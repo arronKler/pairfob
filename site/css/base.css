@@ -1,0 +1,434 @@
+/* Tokens, reset, page chrome and the editorial section scaffolding every band
+   reuses. Device mockups live in device.css; each band has its own file. */
+
+:root {
+  --void: #07090d;
+  --bg: #0a0c10;
+  --surface: #12161d;
+  --surface-2: #1a2029;
+  --ink: #e9edf3;
+  --muted: #9aa5b4;
+  /* 4.84:1 on --void. #6d7887 measured 4.45:1 and missed AA for body copy. */
+  --faint: #737e8d;
+  --line: rgba(233, 237, 243, 0.08);
+  --line-strong: rgba(233, 237, 243, 0.16);
+  --accent: #6ea8fe;
+  --accent-deep: #3d7bfd;
+  --accent-ink: #081018;
+  --ok: #46d68c;
+  --warn: #ffb224;
+  --font:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB",
+    "Noto Sans SC", system-ui, "Segoe UI", sans-serif;
+  --display:
+    "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Noto Sans SC", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --max: 1120px;
+  --gutter: clamp(20px, 5vw, 48px);
+  --band-gap: clamp(28px, 5vw, 56px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Layout rules like `display: flex` outrank the UA sheet, so state toggled from
+   JS needs the attribute to win. */
+[hidden] {
+  display: none !important;
+}
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  overflow-x: clip;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(110, 168, 254, 0.32);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+code,
+pre {
+  font-family: var(--mono);
+}
+
+.skip {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 40;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.skip:focus {
+  top: 12px;
+}
+
+.wordmark {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+/* ---------- top bar ---------- */
+
+.site-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 0 var(--gutter);
+  background: color-mix(in srgb, var(--void) 82%, transparent);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid transparent;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+.brand .wordmark {
+  font-size: 1.1rem;
+}
+
+.site-nav {
+  display: flex;
+  gap: 26px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.site-nav a:hover {
+  color: var(--ink);
+}
+
+.bar-end {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bar-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lang-btn {
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.bar-lang [aria-current="page"] {
+  color: var(--ink);
+}
+
+.bar-lang a:hover,
+.lang-btn:hover {
+  color: var(--ink);
+}
+
+/* The static document is English, so only a visitor being switched to Chinese
+   would otherwise see the English copy flash before home-i18n.js swaps it.
+   Keyed on the target language, not on English: hiding text that is already
+   correct just blanks the page for every English visitor. lang is set in the
+   head by prepareMarketing(), well before this can paint. */
+html[lang="zh-CN"]:not([data-i18n-ready]) [data-i18n] {
+  visibility: hidden;
+}
+
+.bar-doc {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.bar-doc:hover {
+  color: var(--ink);
+}
+
+/* ---------- buttons ---------- */
+
+.bar-cta,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-weight: 650;
+  transition: background-color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+
+.bar-cta,
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.bar-cta {
+  min-height: 38px;
+  padding: 0 15px;
+  font-size: 0.86rem;
+}
+
+.btn {
+  min-height: 52px;
+  padding: 0 26px;
+  font-size: 1.02rem;
+}
+
+.btn-ghost {
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+}
+
+.bar-cta:hover,
+.btn-primary:hover {
+  background: #8bbbff;
+}
+
+/* Wide screens are the computer: install here. Narrow screens are the other
+   device: open the PWA. Both CTAs stay in the DOM; only visibility swaps. */
+.cta-phone {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .cta-desk {
+    display: none;
+  }
+
+  a.cta-phone {
+    display: inline-flex;
+  }
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent);
+}
+
+/* ---------- section scaffolding ---------- */
+
+.band {
+  max-width: calc(var(--max) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding: clamp(56px, 7vw, 92px) var(--gutter);
+  scroll-margin-top: 64px;
+}
+
+/* Four identically built bands in a row read as one long page. Tinting the
+   alternates gives the scroll somewhere to breathe. */
+.band-tint {
+  position: relative;
+  max-width: none;
+  padding-inline: max(var(--gutter), calc(50vw - var(--max) / 2));
+  background: var(--bg);
+  border-block: 1px solid var(--line);
+}
+
+.band-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  align-items: start;
+  gap: 18px clamp(32px, 6vw, 72px);
+  margin-bottom: var(--band-gap);
+}
+
+.eyebrow {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 clamp(20px, 3vw, 34px);
+  color: var(--faint);
+  font: 500 0.74rem/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.eyebrow b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.eyebrow::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line-strong), transparent);
+}
+
+.band h2,
+.hero-copy h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.12;
+  text-wrap: pretty;
+}
+
+.band h2 {
+  font-size: clamp(1.75rem, 3.5vw, 2.7rem);
+}
+
+.band-lede {
+  margin: 0;
+  padding-top: 0.55em;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.75;
+  text-wrap: pretty;
+}
+
+/* ---------- footer ---------- */
+
+.foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 22px clamp(24px, 5vw, 64px);
+  max-width: calc(var(--max) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding: clamp(34px, 4vw, 48px) var(--gutter) 56px;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 0.86rem;
+}
+
+.foot p {
+  margin: 0;
+}
+
+.foot-brand {
+  max-width: 26rem;
+}
+
+.foot .wordmark {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.foot-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+}
+
+.foot-nav a:hover {
+  color: var(--ink);
+}
+
+@media (max-width: 860px) {
+  .band-head {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .band-lede {
+    padding-top: 0;
+    max-width: 34rem;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Two columns squeeze the brand line into a vertical sliver on a phone. */
+  .foot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .foot-brand {
+    max-width: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .site-nav {
+    display: none;
+  }
+
+  .band h2 br,
+  .hero-copy h1 br {
+    display: none;
+  }
+}
+
+@media (min-width: 721px) {
+  .bar-doc {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

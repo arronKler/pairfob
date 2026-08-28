@@ -1,0 +1,56 @@
+{
+  "name": "pairfob-origin",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "BUILD": "2026-08-30.2"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    }
+  },
+  "analytics_engine_datasets": [
+    { "binding": "METRICS", "dataset": "pairfob" }
+  ],
+  "routes": [
+    { "pattern": "pairfob.com", "custom_domain": true },
+    { "pattern": "www.pairfob.com", "custom_domain": true }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pairfob",
+      "database_id": "bcdc6770-16be-4256-ba7a-1a20decfff12",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "DAEMON_ROOM", "class_name": "DaemonRoom" },
+      { "name": "PAIRING_INDEX", "class_name": "PairingIndex" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DaemonRoom", "PairingIndex"]
+    }
+  ],
+  "assets": {
+    "directory": "./public-dist",
+    "binding": "ASSETS",
+    // Folder indexes (`/doc/`, `/doc/zh/`) must keep the trailing slash:
+    // VitePress `base` is `/doc/`. drop-trailing-slash 307s those URLs away.
+    // `/pair` and `/zh` are fetched as opaque shells in the Worker.
+    "html_handling": "auto-trailing-slash",
+    "run_worker_first": true
+  }
+}

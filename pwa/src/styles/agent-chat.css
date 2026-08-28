@@ -1,0 +1,273 @@
+.agent-chat-root {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/*
+  Same WebKit rule as .term: the scrollport is an in-flow flex child with
+  min-height:0. Making this node itself a column flex container sizes it to
+  the transcript, the pane clips, and a finger pan has nothing to scroll.
+*/
+.agent-stream {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  padding: 12px 14px 18px;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.agent-stream-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.agent-stream summary {
+  touch-action: pan-y;
+}
+
+/*
+  Lives in the stream, not the chrome. A pinned sibling covers the first
+  turns and stays on screen while the reader is at the latest message.
+*/
+.agent-older {
+  flex: none;
+  align-self: center;
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.agent-older[hidden] { display: none; }
+
+.agent-user {
+  align-self: flex-end;
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font: 400 0.9rem/1.45 var(--font);
+  color: var(--ink);
+}
+
+.agent-user-role {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.agent-user-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agent-assistant {
+  align-self: stretch;
+  min-width: 0;
+}
+
+.agent-md {
+  font: 400 0.92rem/1.55 var(--font);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.agent-md > :first-child { margin-top: 0; }
+.agent-md > :last-child { margin-bottom: 0; }
+
+.agent-md h1,
+.agent-md h2,
+.agent-md h3,
+.agent-md h4 {
+  font-weight: 650;
+  line-height: 1.3;
+  margin: 1.05em 0 0.4em;
+}
+
+.agent-md h1 { font-size: 1.15rem; }
+.agent-md h2 { font-size: 1.05rem; }
+.agent-md h3,
+.agent-md h4 { font-size: 0.98rem; }
+
+.agent-md p,
+.agent-md ul,
+.agent-md ol,
+.agent-md pre,
+.agent-md blockquote,
+.agent-md table {
+  margin: 0.65em 0;
+}
+
+.agent-md ul,
+.agent-md ol { padding-left: 1.3em; }
+
+.agent-md li { margin: 0.2em 0; }
+
+.agent-md a { color: var(--accent); }
+
+.agent-md code {
+  font-family: var(--mono);
+  font-size: 0.84em;
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+
+.agent-md pre {
+  background: var(--term-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.agent-md pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.agent-md blockquote {
+  margin-left: 0;
+  padding: 0 0 0 12px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--muted);
+}
+
+.agent-md table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.agent-md th,
+.agent-md td {
+  border: 1px solid var(--line-strong);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.agent-md th { background: var(--surface-2); }
+
+.agent-md hr {
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+  margin: 1em 0;
+}
+
+.agent-md img {
+  max-width: 100%;
+  height: auto;
+}
+
+.agent-md input[type="checkbox"] {
+  margin-right: 0.4em;
+}
+
+.agent-process {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.agent-process-summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.agent-process-summary::-webkit-details-marker { display: none; }
+
+.agent-process-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 0 2px 10px;
+  padding: 0 0 4px 10px;
+  border-left: 1px solid var(--line-strong);
+}
+
+.agent-step {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.agent-step-summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 550;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.agent-step-summary::-webkit-details-marker { display: none; }
+
+.agent-step-label {
+  margin: 4px 0;
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.agent-step-body {
+  margin: 0 0 8px;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 400 0.78rem/1.45 var(--mono);
+  color: var(--muted);
+}
+
+.agent-live {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.agent-compose-hint {
+  margin: 6px 2px 0;
+  color: var(--warn);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.agent-compose-hint[hidden] { display: none; }
+
+.agent-blocked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.desk .agent-chat-root {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+}

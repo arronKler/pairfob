@@ -1,0 +1,16 @@
+/* Pairfob styles — split by screen/control family; imported by main.ts. */
+@import "./styles/tokens.css";
+@import "./styles/base.css";
+@import "./styles/icons.css";
+@import "./styles/chrome.css";
+@import "./styles/connect.css";
+@import "./styles/session-shell.css";
+@import "./styles/terminal.css";
+@import "./styles/full-terminal.css";
+@import "./styles/agent-chat.css";
+@import "./styles/prompt.css";
+@import "./styles/dock.css";
+@import "./styles/desk.css";
+@import "./styles/switcher.css";
+@import "./styles/computers.css";
+@import "./styles/settings.css";

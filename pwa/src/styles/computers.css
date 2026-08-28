@@ -1,0 +1,39 @@
+/* --- Computer picker ------------------------------------------------------- */
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.computer-list {
+  margin-top: 8px;
+}
+
+.computer-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.computer-row .switch-item {
+  margin-top: 0;
+  flex: 1 1 auto;
+}
+
+.computer-forget {
+  flex: none;
+  min-width: 44px;
+  min-height: 52px;
+  padding: 0 10px;
+  border-radius: var(--r-md);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 550;
+}
+
+.computer-forget:active { color: var(--danger-bright); }
+
+.computer-add { margin-top: 18px; }

@@ -1,0 +1,491 @@
+/* --- Settings -------------------------------------------------------------------------- */
+
+.settings-page .topbar,
+.main-settings .topbar {
+  gap: 0;
+  margin-bottom: 0;
+}
+
+.settings-page .icon-btn,
+.main-settings .icon-btn { color: var(--ink); }
+
+.settings-page .topbar .back,
+.main-settings .topbar .back {
+  margin-left: -12px;
+  padding-bottom: 0;
+  font-size: 1.5rem;
+  font-weight: 400;
+}
+
+.settings-page .topbar-title,
+.main-settings .topbar-title {
+  padding-left: 2px;
+  line-height: 1.15;
+}
+
+.settings-page .topbar + .set-title,
+.main-settings .topbar + .set-title { margin-top: 14px; }
+
+.set-title {
+  margin: 26px 0 0;
+  font-size: 0.74rem;
+  font-weight: 640;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.set-card .seg { margin: 0; }
+
+.set-card {
+  margin-top: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 15px;
+  border-top: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+
+.set-row:first-child { border-top: 0; }
+
+.set-key { color: var(--muted); flex: none; }
+
+.set-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: right;
+  font-weight: 560;
+  color: var(--ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-row-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.set-note { margin: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.55; }
+
+.tech-note {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.tech-note summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.tech-note p { margin: 4px 0 0; }
+.tech-note code { color: var(--accent); font-family: var(--mono); font-size: 0.82em; }
+
+.device { padding: 13px 15px; border-top: 1px solid var(--line); }
+.device:first-child { border-top: 0; }
+
+.device-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-name { font-size: 0.92rem; font-weight: 640; }
+
+.device-id {
+  display: inline-block;
+  margin-top: 5px;
+  color: var(--muted);
+  font: 500 0.74rem var(--mono);
+}
+
+.device-meta { margin: 4px 0 0; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+
+.retry { margin-top: 12px; }
+
+/* --- Modal / action sheet ------------------------------------------------------------------ */
+
+dialog.modal {
+  width: min(23rem, calc(100vw - 32px));
+  max-height: min(40rem, calc(100dvh - 24px));
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xl);
+  padding: 18px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+dialog.modal::backdrop {
+  background: rgba(4, 6, 10, 0.66);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+dialog.modal form > label { display: block; color: var(--muted); margin-top: 10px; }
+
+dialog.modal .action-row {
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+}
+
+dialog.modal .btn { display: flex; width: 100%; margin: 8px 0 0; }
+
+.modal-title {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+/*
+  Header is a flex sibling of the scroller, not position:sticky inside it.
+  WebKit overflow-scrolling paints list rows through a sticky title bar.
+*/
+dialog.modal.sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+dialog.modal.sheet > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sheet-head {
+  flex: none;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 8px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+
+.sheet-head .modal-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sheet-close {
+  flex: none;
+  color: var(--ink);
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  margin: 7px 0 0;
+  padding: 0 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 560;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.menu-item:active { background: #232c38; }
+
+.menu-danger { color: var(--danger-bright); }
+
+.menu-item:disabled { opacity: 0.45; }
+
+.menu-mode {
+  margin: 4px 0 8px;
+}
+
+@media (max-width: 899.98px) {
+  dialog.modal {
+    margin: auto auto 0;
+    width: calc(100vw - 14px);
+    max-height: calc(100dvh - 24px);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    border-bottom: 0;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Transform on <dialog> itself knocks it out of the centered top layer. */
+  dialog.modal > form {
+    animation: sheet-up 0.24s var(--ease);
+  }
+}
+/* --- Operation dialogs (create / prompt / worktree / history) ------------------ */
+
+.operation-modal { max-height: min(34rem, calc(100dvh - 48px)); overflow: auto; }
+
+.operation-body { margin-top: 4px; }
+
+.operation-field {
+  display: block;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 550;
+}
+
+.operation-field input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0e1218;
+  color: var(--ink);
+  font: 400 0.95rem/1.4 var(--font);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.operation-field select {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 34px 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0e1218;
+  color: var(--ink);
+  font: 400 0.95rem/1.4 var(--font);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.operation-field textarea {
+  display: block;
+  width: 100%;
+  min-height: 8.5rem;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0e1218;
+  color: var(--ink);
+  font: 400 0.95rem/1.5 var(--font);
+  resize: vertical;
+}
+
+/* iOS zooms the visual viewport when a focused form control is below 16px. */
+@media (max-width: 899.98px) {
+  .operation-field input,
+  .operation-field select,
+  .operation-field textarea {
+    font-size: 16px;
+  }
+}
+
+.operation-field input:focus,
+.operation-field select:focus,
+.operation-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.22);
+}
+
+.operation-field input::placeholder,
+.operation-field textarea::placeholder {
+  color: rgba(154, 165, 180, 0.45);
+}
+
+.operation-hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+/* --- History ------------------------------------------------------------ */
+
+.history-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 2px 0 10px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.history-tab {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 620;
+}
+
+.history-tab[aria-selected="true"] {
+  color: var(--ink);
+  background: var(--surface-3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+}
+
+.history-viewport {
+  max-height: min(52dvh, calc(100dvh - 20rem), 32rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.history-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-item {
+  margin: 10px 0 0;
+  padding: 11px 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.history-role {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 640;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.history-text {
+  margin: 0;
+  font: 400 0.82rem/1.55 var(--mono);
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 18rem;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.terminal-history-text {
+  min-height: 12rem;
+  margin: 8px 0 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font: 400 0.78rem/1.45 var(--mono);
+  white-space: pre;
+  overflow-x: auto;
+  overflow-y: visible;
+  tab-size: 2;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 899.98px) {
+  .history-list {
+    margin-top: 8px;
+  }
+
+  /* Nested per-item scroll inside a sheet cannot be panned on iOS. */
+  .history-text {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* --- Worktrees ------------------------------------------------------------- */
+
+.worktree-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 24rem;
+  overflow: auto;
+}
+
+.worktree-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 0;
+  padding: 11px 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.worktree-item > div { min-width: 0; }
+
+.worktree-item strong {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 620;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worktree-path {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font: 500 0.72rem var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worktree-item .btn-small { flex: none; }

@@ -1,0 +1,76 @@
+/* Last band: objections the rest of the page does not already answer. */
+
+.faq {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+}
+
+.faq div {
+  min-width: 0;
+  padding: 22px 0 24px;
+  border-top: 1px solid var(--line);
+}
+
+.faq dt {
+  color: var(--ink);
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.faq dd {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.faq-more {
+  margin: 22px 0 0;
+  font-size: 0.9rem;
+}
+
+.faq-more a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.faq-more a:hover {
+  text-decoration: underline;
+}
+
+@media (min-width: 721px) {
+  .faq div:nth-child(odd) {
+    padding-right: 36px;
+  }
+
+  .faq div:nth-child(even) {
+    padding-left: 36px;
+    border-left: 1px solid var(--line);
+  }
+
+  .faq div:nth-child(-n + 2) {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .faq div:nth-child(5) {
+    grid-column: 1 / -1;
+    border-left: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .faq {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .faq div:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+}

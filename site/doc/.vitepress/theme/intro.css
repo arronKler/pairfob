@@ -1,0 +1,176 @@
+/* Docs intro ("What it is" / 「这是什么」): thesis, claims, disambiguation, steps.
+   Lives on layout:doc so the sidebar stays. Do not restyle other pages. */
+
+.vp-doc .pf-lede {
+  margin: 10px 0 0;
+  max-width: 40rem;
+  color: var(--vp-c-text-2);
+  font-size: 1.05rem;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.vp-doc .pf-lede strong {
+  color: var(--vp-c-text-1);
+  font-weight: 600;
+}
+
+.vp-doc .pf-claims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin: 28px 0 12px;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-divider);
+}
+
+.vp-doc .pf-claims article {
+  min-width: 0;
+  padding: 18px 20px 20px;
+  background: var(--vp-c-bg-alt);
+}
+
+.vp-doc .pf-claims .pf-claim-t {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  color: var(--vp-c-text-1);
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.vp-doc .pf-claims p:not(.pf-claim-t) {
+  margin: 0;
+  color: var(--vp-c-text-2);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.vp-doc .pf-vs {
+  margin: 8px 0 24px;
+}
+
+.vp-doc .pf-vs-head,
+.vp-doc .pf-vs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.15rem minmax(0, 1.15fr);
+  gap: 8px 12px;
+  align-items: baseline;
+}
+
+.vp-doc .pf-vs-head {
+  margin-bottom: 2px;
+  color: var(--vp-c-text-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.vp-doc .pf-vs-row {
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+.vp-doc .pf-vs-not,
+.vp-doc .pf-vs-is {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.vp-doc .pf-vs-not {
+  color: var(--vp-c-text-2);
+}
+
+.vp-doc .pf-vs-is {
+  color: var(--vp-c-text-1);
+  font-weight: 550;
+}
+
+.vp-doc .pf-vs-arrow {
+  color: var(--vp-c-brand-1);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.vp-doc .pf-track {
+  list-style: none;
+  counter-reset: pf-step;
+  margin: 4px 0 20px;
+  padding: 0;
+}
+
+.vp-doc .pf-track li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px 14px;
+  align-items: baseline;
+  margin: 0;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.vp-doc .pf-track li + li {
+  margin-top: 0;
+}
+
+.vp-doc .pf-track li::before {
+  content: counter(pf-step);
+  counter-increment: pf-step;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 50%;
+  color: var(--vp-c-text-2);
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.vp-doc .pf-track p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+@media (max-width: 639px) {
+  .vp-doc .pf-claims {
+    grid-template-columns: 1fr;
+  }
+
+  .vp-doc .pf-vs-head {
+    display: none;
+  }
+
+  .vp-doc .pf-vs-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 14px 0;
+  }
+
+  .vp-doc .pf-vs-head + .pf-vs-row {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .vp-doc .pf-vs-arrow {
+    display: none;
+  }
+
+  .vp-doc .pf-vs-not::before {
+    content: attr(data-not) " · ";
+    color: var(--vp-c-text-2);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+}

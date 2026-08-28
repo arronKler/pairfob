@@ -1,0 +1,37 @@
+/* =============================================================================
+   Pairfob "Signal" design system
+   A pager for your agent herd: cool layered dark surfaces, one electric-blue
+   action color, semantic status colors (amber = needs you, blue = working,
+   green = done). System type, SF Mono for codes and terminal.
+   ============================================================================= */
+
+:root {
+  color-scheme: dark;
+  --bg: #0a0c10;
+  --surface: #12161d;
+  --surface-2: #1a2029;
+  --ink: #e9edf3;
+  --muted: #9aa5b4;
+  --line: rgba(233, 237, 243, 0.09);
+  --line-strong: rgba(233, 237, 243, 0.17);
+  --accent: #6ea8fe;
+  --accent-deep: #3d7bfd;
+  --accent-ink: #081018;
+  --ok: #46d68c;
+  --warn: #ffb224;
+  --error: #ff8080;
+  --danger: #d63b31;
+  --danger-bright: #ff6b5e;
+  --term-bg: #0b0e13;
+  --term-ink: #dfe5ee;
+  --dock-bg: #0d1117;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --term-fs: 12px;
+  --term-lh: 18px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}

@@ -1,0 +1,301 @@
+/* Band 03 (pairing key + where the bytes go) and band 04 (the three steps). */
+
+.pair-stage {
+  display: grid;
+  grid-template-columns: minmax(230px, 296px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(32px, 6vw, 72px);
+}
+
+.fob {
+  display: flex;
+  align-items: stretch;
+  margin: 0;
+}
+
+.fob-ring {
+  width: 20px;
+  margin: 22px 0;
+  border: 2px solid var(--line-strong);
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
+  background: radial-gradient(circle at 8px 50%, transparent 6px, var(--surface-2) 7px);
+}
+
+.fob-face {
+  flex: 1;
+  padding: 20px 22px 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 0 20px 20px 0;
+  background: linear-gradient(180deg, #171c25, #0f131a);
+  box-shadow: 0 30px 50px -28px rgba(0, 0, 0, 0.9);
+}
+
+.fob-face p {
+  margin: 0;
+}
+
+.fob-label {
+  color: var(--muted);
+  font: 500 0.66rem/1 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Decorative: a full-brightness QR outshouted every real control on the page. */
+.fob-qr {
+  position: relative;
+  width: 104px;
+  aspect-ratio: 1;
+  margin: 16px auto 14px;
+  border: 7px solid #aab4c2;
+  border-radius: 8px;
+  background-color: #aab4c2;
+  background-image: conic-gradient(from 90deg, #0b0e13 25%, transparent 0 50%, #0b0e13 0 75%, transparent 0);
+  background-size: 10px 10px;
+}
+
+.fob-qr span {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 4px solid #0b0e13;
+  background: #aab4c2;
+  box-shadow: inset 0 0 0 4px #0b0e13;
+}
+
+.fob-qr span:nth-child(1) { left: 2px; top: 2px; }
+.fob-qr span:nth-child(2) { right: 2px; top: 2px; }
+.fob-qr span:nth-child(3) { left: 2px; bottom: 2px; }
+
+.fob-primary {
+  color: var(--ink);
+  text-align: center;
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.fob-fallback {
+  margin-top: 8px !important;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+/* ---------- where the bytes go ---------- */
+
+.path {
+  margin: 0;
+  padding: 4px 0 0;
+  list-style: none;
+}
+
+/* Label and description sit side by side so the row spans its column; stacked,
+   the text ended less than half way across and left the band lopsided. */
+.path li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.34fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px clamp(20px, 3vw, 36px);
+  padding: 18px 0 20px 30px;
+  border-top: 1px solid var(--line);
+}
+
+.path li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.path li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 23px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--void);
+}
+
+.path li:nth-child(2)::before {
+  border-color: var(--faint);
+}
+
+.path li::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 38px;
+  bottom: -5px;
+  width: 1px;
+  background: linear-gradient(180deg, var(--line-strong), var(--line));
+}
+
+.path li:last-child::after {
+  display: none;
+}
+
+.path strong {
+  font: 600 0.84rem/1.5 var(--mono);
+}
+
+.path span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+/* ---------- three steps ---------- */
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.steps li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.step-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--faint);
+  font: 600 0.8rem/1 var(--mono);
+}
+
+.step-body {
+  min-width: 0;
+}
+
+.step-body h3 {
+  margin: 0 0 11px;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.steps pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #0b0e13;
+}
+
+.steps code {
+  color: var(--accent);
+  font-size: 0.86rem;
+}
+
+.copy {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+
+.copy:hover,
+.copy[data-copied] {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+.step-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+/* ---------- prerequisite + closing band ---------- */
+
+/* Pairfob is useless without Herdr, so say so before the install steps. */
+.prereq {
+  margin: 0 0 clamp(26px, 3vw, 36px);
+  padding: 16px 18px;
+  border: 1px solid var(--line-strong);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 12px 12px 0;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.prereq b {
+  margin-right: 10px;
+  color: var(--ink);
+  font: 600 0.72rem/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.prereq a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.prereq a:hover {
+  text-decoration: underline;
+}
+
+.prereq code {
+  color: var(--ink);
+  font-size: 0.94em;
+}
+
+@media (max-width: 860px) {
+  .pair-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Once the path moves below it, a left-hung card leaves the band half empty. */
+  .fob {
+    max-width: 300px;
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Side by side, the description column got narrow enough to split words. */
+  .path li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .steps li {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .steps .copy {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  /* Wrapping beats a hidden horizontal scroll on a phone. */
+  .steps pre {
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+}

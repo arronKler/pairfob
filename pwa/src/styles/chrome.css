@@ -1,0 +1,503 @@
+
+/* --- Brand ---------------------------------------------------------------- */
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+
+.wordmark {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.brand-dot,
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+
+.dot { width: 7px; height: 7px; }
+.dot-live { background: var(--ok); }
+.dot-warn { background: var(--warn); }
+.dot-off { background: var(--danger-bright); }
+.dot-demo { background: var(--muted); }
+
+/* --- Boot ----------------------------------------------------------------- */
+
+/*
+  Nested min-height: 100dvh / inset:0 inside #app often collapses on iOS, so
+  the loading copy sits at the top of the visual viewport. The app shell is
+  the positioned box; .boot is only the centered stack.
+*/
+#app.boot-screen {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: env(safe-area-inset-top, 0px) 24px env(safe-area-inset-bottom, 0px);
+}
+
+.boot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  max-width: 20rem;
+  text-align: center;
+}
+
+.boot .wordmark { font-size: 1.9rem; }
+
+.boot-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--line-strong);
+  border-top-color: var(--accent);
+  animation: spin 0.85s linear infinite;
+  display: inline-block;
+  flex: none;
+}
+
+.btn .spinner { width: 16px; height: 16px; border-width: 2px; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+
+/* --- Buttons --------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 640;
+  transition: transform 0.12s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.btn:active:not(:disabled) { transform: scale(0.98); }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-primary:active:not(:disabled) { background: var(--accent-deep); }
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted);
+  background: transparent;
+}
+
+.btn-danger { background: var(--danger); color: #fff; }
+
+.btn-small {
+  width: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 0.85rem;
+  border-radius: 10px;
+}
+
+
+/* --- Notices / banners ------------------------------------------------------- */
+
+.notice {
+  font-size: 0.87rem;
+  line-height: 1.5;
+  margin: 12px 0 0;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+}
+
+.notice-error {
+  background: rgba(214, 59, 49, 0.12);
+  border: 1px solid rgba(214, 59, 49, 0.35);
+  color: var(--error);
+}
+
+.notice-status {
+  background: rgba(110, 168, 254, 0.1);
+  border: 1px solid rgba(110, 168, 254, 0.3);
+  color: var(--accent);
+}
+
+.banner {
+  margin: 12px 0 0;
+  padding: 11px 14px;
+  border-radius: var(--r-md);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.banner-demo {
+  background: var(--surface);
+  border: 1px dashed rgba(233, 237, 243, 0.26);
+  color: var(--muted);
+}
+
+.banner-off {
+  background: rgba(214, 59, 49, 0.1);
+  border: 1px solid rgba(214, 59, 49, 0.35);
+  color: var(--error);
+}
+
+/* --- Page shell (home / settings) ------------------------------------------- */
+
+.page {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(32px + env(safe-area-inset-bottom, 0px));
+}
+
+.topbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+}
+
+.topbar-title {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  min-width: 0;
+  min-height: 44px;
+  flex: 1 1 auto;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.text-link {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 550;
+  border-radius: 8px;
+}
+
+.text-link:disabled { opacity: 0.4; }
+
+.topbar-create {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 11px 0 9px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 620;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.topbar-create::after {
+  content: "";
+  position: absolute;
+  inset: 6px 0;
+  border-radius: 999px;
+  background: rgba(110, 168, 254, 0.12);
+  border: 1px solid rgba(110, 168, 254, 0.22);
+  z-index: -1;
+}
+
+.topbar-create:active:not(:disabled)::after { background: rgba(110, 168, 254, 0.2); }
+
+.topbar-create:disabled { opacity: 0.4; }
+
+.statusline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.statusline .dot-live { box-shadow: 0 0 0 3px rgba(70, 214, 140, 0.16); animation: pulse 2.6s var(--ease) infinite; }
+.statusline .dot-warn { animation: pulse 1.4s var(--ease) infinite; }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 178, 36, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 178, 36, 0); }
+}
+
+.dot-live { animation: pulse-live 2.6s var(--ease) infinite; }
+
+@keyframes pulse-live {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(70, 214, 140, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(70, 214, 140, 0); }
+}
+
+.seg {
+  display: flex;
+  gap: 4px;
+  margin: 12px 0 6px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.seg-item {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 620;
+  color: var(--muted);
+  background: transparent;
+}
+
+.seg-item.on {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.herd-list .section-title:first-child,
+.herd-list .herd-group:first-child .group-title {
+  margin-top: 10px;
+}
+
+.section-title,
+.group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 24px 2px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.group-title {
+  width: 100%;
+  min-height: 44px;
+  margin: 8px 0 2px;
+  padding: 0 2px;
+  align-items: center;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.82rem;
+}
+
+.group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-count {
+  font: 600 0.72rem var(--mono);
+  color: var(--warn);
+  background: rgba(255, 178, 36, 0.14);
+  border-radius: 99px;
+  padding: 1px 8px;
+}
+
+.empty {
+  margin: 8px 0 0;
+  padding: 26px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-lg);
+  text-align: center;
+}
+
+.empty-title { margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--ink); }
+
+.empty-sub { margin: 6px 0 0; font-size: 0.83rem; color: var(--muted); line-height: 1.55; }
+
+/* --- Agent cards --------------------------------------------------------------- */
+
+.card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 14px 14px 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.14s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.card:active { transform: scale(0.985); }
+
+.card-main { flex: 1 1 auto; min-width: 0; }
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.card-name {
+  font-size: 0.98rem;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-meta {
+  margin: 4px 0 0;
+  font-size: 0.79rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card .chev {
+  color: var(--muted);
+}
+
+.card.status-blocked { border-color: rgba(255, 178, 36, 0.42); }
+.card.status-blocked::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 13px;
+  bottom: 13px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--warn);
+}
+.card.sel { border-color: rgba(110, 168, 254, 0.55); background: rgba(110, 168, 254, 0.08); }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  padding: 2.5px 9px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.pill-blocked { background: rgba(255, 178, 36, 0.16); color: var(--warn); border-color: rgba(255, 178, 36, 0.4); }
+.pill-working { background: rgba(110, 168, 254, 0.13); color: var(--accent); border-color: rgba(110, 168, 254, 0.32); }
+.pill-done { background: rgba(70, 214, 140, 0.12); color: var(--ok); border-color: rgba(70, 214, 140, 0.32); }
+.pill-idle { background: transparent; color: var(--muted); border-color: var(--line-strong); }
+.pill-unknown { background: transparent; color: var(--muted); border-color: var(--line-strong); }
+.pill-live { background: rgba(70, 214, 140, 0.12); color: var(--ok); border-color: rgba(70, 214, 140, 0.32); }
+.pill-off { background: rgba(214, 59, 49, 0.14); color: var(--error); border-color: rgba(214, 59, 49, 0.38); }
+
+.pill-toggle {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 2px;
+  padding: 0 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 560;
+}
+
+.pill-toggle:active { background: var(--surface); }
+
+/* --- Agent status dot (session chrome + switcher) ----------------------------- */
+
+.agent-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.agent-blocked { background: var(--warn); }
+.agent-working { background: var(--accent); }
+.agent-done { background: var(--ok); }
+.agent-idle { background: var(--line-strong); }
+.agent-unknown { background: var(--line-strong); }
+
+
+/* --- Menu sections + create controls ---------------------------------------- */
+
+.menu-section-title {
+  margin: 14px 0 0;
+  font-size: 0.68rem;
+  font-weight: 640;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.menu-section-title:not(:first-of-type) { border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* --- Status line long-host ellipsis ------------------------------------------ */
+
+.statusline-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

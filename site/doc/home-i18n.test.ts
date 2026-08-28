@@ -1,0 +1,72 @@
+import { describe, expect, test } from "bun:test";
+
+const CJK = /[\u4e00-\u9fff]/;
+const source = await Bun.file(new URL("../home-i18n.js", import.meta.url)).text();
+const html = await Bun.file(new URL("../index.html", import.meta.url)).text();
+
+function table(name: "zh" | "en"): Record<string, string> {
+  const start = source.indexOf(`const ${name} = {`);
+  const end = source.indexOf("\n  };", start);
+  if (start < 0 || end < 0) throw new Error(`missing ${name} table`);
+  const objectLiteral = source.slice(source.indexOf("{", start), end + 4);
+  return Function(`"use strict"; return (${objectLiteral})`)() as Record<string, string>;
+}
+
+function normalize(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+describe("homepage i18n", () => {
+  const zh = table("zh");
+  const en = table("en");
+
+  test("zh and en share the same keys", () => {
+    expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
+  });
+
+  test("English copy has no leftover Chinese", () => {
+    const leftover: string[] = [];
+    for (const [key, value] of Object.entries(en)) {
+      if (CJK.test(value)) leftover.push(key);
+    }
+    expect(leftover).toEqual([]);
+  });
+
+  test("static HTML keeps Chinese only on the language switcher", () => {
+    const withoutSwitcher = html.replace(/<button[^>]*data-lang="zh"[^>]*>中文<\/button>/, "");
+    expect(CJK.test(withoutSwitcher)).toBe(false);
+  });
+
+  test("homepage copy does not mention Markdown rendering", () => {
+    expect(source.toLowerCase()).not.toContain("markdown");
+    expect(html.toLowerCase()).not.toContain("markdown");
+  });
+
+  test("computer visitors are not sent to /pair as the primary action", () => {
+    expect(html).toContain('class="bar-cta cta-desk" href="#start"');
+    expect(html).toContain('class="btn btn-primary cta-desk" href="#start"');
+    expect(html).toContain('class="bar-cta cta-phone" href="/pair"');
+    expect(html).not.toMatch(/class="bar-cta"(?! cta-phone)[^>]*href="\/pair"/);
+    expect(html).toContain('data-copy="https://pairfob.com/pair"');
+    expect(html).toContain("Don't open it on this computer.");
+    expect(zh["cta.phone.hint"]).toContain("不要在这台电脑");
+    expect(en["cta.computer"]).toBe("Start on this computer");
+    expect(zh["cta.computer"]).toBe("在这台电脑上开始");
+  });
+
+  test("static HTML fallbacks match English copy", () => {
+    const re = /data-i18n(?:-html)?="([^"]+)"(?:\s+data-i18n-html)?>([\s\S]*?)<\/[^>]+>/g;
+    const drift: string[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(html))) {
+      const key = match[1];
+      const expected = en[key];
+      if (expected === undefined) {
+        drift.push(`${key} missing from en`);
+        continue;
+      }
+      if (normalize(match[2]) !== normalize(expected)) drift.push(key);
+    }
+    expect(drift).toEqual([]);
+  });
+});

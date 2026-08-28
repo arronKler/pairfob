@@ -1,0 +1,31 @@
+{
+  "name": "pairfob-pwa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test src",
+    "typecheck": "tsc --noEmit",
+    "dev": "vite",
+    "build": "vite build",
+    "live": "bun scripts/live-session.ts",
+    "perf:terminal:command": "bun scripts/terminal-command-benchmark.ts",
+    "perf:terminal:browser": "bun run build && bun scripts/terminal-browser-benchmark.ts",
+    "perf:terminal": "bun run perf:terminal:command && bun run perf:terminal:browser"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^1.3.0",
+    "@noble/curves": "^1.9.0",
+    "@noble/hashes": "^1.8.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "hash-wasm": "^4.12.0",
+    "marked": "^18.0.11",
+    "qr-scanner": "1.4.2",
+    "remend": "^1.3.1"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.11.12",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0"
+  }
+}

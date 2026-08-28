@@ -1,0 +1,3 @@
+OPERATOR_TOKEN=dev-operator
+IP_HASH_PEPPER=dev-pepper-not-for-prod
+BUILD=local

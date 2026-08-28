@@ -1,0 +1,1110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pairfob.invalid/proto/pairfob-v1-rpc.schema.json",
+  "title": "Pairfob v1 encrypted RPC message",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" },
+    { "$ref": "#/$defs/poke" },
+    { "$ref": "#/$defs/terminalFrame" },
+    { "$ref": "#/$defs/terminalClosed" }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "paneId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "tabId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 19,
+      "maxLength": 131,
+      "pattern": "^op_[A-Za-z0-9_-]{16,128}$"
+    },
+    "terminalId": {
+      "type": "string",
+      "pattern": "^term_[0-9a-f]{32}$"
+    },
+    "terminalSequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "agentKind": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "splitDirection": {
+      "enum": ["right", "down"]
+    },
+    "paneDirection": {
+      "enum": ["left", "right", "up", "down"]
+    },
+    "deviceId": {
+      "type": "string",
+      "pattern": "^dev_[A-Za-z0-9_-]{8,128}$"
+    },
+    "session": {
+      "type": ["string", "null"],
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "appliedOutcome": {
+      "enum": ["applied"]
+    },
+    "appliedOrNoopOutcome": {
+      "enum": ["applied", "noop"]
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "create_conversation",
+        "create_tab",
+        "split_pane",
+        "prompt_agent",
+        "history",
+        "list_worktrees",
+        "create_worktree",
+        "open_worktree",
+        "resize_pane",
+        "swap_pane",
+        "zoom_pane"
+      ],
+      "properties": {
+        "create_conversation": { "type": "boolean" },
+        "create_tab": { "type": "boolean" },
+        "split_pane": { "type": "boolean" },
+        "prompt_agent": { "type": "boolean" },
+        "history": { "type": "boolean" },
+        "list_worktrees": { "type": "boolean" },
+        "create_worktree": { "type": "boolean" },
+        "open_worktree": { "type": "boolean" },
+        "resize_pane": { "type": "boolean" },
+        "swap_pane": { "type": "boolean" },
+        "zoom_pane": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "getConfigResult": {
+      "type": "object",
+      "required": [
+        "protocol",
+        "build",
+        "daemon_id",
+        "hostname",
+        "runtime",
+        "vapid_public",
+        "submit_keys",
+        "idle_pause_ms",
+        "push_delivery",
+        "push_enabled",
+        "agent_kinds",
+        "capabilities"
+      ],
+      "properties": {
+        "protocol": { "const": 1 },
+        "build": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "daemon_id": { "$ref": "#/$defs/id" },
+        "hostname": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "runtime": { "enum": ["herdr", "fake", "offline"] },
+        "vapid_public": { "type": "string", "maxLength": 256 },
+        "submit_keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": { "enum": ["Enter"] }
+        },
+        "idle_pause_ms": { "type": "integer", "minimum": 0 },
+        "push_delivery": { "enum": ["webpush"] },
+        "push_enabled": { "type": "boolean" },
+        "agent_kinds": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/agentKind" }
+        },
+        "capabilities": { "$ref": "#/$defs/capabilities" }
+      },
+      "additionalProperties": false
+    },
+    "createdPaneResult": {
+      "type": "object",
+      "required": ["operation_id", "workspace_id", "tab_id", "pane_id", "outcome"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "workspace_id": { "$ref": "#/$defs/workspaceId" },
+        "tab_id": { "$ref": "#/$defs/tabId" },
+        "pane_id": { "$ref": "#/$defs/paneId" },
+        "outcome": { "$ref": "#/$defs/appliedOutcome" }
+      },
+      "additionalProperties": false
+    },
+    "createConversationResult": {
+      "type": "object",
+      "required": ["operation_id", "workspace_id", "tab_id", "pane_id", "outcome"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "workspace_id": { "$ref": "#/$defs/workspaceId" },
+        "tab_id": { "$ref": "#/$defs/tabId" },
+        "pane_id": { "$ref": "#/$defs/paneId" },
+        "agent_kind": { "$ref": "#/$defs/agentKind" },
+        "outcome": { "$ref": "#/$defs/appliedOutcome" }
+      },
+      "additionalProperties": false
+    },
+    "createTabResult": { "$ref": "#/$defs/createdPaneResult" },
+    "splitPaneResult": { "$ref": "#/$defs/createdPaneResult" },
+    "promptAgentResult": {
+      "type": "object",
+      "required": ["operation_id", "pane_id", "agent_status", "outcome"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "pane_id": { "$ref": "#/$defs/paneId" },
+        "agent_status": { "enum": ["blocked", "working", "done", "idle", "unknown"] },
+        "outcome": { "$ref": "#/$defs/appliedOutcome" }
+      },
+      "additionalProperties": false
+    },
+    "historyItem": {
+      "type": "object",
+      "required": ["role", "text"],
+      "properties": {
+        "role": { "enum": ["user", "assistant"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 131072 }
+      },
+      "additionalProperties": false
+    },
+    "historyResult": {
+      "type": "object",
+      "required": ["items", "next_cursor", "truncated"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/historyItem" }
+        },
+        "next_cursor": { "type": ["string", "null"], "maxLength": 1024 },
+        "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "agentTraceItem": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["user", "thinking", "tool", "assistant"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 131072 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "input": { "type": "string", "minLength": 1, "maxLength": 131072 },
+        "output": { "type": "string", "minLength": 1, "maxLength": 131072 }
+      },
+      "additionalProperties": false
+    },
+    "agentTraceResult": {
+      "type": "object",
+      "required": ["items", "next_cursor", "truncated"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/agentTraceItem" }
+        },
+        "next_cursor": { "type": ["string", "null"], "maxLength": 1024 },
+        "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "worktreeItem": {
+      "type": "object",
+      "required": [
+        "path",
+        "branch",
+        "label",
+        "is_bare",
+        "is_detached",
+        "is_prunable",
+        "is_linked_worktree",
+        "open_workspace_id"
+      ],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "branch": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 },
+        "label": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+        "is_bare": { "type": "boolean" },
+        "is_detached": { "type": "boolean" },
+        "is_prunable": { "type": "boolean" },
+        "is_linked_worktree": { "type": "boolean" },
+        "open_workspace_id": {
+          "oneOf": [
+            { "$ref": "#/$defs/workspaceId" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "listWorktreesResult": {
+      "type": "object",
+      "required": ["worktrees"],
+      "properties": {
+        "worktrees": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/worktreeItem" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "worktreeMutationResult": {
+      "type": "object",
+      "required": ["operation_id", "workspace_id", "tab_id", "pane_id", "path", "branch", "outcome"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "workspace_id": { "$ref": "#/$defs/workspaceId" },
+        "tab_id": { "$ref": "#/$defs/tabId" },
+        "pane_id": { "$ref": "#/$defs/paneId" },
+        "path": { "$ref": "#/$defs/path" },
+        "branch": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 },
+        "outcome": { "$ref": "#/$defs/appliedOutcome" }
+      },
+      "additionalProperties": false
+    },
+    "createWorktreeResult": { "$ref": "#/$defs/worktreeMutationResult" },
+    "openWorktreeResult": {
+      "type": "object",
+      "required": ["operation_id", "workspace_id", "path", "branch", "outcome"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "workspace_id": { "$ref": "#/$defs/workspaceId" },
+        "tab_id": { "$ref": "#/$defs/tabId" },
+        "pane_id": { "$ref": "#/$defs/paneId" },
+        "path": { "$ref": "#/$defs/path" },
+        "branch": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 },
+        "outcome": { "$ref": "#/$defs/appliedOrNoopOutcome" }
+      },
+      "additionalProperties": false
+    },
+    "paneMutationResult": {
+      "type": "object",
+      "required": ["operation_id", "pane_id", "outcome"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "pane_id": { "$ref": "#/$defs/paneId" },
+        "outcome": { "$ref": "#/$defs/appliedOrNoopOutcome" }
+      },
+      "additionalProperties": false
+    },
+    "resizePaneResult": { "$ref": "#/$defs/paneMutationResult" },
+    "swapPaneResult": { "$ref": "#/$defs/paneMutationResult" },
+    "zoomPaneResult": { "$ref": "#/$defs/paneMutationResult" },
+    "terminalOpenResult": {
+      "type": "object",
+      "required": ["operation_id", "terminal_id", "pane_id", "cols", "rows", "encoding"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "terminal_id": { "$ref": "#/$defs/terminalId" },
+        "pane_id": { "$ref": "#/$defs/paneId" },
+        "cols": { "type": "integer", "minimum": 20, "maximum": 320 },
+        "rows": { "type": "integer", "minimum": 5, "maximum": 160 },
+        "encoding": { "const": "ansi" }
+      },
+      "additionalProperties": false
+    },
+    "terminalCommandResult": {
+      "type": "object",
+      "required": ["operation_id", "terminal_id", "accepted_seq", "duplicate"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "terminal_id": { "$ref": "#/$defs/terminalId" },
+        "accepted_seq": { "$ref": "#/$defs/terminalSequence" },
+        "duplicate": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "terminalCloseResult": {
+      "type": "object",
+      "required": ["operation_id", "terminal_id", "closed"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "terminal_id": { "$ref": "#/$defs/terminalId" },
+        "closed": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "request": {
+      "type": "object",
+      "required": ["v", "id", "op", "params"],
+      "properties": {
+        "v": { "const": 1 },
+        "id": { "$ref": "#/$defs/id" },
+        "op": {
+          "enum": [
+            "Ping",
+            "GetConfig",
+            "Snapshot",
+            "PaneRead",
+            "SendText",
+            "SendKeys",
+            "PushSubscribe",
+            "RevokeDevice",
+            "ListDevices",
+            "History",
+            "AgentTrace",
+            "RenamePane",
+            "RenameTab",
+            "RenameWorkspace",
+            "ClosePane",
+            "CloseTab",
+            "CreateConversation",
+            "CreateTab",
+            "SplitPane",
+            "PromptAgent",
+            "ListWorktrees",
+            "CreateWorktree",
+            "OpenWorktree",
+            "ResizePane",
+            "SwapPane",
+            "ZoomPane",
+            "TerminalOpen",
+            "TerminalInput",
+            "TerminalResize",
+            "TerminalScroll",
+            "TerminalClose"
+          ]
+        },
+        "params": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "op": { "const": "Ping" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "properties": { "t_ms": { "type": "integer" } },
+                "required": ["t_ms"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "enum": ["GetConfig", "ListDevices"] } } },
+          "then": {
+            "properties": {
+              "params": { "type": "object", "maxProperties": 0 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "Snapshot" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "properties": { "session": { "$ref": "#/$defs/session" } },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "PaneRead" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id"],
+                "properties": {
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "source": { "const": "visible" },
+                  "format": { "enum": ["text", "ansi"] },
+                  "lines": { "type": "integer", "minimum": 0, "maximum": 4096 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "SendText" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id", "text"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "text": { "type": "string", "maxLength": 32768 },
+                  "submit": { "type": "boolean" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "SendKeys" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id", "keys", "intent"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "keys": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "items": { "type": "string", "minLength": 1, "maxLength": 32 }
+                  },
+                  "intent": { "enum": ["pad", "dialog", "submit"] },
+                  "expected_prompt": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                  "expected_signature": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+                },
+                "allOf": [
+                  {
+                    "if": { "properties": { "intent": { "enum": ["dialog", "submit"] } } },
+                    "then": { "required": ["expected_prompt"] }
+                  }
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "PushSubscribe" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "endpoint", "p256dh", "auth"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "endpoint": { "type": "string", "format": "uri", "maxLength": 4096 },
+                  "p256dh": { "type": "string", "minLength": 1, "maxLength": 256 },
+                  "auth": { "type": "string", "minLength": 1, "maxLength": 256 },
+                  "expirationTime": { "type": ["integer", "null"], "minimum": 0 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "RevokeDevice" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "device_id"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "device_id": { "$ref": "#/$defs/deviceId" },
+                  "reason": { "type": "string", "maxLength": 256 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "History" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id"],
+                "properties": {
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "cursor": { "type": ["string", "null"], "maxLength": 1024 },
+                  "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "AgentTrace" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id"],
+                "properties": {
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "cursor": { "type": ["string", "null"], "maxLength": 1024 },
+                  "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "RenamePane" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id", "label"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "label": { "type": ["string", "null"], "maxLength": 256 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "RenameTab" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "tab_id", "label"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "tab_id": { "$ref": "#/$defs/tabId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "label": { "type": "string", "minLength": 1, "maxLength": 256 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "RenameWorkspace" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "workspace_id", "label"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "workspace_id": { "$ref": "#/$defs/workspaceId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "label": { "type": "string", "minLength": 1, "maxLength": 256 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "ClosePane" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "session": { "$ref": "#/$defs/session" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "CloseTab" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "tab_id"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "tab_id": { "$ref": "#/$defs/tabId" },
+                  "session": { "$ref": "#/$defs/session" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "CreateConversation" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "cwd"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "cwd": { "$ref": "#/$defs/path" },
+                  "agent_kind": { "$ref": "#/$defs/agentKind" },
+                  "label": { "type": "string", "minLength": 1, "maxLength": 256 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "CreateTab" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "workspace_id"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "workspace_id": { "$ref": "#/$defs/workspaceId" },
+                  "cwd": { "$ref": "#/$defs/path" },
+                  "label": { "type": "string", "minLength": 1, "maxLength": 256 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "SplitPane" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id", "direction"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "direction": { "$ref": "#/$defs/splitDirection" },
+                  "cwd": { "$ref": "#/$defs/path" },
+                  "ratio": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "PromptAgent" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id", "text"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "text": { "type": "string", "minLength": 1, "maxLength": 32768 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "ListWorktrees" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "workspace_id": { "$ref": "#/$defs/workspaceId" },
+                  "cwd": { "$ref": "#/$defs/path" }
+                },
+                "oneOf": [
+                  { "required": ["workspace_id"] },
+                  { "required": ["cwd"] }
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "CreateWorktree" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "workspace_id": { "$ref": "#/$defs/workspaceId" },
+                  "cwd": { "$ref": "#/$defs/path" },
+                  "branch": { "type": "string", "minLength": 1, "maxLength": 512 },
+                  "base": { "type": "string", "minLength": 1, "maxLength": 512 },
+                  "path": { "$ref": "#/$defs/path" },
+                  "label": { "type": "string", "minLength": 1, "maxLength": 256 }
+                },
+                "not": { "required": ["workspace_id", "cwd"] },
+                "oneOf": [
+                  { "required": ["workspace_id"] },
+                  { "required": ["cwd"] }
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "OpenWorktree" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "workspace_id": { "$ref": "#/$defs/workspaceId" },
+                  "cwd": { "$ref": "#/$defs/path" },
+                  "branch": { "type": "string", "minLength": 1, "maxLength": 512 },
+                  "path": { "$ref": "#/$defs/path" },
+                  "label": { "type": "string", "minLength": 1, "maxLength": 256 }
+                },
+                "allOf": [
+                  {
+                    "oneOf": [
+                      { "required": ["workspace_id"] },
+                      { "required": ["cwd"] }
+                    ]
+                  },
+                  {
+                    "oneOf": [
+                      { "required": ["branch"] },
+                      { "required": ["path"] }
+                    ]
+                  }
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "ResizePane" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id", "direction"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "direction": { "$ref": "#/$defs/paneDirection" },
+                  "amount": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "SwapPane" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id", "direction"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "direction": { "$ref": "#/$defs/paneDirection" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "ZoomPane" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id", "mode"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "mode": { "enum": ["toggle", "on", "off"] }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "TerminalOpen" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "pane_id", "cols", "rows", "takeover"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "cols": { "type": "integer", "minimum": 20, "maximum": 320 },
+                  "rows": { "type": "integer", "minimum": 5, "maximum": 160 },
+                  "takeover": { "type": "boolean" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "TerminalInput" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "terminal_id", "seq", "data"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "terminal_id": { "$ref": "#/$defs/terminalId" },
+                  "seq": { "$ref": "#/$defs/terminalSequence" },
+                  "data": { "type": "string", "minLength": 4, "maxLength": 43692, "contentEncoding": "base64" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "TerminalResize" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "terminal_id", "seq", "cols", "rows", "cell_width_px", "cell_height_px"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "terminal_id": { "$ref": "#/$defs/terminalId" },
+                  "seq": { "$ref": "#/$defs/terminalSequence" },
+                  "cols": { "type": "integer", "minimum": 20, "maximum": 320 },
+                  "rows": { "type": "integer", "minimum": 5, "maximum": 160 },
+                  "cell_width_px": { "type": "integer", "minimum": 0, "maximum": 4096 },
+                  "cell_height_px": { "type": "integer", "minimum": 0, "maximum": 4096 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "TerminalScroll" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "terminal_id", "seq", "direction", "lines", "source", "modifiers"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "terminal_id": { "$ref": "#/$defs/terminalId" },
+                  "seq": { "$ref": "#/$defs/terminalSequence" },
+                  "direction": { "enum": ["up", "down"] },
+                  "lines": { "type": "integer", "minimum": 1, "maximum": 160 },
+                  "source": { "enum": ["wheel", "page_key"] },
+                  "column": { "type": "integer", "minimum": 0, "maximum": 320 },
+                  "row": { "type": "integer", "minimum": 0, "maximum": 160 },
+                  "modifiers": { "type": "integer", "minimum": 0, "maximum": 255 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "TerminalClose" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "terminal_id"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "terminal_id": { "$ref": "#/$defs/terminalId" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "required": ["v", "id", "ok"],
+      "properties": {
+        "v": { "const": 1 },
+        "id": { "$ref": "#/$defs/id" },
+        "ok": { "type": "boolean" },
+        "result": {
+          "description": "For a success response, validate against the result $defs selected by the matching pending request op. The response does not repeat op."
+        },
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": {
+              "enum": [
+                "unpaired",
+                "revoked",
+                "pane_not_found",
+                "tab_not_found",
+                "workspace_not_found",
+                "stale_prompt",
+                "invalid_key",
+                "herdr_offline",
+                "too_large",
+                "rate_limited",
+                "unknown_op",
+                "backpressure",
+                "bad_token",
+                "bad_frame",
+                "internal",
+                "pair_busy",
+                "unbound",
+                "wrong_ws",
+                "too_many_devices",
+                "kicked",
+                "daemon_offline",
+                "replay",
+                "sas_required",
+                "fp_mismatch",
+                "forbidden",
+                "invalid_argument",
+                "unsupported",
+                "agent_not_found",
+                "worktree_not_found",
+                "transcript_unavailable",
+                "unknown_outcome",
+                "partial_failure",
+                "conflict"
+              ]
+            },
+            "message": { "type": "string", "maxLength": 4096 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "oneOf": [
+        {
+          "properties": { "ok": { "const": true } },
+          "required": ["result"],
+          "not": { "required": ["error"] }
+        },
+        {
+          "properties": { "ok": { "const": false } },
+          "required": ["error"],
+          "not": { "required": ["result"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "poke": {
+      "type": "object",
+      "required": ["v", "op", "params"],
+      "properties": {
+        "v": { "const": 1 },
+        "op": { "const": "Poke" },
+        "params": {
+          "type": "object",
+          "required": ["reason"],
+          "properties": {
+            "reason": { "enum": ["agent_status", "herdr_offline", "herdr_online", "daemon_replaced"] },
+            "pane_id": { "$ref": "#/$defs/paneId" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "terminalFrame": {
+      "type": "object",
+      "required": ["v", "op", "params"],
+      "properties": {
+        "v": { "const": 1 },
+        "op": { "const": "TerminalFrame" },
+        "params": {
+          "type": "object",
+          "required": ["terminal_id", "seq", "width", "height", "full", "index", "count", "data"],
+          "properties": {
+            "terminal_id": { "$ref": "#/$defs/terminalId" },
+            "seq": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" },
+            "width": { "type": "integer", "minimum": 20, "maximum": 320 },
+            "height": { "type": "integer", "minimum": 5, "maximum": 160 },
+            "full": { "type": "boolean" },
+            "index": { "type": "integer", "minimum": 0, "maximum": 43 },
+            "count": { "type": "integer", "minimum": 1, "maximum": 43 },
+            "data": { "type": "string", "maxLength": 131072, "contentEncoding": "base64" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "terminalClosed": {
+      "type": "object",
+      "required": ["v", "op", "params"],
+      "properties": {
+        "v": { "const": 1 },
+        "op": { "const": "TerminalClosed" },
+        "params": {
+          "type": "object",
+          "required": ["terminal_id", "reason"],
+          "properties": {
+            "terminal_id": { "$ref": "#/$defs/terminalId" },
+            "reason": { "type": "string", "maxLength": 512 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

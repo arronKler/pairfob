@@ -1,0 +1,49 @@
+/* --- Session switcher sheet ---------------------------------------------------------- */
+
+.switch-list {
+  margin-top: 8px;
+  max-height: min(24rem, 52dvh);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.switch-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  margin: 7px 0 0;
+  padding: 9px 13px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.switch-item.on { border-color: rgba(110, 168, 254, 0.5); background: rgba(110, 168, 254, 0.1); }
+
+.switch-item:active { background: #232c38; }
+
+.switch-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.switch-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+
+.switch-name {
+  font-size: 0.93rem;
+  font-weight: 620;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switch-meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switch-item .chev { flex: none; color: var(--muted); opacity: 0.7; }

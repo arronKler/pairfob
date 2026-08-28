@@ -1,0 +1,158 @@
+/* --- Session shell: fixed pane frame and its title bar -------------------------- */
+
+#app.session {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  padding: 0 0 var(--kb, 0px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--term-bg);
+  color: var(--term-ink);
+}
+
+.pane-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  overflow: hidden;
+  background: var(--term-bg);
+  transition: transform 0.24s var(--ease), border-radius 0.24s var(--ease);
+}
+
+.pane-root.dragging {
+  transition: none;
+  border-radius: 0 22px 22px 0;
+  box-shadow: -18px 0 44px rgba(0, 0, 0, 0.42);
+}
+
+/* Prompt panel and row action bar share this slot below the buffer. */
+.session-extras {
+  flex: 0 0 auto;
+  max-height: 60dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.session-extras:empty { display: none; }
+
+/*
+  Three zones, never a bag of shrinking siblings: back | identity | actions.
+  Trailing controls stay a fixed cluster so a long pane name ellipsizes instead
+  of crushing the interrupt / menu targets.
+*/
+.chrome {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: calc(env(safe-area-inset-top, 0px) + 4px) 6px 4px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(11, 14, 19, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.chrome-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.chrome-title:active { background: var(--surface-2); }
+
+.chrome-name-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.chrome-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.94rem;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  color: var(--term-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chrome-meta {
+  padding-left: 14px;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chrome-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.icon-btn {
+  flex: none;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--term-ink);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.icon-btn:active { background: var(--surface-2); }
+
+.icon-btn:disabled { opacity: 0.4; }
+
+.icon-stop {
+  color: var(--warn);
+  font-size: 0;
+  line-height: 0;
+}
+
+.icon-stop:active { background: var(--surface-2); }
+
+.back {
+  min-height: 44px;
+  font-size: 1.6rem;
+  font-weight: 500;
+}
+
+/* Session chrome: the ‹ glyph sits high in the em box; nudge it onto the title. */
+.chrome .back { padding-bottom: 3px; }

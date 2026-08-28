@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /pair
+Disallow: /v2/
+Disallow: /api/
+
+Sitemap: https://pairfob.com/sitemap.xml
+Sitemap: https://pairfob.com/doc/sitemap.xml

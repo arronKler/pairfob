@@ -1,0 +1,35 @@
+# Hosted downloads are the files in dist/dl (see scripts/release.sh).
+# Enable GitHub Releases later by setting release.disable to false.
+version: 2
+project_name: pairfob
+builds:
+  - id: pairfobd
+    main: ./cmd/pairfobd
+    binary: pairfobd
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
+archives:
+  - ids:
+      - pairfobd
+    formats:
+      - binary
+    name_template: "pairfobd-{{ .Os }}-{{ .Arch }}"
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+snapshot:
+  version_template: "{{ .ShortCommit }}"
+release:
+  disable: true
+changelog:
+  disable: true

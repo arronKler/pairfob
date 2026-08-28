@@ -1,0 +1,227 @@
+/* Herdr's live ANSI controller. The guided mobile pane remains the default. */
+
+.full-terminal-root {
+  position: relative;
+  background: #090c10;
+}
+
+.full-terminal-chrome {
+  min-height: 52px;
+}
+
+.full-terminal-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px 4px;
+  overflow: hidden;
+}
+
+.full-terminal-title,
+.full-terminal-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.full-terminal-title {
+  color: var(--term-ink);
+  font-size: 0.94rem;
+  font-weight: 650;
+}
+
+.full-terminal-status {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.full-terminal-action {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: var(--term-ink);
+  background: var(--surface-2);
+  font-size: 0.8rem;
+  font-weight: 640;
+  white-space: nowrap;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.full-terminal-retry {
+  color: var(--accent);
+  border: 1px solid rgba(110, 168, 254, 0.35);
+}
+
+.full-terminal-retry[hidden] {
+  display: none;
+}
+
+.full-terminal-action:active {
+  background: #27313e;
+}
+
+.full-terminal-scroll {
+  position: absolute;
+  right: 4px;
+  bottom: 10px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: auto;
+  opacity: 0.45;
+}
+
+.full-terminal-scroll:focus-within,
+.full-terminal-scroll:hover {
+  opacity: 0.92;
+}
+
+.full-terminal-scroll-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  color: var(--term-ink);
+  background: rgba(26, 32, 41, 0.88);
+  border: 1px solid rgba(233, 237, 243, 0.16);
+}
+
+.full-terminal-scroll-btn:active {
+  background: #27313e;
+}
+
+.full-terminal-host {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  padding: 4px;
+  overflow: hidden;
+  background: #090c10;
+  touch-action: none;
+}
+
+.full-terminal-pan {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.full-terminal-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.full-terminal-host.is-pan {
+  touch-action: pan-x;
+}
+
+.full-terminal-host.is-pan .full-terminal-pan {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.full-terminal-pad {
+  flex: 0 0 auto;
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: var(--dock-bg);
+  border-top: 1px solid var(--line);
+}
+
+.full-terminal-kb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 8px;
+  padding: 0 14px;
+  border-radius: 13px;
+  color: var(--muted);
+  background: #0a0d12;
+  border: 1px solid var(--line-strong);
+  font-size: 0.88rem;
+  font-weight: 560;
+}
+
+.full-terminal-kb[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: rgba(110, 168, 254, 0.42);
+}
+
+.full-terminal-host.kb-off .xterm-helper-textarea {
+  pointer-events: none;
+  caret-color: transparent;
+}
+
+html.full-terminal-active,
+html.full-terminal-active body {
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+@media (min-width: 900px) {
+  .full-terminal-kb { display: none; }
+}
+
+.full-terminal-host .xterm {
+  width: 100%;
+  height: 100%;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  font-variant-ligatures: none;
+  font-kerning: none;
+  font-synthesis: none;
+}
+
+.full-terminal-host .xterm-viewport {
+  overflow: hidden;
+  background-color: #090c10;
+  overscroll-behavior: none;
+}
+
+.full-terminal-host .xterm-screen {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.full-terminal-host .xterm-rows {
+  font-variant-ligatures: none;
+  font-kerning: none;
+  line-height: 0 !important;
+}
+
+.full-terminal-host .xterm-rows > div {
+  overflow: hidden;
+  contain: paint;
+  clip-path: inset(0);
+}
+
+.full-terminal-host .xterm-helper-textarea {
+  font-size: 16px;
+}
+
+@media (min-width: 900px) {
+  .full-terminal-host {
+    padding: 8px;
+  }
+}

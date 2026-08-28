@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+pwa/.pnpm-store
+
+# build / pack (rebuild with bun / scripts/pack-origin-assets.sh / release.sh)
+pwa/dist
+workers/pairfob-origin/public-dist
+site/doc/.vitepress/dist
+site/doc/.vitepress/cache
+/dist
+
+# compiled binaries left in the tree
+*.exe
+*.test
+/pairfobd
+/pairfob-relay
+
+# local origin, LAN pairing, agent scratch
+.dev/
+.lan/
+.context/
+log/
+ui-review/
+
+# operator-only ship runbook (keep on the machine that deploys pairfob.com)
+.agents/skills/pairfob-ship/
+
+# secrets and env (keep *.example)
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+.prod-operator-token
+*.srl
+
+# test / tool junk
+*.log
+coverage/
+coverage.out
+__pycache__/
+*.pyc
+.DS_Store

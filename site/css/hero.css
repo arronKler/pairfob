@@ -1,0 +1,293 @@
+/* Hero: the one screen that has to land the promise, plus the three-fact strip
+   that separates Pairfob from a remote desktop. */
+
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.06fr) minmax(280px, 372px);
+  align-items: center;
+  gap: 44px clamp(40px, 6vw, 84px);
+  max-width: calc(var(--max) + var(--gutter) * 2);
+  margin: 0 auto;
+  padding: clamp(28px, 6vw, 76px) var(--gutter) clamp(56px, 8vw, 104px);
+}
+
+.hero-glow {
+  position: absolute;
+  z-index: 0;
+  top: -34%;
+  right: -14%;
+  width: min(880px, 108%);
+  aspect-ratio: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 60% 42%,
+    rgba(61, 123, 253, 0.28),
+    rgba(61, 123, 253, 0.07) 40%,
+    transparent 66%
+  );
+}
+
+.hero-copy,
+.hero-device {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.eyebrow-live {
+  color: var(--muted);
+  letter-spacing: 0.14em;
+}
+
+.eyebrow-live::after {
+  display: none;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: live 2.4s var(--ease) infinite;
+}
+
+@keyframes live {
+  0%,
+  70%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(70, 214, 140, 0.5);
+  }
+  35% {
+    box-shadow: 0 0 0 6px rgba(70, 214, 140, 0);
+  }
+}
+
+.hero-copy h1 {
+  font-size: clamp(2.3rem, 5.6vw, 4.3rem);
+  line-height: 1.08;
+}
+
+.hero .lede {
+  margin: clamp(18px, 2vw, 26px) 0 clamp(26px, 3vw, 34px);
+  max-width: 33rem;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.3vw, 1.14rem);
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.lede-link {
+  color: var(--ink);
+  border-bottom: 1px solid var(--accent);
+  font-weight: 600;
+}
+
+.lede-link:hover {
+  color: var(--accent);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+}
+
+.hero-phone {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hero-phone-label,
+.hero-phone-hint {
+  margin: 0;
+}
+
+.hero-phone-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.hero-phone-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.hero-phone-row code {
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0b0e13;
+  color: var(--accent);
+  font-size: 0.84rem;
+}
+
+.hero-phone .copy {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.hero-phone .copy:hover,
+.hero-phone .copy[data-copied] {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+.hero-phone-hint {
+  color: var(--faint);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  /* hero.css loads after base.css and sets display:flex on .hero-phone. */
+  .hero-phone.cta-desk {
+    display: none;
+  }
+}
+
+.cli-lockup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cli-lockup li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px 7px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font: 500 0.75rem/1 var(--mono);
+}
+
+.cli-lockup svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.cli-lockup li:hover {
+  border-color: rgba(233, 237, 243, 0.28);
+  color: var(--ink);
+}
+
+/* ---------- phone + the notification that starts the story ---------- */
+
+.hero-device {
+  margin: 0;
+  justify-self: end;
+  width: min(100%, 360px);
+}
+
+/* A second device hanging off the phone's lower-left edge: the same herd, open
+   on the computer at the same time. Sits over the empty part of the list. */
+.mirror {
+  position: absolute;
+  z-index: 3;
+  left: -28%;
+  bottom: 8%;
+  overflow: hidden;
+  width: min(258px, 80%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(20, 25, 33, 0.9);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 30px 60px -18px rgba(0, 0, 0, 1);
+  text-align: left;
+}
+
+.mirror p {
+  margin: 0;
+}
+
+.mirror-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--faint);
+  font: 500 0.68rem/1 var(--mono);
+}
+
+.traffic-sm {
+  width: 7px;
+  height: 7px;
+  margin-left: 11px;
+  border-radius: 50%;
+  background: #ffb224;
+  box-shadow:
+    11px 0 0 #46d68c,
+    -11px 0 0 #ff8080;
+}
+
+.mirror-row {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 9px 12px 0;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.mirror-row span {
+  color: var(--faint);
+  font: 400 0.7rem/1 var(--mono);
+}
+
+.mirror-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px !important;
+  padding: 9px 12px 10px;
+  border-top: 1px solid var(--line);
+  background: rgba(110, 168, 254, 0.07);
+  color: var(--accent);
+  font-size: 0.74rem;
+}
+
+.swap {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding-bottom: clamp(40px, 7vw, 64px);
+  }
+
+  .hero-device {
+    justify-self: center;
+    width: min(100%, 340px);
+    padding-top: 12px;
+  }
+
+  /* Computer above, phone below, still overlapping so they read as linked. */
+  .mirror {
+    position: relative;
+    left: 0;
+    bottom: 0;
+    width: min(100%, 300px);
+    margin: 0 auto -16px;
+  }
+}

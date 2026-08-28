@@ -1,0 +1,40 @@
+{
+  "name": "pairfob-origin",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "BUILD": "local"
+  },
+  "analytics_engine_datasets": [
+    { "binding": "METRICS", "dataset": "pairfob" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pairfob",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "DAEMON_ROOM", "class_name": "DaemonRoom" },
+      { "name": "PAIRING_INDEX", "class_name": "PairingIndex" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DaemonRoom", "PairingIndex"]
+    }
+  ],
+  "assets": {
+    "directory": "./public-dist",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "run_worker_first": true
+  }
+}

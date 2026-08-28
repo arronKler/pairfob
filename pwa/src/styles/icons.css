@@ -1,0 +1,134 @@
+/* Geometric UI marks. Font glyphs sit off-center in the CJK stack. */
+
+.chev,
+.group-chev,
+.pill-toggle::after {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 9px;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  opacity: 0.72;
+}
+
+.group-chev {
+  opacity: 0.75;
+  transform-origin: center;
+  transition: transform 0.18s var(--ease);
+}
+
+.group-title[aria-expanded="true"] .group-chev {
+  transform: rotate(90deg);
+}
+
+.pill-toggle::after {
+  content: "";
+  opacity: 0.7;
+  transition: transform 0.18s var(--ease);
+}
+
+.pill-toggle[aria-expanded="true"]::after {
+  transform: rotate(90deg);
+}
+
+.manual-pair summary::after {
+  content: "";
+  flex: none;
+  width: 9px;
+  height: 6px;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  opacity: 0.7;
+  transform-origin: center;
+  transition: transform 0.16s var(--ease);
+}
+
+.manual-pair[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.key-more::after,
+.icon-more::after {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: -6px 0 currentColor, 6px 0 currentColor;
+}
+
+.key-more[aria-expanded="true"]::after {
+  width: 9px;
+  height: 6px;
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.scroll-up::after,
+.scroll-page-up::before,
+.scroll-page-up::after {
+  content: "";
+  width: 11px;
+  height: 8px;
+  background: currentColor;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.scroll-down::after,
+.scroll-page-down::before,
+.scroll-page-down::after {
+  content: "";
+  width: 11px;
+  height: 8px;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.scroll-page-up,
+.scroll-page-down {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scroll-page-up::before,
+.scroll-page-up::after,
+.scroll-page-down::before,
+.scroll-page-down::after {
+  width: 9px;
+  height: 5px;
+}
+
+.topbar-create::before {
+  content: "";
+  width: 11px;
+  height: 11px;
+  background:
+    linear-gradient(currentColor, currentColor) center / 11px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 2px 11px no-repeat;
+}
+
+.icon-stop::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.btn-scan::before {
+  content: "";
+  flex: none;
+  width: 15px;
+  height: 15px;
+  background:
+    linear-gradient(currentColor, currentColor) left top / 6px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) left top / 2px 6px no-repeat,
+    linear-gradient(currentColor, currentColor) right top / 6px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) right top / 2px 6px no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom / 6px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom / 2px 6px no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / 6px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / 2px 6px no-repeat;
+}

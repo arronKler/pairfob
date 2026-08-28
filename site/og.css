@@ -1,0 +1,135 @@
+/* Shared by og.html and og-en.html, both rendered to PNG by scripts/build-og.sh.
+   Never shipped to public-dist: only the rendered images are. */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+body {
+  width: 1200px;
+  height: 630px;
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  align-items: center;
+  gap: 48px;
+  padding: 72px;
+  background: #07090d;
+  color: #e9edf3;
+  font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
+  overflow: hidden;
+}
+
+.glow {
+  position: absolute;
+  top: -220px;
+  left: -120px;
+  width: 820px;
+  height: 620px;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(61, 123, 253, 0.26), transparent 70%);
+  pointer-events: none;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #737e8d;
+  font: 600 17px/1 "IBM Plex Mono", monospace;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.eyebrow i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #46d68c;
+}
+
+h1 {
+  margin: 30px 0 24px;
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-size: 68px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+/* Latin runs much wider per character, so the CJK size overflows to four lines
+   in the 608px column. */
+html[lang="en"] h1 {
+  font-size: 46px;
+}
+
+p {
+  max-width: 30rem;
+  color: #9aa5b4;
+  font-size: 24px;
+  line-height: 1.6;
+}
+
+.wm {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 44px;
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.wm svg {
+  width: 40px;
+  height: 40px;
+}
+
+.card {
+  padding: 24px;
+  border: 1px solid rgba(233, 237, 243, 0.16);
+  border-radius: 26px;
+  background: linear-gradient(180deg, #12161d, #0a0c10);
+  box-shadow: 0 40px 80px -40px #000;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border: 1px solid rgba(233, 237, 243, 0.08);
+  border-radius: 16px;
+  background: #12161d;
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.row + .row {
+  margin-top: 12px;
+}
+
+.row.on {
+  border-color: #ffb224;
+  background: rgba(255, 178, 36, 0.08);
+}
+
+.tag {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font: 600 15px/1 "IBM Plex Mono", monospace;
+}
+
+.warn {
+  background: rgba(255, 178, 36, 0.16);
+  color: #ffb224;
+}
+
+.info {
+  background: rgba(110, 168, 254, 0.16);
+  color: #6ea8fe;
+}
+
+.idle {
+  background: rgba(233, 237, 243, 0.08);
+  color: #9aa5b4;
+}

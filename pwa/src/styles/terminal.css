@@ -1,0 +1,157 @@
+/* --- Terminal buffer ------------------------------------------------------------- */
+
+/*
+  The buffer is an in-flow flex child with min-height:0 so WebKit will shrink
+  it and scroll inside it. An absolute inset:0 layer against a flex-sized
+  parent often computes height:auto on iOS, so the parent clips and a pan
+  has nothing to scroll.
+*/
+.term-wrap {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.term {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-family: var(--mono);
+  font-size: var(--term-fs);
+  line-height: var(--term-lh);
+  letter-spacing: 0;
+  tab-size: 8;
+  padding: 10px 12px 18px;
+  overflow-x: auto;
+  overflow-y: scroll;
+  touch-action: pan-x pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  font-variant-ligatures: none;
+  font-kerning: none;
+  font-synthesis: none;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+  Rows are different lengths after trailing pad is trimmed. `min-width: 100%`
+  on a row is 100% of the visible .term box, so short TUI bars stop at the
+  phone edge while long lines keep the computer's column count. Wrap every
+  row in a max-content canvas so they all share the widest line.
+*/
+.term-inner {
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+/*
+  TUI snapshots paint a background on every cell. WebKit only fills inline
+  span backgrounds around the glyph box, so line-height > 1 leaves a hairline
+  of --term-bg between rows — zebra stripes across the phone screen. Tile
+  rows on an integer pixel grid and stretch cell backgrounds to the row box.
+
+  Rows must be max-content wide (not overflow:hidden at the viewport width),
+  or long lines are clipped and .term never becomes horizontally scrollable.
+*/
+.term [role="button"] {
+  touch-action: pan-x pan-y;
+}
+
+.term-line {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+  height: var(--term-lh);
+  min-height: 1.5em;
+  line-height: var(--term-lh);
+  touch-action: pan-x pan-y;
+}
+
+.term-line > span {
+  flex: 0 0 auto;
+  display: block;
+  white-space: pre;
+  line-height: var(--term-lh);
+}
+
+/* Rows the runtime will accept a numbered answer for. */
+.term-option {
+  box-shadow: inset 2px 0 0 var(--accent);
+  cursor: pointer;
+}
+
+.term-option:active { filter: brightness(1.45); }
+
+/*
+  Reflow long rows instead of forcing a horizontal drag on a phone.
+  Flex items with flex: 0 0 auto size to max-content, so wrap must happen
+  inside the glyphs (block row + inline spans), not between spans.
+*/
+.term.wrapped .term-inner {
+  width: 100%;
+  max-width: 100%;
+}
+
+.term.wrapped .term-line {
+  display: block;
+  width: auto;
+  height: auto;
+  min-height: max(var(--term-lh), 1.5em);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.term.wrapped .term-line > span {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.term.selecting {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  box-shadow: inset 0 0 0 2px rgba(110, 168, 254, 0.45);
+}
+
+.term.selecting .term-option {
+  box-shadow: none;
+  cursor: auto;
+}
+
+.term-jump {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  min-height: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.84rem;
+  font-weight: 640;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  animation: sheet-up 0.18s var(--ease);
+  z-index: 2;
+}
+
+.term-jump[hidden] { display: none; }
+
+.term-jump:active { background: var(--accent-deep); }

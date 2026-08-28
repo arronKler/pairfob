@@ -1,0 +1,19 @@
+{
+  "name": "pairfob-origin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test src",
+    "typecheck": "tsc --noEmit",
+    "e2e": "bun test e2e",
+    "e2e:wrangler": "vitest run --config vitest.config.ts",
+    "mint": "bun run src/mint.ts",
+    "pack-assets": "bash ../../scripts/pack-origin-assets.sh"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@types/bun": "^1.4.0",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.126.0"
+  }
+}
