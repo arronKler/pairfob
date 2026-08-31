@@ -10,6 +10,10 @@ import (
 	"pairfob/internal/runtime"
 )
 
+// The race detector substantially amplifies the Argon2 work performed by the
+// phone handshake. This bounds the test without constraining production code.
+const pairingTestTimeout = 30 * time.Second
+
 func TestPairingApprovalBeforeOrAfterSPAKEPersistsDevice(t *testing.T) {
 	for _, approveBefore := range []bool{false, true} {
 		name := "after_phone_handshake"
@@ -76,7 +80,7 @@ func testPairingApprovalOrder(t *testing.T, approveBefore bool) {
 			if err := <-waitErr; err != nil {
 				t.Fatal(err)
 			}
-		case <-time.After(5 * time.Second):
+		case <-time.After(pairingTestTimeout):
 			t.Fatal("WaitPairingReady did not observe the phone proof")
 		}
 		if !st.Ready || st.Admitted {
@@ -92,7 +96,7 @@ func testPairingApprovalOrder(t *testing.T, approveBefore bool) {
 		if err != nil {
 			t.Fatal("pair", err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(pairingTestTimeout):
 		t.Fatal("Pair did not finish after computer approval")
 	}
 	deadline := time.Now().Add(2 * time.Second)

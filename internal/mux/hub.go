@@ -108,17 +108,19 @@ func newHub(joinToken, statePath string) (*Hub, error) {
 		joinHash = tokenHash(joinToken)
 	}
 	h := &Hub{
-		joinHash:        joinHash,
-		daemons:         map[string]*daemonSlot{},
-		reconnect:       map[string]string{},
-		diskReconnect:   map[string]string{},
-		clients:         map[Conn]*clientState{},
-		statePath:       statePath,
-		now:             time.Now,
-		ttlPair:         180 * time.Second,
-		helloGrace:      5 * time.Second,
-		resumeWait:      15 * time.Second,
-		pairFirstFrame:  15 * time.Second,
+		joinHash:      joinHash,
+		daemons:       map[string]*daemonSlot{},
+		reconnect:     map[string]string{},
+		diskReconnect: map[string]string{},
+		clients:       map[Conn]*clientState{},
+		statePath:     statePath,
+		now:           time.Now,
+		ttlPair:       180 * time.Second,
+		helloGrace:    5 * time.Second,
+		resumeWait:    15 * time.Second,
+		// NewHub is the in-process test relay. Leave enough time for the phone's
+		// Argon2 work under the race detector before its first FWD frame.
+		pairFirstFrame:  60 * time.Second,
 		pairConfirmWait: 30 * time.Second,
 	}
 	if statePath != "" {
