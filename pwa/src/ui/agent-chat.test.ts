@@ -38,7 +38,7 @@ describe("agent-chat is a first-class pane mode", () => {
     const paint = await Bun.file(new URL("./agent-chat-stream.ts", import.meta.url)).text();
     expect(paint).toContain('node("details", "agent-process")');
     expect(paint).toContain("markdownEl");
-    expect(paint).toContain("正在执行");
+    expect(paint).toContain('t("chat.runningEllipsis")');
     expect(paint).toContain("agent-assistant");
     expect(paint).toContain("agent-stream-inner");
     expect(paint).toContain("agent-user-role");
@@ -53,7 +53,7 @@ describe("agent-chat is a first-class pane mode", () => {
     expect(source).toContain("agent-jump");
     expect(source).toContain("agentTraceUnread");
     expect(source).not.toContain("agent-bubble");
-    expect(source).toContain("加载更早内容");
+    expect(source).toContain('t("hist.loadEarlier")');
     expect(source).toContain('next.querySelector(".agent-stream-inner")?.prepend(olderButton())');
     expect(source).not.toContain("olderButton(), stream");
     expect(source).toContain("firstTurnNeedsUser");

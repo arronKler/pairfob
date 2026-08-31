@@ -1,6 +1,7 @@
-# pairfob.v1 envelope
+# Pairfob encrypted envelope v1
 
-Binary WebSocket subprotocol `pairfob.v1`. Header 24 bytes:
+Binary envelope format `version=0x01`, carried by the current WebSocket
+subprotocol `pairfob.v2`. Header 24 bytes:
 
 | offset | size | field |
 | 0 | 1 | version = 0x01 |

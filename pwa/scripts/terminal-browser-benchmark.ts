@@ -105,6 +105,10 @@ globalThis.runTerminalBenchmark = async () => {
   const importStarted = performance.now();
   const module = await import(${JSON.stringify(scriptPath)});
   const importMs = performance.now() - importStarted;
+  const warmImportStarted = performance.now();
+  const warmModule = await import(${JSON.stringify(scriptPath)});
+  const warmImportMs = performance.now() - warmImportStarted;
+  if (warmModule !== module) throw new Error("xterm module cache was not reused");
   const terminal = new module.Terminal({
     cols: 80,
     rows: 24,
@@ -141,6 +145,7 @@ globalThis.runTerminalBenchmark = async () => {
   return {
     viewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
     importMs: round(importMs),
+    warmImportMs: round(warmImportMs),
     openReadyMs: round(openReadyMs),
     outputBytes,
     writeDrainMs: round(writeDrainMs),

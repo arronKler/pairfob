@@ -1,14 +1,23 @@
 /* --- Session shell: fixed pane frame and its title bar -------------------------- */
 
+/*
+  Size to the visual viewport, not the layout viewport. iOS overlays the
+  keyboard and leaves position:fixed; inset:0 behind it; --vv-* tracks the
+  visible rectangle so the dock stays above the keys.
+*/
 #app.session {
   position: fixed;
-  inset: 0;
+  top: var(--vv-top, 0px);
+  right: 0;
+  bottom: auto;
+  left: 0;
   width: 100%;
-  height: auto;
+  height: var(--vv-height, 100%);
   min-width: 0;
   min-height: 0;
   max-width: none;
-  padding: 0 0 var(--kb, 0px);
+  max-height: var(--vv-height, 100%);
+  padding: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;

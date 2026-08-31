@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import { ProtocolError } from "./protocol/errors.ts";
 
 export const HTTP_REQUEST_TIMEOUT_MS = 12_000;
@@ -28,10 +29,10 @@ export async function fetchWithTimeout(
 
   try {
     const response = await fetchImpl(input, { ...init, signal: controller.signal });
-    if (timedOut) throw new ProtocolError("timeout", "网络请求超时");
+    if (timedOut) throw new ProtocolError("timeout", t("err.timeoutNetwork"));
     return response;
   } catch (error) {
-    if (timedOut) throw new ProtocolError("timeout", "网络请求超时");
+    if (timedOut) throw new ProtocolError("timeout", t("err.timeoutNetwork"));
     throw error;
   } finally {
     clearTimeout(timer);

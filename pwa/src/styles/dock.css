@@ -119,6 +119,11 @@
   border-color: rgba(110, 168, 254, 0.45);
 }
 
+.dock-form.live-pending textarea::placeholder {
+  color: var(--accent);
+  opacity: 0.82;
+}
+
 .send-btn {
   flex: 0 0 auto;
   min-height: 46px;

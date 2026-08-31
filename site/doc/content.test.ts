@@ -22,7 +22,12 @@ describe("user-facing documentation", () => {
     expect(app).toContain("按工作区");
     expect(app).toContain("按 Agent");
     expect(app).toContain("默认只展开第一组");
-    expect(app).toContain("会话 / 标签页 / 工作区");
+    expect(app).toContain("**会话名**");
+    expect(app).toContain("**标签页名**");
+    expect(app).toContain("**工作区名**");
+    expect(app).toContain("卡片主体点进去");
+    expect(app).toContain("| 这一格 |");
+    expect(app).not.toContain("| 管理 |");
     expect(app).toContain("claude · pairfob");
     expect(app).toContain("终端 · pairfob");
     expect(app).toContain("不会拿内部 ID 当名称");
@@ -46,6 +51,7 @@ describe("user-facing documentation", () => {
     expect(app).not.toContain("会话顶栏会直接显示 **历史**");
     expect(app).not.toContain("| 画面 |");
     expect(app).toContain("顶部「新建」");
+    expect(app).toContain("**这一屏**");
     expect(docs).not.toContain("＋ 新建会话");
     expect(docs).not.toContain("不展示思维链");
   });
@@ -73,11 +79,14 @@ describe("user-facing documentation", () => {
     const start = await Bun.file(new URL("./start.md", import.meta.url)).text();
     const install = await Bun.file(new URL("./install.md", import.meta.url)).text();
     const zhStart = await Bun.file(new URL("./zh/start.md", import.meta.url)).text();
+    const zhInstall = await Bun.file(new URL("./zh/install.md", import.meta.url)).text();
     const devices = await Bun.file(new URL("./zh/devices.md", import.meta.url)).text();
     expect(start).toContain("curl -fsSL https://pairfob.com/install.sh | sh");
     expect(start).not.toContain("sh -s -- --grant");
     expect(zhStart).not.toContain("sh -s -- --grant");
     expect(install).toContain("curl -fsSL https://pairfob.com/install.sh | sh");
+    expect(install).toContain("https://github.com/arronKler/pairfob");
+    expect(zhInstall).toContain("https://github.com/arronKler/pairfob");
     expect(install).not.toContain("sh -s -- --grant jg_");
     expect(faq).toContain("curl -fsSL https://pairfob.com/install.sh | sh");
     expect(devices).toContain("curl -fsSL https://pairfob.com/install.sh | sh");
@@ -101,12 +110,16 @@ describe("user-facing documentation", () => {
     const indexEn = await Bun.file(new URL("./index.md", import.meta.url)).text();
     expect(faq).toContain("官方实例");
     expect(faq).toContain("Apache-2.0");
+    expect(faq).toContain("https://github.com/arronKler/pairfob");
     expect(faq).toContain("新电脑登记随时可能关上");
     expect(faqEn).toContain("official instance");
     expect(faqEn).toContain("Apache-2.0");
+    expect(faqEn).toContain("https://github.com/arronKler/pairfob");
     expect(faqEn).toContain("New computer setup can close");
-    expect(indexZh).toContain("官方实例");
-    expect(indexEn).toContain("Official instance");
+    expect(indexZh).not.toContain("官方实例");
+    expect(indexEn).not.toContain("Official instance");
+    expect(indexZh).not.toContain("不适合当什么");
+    expect(indexEn).not.toContain("Who it is not for");
   });
 
   test("design section stays a product overview", () => {

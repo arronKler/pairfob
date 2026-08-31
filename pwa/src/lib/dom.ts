@@ -1,3 +1,5 @@
+import { t } from "./i18n.ts";
+
 export function node<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -78,15 +80,15 @@ function modal(title: string): {
   return { dialog, form, trigger };
 }
 
-export function askText(title: string, initial = "", maxLength?: number, fieldLabel = "名称"): Promise<string | null> {
+export function askText(title: string, initial = "", maxLength?: number, fieldLabel?: string): Promise<string | null> {
   return new Promise((resolve) => {
     const { dialog, form, trigger } = modal(title);
-    const field = labeledInput(fieldLabel, "value", "", initial);
+    const field = labeledInput(fieldLabel ?? t("op.fieldName"), "value", "", initial);
     const input = field.querySelector("input") as HTMLInputElement;
     if (maxLength !== undefined) input.maxLength = maxLength;
     const actions = node("div", "action-row");
-    const cancel = button("取消", "btn btn-small btn-ghost", () => dialog.close("cancel"));
-    const submit = node("button", "btn btn-small btn-primary", "确认");
+    const cancel = button(t("cancel"), "btn btn-small btn-ghost", () => dialog.close("cancel"));
+    const submit = node("button", "btn btn-small btn-primary", t("confirm"));
     submit.type = "submit";
     actions.append(submit, cancel);
     form.append(field, actions);
@@ -103,14 +105,14 @@ export function askText(title: string, initial = "", maxLength?: number, fieldLa
   });
 }
 
-export function askConfirm(message: string, confirmLabel = "确认"): Promise<boolean> {
+export function askConfirm(message: string, confirmLabel?: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const { dialog, form, trigger } = modal("确认危险操作");
+    const { dialog, form, trigger } = modal(t("op.dangerTitle"));
     form.append(node("p", "lede", message));
     const actions = node("div", "action-row");
-    const cancel = button("取消", "btn btn-small btn-ghost", () => dialog.close("cancel"));
+    const cancel = button(t("cancel"), "btn btn-small btn-ghost", () => dialog.close("cancel"));
     cancel.autofocus = true;
-    actions.append(button(confirmLabel, "btn btn-small btn-danger", () => dialog.close("confirm")), cancel);
+    actions.append(button(confirmLabel ?? t("confirm"), "btn btn-small btn-danger", () => dialog.close("confirm")), cancel);
     form.append(actions);
     dialog.addEventListener("close", () => {
       const accepted = dialog.returnValue === "confirm";

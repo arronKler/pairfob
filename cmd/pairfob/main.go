@@ -107,29 +107,32 @@ func runDaemon(store *state.Store, sock string) error {
 	if err != nil {
 		return fmt.Errorf("engine: %w", err)
 	}
-	eng.MuxProtocol = plan.Protocol
+	runtimeConfig := daemon.RuntimeConfig{
+		MuxProtocol: plan.Protocol,
+		PushEnabled: getenv("PAIRFOB_PUSH", "") == "1",
+		AutoAdmit:   getenv("PAIRFOB_DEV_AUTO_ADMIT", "") == "1",
+	}
 	if plan.Origin != "" {
-		eng.Origin = plan.Origin
+		runtimeConfig.Origin = plan.Origin
 	} else if origin := getenv("PAIRFOB_ORIGIN", ""); origin != "" {
-		eng.Origin = origin
+		runtimeConfig.Origin = origin
 	}
 	if plan.NeedEnroll {
 		relay, err := enrollV2(store, plan.Origin, env.JoinGrant)
 		if err != nil {
 			return fmt.Errorf("enroll: %w", err)
 		}
-		eng.RelayURL, eng.Reconnect = relay.URL, relay.ReconnectToken
+		runtimeConfig.RelayURL, runtimeConfig.ReconnectToken = relay.URL, relay.ReconnectToken
 		id, _, _, err := store.LoadOrCreateIdentity()
 		if err != nil {
 			return fmt.Errorf("state identity: %w", err)
 		}
-		eng.DaemonID, eng.Identity.DaemonID = id.DaemonID, id.DaemonID
+		runtimeConfig.DaemonID = id.DaemonID
 	} else if plan.DialURL != "" {
-		eng.RelayURL = plan.DialURL
+		runtimeConfig.RelayURL = plan.DialURL
 	}
-	eng.PushEnabled = getenv("PAIRFOB_PUSH", "") == "1"
-	if getenv("PAIRFOB_DEV_AUTO_ADMIT", "") == "1" {
-		eng.AutoAdmit = true
+	target := eng.ConfigureRuntime(runtimeConfig)
+	if runtimeConfig.AutoAdmit {
 		log.Printf("DEV_AUTO_ADMIT accepted the active pairing slot")
 	}
 
@@ -137,7 +140,7 @@ func runDaemon(store *state.Store, sock string) error {
 	link := newRelayLink(hubSide)
 	go link.sendLoop()
 	ready := make(chan error, 1)
-	go runRelay(link, eng, eng.RelayURL, "", ready)
+	go runRelay(link, eng, target.RelayURL, "", ready)
 	if err := <-ready; err != nil {
 		return fmt.Errorf("relay: %w", err)
 	}
@@ -147,7 +150,7 @@ func runDaemon(store *state.Store, sock string) error {
 		return err
 	}
 
-	log.Printf("pairfob admin %s daemon_id %s", sock, eng.DaemonID)
+	log.Printf("pairfob admin %s daemon_id %s", sock, target.DaemonID)
 	return admin.ListenAndServe(sock, liveAdmin{eng: eng, store: store, origin: plan.Origin})
 }
 

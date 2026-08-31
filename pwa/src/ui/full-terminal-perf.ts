@@ -46,7 +46,13 @@ export type TerminalPerfSnapshot = {
     assembly: DurationSummary;
     write: DurationSummary;
   };
+  latency: {
+    inputToNextFrame: DurationSummary;
+    inputToWrite: DurationSummary;
+  };
 };
+
+export type TerminalInputFrameMarker = readonly number[];
 
 class DurationWindow {
   private count = 0;
@@ -116,6 +122,9 @@ export class TerminalPerfTracker {
   private readonly commandRTT = new DurationWindow();
   private readonly assembly = new DurationWindow();
   private readonly write = new DurationWindow();
+  private readonly inputToNextFrame = new DurationWindow();
+  private readonly inputToWrite = new DurationWindow();
+  private readonly pendingInputAt: number[] = [];
 
   readonly commandObserver: TerminalCommandPumpObserver = {
     queued: (_kind, coalesced, state) => {
@@ -123,9 +132,13 @@ export class TerminalPerfTracker {
       if (coalesced) this.commandCoalesced++;
       this.observePending(state);
     },
-    sent: (_kind, _sequence, queueWaitMs, state) => {
+    sent: (kind, _sequence, queueWaitMs, state) => {
       this.commandSent++;
       this.queueWait.record(queueWaitMs);
+      if (kind === "input") {
+        this.pendingInputAt.push(this.now() - Math.max(0, queueWaitMs));
+        if (this.pendingInputAt.length > SAMPLE_LIMIT) this.pendingInputAt.shift();
+      }
       this.observePending(state);
     },
     settled: (_kind, _sequence, rttMs, state) => {
@@ -137,9 +150,11 @@ export class TerminalPerfTracker {
       this.commandFailed++;
       this.commandDropped += droppedCount(dropped);
       this.commandRTT.record(rttMs);
+      this.pendingInputAt.length = 0;
     },
     stopped: (dropped) => {
       this.commandDropped += droppedCount(dropped);
+      this.pendingInputAt.length = 0;
     },
   };
 
@@ -171,6 +186,9 @@ export class TerminalPerfTracker {
     this.commandRTT.reset();
     this.assembly.reset();
     this.write.reset();
+    this.inputToNextFrame.reset();
+    this.inputToWrite.reset();
+    this.pendingInputAt.length = 0;
     this.clearLifecycleEntries();
     this.mark(PERF_ENTER_MARK);
   }
@@ -197,13 +215,17 @@ export class TerminalPerfTracker {
     this.ingressBytes += Math.max(0, bytes);
   }
 
-  frameAssembled(durationMs: number): void {
+  frameAssembled(durationMs: number): TerminalInputFrameMarker {
     this.logicalFrames++;
     this.assembly.record(durationMs);
     if (this.firstFrameMs === null && this.active) {
       this.firstFrameMs = Math.max(0, this.now() - this.enteredAt);
       this.measure(PERF_FIRST_FRAME_MEASURE, PERF_ENTER_MARK);
     }
+    const now = this.now();
+    const marker = this.pendingInputAt.splice(0);
+    for (const queuedAt of marker) this.inputToNextFrame.record(Math.max(0, now - queuedAt));
+    return marker;
   }
 
   writeStarted(bytes: number, pendingBytes: number): void {
@@ -211,8 +233,10 @@ export class TerminalPerfTracker {
     this.peakPendingWriteBytes = Math.max(this.peakPendingWriteBytes, pendingBytes);
   }
 
-  writeCompleted(durationMs: number): void {
+  writeCompleted(durationMs: number, marker: TerminalInputFrameMarker = []): void {
     this.write.record(durationMs);
+    const now = this.now();
+    for (const queuedAt of marker) this.inputToWrite.record(Math.max(0, now - queuedAt));
   }
 
   snapshot(reason = "snapshot"): TerminalPerfSnapshot {
@@ -243,6 +267,10 @@ export class TerminalPerfTracker {
         peakPendingWriteBytes: this.peakPendingWriteBytes,
         assembly: this.assembly.summary(),
         write: this.write.summary(),
+      },
+      latency: {
+        inputToNextFrame: this.inputToNextFrame.summary(),
+        inputToWrite: this.inputToWrite.summary(),
       },
     };
   }

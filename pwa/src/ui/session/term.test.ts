@@ -49,7 +49,7 @@ describe("terminal row taps answer the live prompt", () => {
 
   test("option rows are named from the parsed option, not the padded row", () => {
     const fill = body("fillTerm");
-    expect(fill).toContain("选择 ${parsed.n}. ${parsed.label}");
+    expect(fill).toContain('t("term.selectOption", { n: parsed.n, label: parsed.label })');
   });
 
   test("paint drops computer-window padding before rows are mounted", () => {

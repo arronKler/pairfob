@@ -21,7 +21,7 @@ The default is a flat list, ordered by recent activity (create, status change, o
 
 Grouped headings toggle open and closed. The first group starts open; the rest start collapsed.
 
-The card title is the task identity: the session name if you set one; otherwise the workspace name when it is not just the directory name; otherwise a task-like terminal title. If none of those exist, it shows **claude · pairfob** (“Agent · folder”), or **终端 · pairfob** for a shell. The next line is coordinates (workspace, Agent, a renamed tab, directory), omitting words already in the title and default tabs such as `main`. Internal IDs are never presented as names.
+The card title is the task identity: the session name if you set one; otherwise the workspace name when it is not just the directory name; otherwise a task-like terminal title (stripping live crumbs such as `Thinking` / `Waiting for response` and a trailing ` - grok`). If none of those exist, it shows **claude · pairfob** (“Agent · folder”), or **终端 · pairfob** for a shell. The next line is coordinates (workspace, Agent, a renamed tab, directory), omitting words already in the title and default tabs such as `main`. Internal IDs are never presented as names.
 
 - **会话名** names this terminal surface only.
 - **标签页名** names the tab containing one or more sessions.
@@ -38,6 +38,8 @@ When Pairfob is connected, an empty list means there are no sessions yet; create
 
 **新建** appears in the top bar when the computer supports creating a session. The form can start a supported agent, or a **纯终端** pane with no agent. With no kinds listed, the dialog still opens and creates that terminal session.
 
+The card body opens the session. The trailing `···` is for this session: rename it, close it. A tab id offers 改标签页名; a split tab also offers 关闭整个标签页. 改工作区名 is here too, in every grouping mode.
+
 ## Inside a session
 
 Opening a session lands in **控制**: the session already open on the computer, operated on the phone. Not a remote-desktop screenshot, not another terminal in the browser.
@@ -47,7 +49,7 @@ Chrome:
 - Left: back to the list (phone)
 - Center: name and status; tap to switch sessions
 - While working, an interrupt control is the same as Esc
-- Right: `···` more actions
+- Right: `···` **这一屏** (how this view looks and types, this pane's name, close this pane)
 
 The three modes are under `···` → **模式**. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **设置**.
 
@@ -60,7 +62,8 @@ The three modes are under `···` → **模式**. A switch inside a session is 
 In **控制**:
 
 - The compose box uses the **system keyboard**, including dictation and autocorrect. **组字 / 实时** switches sit above the field
-- Choices become tappable buttons — **Enter is not fired blindly**
+- Choices become tappable buttons; empty Enter cannot stand in for tapping them
+- The trailing control is **Enter**: with no draft it is a terminal Return; with a draft it types then confirms
 - Tapping a row can copy the line, copy a path, quote into compose, or start text selection
 - Swipe or 页↑ pages the live view; it does not dump history
 - Font size is remembered
@@ -68,9 +71,9 @@ In **控制**:
 
 A dialog confirmed on the computer is already confirmed on the phone, and the reverse. There is no phone-side draft and no “pending sync” queue.
 
-## Actions that may appear in the menu
+## Actions that may appear on this view
 
-Tap `···`. Missing items are not drawn.
+Tap the session chrome `···`. Missing items are not drawn. 改标签页名, 改工作区名, and 关闭整个标签页 live on the list card `···`, not here.
 
 | Group | May include |
 | --- | --- |
@@ -80,7 +83,7 @@ Tap `···`. Missing items are not drawn.
 | 新建 | 新建标签页, 分屏 |
 | Worktree | Worktree 列表, 新建 Worktree, 打开 Worktree |
 | 布局 | 让这一格大一点, 和对面一格对调 |
-| 管理 | 改会话名, 改标签页名, 改工作区名, 关闭这个会话 / 整个标签页 |
+| 这一格 | 改会话名, 关闭这个会话 |
 
 **更早的输出** is already-rendered, idle scrollback on the computer. A busy or scrolled-away terminal must become idle first. **对话** groups thinking and tools into a collapsible run that closes once the reply is in. Expand the run to see arguments and results.
 

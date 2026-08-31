@@ -15,6 +15,7 @@
     "nav.pair": "配对",
     "nav.faq": "问题",
     "nav.doc": "文档",
+    "nav.github": "GitHub 上的源码",
     "nav.feedback": "反馈",
     "lang.aria": "语言",
     "cta.open": "打开 Pairfob",
@@ -31,7 +32,7 @@
     // Leading space: the markup closes the Herdr link tight so the English
     // period hugs it, so the Latin/CJK gap has to come from the string.
     "hero.lede2":
-      " 跑 Codex、Claude、Grok。Pairfob 让手机接上同一批会话——不是截图，也不是远程桌面，就是电脑上正在跑的那些会话，两端谁操作都算数。",
+      " 跑 Codex、Claude、Grok。Pairfob 让手机接上电脑上正在跑的那些会话，两端谁操作都算数。",
     "hero.figure": "同一群会话同时开在电脑和手机上",
     "hero.same": "手机上是同一份列表",
     "mock.settings": "设置",
@@ -126,12 +127,12 @@
     "faq.q5": "一部设备能管多台电脑吗？",
     "faq.a5": "能。手机、平板、另一台电脑都可以当设备。第二台电脑装好后，设置 → 添加另一台电脑。",
     "faq.q6": "收费吗？",
-    "faq.a6": "不收费。pairfob.com 是本项目的官方实例。新电脑登记随时可能关上；已经装好的电脑继续可用。不承诺容量。",
+    "faq.a6": "不收费。",
     "faq.more": "文档里还有",
     "faq.feedback.b": "反馈问题",
     "faq.feedback.p": "功能与体验问题去 GitHub 开 issue。安全漏洞请私下报告。",
     "faq.feedback": "去 GitHub 开 issue",
-    "foot.blurb": "不用注册。pairfob.com 是本项目的官方实例。跑 Herdr 的那台电脑目前要是 macOS 或 Linux。",
+    "foot.blurb": "不用注册。跑 Herdr 的那台电脑目前要是 macOS 或 Linux。",
     "foot.aria": "页脚",
   };
 
@@ -149,6 +150,7 @@
     "nav.pair": "Pair",
     "nav.faq": "FAQ",
     "nav.doc": "Docs",
+    "nav.github": "Source on GitHub",
     "nav.feedback": "Feedback",
     "lang.aria": "Language",
     "cta.open": "Open Pairfob",
@@ -163,7 +165,7 @@
     "hero.clis.aria": "Popular coding agent CLIs",
     "hero.lede1": "You run Codex, Claude, and Grok on the computer with",
     "hero.lede2":
-      ". Pairfob attaches the phone to that same herd — not a screenshot, not remote desktop, the same live sessions. Either side counts.",
+      ". Pairfob attaches the phone to that same herd. Either side counts.",
     "hero.figure": "The same sessions open on computer and phone",
     "hero.same": "Same list on the phone",
     "mock.settings": "Settings",
@@ -258,12 +260,12 @@
     "faq.q5": "Can one device manage several computers?",
     "faq.a5": "Yes. A phone, tablet, or another computer can be the device. After the second host is installed: Settings → Add another computer.",
     "faq.q6": "Does it cost money?",
-    "faq.a6": "No. pairfob.com is this project's official instance. New computer setup can close; computers already set up keep working. There is no capacity promise.",
+    "faq.a6": "No.",
     "faq.more": "More in the docs",
     "faq.feedback.b": "Report an issue",
     "faq.feedback.p": "Bugs and product feedback go to GitHub Issues. Security reports stay private.",
     "faq.feedback": "Open a GitHub issue",
-    "foot.blurb": "No account. pairfob.com is this project's official instance. The computer that runs Herdr has to be macOS or Linux for now.",
+    "foot.blurb": "No account. The computer that runs Herdr has to be macOS or Linux for now.",
     "foot.aria": "Footer",
   };
 

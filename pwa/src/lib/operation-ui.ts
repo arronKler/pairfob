@@ -1,4 +1,5 @@
 import { button, node } from "./dom.ts";
+import { t } from "./i18n.ts";
 import { messageOf } from "./notices.ts";
 import {
   OPERATION_INPUT_LIMITS,
@@ -31,20 +32,20 @@ function rejected<T>(message: string, field?: string): FormResult<T> {
 }
 
 export function openWorktreeTargetError(path: string, branch: string): string | null {
-  if (!path && !branch) return "请输入路径或分支。";
-  if (path && branch) return "路径和分支只能填写一个。";
+  if (!path && !branch) return t("form.needPathOrBranch");
+  if (path && branch) return t("form.pathXorBranch");
   return null;
 }
 
 export function splitRatioError(raw: string): string | null {
   if (!raw) return null;
   const ratio = Number(raw);
-  return Number.isFinite(ratio) && ratio > 0 && ratio < 1 ? null : "分屏占比必须大于 0 且小于 1，例如 0.5。";
+  return Number.isFinite(ratio) && ratio > 0 && ratio < 1 ? null : t("form.needRatio");
 }
 
 export function resizeAmountError(raw: string): string | null {
   const amount = Number(raw);
-  return Number.isFinite(amount) && amount > 0 && amount <= 1 ? null : "调整量必须大于 0 且不超过 1，例如 0.1。";
+  return Number.isFinite(amount) && amount > 0 && amount <= 1 ? null : t("form.needAmount");
 }
 
 let serial = 0;
@@ -122,7 +123,7 @@ function selectField(label: string, name: string, choices: Array<{ value: string
 
 function actions(close: () => void, submitLabel: string): HTMLDivElement {
   const row = node("div", "action-row");
-  const cancel = button("取消", "btn btn-small btn-ghost", close);
+  const cancel = button(t("cancel"), "btn btn-small btn-ghost", close);
   const submit = node("button", "btn btn-small btn-primary", submitLabel);
   submit.type = "submit";
   row.append(submit, cancel);
@@ -178,32 +179,32 @@ function formDialog<T>(
 }
 
 export function askCreateConversation(agentKinds: string[], defaultCwd = ""): Promise<CreateConversationInput | null> {
-  return formDialog("新建会话", "新建并打开", (body) => {
-    body.append(field("项目目录", "cwd", defaultCwd, "/path/to/project", true));
+  return formDialog(t("form.newConversation"), t("form.createOpen"), (body) => {
+    body.append(field(t("form.projectDir"), "cwd", defaultCwd, "/path/to/project", true));
     if (agentKinds.length) {
-      body.append(selectField("类型", "agent_kind", [
-        { value: "", label: "纯终端（不启动 Agent）" },
+      body.append(selectField(t("form.kind"), "agent_kind", [
+        { value: "", label: t("form.plainTerminal") },
         ...agentKinds.map((kind) => ({ value: kind, label: kind })),
       ]));
     } else {
-      body.append(node("p", "operation-hint", "电脑没有可用的 Agent 类型，将创建纯终端会话。"));
+      body.append(node("p", "operation-hint", t("form.noAgentKinds")));
     }
-    body.append(field("名称（可选）", "label", "", "例如：修复登录问题"));
-    body.append(node("p", "operation-hint", "会在电脑上创建会话，但不会抢走当前焦点。纯终端只打开 shell，不启动 Agent。"));
+    body.append(field(t("form.labelOptional"), "label", "", t("form.labelExample")));
+    body.append(node("p", "operation-hint", t("form.conversationHint")));
   }, (data) => {
     const cwd = String(data.get("cwd") || "").trim();
     const agentKind = String(data.get("agent_kind") || "").trim();
     const label = String(data.get("label") || "").trim();
-    if (!cwd) return rejected("请输入项目目录。", "cwd");
-    if (agentKind && !agentKinds.includes(agentKind)) return rejected("请选择类型。", "agent_kind");
+    if (!cwd) return rejected(t("form.needCwd"), "cwd");
+    if (agentKind && !agentKinds.includes(agentKind)) return rejected(t("form.needKind"), "agent_kind");
     return accepted({ cwd, ...(agentKind ? { agent_kind: agentKind } : {}), ...(label ? { label } : {}) });
   });
 }
 
 export function askCreateTab(defaultCwd = ""): Promise<{ cwd?: string; label?: string } | null> {
-  return formDialog("新建标签页", "新建", (body) => {
-    body.append(field("目录（可选）", "cwd", defaultCwd));
-    body.append(field("标签页名（可选）", "label"));
+  return formDialog(t("form.newTab"), t("form.create"), (body) => {
+    body.append(field(t("form.cwdOptional"), "cwd", defaultCwd));
+    body.append(field(t("form.tabLabelOptional"), "label"));
   }, (data) => {
     const cwd = String(data.get("cwd") || "").trim();
     const label = String(data.get("label") || "").trim();
@@ -212,36 +213,36 @@ export function askCreateTab(defaultCwd = ""): Promise<{ cwd?: string; label?: s
 }
 
 export function askSplitPane(defaultCwd = ""): Promise<{ direction: SplitDirection; cwd?: string; ratio?: number } | null> {
-  return formDialog("分屏", "再开一格", (body) => {
-    body.append(selectField("位置", "direction", [
-      { value: "right", label: "在右边再开一格" },
-      { value: "down", label: "在下边再开一格" },
+  return formDialog(t("form.split"), t("form.splitAction"), (body) => {
+    body.append(selectField(t("form.place"), "direction", [
+      { value: "right", label: t("form.splitRight") },
+      { value: "down", label: t("form.splitDown") },
     ]));
-    body.append(field("目录（可选）", "cwd", defaultCwd));
-    body.append(node("p", "operation-hint", "新的一格大约占一半。手机一次只看其中一格，半屏时用铺满全屏。"));
+    body.append(field(t("form.cwdOptional"), "cwd", defaultCwd));
+    body.append(node("p", "operation-hint", t("form.splitHint")));
   }, (data) => {
     const direction = String(data.get("direction")) as SplitDirection;
     const cwd = String(data.get("cwd") || "").trim();
-    if (!(["right", "down"] as string[]).includes(direction)) return rejected("请选择分屏位置。", "direction");
+    if (!(["right", "down"] as string[]).includes(direction)) return rejected(t("form.needSplit"), "direction");
     return accepted({ direction, ratio: 0.5, ...(cwd ? { cwd } : {}) });
   });
 }
 
 export function askAgentPrompt(): Promise<string | null> {
-  return formDialog("给 Agent 发任务", "发送", (body) => {
+  return formDialog(t("form.promptAgent"), t("form.send"), (body) => {
     const wrapper = node("label", "operation-field");
-    wrapper.append(document.createTextNode("任务内容"));
+    wrapper.append(document.createTextNode(t("form.task")));
     const textarea = node("textarea");
     textarea.name = "text";
     textarea.required = true;
     textarea.maxLength = OPERATION_INPUT_LIMITS.prompt;
     textarea.rows = 7;
     wrapper.append(textarea);
-    body.append(wrapper, node("p", "operation-hint", "任务会直接交给 Agent，不会当作终端按键输入。"));
+    body.append(wrapper, node("p", "operation-hint", t("form.taskHint")));
   }, (data) => {
     const text = String(data.get("text") || "").trim();
-    if (!text) return rejected("请输入任务内容。", "text");
-    if (fitOperationPrompt(text).truncated) return rejected("任务内容最多 32 KiB，请缩短后再试。", "text");
+    if (!text) return rejected(t("form.needTask"), "text");
+    if (fitOperationPrompt(text).truncated) return rejected(t("form.taskTooBig"), "text");
     return accepted(text);
   });
 }
@@ -249,15 +250,15 @@ export function askAgentPrompt(): Promise<string | null> {
 export function askWorktree(kind: "create", defaults: WorktreeDraft): Promise<CreateWorktreeInput | null>;
 export function askWorktree(kind: "open", defaults: WorktreeDraft): Promise<OpenWorktreeInput | null>;
 export function askWorktree(kind: "create" | "open", defaults: WorktreeDraft): Promise<CreateWorktreeInput | OpenWorktreeInput | null> {
-  return formDialog(kind === "create" ? "新建 Worktree" : "打开 Worktree", kind === "create" ? "新建" : "打开", (body) => {
-    body.append(field(kind === "open" ? "路径（二选一）" : "路径（可选）", "path", defaults.path || ""));
-    body.append(field(kind === "open" ? "分支（二选一）" : "分支（可选）", "branch", defaults.branch || ""));
-    if (kind === "create") body.append(field("基线（可选）", "base", (defaults as Partial<CreateWorktreeInput>).base || ""));
-    body.append(field("名称（可选）", "label", defaults.label || ""));
+  return formDialog(kind === "create" ? t("form.newWorktree") : t("form.openWorktree"), kind === "create" ? t("form.create") : t("open"), (body) => {
+    body.append(field(kind === "open" ? t("form.pathEither") : t("form.pathOptional"), "path", defaults.path || ""));
+    body.append(field(kind === "open" ? t("form.branchEither") : t("form.branchOptional"), "branch", defaults.branch || ""));
+    if (kind === "create") body.append(field(t("form.baseOptional"), "base", (defaults as Partial<CreateWorktreeInput>).base || ""));
+    body.append(field(t("form.labelOptional"), "label", defaults.label || ""));
     if (kind === "create") {
-      body.append(node("p", "operation-hint", "路径和分支都留空时，电脑会自动生成 Worktree 的名称和路径。"));
+      body.append(node("p", "operation-hint", t("form.worktreeBlank")));
     }
-    body.append(node("p", "operation-hint", defaults.cwd ? `仓库目录：${defaults.cwd}` : "将使用当前工作区。"));
+    body.append(node("p", "operation-hint", defaults.cwd ? t("form.repoCwd", { cwd: defaults.cwd }) : t("form.currentWorkspace")));
   }, (data) => {
     const value: CreateWorktreeInput = { ...defaults };
     for (const key of ["path", "branch", "base", "label"] as const) {
@@ -282,7 +283,7 @@ export type LayoutChoice =
 const PANE_RESIZE_STEP = 0.15;
 
 export function askLayout(kind: "resize" | "swap"): Promise<LayoutChoice | null> {
-  const title = kind === "resize" ? "让这一格大一点" : "和对面一格对调";
+  const title = kind === "resize" ? t("form.resizeTitle") : t("form.swapTitle");
   return new Promise((resolve) => {
     const parts = makeDialog(title);
     const pick = (choice: LayoutChoice) => {
@@ -292,23 +293,23 @@ export function askLayout(kind: "resize" | "swap"): Promise<LayoutChoice | null>
     const hint = node(
       "p",
       "operation-hint",
-      kind === "resize" ? "每次大约动一点。电脑上看着不对就再点一次。" : "对调的是电脑上紧挨着的那一格。",
+      kind === "resize" ? t("form.resizeHint") : t("form.swapHint"),
     );
     parts.body.append(hint);
     const choices: Array<{ label: string; choice: LayoutChoice }> = kind === "resize"
       ? [
-          { label: "加宽", choice: { kind: "resize", direction: "right", amount: PANE_RESIZE_STEP } },
-          { label: "变窄", choice: { kind: "resize", direction: "left", amount: PANE_RESIZE_STEP } },
+          { label: t("form.wider"), choice: { kind: "resize", direction: "right", amount: PANE_RESIZE_STEP } },
+          { label: t("form.narrower"), choice: { kind: "resize", direction: "left", amount: PANE_RESIZE_STEP } },
           // Herdr pane.resize direction is the edge that moves. `up` grows this
-          // pane; `down` shrinks it. Do not map 加高 to down.
-          { label: "加高", choice: { kind: "resize", direction: "up", amount: PANE_RESIZE_STEP } },
-          { label: "变矮", choice: { kind: "resize", direction: "down", amount: PANE_RESIZE_STEP } },
+          // pane; `down` shrinks it. Do not map taller to down.
+          { label: t("form.taller"), choice: { kind: "resize", direction: "up", amount: PANE_RESIZE_STEP } },
+          { label: t("form.shorter"), choice: { kind: "resize", direction: "down", amount: PANE_RESIZE_STEP } },
         ]
       : [
-          { label: "和左边对调", choice: { kind: "swap", direction: "left" } },
-          { label: "和右边对调", choice: { kind: "swap", direction: "right" } },
-          { label: "和上边对调", choice: { kind: "swap", direction: "up" } },
-          { label: "和下边对调", choice: { kind: "swap", direction: "down" } },
+          { label: t("form.swapLeft"), choice: { kind: "swap", direction: "left" } },
+          { label: t("form.swapRight"), choice: { kind: "swap", direction: "right" } },
+          { label: t("form.swapUp"), choice: { kind: "swap", direction: "up" } },
+          { label: t("form.swapDown"), choice: { kind: "swap", direction: "down" } },
         ];
     for (const entry of choices) {
       const el = button(entry.label, "btn");
@@ -316,7 +317,7 @@ export function askLayout(kind: "resize" | "swap"): Promise<LayoutChoice | null>
       el.addEventListener("click", () => pick(entry.choice));
       parts.body.append(el);
     }
-    const cancel = button("取消", "btn btn-small btn-ghost", () => parts.close());
+    const cancel = button(t("cancel"), "btn btn-small btn-ghost", () => parts.close());
     cancel.type = "button";
     parts.body.append(cancel);
     parts.dialog.addEventListener("close", () => {
@@ -345,16 +346,16 @@ export async function showWorktrees(
   open?: (item: WorktreeSummary) => Promise<void>,
 ): Promise<void> {
   const parts = asyncDialog("Worktree");
-  const status = node("p", "notice notice-status", "正在读取 Worktree…");
+  const status = node("p", "notice notice-status", t("form.worktreesLoading"));
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   const list = node("ul", "worktree-list");
-  const close = button("关闭", "btn btn-small btn-ghost", () => parts.close());
+  const close = button(t("close"), "btn btn-small btn-ghost", () => parts.close());
   parts.body.append(status, list, close);
   parts.body.setAttribute("aria-busy", "true");
   try {
     const items = parseWorktrees(await load());
-    status.textContent = items.length ? `共 ${items.length} 个 Worktree。` : "还没有 Worktree。";
+    status.textContent = items.length ? t("form.worktreesCount", { n: items.length }) : t("form.worktreesEmpty");
     for (const item of items) {
       const row = node("li", "worktree-item");
       const copy = node("div");
@@ -363,12 +364,12 @@ export async function showWorktrees(
       row.append(copy);
       if (open) {
         const openItem = open;
-        const openButton = button("打开", "btn btn-small btn-primary", async () => {
+        const openButton = button(t("open"), "btn btn-small btn-primary", async () => {
           openButton.disabled = true;
           parts.body.setAttribute("aria-busy", "true");
           status.className = "notice notice-status";
           status.setAttribute("role", "status");
-          status.textContent = `正在打开${worktreeTitle(item)}…`;
+          status.textContent = t("form.openingNamed", { title: worktreeTitle(item) });
           try {
             await openItem(item);
             parts.close("opened");

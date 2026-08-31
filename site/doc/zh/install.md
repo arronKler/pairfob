@@ -83,8 +83,10 @@ rm -f "$prefix/pairfob" "$prefix/pairfobd"
 
 ## 从源码跑
 
-适合本机对照。仍然需要安装 Herdr。
+适合本机对照。仓库在 [arronKler/pairfob](https://github.com/arronKler/pairfob)。仍然需要安装 Herdr。日常使用还是上面的安装命令。
 
 ```sh
 go run ./cmd/pairfob
 ```
+
+本地配对和校验见仓库 README。

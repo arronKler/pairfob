@@ -1,5 +1,6 @@
 import { lineFillBackground, paintLines, spanCss, type StyledLine } from "../../lib/ansi";
 import { node } from "../../lib/dom";
+import { t } from "../../lib/i18n";
 import { TERMINAL_MAX_COLS, TERMINAL_MAX_ROWS, TERMINAL_MIN_COLS, TERMINAL_MIN_ROWS } from "../../lib/protocol/terminal";
 import { reportMutationError } from "../../mutations";
 import { render } from "../../paint";
@@ -116,7 +117,10 @@ export function fillTerm(term: HTMLElement, model: PaneModel): void {
       // Name it from the parsed option; the rendered row still carries box
       // gutters and column padding a screen reader would read out.
       const parsed = model.block.kind === "prompt-select" ? model.block.options[option] : undefined;
-      row.setAttribute("aria-label", parsed ? `选择 ${parsed.n}. ${parsed.label}` : `选择 ${line.text.trim()}`);
+      row.setAttribute(
+        "aria-label",
+        parsed ? t("term.selectOption", { n: parsed.n, label: parsed.label }) : t("term.selectLine", { text: line.text.trim() }),
+      );
     }
     frag.append(row);
   });
@@ -126,7 +130,7 @@ export function fillTerm(term: HTMLElement, model: PaneModel): void {
 export function renderTerm(model: PaneModel): HTMLElement {
   const term = node("div", "term");
   term.setAttribute("role", "log");
-  term.setAttribute("aria-label", "电脑上的终端画面");
+  term.setAttribute("aria-label", t("term.screenAria"));
   if (state.termWrap) term.classList.add("wrapped");
   if (state.termSelect) term.classList.add("selecting");
   fillTerm(term, model);
@@ -300,7 +304,7 @@ export function termView(model: PaneModel, onRow: (index: number) => void): HTML
   });
   wrap.append(term);
   wrap.append(scrollRail((direction, lines, source) => sendGuidedTuiScroll(direction, lines, source), pageScrollLines));
-  const jump = node("button", "term-jump", "↓ 新输出");
+  const jump = node("button", "term-jump", t("term.newOutput"));
   jump.type = "button";
   jump.hidden = state.paneFollow || !state.paneUnread;
   jump.addEventListener("click", () => {

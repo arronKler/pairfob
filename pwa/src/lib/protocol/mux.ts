@@ -26,7 +26,7 @@ export function helloClientBody(protocol: MuxProtocol): { v: MuxProtocol; protoc
 
 export function pairAttachBody(protocol: MuxProtocol, pairRef?: string): { v: MuxProtocol; pair_ref?: string } {
   if (protocol === 2) {
-    if (!pairRef) throw new ProtocolError("invalid_pair_ref", "v2 PAIR_ATTACH 必须带 pair_ref");
+    if (!pairRef) throw new ProtocolError("invalid_pair_ref", "v2 PAIR_ATTACH requires pair_ref");
     return { v: 2, pair_ref: pairRef };
   }
   return pairRef ? { v: 1, pair_ref: pairRef } : { v: 1 };

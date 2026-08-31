@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import type { AgentCard, ListGroup } from "./ranking.ts";
 
 export type DashboardAgentCard = AgentCard & {
@@ -42,7 +43,7 @@ export function mapSnapshotAgents(snapshot: SnapshotWire): DashboardAgentCard[] 
         agent,
         hasAgent: agent !== "",
         status: (knownStatus ? pane.agent_status : agent ? "unknown" : "idle") as AgentCard["status"],
-        workspaceLabel: ws?.label?.trim() || "未命名工作区",
+        workspaceLabel: ws?.label?.trim() || "",
         cwd: pane.cwd || ws?.cwd || "",
         viewportRows: pane.scroll?.viewport_rows,
         historyAvailable: pane.history_available === true,
@@ -62,8 +63,7 @@ export function cwdName(cwd: string): string {
   return parts[parts.length - 1] || cwd;
 }
 
-const PLACEHOLDER_WORKSPACE = "未命名工作区";
-const HIDDEN_TAB_LABELS = new Set(["main", "tab", "new tab", "未命名标签页"]);
+const HIDDEN_TAB_LABELS = new Set(["main", "tab", "new tab", "unnamed tab", "未命名标签页"]);
 const MACHINE_TITLES = new Set([
   "zsh",
   "bash",
@@ -105,13 +105,13 @@ function placeLabel(agent: AgentCard): string {
   const dir = cwdName(agent.cwd);
   if (dir) return dir;
   const workspace = agent.workspaceLabel?.trim();
-  if (workspace && workspace !== PLACEHOLDER_WORKSPACE) return workspace;
+  if (workspace) return workspace;
   return "";
 }
 
 function conversationLabel(agent: AgentCard): string {
   const workspace = agent.workspaceLabel?.trim();
-  if (!workspace || workspace === PLACEHOLDER_WORKSPACE) return "";
+  if (!workspace) return "";
   const dir = cwdName(agent.cwd);
   if (dir && same(workspace, dir)) return "";
   return workspace;
@@ -121,7 +121,14 @@ function looksLikeMachineTitle(text: string, agent: AgentCard): boolean {
   const lower = text.toLowerCase();
   if (MACHINE_TITLES.has(lower)) return true;
   if (agent.agent && lower === agent.agent.trim().toLowerCase()) return true;
-  if (lower === "终端" || lower === "会话" || lower === "未命名会话") return true;
+  if (
+    lower === "终端" ||
+    lower === "会话" ||
+    lower === "未命名会话" ||
+    lower === "terminal" ||
+    lower === "session" ||
+    lower === "unnamed session"
+  ) return true;
   if (/^[/~]/.test(text) || /^[a-z]:[\\/]/i.test(text) || text.includes("://")) return true;
   if (/^[^@\s]+@\S+/.test(text)) return true;
   if (text.includes("/") && !/\s/.test(text) && text.split("/").length >= 2) return true;
@@ -130,8 +137,27 @@ function looksLikeMachineTitle(text: string, agent: AgentCard): boolean {
   return false;
 }
 
+const OSC_STATUS = /^(?:[-–—•]\s*)?(?:Thinking|Waiting for response|Waiting|Working|Running)[.…]*\s*(?:[-–—]\s*)?/i;
+const OSC_SPINNER = /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◐◓◑◒]\s*/;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Drop TUI status crumbs and a trailing " - grok" so the task name remains. */
+function cleanOscTitle(text: string, agent: AgentCard): string {
+  let named = text.trim().replace(OSC_SPINNER, "").trim();
+  while (OSC_STATUS.test(named)) named = named.replace(OSC_STATUS, "").trim();
+  named = named.replace(/^(?:[-–—]\s*)+/, "").trim();
+  const who = agent.agent.trim();
+  if (who) named = named.replace(new RegExp(`(?:\\s*[-–—]\\s*${escapeRegExp(who)})+$`, "i"), "").trim();
+  return named;
+}
+
 function usefulTerminalTitle(agent: AgentCard): string {
-  const text = agent.terminalTitle?.trim() ?? "";
+  const raw = agent.terminalTitle?.trim() ?? "";
+  if (!raw) return "";
+  const text = cleanOscTitle(raw, agent);
   if (!text || looksLikeMachineTitle(text, agent)) return "";
   return text.length > 256 ? text.slice(0, 256) : text;
 }
@@ -143,8 +169,8 @@ function visibleTabLabel(label: string | undefined): string {
 }
 
 export function agentTitle(agent: AgentCard, group: ListGroup = "flat"): string {
-  const named = agent.paneLabel?.trim();
-  if (named) return named;
+  const named = cleanOscTitle(agent.paneLabel?.trim() ?? "", agent);
+  if (named && !looksLikeMachineTitle(named, agent)) return named;
   if (group !== "space") {
     const conversation = conversationLabel(agent);
     if (conversation) return conversation;
@@ -153,37 +179,14 @@ export function agentTitle(agent: AgentCard, group: ListGroup = "flat"): string 
   if (hint) return hint;
   const place = placeLabel(agent);
   const who = agent.agent.trim();
-  if (group === "agent") return place || who || "终端";
-  const kind = who || "终端";
+  if (group === "agent") return place || who || t("title.terminal");
+  const kind = who || t("title.terminal");
   if (place && !same(kind, place)) return `${kind} · ${place}`;
   return kind;
 }
 
-const LIVE_THOUGHT = /^(?:[-–—•]\s*)?(?:Thinking|Waiting for response|Waiting|Working|Running)\b/i;
-const LIVE_SPINNER = /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◐◓◑◒]\s*/;
-
-function stripLiveThought(text: string, agent: AgentCard): string {
-  let named = text.replace(LIVE_THOUGHT, "").trim();
-  named = named.replace(/^(?:[-–—]\s*)+/, "").trim();
-  named = named.replace(LIVE_SPINNER, "").trim();
-  const who = agent.agent.trim();
-  const suffix = who ? ` - ${who}` : "";
-  if (suffix && named.toLowerCase().endsWith(suffix.toLowerCase())) {
-    named = named.slice(0, named.length - suffix.length).trim();
-  }
-  return named;
-}
-
-/** Pager identity: skip TUI status crumbs that the open pane already shows. */
 export function chromeName(agent: AgentCard): string {
-  const named = stripLiveThought(agent.paneLabel?.trim() ?? "", agent);
-  if (named && !looksLikeMachineTitle(named, agent)) return named;
-  const hint = usefulTerminalTitle(agent);
-  if (hint) return hint;
-  const who = agent.agent.trim();
-  const place = placeLabel(agent);
-  if (who && place && !same(who, place)) return `${who} · ${place}`;
-  return who || place || "会话";
+  return agentTitle(agent);
 }
 
 export function agentMeta(agent: AgentCard, group: ListGroup = "flat"): string {
@@ -196,7 +199,7 @@ export function agentMeta(agent: AgentCard, group: ListGroup = "flat"): string {
   };
   if (group !== "space") {
     const workspace = agent.workspaceLabel?.trim();
-    if (workspace && workspace !== PLACEHOLDER_WORKSPACE) push(workspace);
+    if (workspace) push(workspace);
   }
   if (group !== "agent") push(agent.agent);
   const tab = visibleTabLabel(agent.tabLabel);
@@ -248,8 +251,8 @@ export function paneFillCopy(
     .map((item) => item.viewportRows)
     .filter((rows): rows is number => typeof rows === "number" && rows > 0);
   const filled = Boolean(mine && others.length && mine >= Math.max(...others) * 1.5);
-  if (filled) return { menu: "退出全屏", aria: "退出全屏，恢复电脑上的分屏" };
-  return { menu: "铺满全屏", aria: "铺满全屏，把这一格铺满电脑屏幕" };
+  if (filled) return { menu: t("fill.exit"), aria: t("fill.exitAria") };
+  return { menu: t("fill.enter"), aria: t("fill.enterAria") };
 }
 
 export function canPromptAgent(agent: DashboardAgentCard | undefined): agent is DashboardAgentCard {
@@ -259,13 +262,13 @@ export function canPromptAgent(agent: DashboardAgentCard | undefined): agent is 
 export function statusLabel(status: AgentCard["status"]): string {
   switch (status) {
     case "blocked":
-      return "等你";
+      return t("status.blocked");
     case "working":
-      return "工作中";
+      return t("status.working");
     case "done":
-      return "完成";
+      return t("status.done");
     case "idle":
-      return "空闲";
+      return t("status.idle");
     default:
       return "";
   }

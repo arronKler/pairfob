@@ -79,15 +79,25 @@ describe("homepage i18n", () => {
     expect(en["faq.feedback.b"]).toBe("Report an issue");
   });
 
-  test("homepage states the official instance and that new setup can close", () => {
+  test("homepage header links to the public GitHub repository", () => {
+    expect(html).toMatch(/class="bar-github"[^>]*href="https:\/\/github.com\/arronKler\/pairfob"/);
+    expect(html).toContain('data-i18n-aria="nav.github"');
+    expect(html).toContain('"codeRepository": "https://github.com/arronKler/pairfob"');
+    expect(en["nav.github"]).toBe("Source on GitHub");
+    expect(zh["nav.github"]).toBe("GitHub 上的源码");
+  });
+
+  test("homepage paid FAQ is a short no, not a policy paragraph", () => {
     expect(en["faq.q6"]).toBe("Does it cost money?");
-    expect(en["faq.a6"]).toContain("official instance");
-    expect(en["faq.a6"]).toContain("New computer setup can close");
+    expect(en["faq.a6"]).toBe("No.");
     expect(zh["faq.q6"]).toBe("收费吗？");
-    expect(zh["faq.a6"]).toContain("官方实例");
-    expect(zh["faq.a6"]).toContain("新电脑登记随时可能关上");
-    expect(en["foot.blurb"]).toContain("official instance");
-    expect(zh["foot.blurb"]).toContain("官方实例");
+    expect(zh["faq.a6"]).toBe("不收费。");
+    expect(en["faq.a6"]).not.toContain("official instance");
+    expect(zh["faq.a6"]).not.toContain("官方实例");
+    expect(en["foot.blurb"]).not.toContain("official instance");
+    expect(zh["foot.blurb"]).not.toContain("官方实例");
+    expect(en["hero.lede2"]).not.toContain("screenshot");
+    expect(zh["hero.lede2"]).not.toContain("截图");
     expect(en.description).toContain("phone surface for Herdr");
     expect(zh.description).toContain("Herdr 的手机端");
     expect(html).toContain(en.description);

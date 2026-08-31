@@ -1,6 +1,6 @@
 ---
 name: pairfob-dev-lan
-description: Start Pairfob's local Worker origin plus pairfob for browser/phone pairing. Use when the user wants 局域网测试, 本地配对, HTTPS 调试, 摄像头扫码, 装证书, wrangler dev pairing, or to open the PWA on a phone against this checkout. Prefer scripts/dev-up.sh over hand-built wrangler/TLS commands.
+description: Start Pairfob's local Worker origin plus pairfob for browser or phone pairing. Use when the user wants local pairing, LAN HTTPS, a phone scan against this checkout, installing the local CA, or wrangler dev; or says 本地调试, 本地配对, 局域网配对, 真机扫码, or 安装本地 CA. Prefer scripts/dev-up.sh over hand-built wrangler/TLS commands.
 ---
 
 # Local origin (loopback or LAN)

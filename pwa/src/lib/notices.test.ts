@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { ProtocolError } from "./protocol/errors.ts";
-import { FRIENDLY_ERROR, GENERIC_NOTICE, messageOf, noticeFor, sessionEventNotice } from "./notices.ts";
+import { FRIENDLY_ERROR, genericNotice, messageOf, noticeFor, sessionEventNotice } from "./notices.ts";
+import { setLang } from "./i18n.ts";
 
 const liveSrc = await Bun.file(new URL("../live.ts", import.meta.url)).text();
+const operationSrc = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
 const stateSrc = await Bun.file(new URL("../state.ts", import.meta.url)).text();
 const chromeSrc = await Bun.file(new URL("../ui/chrome.ts", import.meta.url)).text();
 
@@ -32,7 +34,7 @@ const REQUIRED_PUBLIC_CODES = [
   "grant_exhausted",
 ];
 
-const NEXT_STEP = /刷新|请|打开|输入|pairfob|重新|稍后再试|回列表|看电脑|确认|换一/;
+const NEXT_STEP = /刷新|请|打开|输入|pairfob|重新|稍后再试|回列表|看电脑|确认|换一|refresh|open|enter|retry|wait|list|computer/i;
 
 const LEAK = /device_psk|reconnect_token|join_grant|pair_loc|\bjg_[0-9a-f]|Error\.Error|\bat Object\.|goroutine \d+|pairfob-v1\/sas/i;
 
@@ -46,6 +48,7 @@ function assertPublicNotice(text: string): void {
 
 describe("shipped user notices", () => {
   test("every mapped public code is a next step without secrets", () => {
+    setLang("zh");
     const codes = Object.keys(FRIENDLY_ERROR);
     expect(codes.length).toBeGreaterThan(20);
     for (const code of codes) {
@@ -58,17 +61,17 @@ describe("shipped user notices", () => {
   test("criterion-3 public codes are mapped, not generic", () => {
     for (const code of REQUIRED_PUBLIC_CODES) {
       const text = noticeFor(code);
-      expect(text).not.toBe(GENERIC_NOTICE);
+      expect(text).not.toBe(genericNotice());
       assertPublicNotice(text);
     }
   });
 
   test("unknown codes fail closed and drop wire dumps", () => {
-    expect(noticeFor("")).toBe(GENERIC_NOTICE);
-    expect(noticeFor("not_a_real_code")).toBe(GENERIC_NOTICE);
-    assertPublicNotice(GENERIC_NOTICE);
+    expect(noticeFor("")).toBe(genericNotice());
+    expect(noticeFor("not_a_real_code")).toBe(genericNotice());
+    assertPublicNotice(genericNotice());
     const dumped = messageOf(new ProtocolError("not_a_real_code", "device_psk=deadbeef daemon websocket gone"));
-    expect(dumped).toBe(GENERIC_NOTICE);
+    expect(dumped).toBe(genericNotice());
     expect(dumped).not.toContain("device_psk");
     expect(dumped).not.toContain("daemon websocket");
   });
@@ -79,8 +82,8 @@ describe("shipped user notices", () => {
     expect(FRIENDLY_ERROR.daemon_offline).toContain("睡眠");
     expect(FRIENDLY_ERROR.daemon_offline).toContain("不用重新配对");
     expect(messageOf(new ProtocolError("revoked", "device revoked"))).toBe(FRIENDLY_ERROR.revoked);
-    expect(messageOf(new Error("panic: runtime error\n    at Object.run"))).toBe(GENERIC_NOTICE);
-    expect(messageOf("raw string dump")).toBe(GENERIC_NOTICE);
+    expect(messageOf(new Error("panic: runtime error\n    at Object.run"))).toBe(genericNotice());
+    expect(messageOf("raw string dump")).toBe(genericNotice());
   });
 
   test("large reads are not mislabeled as unsent mutations", () => {
@@ -110,16 +113,16 @@ describe("shipped user notices", () => {
   });
 
   test("herd operation success toasts dismiss; pending and reconnect stay", () => {
-    expect(liveSrc).toContain("showStatus(pending, true, noticeScope)");
-    expect(liveSrc).toContain("showStatus(success, false, noticeScope)");
+    expect(operationSrc).toContain("showStatus(pending, true, noticeScope)");
+    expect(operationSrc).toContain("showStatus(success, false, noticeScope)");
     expect(liveSrc).toContain("showStatus(sessionEventNotice(event), true)");
   });
 
   test("prompt notices and refreshes stay with the pane that started the task", () => {
-    const prompt = fnBody(liveSrc, "promptSelectedAgent");
-    const operationStart = liveSrc.indexOf("async function runHerdOperation");
-    const operationEnd = liveSrc.indexOf("async function selectCreatedPane", operationStart);
-    const operation = liveSrc.slice(operationStart, operationEnd);
+    const prompt = fnBody(operationSrc, "promptSelectedAgent");
+    const operationStart = operationSrc.indexOf("async function runHerdOperation");
+    const operationEnd = operationSrc.indexOf("async function selectCreatedPane", operationStart);
+    const operation = operationSrc.slice(operationStart, operationEnd);
     const noteNode = fnBody(chromeSrc, "noteNode");
     expect(prompt).toContain("const noticeScope = captureNoticeScope()");
     expect(prompt).toContain("noticeScopeIsCurrent(noticeScope)");

@@ -6,12 +6,13 @@ import {
 import { PairingScanError, scanPairingCode } from "../lib/pairing-scanner";
 import { normalizeCrockford } from "../lib/protocol/bytes";
 import { button, node } from "../lib/dom";
+import { t } from "../lib/i18n";
 import { cancelAddComputer } from "../computers";
 import { beginPairing, cancelPairing, onPairSubmit } from "../pairing";
 import { render } from "../paint";
 import { app, clearNotice, showError, showStatus, state } from "../state";
 import { isDesk } from "../viewport";
-import { backBar, brandNode, noteNode, spinnerNode } from "./chrome";
+import { backBar, brandNode, languageControl, noteNode, spinnerNode } from "./chrome";
 
 function pairField(opts: {
   id: string;
@@ -87,7 +88,7 @@ async function pasteFromClipboard(): Promise<void> {
     if (!code) {
       state.pairManualOpen = true;
       state.pairErrorTarget = "code";
-      showError("剪贴板里没有找到配对码。长按输入框粘贴也可以。");
+      showError(t("err.noClipboardCode"));
       render();
       focusPairCode();
       return;
@@ -100,7 +101,7 @@ async function pasteFromClipboard(): Promise<void> {
     (app.querySelector(".btn-connect") as HTMLButtonElement | null)?.focus();
   } catch {
     state.pairManualOpen = true;
-    showStatus("浏览器没有允许读取剪贴板。长按输入框粘贴也可以。");
+    showStatus(t("err.clipboardDenied"));
     render();
     focusPairCode();
   }
@@ -120,32 +121,32 @@ export function renderConnect(): void {
   const adding = state.addingComputer || state.computers.length > 0;
   const wrap = node("div", adding ? "page settings-page" : `prelude${busy ? " pairing" : ""}`);
   if (adding) {
-    wrap.append(backBar(state.addingComputer ? "添加另一台电脑" : "配对", cancelAddComputer));
+    wrap.append(backBar(state.addingComputer ? t("settings.addComputer") : t("connect.pair"), cancelAddComputer));
   } else {
     wrap.append(brandNode());
-    wrap.append(node("h1", "prelude-title", "连上你的电脑"));
+    wrap.append(node("h1", "prelude-title", t("connect.title")));
   }
   wrap.append(
     node(
       "p",
       "lede",
       scanned
-        ? "二维码已识别，正在安全连接电脑。"
+        ? t("connect.ledeScanned")
         : state.addingComputer
-          ? "先在那台电脑装好 pairfob 并执行 pairfob pair，再扫描它的二维码。无法扫码时，也可以输入配对码。"
-          : "扫描电脑上的二维码。无法扫码时，也可以输入配对码。",
+          ? t("connect.ledeAdd")
+          : t("connect.ledeScan"),
     ),
   );
   if (isDesk() && !adding && !scanned && !busy) {
     const hint = node(
       "p",
       "desk-hint",
-      "这个页面是给手机或另一台设备用的。跑 Herdr 的电脑请执行 pairfob pair，用那边扫终端里的码。",
+      t("connect.deskHint"),
     );
     hint.setAttribute("role", "note");
     wrap.append(hint);
   }
-  if (scanned) wrap.append(node("p", "qr-note", "二维码只在这台手机上处理，配对码不会发送给 Pairfob 服务器。"));
+  if (scanned) wrap.append(node("p", "qr-note", t("connect.qrNote")));
 
   const form = node("form", "connect-form");
   form.noValidate = true;
@@ -155,15 +156,15 @@ export function renderConnect(): void {
     const waiting = node("div", "pair-wait");
     waiting.append(
       spinnerNode(),
-      node("p", "pair-wait-title", state.pairAwaitingApproval ? "等待电脑确认" : "正在验证配对码"),
-      node("p", "pair-wait-copy", state.pairAwaitingApproval ? "请在电脑上按 Enter，随后会自动连接。" : "这通常只需要几秒钟。"),
+      node("p", "pair-wait-title", state.pairAwaitingApproval ? t("connect.waitEnter") : t("connect.waitTitle")),
+      node("p", "pair-wait-copy", state.pairAwaitingApproval ? t("connect.waitEnterCopy") : t("connect.waitCopy")),
     );
     form.append(waiting);
-    const cancel = button("取消", "btn btn-ghost", cancelPairing);
+    const cancel = button(t("cancel"), "btn btn-ghost", cancelPairing);
     cancel.type = "button";
     form.append(cancel);
   } else {
-    const scan = button("扫码连接", "btn-scan", async () => {
+    const scan = button(t("connect.scan"), "btn-scan", async () => {
       try {
         const result = await scanPairingCode(location.origin);
         if (!result) return;
@@ -173,36 +174,36 @@ export function renderConnect(): void {
         await beginPairing(result.code);
       } catch (error) {
         state.pairManualOpen = true;
-        showError(error instanceof PairingScanError ? error.message : "扫码失败，请手动输入配对码。");
+        showError(error instanceof PairingScanError ? error.message : t("err.scanFailed"));
         render();
         focusPairCode();
       }
     });
     const manual = node("details", "manual-pair");
     manual.open = state.pairManualOpen || state.pairErrorTarget === "code";
-    const summary = node("summary", "manual-pair-summary", "无法扫码？输入配对码");
+    const summary = node("summary", "manual-pair-summary", t("connect.manualSummary"));
     const manualBody = node("div", "manual-pair-body");
     const code = pairField({
       id: "pair-code",
-      label: "配对码",
+      label: t("connect.pairCode"),
       name: "code",
-      hint: "例如 7K3M-9H2P-WJ3K9M",
+      hint: t("connect.pairHint"),
       value: state.pairCodeDraft,
       expected: 14,
       disabled: false,
       maxLength: 20,
       pattern: PAIR_CODE_WITH_LOCATOR_PATTERN,
-      title: "输入电脑显示的配对码",
+      title: t("connect.pairTitle"),
       required: true,
     });
     code.input.addEventListener("input", () => {
       state.pairCodeDraft = code.input.value;
     });
     bindPairError(code.input, code.field, feedback);
-    manualBody.append(code.field, button("从剪贴板粘贴", "btn-paste", pasteFromClipboard));
+    manualBody.append(code.field, button(t("connect.paste"), "btn-paste", pasteFromClipboard));
     const submit = node("button", "btn btn-primary btn-connect");
     submit.type = "submit";
-    submit.textContent = "连接";
+    submit.textContent = t("connect.submit");
     manualBody.append(submit);
     manual.append(summary, manualBody);
     manual.addEventListener("toggle", () => {
@@ -214,7 +215,10 @@ export function renderConnect(): void {
   }
   wrap.append(form);
   if (!state.pairErrorTarget && feedback) wrap.append(feedback);
-  wrap.append(node("p", "trust", "端到端加密 · Pairfob 服务器也看不到会话内容"));
+  wrap.append(node("p", "trust", t("connect.trust")));
+  const lang = node("div", "connect-lang");
+  lang.append(languageControl());
+  wrap.append(lang);
   app.replaceChildren(wrap);
   if (!busy) {
     const code = form.querySelector<HTMLInputElement>("#pair-code");

@@ -46,12 +46,12 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
     />
-    <link rel="stylesheet" href="/css/base.css?v=64" />
-    <link rel="stylesheet" href="/css/device.css?v=64" />
-    <link rel="stylesheet" href="/css/hero.css?v=64" />
-    <link rel="stylesheet" href="/css/capabilities.css?v=64" />
-    <link rel="stylesheet" href="/css/start.css?v=64" />
-    <link rel="stylesheet" href="/css/faq.css?v=64" />
+    <link rel="stylesheet" href="/css/base.css?v=65" />
+    <link rel="stylesheet" href="/css/device.css?v=65" />
+    <link rel="stylesheet" href="/css/hero.css?v=65" />
+    <link rel="stylesheet" href="/css/capabilities.css?v=65" />
+    <link rel="stylesheet" href="/css/start.css?v=65" />
+    <link rel="stylesheet" href="/css/faq.css?v=65" />
     <script src="/lang.js?v=49"></script>
   </head>
   <body>
@@ -83,6 +83,21 @@
         </nav>
         <a class="bar-doc" href="/doc/" data-locale-href="doc" data-i18n="nav.doc">Docs</a>
         <a
+          class="bar-github"
+          href="https://github.com/arronKler/pairfob"
+          target="_blank"
+          rel="noreferrer"
+          data-i18n-aria="nav.github"
+          aria-label="Source on GitHub"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"
+            />
+          </svg>
+        </a>
+        <a
           class="bar-feedback"
           href="https://github.com/arronKler/pairfob/issues/new"
           target="_blank"
@@ -113,7 +128,7 @@
               target="_blank"
               rel="noreferrer"
               >Herdr</a
-            ><span data-i18n="hero.lede2">. Pairfob attaches the phone to that same herd — not a screenshot, not remote desktop, the same live sessions. Either side counts.</span>
+            ><span data-i18n="hero.lede2">. Pairfob attaches the phone to that same herd. Either side counts.</span>
           </p>
           <div class="hero-actions">
             <a class="btn btn-primary cta-desk" href="#start" data-i18n="cta.computer">Start on this computer</a>
@@ -499,7 +514,7 @@
           </div>
           <div>
             <dt data-i18n="faq.q6">Does it cost money?</dt>
-            <dd data-i18n="faq.a6">No. pairfob.com is this project's official instance. New computer setup can close; computers already set up keep working. There is no capacity promise.</dd>
+            <dd data-i18n="faq.a6">No.</dd>
           </div>
         </dl>
         <p class="faq-more">
@@ -525,7 +540,7 @@
     <footer class="foot">
       <div class="foot-brand">
         <span class="wordmark">Pairfob</span>
-        <p data-i18n="foot.blurb">No account. pairfob.com is this project's official instance. The computer that runs Herdr has to be macOS or Linux for now.</p>
+        <p data-i18n="foot.blurb">No account. The computer that runs Herdr has to be macOS or Linux for now.</p>
       </div>
       <nav class="foot-nav" data-i18n-aria="foot.aria" aria-label="Footer">
         <a href="#faq" data-i18n="nav.faq">FAQ</a>
@@ -556,11 +571,13 @@
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "softwareRequirements": "Herdr 0.7 or newer",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "codeRepository": "https://github.com/arronKler/pairfob",
+        "sameAs": ["https://github.com/arronKler/pairfob"],
         "isAccessibleForFree": true
       }
     </script>
 
-    <script src="/home-i18n.js?v=67"></script>
+    <script src="/home-i18n.js?v=69"></script>
     <script src="/site.js?v=49"></script>
   </body>
 </html>

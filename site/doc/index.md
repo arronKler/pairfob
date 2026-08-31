@@ -81,19 +81,6 @@ You already run coding agents in Herdr 0.7 or newer on a computer, and you want 
 
 **macOS and Linux** are supported. Windows cannot host `pairfob` yet.
 
-## Who it is not for
-
-- No Herdr, and you only want a cloud agent on the phone
-- You need the entire desktop, browser, or IDE window
-- You want Pairfob to keep sessions and keys in the cloud
-- The host computer must be Windows (not built yet)
-
-## Official instance
-
-`https://pairfob.com` is this project's official relay and web app. Install and pairing use that origin.
-
-New computer setup can close. Already-enrolled computers keep working. This page does not promise capacity.
-
 ## Shortest path
 
 <ol class="pf-track">

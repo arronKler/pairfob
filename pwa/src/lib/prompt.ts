@@ -1,3 +1,5 @@
+import { t } from "./i18n.ts";
+
 export type PromptOption = {
   /** Digit the runtime expects for this row. */
   n: string;
@@ -133,5 +135,5 @@ export function liftTap(block: Block, index: number): { keys: string[]; expected
 
 export function liftAskLabel(agent?: string): string {
   const name = agent?.trim();
-  return name ? `${name} 在问` : "Agent 在问";
+  return name ? t("ask.named", { name }) : t("ask.agent");
 }

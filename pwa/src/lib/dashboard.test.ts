@@ -207,7 +207,25 @@ describe("dashboard mapping", () => {
     expect(canPromptAgent(agents[1])).toBe(true);
   });
 
-  test("the session chrome strips TUI status crumbs from the pane label", () => {
+  test("OSC status crumbs and trailing agent names never become the card title", () => {
+    const cases: Array<[string, string]> = [
+      ["- Thinking - Pairfob session card title design - grok", "Pairfob session card title design"],
+      ["- Waiting for response… - Session admin belongs on the list - grok", "Session admin belongs on the list"],
+      ["Slim Pairfob docs, drop design internals - grok", "Slim Pairfob docs, drop design internals"],
+      ["⠋ Thinking - Fix iOS keyboard overlay - grok", "Fix iOS keyboard overlay"],
+    ];
+    for (const [terminalTitle, want] of cases) {
+      const [agent] = mapSnapshotAgents({
+        workspaces: [{ workspace_id: "w1", label: "pairfob", cwd: "/repo/pairfob" }],
+        panes: [{ pane_id: "p1", workspace_id: "w1", agent: "grok", agent_status: "working", terminal_title: terminalTitle }],
+      });
+      expect(agentTitle(agent), terminalTitle).toBe(want);
+      expect(chromeName(agent), terminalTitle).toBe(want);
+      expect(agentTitle(agent), terminalTitle).not.toMatch(/Thinking|Waiting for response| - grok$/i);
+    }
+  });
+
+  test("OSC crumbs in a pane label are cleaned the same way as a terminal title", () => {
     const [agent] = mapSnapshotAgents({
       workspaces: [{ workspace_id: "w1", label: "pairfob", cwd: "/repo/pairfob" }],
       panes: [{
@@ -218,7 +236,7 @@ describe("dashboard mapping", () => {
         label: "- Thinking - Fix mobile terminal chrome layout crowding - grok",
       }],
     });
-    expect(agentTitle(agent)).toContain("Thinking");
+    expect(agentTitle(agent)).toBe("Fix mobile terminal chrome layout crowding");
     expect(chromeName(agent)).toBe("Fix mobile terminal chrome layout crowding");
   });
 

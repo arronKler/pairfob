@@ -1,6 +1,6 @@
 import { liftTap, type Block } from "../../lib/prompt";
-import { refreshPane } from "../../live";
 import { reportMutationError } from "../../mutations";
+import { requestPaneRefresh } from "../../pane-refresh-request";
 import { clearNotice, haptic, markPaneSubmitted, state } from "../../state";
 import { withModifiers } from "../keypad";
 
@@ -55,7 +55,7 @@ export async function flushKeys(): Promise<void> {
     await session.sendKeys(paneId, keys, { intent: "pad" });
     if (keys.includes("enter")) markPaneSubmitted(paneId);
     clearNotice();
-    await refreshPane();
+    await requestPaneRefresh();
   } catch (error) {
     dropQueuedKeys();
     await reportMutationError(session, error);
@@ -103,7 +103,7 @@ export async function sendPage(direction: "up" | "down"): Promise<void> {
   try {
     await session.sendText(paneId, direction === "up" ? "\u001b[5~" : "\u001b[6~");
     clearNotice();
-    await refreshPane();
+    await requestPaneRefresh();
   } catch (error) {
     await reportMutationError(session, error);
   }
@@ -119,7 +119,7 @@ export async function sendGuarded(keys: string[], intent: "dialog" | "submit", e
     await session.sendKeys(paneId, keys, { intent, expected_prompt: expectedPrompt });
     if (keys.includes("enter")) markPaneSubmitted(paneId);
     clearNotice();
-    await refreshPane();
+    await requestPaneRefresh();
   } catch (error) {
     await reportMutationError(session, error);
   }

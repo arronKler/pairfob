@@ -1,4 +1,5 @@
 import { button, node } from "../lib/dom";
+import { t } from "../lib/i18n";
 import { markdownEl } from "../lib/agent-markdown";
 import { spinnerNode } from "./chrome";
 import {
@@ -72,11 +73,11 @@ function stepCard(item: AgentTraceItem, kept: DetailsState): HTMLElement {
   card.append(summary);
   if (item.type === "thinking" && item.text) card.append(node("pre", "agent-step-body", item.text));
   if (item.input) {
-    card.append(node("p", "agent-step-label", "参数"));
+    card.append(node("p", "agent-step-label", t("chat.params")));
     card.append(node("pre", "agent-step-body", item.input));
   }
   if (item.output) {
-    card.append(node("p", "agent-step-label", "结果"));
+    card.append(node("p", "agent-step-label", t("chat.result")));
     card.append(node("pre", "agent-step-body", item.output));
   }
   if (item.type === "tool" && !item.input && !item.output && item.text) {
@@ -97,7 +98,7 @@ function processCard(turn: AgentTurn, live: boolean, kept: DetailsState): HTMLEl
 
 function userBubble(item: AgentTraceItem): HTMLElement {
   const article = node("article", "agent-user");
-  article.append(node("strong", "agent-user-role", "你"));
+  article.append(node("strong", "agent-user-role", t("hist.you")));
   article.append(node("div", "agent-user-text", item.text || ""));
   return article;
 }
@@ -111,7 +112,7 @@ function assistantReply(item: AgentTraceItem): HTMLElement {
 function paintTurn(turn: AgentTurn, live: boolean, kept: DetailsState, into: HTMLElement): void {
   if (turn.user) into.append(userBubble(turn.user));
   if (turn.steps.length) into.append(processCard(turn, live, kept));
-  else if (live && !turn.replies.length) into.append(node("p", "agent-live", "正在执行…"));
+  else if (live && !turn.replies.length) into.append(node("p", "agent-live", t("chat.runningEllipsis")));
   for (const reply of turn.replies) into.append(assistantReply(reply));
 }
 
@@ -130,7 +131,7 @@ function emptyPanel(spec: AgentEmptySpec, onRetry?: () => void): HTMLElement {
   panel.append(node("p", "agent-empty-title", spec.title));
   if (spec.sub) panel.append(node("p", "agent-empty-sub", spec.sub));
   if (spec.kind === "error" && onRetry) {
-    const retry = button("重试", "btn btn-small", onRetry);
+    const retry = button(t("retry"), "btn btn-small", onRetry);
     retry.type = "button";
     panel.append(retry);
   }
@@ -150,7 +151,7 @@ export function paintAgentStream(opts: {
   const stream = node("div", "agent-stream");
   const inner = node("div", "agent-stream-inner");
   stream.setAttribute("role", "log");
-  stream.setAttribute("aria-label", "对话");
+  stream.setAttribute("aria-label", t("chat.streamAria"));
   stream.setAttribute("aria-busy", String(opts.busy === true));
   stream.tabIndex = 0;
   const kept = opts.kept ?? emptyDetails();

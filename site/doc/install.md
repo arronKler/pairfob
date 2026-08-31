@@ -84,8 +84,10 @@ Uninstalling the service does not delete the state directory. To drop pairings t
 
 ## From source
 
-Useful when comparing locally. Herdr still needs to be installed.
+Clone [the repository](https://github.com/arronKler/pairfob) for local comparison. Herdr still needs to be installed. Everyday use still follows the install command above.
 
 ```sh
 go run ./cmd/pairfob
 ```
+
+Local pairing and checks are in the repository README.

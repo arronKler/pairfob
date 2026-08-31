@@ -1,11 +1,12 @@
 import QrScanner from "qr-scanner";
+import { t } from "./i18n.ts";
 import { parsePairingURL, type FragmentPairing } from "./pairing-input.ts";
 
 export class PairingScanError extends Error {}
 
 export async function scanPairingCode(expectedOrigin: string): Promise<FragmentPairing | null> {
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new PairingScanError("这个浏览器不能使用摄像头，请手动输入配对码。");
+    throw new PairingScanError(t("scan.noCamera"));
   }
 
   const dialog = document.createElement("dialog");
@@ -13,9 +14,9 @@ export async function scanPairingCode(expectedOrigin: string): Promise<FragmentP
   dialog.setAttribute("aria-labelledby", "scanner-title");
   const title = document.createElement("h2");
   title.id = "scanner-title";
-  title.textContent = "扫描电脑上的二维码";
+  title.textContent = t("scan.title");
   const note = document.createElement("p");
-  note.textContent = "二维码只在这台手机上识别，不会上传摄像头画面。";
+  note.textContent = t("scan.note");
   const viewport = document.createElement("div");
   viewport.className = "scanner-viewport";
   const video = document.createElement("video");
@@ -31,7 +32,7 @@ export async function scanPairingCode(expectedOrigin: string): Promise<FragmentP
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.className = "btn btn-ghost";
-  cancel.textContent = "取消扫码";
+  cancel.textContent = t("scan.cancel");
   dialog.append(title, note, viewport, error, cancel);
   document.body.append(dialog);
   const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -57,7 +58,7 @@ export async function scanPairingCode(expectedOrigin: string): Promise<FragmentP
     try {
       dialog.showModal();
     } catch {
-      finish(null, new PairingScanError("当前浏览器无法打开扫码窗口，请手动输入配对码。"));
+      finish(null, new PairingScanError(t("scan.noWindow")));
       return;
     }
     scanner = new QrScanner(
@@ -65,13 +66,13 @@ export async function scanPairingCode(expectedOrigin: string): Promise<FragmentP
       (result) => {
         const pairing = parsePairingURL(result.data, expectedOrigin);
         if (!pairing) {
-          error.textContent = "这不是当前 Pairfob 站点生成的配对二维码。";
+          error.textContent = t("scan.wrongSite");
           return;
         }
         finish(pairing);
       },
       { preferredCamera: "environment", returnDetailedScanResult: true, maxScansPerSecond: 8 },
     );
-    scanner.start().catch(() => finish(null, new PairingScanError("无法打开摄像头，请检查浏览器权限或手动输入配对码。")));
+    scanner.start().catch(() => finish(null, new PairingScanError(t("scan.cameraFail"))));
   });
 }

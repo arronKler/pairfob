@@ -8,9 +8,16 @@ describe("compose send button", () => {
    * the TUI has highlighted. 发送 sits under the thumb on a phone, so that made
    * an accidental tap a blind confirmation.
   */
-  test("is disabled while the draft is empty or only whitespace", () => {
-    expect(composeSource).toContain("send.disabled = state.composeLive || submitBusy || !state.composeDraft.trim()");
-    expect(composeSource).toContain("send.disabled = !state.composeDraft.trim()");
+  test("is Enter, and empty taps are blocked only while choices are lifted", () => {
+    expect(composeSource).toContain("function liftedPromptSelect(");
+    expect(composeSource).toContain("paneModel().block.kind === \"prompt-select\"");
+    expect(composeSource).toContain("send.disabled = blocked");
+    expect(composeSource).toContain('send.textContent = "Enter"');
+    expect(composeSource).not.toContain('send.textContent = "发送"');
+    expect(composeSource).toContain('t("compose.blockedAria")');
+    expect(composeSource).toContain("void submitTyped(true)");
+    const submit = composeSource.slice(composeSource.indexOf("export async function submitTyped"));
+    expect(submit).toContain("if (!state.composeDraft.trim() && liftedPromptSelect()) return");
   });
 
   test("every path that changes the draft resyncs it", () => {
@@ -26,8 +33,9 @@ describe("compose send button", () => {
 
   test("tapping the buffer focuses the same field the keyboard types into", () => {
     expect(composeSource).toContain("export function focusCompose");
-    expect(composeSource).toContain("组字 · 写完再发送");
+    expect(composeSource).toContain('t("compose.batchPh")');
     expect(composeSource).toContain('enterKeyHint = "enter"');
+    expect(composeSource).toContain("field.focus({ preventScroll: true })");
   });
 
   test("a deliberate Enter key press can still send a bare Enter", () => {
@@ -52,21 +60,21 @@ describe("compose send button", () => {
     expect(submit).toContain("submitBusy");
     expect(submit).toContain("finally");
     expect(composeSource).toContain("state.composeDraft === value");
-    expect(composeSource).toContain('send.textContent = "发送中…"');
+    expect(composeSource).toContain('t("compose.sending")');
     expect(composeSource).toContain('send.setAttribute("aria-busy", "true")');
   });
 
   test("keeps delayed guarded submit automatic and visible to the user", () => {
     const guarded = composeSource.slice(composeSource.indexOf("async function guardedSubmit"));
-    expect(guarded).toContain("SUBMIT_PENDING_NOTICE");
-    expect(guarded).toContain("showStatus(SUBMIT_PENDING_NOTICE, true, noticeScope)");
+    expect(guarded).toContain("submitPendingNotice()");
+    expect(guarded).toContain("showStatus(submitPendingNotice(), true, noticeScope)");
     expect(guarded).toContain("retryRead:");
-    expect(composeSource).toContain("确认后会自动按 Enter");
+    expect(composeSource).toContain('t("compose.submitPending")');
     expect(composeSource).not.toContain("可点按键垫上的 Enter");
   });
 
   test("batch and live input share the UTF-8 wire budget", () => {
-    expect(composeSource).toContain("fitOperationPrompt(livePending + text)");
+    expect(composeSource).toContain("fitOperationPrompt(queued + text)");
     expect(composeSource).toContain("fitOperationPrompt(input.value)");
     expect(composeSource).toContain("fitOperationPrompt(state.composeDraft + event.key)");
   });
@@ -117,15 +125,15 @@ describe("compose live vs batch", () => {
     expect(composeSource).toContain("export function composeLiveControl");
     expect(composeSource).toContain("syncComposeLiveControl");
     expect(composeSource).toContain('send.textContent = "Enter"');
-    expect(composeSource).toContain("form.append(inputLabel, input, send)");
-    expect(composeSource).toContain("实时 · 边打边进终端");
+    expect(composeSource).toContain("form.append(inputLabel, liveStatus, input, send)");
+    expect(composeSource).toContain('t("compose.livePh")');
     const dock = await Bun.file(new URL("./dock.ts", import.meta.url)).text();
     expect(dock).not.toContain("composeLiveControl()");
     const settings = await Bun.file(new URL("../settings.ts", import.meta.url)).text();
     expect(settings).toContain("composeLiveControl()");
-    expect(settings).toContain('set-title", "输入"');
+    expect(settings).toContain('t("settings.input")');
     const menu = await Bun.file(new URL("../pane-menu.ts", import.meta.url)).text();
-    expect(menu).toContain('menu-section-title", "输入"');
+    expect(menu).toContain('t("menu.input")');
     expect(menu).toContain("setComposeLive");
   });
 
@@ -140,6 +148,28 @@ describe("compose live vs batch", () => {
     expect(liveEnter).not.toContain("guardedSubmit");
     expect(composeSource).toContain("if (state.composeLive)");
     expect(composeSource).toContain("await submitLiveEnter()");
+  });
+
+  test("upgrades live input to the persistent terminal stream with a guided fallback", () => {
+    const switcher = composeSource.slice(composeSource.indexOf("export async function setComposeLive"));
+    expect(switcher).toContain("enterFullTerminal({ fallbackToGuidedLive: true })");
+  });
+
+  test("shows local pending text immediately and pipelines the ordered screen read", () => {
+    expect(composeSource).toContain("new LiveInputPump");
+    expect(composeSource).toContain('t("compose.pendingPh"');
+    expect(composeSource).toContain('liveStatus.setAttribute("aria-live", "polite")');
+    expect(composeSource).toContain("const request = session.sendText(paneId, text)");
+    expect(composeSource).toContain("requestRead: () => { void requestPaneRefresh(); }");
+    expect(composeSource).not.toContain("const LIVE_FLUSH_MS = 55");
+  });
+
+  test("Enter waits for all queued live text and does not replay an uncertain mutation", () => {
+    const liveEnterStart = composeSource.indexOf("async function submitLiveEnter");
+    const liveEnter = composeSource.slice(liveEnterStart, composeSource.indexOf("export async function submitTyped"));
+    expect(liveEnter).toContain("if (!(await flushLiveInput())) return");
+    expect(composeSource).toContain('error.code === "unknown_outcome"');
+    expect(composeSource).toContain("? input.queuedText");
   });
 
   test("IME composition is held until the character is committed", () => {

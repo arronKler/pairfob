@@ -1,4 +1,5 @@
 import { button, node } from "../../lib/dom";
+import { t } from "../../lib/i18n";
 import { rowPath, rowText } from "../../lib/termrow";
 import { render } from "../../paint";
 import { haptic, showError, showStatus, state } from "../../state";
@@ -23,7 +24,7 @@ async function copy(text: string, done: string): Promise<void> {
     await navigator.clipboard.writeText(text);
     showStatus(done);
   } catch {
-    showError("浏览器没有允许复制。");
+    showError(t("err.copyDenied"));
   }
   state.paneRow = null;
   render();
@@ -45,21 +46,21 @@ export function rowBar(model: PaneModel): HTMLElement | null {
   }
   const bar = node("div", "row-bar");
   bar.setAttribute("role", "group");
-  bar.setAttribute("aria-label", "这一行的操作");
+  bar.setAttribute("aria-label", t("row.aria"));
   bar.append(node("p", "row-quote", text));
   const actions = node("div", "row-actions");
-  actions.append(button("复制整行", "row-act", () => copy(text, "已复制这一行。")));
+  actions.append(button(t("row.copyLine"), "row-act", () => copy(text, t("row.copiedLine"))));
   const path = rowPath(raw);
-  if (path) actions.append(button(`复制 ${path}`, "row-act", () => copy(path, "已复制路径。")));
+  if (path) actions.append(button(t("row.copyPath", { path }), "row-act", () => copy(path, t("row.copiedPath"))));
   actions.append(
-    button("引用到输入框", "row-act", () => {
+    button(t("row.quote"), "row-act", () => {
       insertCompose(text);
       state.paneRow = null;
       render();
     }),
   );
-  actions.append(button("选择文本", "row-act", () => toggleTermSelect(true)));
-  actions.append(button("关闭", "row-act row-act-ghost", closeRow));
+  actions.append(button(t("menu.selectText"), "row-act", () => toggleTermSelect(true)));
+  actions.append(button(t("close"), "row-act row-act-ghost", closeRow));
   bar.append(actions);
   return bar;
 }

@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import type { AgentTraceItem } from "./operations";
 
 export type AgentTurn = {
@@ -63,15 +64,15 @@ export function stepKey(item: AgentTraceItem): string {
 }
 
 export function processTitle(steps: AgentTraceItem[], live: boolean): string {
-  if (live) return "正在执行";
+  if (live) return t("trace.running");
   const tools = steps.filter((step) => step.type === "tool").length;
   const thinking = steps.some((step) => step.type === "thinking");
-  if (thinking && !tools) return "思考过程";
-  if (!thinking && tools === 1) return "执行过程 · 1 个工具";
-  if (!thinking && tools > 1) return `执行过程 · ${tools} 个工具`;
-  if (thinking && tools === 1) return "执行过程 · 思考与 1 个工具";
-  if (thinking && tools > 1) return `执行过程 · 思考与 ${tools} 个工具`;
-  return "执行过程";
+  if (thinking && !tools) return t("trace.thinking");
+  if (!thinking && tools === 1) return t("trace.oneTool");
+  if (!thinking && tools > 1) return t("trace.nTools", { n: tools });
+  if (thinking && tools === 1) return t("trace.thinkOne");
+  if (thinking && tools > 1) return t("trace.thinkN", { n: tools });
+  return t("trace.process");
 }
 
 function clip(text: string, max = 72): string {
@@ -111,7 +112,7 @@ function shortPath(path: string): string {
 }
 
 export function toolSummary(item: AgentTraceItem): string {
-  const name = (item.name || "工具").trim();
+  const name = (item.name || t("trace.tool")).trim();
   const record = asRecord(item.input);
   const command = pick(record, COMMAND_KEYS);
   if (command) return clip(command);
@@ -132,8 +133,8 @@ export function toolSummary(item: AgentTraceItem): string {
 }
 
 export function stepSummary(item: AgentTraceItem): string {
-  if (item.type === "thinking") return "思考";
+  if (item.type === "thinking") return t("trace.think");
   const label = toolSummary(item);
-  if (item.type === "tool" && !item.output) return `${label} · 执行中`;
+  if (item.type === "tool" && !item.output) return `${label} · ${t("trace.runningTool")}`;
   return label;
 }

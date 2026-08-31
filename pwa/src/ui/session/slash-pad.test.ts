@@ -21,8 +21,8 @@ describe("expanded pad modes", () => {
   });
 
   test("switching morphs the expanded body and drops latched modifiers", () => {
-    expect(pad).toContain('label: "按键"');
-    expect(pad).toContain('label: "命令"');
+    expect(pad).toContain('t("slash.keys")');
+    expect(pad).toContain('t("slash.commands")');
     expect(pad).toContain("clearModifiers()");
     expect(pad).toContain("savePadKind()");
   });

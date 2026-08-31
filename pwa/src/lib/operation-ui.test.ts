@@ -1,20 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import { t } from "./i18n";
 import { openWorktreeTargetError, resizeAmountError, splitRatioError } from "./operation-ui";
 
 const source = await Bun.file(new URL("./operation-ui.ts", import.meta.url)).text();
 
 describe("operation form guidance", () => {
   test("opening a Worktree requires exactly one target", () => {
-    expect(openWorktreeTargetError("", "")).toBe("请输入路径或分支。");
-    expect(openWorktreeTargetError("/repo/tree", "feature/tree")).toBe("路径和分支只能填写一个。");
+    expect(openWorktreeTargetError("", "")).toBe(t("form.needPathOrBranch"));
+    expect(openWorktreeTargetError("/repo/tree", "feature/tree")).toBe(t("form.pathXorBranch"));
     expect(openWorktreeTargetError("/repo/tree", "")).toBeNull();
     expect(openWorktreeTargetError("", "feature/tree")).toBeNull();
-    expect(source).toContain('kind === "open" ? "路径（二选一）"');
-    expect(source).toContain('kind === "open" ? "分支（二选一）"');
+    expect(source).toContain('t("form.pathEither")');
+    expect(source).toContain('t("form.branchEither")');
   });
 
   test("creating a Worktree explains that an empty target is valid", () => {
-    expect(source).toContain("路径和分支都留空时，电脑会自动生成 Worktree 的名称和路径。");
+    expect(source).toContain('t("form.worktreeBlank")');
   });
 
   test("fraction labels and validation agree at their boundaries", () => {
@@ -28,30 +29,32 @@ describe("operation form guidance", () => {
   });
 
   test("layout picks are phone actions, not protocol fields", () => {
-    expect(source).toContain('title = kind === "resize" ? "让这一格大一点"');
-    expect(source).toContain("加宽");
-    expect(source).toContain("变窄");
-    expect(source).toContain('label: "加高", choice: { kind: "resize", direction: "up"');
-    expect(source).toContain('label: "变矮", choice: { kind: "resize", direction: "down"');
-    expect(source).toContain("和左边对调");
+    expect(source).toContain('title = kind === "resize" ? t("form.resizeTitle")');
+    expect(source).toContain('t("form.wider")');
+    expect(source).toContain('t("form.narrower")');
+    expect(source).toContain('t("form.taller")');
+    expect(source).toContain('t("form.shorter")');
+    expect(source).toContain('direction: "up"');
+    expect(source).toContain('direction: "down"');
+    expect(source).toContain('t("form.swapLeft")');
     expect(source).toContain("PANE_RESIZE_STEP");
     expect(source).not.toContain("调整量（大于 0，最大 1）");
     expect(source).not.toContain("放大模式");
-    expect(source).toContain("在右边再开一格");
+    expect(source).toContain('t("form.splitRight")');
     expect(source).toContain("ratio: 0.5");
-    expect(source).toContain("手机一次只看其中一格，半屏时用铺满全屏");
+    expect(source).toContain('t("form.splitHint")');
   });
 
   test("new sessions can omit an agent kind for a terminal pane", () => {
-    expect(source).toContain('formDialog("新建会话"');
-    expect(source).toContain("纯终端（不启动 Agent）");
-    expect(source).toContain("电脑没有可用的 Agent 类型，将创建纯终端会话。");
+    expect(source).toContain('formDialog(t("form.newConversation")');
+    expect(source).toContain('t("form.plainTerminal")');
+    expect(source).toContain('t("form.noAgentKinds")');
     expect(source).toContain("...(agentKind ? { agent_kind: agentKind } : {})");
     expect(source).not.toContain("请选择 Agent。");
   });
 
   test("the submit action is primary and cancel is ghost", () => {
-    expect(source).toContain('button("取消", "btn btn-small btn-ghost", close)');
+    expect(source).toContain('button(t("cancel"), "btn btn-small btn-ghost", close)');
     expect(source).toContain('node("button", "btn btn-small btn-primary", submitLabel)');
     expect(source).toContain("row.append(submit, cancel)");
   });

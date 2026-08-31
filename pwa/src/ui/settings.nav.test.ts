@@ -9,7 +9,6 @@ for (const key of [
   "navigator",
   "HTMLElement",
   "HTMLButtonElement",
-  "HTMLAnchorElement",
   "Node",
   "DocumentFragment",
   "localStorage",
@@ -34,6 +33,7 @@ const { setRenderer } = await import("../paint.ts");
 const { renderHome } = await import("./home.ts");
 const { renderSettings } = await import("./settings.ts");
 const { renderPane } = await import("./pane.ts");
+const { lang, setLang, setLangPref, t } = await import("../lib/i18n.ts");
 
 function paint(): void {
   if (state.screen === "settings") renderSettings();
@@ -72,22 +72,13 @@ afterEach(() => {
   state.defaultTermMode = "guided";
   state.paneTermModes = {};
   localStorage.removeItem(DEFAULT_TERM_MODE_KEY);
+  setLang("zh");
+  try {
+    localStorage.removeItem("pairfob_lang");
+  } catch {
+    /* ignore */
+  }
   app.replaceChildren();
-});
-
-describe("settings help", () => {
-  test("settings exposes docs and a GitHub issue form", () => {
-    bootHomeWithStalePane();
-    click("设置");
-    const docs = [...app.querySelectorAll("a")].find((el) => el.textContent?.includes("文档"));
-    const issue = [...app.querySelectorAll("a")].find((el) => el.textContent?.includes("反馈问题"));
-    if (!(docs instanceof HTMLAnchorElement) || !(issue instanceof HTMLAnchorElement)) {
-      throw new Error(`missing help links: ${app.innerHTML.slice(0, 400)}`);
-    }
-    expect(docs.href).toContain("/doc/zh/");
-    expect(issue.href).toBe("https://github.com/arronKler/pairfob/issues/new");
-    expect(issue.target).toBe("_blank");
-  });
 });
 
 describe("settings back", () => {
@@ -133,6 +124,24 @@ describe("default terminal mode", () => {
     setDefaultTermMode("agent");
     expect(paneTermMode("p1")).toBe("guided");
     expect(paneTermMode("p2")).toBe("agent");
+  });
+});
+
+describe("language", () => {
+  test("settings can pin english and follow the browser again", () => {
+    bootHomeWithStalePane();
+    click("设置");
+    const group = app.querySelector('[aria-label="语言"]');
+    expect(group).toBeTruthy();
+    expect([...group!.querySelectorAll("button")].map((el) => el.textContent)).toEqual(["跟随浏览器", "中文", "English"]);
+    click("English");
+    expect(lang()).toBe("en");
+    expect(app.querySelector(".topbar-title")?.textContent).toBe("Settings");
+    expect(app.querySelector('[aria-label="Language"] [aria-checked="true"]')?.textContent).toBe("English");
+    click("Browser default");
+    expect(document.documentElement.lang === "en" || document.documentElement.lang === "zh-CN").toBe(true);
+    setLangPref("zh");
+    expect(t("home.settings")).toBe("设置");
   });
 });
 

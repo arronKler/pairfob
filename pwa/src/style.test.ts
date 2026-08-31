@@ -15,6 +15,7 @@ const css = await loadCss(new URL("./style.css", import.meta.url));
 const html = await Bun.file(new URL("../index.html", import.meta.url)).text();
 const manifest = JSON.parse(await Bun.file(new URL("../public/manifest.webmanifest", import.meta.url)).text());
 const main = await Bun.file(new URL("../src/main.ts", import.meta.url)).text();
+const viewportSrc = await Bun.file(new URL("./viewport.ts", import.meta.url)).text();
 const stateSrc = await Bun.file(new URL("./state.ts", import.meta.url)).text();
 
 function color(token: string): string {
@@ -73,7 +74,7 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("interactive touch controls keep a 44px target", () => {
-    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".lift button", ".send-btn", ".menu-item", ".icon-btn", ".operation-field input", ".operation-field select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd", ".home-feedback a", "a.set-nav"]) {
+    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".lift button", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
       const match = rule(selector).match(/min-height:\s*(\d+)px/);
       expect(match, selector).not.toBeNull();
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);
@@ -251,8 +252,9 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("a finger pan does not pin the terminal to the newest row", () => {
-    expect(main).toContain('addEventListener("scroll", applyKeyboardInset)');
-    expect(main).not.toMatch(/visualViewport\?\.addEventListener\("scroll", onViewportResize\)/);
+    expect(viewportSrc).toContain('addEventListener("scroll", applyVisualViewport)');
+    expect(viewportSrc).not.toMatch(/visualViewport\?\.addEventListener\("scroll", resized\)/);
+    expect(main).toContain("bindVisualViewport");
     expect(main).toContain("stickBottom");
   });
 
@@ -283,15 +285,16 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".term")).not.toMatch(/position:\s*absolute/);
     expect(rule(".pane-root")).toMatch(/flex:\s*1 1 0%/);
     expect(rule(".pane-root")).toMatch(/overflow:\s*hidden/);
-    expect(rule("#app.session")).toMatch(/inset:\s*0/);
-    expect(rule("#app.session")).toMatch(/height:\s*auto/);
+    expect(rule("#app.session")).toMatch(/top:\s*var\(--vv-top/);
+    expect(rule("#app.session")).toMatch(/height:\s*var\(--vv-height/);
     expect(rule("#app.session")).not.toMatch(/height:\s*100dvh/);
+    expect(rule("#app.session")).not.toMatch(/var\(--kb/);
     expect(rule("#app.desk")).toMatch(/position:\s*fixed/);
-    expect(rule("#app.desk")).toMatch(/inset:\s*0/);
-    expect(rule("#app.desk")).toMatch(/height:\s*auto/);
+    expect(rule("#app.desk")).toMatch(/top:\s*var\(--vv-top/);
+    expect(rule("#app.desk")).toMatch(/height:\s*var\(--vv-height/);
     expect(rule("#app.desk")).toMatch(/min-height:\s*0/);
     expect(rule("#app.desk")).toMatch(/overflow:\s*hidden/);
-    expect(rule("#app.desk")).toMatch(/var\(--kb/);
+    expect(rule("#app.desk")).not.toMatch(/var\(--kb/);
     expect(rule("#app.desk")).not.toMatch(/height:\s*100dvh/);
     expect(rule("#app.desk")).not.toMatch(/min-height:\s*100dvh/);
     expect(rule(".main")).toMatch(/min-height:\s*0/);

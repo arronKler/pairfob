@@ -1,11 +1,12 @@
 import { agentMeta, agentTitle, chromeName, cwdName, statusLabel, tabIsSplit } from "../../lib/dashboard";
 import { button, node } from "../../lib/dom";
+import { t } from "../../lib/i18n";
 import { type AgentCard } from "../../lib/ranking";
 import { app, selectedAgent, state } from "../../state";
 import { isDesk } from "../../viewport";
 import { backButton, noteNode } from "../chrome";
 import { chromeActionCluster, syncChromeStop } from "./chrome-actions";
-import { composeField, sizeCompose } from "./compose";
+import { composeField, sizeCompose, syncSendButton } from "./compose";
 import { dockNode } from "./dock";
 import { queueKey } from "./keys";
 import { paneModel, type PaneModel } from "./model";
@@ -24,7 +25,7 @@ function statusLine(selected: AgentCard): string {
 }
 
 function chromeMeta(selected: AgentCard): string {
-  return [statusLabel(selected.status), cwdName(selected.cwd), tabIsSplit(selected, state.agents) ? "分屏" : ""]
+  return [statusLabel(selected.status), cwdName(selected.cwd), tabIsSplit(selected, state.agents) ? t("chrome.split") : ""]
     .filter(Boolean)
     .join(" · ");
 }
@@ -46,19 +47,22 @@ function titleBody(selected: AgentCard): HTMLElement[] {
 function syncChromeStatus(chrome: HTMLElement, title: HTMLElement, selected: AgentCard): void {
   const line = statusLine(selected);
   title.title = [agentTitle(selected), line].filter(Boolean).join(" · ");
-  title.setAttribute("aria-label", `${agentTitle(selected)}${line ? `，${line}` : ""}，切换会话`);
+  title.setAttribute(
+    "aria-label",
+    line ? t("chrome.switchAriaMeta", { title: agentTitle(selected), line }) : t("chrome.switchAria", { title: agentTitle(selected) }),
+  );
   syncChromeStop(chrome, selected.status === "working", () => queueKey("esc"));
 }
 
 function chromeNode(selected: AgentCard | undefined, includeBack: boolean, handlers: SessionHandlers): HTMLElement {
   const chrome = node("header", "chrome");
   if (includeBack) {
-    chrome.append(backButton(handlers.onBack, "返回会话列表"));
+    chrome.append(backButton(handlers.onBack, t("chrome.backList")));
   }
   const title = node("button", "chrome-title");
   title.type = "button";
   title.addEventListener("click", handlers.onSwitch);
-  title.append(...(selected ? titleBody(selected) : [node("span", "chrome-name", "会话")]));
+  title.append(...(selected ? titleBody(selected) : [node("span", "chrome-name", t("title.session"))]));
   chrome.append(title);
   chrome.append(chromeActionCluster(handlers.onMenu));
   if (selected) syncChromeStatus(chrome, title, selected);
@@ -76,8 +80,8 @@ function fillExtras(host: HTMLElement, model: PaneModel): void {
 
 function selectBar(): HTMLElement {
   const bar = node("div", "select-bar");
-  bar.append(node("p", "select-hint", "选择模式：长按选中文字，再用系统菜单复制。"));
-  bar.append(button("完成", "btn btn-small", () => toggleTermSelect(false)));
+  bar.append(node("p", "select-hint", t("term.selectHint")));
+  bar.append(button(t("term.done"), "btn btn-small", () => toggleTermSelect(false)));
   const error = noteNode();
   if (error) bar.append(error);
   return bar;
@@ -91,7 +95,7 @@ export function fillSession(
 ): HTMLTextAreaElement | undefined {
   container.append(chromeNode(selected, includeBack, handlers));
   if (!selected) {
-    container.append(node("p", "empty-sub", "这个会话已经不在了。"));
+    container.append(node("p", "empty-sub", t("err.paneGone")));
     return;
   }
   const model = paneModel();
@@ -121,7 +125,7 @@ export function finishSessionPaint(scroll: { top: number; left: number; bottom: 
   if (field) {
     sizeCompose(field);
     if (state.composeFocused || isDesk()) {
-      field.focus();
+      field.focus({ preventScroll: true });
       const caret = field.value.length;
       field.setSelectionRange(caret, caret);
     }
@@ -150,6 +154,7 @@ export function patchSessionScreen(): boolean {
   const model = paneModel();
   fillTerm(term, model);
   fillExtras(extras, model);
+  syncSendButton();
   patchChromeTitle();
   restoreTermScroll(term, { left, top, bottom: following });
   if (following) {

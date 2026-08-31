@@ -1,4 +1,5 @@
 import { node } from "../lib/dom";
+import { t, type CopyKey } from "../lib/i18n";
 
 export type Modifier = "ctrl" | "alt" | "shift" | "cmd";
 
@@ -13,11 +14,11 @@ export type KeySpec = {
 /** Primary phone row: escape, movement, delete. */
 export const PRIMARY_KEYS: KeySpec[] = [
   { key: "esc", label: "Esc" },
-  { key: "up", label: "↑", aria: "上箭头", repeat: true },
-  { key: "down", label: "↓", aria: "下箭头", repeat: true },
-  { key: "left", label: "←", aria: "左箭头", repeat: true },
-  { key: "right", label: "→", aria: "右箭头", repeat: true },
-  { key: "backspace", label: "⌫", aria: "退格", repeat: true },
+  { key: "up", label: "↑", repeat: true },
+  { key: "down", label: "↓", repeat: true },
+  { key: "left", label: "←", repeat: true },
+  { key: "right", label: "→", repeat: true },
+  { key: "backspace", label: "⌫", repeat: true },
 ];
 
 export const SECONDARY_KEYS: KeySpec[] = [
@@ -133,10 +134,19 @@ export function bindModifier(element: HTMLElement, mod: Modifier): void {
   }
 }
 
+const KEY_ARIA: Partial<Record<string, CopyKey>> = {
+  up: "key.up",
+  down: "key.down",
+  left: "key.left",
+  right: "key.right",
+  backspace: "key.backspace",
+};
+
 export function paintKey(spec: KeySpec): HTMLButtonElement {
   const el = node("button", spec.modifier ? "key key-mod" : "key", spec.label ?? "");
   el.type = "button";
-  const name = spec.aria ?? spec.label;
+  const mapped = KEY_ARIA[spec.key];
+  const name = mapped ? t(mapped) : spec.aria ?? spec.label;
   if (name) el.setAttribute("aria-label", name);
   if (spec.modifier) el.setAttribute("aria-pressed", "false");
   return el;

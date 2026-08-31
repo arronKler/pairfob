@@ -1,5 +1,6 @@
 import { canPromptAgent, chromeName, statusLabel } from "../lib/dashboard";
 import { button, node } from "../lib/dom";
+import { t } from "../lib/i18n";
 import { firstTurnNeedsUser } from "../lib/agent-trace-view";
 import { cacheAgentTrace, cachedAgentTrace } from "../lib/agent-trace-cache";
 import type { AgentTraceItem, AgentTracePage } from "../lib/operations";
@@ -60,7 +61,7 @@ function applyTracePage(page: AgentTracePage, older: boolean): boolean {
     state.agentTraceItems = [...page.items, ...state.agentTraceItems];
     state.agentTraceNext = page.nextCursor;
     absorbPending(state.agentTraceItems);
-    if (page.truncated) state.agentTraceNote = "部分内容已截断";
+    if (page.truncated) state.agentTraceNote = t("chat.truncated");
     return true;
   }
   const sig = fingerprint(page.items);
@@ -102,23 +103,23 @@ export function restoreAgentTrace(paneId: string): boolean {
   return true;
 }
 
-const TRACE_UNAVAILABLE_NOTE = "还没有可读取的 Agent 记录。发出去的消息会写进这个对话。";
+const traceUnavailableNote = () => t("chat.noTrace");
 
 function emptySpec(working: boolean): AgentEmptySpec {
   const note = state.agentTraceNote;
-  if (state.agentTraceLoadState === "error" && note && note !== TRACE_UNAVAILABLE_NOTE) {
+  if (state.agentTraceLoadState === "error" && note && note !== traceUnavailableNote()) {
     return { kind: "error", title: note };
   }
-  if (working) return { kind: "working", title: "正在执行" };
+  if (working) return { kind: "working", title: t("trace.running") };
   if (state.agentTraceLoadState === "cold" || state.agentTraceLoadState === "loading") {
-    return { kind: "loading", title: "正在读取执行过程" };
+    return { kind: "loading", title: t("chat.readingProcess") };
   }
-  if (note === TRACE_UNAVAILABLE_NOTE) return { kind: "empty", title: "还没有对话", sub: "发出去的消息会写进这个对话。" };
-  if (note) return { kind: "empty", title: "还没有对话", sub: note };
+  if (note === traceUnavailableNote()) return { kind: "empty", title: t("chat.noChat"), sub: t("chat.willWrite") };
+  if (note) return { kind: "empty", title: t("chat.noChat"), sub: note };
   return {
     kind: "empty",
-    title: "还没有对话",
-    sub: canSend() ? "在下面给 Agent 发一条" : "这个会话还不能给 Agent 发任务",
+    title: t("chat.noChat"),
+    sub: canSend() ? t("chat.sendBelow") : t("chat.cantSend"),
   };
 }
 
@@ -130,7 +131,7 @@ function traceLatencyBucket(ms: number): string {
 }
 
 function olderButton(): HTMLButtonElement {
-  const btn = button("加载更早内容", "btn btn-small agent-older", () => {
+  const btn = button(t("hist.loadEarlier"), "btn btn-small agent-older", () => {
     if (state.agentTraceNext && !state.agentTraceBusy) void refreshAgentTrace(true);
   });
   syncOlderButton(btn);
@@ -143,7 +144,7 @@ function syncOlderButton(btn?: HTMLElement | null): void {
   const more = Boolean(state.agentTraceNext);
   el.hidden = !more;
   el.disabled = !more || state.agentTraceBusy;
-  el.textContent = state.agentTraceBusy && more ? "正在读取更早内容…" : "加载更早内容";
+  el.textContent = state.agentTraceBusy && more ? t("chat.readingOlder") : t("hist.loadEarlier");
 }
 
 export function stickAgentStream(): void {
@@ -169,14 +170,14 @@ function sizeChatCompose(field: HTMLTextAreaElement): void {
   field.style.height = `${Math.min(Math.max(field.scrollHeight, COMPOSE_MIN_PX), COMPOSE_MAX_PX)}px`;
 }
 
-const AGENT_PROMPT_LIMIT_NOTICE = "单条消息最多 32 KiB，已保留可发送的前半部分。";
+const agentPromptLimitNotice = () => t("chat.limit");
 
 function syncAgentDraft(input: HTMLTextAreaElement, hint: HTMLElement): void {
   const fitted = fitOperationPrompt(input.value);
   state.composeDraft = fitted.text;
   input.value = fitted.text;
   hint.hidden = !fitted.truncated;
-  hint.textContent = fitted.truncated ? AGENT_PROMPT_LIMIT_NOTICE : "";
+  hint.textContent = fitted.truncated ? agentPromptLimitNotice() : "";
   sizeChatCompose(input);
   syncChatCompose();
 }
@@ -236,7 +237,7 @@ export async function refreshAgentTrace(older = false): Promise<boolean> {
         measured = true;
       }
       const applied = applyTracePage(page, cursor !== null);
-      if (page.truncated) state.agentTraceNote = "部分内容已截断";
+      if (page.truncated) state.agentTraceNote = t("chat.truncated");
       else if (!cursor) state.agentTraceNote = "";
       changed = applied || changed;
       pulls += 1;
@@ -269,7 +270,7 @@ export async function refreshAgentTrace(older = false): Promise<boolean> {
       state.agentTraceNext = null;
       state.agentTraceSig = "";
       state.agentTraceTail = 0;
-      state.agentTraceNote = state.agentTracePending ? "" : TRACE_UNAVAILABLE_NOTE;
+      state.agentTraceNote = state.agentTracePending ? "" : traceUnavailableNote();
       if (!patchAgentChat({ follow: true })) render();
       return false;
     }
@@ -296,7 +297,7 @@ export function enterAgentChat(): void {
     state.agentTraceUnread = false;
     render();
     void refreshAgentTrace();
-    queueMicrotask(() => composeEl()?.focus());
+    queueMicrotask(() => composeEl()?.focus({ preventScroll: true }));
   };
   if (state.fullTerminal) {
     void leaveFullTerminal({ rememberGuided: false, paint: false }).then(() => {
@@ -345,15 +346,15 @@ function syncChatCompose(agent = selectedAgent()): void {
   const send = app.querySelector(".agent-dock .send-btn");
   if (!(input instanceof HTMLTextAreaElement) || !(send instanceof HTMLButtonElement)) return;
   const allowed = canSend(agent);
-  input.placeholder = allowed ? "给 Agent 发消息" : "这个会话还不能给 Agent 发任务";
+  input.placeholder = allowed ? t("chat.placeholder") : t("chat.cantSend");
   input.disabled = !allowed || state.operationBusy;
   send.disabled = !allowed || state.operationBusy || !state.composeDraft.trim();
 }
 
 function confirmBar(): HTMLElement {
   const bar = node("div", "agent-confirm");
-  bar.append(node("p", "agent-confirm-copy", "Agent 在终端里等你确认。"));
-  const go = button("去确认", "btn btn-small", () => leaveAgentChat());
+  bar.append(node("p", "agent-confirm-copy", t("chat.waitingConfirm")));
+  const go = button(t("chat.goConfirm"), "btn btn-small", () => leaveAgentChat());
   go.type = "button";
   bar.append(go);
   return bar;
@@ -399,7 +400,7 @@ function syncChatDock(agent = selectedAgent()): void {
 
 function patchChatChrome(chrome: HTMLElement, selected: ReturnType<typeof selectedAgent>): void {
   const name = chrome.querySelector(".chrome-name");
-  if (name) name.textContent = selected ? chromeName(selected) : "对话";
+  if (name) name.textContent = selected ? chromeName(selected) : t("mode.agent");
   const meta = chrome.querySelector(".chrome-meta-text");
   if (meta) meta.textContent = selected ? statusLabel(selected.status) : "";
   const dot = chrome.querySelector(".agent-dot");
@@ -408,7 +409,12 @@ function patchChatChrome(chrome: HTMLElement, selected: ReturnType<typeof select
   if (title instanceof HTMLElement && selected) {
     const line = statusLabel(selected.status);
     title.title = [chromeName(selected), line].filter(Boolean).join(" · ");
-    title.setAttribute("aria-label", `${chromeName(selected)}${line ? `，${line}` : ""}，切换会话`);
+    title.setAttribute(
+      "aria-label",
+      line
+        ? t("chrome.switchAriaMeta", { title: chromeName(selected), line })
+        : t("chrome.switchAria", { title: chromeName(selected) }),
+    );
   }
   syncChromeStop(chrome, selected?.status === "working", () => {
     const session = state.live;
@@ -470,13 +476,13 @@ function chatCompose(selectedHasAgent: boolean): { dock: HTMLElement; input: HTM
   input.rows = 1;
   input.enterKeyHint = "send";
   input.maxLength = OPERATION_INPUT_LIMITS.prompt;
-  input.placeholder = selectedHasAgent ? "给 Agent 发消息" : "这个会话还不能给 Agent 发任务";
+  input.placeholder = selectedHasAgent ? t("chat.placeholder") : t("chat.cantSend");
   const initial = fitOperationPrompt(state.composeDraft);
   state.composeDraft = initial.text;
   input.value = initial.text;
   if (initial.truncated) {
     hint.hidden = false;
-    hint.textContent = AGENT_PROMPT_LIMIT_NOTICE;
+    hint.textContent = agentPromptLimitNotice();
   }
   input.disabled = !selectedHasAgent || state.operationBusy;
   input.addEventListener("input", () => {
@@ -505,7 +511,7 @@ function chatCompose(selectedHasAgent: boolean): { dock: HTMLElement; input: HTM
     event.preventDefault();
     void submitAgentPrompt();
   });
-  const send = button("发送", "send-btn", () => void submitAgentPrompt());
+  const send = button(t("compose.send"), "send-btn", () => void submitAgentPrompt());
   send.disabled = !selectedHasAgent || state.operationBusy || !state.composeDraft.trim();
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -554,7 +560,7 @@ async function submitAgentPrompt(): Promise<void> {
     state.operationBusy = false;
     syncChatDock();
     stickAgentStream();
-    composeEl()?.focus();
+    composeEl()?.focus({ preventScroll: true });
   }
 }
 
@@ -567,7 +573,7 @@ function chatChrome(
 ): HTMLElement {
   const chrome = node("header", "chrome");
   if (includeBack) {
-    chrome.append(backButton(onBack, "返回会话列表"));
+    chrome.append(backButton(onBack, t("chrome.backList")));
   }
   const title = node("button", "chrome-title");
   title.type = "button";
@@ -579,9 +585,14 @@ function chatChrome(
     meta.append(node("span", `agent-dot agent-${selected.status}`), node("span", "chrome-meta-text", line));
     title.append(meta);
     title.title = [chromeName(selected), line].filter(Boolean).join(" · ");
-    title.setAttribute("aria-label", `${chromeName(selected)}${line ? `，${line}` : ""}，切换会话`);
+    title.setAttribute(
+      "aria-label",
+      line
+        ? t("chrome.switchAriaMeta", { title: chromeName(selected), line })
+        : t("chrome.switchAria", { title: chromeName(selected) }),
+    );
   } else {
-    title.append(node("span", "chrome-name", "对话"));
+    title.append(node("span", "chrome-name", t("mode.agent")));
   }
   chrome.append(title, chromeActionCluster(onMenu));
   syncChromeStop(chrome, selected?.status === "working", () => {
@@ -608,7 +619,7 @@ export function fillAgentChat(
   stream.dataset.sig = streamSig(items, working);
   container.dataset.back = includeBack ? "1" : "0";
   const wrap = node("div", "agent-stream-wrap");
-  const jump = node("button", "agent-jump", "↓ 新回复");
+  const jump = node("button", "agent-jump", t("chat.newReply"));
   jump.type = "button";
   jump.hidden = state.agentTraceFollow || !state.agentTraceUnread;
   jump.addEventListener("click", jumpToLatest);

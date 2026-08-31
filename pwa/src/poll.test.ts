@@ -19,8 +19,8 @@ describe("refresh contract constants", () => {
     expect(SNAPSHOT_FALLBACK_MS).toBe(15_000);
     expect(PANE_READ_FALLBACK_MS).toBe(1_500);
     expect(stateSrc).toContain("export { SNAPSHOT_FALLBACK_MS, PANE_READ_FALLBACK_MS }");
-    expect(noticesSrc).toContain("locator_required:");
-    expect(noticesSrc).toContain("rate_limited:");
+    expect(noticesSrc).toContain('"locator_required"');
+    expect(noticesSrc).toContain('"rate_limited"');
     expect(pollingSrc).toContain("SNAPSHOT_FALLBACK_MS");
     expect(pollingSrc).toContain("callbacks.canReadPane() ? callbacks.paneDelayMs() : PANE_TIMER_IDLE_MS");
     expect(liveSrc).not.toContain("setInterval(");

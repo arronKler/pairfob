@@ -34,4 +34,7 @@
   --term-fs: 12px;
   --term-lh: 18px;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --vv-top: 0px;
+  --vv-height: 100%;
+  --kb: 0px;
 }

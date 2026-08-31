@@ -1,39 +1,28 @@
 import { button, node } from "../lib/dom";
+import { t } from "../lib/i18n";
 import { type DeviceSummary } from "../lib/protocol/client";
 import { formatDeviceAge, notificationAction, shortDeviceId, TERM_MODE_LABEL } from "../lib/ui-model";
 import { beginAddComputer, openComputers } from "../computers";
 import { computerTitle } from "../lib/computer-catalog";
-import { enablePush, refreshSettings, revokeSelf } from "../live";
+import { revokeSelf } from "../live-operations";
+import { enablePush, refreshSettings } from "../live-settings";
 import { render } from "../paint";
 import { app, setDefaultTermMode, state, type TermMode } from "../state";
 import { isDesk } from "../viewport";
 import { composeLiveControl } from "./session-view";
-import {
-  backBar,
-  chevron,
-  feedbackNode,
-  herdStatus,
-  ISSUE_NEW_URL,
-  listGroupControl,
-  noteNode,
-  setRow,
-} from "./chrome";
+import { backBar, feedbackNode, herdStatus, languageControl, listGroupControl, noteNode, setRow } from "./chrome";
 
-const TERM_MODE_OPTIONS: Array<{ id: TermMode; label: string }> = [
-  { id: "guided", label: TERM_MODE_LABEL.guided },
-  { id: "full", label: TERM_MODE_LABEL.full },
-  { id: "agent", label: TERM_MODE_LABEL.agent },
-];
+const TERM_MODE_OPTIONS: TermMode[] = ["guided", "full", "agent"];
 
 function defaultTermModeControl(): HTMLElement {
   const bar = node("div", "seg");
   bar.setAttribute("role", "radiogroup");
-  bar.setAttribute("aria-label", "默认模式");
-  for (const option of TERM_MODE_OPTIONS) {
-    const selected = state.defaultTermMode === option.id;
-    const item = button(option.label, `seg-item${selected ? " on" : ""}`, () => {
-      if (state.defaultTermMode === option.id) return;
-      setDefaultTermMode(option.id);
+  bar.setAttribute("aria-label", t("mode.defaultAria"));
+  for (const id of TERM_MODE_OPTIONS) {
+    const selected = state.defaultTermMode === id;
+    const item = button(TERM_MODE_LABEL[id], `seg-item${selected ? " on" : ""}`, () => {
+      if (state.defaultTermMode === id) return;
+      setDefaultTermMode(id);
       render();
     });
     item.setAttribute("role", "radio");
@@ -46,95 +35,80 @@ function defaultTermModeControl(): HTMLElement {
 function deviceRow(device: DeviceSummary): HTMLElement {
   const row = node("div", "device");
   const head = node("div", "device-head");
-  head.append(node("strong", "device-name", device.label || "未命名设备"));
-  if (device.self) head.append(node("span", "pill pill-live", "这台手机"));
-  if (device.revoked_at) head.append(node("span", "pill pill-off", "已解除配对"));
+  head.append(node("strong", "device-name", device.label || t("device.unnamed")));
+  if (device.self) head.append(node("span", "pill pill-live", t("device.self")));
+  if (device.revoked_at) head.append(node("span", "pill pill-off", t("device.revoked")));
   const id = node("code", "device-id", shortDeviceId(device.device_id));
   id.title = device.device_id;
   const activity = device.revoked_at
-    ? `解除配对：${formatDeviceAge(device.revoked_at)}`
-    : `最近使用：${formatDeviceAge(device.last_seen || device.created_at)}`;
-  const notifications = device.subscription_count ? " · 通知已开启" : " · 未开启通知";
+    ? t("device.revokedAt", { when: formatDeviceAge(device.revoked_at) })
+    : t("device.lastUsed", { when: formatDeviceAge(device.last_seen || device.created_at) });
+  const notifications = device.subscription_count ? t("device.notifyOn") : t("device.notifyOff");
   row.append(head, id, node("p", "device-meta", activity + notifications));
-  return row;
-}
-
-function helpRow(label: string, href: string): HTMLAnchorElement {
-  const row = node("a", "set-row set-nav");
-  row.href = href;
-  row.target = "_blank";
-  row.rel = "noreferrer";
-  row.append(document.createTextNode(label), chevron());
   return row;
 }
 
 export function fillSettings(container: HTMLElement | DocumentFragment, withBack: boolean): void {
   if (withBack) {
     container.append(
-      backBar("设置", () => {
+      backBar(t("settings.title"), () => {
         state.screen = isDesk() && state.paneId ? "pane" : "home";
         render();
       }),
     );
   }
   const status = herdStatus();
-  container.append(node("h2", "set-title", "连接"));
+  container.append(node("h2", "set-title", t("settings.connection")));
   const conn = node("div", "set-card");
-  conn.append(setRow("电脑", state.herdHost || (state.credential ? computerTitle(state.credential) : "当前电脑")));
-  conn.append(setRow("状态", status.text, status.tone));
+  conn.append(setRow(t("settings.computer"), state.herdHost || (state.credential ? computerTitle(state.credential) : t("settings.currentComputer"))));
+  conn.append(setRow(t("settings.status"), status.text, status.tone));
   const self = state.deviceList.find((device) => device.self && !device.revoked_at);
-  if (self) conn.append(setRow("这台手机", self.label || "已配对设备"));
+  if (self) conn.append(setRow(t("settings.thisPhone"), self.label || t("settings.pairedPhone")));
   if (state.computers.length > 1) {
     const switchRow = node("div", "set-row set-row-stack");
-    switchRow.append(node("p", "set-note", `这台手机上有 ${state.computers.length} 台已配对电脑。`));
-    switchRow.append(button("切换电脑", "btn btn-small", openComputers));
+    switchRow.append(node("p", "set-note", t("settings.computersCount", { n: state.computers.length })));
+    switchRow.append(button(t("settings.switchComputer"), "btn btn-small", openComputers));
     conn.append(switchRow);
   }
   const addRow = node("div", "set-row set-row-stack");
-  addRow.append(
-    node(
-      "p",
-      "set-note",
-      "另一台电脑先装 pairfob（和第一台同一条安装命令），再执行 pairfob pair。这里扫码只是多一条凭证，不会替换现在这台。",
-    ),
-  );
-  addRow.append(button("添加另一台电脑", "btn btn-small", beginAddComputer));
+  addRow.append(node("p", "set-note", t("settings.addComputerHint")));
+  addRow.append(button(t("settings.addComputer"), "btn btn-small", beginAddComputer));
   conn.append(addRow);
   container.append(conn);
 
-  container.append(node("h2", "set-title", "会话列表"));
+  container.append(node("h2", "set-title", t("settings.language")));
+  const langCard = node("div", "set-card");
+  const langRow = node("div", "set-row set-row-stack");
+  langRow.append(node("p", "set-note", t("settings.languageNote")));
+  langRow.append(languageControl());
+  langCard.append(langRow);
+  container.append(langCard);
+
+  container.append(node("h2", "set-title", t("settings.list")));
   const listCard = node("div", "set-card");
   const listRow = node("div", "set-row set-row-stack");
-  listRow.append(node("p", "set-note", "默认平铺全部会话。按工作区或 Agent 分组后，点标题折叠；默认只展开第一组。"));
+  listRow.append(node("p", "set-note", t("settings.listNote")));
   listRow.append(listGroupControl());
   listCard.append(listRow);
   container.append(listCard);
 
-  container.append(node("h2", "set-title", "模式"));
+  container.append(node("h2", "set-title", t("settings.mode")));
   const modeCard = node("div", "set-card");
   const modeRow = node("div", "set-row set-row-stack");
-  modeRow.append(
-    node(
-      "p",
-      "set-note",
-      "控制是手机上操作这个会话：选项可点，用系统键盘。终端是真终端。对话是和 Agent 发消息。点开会话时默认进这个；某个会话里再切换，只记住那一个。",
-    ),
-  );
+  modeRow.append(node("p", "set-note", t("settings.modeNote")));
   modeRow.append(defaultTermModeControl());
   modeCard.append(modeRow);
   container.append(modeCard);
 
-  container.append(node("h2", "set-title", "输入"));
+  container.append(node("h2", "set-title", t("settings.input")));
   const inputCard = node("div", "set-card");
   const inputRow = node("div", "set-row set-row-stack");
-  inputRow.append(
-    node("p", "set-note", "组字写完再按 Enter。实时边打边进终端。右侧始终是 Enter。"),
-  );
+  inputRow.append(node("p", "set-note", t("settings.inputNote")));
   inputRow.append(composeLiveControl());
   inputCard.append(inputRow);
   container.append(inputCard);
 
-  container.append(node("h2", "set-title", "通知"));
+  container.append(node("h2", "set-title", t("settings.notifications")));
   const pushCard = node("div", "set-card");
   const pushRow = node("div", "set-row set-row-stack");
   pushRow.append(
@@ -142,10 +116,10 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
       "p",
       "set-note",
       state.pushEnabled === false
-        ? "电脑端还没有开启 Pairfob 通知，先在电脑端设置。"
+        ? t("settings.pushComputerOff")
         : state.pushSubscribed === true
-          ? "Agent 等你处理或完成任务时，会通知这台手机。"
-          : "开启后，Agent 等你处理或完成任务时会通知这台手机。",
+          ? t("settings.pushOn")
+          : t("settings.pushOff"),
     ),
   );
   const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -157,19 +131,19 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   container.append(pushCard);
   if (state.pushEnabled === false && !state.settingsLoading) {
     const details = node("details", "tech-note");
-    details.append(node("summary", "", "电脑端设置方法"));
+    details.append(node("summary", "", t("settings.pushHowto")));
     details.append(
-      node("p", "", "启动 pairfob 时加入 "),
+      node("p", "", t("settings.pushHowtoBody")),
       node("code", "", "PAIRFOB_PUSH=1"),
-      document.createTextNode("，并设置 PAIRFOB_VAPID_SUBJECT，然后重新打开本页。"),
+      document.createTextNode(t("settings.pushHowtoTail")),
     );
     container.append(details);
   }
   if (state.pushConfigError) container.append(feedbackNode({ text: state.pushConfigError, tone: "error" }));
 
-  container.append(node("h2", "set-title", "已配对设备"));
+  container.append(node("h2", "set-title", t("settings.devices")));
   if (state.settingsLoading && !state.deviceList.length) {
-    container.append(feedbackNode({ text: "正在读取设备列表…", tone: "status" }));
+    container.append(feedbackNode({ text: t("settings.devicesLoading"), tone: "status" }));
   } else if (state.devicesError) {
     container.append(feedbackNode({ text: state.devicesError, tone: "error" }));
   } else if (state.deviceList.length) {
@@ -177,33 +151,27 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
     state.deviceList.forEach((device) => list.append(deviceRow(device)));
     container.append(list);
     const management = node("details", "tech-note");
-    management.append(node("summary", "", "管理其他设备"));
+    management.append(node("summary", "", t("settings.manageOthers")));
     management.append(
-      node("p", "", "为防止失窃手机解除其他设备的配对，手机端只能解除自己的配对。请在电脑端运行 "),
+      node("p", "", t("settings.manageOthersBody")),
       node("code", "", "pairfob device revoke <device_id>"),
-      document.createTextNode("。"),
+      document.createTextNode(t("settings.sentenceEnd")),
     );
     container.append(management);
   } else {
-    container.append(node("p", "empty-sub", "还没有其他已配对设备。"));
+    container.append(node("p", "empty-sub", t("settings.noOtherDevices")));
   }
 
-  container.append(node("h2", "set-title", "帮助"));
-  const help = node("div", "set-card");
-  help.append(helpRow("文档", "/doc/zh/"));
-  help.append(helpRow("反馈问题", ISSUE_NEW_URL));
-  container.append(help);
-
-  container.append(node("h2", "set-title", "危险操作"));
+  container.append(node("h2", "set-title", t("settings.danger")));
   const danger = node("div", "set-card");
   const dangerRow = node("div", "set-row set-row-stack");
-  dangerRow.append(node("p", "set-note", "解除后，这台手机会立即断开并删除本地凭证。"));
-  dangerRow.append(button("解除这台手机的配对", "btn btn-small btn-danger", revokeSelf));
+  dangerRow.append(node("p", "set-note", t("settings.unpairNote")));
+  dangerRow.append(button(t("settings.unpair"), "btn btn-small btn-danger", revokeSelf));
   danger.append(dangerRow);
   container.append(danger);
 
   if (state.devicesError || state.pushConfigError) {
-    container.append(button("重试", "btn btn-small btn-ghost retry", refreshSettings));
+    container.append(button(t("retry"), "btn btn-small btn-ghost retry", refreshSettings));
   }
   const feedback = noteNode();
   if (feedback) container.append(feedback);

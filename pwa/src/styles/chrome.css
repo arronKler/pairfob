@@ -362,43 +362,57 @@
 
 .empty-sub { margin: 6px 0 0; font-size: 0.83rem; color: var(--muted); line-height: 1.55; }
 
-.home-feedback {
-  margin: 22px 2px 0;
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.5;
-}
-
-.home-feedback a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  margin-left: 0.35em;
-  color: var(--accent);
-  font-weight: 560;
-}
-
 /* --- Agent cards --------------------------------------------------------------- */
 
 .card {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0;
   width: 100%;
   margin: 8px 0 0;
-  padding: 14px 14px 14px 16px;
+  padding: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  cursor: pointer;
   text-align: left;
-  transition: transform 0.14s ease, border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.card:active { transform: scale(0.985); }
+.card-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 8px 14px 16px;
+  border-radius: var(--r-lg) 0 0 var(--r-lg);
+  cursor: pointer;
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: inherit;
+}
 
-.card-main { flex: 1 1 auto; min-width: 0; }
+.card-main:active { transform: scale(0.985); }
+
+.card-copy { flex: 1 1 auto; min-width: 0; }
+
+.card-split {
+  flex: none;
+  align-self: stretch;
+  width: 1px;
+  margin: 12px 0;
+  background: var(--line);
+}
+
+.card-more {
+  flex: none;
+  margin: 4px 6px 4px 2px;
+  color: var(--muted);
+}
 
 .card-title {
   display: flex;

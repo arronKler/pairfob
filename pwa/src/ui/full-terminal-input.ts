@@ -1,6 +1,7 @@
 import type { ILink, ILinkProvider, ITerminalOptions, Terminal } from "@xterm/xterm";
 
 import { button, node } from "../lib/dom";
+import { t } from "../lib/i18n";
 import { saveKeysExpanded, state } from "../state";
 import { PRIMARY_KEYS, SECONDARY_KEYS, TERTIARY_KEYS, bindModifier, clearModifiers, paintKey, withModifiers, type KeySpec } from "./keypad";
 
@@ -256,9 +257,9 @@ export function bindXtermKeyboard(host: HTMLElement, startOpen: boolean): Termin
 export function syncKeyboardButton(root: ParentNode, open: boolean): void {
   const el = root.querySelector(".full-terminal-kb") as HTMLButtonElement | null;
   if (!el) return;
-  el.textContent = open ? "收起键盘" : "点这里输入";
+  el.textContent = open ? t("ft.kbHide") : t("ft.kbType");
   el.setAttribute("aria-pressed", open ? "true" : "false");
-  el.setAttribute("aria-label", open ? "收起键盘" : "打开键盘输入");
+  el.setAttribute("aria-label", open ? t("ft.kbHide") : t("ft.kbOpen"));
 }
 
 /** On-screen keys the phone keyboard cannot emit, typed into the live PTY. */
@@ -281,9 +282,9 @@ export function fullTerminalPad(
         syncKeyboardButton(pad, keyboard.isOpen());
       });
     }
-    const primary = keyRow(PRIMARY_KEYS, "终端快捷键", send);
+    const primary = keyRow(PRIMARY_KEYS, t("keys.primary"), send);
     const more = button("", "key key-more");
-    more.setAttribute("aria-label", "更多按键");
+    more.setAttribute("aria-label", t("keys.morePad"));
     more.setAttribute("aria-expanded", state.keysExpanded ? "true" : "false");
     more.addEventListener("click", () => {
       clearModifiers();
@@ -294,7 +295,7 @@ export function fullTerminalPad(
     primary.append(more);
     pad.append(primary);
     if (state.keysExpanded) {
-      pad.append(keyRow(SECONDARY_KEYS, "更多终端快捷键", send), keyRow(TERTIARY_KEYS, "修饰键", send));
+      pad.append(keyRow(SECONDARY_KEYS, t("keys.more"), send), keyRow(TERTIARY_KEYS, t("keys.mods"), send));
     }
   };
   paint();

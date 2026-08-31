@@ -106,7 +106,7 @@ Do not treat the current code as a team invite. Pairing attaches to **your** com
 
 ## Does it cost money?
 
-No. The source is Apache-2.0. `https://pairfob.com` is this project's official instance: the web app and the relay you enroll against. There is no account and no capacity promise.
+No. The source is Apache-2.0 at <https://github.com/arronKler/pairfob>. `https://pairfob.com` is this project's official instance: the web app and the relay you enroll against. There is no account and no capacity promise.
 
 New computer setup can close at any time. Computers already enrolled, and devices already paired, keep working.
 

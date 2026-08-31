@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "live": "bun scripts/live-session.ts",
+    "perf:live-input": "bun scripts/live-input-benchmark.ts",
     "perf:terminal:command": "bun scripts/terminal-command-benchmark.ts",
     "perf:terminal:browser": "bun run build && bun scripts/terminal-browser-benchmark.ts",
     "perf:terminal": "bun run perf:terminal:command && bun run perf:terminal:browser"

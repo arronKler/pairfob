@@ -1,4 +1,5 @@
 import { node } from "../../lib/dom";
+import { t } from "../../lib/i18n";
 import { render } from "../../paint";
 import { saveKeysExpanded, state } from "../../state";
 import { noteNode } from "../chrome";
@@ -29,10 +30,10 @@ function keyRow(specs: KeySpec[], label: string): HTMLElement {
 
 export function keyPad(): HTMLElement {
   const wrap = node("div", "keys-wrap");
-  const primary = keyRow(PRIMARY_KEYS, "终端快捷键");
+  const primary = keyRow(PRIMARY_KEYS, t("keys.primary"));
   const more = node("button", "key key-more");
   more.type = "button";
-  more.setAttribute("aria-label", "更多按键");
+  more.setAttribute("aria-label", t("keys.morePad"));
   more.setAttribute("aria-expanded", state.keysExpanded ? "true" : "false");
   more.addEventListener("click", () => {
     clearModifiers();
@@ -48,14 +49,14 @@ export function keyPad(): HTMLElement {
       wrap.append(slashPad());
       return wrap;
     }
-    const secondary = keyRow(SECONDARY_KEYS, "更多终端快捷键");
-    const newline = node("button", "key", "换行");
+    const secondary = keyRow(SECONDARY_KEYS, t("keys.more"));
+    const newline = node("button", "key", t("keys.newline"));
     newline.type = "button";
-    newline.setAttribute("aria-label", "在输入框里插入换行");
+    newline.setAttribute("aria-label", t("keys.newlineAria"));
     newline.addEventListener("pointerdown", (event) => event.preventDefault());
     newline.addEventListener("click", insertNewline);
     secondary.append(newline);
-    wrap.append(secondary, keyRow(TERTIARY_KEYS, "修饰键"));
+    wrap.append(secondary, keyRow(TERTIARY_KEYS, t("keys.mods")));
   }
   return wrap;
 }

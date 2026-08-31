@@ -1,14 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
 const source = await Bun.file(new URL("./home.ts", import.meta.url)).text();
-const liveSource = await Bun.file(new URL("../live.ts", import.meta.url)).text();
+const liveSource = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
 
 describe("home new session", () => {
   test("create conversation is not gated on advertised agent kinds", () => {
     expect(source).not.toContain("state.agentKinds.length");
     expect(source).not.toContain("电脑没有提供可用的 Agent 类型");
     expect(source).toContain("create.disabled = state.operationBusy || !state.live?.isConnected()");
-    expect(source).toContain('button(state.operationBusy ? "新建中" : "新建", "topbar-create", startNewConversation)');
+    expect(source).toContain(
+      'button(state.operationBusy ? t("home.creating") : t("home.new"), "topbar-create", startNewConversation)',
+    );
     expect(source).not.toContain("home-create");
     expect(source).not.toContain("＋ 新建会话");
     expect(liveSource).toContain("askCreateConversation(state.agentKinds, defaults)");
@@ -16,11 +18,11 @@ describe("home new session", () => {
   });
 });
 
-describe("home feedback", () => {
-  test("the session list ends with a GitHub issue link", () => {
-    expect(source).toContain("homeFeedback");
-    expect(source).toContain("遇到问题？");
-    expect(source).toContain('issueLink("", "反馈")');
+describe("home chrome", () => {
+  test("the session list does not carry a product-feedback link", () => {
+    expect(source).not.toContain("遇到问题");
+    expect(source).not.toContain("issues/new");
+    expect(source).not.toContain("homeFeedback");
   });
 });
 

@@ -3,6 +3,7 @@ import type { Terminal } from "@xterm/xterm";
 
 import { agentTitle } from "../lib/dashboard";
 import { button, node } from "../lib/dom";
+import { t } from "../lib/i18n";
 import { backButton } from "./chrome";
 import {
   ProtocolError,
@@ -14,7 +15,7 @@ import {
   type SessionEvent,
 } from "../lib/protocol/client";
 import { render } from "../paint";
-import { app, haptic, messageOf, saveTermFit, selectedAgent, setPaneTermMode, state, type TermFit } from "../state";
+import { app, haptic, messageOf, saveTermFit, selectedAgent, setPaneTermMode, showStatus, state, type TermFit } from "../state";
 import { isDesk } from "../viewport";
 import {
   bindFontPinch,
@@ -45,6 +46,7 @@ import {
 } from "./full-terminal-input";
 import { bindHostScroll, pageLineCount, scrollRail, type ScrollAt } from "./full-terminal-scroll";
 import { TerminalCommandPump, type TerminalCommand } from "./full-terminal-command";
+import { loadFullTerminalXterm } from "./full-terminal-loader";
 import { fullTerminalPerf } from "./full-terminal-perf";
 import { track } from "../lib/telemetry";
 import { chromeActionCluster, syncChromeStop } from "./session/chrome-actions";
@@ -68,8 +70,9 @@ let opening = false;
 let leaving: Promise<void> | null = null;
 let leaveSeq = 0;
 let commandPump: TerminalCommandPump | null = null;
-let statusText = "正在打开终端…";
+let statusText = "";
 let retryAvailable = false;
+let guidedLiveFallback = false;
 let lastFrameSequence: bigint | null = null;
 let pendingWriteBytes = 0;
 /** Last terminal.frame grid. Display clamps to this so a short PTY can scale-fill. */
@@ -242,7 +245,7 @@ function startCommandPump(
   stopCommandPump();
   const execute = (command: TerminalCommand, sequence: number): Promise<unknown> => {
     if (version !== bridgeVersion || bridgeId !== terminalId || state.live !== session || !state.fullTerminal) {
-      return Promise.reject(new ProtocolError("conflict", "终端控制器已经切换"));
+      return Promise.reject(new ProtocolError("conflict", t("err.controllerSwitch")));
     }
     if (command.kind === "input") return session.terminalInput(terminalId, sequence, command.data);
     if (command.kind === "resize") {
@@ -270,7 +273,7 @@ function startCommandPump(
     onError: (error) => {
       if (version !== bridgeVersion) return;
       fullTerminalPerf.publish("command_error");
-      void suspendBridge(true, `控制中断：${messageOf(error)}`);
+      void suspendBridge(true, t("ft.interrupt", { error: messageOf(error) }));
     },
   });
 }
@@ -367,11 +370,12 @@ async function mount(host: HTMLElement): Promise<void> {
   retryAvailable = false;
   let module: typeof import("./full-terminal-xterm.ts");
   try {
-    module = await import("./full-terminal-xterm.ts");
+    module = await loadFullTerminalXterm();
   } catch (error) {
     if (version !== rendererVersion) return;
     mounting = false;
-    offerRetry(`终端组件加载失败：${messageOf(error)}`);
+    if (fallbackToGuidedLive()) return;
+    offerRetry(t("ft.loadFail", { error: messageOf(error) }));
     return;
   }
   if (version !== rendererVersion || !state.fullTerminal || !host.isConnected) return;
@@ -441,7 +445,6 @@ async function mount(host: HTMLElement): Promise<void> {
 
 function disposeRenderer(): void {
   rendererVersion++;
-  mounting = false;
   stopCommandPump();
   unbindScroll?.();
   unbindScroll = null;
@@ -471,7 +474,7 @@ async function openBridge(takeover: boolean): Promise<void> {
   const version = bridgeVersion;
   opening = true;
   retryAvailable = false;
-  setStatus(takeover ? "正在接管终端…" : "正在打开终端…");
+  setStatus(takeover ? t("ft.takeover") : t("ft.opening"));
   fullTerminalPerf.bridgeStarted();
   try {
     const size = fit();
@@ -487,17 +490,18 @@ async function openBridge(takeover: boolean): Promise<void> {
     assembler.reset();
     lastFrameSequence = null;
     retryAvailable = false;
-    setStatus("实时 · 端到端加密");
+    setStatus(t("ft.live"));
     if (isDesk() || keyboard?.isOpen()) terminal?.focus();
     else closeTerminalKeyboard();
   } catch (error) {
     if (error instanceof ProtocolError && error.code === "conflict" && !takeover
-      && window.confirm("另一个终端客户端正在控制这个 pane。要从这里接管输入和窗口大小吗？")) {
+      && window.confirm(t("ft.takeoverAsk"))) {
       opening = false;
       await openBridge(true);
       return;
     }
-    offerRetry(`无法打开终端：${messageOf(error)}`);
+    if (error instanceof ProtocolError && ["unsupported", "unknown_op"].includes(error.code) && fallbackToGuidedLive()) return;
+    offerRetry(t("ft.openFail", { error: messageOf(error) }));
   } finally {
     if (version === bridgeVersion) {
       opening = false;
@@ -506,7 +510,7 @@ async function openBridge(takeover: boolean): Promise<void> {
   }
 }
 
-async function suspendBridge(sendClose: boolean, reason = "终端连接已暂停"): Promise<void> {
+async function suspendBridge(sendClose: boolean, reason?: string): Promise<void> {
   const session = state.live;
   const id = bridgeId;
   stopCommandPump();
@@ -519,14 +523,28 @@ async function suspendBridge(sendClose: boolean, reason = "终端连接已暂停
   remoteGrid = null;
   opening = false;
   if (sendClose && session && id) await session.terminalClose(id).catch(() => undefined);
-  offerRetry(reason);
+  offerRetry(reason ?? t("ft.paused"));
+}
+
+function fallbackToGuidedLive(): boolean {
+  if (!guidedLiveFallback || !state.fullTerminal) return false;
+  guidedLiveFallback = false;
+  const paneId = state.paneId;
+  bridgeVersion++;
+  disposeRenderer();
+  state.fullTerminal = false;
+  setFullTerminalDocumentMode(false);
+  if (paneId) setPaneTermMode(paneId, "guided");
+  showStatus(t("ft.guidedFallback"));
+  render();
+  return true;
 }
 
 export function retryFullTerminal(): void {
   if (opening || bridgeId) return;
   haptic(8);
   retryAvailable = false;
-  setStatus("正在打开终端…");
+  setStatus(t("ft.opening"));
   const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
   if (!terminal && host?.isConnected) {
     void mount(host);
@@ -558,7 +576,7 @@ export function setTermFit(next: TermFit): void {
   });
 }
 
-export function enterFullTerminal(): void {
+export function enterFullTerminal(options?: { fallbackToGuidedLive?: boolean }): void {
   if (!state.live || !state.paneId || state.fullTerminal) return;
   guidedScrollController.dispose();
   haptic(8);
@@ -566,8 +584,9 @@ export function enterFullTerminal(): void {
   setPaneTermMode(state.paneId, "full");
   state.agentChat = false;
   state.fullTerminal = true;
+  guidedLiveFallback = options?.fallbackToGuidedLive === true;
   retryAvailable = false;
-  statusText = "正在打开终端…";
+  statusText = t("ft.opening");
   render();
 }
 
@@ -585,6 +604,7 @@ export function leaveFullTerminal(opts?: { rememberGuided?: boolean; paint?: boo
       fullTerminalPerf.publish("leave");
       if (rememberGuided) setPaneTermMode(state.paneId, "guided");
       state.fullTerminal = false;
+      guidedLiveFallback = false;
       setFullTerminalDocumentMode(false);
       if (paint) render();
     } finally {
@@ -598,6 +618,7 @@ export function disposeFullTerminal(): void {
   leaveSeq++;
   leaving = null;
   state.fullTerminal = false;
+  guidedLiveFallback = false;
   setFullTerminalDocumentMode(false);
   retryAvailable = false;
   bridgeId = "";
@@ -624,7 +645,7 @@ export function renderFullTerminal(onBack: () => void, onMenu: () => void): void
   const mounted = app.querySelector(".full-terminal-root");
   if (mounted) {
     const title = app.querySelector(".full-terminal-title");
-    if (title) title.textContent = selectedAgent() ? agentTitle(selectedAgent()!) : "终端";
+    if (title) title.textContent = selectedAgent() ? agentTitle(selectedAgent()!) : t("title.terminal");
     setStatus(statusText);
     syncFullTerminalChrome();
     return;
@@ -633,16 +654,16 @@ export function renderFullTerminal(onBack: () => void, onMenu: () => void): void
   fullTerminalPerf.begin();
   const root = node("div", "pane-root full-terminal-root");
   const chrome = node("header", "chrome full-terminal-chrome");
-  const back = backButton(onBack, "返回会话列表");
+  const back = backButton(onBack, t("chrome.backList"));
   const titleWrap = node("div", "full-terminal-heading");
   titleWrap.append(
-    node("strong", "full-terminal-title", selectedAgent() ? agentTitle(selectedAgent()!) : "终端"),
+    node("strong", "full-terminal-title", selectedAgent() ? agentTitle(selectedAgent()!) : t("title.terminal")),
     node("span", "full-terminal-status", statusText),
   );
   chrome.append(back, titleWrap, chromeActionCluster(onMenu));
   syncFullTerminalChrome();
   const host = node("div", "full-terminal-host");
-  host.setAttribute("aria-label", "终端");
+  host.setAttribute("aria-label", t("title.terminal"));
   if (state.termFit === "pan") host.classList.add("is-pan");
   const pan = node("div", "full-terminal-pan");
   pan.append(node("div", "full-terminal-canvas"));
@@ -674,15 +695,15 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
       const assembledAt = performance.now();
       const frame = assembler.push(part);
       if (!frame) return true;
-      fullTerminalPerf.frameAssembled(performance.now() - assembledAt);
+      const inputMarker = fullTerminalPerf.frameAssembled(performance.now() - assembledAt);
       const sequence = BigInt(frame.sequence);
       if (!frame.full && lastFrameSequence !== null && sequence !== lastFrameSequence + 1n) {
-        void suspendBridge(true, "终端画面出现缺口，请点重连");
+        void suspendBridge(true, t("ft.gap"));
         return true;
       }
       if (lastFrameSequence !== null && sequence <= lastFrameSequence) return true;
       if (pendingWriteBytes + frame.data.byteLength > MAX_RENDER_QUEUE_BYTES) {
-        void suspendBridge(true, "终端输出过快，请点重连");
+        void suspendBridge(true, t("ft.tooFast"));
         return true;
       }
       if (frame.full) terminal?.reset();
@@ -709,12 +730,12 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
         writer.write(frame.data, () => {
           if (terminal === writer && bridgeVersion === writeVersion) {
             pendingWriteBytes = Math.max(0, pendingWriteBytes - frame.data.byteLength);
-            fullTerminalPerf.writeCompleted(performance.now() - writeStartedAt);
+            fullTerminalPerf.writeCompleted(performance.now() - writeStartedAt, inputMarker);
           }
         });
       }
       lastFrameSequence = sequence;
-      setStatus("实时 · 端到端加密");
+      setStatus(t("ft.live"));
     } catch (error) {
       void suspendBridge(true, messageOf(error));
     }
@@ -732,7 +753,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
     pendingWriteBytes = 0;
     remoteGrid = null;
     fullTerminalPerf.publish("terminal_closed");
-    offerRetry(event.reason ? `终端已关闭：${event.reason}` : "终端已关闭");
+    offerRetry(event.reason ? t("ft.closedReason", { reason: event.reason }) : t("ft.closed"));
     return true;
   }
   if (event.type === "disconnected" || event.type === "reconnecting" || event.type === "terminal") {
@@ -746,11 +767,11 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
     pendingWriteBytes = 0;
     remoteGrid = null;
     fullTerminalPerf.publish(event.type);
-    offerRetry("连接中断，等待恢复…");
+    offerRetry(t("ft.waitRestore"));
     return false;
   }
   if (event.type === "connected" && !bridgeId) {
-    setStatus("连接已恢复，正在重开终端…");
+    setStatus(t("ft.restored"));
     void openBridge(false);
   }
   return false;

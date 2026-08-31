@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import type { PairResult } from "./protocol/client.ts";
 
 const BURNED_CODES = new Set([
@@ -15,7 +16,7 @@ export function credentialIsBurned(code: string | undefined): boolean {
 
 export function computerTitle(pair: PairResult): string {
   const host = pair.hostname?.trim();
-  return host || "未命名电脑";
+  return host || t("computer.unnamed");
 }
 
 export function pickResumeCredential(credentials: PairResult[], lastUsedDaemonId: string | null): PairResult | null {

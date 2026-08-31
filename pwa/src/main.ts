@@ -1,4 +1,5 @@
 import "./style.css";
+import { detectLang, initI18n, langPref, setLang, t } from "./lib/i18n";
 import { computerTitle, pickResumeCredential } from "./lib/computer-catalog";
 import { loadOriginConfig } from "./lib/origin-config";
 import { resumeComputer } from "./computers";
@@ -6,7 +7,7 @@ import { reloadComputers, refreshRuntimeState, startPolling, stopPolling } from 
 import { applyOriginPairingPolicy, beginPairing } from "./pairing";
 import { render as paint, setRenderer } from "./paint";
 import { app, capturePairingFragment, clearNotice, messageOf, showError, showStatus, state, termLineHeightPx } from "./state";
-import { isDesk } from "./viewport";
+import { bindVisualViewport, isDesk } from "./viewport";
 import { brandNode, spinnerNode } from "./ui/chrome";
 import { renderComputers } from "./ui/computers";
 import { renderConnect } from "./ui/connect";
@@ -20,6 +21,13 @@ import { node } from "./lib/dom";
 import { handleFullTerminalVisibility } from "./ui/full-terminal";
 import { track } from "./lib/telemetry";
 
+initI18n();
+window.addEventListener("languagechange", () => {
+  if (langPref() !== "auto") return;
+  setLang(detectLang());
+  clearNotice();
+  paint();
+});
 capturePairingFragment();
 let bootBlockedByNetwork = false;
 
@@ -59,8 +67,8 @@ function render(): void {
         "p",
         "boot-text",
         state.phase === "boot"
-          ? "正在读取这台手机的凭证…"
-          : `正在连回${state.credential ? computerTitle(state.credential) : "电脑"}…`,
+          ? t("boot.reading")
+          : t("boot.connecting", { name: state.credential ? computerTitle(state.credential) : t("boot.computer") }),
       ),
     );
     app.replaceChildren(wrap);
@@ -77,7 +85,7 @@ function applyNetworkAvailability(available: boolean): void {
   state.live?.setNetworkAvailable(available);
   if (!available) {
     stopPolling();
-    if (state.phase === "live") showStatus("手机当前没有网络，联网后会自动恢复。", true);
+    if (state.phase === "live") showStatus(t("net.offline"), true);
     paint();
     return;
   }
@@ -85,7 +93,7 @@ function applyNetworkAvailability(available: boolean): void {
     if (bootBlockedByNetwork && state.phase === "connect") void boot();
     return;
   }
-  if (changed || !state.live?.isConnected()) showStatus("网络已恢复，正在确认连接…", true);
+  if (changed || !state.live?.isConnected()) showStatus(t("net.restored"), true);
   if (!changed) state.live?.reconnectNow();
   startPolling();
   void refreshRuntimeState();
@@ -108,15 +116,7 @@ window.matchMedia("(min-width: 900px)").addEventListener("change", () => {
   if (state.phase === "live") paint();
 });
 
-function applyKeyboardInset(): void {
-  if (document.body.classList.contains("lock")) window.scrollTo(0, 0);
-  const vv = window.visualViewport;
-  const kb = vv ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
-  document.documentElement.style.setProperty("--kb", `${kb}px`);
-}
-
-function onViewportResize(): void {
-  applyKeyboardInset();
+bindVisualViewport(() => {
   // Keyboard open/close changes the scrollport height. Do not run this on
   // visualViewport "scroll": iOS fires that during a finger pan and it would
   // pin the buffer to the bottom so a swipe looks like it did nothing.
@@ -129,12 +129,7 @@ function onViewportResize(): void {
       if (state.paneFollow) stickBottom();
     });
   }
-}
-
-window.visualViewport?.addEventListener("resize", onViewportResize);
-window.visualViewport?.addEventListener("scroll", applyKeyboardInset);
-window.addEventListener("resize", onViewportResize);
-onViewportResize();
+});
 
 // Older iOS standalone WebKit can ignore viewport scale limits for its legacy
 // gesture events. Keep the application shell fixed while preserving ordinary
@@ -161,7 +156,7 @@ async function boot(): Promise<void> {
   if (!state.networkOnline) {
     bootBlockedByNetwork = true;
     state.phase = "connect";
-    showStatus("手机当前没有网络，联网后会自动继续。", true);
+    showStatus(t("net.offlineContinue"), true);
     track("pwa_boot", { result: "offline", extra: "connect" });
     paint();
     return;
@@ -194,7 +189,7 @@ async function boot(): Promise<void> {
     : undefined;
   if (state.notificationTarget && !notificationPair) {
     state.notificationTarget = null;
-    showError("这条通知对应的电脑已经不在这台手机上，请重新配对。");
+    showError(t("err.notifyComputerGone"));
   }
   if (applyOriginPairingPolicy()) {
     state.phase = state.computers.length ? "pick" : "connect";

@@ -1,18 +1,8 @@
 import { button, node } from "../lib/dom";
+import { type LangPref, langPref, setLangPref, t } from "../lib/i18n";
 import { type ListGroup } from "../lib/ranking";
 import { render } from "../paint";
-import { saveListGroup, state, type Notice, type StatusTone, visibleNotice } from "../state";
-
-/** Public bugs and product feedback. Security reports stay on GitHub Advisories. */
-export const ISSUE_NEW_URL = "https://github.com/arronKler/pairfob/issues/new";
-
-export function issueLink(className: string, text: string): HTMLAnchorElement {
-  const link = node("a", className, text);
-  link.href = ISSUE_NEW_URL;
-  link.target = "_blank";
-  link.rel = "noreferrer";
-  return link;
-}
+import { clearNotice, saveListGroup, state, type Notice, type StatusTone, visibleNotice } from "../state";
 
 export function feedbackNode(value: Notice): HTMLParagraphElement {
   const element = node("p", `notice notice-${value.tone}`, value.text);
@@ -66,9 +56,9 @@ export function chevron(className = "chev"): HTMLElement {
   return el;
 }
 
-export function backButton(onBack: () => void, label = "返回"): HTMLButtonElement {
+export function backButton(onBack: () => void, label?: string): HTMLButtonElement {
   const back = button("‹", "icon-btn back", onBack);
-  back.setAttribute("aria-label", label);
+  back.setAttribute("aria-label", label ?? t("chrome.back"));
   return back;
 }
 
@@ -82,19 +72,45 @@ export function groupToggle(title: string, count: number, expanded: boolean, onT
   return heading;
 }
 
-const LIST_GROUP_OPTIONS: Array<{ id: ListGroup; label: string }> = [
-  { id: "flat", label: "全部" },
-  { id: "space", label: "按工作区" },
-  { id: "agent", label: "按 Agent" },
+const LIST_GROUP_OPTIONS: Array<{ id: ListGroup; key: "list.flat" | "list.space" | "list.agent" }> = [
+  { id: "flat", key: "list.flat" },
+  { id: "space", key: "list.space" },
+  { id: "agent", key: "list.agent" },
 ];
+
+const LANG_OPTIONS: Array<{ id: LangPref; key: "settings.langAuto" | "settings.langZh" | "settings.langEn" }> = [
+  { id: "auto", key: "settings.langAuto" },
+  { id: "zh", key: "settings.langZh" },
+  { id: "en", key: "settings.langEn" },
+];
+
+export function languageControl(): HTMLElement {
+  const bar = node("div", "seg");
+  bar.setAttribute("role", "radiogroup");
+  bar.setAttribute("aria-label", t("settings.langAria"));
+  const selectedPref = langPref();
+  for (const option of LANG_OPTIONS) {
+    const selected = selectedPref === option.id;
+    const item = button(t(option.key), `seg-item${selected ? " on" : ""}`, () => {
+      if (langPref() === option.id) return;
+      setLangPref(option.id);
+      clearNotice();
+      render();
+    });
+    item.setAttribute("role", "radio");
+    item.setAttribute("aria-checked", selected ? "true" : "false");
+    bar.append(item);
+  }
+  return bar;
+}
 
 export function listGroupControl(): HTMLElement {
   const bar = node("div", "seg");
   bar.setAttribute("role", "radiogroup");
-  bar.setAttribute("aria-label", "会话分组");
+  bar.setAttribute("aria-label", t("list.groupAria"));
   for (const option of LIST_GROUP_OPTIONS) {
     const selected = state.listGroup === option.id;
-    const item = button(option.label, `seg-item${selected ? " on" : ""}`, () => {
+    const item = button(t(option.key), `seg-item${selected ? " on" : ""}`, () => {
       if (state.listGroup === option.id) return;
       state.listGroup = option.id;
       state.listGroupCollapsed = {};
@@ -119,17 +135,17 @@ export function emptyNode(title: string, sub: string): HTMLElement {
 }
 
 export function herdStatus(): { tone: StatusTone; text: string } {
-  if (!state.networkOnline) return { tone: "warn", text: "手机没有网络 · 联网后自动恢复" };
-  if (state.live && !state.live.isConnected()) return { tone: "warn", text: "连接中断，正在自动重连" };
-  if (state.runtimeKind === "fake") return { tone: "demo", text: "演示数据 · 不是你的电脑" };
-  if (state.runtimeKind === "offline") return { tone: "off", text: "电脑上的 Herdr 没有运行" };
-  if (state.herdHost) return { tone: "live", text: `已连接 · ${state.herdHost}` };
-  return { tone: "live", text: "已连接" };
+  if (!state.networkOnline) return { tone: "warn", text: t("chrome.networkOffline") };
+  if (state.live && !state.live.isConnected()) return { tone: "warn", text: t("chrome.reconnecting") };
+  if (state.runtimeKind === "fake") return { tone: "demo", text: t("chrome.demo") };
+  if (state.runtimeKind === "offline") return { tone: "off", text: t("chrome.herdrOff") };
+  if (state.herdHost) return { tone: "live", text: t("chrome.connectedHost", { host: state.herdHost }) };
+  return { tone: "live", text: t("chrome.connected") };
 }
 
 export function herdBanners(target: HTMLElement, status: { tone: StatusTone }): void {
-  if (status.tone === "demo") target.append(bannerNode("demo", "当前显示的是演示数据，不是你电脑上的 Herdr。"));
-  else if (status.tone === "off") target.append(bannerNode("off", "电脑上的 Herdr 没有运行，打开后会自动恢复。"));
+  if (status.tone === "demo") target.append(bannerNode("demo", t("chrome.demoBanner")));
+  else if (status.tone === "off") target.append(bannerNode("off", t("chrome.herdrOffBanner")));
 }
 
 export function backBar(title: string, onBack: () => void): HTMLElement {

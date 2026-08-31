@@ -22,7 +22,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(renderFn).not.toContain('button("退出"');
     expect(renderFn).not.toContain("full-terminal-exit");
     expect(renderFn).not.toContain('button("重连"');
-    expect(renderFn).toContain('backButton(onBack, "返回会话列表")');
+    expect(renderFn).toContain('backButton(onBack, t("chrome.backList"))');
     expect(renderFn).toContain("onBack");
     expect(renderFn).not.toContain("goBackFromPane");
     expect(renderFn).toContain("scrollRail(");
@@ -74,15 +74,26 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     const mountFn = fn("async function mount(", "function disposeRenderer(");
     expect(mountFn).not.toContain("state.fullTerminal = false");
     expect(mountFn).not.toContain("render()");
-    expect(mountFn).toContain("终端组件加载失败");
+    expect(mountFn).toContain('t("ft.loadFail"');
     expect(mountFn).toContain("offerRetry");
 
-    const openFn = fn("async function openBridge(", "async function suspendBridge(");
+    const openFn = fn("async function openBridge(", "function fallbackToGuidedLive(");
     expect(openFn).not.toContain("state.fullTerminal = false");
     expect(openFn).not.toContain("disposeRenderer()");
     expect(openFn).not.toContain("render()");
     expect(openFn).toContain("offerRetry");
-    expect(openFn).toContain("无法打开终端");
+    expect(openFn).toContain('t("ft.openFail"');
+    expect(openFn).toContain('["unsupported", "unknown_op"]');
+  });
+
+  test("live-input upgrades alone may fall back to the guided transport", () => {
+    const fallback = fn("function fallbackToGuidedLive(", "export function retryFullTerminal(");
+    expect(fallback).toContain("guidedLiveFallback");
+    expect(fallback).toContain('setPaneTermMode(paneId, "guided")');
+    expect(fallback).toContain("state.fullTerminal = false");
+    expect(fallback).toContain('t("ft.guidedFallback")');
+    const enter = fn("export function enterFullTerminal(", "export function leaveFullTerminal(");
+    expect(enter).toContain("options?.fallbackToGuidedLive === true");
   });
 
   test("entering complete-terminal records the pane mode", () => {

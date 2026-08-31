@@ -17,3 +17,12 @@ describe("docs chrome leaves the VitePress SPA", () => {
     expect(chrome).toContain("反馈");
   });
 });
+
+const locales = await Bun.file(new URL("./.vitepress/locales.ts", import.meta.url)).text();
+
+describe("docs theme GitHub social link", () => {
+  test("points at the public repository, not the issue form", () => {
+    expect(locales).toContain('icon: "github"');
+    expect(locales).toContain('link: "https://github.com/arronKler/pairfob"');
+  });
+});

@@ -1,4 +1,5 @@
 import { button, node } from "../lib/dom";
+import { t } from "../lib/i18n";
 import { tapAsMouse } from "./full-terminal-input";
 
 /** Pixels of finger or wheel travel that map to one remote TUI line. */
@@ -194,7 +195,7 @@ function bindHold(element: HTMLElement, fire: () => void): void {
 export function scrollRail(scroll: RemoteScroll, pageLines: () => number): HTMLElement {
   const rail = node("div", "full-terminal-scroll");
   rail.setAttribute("role", "group");
-  rail.setAttribute("aria-label", "终端滚动");
+  rail.setAttribute("aria-label", t("keys.scrollAria"));
   const add = (
     mark: string,
     aria: string,
@@ -211,9 +212,9 @@ export function scrollRail(scroll: RemoteScroll, pageLines: () => number): HTMLE
     });
     rail.append(el);
   };
-  add("scroll-up", "鼠标滚轮向上", "up", "wheel", 3);
-  add("scroll-page-up", "上一页", "up", "page_key", pageLines);
-  add("scroll-page-down", "下一页", "down", "page_key", pageLines);
-  add("scroll-down", "鼠标滚轮向下", "down", "wheel", 3);
+  add("scroll-up", t("keys.wheelUp"), "up", "wheel", 3);
+  add("scroll-page-up", t("keys.pageUp"), "up", "page_key", pageLines);
+  add("scroll-page-down", t("keys.pageDown"), "down", "page_key", pageLines);
+  add("scroll-down", t("keys.wheelDown"), "down", "wheel", 3);
   return rail;
 }

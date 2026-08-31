@@ -18,9 +18,10 @@ describe("TerminalPerfTracker", () => {
     perf.commandObserver.settled?.("input", 1, 150, { commands: 1, inputBytes: 4 });
     perf.framePart(96);
     now = 300;
-    perf.frameAssembled(2);
+    const marker = perf.frameAssembled(2);
     perf.writeStarted(96, 96);
-    perf.writeCompleted(8);
+    now = 310;
+    perf.writeCompleted(8, marker);
 
     const snapshot = perf.snapshot("test");
     expect(snapshot.lifecycle).toEqual({ componentReadyMs: 25, bridgeOpenMs: 50, firstFrameMs: 200 });
@@ -43,6 +44,8 @@ describe("TerminalPerfTracker", () => {
       renderedBytes: 96,
       peakPendingWriteBytes: 96,
     });
+    expect(snapshot.latency.inputToNextFrame).toEqual({ count: 1, averageMs: 165, p50Ms: 165, p95Ms: 165, maxMs: 165 });
+    expect(snapshot.latency.inputToWrite).toEqual({ count: 1, averageMs: 175, p50Ms: 175, p95Ms: 175, maxMs: 175 });
   });
 
   test("retains only a bounded latency sample window while preserving totals", () => {
@@ -67,5 +70,19 @@ describe("TerminalPerfTracker", () => {
     expect(commands.failed).toBe(1);
     expect(commands.dropped).toBe(2);
     expect(commands.rtt.p95Ms).toBe(120);
+  });
+
+  test("does not attribute a later frame to input dropped by a stopped pump", () => {
+    let now = 10;
+    const perf = new TerminalPerfTracker(() => now);
+    perf.begin();
+    perf.commandObserver.queued?.("input", false, { commands: 1, inputBytes: 1 });
+    perf.commandObserver.sent?.("input", 1, 0, { commands: 1, inputBytes: 1 });
+    perf.commandObserver.stopped?.({ commands: 1, inputBytes: 1 });
+    now = 200;
+    const marker = perf.frameAssembled(1);
+    perf.writeCompleted(1, marker);
+    expect(perf.snapshot().latency.inputToNextFrame.count).toBe(0);
+    expect(perf.snapshot().latency.inputToWrite.count).toBe(0);
   });
 });

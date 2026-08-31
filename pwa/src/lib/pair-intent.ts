@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import { validDaemonId } from "./identifiers.ts";
 import { ProtocolError } from "./protocol/errors.ts";
 import { fetchWithTimeout, type FetchLike } from "./request-timeout.ts";
@@ -43,7 +44,7 @@ export async function requestPairIntent(
       body: JSON.stringify({ v: 2, pair_loc: pairLoc }),
     }, { signal });
   } catch (error) {
-    if (signal?.aborted) throw new ProtocolError("pairing_cancelled", "已取消配对");
+    if (signal?.aborted) throw new ProtocolError("pairing_cancelled", t("err.pairing_cancelled"));
     throw error;
   }
   let body: unknown = null;
@@ -54,13 +55,13 @@ export async function requestPairIntent(
   }
   const code = intentErrorCode(body);
   if (response.status === 404 || code === "unpaired") {
-    throw new ProtocolError("unpaired", "配对码过期或已用过，请抄电脑 pairfob 打印的当前码");
+    throw new ProtocolError("unpaired", t("err.unpaired"));
   }
   if (response.status === 429 || code === "rate_limited") {
-    throw new ProtocolError("rate_limited", "尝试太频繁，请稍后再试。");
+    throw new ProtocolError("rate_limited", t("err.rate_limited"));
   }
   if (!response.ok || !intentHit(body)) {
-    throw new ProtocolError(code || "unpaired", "无法开始配对");
+    throw new ProtocolError(code || "unpaired", t("err.pairStart"));
   }
   return { daemonId: body.daemon_id, pairRef: body.pair_ref, pairTicket: body.pair_ticket };
 }

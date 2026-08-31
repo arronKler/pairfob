@@ -21,7 +21,7 @@ import { SNAPSHOT_FALLBACK_MS, PANE_READ_FALLBACK_MS } from "./poll";
 import { isDesk } from "./viewport";
 
 export { SNAPSHOT_FALLBACK_MS, PANE_READ_FALLBACK_MS };
-export { FRIENDLY_ERROR, GENERIC_NOTICE, messageOf, noticeFor, sessionEventNotice } from "./lib/notices";
+export { FRIENDLY_ERROR, GENERIC_NOTICE, genericNotice, messageOf, noticeFor, sessionEventNotice } from "./lib/notices";
 
 export type Phase = "boot" | "connect" | "pairing" | "resuming" | "live" | "pick";
 export type Screen = "home" | "pane" | "settings" | "computers";

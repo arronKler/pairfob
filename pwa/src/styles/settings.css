@@ -79,16 +79,6 @@
   justify-content: flex-start;
 }
 
-a.set-nav {
-  min-height: 44px;
-  color: inherit;
-  text-decoration: none;
-}
-
-a.set-nav:hover {
-  background: var(--surface-2);
-}
-
 .set-note { margin: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.55; }
 
 .tech-note {

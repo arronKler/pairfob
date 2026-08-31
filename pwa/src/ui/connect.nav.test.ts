@@ -21,7 +21,13 @@ g.matchMedia = happy.matchMedia.bind(happy);
 happy.document.body.innerHTML = '<main id="app"></main>';
 
 const { app, state } = await import("../state.ts");
+const { setRenderer } = await import("../paint.ts");
 const { renderConnect } = await import("./connect.ts");
+const { setLang } = await import("../lib/i18n.ts");
+
+setRenderer(() => {
+  if (state.phase === "connect" || state.phase === "pairing") renderConnect();
+});
 
 function paintAdd(busy = false): void {
   state.phase = busy ? "pairing" : "connect";
@@ -39,8 +45,22 @@ afterEach(() => {
   state.fragment = null;
   state.pairManualOpen = false;
   state.pairAwaitingApproval = false;
+  setLang("zh");
+  try {
+    localStorage.removeItem("pairfob_lang");
+  } catch {
+    /* ignore */
+  }
   app.replaceChildren();
 });
+
+function click(label: string): void {
+  const el = [...app.querySelectorAll("button")].find((button) => {
+    return button.getAttribute("aria-label") === label || button.textContent === label;
+  });
+  if (!(el instanceof HTMLButtonElement)) throw new Error(`missing ${label}: ${app.innerHTML.slice(0, 280)}`);
+  el.click();
+}
 
 describe("add-computer pairing chrome", () => {
   test("first-run pairing keeps the prelude, not a settings topbar", () => {
@@ -69,5 +89,19 @@ describe("add-computer pairing chrome", () => {
     expect(app.querySelector(".settings-page")).toBeTruthy();
     expect(app.querySelector(".topbar-title")?.textContent).toBe("添加另一台电脑");
     expect(app.querySelector(".pair-wait-title")?.textContent).toBe("正在验证配对码");
+  });
+
+  test("the pairing page can switch to English", () => {
+    state.phase = "connect";
+    state.addingComputer = false;
+    state.computers = [];
+    renderConnect();
+    const group = app.querySelector('[aria-label="语言"]');
+    expect(group).toBeTruthy();
+    expect([...group!.querySelectorAll("button")].map((el) => el.textContent)).toEqual(["跟随浏览器", "中文", "English"]);
+    click("English");
+    expect(app.querySelector(".prelude-title")?.textContent).toBe("Connect your computer");
+    expect(app.querySelector(".btn-scan")?.textContent).toBe("Scan to connect");
+    expect(app.querySelector('[aria-label="Language"] [aria-checked="true"]')?.textContent).toBe("English");
   });
 });

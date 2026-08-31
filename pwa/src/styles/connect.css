@@ -148,6 +148,19 @@ dialog.scanner-modal::backdrop { background: #04060ad9; backdrop-filter: blur(5p
   letter-spacing: 0.02em;
 }
 
+.connect-lang {
+  margin-top: 22px;
+}
+
+.connect-lang .seg {
+  margin: 0;
+}
+
+.prelude.pairing .connect-lang {
+  margin-top: auto;
+  padding-top: 24px;
+}
+
 .settings-page .topbar + .lede { margin-top: 14px; }
 
 .field { display: block; margin: 0 0 14px; }

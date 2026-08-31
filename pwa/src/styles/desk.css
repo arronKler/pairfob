@@ -7,13 +7,17 @@
 */
 #app.desk {
   position: fixed;
-  inset: 0;
+  top: var(--vv-top, 0px);
+  right: 0;
+  bottom: auto;
+  left: 0;
   width: 100%;
-  height: auto;
+  height: var(--vv-height, 100%);
   min-width: 0;
   min-height: 0;
   max-width: none;
-  padding: 0 0 var(--kb, 0px);
+  max-height: var(--vv-height, 100%);
+  padding: 0;
   overflow: hidden;
   display: grid;
   grid-template-columns: clamp(17rem, 22vw, 20rem) minmax(0, 1fr);
@@ -36,17 +40,20 @@
 
 .rail .empty-sub { margin: 4px 2px 0; }
 
-.rail .home-feedback {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
-
 .rail .card {
   margin: 6px 0 0;
-  padding: 10px 12px;
+  padding: 0;
   border-radius: var(--r-md);
 }
+
+.rail .card-main {
+  padding: 10px 6px 10px 12px;
+  border-radius: var(--r-md) 0 0 var(--r-md);
+}
+
+.rail .card-split { margin: 8px 0; }
+
+.rail .card-more { margin: 2px 4px 2px 0; }
 
 .rail .card-name { font-size: 0.9rem; }
 .rail .card-meta { font-size: 0.74rem; }

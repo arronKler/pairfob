@@ -1,3 +1,4 @@
+import { t } from "./lib/i18n";
 import { parseRuntimeOperationsConfig } from "./lib/operations";
 import { reportMutationError } from "./mutations";
 import { render } from "./paint";
@@ -41,7 +42,7 @@ export async function refreshSettings(): Promise<void> {
   if (devices.status === "fulfilled") {
     state.deviceList = Array.isArray(devices.value.devices) ? devices.value.devices : [];
   } else {
-    state.devicesError = "设备列表暂时读不到，请稍后重试。";
+    state.devicesError = t("err.devicesLoad");
   }
   if (config.status === "fulfilled") {
     try {
@@ -49,17 +50,17 @@ export async function refreshSettings(): Promise<void> {
       state.pushEnabled = config.value.push_enabled === true;
     } catch {
       state.pushEnabled = null;
-      state.pushConfigError = "通知配置格式不正确，请更新电脑端。";
+      state.pushConfigError = t("err.pushConfigBad");
     }
   } else {
     state.pushEnabled = null;
-    state.pushConfigError = "通知状态暂时读不到，请稍后重试。";
+    state.pushConfigError = t("err.pushStatusLoad");
   }
   if (subscription.status === "fulfilled") {
     state.pushSubscribed = subscription.value;
   } else {
     state.pushSubscribed = null;
-    if (!state.pushConfigError) state.pushConfigError = "这台手机的通知状态暂时读不到，请稍后重试。";
+    if (!state.pushConfigError) state.pushConfigError = t("err.pushPhoneStatus");
   }
   state.settingsLoading = false;
   if (state.screen === "settings") render();
@@ -74,7 +75,7 @@ function vapidKey(value: string): ArrayBuffer {
 export async function enablePush(): Promise<void> {
   const session = state.live;
   if (!session || !supportsWebPush()) {
-    showError("当前浏览器不支持网页通知。");
+    showError(t("err.pushUnsupported"));
     render();
     return;
   }
@@ -82,10 +83,10 @@ export async function enablePush(): Promise<void> {
     const config = await session.getConfig();
     parseRuntimeOperationsConfig(config);
     state.pushEnabled = config.push_enabled === true;
-    if (!state.pushEnabled) throw new Error("电脑端尚未开启通知。看「电脑端设置方法」的步骤。");
-    if (typeof config.vapid_public !== "string" || !config.vapid_public) throw new Error("电脑端通知配置还没准备好，请稍后重试。");
+    if (!state.pushEnabled) throw new Error(t("err.pushComputerOff"));
+    if (typeof config.vapid_public !== "string" || !config.vapid_public) throw new Error(t("err.pushNotReady"));
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") throw new Error("浏览器没有允许通知。请在浏览器设置中允许后重试。");
+    if (permission !== "granted") throw new Error(t("err.pushPermission"));
     const registration = await navigator.serviceWorker.ready;
     const existing = await registration.pushManager.getSubscription();
     const subscription =
@@ -98,7 +99,7 @@ export async function enablePush(): Promise<void> {
     state.pushSubscribed = true;
     await refreshSettings();
     haptic(10);
-    showStatus("通知已开启。");
+    showStatus(t("push.enabled"));
   } catch (error) {
     await reportMutationError(session, error);
   }

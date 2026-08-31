@@ -1,3 +1,4 @@
+import { t } from "./lib/i18n";
 import { resolveNotificationTarget } from "./lib/notification-target";
 import { render } from "./paint";
 import { showError, state } from "./state";
@@ -10,7 +11,7 @@ export async function openPendingNotification(openPane: (paneId: string) => Prom
   state.notificationTarget = null;
   if (resolution.kind === "missing") {
     state.screen = "home";
-    showError("这条通知对应的会话已经不在了。");
+    showError(t("err.notifyGone"));
     render();
     return true;
   }

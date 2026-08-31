@@ -6,7 +6,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "vars": {
-    "BUILD": "2026-08-31.2"
+    "BUILD": "2026-08-31.3"
   },
   "observability": {
     "enabled": true,

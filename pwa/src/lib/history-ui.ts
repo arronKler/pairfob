@@ -1,4 +1,5 @@
 import { button, node } from "./dom.ts";
+import { t } from "./i18n.ts";
 import { messageOf } from "./notices.ts";
 import { parseHistoryPage, type HistoryItem, type HistoryPage } from "./operations.ts";
 import { ProtocolError } from "./protocol/errors.ts";
@@ -32,10 +33,10 @@ function freshMode(): ModeState {
 
 function terminalError(error: unknown): string {
   if (error instanceof ProtocolError && error.code === "conflict") {
-    return "Agent 正在工作，或终端画面没有停在底部。等它空闲后再读取终端历史。";
+    return t("hist.terminalBusy");
   }
   if (error instanceof ProtocolError && error.code === "unsupported") {
-    return "当前 Herdr 不能读取终端历史。请在电脑上升级 Herdr 后重试。";
+    return t("hist.terminalUnsupported");
   }
   return messageOf(error, "read");
 }
@@ -46,9 +47,9 @@ function lineCount(text: string): number {
 }
 
 function dialogTitle(modes: HistoryMode[]): string {
-  if (modes.length === 1 && modes[0] === "terminal") return "更早的输出";
-  if (modes.length === 1 && modes[0] === "conversation") return "对话记录";
-  return "会话历史";
+  if (modes.length === 1 && modes[0] === "terminal") return t("hist.earlier");
+  if (modes.length === 1 && modes[0] === "conversation") return t("hist.conversation");
+  return t("hist.session");
 }
 
 function historyDialog(heading: string): { dialog: HTMLDialogElement; body: HTMLDivElement; close: () => void } {
@@ -88,23 +89,23 @@ export async function showHistory(loaders: HistoryLoaders): Promise<void> {
 
   const tabs = node("div", "history-tabs");
   tabs.setAttribute("role", "tablist");
-  tabs.setAttribute("aria-label", "历史类型");
-  const status = node("p", "notice notice-status", "正在读取历史…");
+  tabs.setAttribute("aria-label", t("hist.typeAria"));
+  const status = node("p", "notice notice-status", t("hist.loading"));
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   const viewport = node("div", "history-viewport");
   viewport.id = "history-panel";
   viewport.setAttribute("role", "tabpanel");
   const footer = node("div", "action-row history-actions");
-  const close = button("回到实时", "btn btn-small btn-ghost", parts.close);
-  const more = button("加载更多", "btn btn-small btn-primary", () => void readNext());
+  const close = button(t("hist.backLive"), "btn btn-small btn-ghost", parts.close);
+  const more = button(t("hist.loadMore"), "btn btn-small btn-primary", () => void readNext());
   footer.append(more, close);
   if (availableModes.length > 1) parts.body.append(tabs);
   parts.body.append(status, viewport, footer);
 
   const tabButtons = new Map<HistoryMode, HTMLButtonElement>();
   for (const item of availableModes) {
-    const label = item === "conversation" ? "对话" : "终端";
+    const label = item === "conversation" ? t("hist.conversationTab") : t("hist.terminalTab");
     const tab = button(label, "history-tab", () => void selectMode(item));
     tab.id = `history-tab-${item}`;
     tab.setAttribute("role", "tab");
@@ -117,7 +118,7 @@ export async function showHistory(loaders: HistoryLoaders): Promise<void> {
     const list = node("ol", "history-list");
     for (const item of state.items) {
       const row = node("li", `history-item history-${item.role}`);
-      row.append(node("strong", "history-role", item.role === "user" ? "你" : "Agent"));
+      row.append(node("strong", "history-role", item.role === "user" ? t("hist.you") : "Agent"));
       row.append(node("pre", "history-text", item.text));
       list.append(row);
     }
@@ -127,22 +128,24 @@ export async function showHistory(loaders: HistoryLoaders): Promise<void> {
   function paintTerminal(state: ModeState): void {
     const terminal = node("pre", "terminal-history-text", state.text);
     terminal.tabIndex = 0;
-    terminal.setAttribute("aria-label", "终端历史内容");
+    terminal.setAttribute("aria-label", t("hist.terminalAria"));
     viewport.replaceChildren(terminal);
   }
 
   function statusText(state: ModeState): string {
-    if (state.loading) return mode === "terminal" ? "正在读取终端历史…" : "正在读取对话记录…";
+    if (state.loading) return mode === "terminal" ? t("hist.loadingTerm") : t("hist.loadingChat");
     if (state.error) return state.error;
     if (mode === "terminal") {
       const rows = lineCount(state.text);
-      if (!rows) return "没有可显示的终端历史。";
-      if (state.truncated && state.nextCursor) return `已读取最近 ${rows} 行，还有更早内容。`;
-      if (state.truncated) return `已读取最近 ${rows} 行；内容已达到安全上限。`;
-      return `已读取 ${rows} 行终端历史。`;
+      if (!rows) return t("hist.noTerm");
+      if (state.truncated && state.nextCursor) return t("hist.recentRows", { n: rows });
+      if (state.truncated) return t("hist.recentCapped", { n: rows });
+      return t("hist.readRows", { n: rows });
     }
-    if (!state.items.length) return "没有可显示的对话记录。";
-    return `已读取 ${state.items.length} 条记录${state.truncated ? "（部分内容已截断）" : ""}。`;
+    if (!state.items.length) return t("hist.noChat");
+    return state.truncated
+      ? t("hist.readItemsTrunc", { n: state.items.length })
+      : t("hist.readItems", { n: state.items.length });
   }
 
   function paint(): void {
@@ -162,7 +165,7 @@ export async function showHistory(loaders: HistoryLoaders): Promise<void> {
     if (!hasContent) viewport.replaceChildren();
     else if (mode === "terminal") paintTerminal(state);
     else paintConversation(state);
-    more.textContent = state.error ? "重试" : mode === "terminal" ? "加载更早内容" : "加载更多";
+    more.textContent = state.error ? t("retry") : mode === "terminal" ? t("hist.loadEarlier") : t("hist.loadMore");
     more.hidden = !state.error && !state.nextCursor;
     more.disabled = state.loading;
   }

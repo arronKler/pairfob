@@ -1,84 +1,121 @@
 # Pairfob agent notes
 
-**产品、协议与规模以仓库里的代码和 `proto/` 为准。** 托管数据面是 `pairfob.v2`（Cloudflare Worker + 一 Durable Object / `daemon_id`，origin `https://pairfob.com`）。信封字节仍是 `pairfob.v1`：`proto/envelope.md`、`proto/rpc.schema.json`、`proto/pairfob-vectors.json`。不得改 HKDF info、AAD、Argon2id、DeviceHello transcript、内层 RPC 字段。v2 只增加 mux 控制面（见 `proto/envelope-v2.md`）；`pair_loc` 不进 SPAKE / Argon2。
+**Product, protocol, and scale are defined by this repo and `proto/`.** The
+hosted data plane is `pairfob.v2` (Cloudflare Worker + one Durable Object per
+`daemon_id`, origin `https://pairfob.com`). Envelope bytes stay `pairfob.v1`:
+`proto/envelope.md`, `proto/rpc.schema.json`, `proto/pairfob-vectors.json`. Do
+not change HKDF info, AAD, Argon2id, DeviceHello transcript, or inner RPC
+fields. v2 only adds the mux control plane (`proto/envelope-v2.md`); `pair_loc`
+never enters SPAKE / Argon2.
 
 ```
 phone PWA --HTTPS/WSS pairfob.v2--> pairfob.com (Worker+R2)
                                       Worker /v2/ws → DaemonRoom DO
-pairfob --outbound WSS--> 该 DO --opaque FWD-- 同一 DO 上的 phone
+pairfob --outbound WSS--> that DO --opaque FWD-- the phone on the same DO
 pairfob --loopback--> HarnessRuntime
 ```
 
-Relay / DO 只做帧级 relay，不解析 `FWD`。身份与密钥只在 daemon。读和写都要求 `Established` 会话。产品 relay 只有 `workers/pairfob-origin`（`pairfob.v2`）。`https://pairfob.com` 是本项目的官方实例。新电脑登记可关（`SIGNUP_OPEN` / `ENROLL_OPEN`），这是成本阀，已登记的电脑继续可用。用户文档不提供自建 origin。`internal/mux` Hub 仅作 daemon 进程内测试替身，不是可部署 origin。
+The relay / DO is frame-level only and does not parse `FWD`. Identity and keys
+live only on the daemon. Reads and writes require an `Established` session. The
+product relay is `workers/pairfob-origin` (`pairfob.v2`). `https://pairfob.com`
+is this project's official instance. New computer setup can close
+(`SIGNUP_OPEN` / `ENROLL_OPEN`); that is a cost valve, and already-enrolled
+computers keep working. User docs do not offer a self-hosted origin. The
+`internal/mux` Hub is an in-process test stand-in, not a deployable origin.
 
-## 文件规模（硬性）
+## File size (hard limit)
 
-**每个手写源文件最多 800 行。** 适用于 Go、TypeScript、CSS、测试文件与脚本。不含 `node_modules/`、`pwa/dist/`、生成物与依赖锁文件。
+**Each handwritten source file is at most 800 lines.** Applies to Go,
+TypeScript, CSS, tests, and scripts. Excludes `node_modules/`, `pwa/dist/`,
+generated output, and lockfiles.
 
-目的：项目结构清晰，模块拆分合理，逻辑易读易理解。
+The point is a clear project shape: split on duty, keep logic readable.
 
-改代码时：
+When changing code:
 
-- 已超过 800 行的文件：先按职责拆开，再改行为。禁止继续往里堆。
-- 将要超过 800 行：同一轮改动里拆出去，不要留下「先写完再拆」的巨型文件。
-- 不要用「utils / helpers / misc / part2」这类垃圾桶文件凑行数。
-- 不要靠删空行、挤注释、把无关逻辑塞进另一个已经很大的文件来规避上限。
-- 测试与实现分开文件；一个测试文件只覆盖一个模块或一种行为族。
-- 拆分后每个文件仍应能独立读懂：包注释或文件头只写非显然的边界，不写变更流水账。
+- Already over 800 lines: split by duty first, then change behavior. Do not
+  keep stacking.
+- About to go over 800: split in the same change. Do not leave a "finish then
+  split" giant file.
+- Do not pad the limit with dump files named `utils` / `helpers` / `misc` /
+  `part2`.
+- Do not dodge the limit by deleting blank lines, cramming comments, or shoving
+  unrelated logic into another file that is already large.
+- Tests and implementation stay in separate files; one test file covers one
+  module or one family of behavior.
+- After a split, each file should still read on its own: package comments or
+  file headers only for non-obvious boundaries, never a changelog.
 
-按**职责**拆，不按行号切。优先边界：
+Split on **duty**, not line number. Prefer these seams:
 
-| 层 | 拆什么 |
+| Layer | Split |
 | --- | --- |
-| `internal/daemon` | 会话握手、RPC 分发、具体 mutation（worktree / layout / keys / push）、持久化 |
-| `internal/mux` | daemon 注册、配对绑定、session attach、FWD 转发 |
-| `internal/runtime` | 传输/fault、snapshot 适配、各 Command 的 Herdr 调用 |
-| `pwa/src/main.ts` | 启动/配对/SAS、dashboard、pane 会话、设置 |
-| `pwa/src/lib/protocol` | 配对握手、会话 RPC、帧校验 |
-| `pwa/src/style.css` | 按画面或控件族拆，用 CSS 源文件 import，不要复制选择器 |
+| `internal/daemon` | session handshake, RPC dispatch, concrete mutations (worktree / layout / keys / push), persistence |
+| `internal/mux` | daemon register, pairing bind, session attach, FWD forward |
+| `internal/runtime` | transport/fault, snapshot adapt, Herdr calls for each Command |
+| `pwa/src/main.ts` | boot/pairing/SAS, dashboard, pane session, settings |
+| `pwa/src/lib/protocol` | pairing handshake, session RPC, frame checks |
+| `pwa/src/style.css` | by screen or control family, imported CSS sources, no copied selectors |
 
-当前没有超限文件。改动后用 `wc -l` 复查，超了先拆再继续。
+There are no over-limit files right now. Recheck with `wc -l` after edits; split
+before continuing if a file went over.
 
-`internal/runtime/herdr.go`、`internal/mux/hub.go`、`pwa/src/lib/protocol/client.ts`、`pwa/src/style.css` 已按职责拆完。Herdr 适配在 `herdr_observe.go` / `herdr_execute.go`，会话画面在 `pwa/src/ui/session/`，PWA 样式在 `pwa/src/styles/`。
+`internal/runtime/herdr.go`, `internal/mux/hub.go`,
+`pwa/src/lib/protocol/client.ts`, and `pwa/src/style.css` are already split by
+duty. Herdr adapt lives in `herdr_observe.go` / `herdr_execute.go`, the session
+screen in `pwa/src/ui/session/`, PWA styles in `pwa/src/styles/`.
 
-同包多文件在 Go 里是正常做法。TypeScript 拆文件后从原模块再导出，避免扩散 import 翻新。
+Multiple files in one Go package is normal. After a TypeScript split, re-export
+from the original module so imports do not churn.
 
-## 目录
+## Directories
 
-| 路径 | 职责 |
+| Path | Duty |
 | --- | --- |
-| `cmd/pairfob` | 出站连 origin、配对 CLI、本机 Herdr |
-| `workers/pairfob-origin` | 唯一 relay：Worker + R2 + DaemonRoom DO（线上与 `wrangler dev`） |
-| `cmd/genvectors` | 从 Go 密码学实现生成 `proto/pairfob-vectors.json` |
-| `internal/mux` | 帧级路由；不碰 FWD 明文 |
-| `internal/daemon` | 配对、会话、RPC、推送、操作账本 |
-| `internal/runtime` | Herdr 适配；Herdr 方法名不得穿过 `Runtime` 接口 |
-| `internal/envelope` `aeadfwd` `canon` `hkdfk` `spake2plus` `session` | 协议原语 |
-| `pwa/src/lib/protocol` | 浏览器侧协议 |
-| `pwa/src/lib` | UI 纯函数与 DOM 辅助；`main.ts` 只编排 |
-| `proto/` | 冻结的信封、RPC schema、向量、PGP words |
-| `scripts/verify.sh` | 格式、vet、Go 测试（含 race）、PWA 测试、Worker origin 测试、typecheck、生产构建 |
-| `scripts/install.sh` | 官网一键安装 pairfob（checksum、enroll、用户级服务） |
-| `scripts/release.sh` | 交叉编译 `dist/dl/pairfob-{os}-{arch}` + SHA256SUMS |
+| `cmd/pairfob` | outbound origin, pairing CLI, local Herdr |
+| `workers/pairfob-origin` | the only relay: Worker + R2 + DaemonRoom DO (production and `wrangler dev`) |
+| `cmd/genvectors` | generate `proto/pairfob-vectors.json` from the Go crypto |
+| `internal/mux` | frame routing; does not touch FWD plaintext |
+| `internal/daemon` | pairing, session, RPC, push, operation ledger |
+| `internal/runtime` | Herdr adapt; Herdr method names must not cross the `Runtime` interface |
+| `internal/envelope` `aeadfwd` `canon` `hkdfk` `spake2plus` `session` | protocol primitives |
+| `pwa/src/lib/protocol` | browser protocol |
+| `pwa/src/lib` | UI pure functions and DOM helpers; `main.ts` only orchestrates |
+| `proto/` | frozen envelope, RPC schema, vectors, PGP words |
+| `scripts/verify.sh` | format, vet, Go tests (including race), PWA tests, Worker origin tests, typecheck, production build |
+| `scripts/install.sh` | one-line install of pairfob (checksum, enroll, user-level service) |
+| `scripts/release.sh` | cross-compile `dist/dl/pairfob-{os}-{arch}` + SHA256SUMS |
 
-新代码放到已有模块。只有现有包无法表达一个独立职责时才新增 `internal/<name>`。
+Put new code in an existing module. Add `internal/<name>` only when no current
+package can express that duty.
 
-## 实现约束
+## Implementation constraints
 
-- 密码学与信封字节仍是 `pairfob.v1`（头 `version=0x01`）。mux 子协议只有 `pairfob.v2`。canonical 字节、Argon2id、SPAKE2+、HKDF info、DeviceHello 以 `proto/`（尤其 `pairfob-vectors.json`）与 Go/TS 实现为准；两端必须 bit-identical。mux JSON `"v":2` 见 `proto/envelope-v2.md`。禁止再实现 `/v1/ws` origin。
-- 公网路径 default-deny。不要信任客户端声称的 `device_id`，也不要把 Herdr HTTP/Unix socket 暴露给 relay。
-- mutation 带新鲜 `operation_id`，不自动重试；`unknown_outcome` 只刷新，不重放。
-- `GetConfig.capabilities` 的十一键是展示与放行的权威；不要发明聚合别名。
-- 路径与 cwd 必须落在 live snapshot 根或 `PAIRFOB_ALLOWED_ROOTS`；失败时 fail-closed。
-- 产品循环不是终端模拟器：读已渲染 pane，把按键打回 PTY。
+- Crypto and envelope bytes stay `pairfob.v1` (header `version=0x01`). The only
+  mux subprotocol is `pairfob.v2`. Canonical bytes, Argon2id, SPAKE2+, HKDF
+  info, and DeviceHello follow `proto/` (especially `pairfob-vectors.json`) and
+  the Go/TS implementations; both ends must be bit-identical. Mux JSON `"v":2`
+  is in `proto/envelope-v2.md`. Do not implement a `/v1/ws` origin again.
+- Public paths are default-deny. Do not trust a client-claimed `device_id`, and
+  do not expose the Herdr HTTP/Unix socket to the relay.
+- Mutations carry a fresh `operation_id` and are not retried automatically;
+  `unknown_outcome` only refreshes, never replays.
+- The eleven `GetConfig.capabilities` keys are the authority for showing and
+  allowing operations; do not invent aggregate aliases.
+- Paths and cwd must land in a live snapshot root or `PAIRFOB_ALLOWED_ROOTS`;
+  failures fail closed.
+- The product loop is not a terminal emulator: read the rendered pane, send
+  keys back to the PTY.
 
-## 验证
+## Verify
 
-改协议或跨语言原语后，先 `go run ./cmd/genvectors`（若向量会变），再：
+After protocol or cross-language primitive changes, run `go run ./cmd/genvectors`
+first if vectors would change, then:
 
 ```
 (cd pwa && bun install)
 ./scripts/verify.sh
 ```
 
-Go 必须 `gofmt`。PWA 用 bun。不要为了过测试放宽 schema 或把 fail-closed 改成猜测成功。
+Go must be `gofmt`. PWA uses bun. Do not loosen schema or turn fail-closed into
+guess-success to make tests pass.

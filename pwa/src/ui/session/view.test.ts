@@ -20,12 +20,12 @@ describe("pane header keeps status surfaces in step", () => {
   test("status sync owns the accessible name and the interrupt button", () => {
     const start = viewSource.indexOf("function syncChromeStatus(");
     const sync = viewSource.slice(start, viewSource.indexOf("function chromeNode("));
-    expect(sync).toContain('setAttribute("aria-label"');
+    expect(sync).toContain('"aria-label"');
     expect(sync).toContain("syncChromeStop(chrome, selected.status === \"working\"");
     expect(sync).not.toContain("title.after");
     expect(actionsSource).toContain(".icon-stop");
-    expect(actionsSource).toContain("打断当前任务");
-    expect(actionsSource).toContain("会话操作");
+    expect(actionsSource).toContain('t("pane.interrupt")');
+    expect(actionsSource).toContain('t("pane.menuTitle")');
   });
 
   test("nothing else builds the interrupt button behind the sync's back", () => {
@@ -42,6 +42,10 @@ describe("pane header keeps status surfaces in step", () => {
     expect(chrome).not.toContain("更多操作");
     expect(viewSource).not.toContain("full-terminal-retry");
     expect(viewSource).not.toContain("退出完整终端");
+  });
+
+  test("in-place pane reads resync Enter when a prompt panel appears", () => {
+    expect(viewSource).toContain("syncSendButton()");
   });
 
   test("the status dot sits with the status line so the title can use the full width", () => {
@@ -61,7 +65,7 @@ describe("pane header keeps status surfaces in step", () => {
   test("the visible subtitle is a short status line, not the dashboard card meta", () => {
     const body = viewSource.slice(viewSource.indexOf("function chromeMeta("), viewSource.indexOf("function titleBody("));
     expect(body).toContain("cwdName(selected.cwd)");
-    expect(body).toContain('tabIsSplit(selected, state.agents) ? "分屏"');
+    expect(body).toContain('tabIsSplit(selected, state.agents) ? t("chrome.split")');
     expect(body).not.toContain("agentMeta");
     expect(viewSource).toContain("function statusLine(");
     expect(viewSource).toContain("agentMeta(selected)");

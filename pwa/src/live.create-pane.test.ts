@@ -29,7 +29,7 @@ const { app, setDefaultTermMode, state } = await import("./state.ts");
 const { setRenderer } = await import("./paint.ts");
 const { renderHome } = await import("./ui/home.ts");
 const { renderPane } = await import("./ui/pane.ts");
-const { startNewConversation } = await import("./live.ts");
+const { startNewConversation } = await import("./live-operations.ts");
 
 function paint(): void {
   if (state.screen === "pane") renderPane();

@@ -1,4 +1,5 @@
 import { node } from "../../lib/dom";
+import { t } from "../../lib/i18n";
 import { chevron } from "../chrome";
 import { liftAskLabel } from "../../lib/prompt";
 import { render } from "../../paint";
@@ -14,7 +15,7 @@ export function promptPanel(model: PaneModel): HTMLElement | null {
   const block = model.block;
   if (block.kind !== "prompt-select" || state.termSelect) return null;
   const panel = node("section", "lift");
-  panel.setAttribute("aria-label", "Agent 的提问");
+  panel.setAttribute("aria-label", t("prompt.aria"));
   panel.append(node("p", "lift-tag", liftAskLabel(selectedAgent()?.agent)));
   if (block.question) panel.append(node("p", "q", block.question));
   block.options.forEach((option, index) => {

@@ -1,3 +1,5 @@
+import { t } from "./i18n.ts";
+
 export type AgentStatus = "blocked" | "working" | "done" | "idle" | "unknown";
 
 export interface AgentCard {
@@ -66,10 +68,10 @@ export function parseListGroup(raw: string | null | undefined): ListGroup {
 function groupKey(agent: AgentCard, mode: Exclude<ListGroup, "flat">): { id: string; title: string } {
   if (mode === "space") {
     const id = agent.workspaceId || agent.workspaceLabel || "space";
-    return { id, title: agent.workspaceLabel || "未命名工作区" };
+    return { id, title: agent.workspaceLabel || t("workspace.unnamed") };
   }
   const name = agent.agent.trim();
-  if (!name) return { id: "unbound", title: "未绑定 Agent" };
+  if (!name) return { id: "unbound", title: t("group.unbound") };
   return { id: `agent:${name.toLowerCase()}`, title: name };
 }
 
@@ -85,7 +87,7 @@ function groupTouched(group: AgentGroup, touchedAt: TouchedAt): number {
 export function groupAgents(agents: AgentCard[], mode: ListGroup, touchedAt: TouchedAt = {}): AgentGroup[] {
   const ranked = rankAgents(agents, touchedAt);
   if (mode === "flat") {
-    return ranked.length ? [{ id: "all", title: "会话", items: ranked }] : [];
+    return ranked.length ? [{ id: "all", title: t("group.sessions"), items: ranked }] : [];
   }
   const groups = new Map<string, AgentGroup>();
   const order: string[] = [];

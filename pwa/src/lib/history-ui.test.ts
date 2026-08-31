@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const historySource = await Bun.file(new URL("./history-ui.ts", import.meta.url)).text();
-const liveSource = await Bun.file(new URL("../live.ts", import.meta.url)).text();
+const liveSource = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
 const chromeSource = await Bun.file(new URL("../ui/session/view.ts", import.meta.url)).text();
 const termSource = await Bun.file(new URL("../ui/session/term.ts", import.meta.url)).text();
 const menuSource = await Bun.file(new URL("../ui/pane-menu.ts", import.meta.url)).text();
@@ -20,7 +20,7 @@ describe("mobile history surface", () => {
   test("replaces overlapping terminal windows but appends transcript pages", () => {
     expect(historySource).toContain('state.text = page.items.map((item) => item.text).join("\\n")');
     expect(historySource).toContain("state.items = append ? [...state.items, ...page.items] : page.items");
-    expect(historySource).toContain("加载更早内容");
+    expect(historySource).toContain('t("hist.loadEarlier")');
     expect(historySource).toContain('messageOf(error, "read")');
   });
 
@@ -30,11 +30,11 @@ describe("mobile history surface", () => {
     expect(chromeSource).not.toContain("mode-switch");
     expect(menuSource).toContain("enterAgentChat");
     expect(menuSource).not.toContain("对话记录");
-    expect(menuSource).toContain('item("更早的输出", openSelectedTerminalHistory)');
+    expect(menuSource).toContain('item(t("menu.history"), openSelectedTerminalHistory)');
     expect(termSource).not.toContain("↑ 更早的输出");
     expect(termSource).not.toContain("olderThanLive");
-    expect(historySource).toContain('return "更早的输出"');
-    expect(historySource).toContain("Agent 正在工作，或终端画面没有停在底部");
+    expect(historySource).toContain('return t("hist.earlier")');
+    expect(historySource).toContain('t("hist.terminalBusy")');
     expect(historySource).toContain('setAttribute("role", "tablist")');
   });
 

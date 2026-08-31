@@ -106,7 +106,7 @@ description: 账号、Herdr、锁屏、合盖、断网、丢失手机、Windows�
 
 ## 收费吗？
 
-不收费。源码是 Apache-2.0。`https://pairfob.com` 是本项目的官方实例：网页和你登记用的中转都在这里。没有账号，也不承诺容量。
+不收费。源码是 Apache-2.0，在 <https://github.com/arronKler/pairfob>。`https://pairfob.com` 是本项目的官方实例：网页和你登记用的中转都在这里。没有账号，也不承诺容量。
 
 新电脑登记随时可能关上。已经登记的电脑、已经配对的设备继续可用。
 

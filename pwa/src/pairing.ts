@@ -1,3 +1,4 @@
+import { t } from "./lib/i18n";
 import { fragmentUsableOnOrigin, resolveHandPairing } from "./lib/pairing-input";
 import { normalizeCrockford } from "./lib/protocol/bytes";
 import { requestPairIntent } from "./lib/pair-intent";
@@ -49,7 +50,7 @@ export async function beginPairing(rawCode: string): Promise<void> {
   const resolved = resolveHandPairing(2, rawCode, Boolean(scanned));
   if (!resolved.ok) {
     const length = normalizeCrockford(rawCode).length;
-    rejectLocal("code", rawCode ? `配对码还没输完整：需要 14 位，现在识别到 ${length} 位。` : FRIENDLY_ERROR.locator_required);
+    rejectLocal("code", rawCode ? t("err.pairIncomplete", { n: length }) : FRIENDLY_ERROR.locator_required);
     return;
   }
   state.pairAbort?.abort();
@@ -68,7 +69,7 @@ export async function beginPairing(rawCode: string): Promise<void> {
       attach = { pair_ref: scanned.pairRef };
     } else {
       const intent = await requestPairIntent(resolved.loc!, fetch, abort.signal);
-      if (abort.signal.aborted) throw new ProtocolError("pairing_cancelled", "已取消配对");
+      if (abort.signal.aborted) throw new ProtocolError("pairing_cancelled", t("err.pairing_cancelled"));
       relay = wsURL({ daemonId: intent.daemonId, pairTicket: intent.pairTicket });
       attach = { pair_ref: intent.pairRef };
     }
@@ -79,7 +80,7 @@ export async function beginPairing(rawCode: string): Promise<void> {
       label: friendlyDeviceLabel(navigator.userAgent),
       onAwaitApproval: () => {
         state.pairAwaitingApproval = true;
-        showStatus("已验证配对码，请在电脑上按 Enter 确认。", true);
+        showStatus(t("pair.verified"), true);
         render();
       },
       signal: abort.signal,

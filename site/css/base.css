@@ -199,7 +199,8 @@ html[lang="zh-CN"]:not([data-i18n-ready]) [data-i18n] {
 }
 
 .bar-doc,
-.bar-feedback {
+.bar-feedback,
+.bar-github {
   display: inline-flex;
   align-items: center;
   min-height: 38px;
@@ -208,8 +209,20 @@ html[lang="zh-CN"]:not([data-i18n-ready]) [data-i18n] {
   white-space: nowrap;
 }
 
+.bar-github {
+  justify-content: center;
+  width: 38px;
+  flex-shrink: 0;
+}
+
+.bar-github svg {
+  width: 20px;
+  height: 20px;
+}
+
 .bar-doc:hover,
-.bar-feedback:hover {
+.bar-feedback:hover,
+.bar-github:hover {
   color: var(--ink);
 }
 
@@ -418,12 +431,30 @@ html[lang="zh-CN"]:not([data-i18n-ready]) [data-i18n] {
 }
 
 @media (max-width: 720px) {
+  .site-bar {
+    gap: 10px;
+  }
+
   .bar-end {
-    gap: 8px;
+    gap: 6px;
   }
 
   .site-nav {
     display: none;
+  }
+
+  /* Feedback stays in the FAQ and footer. The GitHub mark is the compact
+     public-repo entry once the how-to nav is gone. */
+  .bar-feedback {
+    display: none;
+  }
+
+  .bar-github {
+    width: 32px;
+  }
+
+  .bar-cta {
+    padding: 0 12px;
   }
 
   .band h2 br,

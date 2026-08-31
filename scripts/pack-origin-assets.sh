@@ -25,6 +25,33 @@ if [[ "$site_v" != "$doc_v" ]]; then
   exit 1
 fi
 
+# The PWA is copied first, so every root owned by the marketing site or Worker
+# must remain absent from its build output. index.html is the one intentional
+# overlap: the original PWA shell is copied to /pair after the site replaces /.
+reserved_pwa_paths=(
+  css doc dl home-i18n.js install.sh lang.js og-en.png og.png
+  pair pair.html pair-shell.asset robots.txt site.js sitemap.xml zh zh-shell.asset
+)
+for path in "${reserved_pwa_paths[@]}"; do
+  if [[ -e "$PWA/$path" ]]; then
+    echo "pack: PWA output collides with origin-owned path: $path" >&2
+    exit 1
+  fi
+done
+
+# These icons intentionally serve both shells. Refuse to let copy order decide
+# which visual identity reaches production if their source copies ever drift.
+for path in icon.svg mask-icon.svg apple-touch-icon.png; do
+  if [[ ! -f "$PWA/$path" || ! -f "$SITE/$path" ]]; then
+    echo "pack: shared asset is missing from PWA or site: $path" >&2
+    exit 1
+  fi
+  if ! cmp -s "$PWA/$path" "$SITE/$path"; then
+    echo "pack: shared asset differs between PWA and site: $path" >&2
+    exit 1
+  fi
+done
+
 rm -rf "$DEST"
 mkdir -p "$DEST/css" "$DEST/pair"
 cp -R "$PWA/." "$DEST/"

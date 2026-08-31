@@ -1,4 +1,5 @@
 import { node } from "../lib/dom";
+import { t } from "../lib/i18n";
 import { app, selectedAgent, state } from "../state";
 import { fillAgentChat } from "./agent-chat";
 import { renderRail } from "./home";
@@ -32,7 +33,7 @@ export function renderDesk(): void {
       main.append(pane);
     } else {
       const empty = node("div", "main-empty");
-      empty.append(node("p", "empty-title", "选择一个会话"), node("p", "empty-sub", "从左侧的列表点一个，这里会显示电脑上的终端画面。"));
+      empty.append(node("p", "empty-title", t("desk.pickTitle")), node("p", "empty-sub", t("desk.pickSub")));
       main.append(empty);
     }
   }

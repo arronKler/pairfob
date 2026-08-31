@@ -1,6 +1,7 @@
 import { computerTitle } from "./lib/computer-catalog";
 import { deleteCredential } from "./lib/credentials";
 import { askConfirm } from "./lib/dom";
+import { t } from "./lib/i18n";
 import { ProtocolError, type PairResult } from "./lib/protocol/client";
 import {
   clearLiveConnection,
@@ -23,7 +24,7 @@ export async function resumeComputer(pair: PairResult): Promise<void> {
   } catch (error) {
     await landAfterDisconnect({
       daemonId: pair.daemonId,
-      error: error instanceof ProtocolError ? error : new ProtocolError("disconnected", "无法连上这台电脑"),
+      error: error instanceof ProtocolError ? error : new ProtocolError("disconnected", t("err.computerConnect")),
     });
   }
 }
@@ -83,8 +84,8 @@ export async function switchComputer(daemonId: string): Promise<void> {
 
 export async function forgetComputer(daemonId: string): Promise<void> {
   const pair = state.computers.find((item) => item.daemonId === daemonId);
-  const title = pair ? computerTitle(pair) : "这台电脑";
-  if (!(await askConfirm(`从这台手机去掉「${title}」？电脑上的配对还在，以后还可以再扫码连回来。`, "忘记"))) {
+  const title = pair ? computerTitle(pair) : t("computers.this");
+  if (!(await askConfirm(t("computers.forgetAsk", { title }), t("forget")))) {
     return;
   }
   const forgettingCurrent = state.credential?.daemonId === daemonId;
@@ -102,6 +103,6 @@ export async function forgetComputer(daemonId: string): Promise<void> {
     state.phase = "pick";
     state.screen = "home";
   }
-  showStatus("已从这台手机去掉这台电脑。");
+  showStatus(t("computers.forgot"));
   render();
 }
