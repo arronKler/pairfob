@@ -24,10 +24,13 @@ export function renderDesk(): void {
     const handlers = sessionHandlers();
     if (selected && state.paneId && state.agentChat) {
       const chat = node("div", "pane-root agent-chat-root");
-      input = fillAgentChat(chat, handlers.onBack, false, handlers.onMenu);
+      input = fillAgentChat(chat, handlers.onBack, false, handlers.onMenu, handlers.onSwitch);
       main.append(chat);
-    } else if (selected && state.paneId) input = fillSession(main, selected, false, handlers);
-    else {
+    } else if (selected && state.paneId) {
+      const pane = node("div", "pane-root");
+      input = fillSession(pane, selected, false, handlers);
+      main.append(pane);
+    } else {
       const empty = node("div", "main-empty");
       empty.append(node("p", "empty-title", "选择一个会话"), node("p", "empty-sub", "从左侧的列表点一个，这里会显示电脑上的终端画面。"));
       main.append(empty);

@@ -40,7 +40,7 @@ window.addEventListener("pairfob-lang", idleCopyButtons);
 function trackCopy(text) {
   const extra = text.includes("install.sh")
     ? "install"
-    : text.includes("pairfobd pair")
+    : text.includes("pairfob pair")
       ? "pair_cli"
       : text.includes("/pair")
         ? "pair_url"

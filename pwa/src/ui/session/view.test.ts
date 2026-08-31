@@ -44,6 +44,20 @@ describe("pane header keeps status surfaces in step", () => {
     expect(viewSource).not.toContain("退出完整终端");
   });
 
+  test("the status dot sits with the status line so the title can use the full width", () => {
+    const body = viewSource.slice(viewSource.indexOf("function titleBody("), viewSource.indexOf("function syncChromeStatus("));
+    expect(body).toContain("chrome-name");
+    expect(body).toContain("chrome-meta-text");
+    expect(body).toContain("agent-dot");
+    expect(body).not.toContain("chrome-name-row");
+    const nameStart = body.indexOf('node("span", "chrome-name"');
+    const metaStart = body.indexOf("chrome-meta");
+    const dotStart = body.indexOf("agent-dot");
+    expect(nameStart).toBeGreaterThan(-1);
+    expect(metaStart).toBeGreaterThan(nameStart);
+    expect(dotStart).toBeGreaterThan(metaStart);
+  });
+
   test("the visible subtitle is a short status line, not the dashboard card meta", () => {
     const body = viewSource.slice(viewSource.indexOf("function chromeMeta("), viewSource.indexOf("function titleBody("));
     expect(body).toContain("cwdName(selected.cwd)");

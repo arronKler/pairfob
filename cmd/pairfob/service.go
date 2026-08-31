@@ -14,14 +14,14 @@ import (
 )
 
 const (
-	launchdLabel  = "com.pairfob.pairfobd"
-	systemdUnit   = "pairfobd.service"
-	serviceLogRel = "pairfobd.log"
+	launchdLabel  = "com.pairfob.pairfob"
+	systemdUnit   = "pairfob.service"
+	serviceLogRel = "pairfob.log"
 )
 
 func serviceCommand(args []string) error {
 	if len(args) != 1 {
-		return errors.New("usage: pairfobd service install|uninstall|start|restart|stop|status")
+		return errors.New("usage: pairfob service install|uninstall|start|restart|stop|status")
 	}
 	switch args[0] {
 	case "install":
@@ -37,7 +37,7 @@ func serviceCommand(args []string) error {
 	case "status":
 		return statusUserService()
 	default:
-		return errors.New("usage: pairfobd service install|uninstall|start|restart|stop|status")
+		return errors.New("usage: pairfob service install|uninstall|start|restart|stop|status")
 	}
 }
 
@@ -129,7 +129,7 @@ func launchdPlist(execPath, logPath, home string) string {
 
 func systemdUnitFile(execPath, logPath, home string) string {
 	return `[Unit]
-Description=pairfobd (Pairfob daemon)
+Description=pairfob (Pairfob daemon)
 After=network-online.target
 
 [Service]
@@ -220,7 +220,7 @@ func controlUserService(action string) error {
 		return err
 	}
 	if _, err := os.Stat(layout.UnitPath); err != nil {
-		return fmt.Errorf("user service is not installed; run pairfobd service install")
+		return fmt.Errorf("user service is not installed; run pairfob service install")
 	}
 	if err := applyService(layout, action); err != nil {
 		return err

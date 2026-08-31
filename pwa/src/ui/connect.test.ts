@@ -20,7 +20,7 @@ describe("connect locator_required local", () => {
 
   test("adding another computer keeps the scan-first pairing surface", () => {
     expect(connectSource).toContain("添加另一台电脑");
-    expect(connectSource).toContain("先在那台电脑装好 pairfobd");
+    expect(connectSource).toContain("先在那台电脑装好 pairfob");
     expect(connectSource).toContain("cancelAddComputer");
     expect(connectSource).toContain('adding ? "page settings-page" : `prelude${busy ? " pairing" : ""}`');
     expect(connectSource).not.toContain("adding && !busy");
@@ -50,6 +50,6 @@ describe("connect locator_required local", () => {
   test("wide screens warn that pairing opens on the other device", () => {
     expect(connectSource).toContain("isDesk() && !adding && !scanned && !busy");
     expect(connectSource).toContain("这个页面是给手机或另一台设备用的");
-    expect(connectSource).toContain("跑 Herdr 的电脑请执行 pairfobd pair");
+    expect(connectSource).toContain("跑 Herdr 的电脑请执行 pairfob pair");
   });
 });

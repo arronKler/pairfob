@@ -73,7 +73,7 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("interactive touch controls keep a 44px target", () => {
-    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".lift button", ".send-btn", ".menu-item", ".icon-btn", ".operation-field input", ".operation-field select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".term-jump", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
+    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".lift button", ".send-btn", ".menu-item", ".icon-btn", ".operation-field input", ".operation-field select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
       const match = rule(selector).match(/min-height:\s*(\d+)px/);
       expect(match, selector).not.toBeNull();
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);
@@ -82,8 +82,8 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("new-output chip sits on the left so it does not cover the TUI page rail", () => {
-    expect(rule(".term-jump")).toMatch(/left:\s*12px/);
-    expect(rule(".term-jump")).not.toMatch(/right:/);
+    expect(css).toMatch(/\.term-jump,\s*\.agent-jump\s*\{[^}]*left:\s*12px/);
+    expect(css).toMatch(/\.term-jump,\s*\.agent-jump\s*\{[^}]*min-height:\s*44px/);
     expect(rule(".full-terminal-scroll")).toMatch(/right:\s*4px/);
   });
 
@@ -150,6 +150,8 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".chrome-actions")).toMatch(/flex:\s*none/);
     expect(rule(".chrome-actions")).toMatch(/display:\s*flex/);
     expect(rule(".chrome-name")).toMatch(/min-width:\s*0/);
+    expect(rule(".chrome-meta")).toMatch(/display:\s*flex/);
+    expect(rule(".chrome-meta")).not.toMatch(/padding-left:\s*14px/);
   });
 
   test("session chrome stays above the terminal stacking context", () => {
@@ -255,6 +257,9 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("agent-chat stream is a definite box WebKit can pan", () => {
+    expect(rule(".agent-stream-wrap")).toMatch(/flex:\s*1 1 0%/);
+    expect(rule(".agent-stream-wrap")).toMatch(/min-height:\s*0/);
+    expect(rule(".agent-stream-wrap")).toMatch(/position:\s*relative/);
     expect(rule(".agent-stream")).toMatch(/flex:\s*1 1 0%/);
     expect(rule(".agent-stream")).toMatch(/min-height:\s*0/);
     expect(rule(".agent-stream")).toMatch(/overflow-y:\s*scroll/);
@@ -264,6 +269,9 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".agent-older")).toMatch(/min-height:\s*44px/);
     expect(rule(".agent-older")).not.toMatch(/position:\s*(sticky|fixed|absolute)/);
     expect(rule(".agent-older[hidden]")).toMatch(/display:\s*none/);
+    expect(rule(".agent-empty")).toMatch(/justify-content:\s*center/);
+    expect(rule(".agent-empty")).toMatch(/align-items:\s*center/);
+    expect(rule(".agent-stream-inner")).toMatch(/min-height:\s*100%/);
   });
 
   test("the terminal scrollport is a definite box WebKit can pan", () => {
@@ -278,6 +286,16 @@ describe("UI accessibility guardrails", () => {
     expect(rule("#app.session")).toMatch(/inset:\s*0/);
     expect(rule("#app.session")).toMatch(/height:\s*auto/);
     expect(rule("#app.session")).not.toMatch(/height:\s*100dvh/);
+    expect(rule("#app.desk")).toMatch(/position:\s*fixed/);
+    expect(rule("#app.desk")).toMatch(/inset:\s*0/);
+    expect(rule("#app.desk")).toMatch(/height:\s*auto/);
+    expect(rule("#app.desk")).toMatch(/min-height:\s*0/);
+    expect(rule("#app.desk")).toMatch(/overflow:\s*hidden/);
+    expect(rule("#app.desk")).toMatch(/var\(--kb/);
+    expect(rule("#app.desk")).not.toMatch(/height:\s*100dvh/);
+    expect(rule("#app.desk")).not.toMatch(/min-height:\s*100dvh/);
+    expect(rule(".main")).toMatch(/min-height:\s*0/);
+    expect(rule(".main")).toMatch(/overflow:\s*hidden/);
   });
 
   test("standalone PWA paints the home-indicator strip with the app canvas", () => {

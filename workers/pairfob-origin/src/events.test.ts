@@ -25,7 +25,7 @@ describe("page classification", () => {
     expect(pageClass("/pair")).toBe("pair");
     expect(pageClass("/doc/start")).toBe("docs");
     expect(pageClass("/install.sh")).toBe("install");
-    expect(pageClass("/dl/pairfobd-linux-arm64")).toBe("download");
+    expect(pageClass("/dl/pairfob-linux-arm64")).toBe("download");
     expect(pageClass("/assets/index.js")).toBeNull();
   });
 });

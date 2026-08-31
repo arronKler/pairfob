@@ -1,4 +1,4 @@
-import { canPromptAgent, statusLabel } from "../lib/dashboard";
+import { canPromptAgent, chromeName, statusLabel } from "../lib/dashboard";
 import { button, node } from "../lib/dom";
 import { firstTurnNeedsUser } from "../lib/agent-trace-view";
 import { cacheAgentTrace, cachedAgentTrace } from "../lib/agent-trace-cache";
@@ -17,11 +17,13 @@ import {
   selectedAgent,
   setPaneTermMode,
   state,
+  visibleNotice,
+  type Notice,
 } from "../state";
-import { backButton } from "./chrome";
+import { backButton, feedbackNode } from "./chrome";
 import { leaveFullTerminal } from "./full-terminal";
 import { chromeActionCluster, syncChromeStop } from "./session/chrome-actions";
-import { paintAgentStream, readDetailsState } from "./agent-chat-stream";
+import { paintAgentStream, readDetailsState, type AgentEmptySpec } from "./agent-chat-stream";
 
 function fingerprint(items: AgentTraceItem[]): string {
   return JSON.stringify(items);
@@ -44,8 +46,8 @@ const TRACE_PAGE = 200;
 const OLDER_FILL_MAX = 4;
 let traceRequest = 0;
 
-function streamSig(items: AgentTraceItem[], working: boolean, blocked: boolean): string {
-  return `${fingerprint(items)}|${working ? 1 : 0}|${blocked ? 1 : 0}|${state.agentTraceLoadState}|${state.agentTraceNote}`;
+function streamSig(items: AgentTraceItem[], working: boolean): string {
+  return `${fingerprint(items)}|${working ? 1 : 0}|${state.agentTraceLoadState}`;
 }
 
 function applyTracePage(page: AgentTracePage, older: boolean): boolean {
@@ -100,11 +102,24 @@ export function restoreAgentTrace(paneId: string): boolean {
   return true;
 }
 
-function emptyTraceMessage(working: boolean): string {
-  if (state.agentTraceNote) return state.agentTraceNote;
-  if (working) return state.agentTraceLoadState === "ready" ? "Agent 正在执行，正在等待新的过程记录…" : "Agent 正在执行，正在同步过程…";
-  if (state.agentTraceLoadState === "cold" || state.agentTraceLoadState === "loading") return "正在读取 Agent 执行过程…";
-  return "还没有对话。给 Agent 发一条消息开始。";
+const TRACE_UNAVAILABLE_NOTE = "还没有可读取的 Agent 记录。发出去的消息会写进这个对话。";
+
+function emptySpec(working: boolean): AgentEmptySpec {
+  const note = state.agentTraceNote;
+  if (state.agentTraceLoadState === "error" && note && note !== TRACE_UNAVAILABLE_NOTE) {
+    return { kind: "error", title: note };
+  }
+  if (working) return { kind: "working", title: "正在执行" };
+  if (state.agentTraceLoadState === "cold" || state.agentTraceLoadState === "loading") {
+    return { kind: "loading", title: "正在读取执行过程" };
+  }
+  if (note === TRACE_UNAVAILABLE_NOTE) return { kind: "empty", title: "还没有对话", sub: "发出去的消息会写进这个对话。" };
+  if (note) return { kind: "empty", title: "还没有对话", sub: note };
+  return {
+    kind: "empty",
+    title: "还没有对话",
+    sub: canSend() ? "在下面给 Agent 发一条" : "这个会话还不能给 Agent 发任务",
+  };
 }
 
 function traceLatencyBucket(ms: number): string {
@@ -134,6 +149,19 @@ function syncOlderButton(btn?: HTMLElement | null): void {
 export function stickAgentStream(): void {
   const stream = streamEl();
   if (stream && state.agentTraceFollow) stream.scrollTop = stream.scrollHeight;
+}
+
+function syncAgentJump(): void {
+  const jump = app.querySelector(".agent-jump") as HTMLElement | null;
+  if (jump) jump.hidden = state.agentTraceFollow || !state.agentTraceUnread;
+}
+
+function jumpToLatest(): void {
+  haptic(6);
+  state.agentTraceFollow = true;
+  state.agentTraceUnread = false;
+  stickAgentStream();
+  syncAgentJump();
 }
 
 function sizeChatCompose(field: HTMLTextAreaElement): void {
@@ -241,9 +269,7 @@ export async function refreshAgentTrace(older = false): Promise<boolean> {
       state.agentTraceNext = null;
       state.agentTraceSig = "";
       state.agentTraceTail = 0;
-      state.agentTraceNote = state.agentTracePending
-        ? ""
-        : "还没有可读取的 Agent 记录。发出去的消息会写进这个对话。";
+      state.agentTraceNote = state.agentTracePending ? "" : TRACE_UNAVAILABLE_NOTE;
       if (!patchAgentChat({ follow: true })) render();
       return false;
     }
@@ -267,6 +293,7 @@ export function enterAgentChat(): void {
     state.fullTerminal = false;
     state.agentChat = true;
     state.agentTraceFollow = true;
+    state.agentTraceUnread = false;
     render();
     void refreshAgentTrace();
     queueMicrotask(() => composeEl()?.focus());
@@ -295,14 +322,18 @@ function paintItems(items: AgentTraceItem[], working: boolean, stream: HTMLEleme
   const next = paintAgentStream({
     items,
     working,
-    emptyMessage: emptyTraceMessage(working),
-    note: state.agentTraceNote,
+    empty: emptySpec(working),
     busy: state.agentTraceBusy || (!state.agentTraceItems.length && state.agentTraceLoadState === "cold"),
     kept: readDetailsState(stream),
-    blocked: selectedAgent()?.status === "blocked",
-    onConfirm: () => leaveAgentChat(),
+    onRetry: () => {
+      if (!state.agentTraceBusy) void refreshAgentTrace();
+    },
     onNeedOlder: () => {
       if (state.agentTraceNext && !state.agentTraceBusy) void refreshAgentTrace(true);
+    },
+    onFollow: (follow) => {
+      if (follow) state.agentTraceUnread = false;
+      syncAgentJump();
     },
   });
   next.querySelector(".agent-stream-inner")?.prepend(olderButton());
@@ -319,11 +350,66 @@ function syncChatCompose(agent = selectedAgent()): void {
   send.disabled = !allowed || state.operationBusy || !state.composeDraft.trim();
 }
 
+function confirmBar(): HTMLElement {
+  const bar = node("div", "agent-confirm");
+  bar.append(node("p", "agent-confirm-copy", "Agent 在终端里等你确认。"));
+  const go = button("去确认", "btn btn-small", () => leaveAgentChat());
+  go.type = "button";
+  bar.append(go);
+  return bar;
+}
+
+function chatDockNotice(): Notice | null {
+  const fromApp = visibleNotice();
+  if (fromApp) return fromApp;
+  if (!(state.agentTraceItems.length || state.agentTracePending) || !state.agentTraceNote) return null;
+  return { text: state.agentTraceNote, tone: state.agentTraceLoadState === "error" ? "error" : "status" };
+}
+
+function paintChatNotice(dock: HTMLElement): void {
+  const want = chatDockNotice();
+  const existing = dock.querySelector("[data-app-notice]");
+  if (!want) {
+    existing?.remove();
+    return;
+  }
+  if (
+    existing instanceof HTMLElement &&
+    existing.textContent === want.text &&
+    existing.classList.contains(`notice-${want.tone}`)
+  ) {
+    return;
+  }
+  existing?.remove();
+  const note = feedbackNode(want);
+  note.setAttribute("data-app-notice", "");
+  dock.append(note);
+}
+
+function syncChatDock(agent = selectedAgent()): void {
+  syncChatCompose(agent);
+  const dock = app.querySelector(".agent-dock");
+  if (!(dock instanceof HTMLElement)) return;
+  const blocked = agent?.status === "blocked";
+  const existing = dock.querySelector(".agent-confirm");
+  if (blocked && !existing) dock.prepend(confirmBar());
+  else if (!blocked && existing) existing.remove();
+  paintChatNotice(dock);
+}
+
 function patchChatChrome(chrome: HTMLElement, selected: ReturnType<typeof selectedAgent>): void {
-  const title = chrome.querySelector(".full-terminal-title");
-  if (title) title.textContent = selected ? selected.agent || "对话" : "对话";
-  const status = chrome.querySelector(".full-terminal-status");
-  if (status) status.textContent = selected ? statusLabel(selected.status) : "";
+  const name = chrome.querySelector(".chrome-name");
+  if (name) name.textContent = selected ? chromeName(selected) : "对话";
+  const meta = chrome.querySelector(".chrome-meta-text");
+  if (meta) meta.textContent = selected ? statusLabel(selected.status) : "";
+  const dot = chrome.querySelector(".agent-dot");
+  if (dot && selected) dot.className = `agent-dot agent-${selected.status}`;
+  const title = chrome.querySelector(".chrome-title");
+  if (title instanceof HTMLElement && selected) {
+    const line = statusLabel(selected.status);
+    title.title = [chromeName(selected), line].filter(Boolean).join(" · ");
+    title.setAttribute("aria-label", `${chromeName(selected)}${line ? `，${line}` : ""}，切换会话`);
+  }
   syncChromeStop(chrome, selected?.status === "working", () => {
     const session = state.live;
     const paneId = state.paneId;
@@ -339,20 +425,21 @@ export function patchAgentChat(opts?: { follow?: boolean; older?: boolean; top?:
   if (!root || !stream || !(chrome instanceof HTMLElement) || !state.agentChat) return false;
   const selected = selectedAgent();
   const working = selected?.status === "working";
-  const blocked = selected?.status === "blocked";
   const items = visibleItems();
-  const sig = streamSig(items, working, blocked);
+  const sig = streamSig(items, working);
   const follow = opts?.follow ?? (state.agentTraceFollow && atBottom(stream));
   const prevTop = opts?.top ?? stream.scrollTop;
   const prevHeight = opts?.height ?? stream.scrollHeight;
   patchChatChrome(chrome, selected);
-  syncChatCompose(selected);
+  syncChatDock(selected);
   syncOlderButton();
   if (!opts?.older && stream.dataset.sig === sig) {
     if (follow) {
       state.agentTraceFollow = true;
+      state.agentTraceUnread = false;
       stream.scrollTop = stream.scrollHeight;
     }
+    syncAgentJump();
     return true;
   }
   const next = paintItems(items, working, stream);
@@ -363,10 +450,13 @@ export function patchAgentChat(opts?: { follow?: boolean; older?: boolean; top?:
   if (opts?.older) painted.scrollTop = painted.scrollHeight - prevHeight + prevTop;
   else if (follow) {
     state.agentTraceFollow = true;
+    state.agentTraceUnread = false;
     painted.scrollTop = painted.scrollHeight;
   } else {
     painted.scrollTop = prevTop;
+    state.agentTraceUnread = true;
   }
+  syncAgentJump();
   return true;
 }
 
@@ -422,7 +512,9 @@ function chatCompose(selectedHasAgent: boolean): { dock: HTMLElement; input: HTM
     void submitAgentPrompt();
   });
   form.append(input, send);
+  if (selectedAgent()?.status === "blocked") dock.append(confirmBar());
   dock.append(form, hint);
+  paintChatNotice(dock);
   return { dock, input };
 }
 
@@ -440,7 +532,7 @@ async function submitAgentPrompt(): Promise<void> {
     field.value = "";
     sizeChatCompose(field);
   }
-  syncChatCompose(selected);
+  syncChatDock(selected);
   if (!patchAgentChat({ follow: true })) render();
   try {
     await session.promptAgent({ pane_id: selected.paneId, text });
@@ -460,7 +552,7 @@ async function submitAgentPrompt(): Promise<void> {
     if (!patchAgentChat({ follow: true })) render();
   } finally {
     state.operationBusy = false;
-    syncChatCompose();
+    syncChatDock();
     stickAgentStream();
     composeEl()?.focus();
   }
@@ -470,17 +562,27 @@ function chatChrome(
   onBack: () => void,
   includeBack: boolean,
   onMenu: () => void,
+  onSwitch: () => void,
   selected: ReturnType<typeof selectedAgent>,
 ): HTMLElement {
   const chrome = node("header", "chrome");
   if (includeBack) {
     chrome.append(backButton(onBack, "返回会话列表"));
   }
-  const title = node("div", "full-terminal-heading");
-  title.append(
-    node("strong", "full-terminal-title", selected ? selected.agent || "对话" : "对话"),
-    node("span", "full-terminal-status", selected ? statusLabel(selected.status) : ""),
-  );
+  const title = node("button", "chrome-title");
+  title.type = "button";
+  title.addEventListener("click", onSwitch);
+  if (selected) {
+    title.append(node("span", "chrome-name", chromeName(selected)));
+    const meta = node("span", "chrome-meta");
+    const line = statusLabel(selected.status);
+    meta.append(node("span", `agent-dot agent-${selected.status}`), node("span", "chrome-meta-text", line));
+    title.append(meta);
+    title.title = [chromeName(selected), line].filter(Boolean).join(" · ");
+    title.setAttribute("aria-label", `${chromeName(selected)}${line ? `，${line}` : ""}，切换会话`);
+  } else {
+    title.append(node("span", "chrome-name", "对话"));
+  }
   chrome.append(title, chromeActionCluster(onMenu));
   syncChromeStop(chrome, selected?.status === "working", () => {
     const session = state.live;
@@ -496,23 +598,30 @@ export function fillAgentChat(
   onBack: () => void,
   includeBack: boolean,
   onMenu: () => void,
+  onSwitch: () => void,
 ): HTMLTextAreaElement {
   const selected = selectedAgent();
   const working = selected?.status === "working";
   const items = visibleItems();
   const stream = paintItems(items, working, null);
   const { dock, input } = chatCompose(canSend(selected));
-  stream.dataset.sig = streamSig(items, working, selected?.status === "blocked");
+  stream.dataset.sig = streamSig(items, working);
   container.dataset.back = includeBack ? "1" : "0";
-  container.append(chatChrome(onBack, includeBack, onMenu, selected), stream, dock);
+  const wrap = node("div", "agent-stream-wrap");
+  const jump = node("button", "agent-jump", "↓ 新回复");
+  jump.type = "button";
+  jump.hidden = state.agentTraceFollow || !state.agentTraceUnread;
+  jump.addEventListener("click", jumpToLatest);
+  wrap.append(stream, jump);
+  container.append(chatChrome(onBack, includeBack, onMenu, onSwitch, selected), wrap, dock);
   sizeChatCompose(input);
   if (!state.agentTraceBusy && state.agentTraceLoadState === "cold") void refreshAgentTrace();
   if (state.agentTraceFollow) requestAnimationFrame(stickAgentStream);
   return input;
 }
 
-export function renderAgentChat(onBack: () => void, onMenu: () => void): void {
+export function renderAgentChat(onBack: () => void, onMenu: () => void, onSwitch: () => void): void {
   const root = node("div", "pane-root agent-chat-root");
-  fillAgentChat(root, onBack, true, onMenu);
+  fillAgentChat(root, onBack, true, onMenu, onSwitch);
   app.replaceChildren(root);
 }

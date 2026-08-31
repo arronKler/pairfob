@@ -17,16 +17,16 @@ const zh = computed(() => lang.value.startsWith("zh"));
 const copy = computed(() =>
   zh.value
     ? {
-        aria: "会话从另一台设备经交换机到你的电脑",
+        aria: "会话从另一台设备经 pairfob.com 到你的电脑",
         nodes: [
           {
             k: "设备",
             title: "另一台设备上的 Pairfob",
             detail: "手机、平板或另一台电脑。密钥在这一端。",
-            hop: "密文 · HTTPS / WSS",
+            hop: "密文",
           },
           {
-            k: "交换机",
+            k: "中转",
             title: "pairfob.com",
             detail: "只转发密文。不看内容，不跑 agent。",
             hop: "密文",
@@ -34,23 +34,23 @@ const copy = computed(() =>
           },
           {
             k: "电脑",
-            title: "你电脑上的 pairfobd",
-            detail: "本机回环接到 Herdr，再接到那些 CLI。",
-            chain: ["pairfobd", "Herdr", "CLI"],
+            title: "你电脑上的 pairfob",
+            detail: "接到 Herdr，再接到那些 CLI。",
+            chain: ["pairfob", "Herdr", "CLI"],
           },
         ],
       }
     : {
-        aria: "A session travels from another device through the switchboard to your computer",
+        aria: "A session travels from another device through pairfob.com to your computer",
         nodes: [
           {
             k: "Device",
             title: "Pairfob on another device",
             detail: "Phone, tablet, or another computer. Keys stay here.",
-            hop: "ciphertext · HTTPS / WSS",
+            hop: "ciphertext",
           },
           {
-            k: "Switchboard",
+            k: "Relay",
             title: "pairfob.com",
             detail: "Forwards ciphertext. Does not read content or run agents.",
             hop: "ciphertext",
@@ -58,9 +58,9 @@ const copy = computed(() =>
           },
           {
             k: "Computer",
-            title: "pairfobd on your computer",
-            detail: "Loopback to Herdr, then to those CLIs.",
-            chain: ["pairfobd", "Herdr", "CLI"],
+            title: "pairfob on your computer",
+            detail: "Talks to Herdr, then to those CLIs.",
+            chain: ["pairfob", "Herdr", "CLI"],
           },
         ],
       },

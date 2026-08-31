@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var ErrNotRunning = errors.New("pairfobd is not running")
+var ErrNotRunning = errors.New("pairfob is not running")
 
 func Call(sock string, req Request) (Response, error) {
 	path, err := validatePath(sock)

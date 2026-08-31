@@ -419,7 +419,7 @@ func TestEnrollCommandWithoutGrantHitsOrigin(t *testing.T) {
 
 func TestVersionLineIncludesDevBuild(t *testing.T) {
 	line := versionLine()
-	if !strings.Contains(line, "pairfobd") || !strings.Contains(line, version) {
+	if !strings.Contains(line, "pairfob") || !strings.Contains(line, version) {
 		t.Fatalf("%q", line)
 	}
 }
@@ -433,7 +433,7 @@ func TestEnrollV2OriginRejectsAreHumanNextSteps(t *testing.T) {
 	}{
 		{code: "bad_grant", status: 400, want: "Re-run the installer"},
 		{code: "grant_exhausted", status: 409, want: "Re-run the installer"},
-		{code: "unexpected_wire", status: 400, want: "pairfobd doctor"},
+		{code: "unexpected_wire", status: 400, want: "pairfob doctor"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.code, func(t *testing.T) {
@@ -475,7 +475,7 @@ func TestEnrollV2UnreachableOriginIsHuman(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = enrollV2(store, server.URL, "jg_"+strings.Repeat("cd", 16))
-	if err == nil || !strings.Contains(err.Error(), "pairfobd doctor") {
+	if err == nil || !strings.Contains(err.Error(), "pairfob doctor") {
 		t.Fatalf("got %v", err)
 	}
 	assertOperatorText(t, err.Error())
@@ -496,7 +496,7 @@ func TestEnrollCommandRefusesWhenAlreadySetUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = enrollCommand([]string{"--grant", grant, "--origin", "https://pairfob.com"}, filepath.Join(dir, "not-running.sock"))
-	if err == nil || !strings.Contains(err.Error(), "already set up") || !strings.Contains(err.Error(), "pairfobd pair") {
+	if err == nil || !strings.Contains(err.Error(), "already set up") || !strings.Contains(err.Error(), "pairfob pair") {
 		t.Fatalf("got %v", err)
 	}
 	assertOperatorText(t, err.Error())

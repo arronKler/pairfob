@@ -32,7 +32,7 @@ const REQUIRED_PUBLIC_CODES = [
   "grant_exhausted",
 ];
 
-const NEXT_STEP = /刷新|请|打开|输入|pairfobd|重新|稍后再试|回列表|看电脑|确认|换一/;
+const NEXT_STEP = /刷新|请|打开|输入|pairfob|重新|稍后再试|回列表|看电脑|确认|换一/;
 
 const LEAK = /device_psk|reconnect_token|join_grant|pair_loc|\bjg_[0-9a-f]|Error\.Error|\bat Object\.|goroutine \d+|pairfob-v1\/sas/i;
 

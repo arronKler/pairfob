@@ -12,7 +12,7 @@ site/doc/.vitepress/cache
 # compiled binaries left in the tree
 *.exe
 *.test
-/pairfobd
+/pairfob
 /pairfob-relay
 
 # local origin, LAN pairing, agent scratch

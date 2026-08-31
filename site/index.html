@@ -46,12 +46,12 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
     />
-    <link rel="stylesheet" href="/css/base.css?v=62" />
-    <link rel="stylesheet" href="/css/device.css?v=62" />
-    <link rel="stylesheet" href="/css/hero.css?v=62" />
-    <link rel="stylesheet" href="/css/capabilities.css?v=62" />
-    <link rel="stylesheet" href="/css/start.css?v=62" />
-    <link rel="stylesheet" href="/css/faq.css?v=62" />
+    <link rel="stylesheet" href="/css/base.css?v=63" />
+    <link rel="stylesheet" href="/css/device.css?v=63" />
+    <link rel="stylesheet" href="/css/hero.css?v=63" />
+    <link rel="stylesheet" href="/css/capabilities.css?v=63" />
+    <link rel="stylesheet" href="/css/start.css?v=63" />
+    <link rel="stylesheet" href="/css/faq.css?v=63" />
     <script src="/lang.js?v=49"></script>
   </head>
   <body>
@@ -233,16 +233,18 @@
         <header class="band-head">
           <p class="eyebrow"><b>01</b><span data-i18n="start.eyebrow">How</span></p>
           <h2 data-i18n="start.h2">Three steps and you are in.</h2>
-          <p class="band-lede" data-i18n="start.lede">Install a resident pairfobd on the computer, scan once to pair. After that, Pairfob on the phone is the herd on that computer.</p>
+          <p class="band-lede" data-i18n="start.lede">Install a resident pairfob on the computer, scan once to pair. After that, Pairfob on the phone is the herd on that computer.</p>
         </header>
 
         <p class="prereq">
           <b data-i18n="start.prereq.b">Prerequisite</b><span data-i18n="start.prereq1">Pairfob does not ship an agent. It is the phone surface for</span>
           <a href="https://herdr.dev" target="_blank" rel="noreferrer">Herdr</a
-          ><span data-i18n="start.prereq2">. Install Herdr 0.7 or newer; pairfobd quietly starts it on launch. After installation,</span>
-          <code>pairfobd doctor</code>
+          ><span data-i18n="start.prereq2">. Install Herdr 0.7 or newer; pairfob quietly starts it on launch. After installation,</span>
+          <code>pairfob doctor</code>
           <span data-i18n="start.prereq3">tells you what is still missing.</span>
         </p>
+
+        <p class="step-host-note cta-phone" data-i18n="start.hostnote">The next two steps run in a terminal on the computer.</p>
 
         <ol class="steps">
           <li>
@@ -258,18 +260,25 @@
             <span class="step-n">2</span>
             <div class="step-body">
               <h3 data-i18n="start.s2">Start pairing on the computer</h3>
-              <pre><code>pairfobd pair</code></pre>
+              <pre><code>pairfob pair</code></pre>
             </div>
-            <button type="button" class="copy" data-copy="pairfobd pair" data-i18n="start.copy">Copy</button>
+            <button type="button" class="copy" data-copy="pairfob pair" data-i18n="start.copy">Copy</button>
           </li>
           <li>
             <span class="step-n">3</span>
             <div class="step-body">
-              <h3 data-i18n="start.s3">On the phone, open this URL and scan</h3>
-              <pre><code>https://pairfob.com/pair</code></pre>
-              <p class="step-note" data-i18n="start.s3note">Leave this computer on the QR. Open the URL on the other device.</p>
+              <h3 class="cta-desk" data-i18n="start.s3">On the phone, open this URL and scan</h3>
+              <h3 class="cta-phone" data-i18n="start.s3.phone">On this phone, open Pairfob and scan</h3>
+              <div class="step-url cta-desk">
+                <pre><code>https://pairfob.com/pair</code></pre>
+                <p class="step-note" data-i18n="start.s3note">Leave this computer on the QR. Open the URL on the other device.</p>
+              </div>
+              <div class="step-open cta-phone">
+                <a class="btn btn-primary" href="/pair" data-i18n="cta.open">Open Pairfob</a>
+                <p class="step-note" data-i18n="start.s3note.phone">Leave the QR on the computer. Tap to scan, or type the pairing code.</p>
+              </div>
             </div>
-            <button type="button" class="copy" data-copy="https://pairfob.com/pair" data-i18n="start.copy">Copy</button>
+            <button type="button" class="copy cta-desk" data-copy="https://pairfob.com/pair" data-i18n="start.copy">Copy</button>
           </li>
         </ol>
       </section>
@@ -420,6 +429,9 @@
           <p class="eyebrow"><b>04</b><span data-i18n="pair.eyebrow">Pair</span></p>
           <h2 data-i18n="pair.h2" data-i18n-html>Pair once.<br />It stays.</h2>
           <p class="band-lede" data-i18n="pair.lede">The computer shows a QR code; scan on the phone to start. Type the code if you cannot scan. Press Enter once when the computer asks.</p>
+          <p class="pair-open cta-phone">
+            <a class="btn btn-primary" href="/pair" data-i18n="cta.open">Open Pairfob</a>
+          </p>
         </header>
 
         <div class="pair-stage">
@@ -444,7 +456,7 @@
             </li>
             <li>
               <strong data-i18n="path.d3.t">Your computer</strong>
-              <span data-i18n="path.d3">pairfobd dials out. No inbound ports on the machine</span>
+              <span data-i18n="path.d3">pairfob dials out. No inbound ports on the machine</span>
             </li>
           </ol>
         </div>
@@ -466,12 +478,12 @@
             <dd data-i18n="faq.a2">A locked screen is fine. A closed lid only works if the machine does not sleep. Pairfob cannot wake a sleeping computer.</dd>
           </div>
           <div>
-            <dt data-i18n="faq.q3">Can I install pairfobd on Windows?</dt>
+            <dt data-i18n="faq.q3">Can I install pairfob on Windows?</dt>
             <dd data-i18n="faq.a3">Not yet. A Windows machine can open the page as another screen. The host still has to be macOS or Linux.</dd>
           </div>
           <div>
             <dt data-i18n="faq.q4">Do I need Tailscale or an inbound port?</dt>
-            <dd data-i18n="faq.a4">No. pairfobd only dials out.</dd>
+            <dd data-i18n="faq.a4">No. pairfob only dials out.</dd>
           </div>
           <div>
             <dt data-i18n="faq.q5">Can one device manage several computers?</dt>
@@ -492,7 +504,8 @@
       <nav class="foot-nav" data-i18n-aria="foot.aria" aria-label="Footer">
         <a href="#faq" data-i18n="nav.faq">FAQ</a>
         <a href="/doc/" data-locale-href="doc" data-i18n="nav.doc">Docs</a>
-        <a href="/pair" data-i18n="cta.foot">On the phone, open Pairfob</a>
+        <a class="cta-desk" href="/pair" data-i18n="cta.foot">On the phone, open Pairfob</a>
+        <a class="cta-phone" href="/pair" data-i18n="cta.open">Open Pairfob</a>
         <a href="https://herdr.dev" target="_blank" rel="noreferrer">Herdr</a>
       </nav>
     </footer>
@@ -512,7 +525,7 @@
       }
     </script>
 
-    <script src="/home-i18n.js?v=62"></script>
+    <script src="/home-i18n.js?v=63"></script>
     <script src="/site.js?v=49"></script>
   </body>
 </html>

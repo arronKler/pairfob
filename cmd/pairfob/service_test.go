@@ -6,16 +6,16 @@ import (
 )
 
 func TestLaunchdPlistOmitsGrantAndKeepsAlive(t *testing.T) {
-	body := launchdPlist("/opt/pairfob/pairfobd", "/home/u/.config/pairfob/pairfobd.log", "/home/u")
+	body := launchdPlist("/opt/pairfob/pairfob", "/home/u/.config/pairfob/pairfob.log", "/home/u")
 	for _, want := range []string{
 		launchdLabel,
-		"/opt/pairfob/pairfobd",
+		"/opt/pairfob/pairfob",
 		"<key>KeepAlive</key>",
 		"<key>RunAtLoad</key>",
 		"<key>HOME</key>",
 		"<key>PATH</key>",
 		"/home/u/.local/bin:",
-		"/home/u/.config/pairfob/pairfobd.log",
+		"/home/u/.config/pairfob/pairfob.log",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing %q in %s", want, body)
@@ -29,8 +29,8 @@ func TestLaunchdPlistOmitsGrantAndKeepsAlive(t *testing.T) {
 }
 
 func TestSystemdUnitQuotesSpacesAndOmitsGrant(t *testing.T) {
-	body := systemdUnitFile("/opt/Pair Fob/pairfobd", "/home/u/.config/pairfob/pairfobd.log", "/home/u")
-	if !strings.Contains(body, `ExecStart="/opt/Pair Fob/pairfobd"`) {
+	body := systemdUnitFile("/opt/Pair Fob/pairfob", "/home/u/.config/pairfob/pairfob.log", "/home/u")
+	if !strings.Contains(body, `ExecStart="/opt/Pair Fob/pairfob"`) {
 		t.Fatalf("ExecStart not quoted: %s", body)
 	}
 	if strings.Contains(body, "JOIN_GRANT") {
@@ -49,7 +49,7 @@ func TestLaunchdPlistEscapesXML(t *testing.T) {
 }
 
 func TestServiceCommandsDarwinInstallBootstrapsUserAgent(t *testing.T) {
-	cmds := serviceCommands(serviceLayout{GOOS: "darwin", UID: 501, UnitPath: "/Users/x/Library/LaunchAgents/com.pairfob.pairfobd.plist"}, "install")
+	cmds := serviceCommands(serviceLayout{GOOS: "darwin", UID: 501, UnitPath: "/Users/x/Library/LaunchAgents/com.pairfob.pairfob.plist"}, "install")
 	joined := fmtCmds(cmds)
 	if !strings.Contains(joined, "launchctl bootstrap gui/501") || !strings.Contains(joined, "kickstart -k gui/501/"+launchdLabel) {
 		t.Fatalf("cmds=%s", joined)
@@ -59,7 +59,7 @@ func TestServiceCommandsDarwinInstallBootstrapsUserAgent(t *testing.T) {
 func TestServiceCommandsLinuxEnableNow(t *testing.T) {
 	cmds := serviceCommands(serviceLayout{GOOS: "linux"}, "install")
 	joined := fmtCmds(cmds)
-	if !strings.Contains(joined, "systemctl --user enable --now pairfobd.service") {
+	if !strings.Contains(joined, "systemctl --user enable --now pairfob.service") {
 		t.Fatalf("cmds=%s", joined)
 	}
 }
@@ -67,7 +67,7 @@ func TestServiceCommandsLinuxEnableNow(t *testing.T) {
 func TestServiceCommandsLinuxRestart(t *testing.T) {
 	cmds := serviceCommands(serviceLayout{GOOS: "linux"}, "restart")
 	joined := fmtCmds(cmds)
-	if !strings.Contains(joined, "systemctl --user restart pairfobd.service") {
+	if !strings.Contains(joined, "systemctl --user restart pairfob.service") {
 		t.Fatalf("cmds=%s", joined)
 	}
 }

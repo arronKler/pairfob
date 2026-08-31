@@ -87,6 +87,17 @@ describe("user-facing documentation", () => {
     expect(docs).not.toContain("/self-host");
   });
 
+  test("design section stays a product overview", () => {
+    expect(docs).not.toContain("能力从哪来");
+    expect(docs).not.toContain("怎么接起来");
+    expect(docs).not.toContain("Where capabilities come from");
+    expect(docs).not.toContain("How it is wired");
+    expect(docs).not.toContain("GetConfig");
+    expect(docs).not.toContain("SPAKE");
+    expect(docs).not.toContain("pairfob.v1");
+    expect(docs).not.toContain("pairfob.v2");
+  });
+
   test("documents notification transitions and deep-link behavior", () => {
     expect(push).toContain("Agent **等你处理**或从工作中变成**完成**时");
     expect(push).toContain("完成通知只认 `working → done`");

@@ -77,7 +77,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
     node(
       "p",
       "set-note",
-      "另一台电脑先装 pairfobd（和第一台同一条安装命令），再执行 pairfobd pair。这里扫码只是多一条凭证，不会替换现在这台。",
+      "另一台电脑先装 pairfob（和第一台同一条安装命令），再执行 pairfob pair。这里扫码只是多一条凭证，不会替换现在这台。",
     ),
   );
   addRow.append(button("添加另一台电脑", "btn btn-small", beginAddComputer));
@@ -141,7 +141,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
     const details = node("details", "tech-note");
     details.append(node("summary", "", "电脑端设置方法"));
     details.append(
-      node("p", "", "启动 pairfobd 时加入 "),
+      node("p", "", "启动 pairfob 时加入 "),
       node("code", "", "PAIRFOB_PUSH=1"),
       document.createTextNode("，并设置 PAIRFOB_VAPID_SUBJECT，然后重新打开本页。"),
     );
@@ -162,7 +162,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
     management.append(node("summary", "", "管理其他设备"));
     management.append(
       node("p", "", "为防止失窃手机解除其他设备的配对，手机端只能解除自己的配对。请在电脑端运行 "),
-      node("code", "", "pairfobd device revoke <device_id>"),
+      node("code", "", "pairfob device revoke <device_id>"),
       document.createTextNode("。"),
     );
     container.append(management);

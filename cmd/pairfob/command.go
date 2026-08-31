@@ -11,15 +11,15 @@ import (
 
 const commandUsage = `Pairfob — this computer, on another device.
 
-  pairfobd pair              Pair a phone, tablet, or another computer
-  pairfobd list              What's paired
-  pairfobd forget N          Unpair
-  pairfobd update            Install the latest version
-  pairfobd doctor            Check this computer
-  pairfobd version
+  pairfob pair              Pair a phone, tablet, or another computer
+  pairfob list              What's paired
+  pairfob forget N          Unpair
+  pairfob update            Install the latest version
+  pairfob doctor            Check this computer
+  pairfob version
 
 After install, Pairfob runs in the background.
-Type pairfobd by itself to see how it's doing.`
+Type pairfob by itself to see how it's doing.`
 
 func runCommand(args []string, sock string) error {
 	if len(args) == 0 {
@@ -39,7 +39,7 @@ func runCommand(args []string, sock string) error {
 		return printPhones(sock)
 	case "forget", "unpair":
 		if len(args) != 2 {
-			return errors.New("usage: pairfobd forget N")
+			return errors.New("usage: pairfob forget N")
 		}
 		return forgetPhone(sock, args[1])
 	case "phones", "phone":
@@ -74,7 +74,7 @@ func printResult(sock string, req admin.Request) error {
 
 func notRunning(err error) error {
 	if errors.Is(err, admin.ErrNotRunning) {
-		return errors.New("Pairfob isn't running. It starts at login after install, or run pairfobd in a terminal.")
+		return errors.New("Pairfob isn't running. It starts at login after install, or run pairfob in a terminal.")
 	}
 	return err
 }

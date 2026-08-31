@@ -8,7 +8,7 @@ Identity: **`CF-Connecting-IP` only**. Do not enable â€œtrust `X-Forwarded-For`â
 
 - Enable **Bot Fight Mode** (or Super Bot Fight on the zone).
 - Challenge anonymous automated clients on `/v2/pair-intent` and `/v2/enroll`.
-- Skip Bot Fight for `pairfobd` enroll/rekey if those requests are IP-allowlisted; they send **no browser Origin**. A global JS challenge on `/v2/enroll` will break daemons.
+- Skip Bot Fight for `pairfob` enroll/rekey if those requests are IP-allowlisted; they send **no browser Origin**. A global JS challenge on `/v2/enroll` will break daemons.
 
 ## Rate Limit rules (zone)
 

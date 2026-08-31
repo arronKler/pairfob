@@ -24,17 +24,17 @@ func pairCommand(args []string, sock string) error {
 	switch args[0] {
 	case "new":
 		if len(args) != 1 {
-			return errors.New("usage: pairfobd pair new")
+			return errors.New("usage: pairfob pair new")
 		}
 		return pairNewCommand(sock)
 	case "status":
 		if len(args) != 1 {
-			return errors.New("usage: pairfobd pair status")
+			return errors.New("usage: pairfob pair status")
 		}
 		return printResult(sock, admin.Request{Op: "pair.status"})
 	case "accept", "deny":
 		if len(args) > 2 {
-			return errors.New("usage: pairfobd pair accept|deny [pair_ref]")
+			return errors.New("usage: pairfob pair accept|deny [pair_ref]")
 		}
 		req := admin.Request{Op: "pair." + args[0]}
 		if len(args) == 2 {
@@ -42,7 +42,7 @@ func pairCommand(args []string, sock string) error {
 		}
 		return printResult(sock, req)
 	default:
-		return errors.New("usage: pairfobd pair")
+		return errors.New("usage: pairfob pair")
 	}
 }
 
@@ -53,7 +53,7 @@ func newPairingOffer(sock string) (admin.Pairing, error) {
 	}
 	var offer admin.Pairing
 	if json.Unmarshal(resp.Result, &offer) != nil || offer.Code == "" || offer.Ref == "" || offer.URL == "" || offer.ExpiresAt.IsZero() {
-		return admin.Pairing{}, errors.New("pairfobd returned an invalid pairing offer")
+		return admin.Pairing{}, errors.New("pairfob returned an invalid pairing offer")
 	}
 	return offer, nil
 }
@@ -117,7 +117,7 @@ func runInteractivePairing(ctx context.Context, sock string, in io.Reader, out i
 
 func relayCredentialCommand(args []string, sock string) error {
 	if len(args) != 1 || args[0] != "rekey" {
-		return errors.New("usage: pairfobd relay rekey")
+		return errors.New("usage: pairfob relay rekey")
 	}
 	if resp, err := admin.Call(sock, admin.Request{Op: "relay.rekey"}); err == nil {
 		_, writeErr := os.Stdout.Write(append(append([]byte(nil), resp.Result...), '\n'))

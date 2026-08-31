@@ -88,6 +88,7 @@ function bootAgentChat(): void {
   state.agentTraceSig = "seed";
   state.agentTracePending = "";
   state.agentTraceFollow = true;
+  state.agentTraceUnread = false;
   setPaneTermMode("p1", "agent");
   setRenderer(() => renderPane());
   renderPane();
@@ -113,6 +114,9 @@ afterEach(() => {
   state.agentTracePending = "";
   state.agentTraceNext = null;
   state.agentTraceFollow = true;
+  state.agentTraceBusy = false;
+  state.agentTraceNote = "";
+  state.notice = null;
   state.live = null;
   clearAgentTraceCache();
   app.replaceChildren();
@@ -130,6 +134,13 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".agent-user-role")?.textContent).toBe("你");
     expect(app.querySelector(".agent-process-summary")?.textContent).toContain("正在执行");
     expect(app.querySelector(".agent-stream-inner")).toBeTruthy();
+    const title = app.querySelector(".agent-chat-root .chrome-title");
+    expect(title).toBeTruthy();
+    expect(title?.getAttribute("aria-label") || "").toContain("切换会话");
+    if (!(title instanceof HTMLButtonElement)) throw new Error("title is not a button");
+    title.click();
+    expect(document.querySelector("dialog.sheet .modal-title")?.textContent).toBe("切换会话");
+    document.querySelector("dialog.sheet")?.remove();
   });
 
   test("a cold working conversation shows loading instead of the empty call to action", async () => {
@@ -144,13 +155,14 @@ describe("agent-chat remembers its mode per pane", () => {
     } as typeof state.live;
 
     renderPane();
-    expect(app.textContent).toContain("Agent 正在执行，正在同步过程");
+    expect(app.querySelector(".agent-empty-working .agent-empty-title")?.textContent).toBe("正在执行");
+    expect(app.querySelector(".agent-empty .spinner")).toBeTruthy();
     expect(app.textContent).not.toContain("还没有对话");
 
     finish?.({ items: [], nextCursor: null, truncated: false });
     await Promise.resolve();
     await Promise.resolve();
-    expect(app.textContent).toContain("Agent 正在执行");
+    expect(app.querySelector(".agent-empty-working")).toBeTruthy();
     expect(app.textContent).not.toContain("还没有对话");
   });
 
@@ -167,14 +179,17 @@ describe("agent-chat remembers its mode per pane", () => {
     } as typeof state.live;
 
     renderPane();
-    expect(app.textContent).toContain("正在读取 Agent 执行过程");
+    expect(app.querySelector(".agent-empty-loading")).toBeTruthy();
+    expect(app.querySelector(".agent-empty-title")?.textContent).toBe("正在读取执行过程");
+    expect(app.querySelector(".agent-empty .spinner")).toBeTruthy();
     expect(app.textContent).not.toContain("还没有对话");
     expect(app.querySelector(".agent-stream")?.getAttribute("aria-busy")).toBe("true");
 
     finish?.({ items: [], nextCursor: null, truncated: false });
     await Promise.resolve();
     await Promise.resolve();
-    expect(app.textContent).toContain("还没有对话");
+    expect(app.querySelector(".agent-empty-empty .agent-empty-title")?.textContent).toBe("还没有对话");
+    expect(app.querySelector(".agent-empty-sub")?.textContent).toContain("在下面");
     expect(app.querySelector(".agent-stream")?.getAttribute("aria-busy")).toBe("false");
   });
 
@@ -372,20 +387,71 @@ describe("agent-chat remembers its mode per pane", () => {
       agentTrace: async () => { throw new ProtocolError("too_large", "response exceeds protocol limit"); },
     } as typeof state.live;
     await refreshAgentTrace();
-    expect(app.textContent).toContain("没能完整读取");
+    const notice = app.querySelector(".agent-dock [data-app-notice]");
+    expect(notice?.textContent).toContain("没能完整读取");
+    expect(app.querySelector(".agent-stream [data-app-notice]")).toBeNull();
     expect(app.textContent).not.toContain("没有发送");
     expect(app.textContent).toContain("looks fine");
+    expect(patchAgentChat({ follow: true })).toBe(true);
+    expect(app.querySelector(".agent-dock [data-app-notice]")).toBe(notice);
   });
 
   test("blocked agents get a way back to the guided confirm UI", () => {
     bootAgentChat();
     state.agents[0].status = "blocked";
     renderPane();
-    expect(app.querySelector(".agent-blocked")?.textContent).toContain("等你确认");
-    const go = app.querySelector(".agent-blocked button");
+    expect(app.querySelector(".agent-stream .agent-confirm")).toBeNull();
+    expect(app.querySelector(".agent-confirm")?.textContent).toContain("等你确认");
+    const go = app.querySelector(".agent-confirm button");
     if (!(go instanceof HTMLButtonElement)) throw new Error("missing 去确认");
     go.click();
     expect(state.agentChat).toBe(false);
     expect(paneTermMode("p1")).toBe("guided");
+  });
+
+  test("a failed empty read offers retry in the centered empty state", async () => {
+    bootAgentChat();
+    state.agents[0].status = "idle";
+    state.agentTraceItems = [];
+    state.agentTraceLoadState = "cold";
+    state.agentTraceSig = "";
+    state.live = {
+      ...live(),
+      agentTrace: async () => { throw new ProtocolError("internal", "boom"); },
+    } as typeof state.live;
+    state.agentTraceBusy = false;
+    await refreshAgentTrace();
+    expect(app.querySelector(".agent-empty-error")).toBeTruthy();
+    expect(app.querySelector(".agent-empty-error button")?.textContent).toBe("重试");
+    expect(app.querySelector(".agent-dock [data-app-notice]")).toBeNull();
+  });
+
+  test("会话操作 omits terminal display actions in 对话", () => {
+    bootAgentChat();
+    click('button[aria-label="会话操作"]');
+    const sheet = document.querySelector("dialog.sheet");
+    expect(sheet?.textContent).toContain("模式");
+    expect(sheet?.textContent).not.toContain("文字加大");
+    expect(sheet?.textContent).not.toContain("复制画面文本");
+    expect(sheet?.textContent).not.toContain("更早的输出");
+    expect(sheet?.textContent).not.toContain("选择文本");
+    expect(sheet?.textContent).not.toContain("长行自动折行");
+    sheet?.remove();
+  });
+
+  test("new turns while scrolled up offer ↓ 新回复", () => {
+    bootAgentChat();
+    state.agentTraceFollow = false;
+    state.agentTraceUnread = false;
+    state.agentTraceItems = [...state.agentTraceItems, { type: "assistant", text: "later reply" }];
+    expect(patchAgentChat({ follow: false })).toBe(true);
+    const jump = app.querySelector(".agent-jump");
+    if (!(jump instanceof HTMLButtonElement)) throw new Error("missing 新回复");
+    expect(jump.hidden).toBe(false);
+    expect(jump.textContent).toContain("新回复");
+    jump.click();
+    expect(state.agentTraceFollow).toBe(true);
+    expect(state.agentTraceUnread).toBe(false);
+    expect(jump.hidden).toBe(true);
   });
 });

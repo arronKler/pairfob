@@ -18,7 +18,7 @@ func versionCommand() error {
 
 func versionLine() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "pairfobd %s %s/%s", version, runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(&b, "pairfob %s %s/%s", version, runtime.GOOS, runtime.GOARCH)
 	if commit != "" {
 		fmt.Fprintf(&b, " (%s)", commit)
 	}
@@ -27,5 +27,5 @@ func versionLine() string {
 }
 
 func artifactName(goos, goarch string) string {
-	return "pairfobd-" + goos + "-" + goarch
+	return "pairfob-" + goos + "-" + goarch
 }

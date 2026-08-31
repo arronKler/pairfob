@@ -5,8 +5,8 @@
 ```
 phone PWA --HTTPS/WSS pairfob.v2--> pairfob.com (Worker+R2)
                                       Worker /v2/ws → DaemonRoom DO
-pairfobd --outbound WSS--> 该 DO --opaque FWD-- 同一 DO 上的 phone
-pairfobd --loopback--> HarnessRuntime
+pairfob --outbound WSS--> 该 DO --opaque FWD-- 同一 DO 上的 phone
+pairfob --loopback--> HarnessRuntime
 ```
 
 Relay / DO 只做帧级 relay，不解析 `FWD`。身份与密钥只在 daemon。读和写都要求 `Established` 会话。产品 relay 只有 `workers/pairfob-origin`（`pairfob.v2`）。`internal/mux` Hub 仅作 daemon 进程内测试替身，不是可部署 origin。
@@ -47,7 +47,7 @@ Relay / DO 只做帧级 relay，不解析 `FWD`。身份与密钥只在 daemon�
 
 | 路径 | 职责 |
 | --- | --- |
-| `cmd/pairfobd` | 出站连 origin、配对 CLI、本机 Herdr |
+| `cmd/pairfob` | 出站连 origin、配对 CLI、本机 Herdr |
 | `workers/pairfob-origin` | 唯一 relay：Worker + R2 + DaemonRoom DO（线上与 `wrangler dev`） |
 | `cmd/genvectors` | 从 Go 密码学实现生成 `proto/pairfob-vectors.json` |
 | `internal/mux` | 帧级路由；不碰 FWD 明文 |
@@ -58,8 +58,8 @@ Relay / DO 只做帧级 relay，不解析 `FWD`。身份与密钥只在 daemon�
 | `pwa/src/lib` | UI 纯函数与 DOM 辅助；`main.ts` 只编排 |
 | `proto/` | 冻结的信封、RPC schema、向量、PGP words |
 | `scripts/verify.sh` | 格式、vet、Go 测试（含 race）、PWA 测试、Worker origin 测试、typecheck、生产构建 |
-| `scripts/install.sh` | 官网一键安装 pairfobd（checksum、enroll、用户级服务） |
-| `scripts/release.sh` | 交叉编译 `dist/dl/pairfobd-{os}-{arch}` + SHA256SUMS |
+| `scripts/install.sh` | 官网一键安装 pairfob（checksum、enroll、用户级服务） |
+| `scripts/release.sh` | 交叉编译 `dist/dl/pairfob-{os}-{arch}` + SHA256SUMS |
 
 新代码放到已有模块。只有现有包无法表达一个独立职责时才新增 `internal/<name>`。
 

@@ -12,7 +12,7 @@ import (
 
 func TestChecksumForAcceptsStarPrefix(t *testing.T) {
 	sum := sha256Hex([]byte("bin"))
-	got, err := checksumFor(sum+" *pairfobd-darwin-arm64\n", "pairfobd-darwin-arm64")
+	got, err := checksumFor(sum+" *pairfob-darwin-arm64\n", "pairfob-darwin-arm64")
 	if err != nil || got != sum {
 		t.Fatalf("got %q err=%v", got, err)
 	}
@@ -33,7 +33,7 @@ func TestAllowedDownloadBaseRejectsCleartextInternet(t *testing.T) {
 func TestUpdateExecutableReplacesAndVerifies(t *testing.T) {
 	dir := t.TempDir()
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
-	dest := filepath.Join(dir, "pairfobd")
+	dest := filepath.Join(dir, "pairfob")
 	if err := os.WriteFile(dest, []byte("old-binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestUpdateExecutableRejectsHashMismatch(t *testing.T) {
 	mux.HandleFunc("/"+name, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("payload")) })
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
-	err := updateExecutable(filepath.Join(t.TempDir(), "pairfobd"), server.URL)
+	err := updateExecutable(filepath.Join(t.TempDir(), "pairfob"), server.URL)
 	if err == nil || !strings.Contains(err.Error(), "SHA-256") {
 		t.Fatalf("got %v", err)
 	}

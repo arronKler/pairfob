@@ -1,6 +1,6 @@
 ---
 name: pairfob-dev-lan
-description: Start Pairfob's local Worker origin plus pairfobd for browser/phone pairing. Use when the user wants 局域网测试, 本地配对, HTTPS 调试, 摄像头扫码, 装证书, wrangler dev pairing, or to open the PWA on a phone against this checkout. Prefer scripts/dev-up.sh over hand-built wrangler/TLS commands.
+description: Start Pairfob's local Worker origin plus pairfob for browser/phone pairing. Use when the user wants 局域网测试, 本地配对, HTTPS 调试, 摄像头扫码, 装证书, wrangler dev pairing, or to open the PWA on a phone against this checkout. Prefer scripts/dev-up.sh over hand-built wrangler/TLS commands.
 ---
 
 # Local origin (loopback or LAN)
@@ -17,11 +17,11 @@ Same Worker as production, via `wrangler.local.jsonc`. Drivers are `scripts/dev-
 Default bind is `127.0.0.1:18786` (HTTP). Script prints:
 
 - PWA: `http://127.0.0.1:18786/pair`
-- pair: `PAIRFOB_STATE_DIR=.dev/state .dev/pairfobd pair`
+- pair: `PAIRFOB_STATE_DIR=.dev/state .dev/pairfob pair`
 
-Scan or type the code, then Enter on the computer when asked. `dev-up` enrolls this `pairfobd` against the local origin with no install code.
+Scan or type the code, then Enter on the computer when asked. `dev-up` enrolls this `pairfob` against the local origin with no install code.
 
-Without a TTY: `PAIRFOB_STATE_DIR=.dev/state .dev/pairfobd pair new`, then `pair status` for `pair_url` / `code` / `pair_ref`. Open that URL with `browse open '<pair_url>' --local`. Poll `pair status` until `"ready":true`, then `pair accept`. Do not attach Chrome DevTools MCP to the user's daily Chrome profile (stale `DevToolsActivePort`). `forget` a test device when done.
+Without a TTY: `PAIRFOB_STATE_DIR=.dev/state .dev/pairfob pair new`, then `pair status` for `pair_url` / `code` / `pair_ref`. Open that URL with `browse open '<pair_url>' --local`. Poll `pair status` until `"ready":true`, then `pair accept`. Do not attach Chrome DevTools MCP to the user's daily Chrome profile (stale `DevToolsActivePort`). `forget` a test device when done.
 
 ## LAN + camera (phone)
 

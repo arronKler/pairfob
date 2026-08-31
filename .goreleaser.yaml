@@ -3,9 +3,9 @@
 version: 2
 project_name: pairfob
 builds:
-  - id: pairfobd
-    main: ./cmd/pairfobd
-    binary: pairfobd
+  - id: pairfob
+    main: ./cmd/pairfob
+    binary: pairfob
     env:
       - CGO_ENABLED=0
     goos:
@@ -20,10 +20,10 @@ builds:
       - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
 archives:
   - ids:
-      - pairfobd
+      - pairfob
     formats:
       - binary
-    name_template: "pairfobd-{{ .Os }}-{{ .Arch }}"
+    name_template: "pairfob-{{ .Os }}-{{ .Arch }}"
 checksum:
   name_template: SHA256SUMS
   algorithm: sha256

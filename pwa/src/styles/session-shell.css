@@ -81,15 +81,7 @@
 
 .chrome-title:active { background: var(--surface-2); }
 
-.chrome-name-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-}
-
 .chrome-name {
-  flex: 1 1 auto;
   min-width: 0;
   font-size: 0.94rem;
   font-weight: 640;
@@ -101,10 +93,17 @@
 }
 
 .chrome-meta {
-  padding-left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font-size: 0.7rem;
   line-height: 1.2;
   color: var(--muted);
+}
+
+.chrome-meta-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

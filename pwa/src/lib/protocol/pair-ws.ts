@@ -138,7 +138,7 @@ export async function pairOverWS(
     const attached = await socket.next(8_000);
     if (attached.typ === Typ.ERROR) {
       const error = envelopeError(attached);
-      if (error.code === "unpaired") throw new ProtocolError("unpaired", "配对码过期或已用过，请抄电脑 pairfobd 打印的当前码");
+      if (error.code === "unpaired") throw new ProtocolError("unpaired", "配对码过期或已用过，请抄电脑 pairfob 打印的当前码");
       throw error;
     }
     if (attached.typ !== Typ.PAIR_ATTACHED) throw new ProtocolError("bad_message", `预期 PAIR_ATTACHED，实际 ${attached.typ}`);
@@ -241,7 +241,7 @@ export async function pairOverWS(
     if (!attachedReceived && protocol === 2 && pairingWsUsesTicket(relayWS)) {
       if (error instanceof ProtocolError && error.code === "unpaired") throw error;
       if (isPreAttachFailure(error)) {
-        throw new ProtocolError("unpaired", "配对码过期或已用过，请抄电脑 pairfobd 打印的当前码");
+        throw new ProtocolError("unpaired", "配对码过期或已用过，请抄电脑 pairfob 打印的当前码");
       }
     }
     throw error;

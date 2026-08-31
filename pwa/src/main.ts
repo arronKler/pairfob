@@ -45,8 +45,8 @@ function render(): void {
   app.classList.toggle("session", session);
   app.classList.toggle("desk", desk);
   app.classList.toggle("boot-screen", booting);
-  document.documentElement.classList.toggle("lock", session || booting);
-  document.body.classList.toggle("lock", session || booting);
+  document.documentElement.classList.toggle("lock", session || desk || booting);
+  document.body.classList.toggle("lock", session || desk || booting);
   app.style.setProperty("--term-fs", `${state.termFontPx}px`);
   app.style.setProperty("--term-lh", `${termLineHeightPx(state.termFontPx)}px`);
   app.setAttribute("aria-busy", state.operationBusy ? "true" : "false");

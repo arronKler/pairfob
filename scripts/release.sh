@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-compile pairfobd for hosted download at https://pairfob.com/dl.
+# Cross-compile pairfob for hosted download at https://pairfob.com/dl.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -30,9 +30,9 @@ fi
 
 for os in darwin linux; do
   for arch in amd64 arm64; do
-    dest="${OUT}/pairfobd-${os}-${arch}"
+    dest="${OUT}/pairfob-${os}-${arch}"
     echo "build ${dest}"
-    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$ldflags" -o "$dest" ./cmd/pairfobd
+    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$ldflags" -o "$dest" ./cmd/pairfob
   done
 done
 
@@ -41,9 +41,9 @@ printf '%s\n' "$VERSION" >"${OUT}/VERSION"
 (
   cd "$OUT"
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum pairfobd-* VERSION >SHA256SUMS
+    sha256sum pairfob-* VERSION >SHA256SUMS
   else
-    shasum -a 256 pairfobd-* VERSION >SHA256SUMS
+    shasum -a 256 pairfob-* VERSION >SHA256SUMS
   fi
 )
 

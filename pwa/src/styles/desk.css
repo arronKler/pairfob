@@ -1,14 +1,22 @@
 /* --- Desktop (>= 900px) ------------------------------------------------------------ */
 
+/*
+  Pin to the visual viewport the same way #app.session does. height/min-height:
+  100dvh overshoots iPad landscape Safari (toolbar + home indicator), so the
+  dock sits below the fold and the page itself starts to scroll.
+*/
 #app.desk {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  padding: 0 0 var(--kb, 0px);
+  overflow: hidden;
   display: grid;
   grid-template-columns: clamp(17rem, 22vw, 20rem) minmax(0, 1fr);
-  height: 100dvh;
-  height: -webkit-fill-available;
-  min-height: 100dvh;
-  min-height: -webkit-fill-available;
-  max-width: none;
-  padding: 0;
   background: var(--bg);
   color: var(--ink);
 }
@@ -42,6 +50,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: var(--term-bg);
   color: var(--term-ink);
 }

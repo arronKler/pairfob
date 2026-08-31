@@ -68,9 +68,7 @@ const enSidebar: DefaultTheme.Sidebar = [
     text: "Design",
     items: [
       { text: "The same screen", link: "/model" },
-      { text: "Where capabilities come from", link: "/capabilities" },
       { text: "What the relay cannot see", link: "/security" },
-      { text: "How it is wired", link: "/architecture" },
     ],
   },
   {
@@ -108,9 +106,7 @@ const zhSidebar: DefaultTheme.Sidebar = [
     text: "设计",
     items: [
       { text: "同一块屏幕", link: "/zh/model" },
-      { text: "能力从哪来", link: "/zh/capabilities" },
       { text: "中继看不到什么", link: "/zh/security" },
-      { text: "怎么接起来", link: "/zh/architecture" },
     ],
   },
   {

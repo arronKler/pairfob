@@ -8,6 +8,15 @@
   min-height:0. Making this node itself a column flex container sizes it to
   the transcript, the pane clips, and a finger pan has nothing to scroll.
 */
+.agent-stream-wrap {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
 .agent-stream {
   flex: 1 1 0%;
   min-width: 0;
@@ -26,6 +35,54 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 100%;
+}
+
+.agent-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 12rem;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.agent-empty-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.agent-empty-sub {
+  margin: 0;
+  max-width: 16rem;
+  font-size: 0.83rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.agent-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: rgba(110, 168, 254, 0.1);
+  border: 1px solid rgba(110, 168, 254, 0.3);
+}
+
+.agent-confirm-copy {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--accent);
+  line-height: 1.4;
 }
 
 .agent-stream summary {
@@ -258,13 +315,6 @@
 }
 
 .agent-compose-hint[hidden] { display: none; }
-
-.agent-blocked {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
 
 .desk .agent-chat-root {
   flex: 1 1 0%;

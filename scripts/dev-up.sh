@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start a local pairfob.v2 origin (workerd) + pairfobd for pairing tests.
+# Start a local pairfob.v2 origin (workerd) + pairfob for pairing tests.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEV="$ROOT/.dev"
@@ -84,9 +84,9 @@ EOF
   export PAIRFOB_TLS_CA="$TLS_DIR/ca.crt"
 fi
 
-echo "building PWA + pairfobd…"
+echo "building PWA + pairfob…"
 (cd pwa && bun run build >/dev/null)
-go build -o "$DEV/pairfobd" ./cmd/pairfobd
+go build -o "$DEV/pairfob" ./cmd/pairfob
 
 echo "packing origin assets (PWA at / and /pair)…"
 DEST="$ORIGIN_DIR/public-dist"
@@ -150,12 +150,12 @@ fi
 export PAIRFOB_PAIR_CODE="${PAIRFOB_PAIR_CODE:-}"
 unset PAIRFOB_JOIN_TOKEN PAIRFOB_JOIN_GRANT PAIRFOB_RELAY_WS PAIRFOB_PROTOCOL || true
 
-"$DEV/pairfobd" >"$DEV/daemon.log" 2>&1 &
+"$DEV/pairfob" >"$DEV/daemon.log" 2>&1 &
 echo $! >"$DEV/daemon.pid"
 for i in $(seq 1 50); do
-  if grep -q 'pairfobd admin' "$DEV/daemon.log" 2>/dev/null; then break; fi
+  if grep -q 'pairfob admin' "$DEV/daemon.log" 2>/dev/null; then break; fi
   if [[ "$i" -eq 50 ]]; then
-    echo "pairfobd did not start; last log:" >&2
+    echo "pairfob did not start; last log:" >&2
     tail -n 40 "$DEV/daemon.log" >&2
     exit 1
   fi
@@ -165,7 +165,7 @@ done
 {
   echo "Pairfob local test (pairfob.v2 Worker origin)"
   echo "PWA            ${ORIGIN_URL}/pair"
-  echo "Pair           PAIRFOB_STATE_DIR=${PAIRFOB_STATE_DIR} $DEV/pairfobd pair"
+  echo "Pair           PAIRFOB_STATE_DIR=${PAIRFOB_STATE_DIR} $DEV/pairfob pair"
   echo "                scan/input, then press Enter when prompted"
   if [[ "$origin_scheme" == "https" ]]; then
     echo "Install CA     ${CAHTTP_URL}/          (HTTP profile; iPhone: do not install a .crt identity)"

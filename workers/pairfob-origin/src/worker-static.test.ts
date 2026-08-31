@@ -99,12 +99,12 @@ describe("worker static overlay", () => {
   test("GET /install.sh is text/plain", async () => {
     const env = testEnv({
       assets: assets({
-        "/install.sh": "#!/bin/sh\necho pairfobd\n",
+        "/install.sh": "#!/bin/sh\necho pairfob\n",
       }),
     });
     const res = await handleFetch(new Request("https://pairfob.com/install.sh"), env);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/plain");
-    expect(await res.text()).toContain("pairfobd");
+    expect(await res.text()).toContain("pairfob");
   });
 });

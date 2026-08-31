@@ -177,6 +177,8 @@ export type AppState = {
   agentTracePending: string;
   /** Pin the stream to the newest turn unless the reader scrolls up. */
   agentTraceFollow: boolean;
+  /** True when the transcript advanced while the reader was scrolled up. */
+  agentTraceUnread: boolean;
   /** Index of the terminal row whose action bar is open, or null. */
   paneRow: number | null;
   termWrap: boolean;
@@ -255,6 +257,7 @@ export const state: AppState = {
   agentTraceTail: 0,
   agentTracePending: "",
   agentTraceFollow: true,
+  agentTraceUnread: false,
   paneRow: null,
   termWrap: loadTermWrap(),
   termFit: loadTermFit(),
@@ -535,6 +538,7 @@ export function resetPaneView(): void {
   state.agentTraceTail = 0;
   state.agentTracePending = "";
   state.agentTraceFollow = true;
+  state.agentTraceUnread = false;
   // keysExpanded / padKind stay: they are keypad preferences, not per-pane view
   // modes. Collapsing on every switch put Ctrl+C and 换行 two taps away.
 }

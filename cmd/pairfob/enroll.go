@@ -58,7 +58,7 @@ func enrollCommand(args []string, sock string) error {
 	origin := fs.String("origin", "", "")
 	force := fs.Bool("force", false, "")
 	if err := fs.Parse(args); err != nil {
-		return errors.New("usage: pairfobd enroll [--grant jg_…] [--origin URL] [--force]")
+		return errors.New("usage: pairfob enroll [--grant jg_…] [--origin URL] [--force]")
 	}
 	if strings.TrimSpace(os.Getenv("PAIRFOB_JOIN_TOKEN")) != "" {
 		return errors.New("this setup does not use a join token")
@@ -96,7 +96,7 @@ func enrollCommand(args []string, sock string) error {
 	}
 	if existing.ReconnectToken != "" && !*force {
 		if *grant == "" {
-			fmt.Printf("This computer is already set up.\nPair a device after Pairfob is running: pairfobd pair\n")
+			fmt.Printf("This computer is already set up.\nPair a device after Pairfob is running: pairfob pair\n")
 			return nil
 		}
 		return alreadyEnrolledError()
@@ -104,7 +104,7 @@ func enrollCommand(args []string, sock string) error {
 	if _, err := enrollV2(store, *origin, *grant); err != nil {
 		return err
 	}
-	fmt.Printf("This computer is ready on %s.\nPair a device after Pairfob is running: pairfobd pair\n", originHost(*origin))
+	fmt.Printf("This computer is ready on %s.\nPair a device after Pairfob is running: pairfob pair\n", originHost(*origin))
 	return nil
 }
 

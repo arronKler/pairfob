@@ -48,7 +48,7 @@ export function renderPane(): void {
     return;
   }
   if (state.agentChat) {
-    renderAgentChat(goBackFromPane, openPaneMenu);
+    renderAgentChat(goBackFromPane, openPaneMenu, openPaneSwitcher);
     return;
   }
   const scroll = sessionScroll();

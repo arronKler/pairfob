@@ -1,5 +1,6 @@
 import { button, node } from "../lib/dom";
 import { markdownEl } from "../lib/agent-markdown";
+import { spinnerNode } from "./chrome";
 import {
   groupAgentTurns,
   processTitle,
@@ -114,16 +115,37 @@ function paintTurn(turn: AgentTurn, live: boolean, kept: DetailsState, into: HTM
   for (const reply of turn.replies) into.append(assistantReply(reply));
 }
 
+export type AgentEmptyKind = "loading" | "working" | "empty" | "error";
+
+export type AgentEmptySpec = {
+  kind: AgentEmptyKind;
+  title: string;
+  sub?: string;
+};
+
+function emptyPanel(spec: AgentEmptySpec, onRetry?: () => void): HTMLElement {
+  const panel = node("div", `agent-empty agent-empty-${spec.kind}`);
+  panel.setAttribute("role", spec.kind === "error" ? "alert" : "status");
+  if (spec.kind === "loading" || spec.kind === "working") panel.append(spinnerNode());
+  panel.append(node("p", "agent-empty-title", spec.title));
+  if (spec.sub) panel.append(node("p", "agent-empty-sub", spec.sub));
+  if (spec.kind === "error" && onRetry) {
+    const retry = button("重试", "btn btn-small", onRetry);
+    retry.type = "button";
+    panel.append(retry);
+  }
+  return panel;
+}
+
 export function paintAgentStream(opts: {
   items: AgentTraceItem[];
   working: boolean;
-  emptyMessage: string;
-  note?: string;
+  empty: AgentEmptySpec;
   busy?: boolean;
   kept?: DetailsState;
-  blocked?: boolean;
-  onConfirm?: () => void;
+  onRetry?: () => void;
   onNeedOlder?: () => void;
+  onFollow?: (follow: boolean) => void;
 }): HTMLElement {
   const stream = node("div", "agent-stream");
   const inner = node("div", "agent-stream-inner");
@@ -132,25 +154,16 @@ export function paintAgentStream(opts: {
   stream.setAttribute("aria-busy", String(opts.busy === true));
   stream.tabIndex = 0;
   const kept = opts.kept ?? emptyDetails();
-  if (opts.blocked) {
-    const banner = node("p", "notice notice-status agent-blocked", "Agent 在终端里等你确认。");
-    banner.append(" ", button("去确认", "btn btn-small", () => opts.onConfirm?.()));
-    inner.append(banner);
-  }
-  if (!opts.items.length) {
-    inner.append(node("p", "empty-sub", opts.emptyMessage));
-  }
+  if (!opts.items.length) inner.append(emptyPanel(opts.empty, opts.onRetry));
   const turns = groupAgentTurns(opts.items);
   for (const [index, turn] of turns.entries()) {
     paintTurn(turn, opts.working && index === turns.length - 1, kept, inner);
-  }
-  if (opts.note && opts.items.length) {
-    inner.prepend(node("p", "notice notice-status", opts.note));
   }
   stream.append(inner);
   stream.addEventListener("scroll", () => {
     const follow = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 32;
     state.agentTraceFollow = follow;
+    opts.onFollow?.(follow);
     if (stream.scrollTop < 32) opts.onNeedOlder?.();
   }, { passive: true });
   return stream;

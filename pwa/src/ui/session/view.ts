@@ -30,10 +30,12 @@ function chromeMeta(selected: AgentCard): string {
 }
 
 function titleBody(selected: AgentCard): HTMLElement[] {
-  const nameRow = node("span", "chrome-name-row");
-  nameRow.append(node("span", `agent-dot agent-${selected.status}`), node("span", "chrome-name", chromeName(selected)));
+  const name = node("span", "chrome-name", chromeName(selected));
   const line = chromeMeta(selected);
-  return line ? [nameRow, node("span", "chrome-meta", line)] : [nameRow];
+  if (!line) return [name];
+  const meta = node("span", "chrome-meta");
+  meta.append(node("span", `agent-dot agent-${selected.status}`), node("span", "chrome-meta-text", line));
+  return [name, meta];
 }
 
 /**

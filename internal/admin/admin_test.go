@@ -98,7 +98,7 @@ func TestSocketPathMustBeAbsolute(t *testing.T) {
 	if _, err := SocketPath(); err == nil {
 		t.Fatal("relative override accepted")
 	}
-	override := filepath.Join(t.TempDir(), "pairfobd.sock")
+	override := filepath.Join(t.TempDir(), "pairfob.sock")
 	t.Setenv("PAIRFOB_ADMIN_SOCK", override)
 	got, err := SocketPath()
 	if err != nil || got != override {
@@ -110,9 +110,9 @@ func TestSocketPathMustBeAbsolute(t *testing.T) {
 	}
 }
 
-func TestRekeyUsesTheLongControlPlaneDeadline(t *testing.T) {
-	if timeoutFor("relay.rekey") != rekeyTimeout || timeoutFor("pair.wait") != pairWaitTimeout || timeoutFor("pair.status") != adminTimeout {
-		t.Fatalf("unexpected deadlines rekey=%s wait=%s status=%s", timeoutFor("relay.rekey"), timeoutFor("pair.wait"), timeoutFor("pair.status"))
+func TestLongControlPlaneOperationsUseTheirOwnDeadlines(t *testing.T) {
+	if timeoutFor("pair.new") != pairNewTimeout || timeoutFor("relay.rekey") != rekeyTimeout || timeoutFor("pair.wait") != pairWaitTimeout || timeoutFor("pair.status") != adminTimeout {
+		t.Fatalf("unexpected deadlines new=%s rekey=%s wait=%s status=%s", timeoutFor("pair.new"), timeoutFor("relay.rekey"), timeoutFor("pair.wait"), timeoutFor("pair.status"))
 	}
 }
 

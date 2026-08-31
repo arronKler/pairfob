@@ -5,7 +5,7 @@ Mux and product events live in two places:
 1. **Workers Logs** — structured `console.log` JSON (`kind: "pairfob"`) for enroll, pair-intent, WebSocket open/close, bind, errors, late alarms, page class, and first-party beacons. Invocation logs stay on; they record `<Method> <URL>`. Do not put secrets on the path. `pair_ticket` is a query parameter, so do not log `req.url`. Production currently stores funnel events here (`observability.logs.persist`). `fwd` stays off the log stream because of volume.
 2. **Workers Analytics Engine** dataset `pairfob` (binding `METRICS`) — durable SQL counters. Isolate `counters` on `GET /v2/admin/stats` are a per-isolate snapshot only. If `wrangler deploy` still returns `10089` after the account-level enable, attach `METRICS` with a settings PATCH that `inherit`s existing bindings and adds `{ type: "analytics_engine", name: "METRICS", dataset: "pairfob" }`.
 
-`pairfobd` does not phone home. `PAIRFOB_TRACE=1` stays on the user machine.
+`pairfob` does not phone home. `PAIRFOB_TRACE=1` stays on the user machine.
 
 ## Schema (`pairfob`)
 

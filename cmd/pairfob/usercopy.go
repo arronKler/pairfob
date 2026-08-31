@@ -16,7 +16,7 @@ func enrollNotice(code string) string {
 	case "forbidden":
 		return "setup is closed on this site right now."
 	default:
-		return "setup did not complete. Run pairfobd doctor."
+		return "setup did not complete. Run pairfob doctor."
 	}
 }
 
@@ -25,14 +25,14 @@ func enrollRejected(code string) error {
 }
 
 func alreadyEnrolledError() error {
-	return errors.New("this computer is already set up. Pair a device with pairfobd pair, or pass --force only to replace this setup.")
+	return errors.New("this computer is already set up. Pair a device with pairfob pair, or pass --force only to replace this setup.")
 }
 
 func publicOriginError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return errors.New("could not reach Pairfob. Check the network, then run pairfobd doctor.")
+	return errors.New("could not reach Pairfob. Check the network, then run pairfob doctor.")
 }
 
 func rekeyNotice(code string) string {
@@ -40,7 +40,7 @@ func rekeyNotice(code string) string {
 	case "bad_token":
 		return "this computer is no longer enrolled. Re-run the installer."
 	default:
-		return "could not rotate the connection. Run pairfobd doctor."
+		return "could not rotate the connection. Run pairfob doctor."
 	}
 }
 
@@ -58,9 +58,9 @@ func pairSlotError(err error) error {
 	}
 	switch msg {
 	case "pair_ref does not match the active pairing", "pairing closed before phone proof", "no active pairing", "pair_ref required":
-		return errors.New("that pairing slot is gone. Run pairfobd pair again.")
+		return errors.New("that pairing slot is gone. Run pairfob pair again.")
 	default:
-		return errors.New("pairing did not finish. Run pairfobd pair again, or pairfobd doctor.")
+		return errors.New("pairing did not finish. Run pairfob pair again, or pairfob doctor.")
 	}
 }
 

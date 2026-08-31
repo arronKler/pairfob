@@ -115,4 +115,14 @@ describe("session action sheet", () => {
     expect(source).not.toContain("promptSelectedAgent");
     expect(source).not.toContain("canPromptAgent");
   });
+
+  test("对话 hides terminal display actions that do not apply to the transcript", () => {
+    expect(source).toContain("if (!state.agentChat)");
+    const display = source.slice(source.indexOf('if (!state.agentChat)'), source.indexOf('section("新建"'));
+    expect(display).toContain('section("显示"');
+    expect(display).toContain("toggleTermWrap");
+    expect(display).toContain("toggleTermSelect");
+    expect(display).toContain("copyScreenText");
+    expect(display).toContain("更早的输出");
+  });
 });

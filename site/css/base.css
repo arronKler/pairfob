@@ -247,7 +247,8 @@ html[lang="zh-CN"]:not([data-i18n-ready]) [data-i18n] {
 }
 
 /* Wide screens are the computer: install here. Narrow screens are the other
-   device: open the PWA. Both CTAs stay in the DOM; only visibility swaps. */
+   device: open the PWA. Both CTAs stay in the DOM; only visibility swaps.
+   Anchors keep inline-flex so hero / header buttons do not collapse to inline. */
 .cta-phone {
   display: none;
 }
@@ -259,6 +260,12 @@ html[lang="zh-CN"]:not([data-i18n-ready]) [data-i18n] {
 
   a.cta-phone {
     display: inline-flex;
+  }
+
+  p.cta-phone,
+  h3.cta-phone,
+  div.cta-phone {
+    display: block;
   }
 }
 

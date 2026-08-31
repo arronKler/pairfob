@@ -47,11 +47,24 @@ describe("homepage i18n", () => {
     expect(html).toContain('class="btn btn-primary cta-desk" href="#start"');
     expect(html).toContain('class="bar-cta cta-phone" href="/pair"');
     expect(html).not.toMatch(/class="bar-cta"(?! cta-phone)[^>]*href="\/pair"/);
-    expect(html).toContain('data-copy="https://pairfob.com/pair"');
+    expect(html).toContain('class="copy cta-desk" data-copy="https://pairfob.com/pair"');
     expect(html).toContain("Don't open it on this computer.");
+    expect(html).not.toMatch(/<a[^>]*href="\/pair"[^>]*>https:\/\/pairfob.com\/pair/);
     expect(zh["cta.phone.hint"]).toContain("不要在这台电脑");
     expect(en["cta.computer"]).toBe("Start on this computer");
     expect(zh["cta.computer"]).toBe("在这台电脑上开始");
+  });
+
+  test("phone visitors get a same-tab /pair button in the how-to and pair bands", () => {
+    expect(html).toContain('class="step-open cta-phone"');
+    expect(html).toMatch(/class="step-open cta-phone"[\s\S]*?href="\/pair"/);
+    expect(html).toContain('class="pair-open cta-phone"');
+    expect(html).toMatch(/class="pair-open cta-phone"[\s\S]*?href="\/pair"/);
+    expect(html).toContain('class="step-host-note cta-phone"');
+    expect(html).toContain('data-i18n="start.s3.phone"');
+    expect(en["start.s3.phone"]).toContain("this phone");
+    expect(zh["start.s3note.phone"]).toContain("点进去");
+    expect(zh["start.hostnote"]).toContain("电脑终端");
   });
 
   test("static HTML fallbacks match English copy", () => {

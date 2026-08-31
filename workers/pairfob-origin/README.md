@@ -6,7 +6,7 @@ Envelope codec stays `version=0x01`; FWD bytes are opaque. Mux control JSON is `
 
 ## Interactive local origin
 
-From the repo root, `../../scripts/dev-up.sh` packs the PWA, starts `wrangler dev` on loopback, mints a grant, and enrolls `pairfobd`. That is the pairing/debug loop. Miniflare is still **not** a hibernation proof.
+From the repo root, `../../scripts/dev-up.sh` packs the PWA, starts `wrangler dev` on loopback, mints a grant, and enrolls `pairfob`. That is the pairing/debug loop. Miniflare is still **not** a hibernation proof.
 
 ## Local tests (no Cloudflare account)
 
@@ -59,7 +59,7 @@ with `'wasm-unsafe-eval'`. `src/csp.test.ts` guards that split. Docs HTML is
 rewritten at VitePress build time so executable inline scripts become hashed
 files under `/doc/assets/`.
 
-`pairfobd` client-mints and journals the v2 `daemon_id` and reconnect token before `POST /v2/enroll`; the Worker validates and echoes them. Retrying the identical credential after an uncertain HTTP outcome is idempotent and does not consume another grant slot. Rekey likewise sends a pre-journaled `new_reconnect_token`.
+`pairfob` client-mints and journals the v2 `daemon_id` and reconnect token before `POST /v2/enroll`; the Worker validates and echoes them. Retrying the identical credential after an uncertain HTTP outcome is idempotent and does not consume another grant slot. Rekey likewise sends a pre-journaled `new_reconnect_token`.
 
 ## Static PWA
 
@@ -67,7 +67,7 @@ files under `/doc/assets/`.
 
 ## Observability
 
-Workers Logs plus Analytics Engine dataset `pairfob` (binding `METRICS`). First-party beacons are `POST /v2/events`. See `docs/observability.md`. `pairfobd` does not send telemetry.
+Workers Logs plus Analytics Engine dataset `pairfob` (binding `METRICS`). First-party beacons are `POST /v2/events`. See `docs/observability.md`. `pairfob` does not send telemetry.
 
 ## WAF
 

@@ -66,7 +66,7 @@ Index miss、过期、unknown、以及 Room 当前槽与 loc **不符**：同一
 
 ### enroll
 
-产品路径不带 `join_grant`：Worker 为该次登记铸造内部 1 槽 grant（每 IP 有上限）。兼容路径仍接受 `join_grant`（`jg_` + 32 小写 hex）。`pairfobd` 先生成并持久化 `daemon_id`（`d_` + 20 小写 hex，即 10 随机字节）与 `reconnect_token`（`rt_` + 32 小写 hex），再随 enroll 请求发送；成功响应必须原样回显。相同凭据在 D1 + Room 已登记时可幂等恢复，且不再次消耗 grant。D1 已有行而 Room 未写入时，持同一 `daemon_id` + `reconnect_token` 即可补完 Room。云上只存 reconnect 的 SHA-256。
+产品路径不带 `join_grant`：Worker 为该次登记铸造内部 1 槽 grant（每 IP 有上限）。兼容路径仍接受 `join_grant`（`jg_` + 32 小写 hex）。`pairfob` 先生成并持久化 `daemon_id`（`d_` + 20 小写 hex，即 10 随机字节）与 `reconnect_token`（`rt_` + 32 小写 hex），再随 enroll 请求发送；成功响应必须原样回显。相同凭据在 D1 + Room 已登记时可幂等恢复，且不再次消耗 grant。D1 已有行而 Room 未写入时，持同一 `daemon_id` + `reconnect_token` 即可补完 Room。云上只存 reconnect 的 SHA-256。
 
 rekey 请求含 `{v:2, daemon_id, reconnect_token, new_reconnect_token}`。Room 在当前 hash 等于旧值时原子替换；当前 hash 已等于新值时把同请求视为成功重放。响应必须回显新 token。
 
@@ -106,7 +106,7 @@ PAIR_OPEN（daemon 不带 `pair_loc`）：
 {"v":2,"op":"CreatePairing","daemon_id":"d_…","pair_ref":"<32 hex>","ttl_s":180}
 ```
 
-ack（Room 铸造 loc，**ack 之后** pairfobd 才打印）：
+ack（Room 铸造 loc，**ack 之后** pairfob 才打印）：
 
 ```json
 {"v":2,"op":"CreatePairing","ok":true,"pair_ref":"<32 hex>","pair_loc":"WJ3K9M","ttl_s":180}

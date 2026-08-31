@@ -209,32 +209,34 @@ export function openPaneMenu(): void {
     }
     parts.body.append(node("h3", "menu-section-title", "输入"), inputBar);
   }
-  section("显示", [
-    ...(!state.fullTerminal ? [item(state.termWrap ? "关掉自动折行" : "长行自动折行", toggleTermWrap)] : []),
-    item("选择文本", () => toggleTermSelect(true)),
-    item(
-      `文字加大（当前 ${state.termFontPx}px）`,
-      () => {
-        state.termFontPx = clampTermFont(state.termFontPx + 1);
-        saveTermFont();
-        render();
-      },
-      "",
-      state.termFontPx >= TERM_FONT_MAX,
-    ),
-    item(
-      `文字减小（当前 ${state.termFontPx}px）`,
-      () => {
-        state.termFontPx = clampTermFont(state.termFontPx - 1);
-        saveTermFont();
-        render();
-      },
-      "",
-      state.termFontPx <= TERM_FONT_MIN,
-    ),
-    item("复制画面文本", copyScreenText),
-    ...(state.operationCapabilities.history ? [item("更早的输出", openSelectedTerminalHistory)] : []),
-  ]);
+  if (!state.agentChat) {
+    section("显示", [
+      ...(!state.fullTerminal ? [item(state.termWrap ? "关掉自动折行" : "长行自动折行", toggleTermWrap)] : []),
+      item("选择文本", () => toggleTermSelect(true)),
+      item(
+        `文字加大（当前 ${state.termFontPx}px）`,
+        () => {
+          state.termFontPx = clampTermFont(state.termFontPx + 1);
+          saveTermFont();
+          render();
+        },
+        "",
+        state.termFontPx >= TERM_FONT_MAX,
+      ),
+      item(
+        `文字减小（当前 ${state.termFontPx}px）`,
+        () => {
+          state.termFontPx = clampTermFont(state.termFontPx - 1);
+          saveTermFont();
+          render();
+        },
+        "",
+        state.termFontPx <= TERM_FONT_MIN,
+      ),
+      item("复制画面文本", copyScreenText),
+      ...(state.operationCapabilities.history ? [item("更早的输出", openSelectedTerminalHistory)] : []),
+    ]);
+  }
   section("新建", [
     ...(state.operationCapabilities.create_tab ? [item("新建标签页", createSelectedTab)] : []),
     ...(state.operationCapabilities.split_pane ? [item("分屏", splitSelectedPane)] : []),

@@ -132,7 +132,7 @@ export function renderConnect(): void {
       scanned
         ? "二维码已识别，正在安全连接电脑。"
         : state.addingComputer
-          ? "先在那台电脑装好 pairfobd 并执行 pairfobd pair，再扫描它的二维码。无法扫码时，也可以输入配对码。"
+          ? "先在那台电脑装好 pairfob 并执行 pairfob pair，再扫描它的二维码。无法扫码时，也可以输入配对码。"
           : "扫描电脑上的二维码。无法扫码时，也可以输入配对码。",
     ),
   );
@@ -140,7 +140,7 @@ export function renderConnect(): void {
     const hint = node(
       "p",
       "desk-hint",
-      "这个页面是给手机或另一台设备用的。跑 Herdr 的电脑请执行 pairfobd pair，用那边扫终端里的码。",
+      "这个页面是给手机或另一台设备用的。跑 Herdr 的电脑请执行 pairfob pair，用那边扫终端里的码。",
     );
     hint.setAttribute("role", "note");
     wrap.append(hint);

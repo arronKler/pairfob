@@ -113,10 +113,10 @@ func writeDoctor(w io.Writer, h health) {
 		fmt.Fprintf(w, "  Origin      %s\n", origin)
 	}
 	if h.Running {
-		fmt.Fprintln(w, "\n  pairfobd pair     pair a device")
-		fmt.Fprintln(w, "  pairfobd list     what's paired")
+		fmt.Fprintln(w, "\n  pairfob pair     pair a device")
+		fmt.Fprintln(w, "  pairfob list     what's paired")
 	} else {
-		fmt.Fprintln(w, "\nStart it in this terminal with: pairfobd")
+		fmt.Fprintln(w, "\nStart it in this terminal with: pairfob")
 	}
 }
 
@@ -140,9 +140,9 @@ func writeLiveSnapshot(w io.Writer, sock string) error {
 		fmt.Fprintln(w, "Herdr is off. Open it on this computer.")
 	}
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  pairfobd pair     pair a device")
-	fmt.Fprintln(w, "  pairfobd list     what's paired")
-	fmt.Fprintln(w, "  pairfobd doctor   full check")
+	fmt.Fprintln(w, "  pairfob pair     pair a device")
+	fmt.Fprintln(w, "  pairfob list     what's paired")
+	fmt.Fprintln(w, "  pairfob doctor   full check")
 	return nil
 }
 

@@ -1,4 +1,4 @@
-// Package state owns pairfobd's durable identity, relay credential, devices, and
+// Package state owns pairfob's durable identity, relay credential, devices, and
 // Web Push subscription metadata. All files are written atomically with mode
 // 0600 so a crash can leave either the old or the new complete JSON document.
 package state

@@ -147,7 +147,7 @@ func runDaemon(store *state.Store, sock string) error {
 		return err
 	}
 
-	log.Printf("pairfobd admin %s daemon_id %s", sock, eng.DaemonID)
+	log.Printf("pairfob admin %s daemon_id %s", sock, eng.DaemonID)
 	return admin.ListenAndServe(sock, liveAdmin{eng: eng, store: store, origin: plan.Origin})
 }
 
@@ -197,11 +197,11 @@ func announceStartup(eng *daemon.Engine, sock, explicitCode string) error {
 	n := eng.PairingStatus().Devices
 	switch n {
 	case 0:
-		fmt.Printf("Pairfob is running. Pair a device: pairfobd pair\n")
+		fmt.Printf("Pairfob is running. Pair a device: pairfob pair\n")
 	case 1:
-		fmt.Printf("Pairfob is running. 1 device paired. Pair another: pairfobd pair\n")
+		fmt.Printf("Pairfob is running. 1 device paired. Pair another: pairfob pair\n")
 	default:
-		fmt.Printf("Pairfob is running. %d devices paired. Pair another: pairfobd pair\n", n)
+		fmt.Printf("Pairfob is running. %d devices paired. Pair another: pairfob pair\n", n)
 	}
 	return nil
 }

@@ -54,7 +54,7 @@ export async function requestPairIntent(
   }
   const code = intentErrorCode(body);
   if (response.status === 404 || code === "unpaired") {
-    throw new ProtocolError("unpaired", "配对码过期或已用过，请抄电脑 pairfobd 打印的当前码");
+    throw new ProtocolError("unpaired", "配对码过期或已用过，请抄电脑 pairfob 打印的当前码");
   }
   if (response.status === 429 || code === "rate_limited") {
     throw new ProtocolError("rate_limited", "尝试太频繁，请稍后再试。");

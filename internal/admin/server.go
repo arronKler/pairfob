@@ -13,6 +13,7 @@ import (
 const (
 	maxAdminRequest = 4096
 	adminTimeout    = 5 * time.Second
+	pairNewTimeout  = 30 * time.Second
 	rekeyTimeout    = 20 * time.Second
 	pairWaitTimeout = 305 * time.Second
 )
@@ -24,7 +25,7 @@ func Listen(path string) (net.Listener, error) {
 	}
 	if conn, err := net.DialTimeout("unix", path, 200*time.Millisecond); err == nil {
 		_ = conn.Close()
-		return nil, errors.New("pairfobd already running")
+		return nil, errors.New("pairfob already running")
 	}
 	_ = os.Remove(path)
 	ln, err := net.Listen("unix", path)
@@ -79,6 +80,9 @@ func handleConn(conn net.Conn, svc Service) {
 func timeoutFor(op string) time.Duration {
 	if op == "pair.wait" {
 		return pairWaitTimeout
+	}
+	if op == "pair.new" {
+		return pairNewTimeout
 	}
 	if op == "relay.rekey" {
 		return rekeyTimeout

@@ -1,12 +1,12 @@
 #!/bin/sh
-# Install pairfobd from https://pairfob.com/dl (or $PAIRFOB_DOWNLOAD_BASE).
+# Install pairfob from https://pairfob.com/dl (or $PAIRFOB_DOWNLOAD_BASE).
 set -eu
 
 usage() {
   cat <<'EOF'
 usage: install.sh [--origin URL] [--prefix DIR] [--grant jg_…] [--no-service] [--no-enroll]
 
-Downloads the pairfobd binary for this machine, verifies SHA-256, enrolls
+Downloads the pairfob binary for this machine, verifies SHA-256, enrolls
 against pairfob.com (or --origin), and installs a user-level service that
 starts at login.
 
@@ -89,7 +89,7 @@ case "$arch" in
     exit 1
     ;;
 esac
-name="pairfobd-${os}-${arch}"
+name="pairfob-${os}-${arch}"
 
 if [ -z "$PREFIX" ]; then
   if [ "$(id -u)" -eq 0 ]; then
@@ -141,9 +141,23 @@ fi
 chmod 0755 "${workdir}/${name}"
 
 mkdir -p "$PREFIX"
-dest="${PREFIX}/pairfobd"
+dest="${PREFIX}/pairfob"
+legacy="${PREFIX}/pairfobd"
+
+# A reinstall is also the supported migration from the pre-release pairfobd
+# command. Stop whichever user service owns the existing installation before
+# replacing files so the old and new daemon labels cannot run together.
+if [ -x "$dest" ]; then
+  "$dest" service uninstall
+fi
+if [ -x "$legacy" ] && [ ! -L "$legacy" ]; then
+  "$legacy" service uninstall
+fi
+
 mv "${workdir}/${name}" "$dest"
 chmod 0755 "$dest"
+ln -s pairfob "${workdir}/pairfobd"
+mv -f "${workdir}/pairfobd" "$legacy"
 echo "installed ${dest}"
 
 if [ "$NO_ENROLL" -eq 0 ]; then
@@ -159,7 +173,7 @@ fi
 
 if [ "$NO_SERVICE" -eq 0 ]; then
   "$dest" service install
-  echo "waiting for pairfobd…"
+  echo "waiting for pairfob…"
   ok=0
   attempt=0
   while [ "$attempt" -lt 40 ]; do
@@ -173,7 +187,7 @@ if [ "$NO_SERVICE" -eq 0 ]; then
   if [ "$ok" -eq 1 ]; then
     echo "Pairfob is running."
   else
-    echo "Installed, but not answering yet. Check ~/.config/pairfob/pairfobd.log" >&2
+    echo "Installed, but not answering yet. Check ~/.config/pairfob/pairfob.log" >&2
   fi
 fi
 
@@ -184,6 +198,6 @@ case ":${PATH}:" in
     ;;
 esac
 
-echo "On this computer:     pairfobd pair"
+echo "On this computer:     pairfob pair"
 echo "On the other device:  https://pairfob.com/pair"
 echo "Scan or type the code, then press Enter here."

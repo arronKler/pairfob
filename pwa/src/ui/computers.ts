@@ -47,7 +47,7 @@ export function fillComputers(container: HTMLElement | DocumentFragment, withBac
         "lede",
         state.computers.length > 1
           ? "这台手机已经配对过多台电脑。连其中一台，或再添加一台。"
-          : "电脑现在不在线。若刚合盖，电脑可能已经睡眠。确认电脑醒着且 pairfobd 在跑后再点下面重试，或添加另一台电脑。",
+          : "电脑现在不在线。若刚合盖，电脑可能已经睡眠。确认电脑醒着且 pairfob 在跑后再点下面重试，或添加另一台电脑。",
       ),
     );
   }
@@ -55,7 +55,7 @@ export function fillComputers(container: HTMLElement | DocumentFragment, withBac
   state.computers.forEach((pair) => list.append(computerRow(pair)));
   container.append(list);
   container.append(button("添加另一台电脑", "btn btn-ghost computer-add", beginAddComputer));
-  container.append(node("p", "lede", "另一台电脑要先装 pairfobd，再执行 pairfobd pair。"));
+  container.append(node("p", "lede", "另一台电脑要先装 pairfob，再执行 pairfob pair。"));
   const error = noteNode();
   if (error) container.append(error);
 }

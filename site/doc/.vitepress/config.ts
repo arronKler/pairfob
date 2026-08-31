@@ -5,7 +5,7 @@ import { enTheme, zhSearch, zhTheme, enSearch } from "./locales";
 
 export default defineConfig({
   title: "Pairfob",
-  description: "How to use it, and the product design notes",
+  description: "How to use Pairfob",
   base: "/doc/",
   cleanUrls: true,
   appearance: "force-dark",

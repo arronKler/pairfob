@@ -42,6 +42,16 @@ describe("agent-chat is a first-class pane mode", () => {
     expect(paint).toContain("agent-assistant");
     expect(paint).toContain("agent-stream-inner");
     expect(paint).toContain("agent-user-role");
+    expect(paint).toContain("agent-empty");
+    expect(paint).toContain("agent-empty-sub");
+    expect(paint).not.toContain('"empty-sub"');
+    expect(paint).not.toContain("agent-blocked");
+    expect(source).toContain("agent-confirm");
+    expect(source).toContain("syncChatDock");
+    expect(source).toContain("paintChatNotice");
+    expect(source).toContain("existing.classList.contains(`notice-${want.tone}`)");
+    expect(source).toContain("agent-jump");
+    expect(source).toContain("agentTraceUnread");
     expect(source).not.toContain("agent-bubble");
     expect(source).toContain("加载更早内容");
     expect(source).toContain('next.querySelector(".agent-stream-inner")?.prepend(olderButton())');
@@ -53,7 +63,7 @@ describe("agent-chat is a first-class pane mode", () => {
   test("leave paints guided itself; list-back keeps the mode", () => {
     const leave = fn("export function leaveAgentChat(", "function paintItems(");
     expect(leave).toContain('setPaneTermMode(state.paneId, "guided")');
-    expect(pane).toContain("renderAgentChat(goBackFromPane, openPaneMenu)");
+    expect(pane).toContain("renderAgentChat(goBackFromPane, openPaneMenu, openPaneSwitcher)");
     const back = pane.slice(pane.indexOf("export function goBackFromPane("), pane.indexOf("export function sessionHandlers("));
     expect(back).toContain("if (state.agentChat)");
     expect(back).toContain("rememberGuided: false");
@@ -63,6 +73,9 @@ describe("agent-chat is a first-class pane mode", () => {
     expect(view).not.toContain("handlers.onAgentChat");
     expect(desk).toContain("fillAgentChat");
     expect(desk).toContain("state.agentChat");
+    expect(desk).toContain('node("div", "pane-root")');
+    expect(desk).toContain("fillSession(pane, selected, false, handlers)");
+    expect(desk).not.toContain("fillSession(main,");
   });
 
   test("live polling patches the chat instead of replacing the pane", async () => {

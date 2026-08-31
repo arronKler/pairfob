@@ -17,11 +17,11 @@ func phonesCommand(args []string, sock string) error {
 	}
 	if len(args) >= 1 && (args[0] == "forget" || args[0] == "revoke") {
 		if len(args) != 2 {
-			return errors.New("usage: pairfobd forget N")
+			return errors.New("usage: pairfob forget N")
 		}
 		return forgetPhone(sock, args[1])
 	}
-	return errors.New("usage: pairfobd list\n       pairfobd forget N")
+	return errors.New("usage: pairfob list\n       pairfob forget N")
 }
 
 func deviceCommand(args []string, sock string) error {
@@ -31,7 +31,7 @@ func deviceCommand(args []string, sock string) error {
 	if len(args) == 2 && (args[0] == "revoke" || args[0] == "forget") {
 		return forgetPhone(sock, args[1])
 	}
-	return errors.New("usage: pairfobd list\n       pairfobd forget N")
+	return errors.New("usage: pairfob list\n       pairfob forget N")
 }
 
 func loadPhones(sock string) ([]admin.Device, error) {
@@ -46,7 +46,7 @@ func loadPhones(sock string) ([]admin.Device, error) {
 		Devices []admin.Device `json:"devices"`
 	}
 	if err := json.Unmarshal(resp.Result, &wrapped); err != nil {
-		return nil, errors.New("pairfobd returned an invalid device list")
+		return nil, errors.New("pairfob returned an invalid device list")
 	}
 	rows := wrapped.Devices
 	active := make([]admin.Device, 0, len(rows))
@@ -65,7 +65,7 @@ func printPhones(sock string) error {
 		return err
 	}
 	if len(rows) == 0 {
-		fmt.Println("Nothing paired yet. Pair one: pairfobd pair")
+		fmt.Println("Nothing paired yet. Pair one: pairfob pair")
 		return nil
 	}
 	for i, d := range rows {
@@ -75,7 +75,7 @@ func printPhones(sock string) error {
 		}
 		fmt.Printf("%d  %s  %s\n", i+1, label, lastSeenPhrase(d.LastSeen))
 	}
-	fmt.Println("\nUnpair one: pairfobd forget 1")
+	fmt.Println("\nUnpair one: pairfob forget 1")
 	return nil
 }
 
@@ -98,11 +98,11 @@ func forgetPhone(sock string, raw string) error {
 func resolvePhone(rows []admin.Device, raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return "", errors.New("which device? pairfobd list")
+		return "", errors.New("which device? pairfob list")
 	}
 	if n, err := strconv.Atoi(raw); err == nil {
 		if n < 1 || n > len(rows) {
-			return "", fmt.Errorf("no device %d — pairfobd list", n)
+			return "", fmt.Errorf("no device %d — pairfob list", n)
 		}
 		return rows[n-1].ID, nil
 	}
@@ -122,7 +122,7 @@ func resolvePhone(rows []admin.Device, raw string) (string, error) {
 	if len(matches) > 1 {
 		return "", fmt.Errorf("several devices are named %q — forget by number", raw)
 	}
-	return "", fmt.Errorf("no device matching %q — pairfobd list", raw)
+	return "", fmt.Errorf("no device matching %q — pairfob list", raw)
 }
 
 func lastSeenPhrase(unix int64) string {

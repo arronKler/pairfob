@@ -227,6 +227,23 @@
   text-wrap: pretty;
 }
 
+.step-host-note {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.step-open .btn,
+.pair-open .btn {
+  width: min(100%, 22rem);
+}
+
+.pair-open {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+}
+
 /* ---------- prerequisite + closing band ---------- */
 
 /* Pairfob is useless without Herdr, so say so before the install steps. */

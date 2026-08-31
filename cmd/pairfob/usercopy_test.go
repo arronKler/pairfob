@@ -27,7 +27,7 @@ func TestEnrollNoticesNameANextStep(t *testing.T) {
 	for _, code := range []string{"bad_grant", "grant_exhausted", "not_a_code"} {
 		text := enrollNotice(code)
 		assertOperatorText(t, text)
-		if !strings.Contains(text, "install") && !strings.Contains(text, "pairfobd doctor") {
+		if !strings.Contains(text, "install") && !strings.Contains(text, "pairfob doctor") {
 			t.Fatalf("%s: %q", code, text)
 		}
 		if strings.Contains(text, code) {
@@ -58,7 +58,7 @@ func TestDoctorOriginNoteDropsInternals(t *testing.T) {
 
 func TestPairSlotErrorIsHuman(t *testing.T) {
 	err := pairSlotError(errors.New("pair_ref does not match the active pairing"))
-	if err == nil || !strings.Contains(err.Error(), "pairfobd pair") {
+	if err == nil || !strings.Contains(err.Error(), "pairfob pair") {
 		t.Fatalf("got %v", err)
 	}
 	assertOperatorText(t, err.Error())

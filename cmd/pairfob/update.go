@@ -20,7 +20,7 @@ const maxUpdateBytes = 64 << 20
 
 func updateCommand(args []string) error {
 	if len(args) != 0 {
-		return errors.New("usage: pairfobd update")
+		return errors.New("usage: pairfob update")
 	}
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("PAIRFOB_DOWNLOAD_BASE")), "/")
 	if base == "" {
@@ -63,7 +63,7 @@ func updateExecutable(dest, base string) error {
 		return fmt.Errorf("%s: %w", name, err)
 	}
 	if sha256Hex(payload) != want {
-		return errors.New("downloaded pairfobd failed SHA-256 verification")
+		return errors.New("downloaded pairfob failed SHA-256 verification")
 	}
 	if err := replaceExecutable(dest, payload); err != nil {
 		return err
@@ -180,7 +180,7 @@ func sha256Hex(b []byte) string {
 
 func replaceExecutable(dest string, payload []byte) error {
 	dir := filepath.Dir(dest)
-	tmp, err := os.CreateTemp(dir, ".pairfobd-update-*")
+	tmp, err := os.CreateTemp(dir, ".pairfob-update-*")
 	if err != nil {
 		return err
 	}

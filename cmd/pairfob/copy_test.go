@@ -19,8 +19,8 @@ func TestPublicDocsDoNotAskUsersToCompareSAS(t *testing.T) {
 	files := []string{
 		"site/doc/start.md", "site/doc/pair.md", "site/doc/security.md", "site/doc/glossary.md", "site/doc/index.md",
 		"site/doc/zh/start.md", "site/doc/zh/pair.md", "site/doc/zh/security.md", "site/doc/zh/glossary.md", "site/doc/zh/index.md",
-		"cmd/pairfobd/pair.go",
-		"cmd/pairfobd/pair_prompt.go",
+		"cmd/pairfob/pair.go",
+		"cmd/pairfob/pair_prompt.go",
 	}
 	for _, rel := range files {
 		body, err := os.ReadFile(filepath.Join(root, rel))
@@ -46,7 +46,7 @@ func TestPairBannerAndEnterPromptHaveNoSAS(t *testing.T) {
 	if !strings.Contains(got, "Can't scan? Type this pairing code") {
 		t.Fatalf("%s", got)
 	}
-	src, err := os.ReadFile(filepath.Join(repoRoot(t), "cmd/pairfobd/pair_prompt.go"))
+	src, err := os.ReadFile(filepath.Join(repoRoot(t), "cmd/pairfob/pair_prompt.go"))
 	if err != nil {
 		t.Fatal(err)
 	}

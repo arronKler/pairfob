@@ -7,7 +7,7 @@ one Durable Object per `daemon_id`). Envelope bytes stay `pairfob.v1`; see
 `proto/envelope.md`, `proto/envelope-v2.md`, and `proto/pairfob-vectors.json`.
 Local pairing uses the same Worker via `./scripts/dev-up.sh`.
 
-The origin serves the PWA and forwards opaque binary envelopes. `pairfobd`
+The origin serves the PWA and forwards opaque binary envelopes. `pairfob`
 keeps the device credentials and end-to-end keys, connects outbound, and is
 the only process that talks to the Herdr Unix socket. The origin cannot read
 terminal content or RPC payloads.
@@ -26,7 +26,7 @@ enroll+HELLO), strict TypeScript checking, and a production Vite build.
 ## Hosted (pairfob.v2)
 
 Public origin is `https://pairfob.com` (Cloudflare Worker + one Durable Object
-per `daemon_id`). One `pairfobd` process talks to one origin. There is no Go
+per `daemon_id`). One `pairfob` process talks to one origin. There is no Go
 relay process. First enroll is `curl | sh` with no install code.
 `PAIRFOB_JOIN_TOKEN` is always rejected. Hosted origin defaults to
 `https://pairfob.com`. The phone uses the same PWA dist; `GET /api/config`
@@ -39,18 +39,19 @@ rather than certify a capacity claim.
 curl -fsSL https://pairfob.com/install.sh | sh
 ```
 
-That installs `pairfobd` to `/usr/local/bin` or `~/.local/bin`, enrolls, and
-installs a user LaunchAgent / systemd --user unit. Before enroll/rekey,
-`pairfobd` journals the client-minted replacement credential so an uncertain
+That installs `pairfob` to `/usr/local/bin` or `~/.local/bin`, adds `pairfobd`
+as a compatibility alias, enrolls, and installs a user LaunchAgent / systemd
+--user unit. Before enroll/rekey,
+`pairfob` journals the client-minted replacement credential so an uncertain
 HTTP outcome resumes the exact same operation. Later starts reuse `relay.json`.
 A second computer runs the same installer, then pairs from the phone.
 
-From a source checkout, `go run ./cmd/pairfobd` is enough; `PAIRFOB_ORIGIN` and
+From a source checkout, `go run ./cmd/pairfob` is enough; `PAIRFOB_ORIGIN` and
 `PAIRFOB_RELAY_WS` are optional on hosted. In a terminal on the computer, start
 the complete interactive pairing flow:
 
 ```
-pairfobd pair
+pairfob pair
 ```
 
 It leads with a QR and keeps one manual pairing code as the fallback. After the
@@ -59,34 +60,34 @@ phone proves the code, the computer asks for one Enter confirmation.
 Build downloadable binaries with `./scripts/release.sh` (writes `dist/dl/` plus
 `SHA256SUMS`). Pack `install.sh` onto the origin with `scripts/pack-origin-assets.sh`.
 A production origin that should serve the binaries also sets `PAIRFOB_PACK_DL=1`
-before packing (files land at `/dl/`). `pairfobd update` pulls those artifacts.
+before packing (files land at `/dl/`). `pairfob update` pulls those artifacts.
 
 Hosted hand entry is one combined code (8 secret glyphs + 6 routing glyphs).
 The PWA splits it locally: the last 6 glyphs are only a locator and never enter
 SPAKE / Argon2. QR uses `d` and `r` and does not put the locator on the WebSocket
-URL. `pairfobd doctor` probes which mux protocol this process is on.
+URL. `pairfob doctor` probes which mux protocol this process is on.
 
 ## Local test (real pairing in the browser)
 
 ```
-./scripts/dev-up.sh     # Worker origin + pairfobd + PWA on loopback
+./scripts/dev-up.sh     # Worker origin + pairfob + PWA on loopback
 ./scripts/dev-down.sh   # stop
 ```
 
 This is the same `workers/pairfob-origin` as production, via `wrangler dev`.
-It enrolls `pairfobd` against the local origin and serves the PWA at `/pair`.
+It enrolls `pairfob` against the local origin and serves the PWA at `/pair`.
 
-1. 在电脑执行 `dev-up.sh` 打印的 `pairfobd pair`（带上同一个 `PAIRFOB_STATE_DIR`），它会优先展示二维码，并保留配对码作为兜底。
+1. 在电脑执行 `dev-up.sh` 打印的 `pairfob pair`（带上同一个 `PAIRFOB_STATE_DIR`），它会优先展示二维码，并保留配对码作为兜底。
 2. 打开 PWA `http://127.0.0.1:18786/pair`，扫码会直接开始；无法扫码时，展开「输入配对码」再连接。
 3. 电脑出现手机已验证提示后，直接按 Enter。手机会自动进入已连接状态。
 4. 进入「需要你」。点一张卡片，打开的是你电脑上 Herdr 里那个真实会话。
 
 `./scripts/dev-up.sh` 默认连本机 Herdr。点对话框、打字、回车都会进那个 pane。
 只有显式设置 `PAIRFOB_DEV_FAKE_RUNTIME=1` 才走内置演示数据。默认单会话下，
-`pairfobd` 发现没有 Herdr socket 时会用已安装的 CLI 无感启动持久 Herdr server；
+`pairfob` 发现没有 Herdr socket 时会用已安装的 CLI 无感启动持久 Herdr server；
 用户之后运行普通 `herdr` 会附着到同一个 server。启动失败时 RPC 会报
 `herdr_offline`，界面会给出手动启动提示；Herdr 稍后出现后会自动恢复，不需要
-重启 `pairfobd` 或重新配对。显式设置 `PAIRFOB_HERDR_AUTOSTART=0` 可关闭自动启动；
+重启 `pairfob` 或重新配对。显式设置 `PAIRFOB_HERDR_AUTOSTART=0` 可关闭自动启动；
 多会话模式也不会猜测要启动哪个 session。
 
 The encrypted RPC surface also supports creating a conversation, creating tabs
@@ -119,7 +120,7 @@ to retry, and must not be reused for a different payload. Pairfob never
 automatically retries mutations. `unknown_outcome` means the caller must refresh
 `Snapshot` or `ListWorktrees` instead of resending the operation; a composed
 operation such as `CreateConversation` may report `partial_failure`.
-Before a side effect starts, pairfobd writes the device/session/intent fingerprint
+Before a side effect starts, pairfob writes the device/session/intent fingerprint
 to `operations.json`; terminal receipts are then updated atomically. A pending
 row recovered after a crash returns `unknown_outcome` and is never replayed.
 Completed rows are retained for 30 days, and a full 65,536-row ledger rejects new
@@ -170,17 +171,17 @@ mutations always use `focus=false`.
 ## Operations
 
 ```
-pairfobd pair
-pairfobd list
-pairfobd forget 1
-pairfobd update
-pairfobd doctor
-pairfobd version
+pairfob pair
+pairfob list
+pairfob forget 1
+pairfob update
+pairfob doctor
+pairfob version
 ```
 
-`pair`, `list`, and `forget` talk to the running daemon over `$PAIRFOB_STATE_DIR/pairfobd.sock`
+`pair`, `list`, and `forget` talk to the running daemon over `$PAIRFOB_STATE_DIR/pairfob.sock`
 (0600). The other end can be a phone, tablet, or another computer running the
-PWA. In a terminal, `pairfobd` with no arguments shows a short status when the
+PWA. In a terminal, `pairfob` with no arguments shows a short status when the
 daemon is already running. Advanced diagnostics (`pair new|status|accept|deny`,
 `enroll`, `service`, `relay rekey`) stay available and are omitted from the default
 help. There is no local browser confirm page. `update` replaces the binary and
@@ -194,7 +195,7 @@ material. The admin device list deliberately omits PSKs, user agents, and
 subscription endpoints/keys. New PWA pairings persist only a coarse device
 label such as `iPhone` or `Android 手机`; Settings shows that label, recent
 activity, and the subscription count. A phone may revoke only itself; use
-`pairfobd device revoke <device_id>` locally for any other device.
+`pairfob device revoke <device_id>` locally for any other device.
 
 Web Push is off by default. Enable it with `PAIRFOB_PUSH=1` and set
 `PAIRFOB_VAPID_SUBJECT` to an operator-controlled `mailto:` or `https:` URL.

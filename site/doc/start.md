@@ -1,6 +1,6 @@
 ---
 title: Get started
-description: Install Herdr and pairfobd once, then continue from another device.
+description: Install Herdr and pairfob once, then continue from another device.
 ---
 
 # Get started
@@ -13,52 +13,39 @@ Four steps: install Herdr → install Pairfob → pair → open a session.
 
 | Need | Notes |
 | --- | --- |
-| A macOS or Linux computer | `pairfobd` and the agents run here |
+| A macOS or Linux computer | `pairfob` and the agents run here |
 | [Herdr](https://herdr.dev) 0.7 or newer | Pairfob does not ship an agent and does not replace Herdr |
 | `curl` | The install script downloads the binary |
 | A browser on another device | Phone, tablet, or another computer |
 
-Do not set `PAIRFOB_JOIN_TOKEN`. The relay is the Worker origin; setting it makes startup fail.
-
 ## 1. Herdr is installed on the computer
 
-Pairfob does not replace Herdr. Agents still run here, but Herdr does not need to be open before Pairfob starts. In the default single-session setup, `pairfobd` quietly starts the persistent Herdr server when it launches and finds Herdr offline. Running `herdr` later attaches to that same server, so the panes and processes already opened from the phone are not copies.
+Pairfob does not replace Herdr. Agents still run here, but Herdr does not need to be open before Pairfob starts. When `pairfob` launches and finds Herdr offline, it starts it. Running `herdr` later attaches to that same server, so the sessions already opened from the phone are not copies.
 
-If automatic startup fails, the phone explicitly says Herdr is not running. Run `herdr` once on the computer and Pairfob recovers without a daemon restart or new pairing. Set `PAIRFOB_HERDR_AUTOSTART=0` in the service environment to opt out. There is no extra “remote mode” to turn on.
+If automatic startup fails, the phone explicitly says Herdr is not running. Run `herdr` once on the computer and Pairfob recovers without a restart or new pairing. There is no extra “remote mode” to turn on.
 
-## 2. Install pairfobd
+## 2. Install pairfob
 
 ```sh
 curl -fsSL https://pairfob.com/install.sh | sh
 ```
 
-This will:
-
-1. Download the `pairfobd` binary for this OS/arch (darwin/linux × amd64/arm64)
-2. Verify SHA-256 and refuse to install on mismatch
-3. Enroll with `https://pairfob.com`
-4. Install a user-level login service (macOS LaunchAgent / Linux systemd --user)
+This downloads `pairfob`, enrolls with `https://pairfob.com`, and installs a user-level login service.
 
 The service starts after you log in, not at power-on. Sleeping with the lid closed, or logging out, stops it until you return to that same session.
 
-Later starts reuse local `relay.json`. A second computer uses the same command, then **设置 → 添加另一台电脑** on the phone.
+A second computer uses the same command, then **设置 → 添加另一台电脑** on the phone.
 
 Flags, install paths, and uninstall: [Install](/install).
 
-From a source checkout (no user service):
-
-```sh
-go run ./cmd/pairfobd
-```
-
-After install, type `pairfobd` with no subcommand. It prints whether it is running, how many devices are paired, and whether Herdr is open. For the full checklist use `pairfobd doctor`.
+After install, type `pairfob` with no subcommand. It prints whether it is running, how many devices are paired, and whether Herdr is open. For the full checklist use `pairfob doctor`.
 
 ## 3. Pair
 
-On a terminal **on the computer that runs pairfobd**:
+On a terminal **on the computer that runs pairfob**:
 
 ```sh
-pairfobd pair
+pairfob pair
 ```
 
 It leads with a QR code and keeps a manual code as fallback. On the other device open <a href="/pair">pairfob.com/pair</a>:
@@ -72,15 +59,15 @@ Details and errors: [Pairing](/pair).
 
 ## 4. Open a session
 
-Herdr sessions appear in the Pairfob list. Tapping a card opens that pane on the computer, not a copy.
+Herdr sessions appear in the Pairfob list. Tapping a card opens that session on the computer, not a copy.
 
-When the status is **等你**, TUI choices become tappable buttons. Pairfob **does not blindly send Enter**. The compose box uses the system keyboard, including dictation and autocorrect. Keystrokes go to the real PTY.
+When the status is **等你**, choices become tappable buttons. Pairfob **does not blindly send Enter**. The compose box uses the system keyboard, including dictation and autocorrect. What you send lands in that session on the computer.
 
 UI: [Using the app](/app). Leaving and sitting down: [Leave and return](/continue).
 
 ## Add to Home Screen
 
-Pairfob is a PWA. Pinning it removes the browser chrome.
+Pairfob is a web app. Pinning it removes the browser chrome.
 
 **iOS / iPadOS (Safari)**
 
@@ -100,8 +87,8 @@ The credential lives in **this browser profile on this device**. Another browser
 
 | On the computer | On the phone |
 | --- | --- |
-| `pairfobd doctor` shows Running / Herdr / Origin healthy | Opening Pairfob shows the same session list |
-| `pairfobd list` includes this device | Opening an **等你** card, the dialog is tappable |
-| The Herdr window is still there; focus was not stolen | Typed text appears in that computer pane |
+| `pairfob doctor` shows Running / Herdr / Origin healthy | Opening Pairfob shows the same session list |
+| `pairfob list` includes this device | Opening an **等你** card, the dialog is tappable |
+| The Herdr window is still there | Typed text appears in that computer session |
 
 Next: [Multiple devices](/devices), [Notifications](/push), or skim the [FAQ](/faq).

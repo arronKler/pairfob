@@ -7,34 +7,32 @@ description: 再配对一台就再扫一次码。手机只能解除自己，别�
 
 电脑是一头。手机、平板、另一台电脑的浏览器都可以配对上来，连着同一群会话。每台设备各自持有凭证，不能靠「导出浏览器数据」来克隆。
 
-设备名单只存粗略名称（例如 `iPhone`、`Android 手机`）、最近使用时间和通知订阅数。不会存 PSK、User-Agent 或推送 endpoint。
-
 ## 再加一台
 
 电脑上再执行：
 
 ```sh
-pairfobd pair
+pairfob pair
 ```
 
-用**新设备**扫这次的码（或手输这次打印的 14 位）。不要让旧设备再扫一次——旧设备已经配过，再扫是在开一条新授权，而且会作废当前槽上别人正在扫的码。
+用**新设备**扫这次的码（或手输这次打印的 14 位）。不要让旧设备再扫一次——旧设备已经配过，再扫是在开一条新授权，而且会作废别人正在扫的码。
 
-上限是每台 daemon **最多 10 条**已建立的会话连接，另有短暂的恢复窗口。日常几部手机足够。连满时新设备会失败，需要先 `forget` 一台。
+日常几部手机足够。连满时新设备会失败，需要先 `forget` 一台。
 
 ## 看谁连着
 
 ```sh
-pairfobd list
+pairfob list
 ```
 
 ```
 1  iPhone  just now
 2  Android 手机  2 hours ago
 
-Unpair one: pairfobd forget 1
+Unpair one: pairfob forget 1
 ```
 
-还没有设备时会提示 `Nothing paired yet. Pair one: pairfobd pair`。
+还没有设备时会提示 `Nothing paired yet. Pair one: pairfob pair`。
 
 手机设置页也会列出已配对设备，并把当前设备标成「这台手机」。
 
@@ -43,31 +41,31 @@ Unpair one: pairfobd forget 1
 电脑上按 `list` 的序号：
 
 ```sh
-pairfobd forget 1
+pairfob forget 1
 ```
 
-也可以 `pairfobd forget iPhone`。多个同名设备时必须用序号。
+也可以 `pairfob forget iPhone`。多个同名设备时必须用序号。
 
-手机 **设置 → 危险操作 → 解除这台手机的配对**，只能解除**自己**。这是故意的：丢失的手机如果还能打开 Pairfob，最多解除自己的配对，不能动其他设备。设置页还会写 `pairfobd device revoke <device_id>`；电脑上日常用 `list` 之后的 `forget N` 即可。
+手机 **设置 → 危险操作 → 解除这台手机的配对**，只能解除**自己**。这是故意的：丢失的手机如果还能打开 Pairfob，最多解除自己的配对，不能动其他设备。电脑上日常用 `list` 之后的 `forget N` 即可。
 
 要踢一台已经拿不到的手机：
 
-1. 在电脑上 `pairfobd list`
-2. `pairfobd forget N`
+1. 在电脑上 `pairfob list`
+2. `pairfob forget N`
 3. 那台设备上的本地凭证会变成废的，打开 Pairfob 需要重新配对
 
 ## 丢失或卖掉手机
 
 1. 立刻在电脑上 `forget` 对应条目
 2. 若开过通知，订阅会一并失效
-3. 如果怀疑电脑本身也不干净，再考虑 `pairfobd relay rekey` 并重新配对所有设备，见 [中继看不到什么](/zh/security)
+3. 如果怀疑电脑本身也不干净，见 [中继看不到什么](/zh/security)
 
 ## 一部手机，多台电脑
 
 每台电脑各自安装、各自配对。安装命令相同：
 
 1. 在另一台电脑：`curl -fsSL https://pairfob.com/install.sh | sh`
-2. 在那台电脑：`pairfobd pair`
+2. 在那台电脑：`pairfob pair`
 3. 在这台手机：**设置 → 添加另一台电脑**，再扫那台电脑当前的码
 
 这台手机按电脑各存一条凭证，下次打开会连回你最近用的那台。存了两条以上时，主页会出现 **电脑**。

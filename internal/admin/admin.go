@@ -1,4 +1,4 @@
-// Package admin is the local operator seam for a running pairfobd.
+// Package admin is the local operator seam for a running pairfob.
 //
 // The daemon is headless. Pairing Y/N, rotating a code, and device revoke
 // happen over a 0600 Unix socket in the state directory — not a browser page.
@@ -14,7 +14,7 @@ import (
 	"pairfob/internal/state"
 )
 
-const socketName = "pairfobd.sock"
+const socketName = "pairfob.sock"
 
 type Pairing struct {
 	Ref       string    `json:"pair_ref,omitempty"`
