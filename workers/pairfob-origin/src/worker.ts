@@ -166,7 +166,7 @@ async function staticOrPlaceholder(req: Request, env: Env, build: string): Promi
     }
     const res = await followDocAsset(env.ASSETS, req, url, await env.ASSETS.fetch(assetReq));
     observeDocument(env, req.method, url.pathname, res.status);
-    return withSecurity(build, res, staticAssetHeaders(url.pathname, res.ok));
+    return withSecurity(build, res, staticAssetHeaders(url.pathname, res.ok, res.headers.get("Content-Type")));
   }
   const headers = new Headers({ "Content-Type": "text/html; charset=utf-8" });
   applySecurityHeaders(headers, build);
@@ -213,15 +213,20 @@ async function followDocAsset(assets: Fetcher, req: Request, url: URL, res: Resp
   return followed;
 }
 
-function staticAssetHeaders(path: string, ok: boolean): Record<string, string> | undefined {
+function staticAssetHeaders(path: string, ok: boolean, contentType: string | null): Record<string, string> | undefined {
   if (!ok) return undefined;
   if (isPairAppPath(path)) {
-    return { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" };
+    return { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, no-transform" };
   }
   // Marketing and docs have no Wasm; `/pair` keeps the PWA-specific policy above.
   if (isMarketingDocument(path) || isDocPath(path)) {
     const headers: Record<string, string> = { "Content-Security-Policy": CSP_SITE };
     if (isAltMarketingPath(path)) headers["Content-Type"] = "text/html; charset=utf-8";
+    if (isMarketingDocument(path) || contentType?.toLowerCase().includes("text/html")) {
+      // Keep Cloudflare Web Analytics from injecting a third-party beacon that
+      // conflicts with Pairfob's self-only CSP and no-telemetry contract.
+      headers["Cache-Control"] = "public, max-age=0, must-revalidate, no-transform";
+    }
     return headers;
   }
   if (path === "/install.sh") {

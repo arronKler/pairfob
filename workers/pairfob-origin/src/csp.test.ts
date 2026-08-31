@@ -54,6 +54,7 @@ describe("static content security policy", () => {
       expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
       expect(res.headers.get("X-Pairfob-Build")).toBeTruthy();
       expect(res.headers.get("Content-Security-Policy")).not.toContain("unsafe-inline");
+      expect(res.headers.get("Cache-Control")).toContain("no-transform");
     }
   });
 

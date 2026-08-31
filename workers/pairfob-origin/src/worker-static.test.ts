@@ -30,7 +30,7 @@ describe("worker static overlay", () => {
       const res = await handleFetch(new Request("https://pairfob.com" + path), env);
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toContain("text/html");
-      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(res.headers.get("Cache-Control")).toBe("no-store, no-transform");
       expect(await res.text()).toContain('id="app"');
     }
   });
@@ -93,6 +93,7 @@ describe("worker static overlay", () => {
       expect(await res.text()).toContain("<title>docs</title>");
       expect(res.headers.get("Content-Security-Policy")).toContain("script-src 'self'");
       expect(res.headers.get("Content-Security-Policy")).not.toContain("wasm-unsafe-eval");
+      expect(res.headers.get("Cache-Control")).toContain("no-transform");
     }
   });
 
