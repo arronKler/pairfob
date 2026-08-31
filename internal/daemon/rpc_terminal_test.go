@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"pairfob/internal/runtime"
 )
@@ -58,9 +59,15 @@ func TestTerminalRPCStreamsFramesAndOrdersCommands(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// Drain every frame that raced with its command response.
-	if _, err := client.RPC("Ping", map[string]any{"t_ms": 1}); err != nil {
-		t.Fatal(err)
+	// Terminal forwarding runs independently from command replies. Poll with a
+	// read-only Ping until every already-generated frame has reached the test
+	// client; one Ping is not a synchronization barrier for that goroutine.
+	deadline := time.Now().Add(2 * time.Second)
+	for len(client.Events) < 3 && time.Now().Before(deadline) {
+		if _, err := client.RPC("Ping", map[string]any{"t_ms": 1}); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Millisecond)
 	}
 	if len(client.Events) < 3 {
 		t.Fatalf("terminal events = %d, want initial, input and resize", len(client.Events))
