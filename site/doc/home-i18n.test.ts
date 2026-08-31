@@ -88,10 +88,8 @@ describe("homepage i18n", () => {
     expect(zh["faq.a6"]).toContain("新电脑登记随时可能关上");
     expect(en["foot.blurb"]).toContain("official instance");
     expect(zh["foot.blurb"]).toContain("官方实例");
-    expect(en.description).toContain("Unofficial phone surface for Herdr");
-    expect(en.description).toContain("official instance");
-    expect(zh.description).toContain("非官方手机端");
-    expect(zh.description).toContain("官方实例");
+    expect(en.description).toContain("phone surface for Herdr");
+    expect(zh.description).toContain("Herdr 的手机端");
     expect(html).toContain(en.description);
   });
 

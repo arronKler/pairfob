@@ -102,14 +102,11 @@ describe("user-facing documentation", () => {
     expect(faq).toContain("官方实例");
     expect(faq).toContain("Apache-2.0");
     expect(faq).toContain("新电脑登记随时可能关上");
-    expect(faq).toContain("不是 Herdr 的官方产品");
     expect(faqEn).toContain("official instance");
     expect(faqEn).toContain("Apache-2.0");
     expect(faqEn).toContain("New computer setup can close");
-    expect(faqEn).toContain("not an official Herdr product");
     expect(indexZh).toContain("官方实例");
     expect(indexEn).toContain("Official instance");
-    expect(indexEn).toContain("not an official Herdr product");
   });
 
   test("design section stays a product overview", () => {

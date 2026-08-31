@@ -9,7 +9,7 @@ pairfob --outbound WSS--> 该 DO --opaque FWD-- 同一 DO 上的 phone
 pairfob --loopback--> HarnessRuntime
 ```
 
-Relay / DO 只做帧级 relay，不解析 `FWD`。身份与密钥只在 daemon。读和写都要求 `Established` 会话。产品 relay 只有 `workers/pairfob-origin`（`pairfob.v2`）。`https://pairfob.com` 是本项目的官方实例，不是 Herdr 官方产品。新电脑登记可关（`SIGNUP_OPEN` / `ENROLL_OPEN`），这是成本阀，已登记的电脑继续可用。用户文档不提供自建 origin。`internal/mux` Hub 仅作 daemon 进程内测试替身，不是可部署 origin。
+Relay / DO 只做帧级 relay，不解析 `FWD`。身份与密钥只在 daemon。读和写都要求 `Established` 会话。产品 relay 只有 `workers/pairfob-origin`（`pairfob.v2`）。`https://pairfob.com` 是本项目的官方实例。新电脑登记可关（`SIGNUP_OPEN` / `ENROLL_OPEN`），这是成本阀，已登记的电脑继续可用。用户文档不提供自建 origin。`internal/mux` Hub 仅作 daemon 进程内测试替身，不是可部署 origin。
 
 ## 文件规模（硬性）
 

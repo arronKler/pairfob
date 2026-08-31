@@ -11,7 +11,7 @@ No. There is no email login. The computer enrolls when you run the installer. De
 
 ## Can Pairfob run agents by itself?
 
-No. It is the phone surface for [Herdr](https://herdr.dev), not an official Herdr product. The computer needs Herdr 0.7 or newer installed. `pairfob` starts Herdr when needed. If automatic startup fails, the list shows Herdr offline and recovers after you run `herdr` manually.
+No. It is the phone surface for [Herdr](https://herdr.dev). The computer needs Herdr 0.7 or newer installed. `pairfob` starts Herdr when needed. If automatic startup fails, the list shows Herdr offline and recovers after you run `herdr` manually.
 
 ## Is this remote desktop?
 

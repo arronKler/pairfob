@@ -4,7 +4,7 @@
   const zh = {
     title: "Pairfob — 手机接着操作电脑上的 AI Agent 会话",
     description:
-      "Herdr 的非官方手机端。在手机上接着操作电脑里正在跑的会话。pairfob.com 是本项目官方实例；不用注册，不开公网端口。",
+      "在手机上接着操作电脑里正在跑的 AI 编码 Agent。Pairfob 是 Herdr 的手机端，Codex、Claude、Grok 的会话两端同步，端到端加密，不用 VPN、不开公网端口。",
     "og.image.alt": "Pairfob：电脑和手机上是同一份 Agent 会话列表",
     skip: "跳到正文",
     "brand.aria": "Pairfob 首页",
@@ -138,7 +138,7 @@
   const en = {
     title: "Pairfob — continue the AI agent session on your computer from your phone",
     description:
-      "Unofficial phone surface for Herdr. Continue the same live sessions from your phone. pairfob.com is this project's official instance; no account, no inbound ports.",
+      "Continue the coding agents already running on your computer from your phone. Pairfob is the phone surface for Herdr: Codex, Claude, and Grok stay one session on both sides, end-to-end encrypted, no VPN and no inbound ports.",
     "og.image.alt": "Pairfob: the same agent list on computer and phone",
     skip: "Skip to content",
     "brand.aria": "Pairfob home",

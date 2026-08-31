@@ -2,7 +2,6 @@
 
 Phone surface for a [Herdr](https://herdr.dev) agent herd: the same live
 sessions on computer and phone. Pairing code, outbound daemon, no Tailscale.
-Pairfob is not an official Herdr product.
 
 `https://pairfob.com` is this project's official instance (Cloudflare Worker +
 one Durable Object per `daemon_id`). There is no account and no capacity

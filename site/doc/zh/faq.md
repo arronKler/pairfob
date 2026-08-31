@@ -11,7 +11,7 @@ description: 账号、Herdr、锁屏、合盖、断网、丢失手机、Windows�
 
 ## Pairfob 能单独跑 agent 吗？
 
-不能。它是 [Herdr](https://herdr.dev) 的手机端，不是 Herdr 的官方产品。电脑上要装 Herdr 0.7 或更高；`pairfob` 会在启动时自动拉起 Herdr。自动启动失败时列表会显示 Herdr 离线，手动运行 `herdr` 后会自动恢复。
+不能。它是 [Herdr](https://herdr.dev) 的手机端。电脑上要装 Herdr 0.7 或更高；`pairfob` 会在启动时自动拉起 Herdr。自动启动失败时列表会显示 Herdr 离线，手动运行 `herdr` 后会自动恢复。
 
 ## 这是远程桌面吗？
 

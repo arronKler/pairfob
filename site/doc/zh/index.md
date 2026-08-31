@@ -87,11 +87,10 @@ pageClass: pf-intro
 - 需要远程控制整台电脑的桌面、浏览器、IDE 窗口
 - 希望 Pairfob 在云上替你保管会话和密钥
 - 需要 Windows 电脑当宿主（还没做）
-- 需要 Herdr、Anthropic 或 OpenAI 的官方应用
 
 ## 官方实例
 
-`https://pairfob.com` 是本项目的官方中转和网页。安装和配对走这个入口。Pairfob 不是 Herdr 的官方产品。
+`https://pairfob.com` 是本项目的官方中转和网页。安装和配对走这个入口。
 
 新电脑登记可能随时关上。已经登记的电脑继续可用。本文不承诺容量。
 
