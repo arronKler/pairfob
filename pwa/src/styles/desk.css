@@ -36,6 +36,12 @@
 
 .rail .empty-sub { margin: 4px 2px 0; }
 
+.rail .home-feedback {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
 .rail .card {
   margin: 6px 0 0;
   padding: 10px 12px;

@@ -47,6 +47,8 @@ printf '%s\n' "$VERSION" >"${OUT}/VERSION"
   fi
 )
 
+pairfob_require_release_dir "$OUT"
+
 echo "artifacts in ${OUT}"
 echo "production: PAIRFOB_PACK_DL=1 ./scripts/pack-origin-assets.sh then wrangler deploy"
 echo "verify.sh omits binaries so Worker e2e stays small."

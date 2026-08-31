@@ -1,6 +1,6 @@
 ---
 title: FAQ
-description: Accounts, Herdr, lock screen, a closed lid, offline, a lost phone, Windows, and how this differs from remote desktop.
+description: Accounts, Herdr, lock screen, a closed lid, offline, a lost phone, Windows, cost, and how this differs from remote desktop.
 ---
 
 # FAQ
@@ -11,7 +11,7 @@ No. There is no email login. The computer enrolls when you run the installer. De
 
 ## Can Pairfob run agents by itself?
 
-No. It is the phone surface for [Herdr](https://herdr.dev). The computer needs Herdr 0.7 or newer installed. `pairfob` starts Herdr when needed. If automatic startup fails, the list shows Herdr offline and recovers after you run `herdr` manually.
+No. It is the phone surface for [Herdr](https://herdr.dev), not an official Herdr product. The computer needs Herdr 0.7 or newer installed. `pairfob` starts Herdr when needed. If automatic startup fails, the list shows Herdr offline and recovers after you run `herdr` manually.
 
 ## Is this remote desktop?
 
@@ -82,7 +82,7 @@ Yes. Each computer runs `curl -fsSL https://pairfob.com/install.sh | sh` on its 
 
 ## Install failed on enroll.
 
-Check the network and `pairfob doctor`. If this network has enrolled too many computers today, try again tomorrow.
+Check the network and `pairfob doctor`. If this network has enrolled too many computers today, try again tomorrow. If setup is closed on the site, new computers cannot enroll right now; computers already set up keep working.
 
 ## The list is empty.
 
@@ -106,8 +106,16 @@ Do not treat the current code as a team invite. Pairing attaches to **your** com
 
 ## Does it cost money?
 
-The entry and the web app are meant to be usable as they stand. This page does not promise a capacity guarantee.
+No. The source is Apache-2.0. `https://pairfob.com` is this project's official instance: the web app and the relay you enroll against. There is no account and no capacity promise.
+
+New computer setup can close at any time. Computers already enrolled, and devices already paired, keep working.
 
 ## Is the documentation Chinese-only?
 
 No. [中文文档](/zh/). Use the language menu in the top bar.
+
+## How do I report a problem?
+
+Open a GitHub issue: <https://github.com/arronKler/pairfob/issues/new>
+
+That is the public channel for bugs and product feedback. A security vulnerability goes to [GitHub Security Advisories](https://github.com/arronKler/pairfob/security/advisories/new), not a public issue.

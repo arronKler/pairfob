@@ -8,7 +8,16 @@ import { render } from "../paint";
 import { app, setDefaultTermMode, state, type TermMode } from "../state";
 import { isDesk } from "../viewport";
 import { composeLiveControl } from "./session-view";
-import { backBar, feedbackNode, herdStatus, listGroupControl, noteNode, setRow } from "./chrome";
+import {
+  backBar,
+  chevron,
+  feedbackNode,
+  herdStatus,
+  ISSUE_NEW_URL,
+  listGroupControl,
+  noteNode,
+  setRow,
+} from "./chrome";
 
 const TERM_MODE_OPTIONS: Array<{ id: TermMode; label: string }> = [
   { id: "guided", label: TERM_MODE_LABEL.guided },
@@ -47,6 +56,15 @@ function deviceRow(device: DeviceSummary): HTMLElement {
     : `最近使用：${formatDeviceAge(device.last_seen || device.created_at)}`;
   const notifications = device.subscription_count ? " · 通知已开启" : " · 未开启通知";
   row.append(head, id, node("p", "device-meta", activity + notifications));
+  return row;
+}
+
+function helpRow(label: string, href: string): HTMLAnchorElement {
+  const row = node("a", "set-row set-nav");
+  row.href = href;
+  row.target = "_blank";
+  row.rel = "noreferrer";
+  row.append(document.createTextNode(label), chevron());
   return row;
 }
 
@@ -110,7 +128,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   const inputCard = node("div", "set-card");
   const inputRow = node("div", "set-row set-row-stack");
   inputRow.append(
-    node("p", "set-note", "组字是写完再发送。实时是边打边进终端，右侧 Enter 再确认。"),
+    node("p", "set-note", "组字写完再按 Enter。实时边打边进终端。右侧始终是 Enter。"),
   );
   inputRow.append(composeLiveControl());
   inputCard.append(inputRow);
@@ -169,6 +187,12 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   } else {
     container.append(node("p", "empty-sub", "还没有其他已配对设备。"));
   }
+
+  container.append(node("h2", "set-title", "帮助"));
+  const help = node("div", "set-card");
+  help.append(helpRow("文档", "/doc/zh/"));
+  help.append(helpRow("反馈问题", ISSUE_NEW_URL));
+  container.append(help);
 
   container.append(node("h2", "set-title", "危险操作"));
   const danger = node("div", "set-card");

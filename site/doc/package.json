@@ -1,6 +1,7 @@
 {
   "name": "pairfob-doc",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vitepress dev --port 5174",

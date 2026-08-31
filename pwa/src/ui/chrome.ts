@@ -3,6 +3,17 @@ import { type ListGroup } from "../lib/ranking";
 import { render } from "../paint";
 import { saveListGroup, state, type Notice, type StatusTone, visibleNotice } from "../state";
 
+/** Public bugs and product feedback. Security reports stay on GitHub Advisories. */
+export const ISSUE_NEW_URL = "https://github.com/arronKler/pairfob/issues/new";
+
+export function issueLink(className: string, text: string): HTMLAnchorElement {
+  const link = node("a", className, text);
+  link.href = ISSUE_NEW_URL;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  return link;
+}
+
 export function feedbackNode(value: Notice): HTMLParagraphElement {
   const element = node("p", `notice notice-${value.tone}`, value.text);
   element.setAttribute("role", value.tone === "error" ? "alert" : "status");

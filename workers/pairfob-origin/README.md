@@ -1,6 +1,6 @@
 # pairfob-origin
 
-The only Pairfob relay: Cloudflare Worker + one Durable Object per `daemon_id` + sharded `PairingIndex` + D1 grants. Production is `https://pairfob.com`. Local pairing is `../../scripts/dev-up.sh` (`wrangler.local.jsonc`).
+The only Pairfob relay: Cloudflare Worker + one Durable Object per `daemon_id` + sharded `PairingIndex` + D1 grants. Production `https://pairfob.com` is this project's official instance. Local pairing is `../../scripts/dev-up.sh` (`wrangler.local.jsonc`).
 
 Envelope codec stays `version=0x01`; FWD bytes are opaque. Mux control JSON is `"v":2`.
 
@@ -44,9 +44,11 @@ bun run src/mint.ts --label lab
 ## Self-serve signup
 
 `/v2/grants` lets a visitor mint their own grant from the landing page, so the
-site is not invite-only. `GET` reports whether signup is open; a same-origin
-browser `POST` mints a `max_daemons=2` grant labelled `self-serve`. Signup is
-open by default, and `SIGNUP_OPEN=0` is the emergency shutoff.
+official instance is not invite-only. `GET` reports whether signup is open; a
+same-origin browser `POST` mints a `max_daemons=2` grant labelled `self-serve`.
+Signup is open by default. `SIGNUP_OPEN=0` is the cost valve: new computers
+cannot enroll; existing rooms keep working. `ENROLL_OPEN=0` is the matching
+Worker switch on `POST /v2/enroll`.
 
 The authoritative abuse cap is `SELF_GRANT_PER_IP` grants per hashed IP per
 `SELF_GRANT_WINDOW_MS`, enforced inside the D1 `INSERT` so concurrent requests

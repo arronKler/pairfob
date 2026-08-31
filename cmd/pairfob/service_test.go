@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -70,6 +73,130 @@ func TestServiceCommandsLinuxRestart(t *testing.T) {
 	if !strings.Contains(joined, "systemctl --user restart pairfob.service") {
 		t.Fatalf("cmds=%s", joined)
 	}
+}
+
+func TestServiceCommandsUseLayoutSpecificLegacyIdentifiers(t *testing.T) {
+	darwin := serviceCommands(serviceLayout{
+		GOOS:         "darwin",
+		UID:          501,
+		UnitPath:     "/Users/x/Library/LaunchAgents/com.pairfob.pairfobd.plist",
+		LaunchdLabel: legacyLaunchdLabel,
+	}, "uninstall")
+	if got := fmtCmds(darwin); !strings.Contains(got, "gui/501/"+legacyLaunchdLabel) {
+		t.Fatalf("darwin commands=%s", got)
+	}
+
+	linux := serviceCommands(serviceLayout{GOOS: "linux", SystemdUnit: legacySystemdUnit}, "uninstall")
+	if got := fmtCmds(linux); !strings.Contains(got, "disable --now "+legacySystemdUnit) {
+		t.Fatalf("linux commands=%s", got)
+	}
+}
+
+func TestUninstallKeepsUnitWhenServiceIsStillActive(t *testing.T) {
+	unitPath := writeServiceUnit(t)
+	calls := 0
+	stubServiceRunner(t, func(args []string) ([]byte, error) {
+		calls++
+		switch calls {
+		case 1:
+			return []byte("service = active"), nil
+		case 2:
+			return []byte("bootout failed"), errors.New("exit 5")
+		case 3:
+			return []byte("service = active"), nil
+		default:
+			t.Fatalf("unexpected command: %v", args)
+			return nil, nil
+		}
+	})
+
+	layout := serviceLayout{GOOS: "darwin", UID: 501, UnitPath: unitPath}
+	if err := uninstallServiceLayout(layout); err == nil || !strings.Contains(err.Error(), "still active") {
+		t.Fatalf("uninstall error=%v", err)
+	}
+	if _, err := os.Stat(unitPath); err != nil {
+		t.Fatalf("unit was removed after failed stop: %v", err)
+	}
+}
+
+func TestUninstallAcceptsStopErrorAfterVerifiedExit(t *testing.T) {
+	unitPath := writeServiceUnit(t)
+	calls := 0
+	stubServiceRunner(t, func(args []string) ([]byte, error) {
+		calls++
+		switch calls {
+		case 1:
+			return []byte("service = active"), nil
+		case 2:
+			return []byte("bootout raced"), errors.New("exit 3")
+		case 3:
+			return []byte(`Could not find service "com.pairfob.pairfob"`), errors.New("exit 113")
+		default:
+			t.Fatalf("unexpected command: %v", args)
+			return nil, nil
+		}
+	})
+
+	layout := serviceLayout{GOOS: "darwin", UID: 501, UnitPath: unitPath}
+	if err := uninstallServiceLayout(layout); err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+	if _, err := os.Stat(unitPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unit still exists: %v", err)
+	}
+}
+
+func TestLinuxUninstallKeepsUnitWhenDisableFails(t *testing.T) {
+	unitPath := writeServiceUnit(t)
+	calls := 0
+	stubServiceRunner(t, func(args []string) ([]byte, error) {
+		calls++
+		switch calls {
+		case 1:
+			return []byte("inactive"), errors.New("exit 3")
+		case 2:
+			return []byte("disable failed"), errors.New("exit 1")
+		case 3:
+			return []byte("inactive"), errors.New("exit 3")
+		default:
+			t.Fatalf("unexpected command: %v", args)
+			return nil, nil
+		}
+	})
+
+	layout := serviceLayout{GOOS: "linux", UnitPath: unitPath}
+	if err := uninstallServiceLayout(layout); err == nil || !strings.Contains(err.Error(), "disable service") {
+		t.Fatalf("uninstall error=%v", err)
+	}
+	if _, err := os.Stat(unitPath); err != nil {
+		t.Fatalf("unit was removed after failed disable: %v", err)
+	}
+}
+
+func TestUninstallMissingUnitIsIdempotentWithoutServiceManager(t *testing.T) {
+	stubServiceRunner(t, func([]string) ([]byte, error) {
+		return []byte("Failed to connect to bus"), errors.New("exit 1")
+	})
+	layout := serviceLayout{GOOS: "linux", UnitPath: filepath.Join(t.TempDir(), "missing.service")}
+	if err := uninstallServiceLayout(layout); err != nil {
+		t.Fatalf("uninstall missing unit: %v", err)
+	}
+}
+
+func writeServiceUnit(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "pairfob.plist")
+	if err := os.WriteFile(path, []byte("fixture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func stubServiceRunner(t *testing.T, runner func([]string) ([]byte, error)) {
+	t.Helper()
+	previous := runServiceCommand
+	runServiceCommand = runner
+	t.Cleanup(func() { runServiceCommand = previous })
 }
 
 func fmtCmds(cmds [][]string) string {

@@ -41,6 +41,40 @@
   text-decoration: underline;
 }
 
+.faq-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px 28px;
+  margin: 28px 0 0;
+  padding: 22px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.faq-feedback p {
+  margin: 0;
+  max-width: 38rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.faq-feedback b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.faq-feedback .btn {
+  flex: none;
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 0.9rem;
+}
+
 @media (min-width: 721px) {
   .faq div:nth-child(odd) {
     padding-right: 36px;
@@ -72,5 +106,10 @@
   .faq div:first-child {
     border-top: 0;
     padding-top: 0;
+  }
+
+  .faq-feedback {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

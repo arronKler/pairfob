@@ -5,7 +5,7 @@ description: 电脑装好 Herdr 和 pairfob，配对一次就能在另一台设�
 
 # 开始使用
 
-托管入口是 `https://pairfob.com`。电脑必须能打开本机 Herdr。目前支持 macOS 和 Linux，Windows 还不支持。
+本项目的官方实例是 `https://pairfob.com`。电脑必须能打开本机 Herdr。目前支持 macOS 和 Linux，Windows 还不支持。
 
 做完这四步，就可以在另一台设备上看到电脑上的会话：安装 Herdr → 安装 Pairfob → 配对 → 点进列表。
 
@@ -30,7 +30,7 @@ Pairfob 不代替 Herdr。agent 仍在这台电脑上跑，但安装 Pairfob 前
 curl -fsSL https://pairfob.com/install.sh | sh
 ```
 
-这会下载 `pairfob`、向 `https://pairfob.com` 登记，并装上登录即启动的用户服务。
+这会下载 `pairfob`、向官方实例 `https://pairfob.com` 登记，并装上登录即启动的用户服务。
 
 这是登录后启动，不是开机就活。合盖睡眠或注销会停掉，回到同一次图形会话后再起来。
 

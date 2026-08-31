@@ -145,13 +145,13 @@ dest="${PREFIX}/pairfob"
 legacy="${PREFIX}/pairfobd"
 
 # A reinstall is also the supported migration from the pre-release pairfobd
-# command. Stop whichever user service owns the existing installation before
-# replacing files so the old and new daemon labels cannot run together.
-if [ -x "$dest" ]; then
-  "$dest" service uninstall
-fi
+# command. The verified new binary owns cleanup, so an older uninstaller cannot
+# silently leave a running service behind before its executable is replaced.
 if [ -x "$legacy" ] && [ ! -L "$legacy" ]; then
-  "$legacy" service uninstall
+  "${workdir}/${name}" service migrate-legacy
+fi
+if [ -x "$dest" ]; then
+  "${workdir}/${name}" service uninstall
 fi
 
 mv "${workdir}/${name}" "$dest"

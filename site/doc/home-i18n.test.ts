@@ -67,6 +67,34 @@ describe("homepage i18n", () => {
     expect(zh["start.hostnote"]).toContain("电脑终端");
   });
 
+  test("homepage exposes a GitHub issue channel", () => {
+    expect(html).toContain("https://github.com/arronKler/pairfob/issues/new");
+    expect(html).toContain('data-i18n="nav.feedback"');
+    expect(html).toContain('class="faq-feedback"');
+    expect(html).toContain('data-i18n="faq.feedback"');
+    expect(zh["nav.feedback"]).toBe("反馈");
+    expect(en["nav.feedback"]).toBe("Feedback");
+    expect(zh["faq.feedback"]).toContain("GitHub");
+    expect(en["faq.feedback"]).toContain("GitHub");
+    expect(en["faq.feedback.b"]).toBe("Report an issue");
+  });
+
+  test("homepage states the official instance and that new setup can close", () => {
+    expect(en["faq.q6"]).toBe("Does it cost money?");
+    expect(en["faq.a6"]).toContain("official instance");
+    expect(en["faq.a6"]).toContain("New computer setup can close");
+    expect(zh["faq.q6"]).toBe("收费吗？");
+    expect(zh["faq.a6"]).toContain("官方实例");
+    expect(zh["faq.a6"]).toContain("新电脑登记随时可能关上");
+    expect(en["foot.blurb"]).toContain("official instance");
+    expect(zh["foot.blurb"]).toContain("官方实例");
+    expect(en.description).toContain("Unofficial phone surface for Herdr");
+    expect(en.description).toContain("official instance");
+    expect(zh.description).toContain("非官方手机端");
+    expect(zh.description).toContain("官方实例");
+    expect(html).toContain(en.description);
+  });
+
   test("static HTML fallbacks match English copy", () => {
     const re = /data-i18n(?:-html)?="([^"]+)"(?:\s+data-i18n-html)?>([\s\S]*?)<\/[^>]+>/g;
     const drift: string[] = [];

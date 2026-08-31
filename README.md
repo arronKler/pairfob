@@ -1,9 +1,14 @@
 # Pairfob
 
-Phone PWA for a Herdr agent herd. Pairing code, outbound daemon, no Tailscale.
+Phone surface for a [Herdr](https://herdr.dev) agent herd: the same live
+sessions on computer and phone. Pairing code, outbound daemon, no Tailscale.
+Pairfob is not an official Herdr product.
 
-The relay is `pairfob.v2` at `https://pairfob.com` (Cloudflare Worker +
-one Durable Object per `daemon_id`). Envelope bytes stay `pairfob.v1`; see
+`https://pairfob.com` is this project's official instance (Cloudflare Worker +
+one Durable Object per `daemon_id`). There is no account and no capacity
+promise. New computer setup can close; already-enrolled computers keep working.
+
+The relay is `pairfob.v2`. Envelope bytes stay `pairfob.v1`; see
 `proto/envelope.md`, `proto/envelope-v2.md`, and `proto/pairfob-vectors.json`.
 Local pairing uses the same Worker via `./scripts/dev-up.sh`.
 
@@ -23,16 +28,17 @@ The verification script runs formatting and JSON checks, `go vet`, ordinary and
 race-enabled Go tests, PWA tests, hosted origin unit/e2e tests (including workerd
 enroll+HELLO), strict TypeScript checking, and a production Vite build.
 
-## Hosted (pairfob.v2)
+## Official instance (pairfob.v2)
 
-Public origin is `https://pairfob.com` (Cloudflare Worker + one Durable Object
-per `daemon_id`). One `pairfob` process talks to one origin. There is no Go
-relay process. First enroll is `curl | sh` with no install code.
-`PAIRFOB_JOIN_TOKEN` is always rejected. Hosted origin defaults to
+The official instance is `https://pairfob.com` (Cloudflare Worker + one Durable
+Object per `daemon_id`). One `pairfob` process talks to one origin. There is no
+Go relay process. First enroll is `curl | sh` with no install code.
+`PAIRFOB_JOIN_TOKEN` is always rejected. The official origin defaults to
 `https://pairfob.com`. The phone uses the same PWA dist; `GET /api/config`
-returns `{protocol:2, build}`. Hosted v2 has no fixed concurrent-connection
+returns `{protocol:2, build}`. The official instance has no fixed concurrent-connection
 target; operational load checks protect mux behavior and cost regressions
-rather than certify a capacity claim.
+rather than certify a capacity claim. Closing new setup (`SIGNUP_OPEN=0` /
+`ENROLL_OPEN=0`) is a cost valve: already-enrolled computers keep working.
 
 ```
 # user machine (macOS / Linux):
@@ -47,8 +53,8 @@ HTTP outcome resumes the exact same operation. Later starts reuse `relay.json`.
 A second computer runs the same installer, then pairs from the phone.
 
 From a source checkout, `go run ./cmd/pairfob` is enough; `PAIRFOB_ORIGIN` and
-`PAIRFOB_RELAY_WS` are optional on hosted. In a terminal on the computer, start
-the complete interactive pairing flow:
+`PAIRFOB_RELAY_WS` are optional against the official instance. In a terminal on
+the computer, start the complete interactive pairing flow:
 
 ```
 pairfob pair
@@ -62,7 +68,7 @@ Build downloadable binaries with `./scripts/release.sh` (writes `dist/dl/` plus
 A production origin that should serve the binaries also sets `PAIRFOB_PACK_DL=1`
 before packing (files land at `/dl/`). `pairfob update` pulls those artifacts.
 
-Hosted hand entry is one combined code (8 secret glyphs + 6 routing glyphs).
+Hand entry on the official instance is one combined code (8 secret glyphs + 6 routing glyphs).
 The PWA splits it locally: the last 6 glyphs are only a locator and never enter
 SPAKE / Argon2. QR uses `d` and `r` and does not put the locator on the WebSocket
 URL. `pairfob doctor` probes which mux protocol this process is on.
@@ -210,12 +216,7 @@ isolated automated test.
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE). Forks and noncommercial use are
-allowed. Copies and forks must keep this notice:
-
-> Required Notice: Copyright arronKler (https://github.com/arronKler/pairfob)
-
-Commercial use is not allowed.
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
 
 ## Security
 

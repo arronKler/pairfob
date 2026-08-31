@@ -5,7 +5,7 @@ description: install.sh 会下载 pairfob、核对校验和、登记，并装上
 
 # 安装
 
-托管安装从 `https://pairfob.com/dl` 拉二进制。需要 `curl`。支持 macOS 和 Linux。Windows 会直接拒绝。
+安装从本项目官方实例 `https://pairfob.com/dl` 拉二进制。需要 `curl`。支持 macOS 和 Linux。Windows 会直接拒绝。
 
 ```sh
 curl -fsSL https://pairfob.com/install.sh | sh

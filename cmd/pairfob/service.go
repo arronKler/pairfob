@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -36,19 +35,23 @@ func serviceCommand(args []string) error {
 		return controlUserService("stop")
 	case "status":
 		return statusUserService()
+	case "migrate-legacy":
+		return migrateLegacyUserService()
 	default:
 		return errors.New("usage: pairfob service install|uninstall|start|restart|stop|status")
 	}
 }
 
 type serviceLayout struct {
-	GOOS     string
-	ExecPath string
-	Home     string
-	UID      int
-	StateDir string
-	LogPath  string
-	UnitPath string
+	GOOS         string
+	ExecPath     string
+	Home         string
+	UID          int
+	StateDir     string
+	LogPath      string
+	UnitPath     string
+	LaunchdLabel string
+	SystemdUnit  string
 }
 
 func currentServiceLayout() (serviceLayout, error) {
@@ -66,12 +69,14 @@ func currentServiceLayout() (serviceLayout, error) {
 	}
 	uid := os.Getuid()
 	layout := serviceLayout{
-		GOOS:     runtime.GOOS,
-		ExecPath: execPath,
-		Home:     home,
-		UID:      uid,
-		StateDir: stateDir,
-		LogPath:  filepath.Join(stateDir, serviceLogRel),
+		GOOS:         runtime.GOOS,
+		ExecPath:     execPath,
+		Home:         home,
+		UID:          uid,
+		StateDir:     stateDir,
+		LogPath:      filepath.Join(stateDir, serviceLogRel),
+		LaunchdLabel: launchdLabel,
+		SystemdUnit:  systemdUnit,
 	}
 	switch runtime.GOOS {
 	case "darwin":
@@ -175,8 +180,8 @@ func systemdQuote(s string) string {
 	return s
 }
 
-func launchdTarget(uid int) string {
-	return "gui/" + strconv.Itoa(uid) + "/" + launchdLabel
+func launchdTarget(layout serviceLayout) string {
+	return "gui/" + strconv.Itoa(layout.UID) + "/" + serviceLaunchdLabel(layout)
 }
 
 func installUserService() error {
@@ -206,8 +211,7 @@ func uninstallUserService() error {
 	if err != nil {
 		return err
 	}
-	_ = applyService(layout, "uninstall")
-	if err := os.Remove(layout.UnitPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := uninstallServiceLayout(layout); err != nil {
 		return err
 	}
 	fmt.Printf("removed user service %s\nstate kept in %s\n", layout.UnitPath, layout.StateDir)
@@ -264,12 +268,12 @@ func applyService(layout serviceLayout, action string) error {
 		if len(c) == 0 {
 			continue
 		}
-		err := exec.Command(c[0], c[1:]...).Run()
-		if c[0] == "launchctl" && len(c) > 1 && c[1] == "bootout" {
+		out, err := runServiceCommand(c)
+		if action == "install" && c[0] == "launchctl" && len(c) > 1 && c[1] == "bootout" {
 			continue
 		}
 		if err != nil && firstErr == nil {
-			firstErr = err
+			firstErr = fmt.Errorf("%s: %w: %s", strings.Join(c, " "), err, strings.TrimSpace(string(out)))
 		}
 	}
 	return firstErr
@@ -279,7 +283,7 @@ func serviceCommands(layout serviceLayout, action string) [][]string {
 	switch layout.GOOS {
 	case "darwin":
 		domain := "gui/" + strconv.Itoa(layout.UID)
-		target := launchdTarget(layout.UID)
+		target := launchdTarget(layout)
 		switch action {
 		case "install":
 			return [][]string{
@@ -298,25 +302,23 @@ func serviceCommands(layout serviceLayout, action string) [][]string {
 			return [][]string{{"launchctl", "bootout", target}}
 		}
 	case "linux":
+		unit := serviceSystemdUnit(layout)
 		switch action {
 		case "install":
 			return [][]string{
 				{"systemctl", "--user", "daemon-reload"},
-				{"systemctl", "--user", "enable", "--now", systemdUnit},
+				{"systemctl", "--user", "enable", "--now", unit},
 			}
 		case "start":
-			return [][]string{{"systemctl", "--user", "start", systemdUnit}}
+			return [][]string{{"systemctl", "--user", "start", unit}}
 		case "restart":
-			return [][]string{{"systemctl", "--user", "restart", systemdUnit}}
+			return [][]string{{"systemctl", "--user", "restart", unit}}
 		case "stop":
-			return [][]string{{"systemctl", "--user", "stop", systemdUnit}}
+			return [][]string{{"systemctl", "--user", "stop", unit}}
 		case "status":
-			return [][]string{{"systemctl", "--user", "is-active", systemdUnit}}
+			return [][]string{{"systemctl", "--user", "is-active", unit}}
 		case "uninstall":
-			return [][]string{
-				{"systemctl", "--user", "disable", "--now", systemdUnit},
-				{"systemctl", "--user", "daemon-reload"},
-			}
+			return [][]string{{"systemctl", "--user", "disable", "--now", unit}}
 		}
 	}
 	return nil

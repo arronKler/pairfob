@@ -11,7 +11,7 @@ Operator-facing variables only. Leave unspecified variables unset. Do not put se
 
 | Variable | When |
 | --- | --- |
-| `PAIRFOB_ORIGIN` | Default `https://pairfob.com`. Leave unset |
+| `PAIRFOB_ORIGIN` | Default `https://pairfob.com` (this project's official instance). Leave unset |
 | `PAIRFOB_JOIN_TOKEN` | **Forbidden**. Setting it fails startup |
 
 ## Local state

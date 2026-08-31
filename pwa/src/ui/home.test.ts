@@ -16,6 +16,14 @@ describe("home new session", () => {
   });
 });
 
+describe("home feedback", () => {
+  test("the session list ends with a GitHub issue link", () => {
+    expect(source).toContain("homeFeedback");
+    expect(source).toContain("遇到问题？");
+    expect(source).toContain('issueLink("", "反馈")');
+  });
+});
+
 describe("home grouped list", () => {
   test("grouped headings toggle and start with later groups collapsed", () => {
     expect(source).toContain("groupToggle");

@@ -54,6 +54,7 @@ The app copy is Chinese. Match the string on screen:
 - Checksum mismatch: the script fails closed
 - Unsupported OS (Windows): the script refuses
 - If `~/.local/bin` is not on PATH, `pairfob` is “not found” even when the service is installed
+- If the installer says setup is closed: new computers cannot enroll right now. Computers already set up keep working
 
 ## Pairing
 

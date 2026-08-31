@@ -13,6 +13,7 @@ import {
   groupToggle,
   herdBanners,
   herdStatus,
+  issueLink,
   listGroupControl,
   noteNode,
   sectionTitle,
@@ -53,20 +54,28 @@ export function fillHerdList(root: HTMLElement): void {
       state.operationCapabilities.create_conversation,
     );
     root.append(emptyNode(copy.title, copy.detail));
-    return;
-  }
-  const groups = groupAgents(state.agents, state.listGroup, state.paneTouched);
-  const list = node("div", "herd-list");
-  if (state.listGroup === "flat") {
-    for (const group of groups) {
-      list.append(sectionTitle(group.title, group.items.length));
-      group.items.forEach((agent) => list.append(agentCard(agent)));
-    }
   } else {
-    state.listGroupCollapsed = syncGroupCollapsed(groups, state.listGroupCollapsed);
-    for (const group of groups) list.append(herdGroup(group, groups));
+    const groups = groupAgents(state.agents, state.listGroup, state.paneTouched);
+    const list = node("div", "herd-list");
+    if (state.listGroup === "flat") {
+      for (const group of groups) {
+        list.append(sectionTitle(group.title, group.items.length));
+        group.items.forEach((agent) => list.append(agentCard(agent)));
+      }
+    } else {
+      state.listGroupCollapsed = syncGroupCollapsed(groups, state.listGroupCollapsed);
+      for (const group of groups) list.append(herdGroup(group, groups));
+    }
+    root.append(list);
   }
-  root.append(list);
+  root.append(homeFeedback());
+}
+
+function homeFeedback(): HTMLElement {
+  const line = node("p", "home-feedback");
+  line.append(document.createTextNode("遇到问题？"));
+  line.append(issueLink("", "反馈"));
+  return line;
 }
 
 function herdGroup(group: AgentGroup, groups: AgentGroup[]): HTMLElement {

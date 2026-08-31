@@ -37,5 +37,11 @@ function go(next: "zh" | "en") {
     </button>
   </nav>
   <a class="pf-nav-link" :href="zh ? '/zh/' : '/'" target="_self">{{ zh ? "首页" : "Home" }}</a>
+  <a
+    class="pf-nav-link"
+    href="https://github.com/arronKler/pairfob/issues/new"
+    target="_blank"
+    rel="noreferrer"
+  >{{ zh ? "反馈" : "Feedback" }}</a>
   <a class="pf-nav-app" href="/pair" target="_self">{{ zh ? "打开 Pairfob" : "Open Pairfob" }}</a>
 </template>

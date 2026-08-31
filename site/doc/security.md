@@ -5,7 +5,7 @@ description: After pairing, the session is encrypted. pairfob.com forwards messa
 
 # What the relay cannot see
 
-`pairfob.com` is a relay. It does not run Herdr and cannot see your code. After pairing, keys live only on your device and on the computer.
+`pairfob.com` is this project's official relay. It does not run Herdr and cannot see your code. After pairing, keys live only on your device and on the computer.
 
 It cannot see the session, what you type, or the agent conversation. What it can see is only what it needs to reach the right computer, plus enough to rate-limit abuse.
 

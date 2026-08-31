@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -92,32 +93,32 @@ func TestInstallScriptRejectsBadChecksum(t *testing.T) {
 	}
 }
 
-func TestInstallScriptReinstallRemovesLegacyService(t *testing.T) {
+func TestInstallScriptReinstallMigratesLegacyServiceWithDownloadedBinary(t *testing.T) {
 	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
-	payload := []byte("#!/bin/sh\necho pairfob-fixture\n")
+	payload := []byte("#!/bin/sh\nprintf 'downloaded %s\\n' \"$*\" >>\"$PAIRFOB_TEST_SERVICE_LOG\"\n")
 	server := httptest.NewServer(updateFixture(name, "test", payload))
 	t.Cleanup(server.Close)
 
 	prefix := t.TempDir()
-	legacyLog := filepath.Join(t.TempDir(), "legacy.log")
-	legacy := []byte("#!/bin/sh\nprintf '%s\\n' \"$*\" >\"$PAIRFOB_TEST_LEGACY_LOG\"\n")
+	serviceLog := filepath.Join(t.TempDir(), "services.log")
+	legacy := []byte("#!/bin/sh\nexit 41\n")
 	if err := os.WriteFile(filepath.Join(prefix, "pairfobd"), legacy, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	cmd := exec.Command("sh", script, "--no-service", "--no-enroll", "--prefix", prefix)
-	cmd.Env = append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL, "PAIRFOB_TEST_LEGACY_LOG="+legacyLog)
+	cmd.Env = append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL, "PAIRFOB_TEST_SERVICE_LOG="+serviceLog)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("install.sh: %v\n%s", err, out)
 	}
-	called, err := os.ReadFile(legacyLog)
+	called, err := os.ReadFile(serviceLog)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(called) != "service uninstall\n" {
-		t.Fatalf("legacy call=%q", called)
+	if string(called) != "downloaded service migrate-legacy\n" {
+		t.Fatalf("service calls=%q", called)
 	}
 	target, err := os.Readlink(filepath.Join(prefix, "pairfobd"))
 	if err != nil || target != "pairfob" {
@@ -128,13 +129,13 @@ func TestInstallScriptReinstallRemovesLegacyService(t *testing.T) {
 func TestInstallScriptReinstallRemovesCurrentAndLegacyServices(t *testing.T) {
 	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
-	payload := []byte("#!/bin/sh\necho pairfob-fixture\n")
+	payload := []byte("#!/bin/sh\nprintf 'downloaded %s\\n' \"$*\" >>\"$PAIRFOB_TEST_SERVICE_LOG\"\n")
 	server := httptest.NewServer(updateFixture(name, "test", payload))
 	t.Cleanup(server.Close)
 
 	prefix := t.TempDir()
 	serviceLog := filepath.Join(t.TempDir(), "services.log")
-	installed := []byte("#!/bin/sh\nprintf '%s %s\\n' \"$(basename \"$0\")\" \"$*\" >>\"$PAIRFOB_TEST_SERVICE_LOG\"\n")
+	installed := []byte("#!/bin/sh\nexit 42\n")
 	for _, command := range []string{"pairfob", "pairfobd"} {
 		if err := os.WriteFile(filepath.Join(prefix, command), installed, 0o755); err != nil {
 			t.Fatal(err)
@@ -151,8 +152,46 @@ func TestInstallScriptReinstallRemovesCurrentAndLegacyServices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(called) != "pairfob service uninstall\npairfobd service uninstall\n" {
+	if string(called) != "downloaded service migrate-legacy\ndownloaded service uninstall\n" {
 		t.Fatalf("service calls=%q", called)
+	}
+}
+
+func TestInstallScriptKeepsLegacyBinaryWhenMigrationFails(t *testing.T) {
+	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
+	name := artifactName(runtime.GOOS, runtime.GOARCH)
+	payload := []byte("#!/bin/sh\nif [ \"$*\" = 'service migrate-legacy' ]; then exit 43; fi\n")
+	server := httptest.NewServer(updateFixture(name, "test", payload))
+	t.Cleanup(server.Close)
+
+	prefix := t.TempDir()
+	legacyPath := filepath.Join(prefix, "pairfobd")
+	legacy := []byte("#!/bin/sh\necho legacy\n")
+	if err := os.WriteFile(legacyPath, legacy, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("sh", script, "--no-service", "--no-enroll", "--prefix", prefix)
+	cmd.Env = append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL)
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Fatalf("install.sh succeeded unexpectedly: %s", out)
+	}
+	got, err := os.ReadFile(legacyPath)
+	if err != nil {
+		t.Fatalf("legacy binary was not preserved: %v", err)
+	}
+	if string(got) != string(legacy) {
+		t.Fatalf("legacy binary changed: %q", got)
+	}
+	info, err := os.Lstat(legacyPath)
+	if err != nil {
+		t.Fatalf("stat legacy path: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("legacy path is no longer a regular file: mode=%v", info.Mode())
+	}
+	if _, err := os.Stat(filepath.Join(prefix, "pairfob")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("new binary was installed after migration failure: %v", err)
 	}
 }
 

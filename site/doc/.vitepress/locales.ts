@@ -138,9 +138,11 @@ export const zhTheme: DefaultTheme.Config = {
   returnToTopLabel: "回到顶部",
   langMenuLabel: "切换语言",
   skipToContentLabel: "跳到正文",
+  socialLinks: [{ icon: "github", link: "https://github.com/arronKler/pairfob" }],
   footer: {
-    message: "密钥只在你的电脑和已配对设备上。pairfob.com 只转发密文。",
-    copyright: "Pairfob · Herdr 的手机端",
+    message:
+      '密钥只在你的电脑和已配对设备上。pairfob.com 是本项目官方实例，只转发密文。 · <a href="https://github.com/arronKler/pairfob/issues/new" target="_blank" rel="noreferrer">反馈问题</a>',
+    copyright: "Pairfob · Herdr 的手机端 · Apache-2.0",
   },
   notFound: {
     title: "没有这一页",
@@ -169,9 +171,11 @@ export const enTheme: DefaultTheme.Config = {
   returnToTopLabel: "Back to top",
   langMenuLabel: "Change language",
   skipToContentLabel: "Skip to content",
+  socialLinks: [{ icon: "github", link: "https://github.com/arronKler/pairfob" }],
   footer: {
-    message: "Keys stay on your computer and paired devices. pairfob.com forwards ciphertext only.",
-    copyright: "Pairfob · the phone surface for Herdr",
+    message:
+      'Keys stay on your computer and paired devices. pairfob.com is the official instance and forwards ciphertext only. · <a href="https://github.com/arronKler/pairfob/issues/new" target="_blank" rel="noreferrer">Report an issue</a>',
+    copyright: "Pairfob · the phone surface for Herdr · Apache-2.0",
   },
   notFound: {
     title: "Page not found",

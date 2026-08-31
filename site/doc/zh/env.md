@@ -11,7 +11,7 @@ description: 安装、登记、路径根、推送。不要设 PAIRFOB_JOIN_TOKEN
 
 | 变量 | 何时用 |
 | --- | --- |
-| `PAIRFOB_ORIGIN` | 缺省 `https://pairfob.com`。不要改 |
+| `PAIRFOB_ORIGIN` | 缺省 `https://pairfob.com`（本项目官方实例）。不要改 |
 | `PAIRFOB_JOIN_TOKEN` | **禁止**。设了会启动失败 |
 
 ## 本机状态

@@ -14,7 +14,7 @@ func enrollNotice(code string) string {
 	case "rate_limited":
 		return "this network has set up too many computers today. Try again tomorrow."
 	case "forbidden":
-		return "setup is closed on this site right now."
+		return "new computer setup is closed on this site right now. Computers already set up keep working."
 	default:
 		return "setup did not complete. Run pairfob doctor."
 	}

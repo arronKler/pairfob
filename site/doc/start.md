@@ -5,7 +5,7 @@ description: Install Herdr and pairfob once, then continue from another device.
 
 # Get started
 
-The hosted origin is `https://pairfob.com`. Herdr must be able to run on the computer. macOS and Linux are supported; Windows is not yet.
+This project's official instance is `https://pairfob.com`. Herdr must be able to run on the computer. macOS and Linux are supported; Windows is not yet.
 
 Four steps: install Herdr → install Pairfob → pair → open a session.
 
@@ -30,7 +30,7 @@ If automatic startup fails, the phone explicitly says Herdr is not running. Run 
 curl -fsSL https://pairfob.com/install.sh | sh
 ```
 
-This downloads `pairfob`, enrolls with `https://pairfob.com`, and installs a user-level login service.
+This downloads `pairfob`, enrolls with the official instance at `https://pairfob.com`, and installs a user-level login service.
 
 The service starts after you log in, not at power-on. Sleeping with the lid closed, or logging out, stops it until you return to that same session.
 

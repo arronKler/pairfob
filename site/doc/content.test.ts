@@ -55,6 +55,14 @@ describe("user-facing documentation", () => {
     expect(app).toContain("只有页面明确显示 Herdr 没有运行时");
   });
 
+  test("names GitHub Issues as the public feedback channel", async () => {
+    const faqEn = await Bun.file(new URL("./faq.md", import.meta.url)).text();
+    expect(faq).toContain("https://github.com/arronKler/pairfob/issues/new");
+    expect(faqEn).toContain("https://github.com/arronKler/pairfob/issues/new");
+    expect(faq).toContain("安全漏洞请走");
+    expect(faqEn).toContain("GitHub Security Advisories");
+  });
+
   test("documents the shipped multi-computer flow", () => {
     expect(faq).toContain("设置 → 添加另一台电脑");
     expect(faq).toContain("多台电脑分别保存一条配对凭证");
@@ -85,6 +93,23 @@ describe("user-facing documentation", () => {
     expect(docs).not.toContain("自托管");
     expect(docs).not.toContain("Self-hosting");
     expect(docs).not.toContain("/self-host");
+  });
+
+  test("names the official instance, Apache-2.0, and closed enroll", async () => {
+    const faqEn = await Bun.file(new URL("./faq.md", import.meta.url)).text();
+    const indexZh = await Bun.file(new URL("./zh/index.md", import.meta.url)).text();
+    const indexEn = await Bun.file(new URL("./index.md", import.meta.url)).text();
+    expect(faq).toContain("官方实例");
+    expect(faq).toContain("Apache-2.0");
+    expect(faq).toContain("新电脑登记随时可能关上");
+    expect(faq).toContain("不是 Herdr 的官方产品");
+    expect(faqEn).toContain("official instance");
+    expect(faqEn).toContain("Apache-2.0");
+    expect(faqEn).toContain("New computer setup can close");
+    expect(faqEn).toContain("not an official Herdr product");
+    expect(indexZh).toContain("官方实例");
+    expect(indexEn).toContain("Official instance");
+    expect(indexEn).toContain("not an official Herdr product");
   });
 
   test("design section stays a product overview", () => {

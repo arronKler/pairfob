@@ -16,7 +16,7 @@ description: What Herdr, pane, pairfob, and locator mean in Pairfob.
 | pairing code | 8 glyphs, secret |
 | locator | 6 glyphs, only finds that computer, not the same class of secret |
 | Computer confirm | After the other device proves the code, one Enter on the computer admits it |
-| relay | `pairfob.com`. Forwards ciphertext, does not read the session |
+| relay | `pairfob.com`, this project's official instance. Forwards ciphertext, does not read the session |
 | PWA | The Pairfob page in the browser; can be added to the Home Screen. Path `/pair` |
 | `PAIRFOB_STATE_DIR` | Default `~/.config/pairfob`, credentials and device list |
 | worktree | Git worktree. List / create / open follow the computer |

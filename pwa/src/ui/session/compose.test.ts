@@ -9,7 +9,7 @@ describe("compose send button", () => {
    * an accidental tap a blind confirmation.
   */
   test("is disabled while the draft is empty or only whitespace", () => {
-    expect(composeSource).toContain("send.disabled = !state.composeLive && (submitBusy || !state.composeDraft.trim())");
+    expect(composeSource).toContain("send.disabled = state.composeLive || submitBusy || !state.composeDraft.trim()");
     expect(composeSource).toContain("send.disabled = !state.composeDraft.trim()");
   });
 
@@ -32,6 +32,9 @@ describe("compose send button", () => {
 
   test("a deliberate Enter key press can still send a bare Enter", () => {
     const submit = composeSource.slice(composeSource.indexOf("export async function submitTyped"));
+    expect(submit).toContain("allowBareEnter = false");
+    expect(submit).toContain("if (allowBareEnter) queueKey");
+    expect(composeSource).toContain("submitTyped(true)");
     expect(submit).toContain('queueKey("enter")');
   });
 

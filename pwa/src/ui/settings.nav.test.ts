@@ -9,6 +9,7 @@ for (const key of [
   "navigator",
   "HTMLElement",
   "HTMLButtonElement",
+  "HTMLAnchorElement",
   "Node",
   "DocumentFragment",
   "localStorage",
@@ -72,6 +73,21 @@ afterEach(() => {
   state.paneTermModes = {};
   localStorage.removeItem(DEFAULT_TERM_MODE_KEY);
   app.replaceChildren();
+});
+
+describe("settings help", () => {
+  test("settings exposes docs and a GitHub issue form", () => {
+    bootHomeWithStalePane();
+    click("设置");
+    const docs = [...app.querySelectorAll("a")].find((el) => el.textContent?.includes("文档"));
+    const issue = [...app.querySelectorAll("a")].find((el) => el.textContent?.includes("反馈问题"));
+    if (!(docs instanceof HTMLAnchorElement) || !(issue instanceof HTMLAnchorElement)) {
+      throw new Error(`missing help links: ${app.innerHTML.slice(0, 400)}`);
+    }
+    expect(docs.href).toContain("/doc/zh/");
+    expect(issue.href).toBe("https://github.com/arronKler/pairfob/issues/new");
+    expect(issue.target).toBe("_blank");
+  });
 });
 
 describe("settings back", () => {

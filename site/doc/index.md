@@ -87,6 +87,13 @@ You already run coding agents in Herdr 0.7 or newer on a computer, and you want 
 - You need the entire desktop, browser, or IDE window
 - You want Pairfob to keep sessions and keys in the cloud
 - The host computer must be Windows (not built yet)
+- You need an official Herdr, Anthropic, or OpenAI app
+
+## Official instance
+
+`https://pairfob.com` is this project's official relay and web app. Install and pairing use that origin. Pairfob is not an official Herdr product.
+
+New computer setup can close. Already-enrolled computers keep working. This page does not promise capacity.
 
 ## Shortest path
 

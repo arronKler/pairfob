@@ -176,6 +176,7 @@ pre {
   font-size: inherit;
   font-weight: inherit;
   letter-spacing: inherit;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -197,12 +198,18 @@ html[lang="zh-CN"]:not([data-i18n-ready]) [data-i18n] {
   visibility: hidden;
 }
 
-.bar-doc {
+.bar-doc,
+.bar-feedback {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
   color: var(--muted);
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
-.bar-doc:hover {
+.bar-doc:hover,
+.bar-feedback:hover {
   color: var(--ink);
 }
 
@@ -411,6 +418,10 @@ html[lang="zh-CN"]:not([data-i18n-ready]) [data-i18n] {
 }
 
 @media (max-width: 720px) {
+  .bar-end {
+    gap: 8px;
+  }
+
   .site-nav {
     display: none;
   }

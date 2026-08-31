@@ -42,6 +42,20 @@ func TestEnrollNoticesNameANextStep(t *testing.T) {
 	}
 }
 
+func TestEnrollClosedNoticeKeepsExistingComputers(t *testing.T) {
+	text := enrollNotice("forbidden")
+	assertOperatorText(t, text)
+	if !strings.Contains(text, "closed") {
+		t.Fatalf("%q", text)
+	}
+	if !strings.Contains(text, "already set up") {
+		t.Fatalf("%q", text)
+	}
+	if strings.Contains(text, "forbidden") {
+		t.Fatalf("raw code in notice: %q", text)
+	}
+}
+
 func TestDoctorOriginNoteDropsInternals(t *testing.T) {
 	got := doctorOriginNote("v2 relay.json url must contain daemon_id=d_abc")
 	assertOperatorText(t, got)

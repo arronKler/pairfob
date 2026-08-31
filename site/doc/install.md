@@ -5,7 +5,7 @@ description: install.sh downloads pairfob, verifies checksums, enrolls, and inst
 
 # Install
 
-Hosted install pulls binaries from `https://pairfob.com/dl`. `curl` is required. macOS and Linux. Windows is rejected.
+Install pulls binaries from this project's official instance at `https://pairfob.com/dl`. `curl` is required. macOS and Linux. Windows is rejected.
 
 ```sh
 curl -fsSL https://pairfob.com/install.sh | sh

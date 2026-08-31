@@ -13,7 +13,7 @@ import {
 import { allowSignupIP } from "./limits.ts";
 import { observeError, observeSignup } from "./metrics.ts";
 
-/** Signup is public by default, with an explicit emergency shutoff. */
+/** New computer setup is public by default. SIGNUP_OPEN=0 is the cost valve. */
 function signupOpen(env: Env): boolean {
   return env.SIGNUP_OPEN !== "0";
 }

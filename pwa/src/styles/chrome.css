@@ -362,6 +362,22 @@
 
 .empty-sub { margin: 6px 0 0; font-size: 0.83rem; color: var(--muted); line-height: 1.55; }
 
+.home-feedback {
+  margin: 22px 2px 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.home-feedback a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-left: 0.35em;
+  color: var(--accent);
+  font-weight: 560;
+}
+
 /* --- Agent cards --------------------------------------------------------------- */
 
 .card {

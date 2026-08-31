@@ -158,7 +158,7 @@ export async function setComposeLive(on: boolean): Promise<void> {
  * 发送 is the text affordance. With an empty draft a tap would put a bare Enter
  * into whatever the TUI has highlighted — on a phone that button sits under the
  * thumb, so an accidental tap would confirm a destructive default. A deliberate
- * bare Enter still has the keypad's Enter key.
+ * bare Enter still has the system keyboard and keypad Enter keys.
  */
 export function syncSendButton(): void {
   const send = app.querySelector(".dock-form .send-btn") as HTMLButtonElement | null;
@@ -171,14 +171,18 @@ export function syncSendButton(): void {
     return;
   }
   if (state.composeLive) {
-    send.disabled = false;
+    send.disabled = true;
     send.textContent = "Enter";
-    send.setAttribute("aria-label", "向终端发送 Enter");
+    send.setAttribute("aria-label", "裸回车请用系统键盘或按键垫");
     return;
   }
   send.textContent = "发送";
-  send.removeAttribute("aria-label");
   send.disabled = !state.composeDraft.trim();
+  if (send.disabled) {
+    send.setAttribute("aria-label", "输入文字后发送；裸回车请用系统键盘或按键垫");
+  } else {
+    send.removeAttribute("aria-label");
+  }
 }
 
 function clearComposeDraft(): void {
@@ -298,8 +302,9 @@ async function submitLiveEnter(): Promise<void> {
   queueKey("enter");
 }
 
-export async function submitTyped(): Promise<void> {
+export async function submitTyped(allowBareEnter = false): Promise<void> {
   if (state.composeLive) {
+    if (!allowBareEnter) return;
     await submitLiveEnter();
     return;
   }
@@ -308,7 +313,7 @@ export async function submitTyped(): Promise<void> {
   const paneId = state.paneId;
   const text = state.composeDraft;
   if (!text) {
-    queueKey("enter");
+    if (allowBareEnter) queueKey("enter");
     return;
   }
   submitBusy = true;
@@ -344,7 +349,7 @@ export async function submitTyped(): Promise<void> {
 
 export async function sendPad(key: string): Promise<void> {
   if (key === "enter") {
-    await submitTyped();
+    await submitTyped(true);
     return;
   }
   queueKey(key);
@@ -362,7 +367,7 @@ export function handlePaneKey(event: KeyboardEvent, fromField: boolean): void {
   if (event.key === "Tab" && (!fromField || event.shiftKey)) return;
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
-    void submitTyped();
+    void submitTyped(true);
     return;
   }
   if (event.key === "Backspace" && fromField && !state.composeDraft) {
@@ -510,9 +515,12 @@ export function composeForm(includeBack: boolean): { form: HTMLFormElement; inpu
   bindTermField(input);
   const send = node("button", "send-btn", state.composeLive ? "Enter" : submitBusy ? "发送中…" : "发送");
   send.type = "submit";
-  if (state.composeLive) send.setAttribute("aria-label", "向终端发送 Enter");
+  if (state.composeLive) send.setAttribute("aria-label", "裸回车请用系统键盘或按键垫");
   if (submitBusy && !state.composeLive) send.setAttribute("aria-busy", "true");
-  send.disabled = !state.composeLive && (submitBusy || !state.composeDraft.trim());
+  send.disabled = state.composeLive || submitBusy || !state.composeDraft.trim();
+  if (!state.composeLive && !submitBusy && !state.composeDraft.trim()) {
+    send.setAttribute("aria-label", "输入文字后发送；裸回车请用系统键盘或按键垫");
+  }
   form.append(inputLabel, input, send);
   return { form, input };
 }

@@ -93,7 +93,7 @@ From the top-right of the list (**设置**).
 - **连接:** computer name, online state, this phone’s label (for example iPhone). **添加另一台电脑** starts another pairing without replacing the current one. With more than one credential, **切换电脑** appears here and **电脑** appears in the top bar
 - **会话列表:** grouping (**全部** / **按工作区** / **按 Agent**)
 - **模式:** default when opening a session — **控制** / **终端** / **对话**. A later switch is remembered per session
-- **输入:** send after composing, or type live into the terminal
+- **输入:** send after composing, or type live into the terminal. The trailing button only submits composed text; use the system keyboard or keypad for a deliberate bare Enter
 - **通知:** see [Notifications](/push). Once enabled, this phone is notified when an Agent needs you or finishes; if the computer has not enabled push, it shows **电脑端未开启**
 - **已配对设备:** label, last used, and notification state. The current row is marked **这台手机**. This phone can unpair only itself
 - **危险操作:** **解除这台手机的配对**. Pairing is required to connect again

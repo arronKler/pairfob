@@ -9,4 +9,11 @@ describe("docs chrome leaves the VitePress SPA", () => {
     expect(chrome).toMatch(/class="pf-nav-link"[^>]*target="_self"/);
     expect(chrome).toMatch(/href="\/pair"[^>]*target="_self"/);
   });
+
+  test("docs chrome links to the public GitHub issue form", () => {
+    expect(chrome).toContain("https://github.com/arronKler/pairfob/issues/new");
+    expect(chrome).toContain('target="_blank"');
+    expect(chrome).toContain("Feedback");
+    expect(chrome).toContain("反馈");
+  });
 });

@@ -57,7 +57,7 @@ cp "$ROOT/scripts/install.sh" "$DEST/install.sh"
 if [[ "${PAIRFOB_PACK_DL:-}" == "1" ]]; then
   # shellcheck source=ship-guard.sh
   . "$ROOT/scripts/ship-guard.sh"
-  pairfob_require_shipable_version_file "$ROOT/dist/dl/VERSION"
+  pairfob_require_release_dir "$ROOT/dist/dl"
   mkdir -p "$DEST/dl"
   cp "$ROOT/dist/dl/"* "$DEST/dl/"
 fi

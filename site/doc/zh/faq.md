@@ -1,6 +1,6 @@
 ---
 title: 常见问题
-description: 账号、Herdr、锁屏、合盖、断网、丢失手机、Windows、和远程桌面的差别。
+description: 账号、Herdr、锁屏、合盖、断网、丢失手机、Windows、收费、和远程桌面的差别。
 ---
 
 # 常见问题
@@ -11,7 +11,7 @@ description: 账号、Herdr、锁屏、合盖、断网、丢失手机、Windows�
 
 ## Pairfob 能单独跑 agent 吗？
 
-不能。它是 [Herdr](https://herdr.dev) 的手机端。电脑上要装 Herdr 0.7 或更高；`pairfob` 会在启动时自动拉起 Herdr。自动启动失败时列表会显示 Herdr 离线，手动运行 `herdr` 后会自动恢复。
+不能。它是 [Herdr](https://herdr.dev) 的手机端，不是 Herdr 的官方产品。电脑上要装 Herdr 0.7 或更高；`pairfob` 会在启动时自动拉起 Herdr。自动启动失败时列表会显示 Herdr 离线，手动运行 `herdr` 后会自动恢复。
 
 ## 这是远程桌面吗？
 
@@ -82,7 +82,7 @@ description: 账号、Herdr、锁屏、合盖、断网、丢失手机、Windows�
 
 ## 安装时登记失败？
 
-先看网络和 `pairfob doctor`。如果这个网络今天登记的电脑太多，明天再试。
+先看网络和 `pairfob doctor`。如果这个网络今天登记的电脑太多，明天再试。如果站点关上了新电脑登记，已经装好的电脑继续可用。
 
 ## 列表是空的？
 
@@ -106,8 +106,16 @@ description: 账号、Herdr、锁屏、合盖、断网、丢失手机、Windows�
 
 ## 收费吗？
 
-入口和网页按现在的产品是可以直接用的。本文不承诺容量保证。
+不收费。源码是 Apache-2.0。`https://pairfob.com` 是本项目的官方实例：网页和你登记用的中转都在这里。没有账号，也不承诺容量。
+
+新电脑登记随时可能关上。已经登记的电脑、已经配对的设备继续可用。
 
 ## 文档只有中文吗？
 
 有英文。[English docs](/)。右上角语言菜单可以切换。
+
+## 问题怎么反馈？
+
+去 GitHub 开 issue：<https://github.com/arronKler/pairfob/issues/new>
+
+功能和体验问题走这条公开渠道。安全漏洞请走 [GitHub Security Advisories](https://github.com/arronKler/pairfob/security/advisories/new)，不要开公开 issue。
