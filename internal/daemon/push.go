@@ -437,7 +437,7 @@ func (e *Engine) sendPoke(reason, paneID string) {
 		}
 		payload, err := aead.Seal(s.s2c, s.routeID, body)
 		if err == nil {
-			_ = e.Conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload})
+			_ = e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload})
 		}
 		s.sendMu.Unlock()
 	}

@@ -173,6 +173,8 @@ export const zh = {
   "settings.networkRtt": "网络往返",
   "settings.networkRttPending": "测量中",
   "settings.networkRttMs": "手机到 Pairfob · {ms} 毫秒",
+  "settings.networkRttRelay": "Relay 中继 · {ms} 毫秒",
+  "settings.networkRttP2P": "P2P 直连 · {ms} 毫秒",
   "settings.thisPhone": "这台手机",
   "settings.pairedPhone": "已配对设备",
   "settings.currentComputer": "当前电脑",

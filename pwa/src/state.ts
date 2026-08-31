@@ -142,6 +142,7 @@ function loadDefaultTermMode(): TermMode {
 
 export type AppState = {
   originProtocol: MuxProtocol;
+  p2pEnabled: boolean;
   fragment: FragmentPairing | null;
   notificationTarget: NotificationTarget | null;
   phase: Phase;
@@ -177,6 +178,8 @@ export type AppState = {
   networkOnline: boolean;
   /** Latest phone-to-Pairfob WebSocket heartbeat round trip. */
   relayRttMs: number | null;
+  /** Active encrypted session path; P2P is attempted without blocking relay use. */
+  sessionTransport: "relay" | "p2p";
   refreshBusy: boolean;
   snapshotPending: boolean;
   /** When the last Snapshot landed, so a pane change can pull status forward. */
@@ -238,6 +241,7 @@ export type AppState = {
 
 export const state: AppState = {
   originProtocol: 2,
+  p2pEnabled: false,
   fragment: null,
   notificationTarget: null,
   phase: "boot",
@@ -265,6 +269,7 @@ export const state: AppState = {
   pairAbort: null,
   networkOnline: navigator.onLine !== false,
   relayRttMs: null,
+  sessionTransport: "relay",
   refreshBusy: false,
   snapshotPending: false,
   snapshotAt: 0,

@@ -39,7 +39,7 @@ No cookies. Enroll, pair-intent, rekey, and config responses use
 | Method | Path | Origin requirement | Behavior |
 | --- | --- | --- | --- |
 | GET | `/` `/assets/*` `/sw.js` `/manifest.webmanifest` `/pair` | - | PWA with the complete security-header set |
-| GET | `/api/config` | - | `{protocol:2, build}` |
+| GET | `/api/config` | - | `{protocol:2, build,p2p}`; `p2p` is the direct-upgrade kill switch |
 | GET | `/v2/health` | - | `{ok:true, protocol:2}` |
 | POST | `/v2/enroll` | Absent or non-browser | Validate and echo the client-persisted `daemon_id` / `reconnect_token`, with optional `join_grant` |
 | POST | `/v2/pair-intent` | **Same-origin required** | Metered locator lookup; 10 requests per 10 minutes per IP |
@@ -170,6 +170,10 @@ Established sessions are capped at 10. ResumeHello is capped at 2 with a
 the quota is enforced with LRU. PING does not extend lifetime. The Durable
 Object does **not** pin `device_id`. The daemon sends ERROR with `kicked` for a
 duplicate device.
+
+After establishment, endpoints may negotiate the optional direct transport
+defined in `direct-transport.md`. Its SDP stays inside opaque encrypted FWD RPC
+payloads; the Worker and Durable Object do not parse it.
 
 ## Error codes
 

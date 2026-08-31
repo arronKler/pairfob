@@ -44,7 +44,7 @@ func (e *Engine) reply(s *sess, id string, result any) bool {
 	if err != nil {
 		return false
 	}
-	return e.Conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload}) == nil
+	return e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload}) == nil
 }
 
 func (e *Engine) replyErr(s *sess, id, code, message string) {
@@ -68,7 +68,7 @@ func (e *Engine) replyErr(s *sess, id, code, message string) {
 	}
 	payload, err := aead.Seal(s.s2c, s.routeID, body)
 	if err == nil {
-		_ = e.Conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload})
+		_ = e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload})
 	}
 }
 
@@ -264,6 +264,10 @@ func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
 		e.rpcTerminalScroll(s, id, params)
 	case "TerminalClose":
 		e.rpcTerminalClose(s, id, params)
+	case "TransportOffer":
+		go e.rpcTransportOffer(s, id, params)
+	case "TransportCommit":
+		e.rpcTransportCommit(s, id, params)
 	default:
 		e.replyErr(s, id, "unknown_op", op)
 	}

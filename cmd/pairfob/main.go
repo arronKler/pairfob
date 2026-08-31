@@ -107,6 +107,9 @@ func runDaemon(store *state.Store, sock string) error {
 	if err != nil {
 		return fmt.Errorf("engine: %w", err)
 	}
+	if getenv("PAIRFOB_P2P", "1") != "0" {
+		eng.Direct = newWebRTCAcceptor()
+	}
 	runtimeConfig := daemon.RuntimeConfig{
 		MuxProtocol: plan.Protocol,
 		PushEnabled: getenv("PAIRFOB_PUSH", "") == "1",

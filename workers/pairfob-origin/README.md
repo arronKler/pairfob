@@ -34,6 +34,12 @@ IP_HASH_PEPPER=dev-pepper-not-for-prod
 
 `wrangler.jsonc` `compatibility_date` is `2026-08-26`. Durable Object classes: `DaemonRoom`, `PairingIndex` (SQLite). Apply all ordered D1 migrations in `migrations/`; `0005_grant_enroll_rate.sql` makes the per-grant enroll window authoritative in D1, and `0006_self_serve_grants.sql` adds the per-IP signup ledger.
 
+`P2P_OPEN=1` advertises the WebRTC direct-upgrade feature in `/api/config`.
+Set it to `0` to stop new or reloaded PWA sessions from attempting the upgrade;
+existing direct sessions continue until they reconnect. Old daemons reject
+negotiation and also stay on relay. A daemon can disable its adapter with
+`PAIRFOB_P2P=0` before restart.
+
 Mint a grant (prints `join_grant` once):
 
 ```
@@ -65,7 +71,7 @@ files under `/doc/assets/`.
 
 ## Static PWA
 
-`public/` is a placeholder. Production packs `site/` onto `/` and `pwa/dist` onto `/pair` (same host as `/v2/ws`). `/api/config` returns `{protocol:2,build}`.
+`public/` is a placeholder. Production packs `site/` onto `/` and `pwa/dist` onto `/pair` (same host as `/v2/ws`). `/api/config` returns `{protocol:2,build,p2p}`.
 
 ## Observability
 

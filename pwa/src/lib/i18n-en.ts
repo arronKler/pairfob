@@ -175,6 +175,8 @@ export const en: { [K in keyof typeof zh]: string } = {
   "settings.networkRtt": "Network round trip",
   "settings.networkRttPending": "Measuring",
   "settings.networkRttMs": "Phone to Pairfob · {ms} ms",
+  "settings.networkRttRelay": "Relay · {ms} ms",
+  "settings.networkRttP2P": "P2P direct · {ms} ms",
   "settings.thisPhone": "This phone",
   "settings.pairedPhone": "Paired device",
   "settings.currentComputer": "This computer",

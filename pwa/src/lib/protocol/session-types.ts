@@ -28,6 +28,7 @@ export interface SessionEvent {
   paneId?: string;
   terminalId?: string;
   terminalFrame?: TerminalFramePart;
+  transport?: "relay" | "p2p";
 }
 
 export interface DeviceSummary {

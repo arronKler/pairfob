@@ -4,7 +4,7 @@ import type { MuxProtocol } from "./protocol/mux.ts";
 import { fetchWithTimeout, type FetchLike } from "./request-timeout.ts";
 
 export type { MuxProtocol };
-export type OriginConfig = { protocol: MuxProtocol; build: string };
+export type OriginConfig = { protocol: MuxProtocol; build: string; p2p: boolean };
 
 export function parseOriginConfig(value: unknown): OriginConfig {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -17,7 +17,10 @@ export function parseOriginConfig(value: unknown): OriginConfig {
   if (typeof record.build !== "string") {
     throw new ProtocolError("bad_message", t("err.originBuild"));
   }
-  return { protocol: record.protocol, build: record.build };
+  if (record.p2p !== undefined && typeof record.p2p !== "boolean") {
+    throw new ProtocolError("bad_message", t("err.originShape"));
+  }
+  return { protocol: record.protocol, build: record.build, p2p: record.p2p === true };
 }
 
 export async function loadOriginConfig(fetchImpl: FetchLike = fetch): Promise<OriginConfig> {

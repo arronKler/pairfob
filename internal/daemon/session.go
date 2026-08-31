@@ -69,7 +69,7 @@ func (e *Engine) handleSessionBound(f envelope.Frame) {
 		old.state = "closed"
 	}
 	created := &sess{
-		routeID: rid, state: "resumehello",
+		routeID: rid, state: "resumehello", link: e.Conn, transport: "relay",
 		rpcQueue: make(chan rpcRequest, sessionRPCQueueSize), rpcStop: make(chan struct{}),
 	}
 	e.sessions[rid] = created
@@ -178,7 +178,7 @@ func helloErrorPayload(code string) []byte {
 }
 
 func (e *Engine) failHello(s *sess, code string) {
-	_ = e.Conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: helloErrorPayload(code)})
+	_ = e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: helloErrorPayload(code)})
 	e.closeSession(s.routeID, "", false)
 	e.audit("session_hello_failed", map[string]any{"device_id": s.deviceID, "code": code})
 }
@@ -259,7 +259,7 @@ func (e *Engine) handleHello(f envelope.Frame, s *sess) {
 			V: 1, Op: "DeviceHello2", OK: true, EphX25519: canon.B64URL(ephPk[:]), TS: ts,
 			ProofD: canon.B64URL(proof), SigD: canon.B64URL(sig),
 		})
-		_ = e.Conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload})
+		_ = e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload})
 	case "DeviceHello3":
 		var h sessionkeys.Hello3
 		if json.Unmarshal(f.Payload, &h) != nil || h.Op != "DeviceHello3" {
@@ -299,6 +299,26 @@ func (e *Engine) FinishHello3(s *sess, proofP []byte, ts int64) bool {
 		return false
 	}
 	c2s, s2c := sessionkeys.SessionKeys(dh, dev.PSK)
+	if s.upgradeFrom != ([16]byte{}) {
+		parent := e.sessions[s.upgradeFrom]
+		if parent == nil || parent.state != "established" || parent.transport != "relay" || parent.deviceID != s.deviceID {
+			e.mu.Unlock()
+			e.closeSession(s.routeID, "conflict", true)
+			return false
+		}
+		s.c2s = &aead.Direction{Key: c2s, Dir: aead.DirClient}
+		s.s2c = &aead.Direction{Key: s2c, Dir: aead.DirServer}
+		s.state = "upgrade_ready"
+		e.mu.Unlock()
+		if err := e.sendSessionFrame(s, envelope.JSON(envelope.TypSESSION_ESTABLISHED, s.routeID, map[string]any{
+			"v": e.muxVersion(), "route_id": hex.EncodeToString(s.routeID[:]),
+		})); err != nil {
+			e.closeSession(s.routeID, "daemon_offline", false)
+			return false
+		}
+		e.audit("p2p_ready", map[string]any{"device_id": s.deviceID})
+		return true
+	}
 	old, hasOld := e.byDevice[s.deviceID]
 	nEst := 0
 	for _, other := range e.sessions {
@@ -334,7 +354,7 @@ func (e *Engine) FinishHello3(s *sess, proofP []byte, ts int64) bool {
 	if hasOld && old != s.routeID {
 		e.closeSession(old, "kicked", true)
 	}
-	if err := e.Conn.Send(envelope.JSON(envelope.TypSESSION_ESTABLISHED, s.routeID, map[string]any{
+	if err := e.sendSessionFrame(s, envelope.JSON(envelope.TypSESSION_ESTABLISHED, s.routeID, map[string]any{
 		"v": e.muxVersion(), "route_id": hex.EncodeToString(s.routeID[:]),
 	})); err != nil {
 		e.closeSession(s.routeID, "daemon_offline", false)
@@ -381,13 +401,16 @@ func (e *Engine) closeSession(rid [16]byte, code string, notify bool) {
 	e.mu.Unlock()
 	stopSessionRPC(s)
 	closeSessionTerminal(s)
+	if notify && code != "" {
+		_ = e.sendSessionFrame(s, envelope.JSON(envelope.TypERROR, rid, envelope.ErrorBody{
+			Code: code, RouteID: hex.EncodeToString(rid[:]), Message: code,
+		}))
+	}
 	s.sendMu.Lock()
 	e.wipeSession(s)
 	s.sendMu.Unlock()
-	if notify && code != "" {
-		_ = e.Conn.Send(envelope.JSON(envelope.TypERROR, rid, envelope.ErrorBody{
-			Code: code, RouteID: hex.EncodeToString(rid[:]), Message: code,
-		}))
+	if s.transport == "p2p" && s.link != nil {
+		s.link.Close()
 	}
 }
 
@@ -405,19 +428,25 @@ func (e *Engine) closeDeviceSessions(deviceID, code string) {
 	}
 }
 
-// ResetTransport drops every connection-scoped secret after the relay WebSocket
-// dies. Persistent device credentials and the daemon Ed25519 key remain.
+// ResetTransport drops relay sessions and uncommitted direct candidates after
+// the daemon relay WebSocket dies. Established P2P sessions are independent of
+// that socket and remain live. Persistent credentials and daemon keys remain.
 // It returns true when an in-flight AEAD pairing had to be burned and a new slot should
 // be opened after reconnect.
 func (e *Engine) ResetTransport() bool {
 	e.mu.Lock()
 	sessions := make([]*sess, 0, len(e.sessions))
-	for _, s := range e.sessions {
+	for rid, s := range e.sessions {
+		if s.transport == "p2p" && s.state == "established" {
+			continue
+		}
 		s.state = "closed"
 		sessions = append(sessions, s)
+		delete(e.sessions, rid)
+		if active, ok := e.byDevice[s.deviceID]; ok && active == rid {
+			delete(e.byDevice, s.deviceID)
+		}
 	}
-	e.sessions = map[[16]byte]*sess{}
-	e.byDevice = map[string][16]byte{}
 	needNewPair := false
 	if pair := e.pair; pair != nil && !pair.closed {
 		if pair.confirmVerified || pair.pairedAEAD || pair.admitted {
@@ -436,6 +465,9 @@ func (e *Engine) ResetTransport() bool {
 		s.sendMu.Lock()
 		e.wipeSession(s)
 		s.sendMu.Unlock()
+		if s.transport == "p2p" && s.link != nil {
+			s.link.Close()
+		}
 	}
 	e.audit("relay_transport_reset", map[string]any{"sessions": len(sessions), "new_pair_required": needNewPair})
 	return needNewPair

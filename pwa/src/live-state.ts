@@ -14,6 +14,8 @@ export function resetLiveConnectionState(): void {
   state.pushConfigError = "";
   state.herdHost = "";
   state.runtimeKind = "";
+  state.relayRttMs = null;
+  state.sessionTransport = "relay";
   state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES };
   state.agentKinds = [];
   state.operationBusy = false;

@@ -64,7 +64,9 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   conn.append(setRow(t("settings.status"), status.text, status.tone));
   conn.append(setRow(
     t("settings.networkRtt"),
-    state.relayRttMs === null ? t("settings.networkRttPending") : t("settings.networkRttMs", { ms: state.relayRttMs }),
+    state.relayRttMs === null
+      ? t("settings.networkRttPending")
+      : t(state.sessionTransport === "p2p" ? "settings.networkRttP2P" : "settings.networkRttRelay", { ms: state.relayRttMs }),
   ));
   const self = state.deviceList.find((device) => device.self && !device.revoked_at);
   if (self) conn.append(setRow(t("settings.thisPhone"), self.label || t("settings.pairedPhone")));

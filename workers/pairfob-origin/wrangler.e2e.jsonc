@@ -5,7 +5,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "vars": {
-    "BUILD": "test"
+    "BUILD": "test",
+    "P2P_OPEN": "1"
   },
   "analytics_engine_datasets": [
     { "binding": "METRICS", "dataset": "pairfob" }

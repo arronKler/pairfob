@@ -320,7 +320,7 @@ func (e *Engine) sendTerminalFrame(s *sess, slot *terminalSlot, frame runtime.Te
 			return false
 		}
 		payload, err := aead.Seal(s.s2c, s.routeID, body)
-		if err != nil || e.Conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload}) != nil {
+		if err != nil || e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload}) != nil {
 			return false
 		}
 	}
@@ -363,7 +363,7 @@ func (e *Engine) sendTerminalClosed(s *sess, terminalID, reason string) {
 	}
 	payload, err := aead.Seal(s.s2c, s.routeID, body)
 	if err == nil {
-		_ = e.Conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload})
+		_ = e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload})
 	}
 }
 

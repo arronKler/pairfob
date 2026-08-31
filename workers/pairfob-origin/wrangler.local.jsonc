@@ -6,7 +6,8 @@
   "workers_dev": false,
   "preview_urls": false,
   "vars": {
-    "BUILD": "local"
+    "BUILD": "local",
+    "P2P_OPEN": "1"
   },
   "analytics_engine_datasets": [
     { "binding": "METRICS", "dataset": "pairfob" }

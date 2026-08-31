@@ -168,6 +168,7 @@ async function boot(): Promise<void> {
   try {
     const config = await loadOriginConfig();
     state.originProtocol = config.protocol;
+    state.p2pEnabled = config.p2p;
   } catch (error) {
     state.phase = "connect";
     showError(messageOf(error));

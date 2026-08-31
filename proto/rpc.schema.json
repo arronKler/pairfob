@@ -47,6 +47,19 @@
       "type": "integer",
       "minimum": 1
     },
+    "transportAttemptId": {
+      "type": "string",
+      "pattern": "^p2p_[A-Za-z0-9_-]{16,64}$"
+    },
+    "transportRouteId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "sessionDescription": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 65536
+    },
     "path": {
       "type": "string",
       "minLength": 1,
@@ -355,6 +368,26 @@
       },
       "additionalProperties": false
     },
+    "transportOfferResult": {
+      "type": "object",
+      "required": ["attempt_id", "route_id", "sdp"],
+      "properties": {
+        "attempt_id": { "$ref": "#/$defs/transportAttemptId" },
+        "route_id": { "$ref": "#/$defs/transportRouteId" },
+        "sdp": { "$ref": "#/$defs/sessionDescription" }
+      },
+      "additionalProperties": false
+    },
+    "transportCommitResult": {
+      "type": "object",
+      "required": ["attempt_id", "route_id", "transport"],
+      "properties": {
+        "attempt_id": { "$ref": "#/$defs/transportAttemptId" },
+        "route_id": { "$ref": "#/$defs/transportRouteId" },
+        "transport": { "const": "webrtc" }
+      },
+      "additionalProperties": false
+    },
     "request": {
       "type": "object",
       "required": ["v", "id", "op", "params"],
@@ -393,7 +426,9 @@
             "TerminalInput",
             "TerminalResize",
             "TerminalScroll",
-            "TerminalClose"
+            "TerminalClose",
+            "TransportOffer",
+            "TransportCommit"
           ]
         },
         "params": { "type": "object" }
@@ -951,6 +986,38 @@
                   "column": { "type": "integer", "minimum": 0, "maximum": 320 },
                   "row": { "type": "integer", "minimum": 0, "maximum": 160 },
                   "modifiers": { "type": "integer", "minimum": 0, "maximum": 255 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "TransportOffer" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["attempt_id", "sdp"],
+                "properties": {
+                  "attempt_id": { "$ref": "#/$defs/transportAttemptId" },
+                  "sdp": { "$ref": "#/$defs/sessionDescription" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "TransportCommit" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["attempt_id", "route_id"],
+                "properties": {
+                  "attempt_id": { "$ref": "#/$defs/transportAttemptId" },
+                  "route_id": { "$ref": "#/$defs/transportRouteId" }
                 },
                 "additionalProperties": false
               }

@@ -28,12 +28,15 @@ Docs: [pairfob.com/doc](https://pairfob.com/doc/).
 ```
 phone  --HTTPS/WSS pairfob.v2-->  pairfob.com (Worker + Durable Object)
 pairfob --outbound WSS---------->  same room  --opaque FWD-->  phone
+          \-- WebRTC DataChannel after authenticated setup --/
 pairfob --loopback-------------->  Herdr
 ```
 
 `pairfob.com` is the project's official instance. It forwards ciphertext frames
 and cannot read the session. Keys live on the computer and the paired device.
-New computer setup can close; already-enrolled computers keep working.
+The established session attempts a WebRTC direct upgrade in the background and
+keeps relay as fallback. New computer setup can close; already-enrolled
+computers keep working. See [`proto/direct-transport.md`](proto/direct-transport.md).
 
 ## Commands
 

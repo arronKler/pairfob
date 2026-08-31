@@ -1,6 +1,7 @@
 import { b64url, b64urlDecode } from "./bytes.ts";
 import { decode, encode, parseJSON, type Frame } from "./envelope.ts";
 import { ProtocolError } from "./errors.ts";
+import type { FrameChannel } from "./frame-channel.ts";
 
 /** Zero route_id for HELLO/ATTACH control frames. Pair and session share send, heartbeat, and envelope checks. */
 export const Z16 = new Uint8Array(16);
@@ -61,7 +62,8 @@ function toBytes(data: unknown): Uint8Array {
 }
 
 /** Exactly one message listener owns every frame for a socket. */
-export class FrameSocket {
+export class FrameSocket implements FrameChannel {
+  readonly kind = "relay" as const;
   private queue: Frame[] = [];
   private waiters: Array<{ resolve: (frame: Frame) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }> = [];
   private handler: ((frame: Frame) => void) | null = null;
@@ -88,6 +90,14 @@ export class FrameSocket {
     });
     ws.addEventListener("close", () => this.fail(new ProtocolError("disconnected", "连接已断开")));
     ws.addEventListener("error", () => this.fail(new ProtocolError("disconnected", "WebSocket 错误")));
+  }
+
+  send(frame: Frame): void {
+    send(this.ws, frame);
+  }
+
+  close(code?: number, reason?: string): void {
+    this.ws.close(code, reason);
   }
 
   next(timeoutMs: number): Promise<Frame> {

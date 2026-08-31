@@ -4,7 +4,9 @@ import { clientWsURL, loadOriginConfig, parseOriginConfig } from "./origin-confi
 
 describe("origin config", () => {
   test("parses protocol 2 only", () => {
-    expect(parseOriginConfig({ protocol: 2, build: "abc" })).toEqual({ protocol: 2, build: "abc" });
+    expect(parseOriginConfig({ protocol: 2, build: "abc", p2p: true })).toEqual({ protocol: 2, build: "abc", p2p: true });
+    expect(parseOriginConfig({ protocol: 2, build: "old" })).toEqual({ protocol: 2, build: "old", p2p: false });
+    expect(() => parseOriginConfig({ protocol: 2, build: "bad", p2p: 1 })).toThrow(ProtocolError);
     expect(() => parseOriginConfig({ protocol: 1, build: "dev" })).toThrow(ProtocolError);
     expect(() => parseOriginConfig({ protocol: 3, build: "x" })).toThrow(ProtocolError);
     expect(() => parseOriginConfig({ protocol: 2 })).toThrow(ProtocolError);
@@ -14,9 +16,9 @@ describe("origin config", () => {
     const calls: string[] = [];
     const config = await loadOriginConfig(async (input, init) => {
       calls.push(`${init?.cache}:${String(input)}`);
-      return new Response(JSON.stringify({ protocol: 2, build: "s11" }), { status: 200 });
+      return new Response(JSON.stringify({ protocol: 2, build: "s11", p2p: false }), { status: 200 });
     });
-    expect(config).toEqual({ protocol: 2, build: "s11" });
+    expect(config).toEqual({ protocol: 2, build: "s11", p2p: false });
     expect(calls).toEqual(["no-store:/api/config"]);
   });
 

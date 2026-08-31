@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -24,6 +25,12 @@ import (
 	runtimeapi "pairfob/internal/runtime"
 	"pairfob/internal/state"
 )
+
+// DirectAcceptor is the frame-level seam implemented by the WebRTC adapter in
+// cmd/pairfob. Tests use an in-memory adapter; session crypto stays in daemon.
+type DirectAcceptor interface {
+	Accept(context.Context, string, func(mux.Conn, envelope.Frame), func(mux.Conn)) (string, mux.Conn, error)
+}
 
 type Device struct {
 	ID                string
@@ -70,19 +77,31 @@ type pairingSlot struct {
 type sess struct {
 	routeID      [16]byte
 	deviceID     string
+	link         mux.Conn
+	transport    string // relay or p2p
+	upgradeFrom  [16]byte
+	attemptID    string
+	directBusy   bool
 	c2s, s2c     *aead.Direction
 	ephSk, ephPk [32]byte
 	peerPk       [32]byte
 	nonce        []byte
 	hello1       sessionkeys.Hello1
 	ts           int64
-	state        string // resumehello|hello2|established|closed
+	state        string // resumehello|hello2|upgrade_ready|established|closed
 	sendMu       sync.Mutex
 	rpcQueue     chan rpcRequest
 	rpcStop      chan struct{}
 	rpcStopOnce  sync.Once
 	terminalMu   sync.Mutex
 	terminal     *terminalSlot
+}
+
+func (e *Engine) sendSessionFrame(s *sess, frame envelope.Frame) error {
+	if s != nil && s.link != nil {
+		return s.link.Send(frame)
+	}
+	return e.Conn.Send(frame)
 }
 
 type Engine struct {
@@ -104,6 +123,7 @@ type Engine struct {
 	VAPIDSubject   string
 	PushHTTPClient *http.Client
 	PushEnabled    bool
+	Direct         DirectAcceptor
 	Journal        *journal.Reader
 
 	pairOpenMu    sync.Mutex

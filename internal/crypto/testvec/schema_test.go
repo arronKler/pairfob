@@ -83,6 +83,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
 		"CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
+		"TransportOffer", "TransportCommit",
 	}
 	if got := schema.Defs["request"].Properties["op"].Enum; !slices.Equal(got, wantOps) {
 		t.Fatalf("RPC op surface\n got: %q\nwant: %q", got, wantOps)
@@ -142,6 +143,25 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		!slices.Equal(listWorktrees.OneOf[1].Required, []string{"cwd"}) {
 		t.Errorf("ListWorktrees must require exactly one explicit scope, got oneOf=%v", listWorktrees.OneOf)
 	}
+	for op, fields := range map[string][]string{
+		"TransportOffer":  {"attempt_id", "sdp"},
+		"TransportCommit": {"attempt_id", "route_id"},
+	} {
+		params := paramsByOp[op]
+		wantFields := slices.Clone(fields)
+		sort.Strings(wantFields)
+		if got := sortedPropertyNames(params.Properties); !slices.Equal(got, wantFields) {
+			t.Errorf("%s params fields = %q, want %q", op, got, wantFields)
+		}
+		gotRequired := slices.Clone(params.Required)
+		sort.Strings(gotRequired)
+		if !slices.Equal(gotRequired, wantFields) {
+			t.Errorf("%s required params = %q, want %q", op, gotRequired, wantFields)
+		}
+		if params.AdditionalProperties == nil || *params.AdditionalProperties {
+			t.Errorf("%s params must reject additional properties", op)
+		}
+	}
 
 	capabilities := []string{
 		"create_conversation", "create_tab", "split_pane", "prompt_agent", "history",
@@ -189,6 +209,12 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	})
 	requireExactObject(t, schema.Defs, "terminalCloseResult", []string{
 		"operation_id", "terminal_id", "closed",
+	})
+	requireExactObject(t, schema.Defs, "transportOfferResult", []string{
+		"attempt_id", "route_id", "sdp",
+	})
+	requireExactObject(t, schema.Defs, "transportCommitResult", []string{
+		"attempt_id", "route_id", "transport",
 	})
 
 	aliases := map[string]string{

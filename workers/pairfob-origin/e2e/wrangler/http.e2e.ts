@@ -13,8 +13,9 @@ describe("wrangler/miniflare HTTP (not a hibernation proof)", () => {
     const res = await SELF.fetch("https://pairfob.com/api/config");
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    const body = (await res.json()) as { protocol: number };
+    const body = (await res.json()) as { protocol: number; p2p: boolean };
     expect(body.protocol).toBe(2);
+    expect(body.p2p).toBe(true);
   });
 
   it("GET /v1/ws is 426", async () => {

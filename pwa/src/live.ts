@@ -141,12 +141,13 @@ export async function establish(pair: PairResult): Promise<void> {
   state.live?.close();
   if (state.live) state.live = null;
   state.relayRttMs = null;
+  state.sessionTransport = "relay";
   state.paneTouched = loadPaneTouched();
   state.paneTermModes = loadPaneTermModes();
   state.paneComposeLive = loadPaneComposeLive();
   await rememberLastUsed(pair.daemonId).catch(() => undefined);
   state.lastUsedDaemonId = pair.daemonId;
-  state.live = await sessionOverWS(wsURL({ daemonId: pair.daemonId }), pair);
+  state.live = await sessionOverWS(wsURL({ daemonId: pair.daemonId }), pair, { p2p: state.p2pEnabled });
   const seen = { ...pair, lastSeen: Math.floor(Date.now() / 1000) };
   state.credential = seen;
   await saveCredential(seen).catch(() => undefined);
@@ -169,6 +170,7 @@ function onSessionEvent(event: SessionEvent): void {
   if (handleFullTerminalEvent(event) && (event.type === "terminal_frame" || event.type === "terminal_closed")) return;
   if (event.type === "latency" && typeof event.rttMs === "number") {
     state.relayRttMs = Math.max(0, Math.round(event.rttMs));
+    state.sessionTransport = event.transport ?? state.sessionTransport;
     if (state.screen === "settings") render();
     return;
   }
@@ -189,6 +191,7 @@ function onSessionEvent(event: SessionEvent): void {
     if (document.visibilityState === "visible") void refreshRuntimeState();
   } else if (event.type === "disconnected" || event.type === "reconnecting") {
     state.relayRttMs = null;
+    state.sessionTransport = "relay";
     stopPolling();
     showStatus(sessionEventNotice(event), true);
     render();
