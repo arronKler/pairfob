@@ -48,6 +48,7 @@ import { bindHostScroll, pageLineCount, scrollRail, type ScrollAt } from "./full
 import { TerminalCommandPump, type TerminalCommand } from "./full-terminal-command";
 import { loadFullTerminalXterm } from "./full-terminal-loader";
 import { fullTerminalPerf } from "./full-terminal-perf";
+import { fullTerminalOptions, openWebglTerminal, WEBGL_CONTEXT_LOST } from "./full-terminal-renderer";
 import { track } from "../lib/telemetry";
 import { chromeActionCluster, syncChromeStop } from "./session/chrome-actions";
 import { guidedScrollController } from "./session/guided-scroll";
@@ -339,7 +340,7 @@ function bindInput(host: HTMLElement): void {
   });
   unbindScroll?.();
   unbindScroll = bindHostScroll(host, sendScroll, cellAt, {
-    nativePanX: () => state.termFit === "pan",
+    panXScroller: () => state.termFit === "pan" ? host.querySelector<HTMLElement>(".full-terminal-pan") : null,
   });
   unbindPinch?.();
   unbindPinch = bindFontPinch(
@@ -364,6 +365,14 @@ function bindInput(host: HTMLElement): void {
   keyboard = bindXtermKeyboard(host, isDesk());
 }
 
+function handleRendererContextLoss(version: number): void {
+  if (version !== rendererVersion || !state.fullTerminal) return;
+  const reason = t("ft.loadFail", { error: WEBGL_CONTEXT_LOST });
+  void suspendBridge(true, reason);
+  disposeRenderer();
+  offerRetry(reason);
+}
+
 async function mount(host: HTMLElement): Promise<void> {
   const version = ++rendererVersion;
   mounting = true;
@@ -380,13 +389,7 @@ async function mount(host: HTMLElement): Promise<void> {
   }
   if (version !== rendererVersion || !state.fullTerminal || !host.isConnected) return;
   mounting = false;
-  terminal = new module.Terminal({
-    cursorBlink: true,
-    cursorStyle: "block",
-    convertEol: false,
-    disableStdin: false,
-    drawBoldTextInBrightColors: true,
-    customGlyphs: true,
+  terminal = new module.Terminal(fullTerminalOptions({
     fontFamily: FULL_TERM_FONT_FAMILY,
     fontSize: state.termFontPx,
     lineHeight: pitchLineHeight(
@@ -395,20 +398,19 @@ async function mount(host: HTMLElement): Promise<void> {
       window.devicePixelRatio || 1,
       24,
     ),
-    letterSpacing: 0,
-    scrollback: 0,
     linkHandler: terminalLinkHandler(),
-    theme: {
-      background: "#090c10",
-      foreground: "#e7ebf1",
-      cursor: "#8ab4ff",
-      cursorAccent: "#090c10",
-      selectionBackground: "#305a8a99",
-    },
-  });
+  }));
   fitAddon = new module.FitAddon();
   terminal.loadAddon(fitAddon);
-  terminal.open(terminalMount(host));
+  try {
+    openWebglTerminal(terminal, module.WebglAddon, terminalMount(host), () => handleRendererContextLoss(version));
+  } catch (error) {
+    if (version !== rendererVersion) return;
+    disposeRenderer();
+    if (fallbackToGuidedLive()) return;
+    offerRetry(t("ft.loadFail", { error: messageOf(error) }));
+    return;
+  }
   fullTerminalPerf.componentReady();
   terminal.registerLinkProvider(httpLinkProvider(terminal));
   bindInput(host);

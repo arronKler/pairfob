@@ -73,45 +73,91 @@ describe("complete-terminal remote scroll", () => {
     host.remove();
   });
 
-  test("nativePanX leaves a sideways drag to the host scroller", () => {
+  test("an 80-column touch drag explicitly pans the overflow scroller", () => {
     const host = document.createElement("div");
+    const pan = document.createElement("div");
+    Object.defineProperty(pan, "clientWidth", { value: 100 });
+    Object.defineProperty(pan, "scrollWidth", { value: 300 });
+    host.append(pan);
     document.body.append(host);
     const calls: Call[] = [];
     const stop = bindHostScroll(host, (direction, lines, source) => {
       calls.push({ direction, lines, source });
-    }, () => undefined, { nativePanX: () => true });
-    const down = pointer("pointerdown", 40, 120, "touch");
+    }, () => undefined, { panXScroller: () => pan });
+    const down = pointer("pointerdown", 140, 120, "touch");
     host.dispatchEvent(down);
-    host.dispatchEvent(pointer("pointermove", 140, 124, "touch"));
-    expect(down.defaultPrevented).toBeFalse();
+    const move = pointer("pointermove", 40, 124, "touch");
+    host.dispatchEvent(move);
+    host.dispatchEvent(pointer("pointermove", 20, 125, "touch"));
+    expect(down.defaultPrevented).toBeTrue();
+    expect(move.defaultPrevented).toBeTrue();
+    expect(pan.scrollLeft).toBe(120);
     expect(calls).toEqual([]);
     stop();
     host.remove();
   });
 
-  test("nativePanX still forwards a vertical finger pan", () => {
+  test("a lost pointer-capture race does not drop the first pan movement", () => {
     const host = document.createElement("div");
+    const pan = document.createElement("div");
+    Object.defineProperty(pan, "clientWidth", { value: 100 });
+    Object.defineProperty(pan, "scrollWidth", { value: 300 });
+    host.setPointerCapture = () => { throw new DOMException("inactive pointer", "NotFoundError"); };
+    host.append(pan);
+    document.body.append(host);
+    const stop = bindHostScroll(host, () => undefined, () => undefined, { panXScroller: () => pan });
+    host.dispatchEvent(pointer("pointerdown", 140, 120, "touch"));
+    host.dispatchEvent(pointer("pointermove", 40, 124, "touch"));
+    expect(pan.scrollLeft).toBe(100);
+    stop();
+    host.remove();
+  });
+
+  test("an 80-column scroller still forwards a vertical finger pan", () => {
+    const host = document.createElement("div");
+    const pan = document.createElement("div");
+    Object.defineProperty(pan, "clientWidth", { value: 100 });
+    Object.defineProperty(pan, "scrollWidth", { value: 300 });
+    host.append(pan);
     document.body.append(host);
     const calls: Call[] = [];
     const stop = bindHostScroll(host, (direction, lines, source, at) => {
       calls.push({ direction, lines, source, at });
-    }, () => ({ column: 4, row: 9 }), { nativePanX: () => true });
+    }, () => ({ column: 4, row: 9 }), { panXScroller: () => pan });
     host.dispatchEvent(pointer("pointerdown", 80, 240, "touch"));
     host.dispatchEvent(pointer("pointermove", 80, 240 - SCROLL_LINE_PX * 3, "touch"));
     expect(calls).toEqual([{ direction: "down", lines: 3, source: "wheel", at: { column: 4, row: 9 } }]);
+    expect(pan.scrollLeft).toBe(0);
     stop();
     host.remove();
   });
 
   test("a sideways wheel is not stolen when the canvas can pan", () => {
     const host = document.createElement("div");
+    const pan = document.createElement("div");
+    host.append(pan);
     document.body.append(host);
     const calls: Call[] = [];
     const stop = bindHostScroll(host, (direction, lines, source) => {
       calls.push({ direction, lines, source });
-    }, () => undefined, { nativePanX: () => true });
+    }, () => undefined, { panXScroller: () => pan });
     host.dispatchEvent(new WheelEvent("wheel", { deltaX: 80, deltaY: 4, bubbles: true, cancelable: true }));
     expect(calls).toEqual([]);
+    stop();
+    host.remove();
+  });
+
+  test("mouse selection does not become a drag-to-pan gesture", () => {
+    const host = document.createElement("div");
+    const pan = document.createElement("div");
+    Object.defineProperty(pan, "clientWidth", { value: 100 });
+    Object.defineProperty(pan, "scrollWidth", { value: 300 });
+    host.append(pan);
+    document.body.append(host);
+    const stop = bindHostScroll(host, () => undefined, () => undefined, { panXScroller: () => pan });
+    host.dispatchEvent(pointer("pointerdown", 140, 120, "mouse"));
+    host.dispatchEvent(pointer("pointermove", 40, 124, "mouse"));
+    expect(pan.scrollLeft).toBe(0);
     stop();
     host.remove();
   });

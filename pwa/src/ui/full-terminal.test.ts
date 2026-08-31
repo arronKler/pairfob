@@ -43,7 +43,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(source).toContain("document.fonts");
     expect(source).toContain("Math.floor(inner.width / cell.width)");
     expect(source).toContain("ptyCols(visibleCols, state.termFit)");
-    expect(source).toContain("nativePanX");
+    expect(source).toContain("panXScroller");
     expect(source).toContain("full-terminal-pan");
     expect(source).toContain("full-terminal-canvas");
     expect(source).toContain("displayGrid");
@@ -54,6 +54,8 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(source).toContain("snapCellLineHeight");
     expect(source).toContain("integerizeDomRows");
     expect(source).toContain("clearScreenScale");
+    expect(source).toContain("openWebglTerminal");
+    expect(source).toContain("WEBGL_CONTEXT_LOST");
     expect(source).not.toContain("fillLineHeight");
     expect(source).not.toContain("planScale");
     expect(source).not.toContain("applyScreenScale");
@@ -157,5 +159,9 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(renderFn).toContain("setFullTerminalDocumentMode(true)");
     expect(leaveFn).toContain("setFullTerminalDocumentMode(false)");
     expect(disposeFn).toContain("setFullTerminalDocumentMode(false)");
+  });
+
+  test("edge swipe-back does not steal an 80-column terminal pan", () => {
+    expect(pane).toContain('closest?.(".full-terminal-pan")');
   });
 });

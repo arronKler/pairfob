@@ -48,19 +48,12 @@ afterEach(() => {
   setLang("zh");
   try {
     localStorage.removeItem("pairfob_lang");
+    document.cookie = "pairfob_lang=;path=/;max-age=0";
   } catch {
     /* ignore */
   }
   app.replaceChildren();
 });
-
-function click(label: string): void {
-  const el = [...app.querySelectorAll("button")].find((button) => {
-    return button.getAttribute("aria-label") === label || button.textContent === label;
-  });
-  if (!(el instanceof HTMLButtonElement)) throw new Error(`missing ${label}: ${app.innerHTML.slice(0, 280)}`);
-  el.click();
-}
 
 describe("add-computer pairing chrome", () => {
   test("first-run pairing keeps the prelude, not a settings topbar", () => {
@@ -96,12 +89,22 @@ describe("add-computer pairing chrome", () => {
     state.addingComputer = false;
     state.computers = [];
     renderConnect();
-    const group = app.querySelector('[aria-label="语言"]');
-    expect(group).toBeTruthy();
-    expect([...group!.querySelectorAll("button")].map((el) => el.textContent)).toEqual(["跟随浏览器", "中文", "English"]);
-    click("English");
+    const select = app.querySelector<HTMLSelectElement>('select[aria-label="语言"]');
+    expect(select).toBeTruthy();
+    expect([...select!.options].map((option) => option.textContent)).toEqual(["自动", "中文", "English"]);
+    expect(app.querySelector(".trust")?.nextElementSibling).toBe(app.querySelector(".connect-lang"));
+    select!.value = "en";
+    select!.dispatchEvent(new happy.Event("change", { bubbles: true }));
     expect(app.querySelector(".prelude-title")?.textContent).toBe("Connect your computer");
     expect(app.querySelector(".btn-scan")?.textContent).toBe("Scan to connect");
-    expect(app.querySelector('[aria-label="Language"] [aria-checked="true"]')?.textContent).toBe("English");
+    expect(app.querySelector<HTMLSelectElement>('select[aria-label="Language"]')?.value).toBe("en");
+  });
+
+  test("adding another computer puts language in the topbar", () => {
+    paintAdd();
+    const lang = app.querySelector(".connect-lang");
+    expect(app.querySelector(".topbar")?.contains(lang)).toBe(true);
+    expect(app.querySelector(".trust")?.nextElementSibling).toBeNull();
+    expect(app.querySelector(".seg")).toBeNull();
   });
 });

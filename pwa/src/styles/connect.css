@@ -1,6 +1,7 @@
 /* --- Prelude and pairing --------------------------------------------------- */
 
 .prelude {
+  position: relative;
   max-width: 26rem;
   margin: 0 auto;
   padding: max(9vh, calc(env(safe-area-inset-top, 0px) + 48px)) 22px calc(40px + env(safe-area-inset-bottom, 0px));
@@ -149,16 +150,54 @@ dialog.scanner-modal::backdrop { background: #04060ad9; backdrop-filter: blur(5p
 }
 
 .connect-lang {
-  margin-top: 22px;
-}
-
-.connect-lang .seg {
-  margin: 0;
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 2px);
+  right: max(8px, env(safe-area-inset-right, 0px));
+  z-index: 3;
 }
 
 .prelude.pairing .connect-lang {
-  margin-top: auto;
-  padding-top: 24px;
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.topbar .connect-lang {
+  position: static;
+  margin-left: auto;
+}
+
+.lang-select {
+  display: block;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 7.25rem;
+  padding: 0 26px 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background-color: transparent;
+  color: var(--muted);
+  font: 550 0.82rem/1 var(--font);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px;
+}
+
+.lang-select:focus {
+  outline: none;
+}
+
+.lang-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  color: var(--ink);
+}
+
+@media (max-width: 899.98px) {
+  .lang-select { font-size: 16px; }
 }
 
 .settings-page .topbar + .lede { margin-top: 14px; }

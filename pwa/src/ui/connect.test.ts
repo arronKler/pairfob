@@ -52,8 +52,9 @@ describe("connect locator_required local", () => {
     expect(connectSource).toContain('t("connect.deskHint")');
   });
 
-  test("the pairing surface includes the language switch", () => {
-    expect(connectSource).toContain("languageControl()");
+  test("the pairing surface includes a compact language select", () => {
+    expect(connectSource).toContain("languageSelect()");
     expect(connectSource).toContain("connect-lang");
+    expect(connectSource).not.toContain("languageControl()");
   });
 });

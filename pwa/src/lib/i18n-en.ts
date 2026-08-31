@@ -134,6 +134,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "list.groupAria": "Session grouping",
 
   "chrome.back": "Back",
+  "chrome.langAuto": "Auto",
   "chrome.networkOffline": "Phone is offline · resumes on the network",
   "chrome.reconnecting": "Connection dropped, reconnecting",
   "chrome.demo": "Demo data · not your computer",

@@ -127,7 +127,7 @@
 }
 
 .full-terminal-host.is-pan {
-  touch-action: pan-x;
+  touch-action: none;
 }
 
 .full-terminal-host.is-pan .full-terminal-pan {
@@ -135,7 +135,7 @@
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   overscroll-behavior-y: none;
-  touch-action: pan-x;
+  touch-action: none;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
 }

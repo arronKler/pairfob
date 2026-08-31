@@ -12,7 +12,7 @@ import { beginPairing, cancelPairing, onPairSubmit } from "../pairing";
 import { render } from "../paint";
 import { app, clearNotice, showError, showStatus, state } from "../state";
 import { isDesk } from "../viewport";
-import { backBar, brandNode, languageControl, noteNode, spinnerNode } from "./chrome";
+import { backBar, brandNode, languageSelect, noteNode, spinnerNode } from "./chrome";
 
 function pairField(opts: {
   id: string;
@@ -115,13 +115,21 @@ function bindPairError(input: HTMLInputElement, field: HTMLLabelElement, feedbac
   field.append(feedback);
 }
 
+function connectLang(): HTMLElement {
+  const lang = node("div", "connect-lang");
+  lang.append(languageSelect());
+  return lang;
+}
+
 export function renderConnect(): void {
   const busy = state.phase === "pairing";
   const scanned = state.fragment;
   const adding = state.addingComputer || state.computers.length > 0;
   const wrap = node("div", adding ? "page settings-page" : `prelude${busy ? " pairing" : ""}`);
   if (adding) {
-    wrap.append(backBar(state.addingComputer ? t("settings.addComputer") : t("connect.pair"), cancelAddComputer));
+    const bar = backBar(state.addingComputer ? t("settings.addComputer") : t("connect.pair"), cancelAddComputer);
+    bar.append(connectLang());
+    wrap.append(bar);
   } else {
     wrap.append(brandNode());
     wrap.append(node("h1", "prelude-title", t("connect.title")));
@@ -216,9 +224,7 @@ export function renderConnect(): void {
   wrap.append(form);
   if (!state.pairErrorTarget && feedback) wrap.append(feedback);
   wrap.append(node("p", "trust", t("connect.trust")));
-  const lang = node("div", "connect-lang");
-  lang.append(languageControl());
-  wrap.append(lang);
+  if (!adding) wrap.append(connectLang());
   app.replaceChildren(wrap);
   if (!busy) {
     const code = form.querySelector<HTMLInputElement>("#pair-code");

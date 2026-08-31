@@ -74,7 +74,7 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("interactive touch controls keep a 44px target", () => {
-    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".lift button", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
+    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".lift button", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
       const match = rule(selector).match(/min-height:\s*(\d+)px/);
       expect(match, selector).not.toBeNull();
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);
@@ -200,6 +200,7 @@ describe("UI accessibility guardrails", () => {
 
   test("mobile form controls do not trigger iOS focus zoom", () => {
     expect(css).toMatch(/@media \(max-width: 899\.98px\)[\s\S]*?\.operation-field input,[\s\S]*?font-size:\s*16px/);
+    expect(css).toMatch(/@media \(max-width: 899\.98px\)[\s\S]*?\.lang-select[\s\S]*?font-size:\s*16px/);
   });
 
   test("terminal rows tile on a pixel grid so phones do not show scanlines", () => {
@@ -216,8 +217,9 @@ describe("UI accessibility guardrails", () => {
   test("the live xterm fills the host instead of a left-aligned gutter", () => {
     expect(rule(".full-terminal-host")).toMatch(/padding:\s*4px/);
     expect(rule(".full-terminal-host")).toMatch(/overflow:\s*hidden/);
-    expect(rule(".full-terminal-host.is-pan")).toMatch(/touch-action:\s*pan-x/);
+    expect(rule(".full-terminal-host.is-pan")).toMatch(/touch-action:\s*none/);
     expect(rule(".full-terminal-host.is-pan .full-terminal-pan")).toMatch(/overflow-x:\s*auto/);
+    expect(rule(".full-terminal-host.is-pan .full-terminal-pan")).toMatch(/touch-action:\s*none/);
     expect(rule(".full-terminal-pan")).toMatch(/overflow:\s*hidden/);
     expect(css).toMatch(/html\.full-terminal-active,\s*html\.full-terminal-active body\s*\{[^}]*-webkit-text-size-adjust:\s*none/);
     expect(css).toMatch(/html\.full-terminal-active,\s*html\.full-terminal-active body\s*\{[^}]*[^-]text-size-adjust:\s*none/);

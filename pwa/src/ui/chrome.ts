@@ -78,11 +78,22 @@ const LIST_GROUP_OPTIONS: Array<{ id: ListGroup; key: "list.flat" | "list.space"
   { id: "agent", key: "list.agent" },
 ];
 
-const LANG_OPTIONS: Array<{ id: LangPref; key: "settings.langAuto" | "settings.langZh" | "settings.langEn" }> = [
-  { id: "auto", key: "settings.langAuto" },
-  { id: "zh", key: "settings.langZh" },
-  { id: "en", key: "settings.langEn" },
+const LANG_OPTIONS: Array<{
+  id: LangPref;
+  key: "settings.langAuto" | "settings.langZh" | "settings.langEn";
+  compact: "chrome.langAuto" | "settings.langZh" | "settings.langEn";
+}> = [
+  { id: "auto", key: "settings.langAuto", compact: "chrome.langAuto" },
+  { id: "zh", key: "settings.langZh", compact: "settings.langZh" },
+  { id: "en", key: "settings.langEn", compact: "settings.langEn" },
 ];
+
+function applyLangPref(next: LangPref): void {
+  if (langPref() === next) return;
+  setLangPref(next);
+  clearNotice();
+  render();
+}
 
 export function languageControl(): HTMLElement {
   const bar = node("div", "seg");
@@ -91,17 +102,29 @@ export function languageControl(): HTMLElement {
   const selectedPref = langPref();
   for (const option of LANG_OPTIONS) {
     const selected = selectedPref === option.id;
-    const item = button(t(option.key), `seg-item${selected ? " on" : ""}`, () => {
-      if (langPref() === option.id) return;
-      setLangPref(option.id);
-      clearNotice();
-      render();
-    });
+    const item = button(t(option.key), `seg-item${selected ? " on" : ""}`, () => applyLangPref(option.id));
     item.setAttribute("role", "radio");
     item.setAttribute("aria-checked", selected ? "true" : "false");
     bar.append(item);
   }
   return bar;
+}
+
+export function languageSelect(): HTMLSelectElement {
+  const select = node("select", "lang-select");
+  select.setAttribute("aria-label", t("settings.langAria"));
+  const selectedPref = langPref();
+  for (const option of LANG_OPTIONS) {
+    const item = node("option");
+    item.value = option.id;
+    item.textContent = t(option.compact);
+    select.append(item);
+  }
+  select.value = selectedPref;
+  select.addEventListener("change", () => {
+    applyLangPref(select.value === "en" || select.value === "zh" ? select.value : "auto");
+  });
+  return select;
 }
 
 export function listGroupControl(): HTMLElement {

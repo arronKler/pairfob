@@ -70,6 +70,7 @@ export function initSwipeBack(): void {
     (event) => {
       if (state.phase !== "live" || state.screen !== "pane" || isDesk()) return;
       if (event.touches.length !== 1) return;
+      if ((event.target as Element | null)?.closest?.(".full-terminal-pan")) return;
       const touch = event.touches[0];
       if (touch.clientX > 28) return;
       tracking = true;
