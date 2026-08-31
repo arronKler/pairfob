@@ -66,6 +66,8 @@ describe("complete-terminal fit keeps a web-terminal column count", () => {
 
   test("pan keeps 80 columns on a phone and uses the extra room on a desk", () => {
     expect(ptyCols(40, "pan")).toBe(FULL_TERM_TARGET_COLS);
+    expect(ptyCols(40, "pan", 100)).toBe(100);
+    expect(ptyCols(40, "pan", 120)).toBe(120);
     expect(ptyCols(100, "pan")).toBe(100);
     expect(ptyCols(40, "fit")).toBe(40);
     expect(ptyCols(0, "pan")).toBe(FULL_TERM_TARGET_COLS);

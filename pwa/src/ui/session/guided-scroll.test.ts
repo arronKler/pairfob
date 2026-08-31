@@ -33,6 +33,30 @@ async function flush(): Promise<void> {
 }
 
 describe("guided terminal wheel bridge", () => {
+  test("calls browser timers with the global receiver", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    let scheduled: (() => void) | null = null;
+    let cancelled = false;
+    const schedule = function (this: typeof globalThis, callback: () => void, _delay: number) {
+      if (this !== globalThis) throw new TypeError("Illegal invocation");
+      scheduled = callback;
+      return 1 as ReturnType<typeof setTimeout>;
+    };
+    const cancel = function (this: typeof globalThis, _timer: ReturnType<typeof setTimeout>) {
+      if (this !== globalThis) throw new TypeError("Illegal invocation");
+      cancelled = true;
+    };
+    const controller = new GuidedScrollController(schedule, cancel);
+
+    expect(await controller.scroll(target(calls), "up", 3)).toBeTrue();
+    expect(scheduled).not.toBeNull();
+    controller.dispose();
+    await flush();
+
+    expect(cancelled).toBeTrue();
+    expect(calls).toContainEqual({ op: "close", terminalId: terminalId("p1") });
+  });
+
   test("uses one real terminal controller and strict wheel sequences for a burst", async () => {
     const calls: Array<Record<string, unknown>> = [];
     const timers: Array<{ callback: () => void; delay: number }> = [];

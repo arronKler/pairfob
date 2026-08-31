@@ -17,7 +17,7 @@ for (const key of [
 }
 happy.document.body.innerHTML = '<main id="app"></main>';
 
-const { app, state } = await import("../../state.ts");
+const { app, paneComposeLive, setPaneComposeLive, state } = await import("../../state.ts");
 const { t } = await import("../../lib/i18n.ts");
 const { composeForm, flushLiveInput, handlePaneKey, sendPad, setComposeLive, submitTyped } = await import("./compose.ts");
 const { disposeFullTerminal } = await import("../full-terminal.ts");
@@ -38,6 +38,8 @@ afterEach(() => {
   dropQueuedKeys();
   state.composeDraft = "";
   state.composeLive = false;
+  state.defaultComposeLive = false;
+  state.paneComposeLive = {};
   state.live = null;
   state.paneId = "";
   state.paneText = "";
@@ -59,7 +61,7 @@ describe("compose trailing Enter", () => {
     "  esc to interrupt · ? for shortcuts",
   ].join("\n");
 
-  test("empty Enter is available unless a prompt-select panel is lifted", () => {
+  test("empty Enter stays available on ordinary and confirmation screens", () => {
     state.paneText = "Delete everything? [Y/n]";
     const open = mount("");
     expect(open.disabled).toBe(false);
@@ -67,9 +69,9 @@ describe("compose trailing Enter", () => {
     expect(open.getAttribute("aria-label")).toBe("向终端发送 Enter");
 
     state.paneText = lifted;
-    const blocked = mount("");
-    expect(blocked.disabled).toBe(true);
-    expect(blocked.getAttribute("aria-label")).toContain("请点选项");
+    const prompt = mount("");
+    expect(prompt.disabled).toBe(false);
+    expect(prompt.getAttribute("aria-label")).toBe("向终端发送 Enter");
     expect(mount("run tests").disabled).toBe(false);
   });
 
@@ -79,7 +81,7 @@ describe("compose trailing Enter", () => {
     expect(button.disabled).toBe(false);
   });
 
-  test("selecting live input upgrades the active pane to the terminal stream", async () => {
+  test("selecting live input stays in the guided view and belongs only to the active pane", async () => {
     state.paneId = "p1";
     state.screen = "pane";
     state.live = { isConnected: () => true } as typeof state.live;
@@ -88,7 +90,36 @@ describe("compose trailing Enter", () => {
     await setComposeLive(true);
 
     expect(state.composeLive).toBeTrue();
-    expect(state.fullTerminal).toBeTrue();
+    expect(state.fullTerminal).toBeFalse();
+    expect(paneComposeLive("p1")).toBeTrue();
+    expect(paneComposeLive("p2")).toBeFalse();
+  });
+
+  test("a delayed mode flush cannot overwrite the next pane's input mode", async () => {
+    let finishSend!: () => void;
+    state.paneId = "p1";
+    state.screen = "pane";
+    state.live = {
+      isConnected: () => true,
+      sendText: () => new Promise<void>((resolve) => { finishSend = resolve; }),
+    } as typeof state.live;
+    mount("", true);
+    const input = app.querySelector("textarea");
+    if (!(input instanceof HTMLTextAreaElement)) throw new Error("missing live compose");
+    input.value = "one";
+    input.dispatchEvent(new happy.Event("input", { bubbles: true }));
+
+    const changing = setComposeLive(false);
+    await Promise.resolve();
+    state.paneId = "p2";
+    state.composeLive = true;
+    setPaneComposeLive("p2", true);
+    finishSend();
+    await changing;
+
+    expect(state.composeLive).toBeTrue();
+    expect(paneComposeLive("p1")).toBeFalse();
+    expect(paneComposeLive("p2")).toBeTrue();
   });
 
   test("live input is visible locally before the network flush", async () => {
@@ -185,7 +216,7 @@ describe("compose trailing Enter", () => {
     expect(sent).toEqual([["enter"]]);
   });
 
-  test("a lifted prompt-select swallows empty Enter from the trailing button", async () => {
+  test("a confirmation screen receives the same deliberate Enter as any TUI", async () => {
     const sent: string[][] = [];
     state.paneId = "p1";
     state.paneText = lifted;
@@ -199,6 +230,6 @@ describe("compose trailing Enter", () => {
 
     await submitTyped(true);
     await flushKeys();
-    expect(sent).toEqual([]);
+    expect(sent).toEqual([["enter"]]);
   });
 });

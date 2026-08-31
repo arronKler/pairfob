@@ -21,9 +21,20 @@ export function parseOriginConfig(value: unknown): OriginConfig {
 }
 
 export async function loadOriginConfig(fetchImpl: FetchLike = fetch): Promise<OriginConfig> {
-  const response = await fetchWithTimeout(fetchImpl, "/api/config", { cache: "no-store" });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(fetchImpl, "/api/config", { cache: "no-store" });
+  } catch (error) {
+    if (error instanceof ProtocolError) throw error;
+    throw new ProtocolError("bad_relay", t("err.originRead"));
+  }
   if (!response.ok) throw new ProtocolError("bad_relay", t("err.originRead"));
-  return parseOriginConfig(await response.json());
+  try {
+    return parseOriginConfig(await response.json());
+  } catch (error) {
+    if (error instanceof ProtocolError) throw error;
+    throw new ProtocolError("bad_message", t("err.originShape"));
+  }
 }
 
 /** Same-origin PWA WS. Origin config is pairfob.v2 only; never `/v1/ws`. */

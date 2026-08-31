@@ -25,6 +25,13 @@ describe("list object menu", () => {
     expect(source).not.toContain('t("cancel")');
   });
 
+  test("the object menu lists full pane facts above the actions", () => {
+    expect(source).toContain("agentDetailRows(agent, state.agents, state.listGroup)");
+    expect(source).toContain("sheet-facts");
+    expect(source).toContain("sheet-fact-path");
+    expect(source).not.toContain("agent.paneId");
+  });
+
   test("workspace rename leaves the card when the list is grouped by workspace", () => {
     expect(source).toContain('state.listGroup !== "space"');
     expect(source).toContain("export function openListWorkspaceMenu");

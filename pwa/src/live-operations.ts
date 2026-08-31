@@ -3,7 +3,6 @@ import { agentTitle, canPromptAgent, tabSiblings } from "./lib/dashboard";
 import { askConfirm, askText } from "./lib/dom";
 import { t } from "./lib/i18n";
 import { clearAgentTraceCache, forgetAgentTrace } from "./lib/agent-trace-cache";
-import { showHistory } from "./lib/history-ui";
 import { type NoticeScope } from "./lib/notice-scope";
 import {
   OPERATION_INPUT_LIMITS,
@@ -161,21 +160,6 @@ export async function promptSelectedAgent(): Promise<void> {
       },
     },
   );
-}
-
-export async function openSelectedTerminalHistory(): Promise<void> {
-  const session = state.live;
-  const selected = selectedAgent();
-  if (!session || !selected || !state.operationCapabilities.history) return;
-  const load = async (cursor: string | null) => {
-    try {
-      return await session.history(selected.paneId, cursor, 50);
-    } catch (error) {
-      if (error instanceof ProtocolError) throw new ProtocolError(error.code, messageOf(error));
-      throw error;
-    }
-  };
-  await showHistory({ terminal: load });
 }
 
 function selectedWorktreeDefaults(): WorktreeDraft | null {

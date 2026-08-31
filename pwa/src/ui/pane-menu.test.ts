@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 const source = await Bun.file(new URL("./pane-menu.ts", import.meta.url)).text();
 const liveSource = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
+const chromeSource = await Bun.file(new URL("./session/view.ts", import.meta.url)).text();
+const termSource = await Bun.file(new URL("./session/term.ts", import.meta.url)).text();
+const settingsStyle = await Bun.file(new URL("../styles/settings.css", import.meta.url)).text();
 
 describe("session view sheet", () => {
   test("this-view menu keeps pane rename and close, not parent-object admin", () => {
@@ -20,19 +23,27 @@ describe("session view sheet", () => {
     expect(liveSource).not.toMatch(/新建标签(?!页)|关闭整个标签(?!页)|标签名不能为空/);
   });
 
-  test("conversation transcripts open the agent-chat mode, not the history sheet", () => {
+  test("conversation transcripts open the agent-chat mode, not a history sheet", () => {
     expect(source).toContain("TERM_MODE_LABEL");
     expect(source).toContain("enterAgentChat");
     expect(source).toContain("canEnterAgentChat()");
     expect(source).not.toMatch(/\bopenSelectedHistory\b/);
+    expect(source).not.toContain("openSelectedTerminalHistory");
     expect(source).not.toContain("对话记录");
   });
 
-  test("earlier rendered output is a menu action, not an overlay on the live pane", () => {
-    expect(source).toContain('item(t("menu.history"), openSelectedTerminalHistory)');
-    expect(source).toContain("state.operationCapabilities.history");
-    expect(liveSource).toContain("showHistory({ terminal: load })");
-    expect(liveSource).not.toContain("if (!selected.historyAvailable) return");
+  test("the session menu has no earlier-output action", () => {
+    expect(source).not.toContain('t("menu.history")');
+    expect(source).not.toContain("openSelectedTerminalHistory");
+    expect(liveSource).not.toContain("showHistory");
+    expect(liveSource).not.toContain("openSelectedTerminalHistory");
+    expect(liveSource).not.toContain("session.history(");
+    expect(chromeSource).not.toContain('button("历史"');
+    expect(chromeSource).not.toContain("onHistory");
+    expect(termSource).not.toContain("↑ 更早的输出");
+    expect(termSource).not.toContain("olderThanLive");
+    expect(settingsStyle).not.toContain(".history-tabs");
+    expect(settingsStyle).not.toContain(".terminal-history-text");
   });
 
   test("pane modes switch from a tab bar; other actions stay a labeled list", () => {
@@ -52,7 +63,10 @@ describe("session view sheet", () => {
     expect(source).toContain('section(t("menu.display")');
     expect(source).toContain('menu-section-title", t("pane.width")');
     expect(source).toContain('label: t("pane.fit")');
-    expect(source).toContain('label: t("pane.cols80Short")');
+    expect(source).toContain("TERM_COL_PRESETS.map");
+    expect(source).toContain('label: t("pane.colsShort", { cols })');
+    expect(source).toContain('setTermFit("pan", cols)');
+    expect(source).toContain("state.termCols === cols");
     expect(source).toContain("setTermFit");
     expect(source).toContain("!state.fullTerminal ? [item(state.termWrap");
     expect(source).not.toContain("menu-grid");
@@ -65,9 +79,11 @@ describe("session view sheet", () => {
   test("compose live typing is a switch on this sheet", () => {
     expect(source).toContain('menu-section-title", t("menu.input")');
     expect(source).toContain("setComposeLive");
+    expect(source).toContain("setFullTerminalComposeLive");
     expect(source).toContain('label: t("compose.batch")');
     expect(source).toContain('label: t("compose.live")');
-    expect(source).toContain("!state.fullTerminal && !state.agentChat");
+    expect(source).toContain("if (!state.agentChat)");
+    expect(source).not.toContain("!state.fullTerminal && !state.agentChat");
     expect(source).not.toContain("改为组字后发送");
     expect(source).not.toContain("改为实时输入");
   });
@@ -86,7 +102,7 @@ describe("session view sheet", () => {
     expect(display).toContain("toggleTermWrap");
     expect(display).toContain("toggleTermSelect");
     expect(display).toContain("copyScreenText");
-    expect(display).toContain('t("menu.history")');
+    expect(display).not.toContain('t("menu.history")');
   });
 
   test("view actions wait until the sheet has closed", () => {

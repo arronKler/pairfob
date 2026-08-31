@@ -95,13 +95,37 @@ export class RoomCore {
   }
 
   rebuildMaps(): void {
-    this.daemon = null;
     this.routes.clear();
+    const daemons: RoomSocket[] = [];
     for (const ws of this.sockets()) {
       const a = this.att(ws);
-      if (isRegisteredDaemon(a)) this.daemon = ws;
+      if (isRegisteredDaemon(a)) daemons.push(ws);
       if (a?.route_id) this.rememberRoute(a.route_id, ws);
     }
+    this.daemon = this.retainNewestDaemon(daemons);
+  }
+
+  /** Hibernation can leave more than one registered daemon socket. FWD must hit the newest. */
+  retainNewestDaemon(daemons: RoomSocket[]): RoomSocket | null {
+    if (daemons.length === 0) return null;
+    let live = daemons[0];
+    let liveHello = this.att(live)?.hello_at_ms ?? 0;
+    for (let i = 1; i < daemons.length; i++) {
+      const hello = this.att(daemons[i])?.hello_at_ms ?? 0;
+      if (hello >= liveHello) {
+        live = daemons[i];
+        liveHello = hello;
+      }
+    }
+    for (const ws of daemons) {
+      if (ws === live) continue;
+      try {
+        ws.close(1000, "replaced");
+      } catch {
+        /* already closed */
+      }
+    }
+    return live;
   }
 
   coldStart(): void {

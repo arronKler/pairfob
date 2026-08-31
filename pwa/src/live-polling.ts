@@ -37,10 +37,17 @@ export function createLivePolling(callbacks: PollingCallbacks) {
     }, delay ?? (callbacks.canReadPane() ? callbacks.paneDelayMs() : PANE_TIMER_IDLE_MS));
   };
 
+  const reschedulePane = (delay?: number) => {
+    if (!active) return;
+    if (paneTimer !== null) window.clearTimeout(paneTimer);
+    paneTimer = null;
+    schedulePane(delay);
+  };
+
   const stop = () => {
     active = false;
-    if (snapshotTimer !== null) clearTimeout(snapshotTimer);
-    if (paneTimer !== null) clearTimeout(paneTimer);
+    if (snapshotTimer !== null) window.clearTimeout(snapshotTimer);
+    if (paneTimer !== null) window.clearTimeout(paneTimer);
     snapshotTimer = null;
     paneTimer = null;
   };
@@ -55,10 +62,10 @@ export function createLivePolling(callbacks: PollingCallbacks) {
     },
     stop,
     wakePane(): void {
-      if (!active) return;
-      if (paneTimer !== null) clearTimeout(paneTimer);
-      paneTimer = null;
-      schedulePane(0);
+      reschedulePane(0);
+    },
+    deferPane(): void {
+      reschedulePane();
     },
   };
 }

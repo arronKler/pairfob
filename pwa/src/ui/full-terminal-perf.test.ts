@@ -85,4 +85,20 @@ describe("TerminalPerfTracker", () => {
     expect(perf.snapshot().latency.inputToNextFrame.count).toBe(0);
     expect(perf.snapshot().latency.inputToWrite.count).toBe(0);
   });
+
+  test("measures scroll commands through the next rendered frame", () => {
+    let now = 100;
+    const perf = new TerminalPerfTracker(() => now);
+    perf.begin();
+    perf.commandObserver.sent?.("scroll", 1, 20, { commands: 1, inputBytes: 0 });
+    now = 200;
+    const marker = perf.frameAssembled(1);
+    now = 210;
+    perf.writeCompleted(4, marker);
+
+    const latency = perf.snapshot().latency;
+    expect(latency.scrollToNextFrame).toEqual({ count: 1, averageMs: 120, p50Ms: 120, p95Ms: 120, maxMs: 120 });
+    expect(latency.scrollToWrite).toEqual({ count: 1, averageMs: 130, p50Ms: 130, p95Ms: 130, maxMs: 130 });
+    expect(latency.inputToNextFrame.count).toBe(0);
+  });
 });

@@ -22,10 +22,14 @@ happy.document.body.innerHTML = '<main id="app"></main>';
 
 const {
   DEFAULT_TERM_MODE_KEY,
+  DEFAULT_COMPOSE_LIVE_KEY,
   app,
+  paneComposeLive,
   paneTermMode,
   parseTermMode,
+  setDefaultComposeLive,
   setDefaultTermMode,
+  setPaneComposeLive,
   setPaneTermMode,
   state,
 } = await import("../state.ts");
@@ -71,7 +75,10 @@ afterEach(() => {
   state.paneId = "";
   state.defaultTermMode = "guided";
   state.paneTermModes = {};
+  state.defaultComposeLive = false;
+  state.paneComposeLive = {};
   localStorage.removeItem(DEFAULT_TERM_MODE_KEY);
+  localStorage.removeItem(DEFAULT_COMPOSE_LIVE_KEY);
   setLang("zh");
   try {
     localStorage.removeItem("pairfob_lang");
@@ -127,6 +134,32 @@ describe("default terminal mode", () => {
   });
 });
 
+describe("default input mode", () => {
+  test("settings changes only the default while pane choices remain independent", () => {
+    bootHomeWithStalePane();
+    setPaneComposeLive("p1", true);
+    setPaneComposeLive("p2", false);
+    click("设置");
+
+    const group = app.querySelector('[aria-label="终端输入方式"]');
+    expect(group?.querySelector('[aria-checked="true"]')?.textContent).toBe("组字");
+    click("实时");
+
+    expect(state.defaultComposeLive).toBeTrue();
+    expect(localStorage.getItem(DEFAULT_COMPOSE_LIVE_KEY)).toBe("1");
+    expect(paneComposeLive("p1")).toBeTrue();
+    expect(paneComposeLive("p2")).toBeFalse();
+    expect(paneComposeLive("p3")).toBeTrue();
+  });
+
+  test("a pane switch can override the default without affecting another pane", () => {
+    setDefaultComposeLive(false);
+    setPaneComposeLive("p1", true);
+    expect(paneComposeLive("p1")).toBeTrue();
+    expect(paneComposeLive("p2")).toBeFalse();
+  });
+});
+
 describe("language", () => {
   test("settings can pin english and follow the browser again", () => {
     bootHomeWithStalePane();
@@ -144,4 +177,3 @@ describe("language", () => {
     expect(t("home.settings")).toBe("设置");
   });
 });
-

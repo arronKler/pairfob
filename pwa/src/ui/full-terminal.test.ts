@@ -26,7 +26,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(renderFn).toContain("onBack");
     expect(renderFn).not.toContain("goBackFromPane");
     expect(renderFn).toContain("scrollRail(");
-    expect(renderFn).toContain("fullTerminalPad(sendPadKey,");
+    expect(renderFn).toContain("syncFullTerminalInput(root, host)");
     expect(renderFn).not.toContain("dockNode");
     expect(renderFn).not.toContain("fillSession");
     expect(renderFn).not.toContain("keyPad");
@@ -37,12 +37,12 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(source).not.toContain("composeForm");
     expect(source).toContain("bindHostScroll(");
     expect(source).toContain("sendScroll");
-    expect(source).toContain("fullTerminalPad");
+    expect(source).toContain("syncFullTerminalControls");
     expect(source).toContain("pickFontSize");
     expect(source).toContain("bindFontPinch");
     expect(source).toContain("document.fonts");
     expect(source).toContain("Math.floor(inner.width / cell.width)");
-    expect(source).toContain("ptyCols(visibleCols, state.termFit)");
+    expect(source).toContain("ptyCols(visibleCols, state.termFit, state.termCols)");
     expect(source).toContain("panXScroller");
     expect(source).toContain("full-terminal-pan");
     expect(source).toContain("full-terminal-canvas");
@@ -79,23 +79,18 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(mountFn).toContain('t("ft.loadFail"');
     expect(mountFn).toContain("offerRetry");
 
-    const openFn = fn("async function openBridge(", "function fallbackToGuidedLive(");
+    const openFn = fn("async function openBridge(", "async function suspendBridge(");
     expect(openFn).not.toContain("state.fullTerminal = false");
     expect(openFn).not.toContain("disposeRenderer()");
     expect(openFn).not.toContain("render()");
     expect(openFn).toContain("offerRetry");
     expect(openFn).toContain('t("ft.openFail"');
-    expect(openFn).toContain('["unsupported", "unknown_op"]');
   });
 
-  test("live-input upgrades alone may fall back to the guided transport", () => {
-    const fallback = fn("function fallbackToGuidedLive(", "export function retryFullTerminal(");
-    expect(fallback).toContain("guidedLiveFallback");
-    expect(fallback).toContain('setPaneTermMode(paneId, "guided")');
-    expect(fallback).toContain("state.fullTerminal = false");
-    expect(fallback).toContain('t("ft.guidedFallback")');
+  test("complete-terminal entry has no hidden live-input coupling", () => {
     const enter = fn("export function enterFullTerminal(", "export function leaveFullTerminal(");
-    expect(enter).toContain("options?.fallbackToGuidedLive === true");
+    expect(enter).not.toContain("fallbackToGuidedLive");
+    expect(source).not.toContain("guidedLiveFallback");
   });
 
   test("entering complete-terminal records the pane mode", () => {
@@ -106,7 +101,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
   test("a short remote frame shrinks the display grid then still asks for the phone size", () => {
     const fitFn = fn("function fit(", "function stopCommandPump(");
     expect(fitFn).toContain("displayGrid({ cols, rows }, remoteGrid)");
-    expect(fitFn).toContain("ptyCols(visibleCols, state.termFit)");
+    expect(fitFn).toContain("ptyCols(visibleCols, state.termFit, state.termCols)");
     expect(fitFn).toContain("sizePanCanvas");
     expect(fitFn).toContain("lockedFont !== null || pan");
     expect(fitFn).toContain("pitchLineHeight");

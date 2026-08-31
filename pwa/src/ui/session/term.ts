@@ -8,8 +8,8 @@ import { app, clampTermFont, haptic, saveTermFont, saveTermWrap, state, termLine
 import { bindHostScroll, pageLineCount, scrollRail } from "../full-terminal-scroll";
 import { focusCompose } from "./compose";
 import { guidedScrollController } from "./guided-scroll";
-import { answerPrompt, sendPage } from "./keys";
-import { paneModel, type PaneModel } from "./model";
+import { sendPage, syncPagePending } from "./keys";
+import { type PaneModel } from "./model";
 
 const BOTTOM_SLACK = 32;
 const TAP_SLOP_PX = 8;
@@ -109,19 +109,6 @@ export function fillTerm(term: HTMLElement, model: PaneModel): void {
   live.forEach((line, index) => {
     const row = lineRow(line);
     row.dataset.row = String(index);
-    const option = model.options.get(index);
-    if (option !== undefined) {
-      row.classList.add("term-option");
-      row.dataset.option = String(option);
-      row.setAttribute("role", "button");
-      // Name it from the parsed option; the rendered row still carries box
-      // gutters and column padding a screen reader would read out.
-      const parsed = model.block.kind === "prompt-select" ? model.block.options[option] : undefined;
-      row.setAttribute(
-        "aria-label",
-        parsed ? t("term.selectOption", { n: parsed.n, label: parsed.label }) : t("term.selectLine", { text: line.text.trim() }),
-      );
-    }
     frag.append(row);
   });
   termInner(term).replaceChildren(frag);
@@ -149,8 +136,8 @@ function rowIndex(target: EventTarget | null): number {
 }
 
 /**
- * Short tap types into the PTY. A numbered prompt row still answers.
- * Long-press opens the copy/quote bar. A drag is a pan, not a tap.
+ * Short tap focuses terminal input. Long-press opens the copy/quote bar. A
+ * drag is a pan, not a tap. Terminal rows never invent controls from text.
  */
 function bindTap(term: HTMLElement, onRow: (index: number) => void): void {
   let startX = 0;
@@ -216,13 +203,6 @@ function bindTap(term: HTMLElement, onRow: (index: number) => void): void {
       if (!wasArmed || !shortTap || moved || state.termSelect) return;
       if (Math.abs(event.clientX - startX) > TAP_SLOP_PX || Math.abs(event.clientY - startY) > TAP_SLOP_PX) return;
       if (!window.getSelection()?.isCollapsed) return;
-      const index = rowIndex(event.target);
-      const live = paneModel();
-      const option = index >= 0 ? live.options.get(index) : undefined;
-      if (option !== undefined && live.block.kind === "prompt-select") {
-        void answerPrompt(live.block, option);
-        return;
-      }
       haptic(4);
       focusCompose();
     },
@@ -293,8 +273,8 @@ export function termView(model: PaneModel, onRow: (index: number) => void): HTML
     },
     { passive: true },
   );
-  // Prompt answers and compose focus read the live model at tap time: the pane
-  // opens empty and the real buffer arrives through patchSessionScreen.
+  // The pane opens empty and the real buffer arrives through
+  // patchSessionScreen; row taps keep the same terminal focus behavior.
   bindTap(term, onRow);
   bindPinch(term);
   bindHostScroll(term, (direction, lines, source) => sendGuidedTuiScroll(direction, lines, source), () => undefined, {
@@ -303,7 +283,9 @@ export function termView(model: PaneModel, onRow: (index: number) => void): HTML
     capturePan: guidedCapturePan,
   });
   wrap.append(term);
-  wrap.append(scrollRail((direction, lines, source) => sendGuidedTuiScroll(direction, lines, source), pageScrollLines));
+  const rail = scrollRail((direction, lines, source) => sendGuidedTuiScroll(direction, lines, source), pageScrollLines);
+  wrap.append(rail);
+  syncPagePending(rail);
   const jump = node("button", "term-jump", t("term.newOutput"));
   jump.type = "button";
   jump.hidden = state.paneFollow || !state.paneUnread;

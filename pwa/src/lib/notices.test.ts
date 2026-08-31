@@ -32,6 +32,8 @@ const REQUIRED_PUBLIC_CODES = [
   "unknown_outcome",
   "bad_grant",
   "grant_exhausted",
+  "heartbeat_timeout",
+  "wrong_protocol",
 ];
 
 const NEXT_STEP = /刷新|请|打开|输入|pairfob|重新|稍后再试|回列表|看电脑|确认|换一|refresh|open|enter|retry|wait|list|computer/i;
@@ -107,6 +109,12 @@ describe("shipped user notices", () => {
     );
     expect(sessionEventNotice({ type: "reconnecting", message: "daemon websocket gone" })).toBe(FRIENDLY_ERROR.reconnecting);
     expect(sessionEventNotice({ type: "disconnected" })).toBe(FRIENDLY_ERROR.disconnected);
+    expect(sessionEventNotice({ type: "disconnected", code: "heartbeat_timeout" })).toBe(FRIENDLY_ERROR.heartbeat_timeout);
+    expect(sessionEventNotice({ type: "reconnecting", code: "heartbeat_timeout" })).toBe(FRIENDLY_ERROR.heartbeat_timeout);
+    expect(sessionEventNotice({ type: "reconnecting", code: "not_a_real_code" })).toBe(FRIENDLY_ERROR.reconnecting);
+    expect(sessionEventNotice({ type: "disconnected", code: "not_a_real_code" })).toBe(FRIENDLY_ERROR.disconnected);
+    expect(messageOf(new ProtocolError("heartbeat_timeout", "relay 未及时响应心跳"))).toBe(FRIENDLY_ERROR.heartbeat_timeout);
+    expect(messageOf(new ProtocolError("wrong_protocol", "relay 未协商 pairfob.v2"))).toBe(FRIENDLY_ERROR.wrong_protocol);
     expect(liveSrc).toContain("sessionEventNotice(event)");
     expect(liveSrc).not.toMatch(/showStatus\(event\.message/);
     expect(liveSrc).not.toMatch(/showError\(event\.message/);

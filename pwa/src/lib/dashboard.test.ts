@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { agentMeta, agentTitle, canPromptAgent, choosePane, chromeName, herdSignature, mapSnapshotAgents, paneFillCopy, statusLabel, tabIsSplit, visibleTabLabel } from "./dashboard.ts";
+import { agentDetailRows, agentMeta, agentTitle, canPromptAgent, choosePane, chromeName, herdSignature, mapSnapshotAgents, paneFillCopy, statusLabel, tabIsSplit, visibleTabLabel } from "./dashboard.ts";
 
 describe("dashboard mapping", () => {
   const snapshot = {
@@ -258,5 +258,55 @@ describe("dashboard mapping", () => {
   test("a short renamed pane still wins in the chrome", () => {
     const agents = mapSnapshotAgents(snapshot);
     expect(chromeName(agents[0])).toBe("auth pane");
+  });
+
+  test("object-menu details keep the full path and drop fields already in the title", () => {
+    const agents = mapSnapshotAgents(snapshot);
+    expect(agentDetailRows(agents[0], agents)).toEqual([
+      { key: "状态", value: "工作中" },
+      { key: "Agent", value: "claude" },
+      { key: "路径", value: "/repo/pairfob", kind: "path" },
+      { key: "工作区", value: "Pairfob" },
+    ]);
+    expect(agentDetailRows(agents[1], agents)).toEqual([
+      { key: "状态", value: "等你" },
+      { key: "Agent", value: "codex" },
+      { key: "路径", value: "/tmp/custom", kind: "path" },
+    ]);
+    expect(agentDetailRows(agents[0], agents).map((row) => row.value).join(" ")).not.toContain("w1:p1");
+  });
+
+  test("a split and a hidden task title show up as extra rows", () => {
+    const split = mapSnapshotAgents({
+      workspaces: [{ workspace_id: "w1", label: "Pairfob", cwd: "/repo" }],
+      tabs: [{ tab_id: "t1", workspace_id: "w1", label: "main" }],
+      panes: [
+        { pane_id: "p1", workspace_id: "w1", tab_id: "t1", agent: "claude", agent_status: "idle", scroll: { viewport_rows: 20 } },
+        { pane_id: "p2", workspace_id: "w1", tab_id: "t1", agent: "codex", agent_status: "idle", scroll: { viewport_rows: 18 } },
+      ],
+    });
+    expect(agentDetailRows(split[0], split).some((row) => row.key === "布局" && row.value === "2 格")).toBe(true);
+
+    const [named] = mapSnapshotAgents({
+      workspaces: [{ workspace_id: "w1", label: "修复登录问题", cwd: "/repo/pairfob" }],
+      panes: [{ pane_id: "p1", workspace_id: "w1", agent: "claude", agent_status: "idle", terminal_title: "Fix auth timeout" }],
+    });
+    expect(agentTitle(named)).toBe("修复登录问题");
+    expect(agentDetailRows(named)).toEqual(expect.arrayContaining([
+      { key: "路径", value: "/repo/pairfob", kind: "path" },
+      { key: "任务", value: "Fix auth timeout" },
+    ]));
+    expect(agentDetailRows(named).some((row) => row.key === "工作区")).toBe(false);
+  });
+
+  test("machine terminal titles and default tab names stay out of the details", () => {
+    const [pane] = mapSnapshotAgents({
+      workspaces: [{ workspace_id: "w1", label: "Pairfob", cwd: "/repo/pairfob" }],
+      tabs: [{ tab_id: "t1", workspace_id: "w1", label: "main" }],
+      panes: [{ pane_id: "p1", workspace_id: "w1", tab_id: "t1", agent: "claude", agent_status: "idle", terminal_title: "zsh" }],
+    });
+    const rows = agentDetailRows(pane);
+    expect(rows.map((row) => row.value)).not.toContain("zsh");
+    expect(rows.some((row) => row.key === "标签页")).toBe(false);
   });
 });

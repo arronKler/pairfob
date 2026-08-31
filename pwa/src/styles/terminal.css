@@ -64,10 +64,6 @@
   Rows must be max-content wide (not overflow:hidden at the viewport width),
   or long lines are clipped and .term never becomes horizontally scrollable.
 */
-.term [role="button"] {
-  touch-action: pan-x pan-y;
-}
-
 .term-line {
   display: flex;
   flex-wrap: nowrap;
@@ -87,14 +83,6 @@
   white-space: pre;
   line-height: var(--term-lh);
 }
-
-/* Rows the runtime will accept a numbered answer for. */
-.term-option {
-  box-shadow: inset 2px 0 0 var(--accent);
-  cursor: pointer;
-}
-
-.term-option:active { filter: brightness(1.45); }
 
 /*
   Reflow long rows instead of forcing a horizontal drag on a phone.
@@ -126,11 +114,6 @@
   user-select: text;
   -webkit-touch-callout: default;
   box-shadow: inset 0 0 0 2px rgba(110, 168, 254, 0.45);
-}
-
-.term.selecting .term-option {
-  box-shadow: none;
-  cursor: auto;
 }
 
 .term-jump,

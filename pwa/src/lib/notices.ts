@@ -13,6 +13,7 @@ const FRIENDLY_CODES = [
   "pairing_cancelled",
   "rate_limited",
   "timeout",
+  "heartbeat_timeout",
   "fp_mismatch",
   "bad_relay",
   "pair_busy",
@@ -25,6 +26,7 @@ const FRIENDLY_CODES = [
   "too_many_devices",
   "unbound",
   "wrong_ws",
+  "wrong_protocol",
   "enroll_required",
   "index_unavailable",
   "daemon_replaced",
@@ -117,7 +119,8 @@ export function messageOf(error: unknown, context: "mutation" | "read" = "mutati
 /** Live session chrome copy. Never surfaces mux ERROR.message. */
 export function sessionEventNotice(event: { type: string; code?: string; message?: string }): string {
   if (event.type === "connected" || event.type === "poke") return "";
-  if (event.code) return noticeFor(event.code);
+  const mapped = event.code ? errorCopy(event.code) : undefined;
+  if (mapped) return mapped;
   if (event.type === "reconnecting") return t("err.reconnecting");
   if (event.type === "disconnected") return t("err.disconnected");
   return genericNotice();

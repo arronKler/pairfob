@@ -32,7 +32,7 @@ happy.document.body.innerHTML = '<main id="app"></main>';
 const { app, paneTermMode, setPaneTermMode, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderPane, goBackFromPane } = await import("./pane.ts");
-const { disposeFullTerminal, leaveFullTerminal, setTermFit } = await import("./full-terminal.ts");
+const { disposeFullTerminal, leaveFullTerminal, setFullTerminalComposeLive, setTermFit } = await import("./full-terminal.ts");
 
 const DRAFT = "keep-draft";
 
@@ -59,6 +59,7 @@ function bootFullTerminal(): void {
   state.paneId = "p1";
   state.paneText = "ready";
   state.composeDraft = DRAFT;
+  state.composeLive = false;
   state.agents = [{
     paneId: "p1",
     agent: "herdr",
@@ -89,6 +90,8 @@ afterEach(async () => {
   disposeFullTerminal();
   state.screen = "pane";
   state.composeDraft = "";
+  state.composeLive = false;
+  state.paneComposeLive = {};
   state.paneTermModes = {};
   state.termFit = "pan";
   state.live = null;
@@ -148,7 +151,7 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(paneTermMode("p1")).toBe("full");
   });
 
-  test("the host keeps a side-pan canvas for an 80-column PTY", () => {
+  test("the host keeps a side-pan canvas for the selected PTY width", () => {
     bootFullTerminal();
     const host = app.querySelector(".full-terminal-host");
     expect(host?.classList.contains("is-pan")).toBe(true);
@@ -159,6 +162,25 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(app.querySelector(".full-terminal-host")?.classList.contains("is-pan")).toBe(false);
     setTermFit("pan");
     expect(app.querySelector(".full-terminal-host")?.classList.contains("is-pan")).toBe(true);
+    setTermFit("pan", 120);
+    expect(state.termCols).toBe(120);
+    expect(localStorage.getItem("pairfob:termCols")).toBe("120");
+  });
+
+  test("compose and live input switch in place without losing an unsent draft", () => {
+    bootFullTerminal();
+    expect(app.querySelector(".full-terminal-compose-input")).toBeTruthy();
+    expect(app.querySelector(".full-terminal-kb")).toBeNull();
+    setFullTerminalComposeLive(true);
+    expect(state.composeLive).toBe(true);
+    expect(state.paneComposeLive.p1).toBe(true);
+    expect(state.composeDraft).toBe(DRAFT);
+    expect(app.querySelector(".full-terminal-compose-input")).toBeNull();
+    expect(app.querySelector(".full-terminal-kb")).toBeTruthy();
+    setFullTerminalComposeLive(false);
+    expect(state.composeLive).toBe(false);
+    expect(state.paneComposeLive.p1).toBe(false);
+    expect((app.querySelector(".full-terminal-compose-input") as HTMLTextAreaElement).value).toBe(DRAFT);
   });
 
   test("list-back lives on the guided chrome after leaving", async () => {

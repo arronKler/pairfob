@@ -19,25 +19,19 @@ function body(name: string): string {
   throw new Error(`unbalanced function ${name}`);
 }
 
-describe("terminal row taps answer the live prompt", () => {
-  /**
-   * openPane clears paneText, so the pane's first paint binds against an empty
-   * buffer. The dialog then arrives through patchSessionScreen, which repaints
-   * rows without rebinding. A tap handler that captured the paint-time model
-   * would answer a prompt that no longer exists.
-   */
-  test("the tap handler reads the model at tap time, not at paint time", () => {
+describe("terminal rows stay faithful to the live TUI", () => {
+  test("the tap handler focuses input and never interprets terminal text", () => {
     const tap = body("bindTap");
-    expect(tap).toContain("paneModel()");
     expect(tap).toContain("focusCompose()");
     expect(tap).toContain("HOLD_MS");
+    expect(tap).not.toContain("answerPrompt");
+    expect(tap).not.toContain("prompt-select");
   });
 
   test("a short tap types; a long press opens the row bar", () => {
     const tap = body("bindTap");
     expect(tap).toContain("focusCompose()");
     expect(tap).toContain("onRow(index)");
-    expect(tap).toContain("answerPrompt");
     expect(tap).toContain('"scroll"');
     expect(tap).toContain("panned");
   });
@@ -47,9 +41,13 @@ describe("terminal row taps answer the live prompt", () => {
     expect(termSource).toContain("export function fillTerm");
   });
 
-  test("option rows are named from the parsed option, not the padded row", () => {
+  test("paint mounts every screen row without inventing buttons or options", () => {
     const fill = body("fillTerm");
-    expect(fill).toContain('t("term.selectOption", { n: parsed.n, label: parsed.label })');
+    expect(fill).toContain("lineRow(line)");
+    expect(fill).not.toContain('setAttribute("role", "button")');
+    expect(fill).not.toContain("term-option");
+    expect(termSource).not.toContain("answerPrompt");
+    expect(termSource).not.toContain("prompt-select");
   });
 
   test("paint drops computer-window padding before rows are mounted", () => {

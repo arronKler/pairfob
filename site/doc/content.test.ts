@@ -43,7 +43,7 @@ describe("user-facing documentation", () => {
     expect(app).toContain("| 模式 | 控制、终端（vim / TUI）、对话");
     expect(app).toContain("| 输入 |");
     expect(app).toContain("| 显示 |");
-    expect(app).toContain("更早的输出");
+    expect(app).not.toContain("更早的输出");
     expect(app).not.toContain("给 Agent 发任务");
     expect(app).not.toContain("铺满全屏");
     expect(docs).not.toContain("| Agent | 给 Agent 发任务 |");

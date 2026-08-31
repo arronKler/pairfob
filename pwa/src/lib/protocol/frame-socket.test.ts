@@ -11,7 +11,6 @@ describe("WebSocket connection cancellation", () => {
       protocol = "";
       close(): void {
         closed++;
-        this.dispatchEvent(new Event("close"));
       }
     }
     Object.defineProperty(globalThis, "WebSocket", { configurable: true, writable: true, value: PendingWebSocket });

@@ -233,6 +233,28 @@ func TestRelayHeartbeatKeepsIdleConnectionActive(t *testing.T) {
 	}
 }
 
+func TestRelayReconnectBackoff(t *testing.T) {
+	tests := []struct {
+		name         string
+		connectedFor time.Duration
+		current      time.Duration
+		wantDelay    time.Duration
+		wantNext     time.Duration
+	}{
+		{name: "stable reconnects immediately", connectedFor: relayStableConnection, current: time.Second, wantDelay: 0, wantNext: time.Second},
+		{name: "unstable keeps backoff", connectedFor: relayStableConnection - time.Millisecond, current: time.Second, wantDelay: time.Second, wantNext: 2 * time.Second},
+		{name: "unstable caps backoff", connectedFor: 0, current: 30 * time.Second, wantDelay: 30 * time.Second, wantNext: 30 * time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			delay, next := relayReconnectBackoff(tt.connectedFor, tt.current)
+			if delay != tt.wantDelay || next != tt.wantNext {
+				t.Fatalf("relayReconnectBackoff() = (%s, %s), want (%s, %s)", delay, next, tt.wantDelay, tt.wantNext)
+			}
+		})
+	}
+}
+
 func TestDeviceAdminNeverReturnsCredentials(t *testing.T) {
 	a, _ := mux.NewPipePair(8)
 	eng := daemon.NewEngine(nil, a, runtime.NewFake())

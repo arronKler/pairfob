@@ -44,8 +44,9 @@ describe("pane header keeps status surfaces in step", () => {
     expect(viewSource).not.toContain("退出完整终端");
   });
 
-  test("in-place pane reads resync Enter when a prompt panel appears", () => {
+  test("in-place pane reads keep the terminal Enter control in sync", () => {
     expect(viewSource).toContain("syncSendButton()");
+    expect(viewSource).not.toContain("promptPanel");
   });
 
   test("the status dot sits with the status line so the title can use the full width", () => {

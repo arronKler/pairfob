@@ -20,9 +20,10 @@ import type {
 import type { TerminalFramePart, TerminalOpenResult } from "./terminal.ts";
 
 export interface SessionEvent {
-  type: "connected" | "disconnected" | "reconnecting" | "poke" | "terminal" | "terminal_frame" | "terminal_closed";
+  type: "connected" | "disconnected" | "reconnecting" | "latency" | "poke" | "terminal" | "terminal_frame" | "terminal_closed";
   code?: string;
   message?: string;
+  rttMs?: number;
   reason?: string;
   paneId?: string;
   terminalId?: string;

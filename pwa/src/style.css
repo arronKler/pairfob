@@ -8,7 +8,7 @@
 @import "./styles/terminal.css";
 @import "./styles/full-terminal.css";
 @import "./styles/agent-chat.css";
-@import "./styles/prompt.css";
+@import "./styles/row-actions.css";
 @import "./styles/dock.css";
 @import "./styles/desk.css";
 @import "./styles/switcher.css";

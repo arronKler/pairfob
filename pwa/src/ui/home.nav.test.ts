@@ -115,6 +115,12 @@ describe("session list object controls", () => {
     cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const plain = document.querySelector("dialog.sheet");
     expect(plain?.querySelector(".modal-title")?.textContent).toBe("one");
+    const facts = plain?.querySelector(".sheet-facts")?.textContent ?? "";
+    expect(facts).toContain("空闲");
+    expect(facts).toContain("claude");
+    expect(facts).toContain("/tmp/a");
+    expect(facts).toContain("alpha");
+    expect(facts).not.toContain("p1");
     expect(plain?.textContent).toContain("改会话名");
     expect(plain?.textContent).toContain("关闭这个会话");
     expect(plain?.textContent).not.toContain("改标签页名");
@@ -125,6 +131,8 @@ describe("session list object controls", () => {
 
     cardNamed("two").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const split = document.querySelector("dialog.sheet");
+    expect(split?.querySelector(".sheet-facts")?.textContent).toContain("review");
+    expect(split?.querySelector(".sheet-facts")?.textContent).toContain("2 格");
     expect(split?.textContent).toContain("改标签页名");
     expect(split?.textContent).toContain("关闭整个标签页");
   });

@@ -114,7 +114,10 @@ export function httpLinkProvider(terminal: Terminal): ILinkProvider {
  * produce mousedown, so TUI mouse protocol and OSC 8 links would otherwise
  * ignore a tap.
  */
-export function tapAsMouse(host: HTMLElement, event: PointerEvent): void {
+export function tapAsMouse(
+  host: HTMLElement,
+  event: Pick<PointerEvent, "clientX" | "clientY" | "screenX" | "screenY">,
+): void {
   const target = (host.querySelector(".xterm") as HTMLElement | null) ?? host;
   const fire = (type: string, buttons: number) => {
     target.dispatchEvent(

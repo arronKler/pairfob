@@ -79,13 +79,13 @@ Tap the session chrome `···`. Missing items are not drawn. 改标签页名, �
 | --- | --- |
 | 模式 | 控制, 终端（vim / TUI）, 对话 |
 | 输入 | 组字, 实时 (控制) |
-| 显示 | 长行自动折行 (控制), 宽度 适应屏幕 / 80 列 (终端), 选择文本, 文字加大/减小, 复制画面文本, 更早的输出. **对话** does not show this group |
+| 显示 | 长行自动折行 (控制), 宽度 适应屏幕 / 80 列 (终端), 选择文本, 文字加大/减小, 复制画面文本. **对话** does not show this group |
 | 新建 | 新建标签页, 分屏 |
 | Worktree | Worktree 列表, 新建 Worktree, 打开 Worktree |
 | 布局 | 让这一格大一点, 和对面一格对调 |
 | (ungrouped) | 改会话名, 关闭这个会话 |
 
-**更早的输出** is already-rendered, idle scrollback on the computer. A busy or scrolled-away terminal must become idle first. **对话** groups thinking and tools into a collapsible run that closes once the reply is in. Expand the run to see arguments and results.
+**对话** groups thinking and tools into a collapsible run that closes once the reply is in. Expand the run to see arguments and results.
 
 The web surface does not offer arbitrary shell, deleting worktrees, or yanking the computer window to the front.
 

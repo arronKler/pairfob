@@ -53,7 +53,7 @@ describe("pane changes pull agent status forward", () => {
   });
 
   test("the pane read path is what triggers it", () => {
-    const read = liveSrc.slice(liveSrc.indexOf("export async function refreshPaneRead"));
+    const read = liveSrc.slice(liveSrc.indexOf("async function performPaneRead"), liveSrc.indexOf("function startPaneRead"));
     expect(read).toContain("shouldPullStatus(!same, Date.now(), state.snapshotAt)");
     expect(liveSrc).toContain("state.snapshotAt = Date.now()");
   });

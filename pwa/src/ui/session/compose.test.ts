@@ -3,21 +3,16 @@ import { describe, expect, test } from "bun:test";
 const composeSource = await Bun.file(new URL("./compose.ts", import.meta.url)).text();
 
 describe("compose send button", () => {
-  /**
-   * An empty draft used to submit a bare Enter, which answers whatever option
-   * the TUI has highlighted. 发送 sits under the thumb on a phone, so that made
-   * an accidental tap a blind confirmation.
-  */
-  test("is Enter, and empty taps are blocked only while choices are lifted", () => {
-    expect(composeSource).toContain("function liftedPromptSelect(");
-    expect(composeSource).toContain("paneModel().block.kind === \"prompt-select\"");
-    expect(composeSource).toContain("send.disabled = blocked");
+  test("is a real Enter key and does not depend on parsed terminal text", () => {
+    expect(composeSource).not.toContain("liftedPromptSelect");
+    expect(composeSource).not.toContain("prompt-select");
+    expect(composeSource).toContain("send.disabled = false");
     expect(composeSource).toContain('send.textContent = "Enter"');
     expect(composeSource).not.toContain('send.textContent = "发送"');
-    expect(composeSource).toContain('t("compose.blockedAria")');
+    expect(composeSource).not.toContain('t("compose.blockedAria")');
     expect(composeSource).toContain("void submitTyped(true)");
     const submit = composeSource.slice(composeSource.indexOf("export async function submitTyped"));
-    expect(submit).toContain("if (!state.composeDraft.trim() && liftedPromptSelect()) return");
+    expect(submit).toContain('if (allowBareEnter) queueKey("enter")');
   });
 
   test("every path that changes the draft resyncs it", () => {
@@ -64,13 +59,12 @@ describe("compose send button", () => {
     expect(composeSource).toContain('send.setAttribute("aria-busy", "true")');
   });
 
-  test("keeps delayed guarded submit automatic and visible to the user", () => {
+  test("keeps delayed guarded submit automatic and quiet unless it stalls", () => {
     const guarded = composeSource.slice(composeSource.indexOf("async function guardedSubmit"));
-    expect(guarded).toContain("submitPendingNotice()");
-    expect(guarded).toContain("showStatus(submitPendingNotice(), true, noticeScope)");
     expect(guarded).toContain("retryRead:");
-    expect(composeSource).toContain('t("compose.submitPending")');
-    expect(composeSource).not.toContain("可点按键垫上的 Enter");
+    expect(guarded).not.toContain("showStatus(");
+    expect(composeSource).not.toContain('t("compose.submitPending")');
+    expect(composeSource).toContain('showError(stallNotice(), noticeScope)');
   });
 
   test("batch and live input share the UTF-8 wire budget", () => {
@@ -116,10 +110,12 @@ describe("slash command pad", () => {
 });
 
 describe("compose live vs batch", () => {
-  test("batch remains the default and is persisted explicitly", async () => {
+  test("batch remains the default and pane choices use separate persistence", async () => {
     const stateSrc = await Bun.file(new URL("../../state.ts", import.meta.url)).text();
-    const load = stateSrc.slice(stateSrc.indexOf("function loadComposeLive"));
-    expect(load).toContain('getItem(COMPOSE_LIVE_KEY) === "1"');
+    const load = stateSrc.slice(stateSrc.indexOf("function loadDefaultComposeLive"));
+    expect(load).toContain('getItem(DEFAULT_COMPOSE_LIVE_KEY) === "1"');
+    expect(stateSrc).toContain("export function loadPaneComposeLive");
+    expect(stateSrc).toContain("export function setPaneComposeLive");
     expect(composeSource).not.toContain("compose-modes");
     expect(composeSource).not.toContain("composeModePicker");
     expect(composeSource).toContain("export function composeLiveControl");
@@ -150,9 +146,11 @@ describe("compose live vs batch", () => {
     expect(composeSource).toContain("await submitLiveEnter()");
   });
 
-  test("upgrades live input to the persistent terminal stream with a guided fallback", () => {
+  test("keeps input behavior independent from the terminal display mode", () => {
     const switcher = composeSource.slice(composeSource.indexOf("export async function setComposeLive"));
-    expect(switcher).toContain("enterFullTerminal({ fallbackToGuidedLive: true })");
+    expect(switcher).toContain("setPaneComposeLive(paneId, on)");
+    expect(switcher).toContain("state.paneId !== paneId || state.live !== session");
+    expect(switcher).not.toContain("enterFullTerminal");
   });
 
   test("shows local pending text immediately and pipelines the ordered screen read", () => {

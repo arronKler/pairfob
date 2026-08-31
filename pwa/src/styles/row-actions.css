@@ -1,0 +1,78 @@
+/* --- Per-row actions -------------------------------------------------------------- */
+
+/*
+  Long-press actions live in the pane's flex column, not over the buffer, so
+  quoting a row never hides the terminal content it came from.
+*/
+.row-bar {
+  flex: 0 0 auto;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--line-strong);
+  animation: sheet-up 0.18s var(--ease);
+}
+
+.row-quote {
+  margin: 0;
+  font: 400 0.76rem var(--mono);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 9px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.row-actions::-webkit-scrollbar { display: none; }
+
+.row-act {
+  flex: 0 0 auto;
+  min-height: 44px;
+  max-width: 15rem;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 560;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-act:active { background: #232c38; }
+
+.row-act-ghost { color: var(--muted); background: transparent; }
+
+/* --- Select mode ----------------------------------------------------------------- */
+
+.select-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--dock-bg);
+  border-top: 1px solid var(--line);
+}
+
+.select-hint {
+  flex: 1 1 12rem;
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.select-bar .notice { flex: 1 1 100%; margin: 0; }

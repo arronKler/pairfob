@@ -18,15 +18,14 @@ import {
   haptic,
   markPaneSubmitted,
   noticeScopeIsCurrent,
-  saveComposeLive,
+  setDefaultComposeLive,
+  setPaneComposeLive,
   showError,
   showStatus,
   state,
 } from "../../state";
 import { flushKeys, queueKey } from "./keys";
 import { LiveInputPump, type LiveInputPumpState } from "./live-input";
-import { paneModel } from "./model";
-import { enterFullTerminal } from "../full-terminal";
 
 const SPECIAL_KEYS: Record<string, string> = {
   Enter: "enter",
@@ -174,8 +173,8 @@ function ensureLiveInputPump(): LiveInputPump | null {
       const restore = error instanceof ProtocolError && error.code === "unknown_outcome"
         ? input.queuedText
         : input.failedText + input.queuedText;
-      state.composeLive = false;
-      saveComposeLive();
+      setPaneComposeLive(paneId, false);
+      if (state.paneId === paneId) state.composeLive = false;
       restoreLiveInput(restore, paneId);
       syncLiveInputFeedback();
       await reportMutationError(session, error);
@@ -232,8 +231,12 @@ export async function setComposeLive(on: boolean): Promise<void> {
     syncComposeMode();
     return;
   }
+  const paneId = state.paneId;
+  const session = state.live;
+  if (paneId) setPaneComposeLive(paneId, on);
   if (state.composeLive) {
     await flushLiveInput();
+    if (state.paneId !== paneId || state.live !== session) return;
     stopLiveInputPump();
     state.composeLive = false;
   } else {
@@ -242,33 +245,17 @@ export async function setComposeLive(on: boolean): Promise<void> {
     state.composeLive = true;
     if (draft) typeLive(draft);
     await flushLiveInput();
+    if (state.paneId !== paneId || state.live !== session) return;
   }
-  saveComposeLive();
   syncComposeMode();
-  syncComposeLiveControl();
-  if (state.composeLive && state.screen === "pane" && state.live && state.paneId) {
-    stopLiveInputPump();
-    enterFullTerminal({ fallbackToGuidedLive: true });
-  }
-}
-
-function liftedPromptSelect(): boolean {
-  return paneModel().block.kind === "prompt-select" && !state.termSelect;
-}
-
-function sendButtonBlocked(): boolean {
-  if (submitBusy && !state.composeLive) return true;
-  if (state.composeDraft.trim()) return false;
-  return liftedPromptSelect();
 }
 
 /**
- * The dock action is always Enter. An empty tap is a pad Enter unless a
- * prompt-select panel is lifted — then only tapping a choice confirms.
+ * The dock action is always Enter. Empty Enter is a deliberate PTY keypress,
+ * including when an agent's own TUI is asking for confirmation.
  */
 export function syncSendButton(send = app.querySelector(".dock-form .send-btn") as HTMLButtonElement | null): void {
   if (!send) return;
-  const blocked = sendButtonBlocked();
   send.removeAttribute("aria-busy");
   if (submitBusy && !state.composeLive) {
     send.disabled = true;
@@ -277,10 +264,9 @@ export function syncSendButton(send = app.querySelector(".dock-form .send-btn") 
     send.setAttribute("aria-label", t("compose.sendingAria"));
     return;
   }
-  send.disabled = blocked;
+  send.disabled = false;
   send.textContent = "Enter";
-  if (blocked) send.setAttribute("aria-label", t("compose.blockedAria"));
-  else if (state.composeDraft.trim()) send.setAttribute("aria-label", t("compose.sendEnterAria"));
+  if (state.composeDraft.trim()) send.setAttribute("aria-label", t("compose.sendEnterAria"));
   else send.setAttribute("aria-label", t("compose.enterAria"));
 }
 
@@ -355,7 +341,6 @@ export function setComposeText(text: string): void {
   haptic(4);
 }
 
-const submitPendingNotice = () => t("compose.submitPending");
 const stallNotice = () => t("compose.stall");
 // Must match the daemon's guarded Enter read. Herdr protocol 19 interprets
 // lines=0 as a zero-row snapshot, so an explicit positive window is required.
@@ -377,10 +362,6 @@ async function guardedSubmit(
     sendText: async (value) => {
       await session.sendText(paneId, value);
       if (state.composeDraft === value) clearComposeDraft();
-      if (state.live === session && noticeScopeIsCurrent(noticeScope)) {
-        showStatus(submitPendingNotice(), true, noticeScope);
-        render();
-      }
     },
     // Matching the daemon's bounds makes this hash a proof of the exact screen
     // it will check immediately before sending Enter.
@@ -397,13 +378,11 @@ async function guardedSubmit(
 }
 
 async function submitLiveEnter(): Promise<void> {
-  if (liftedPromptSelect()) return;
   if (!(await flushLiveInput())) return;
   queueKey("enter");
 }
 
 export async function submitTyped(allowBareEnter = false): Promise<void> {
-  if (!state.composeDraft.trim() && liftedPromptSelect()) return;
   if (state.composeLive) {
     if (!allowBareEnter) return;
     await submitLiveEnter();
@@ -560,7 +539,7 @@ export function syncComposeLiveControl(): void {
   for (const bar of app.querySelectorAll(`[aria-label="${composeModeLabel()}"]`)) {
     for (const item of bar.querySelectorAll("button")) {
       const live = item.dataset.live === "1";
-      const selected = state.composeLive === live;
+      const selected = state.defaultComposeLive === live;
       item.classList.toggle("on", selected);
       item.setAttribute("aria-checked", selected ? "true" : "false");
     }
@@ -575,18 +554,16 @@ export function composeLiveControl(): HTMLElement {
     { live: false, label: t("compose.batch") },
     { live: true, label: t("compose.live") },
   ]) {
-    const selected = state.composeLive === option.live;
+    const selected = state.defaultComposeLive === option.live;
     const item = node("button", `seg-item${selected ? " on" : ""}`, option.label);
     item.type = "button";
     item.dataset.live = option.live ? "1" : "0";
     item.setAttribute("role", "radio");
     item.setAttribute("aria-checked", selected ? "true" : "false");
     item.addEventListener("click", () => {
-      if (state.composeLive === option.live) return;
-      void setComposeLive(option.live).then(() => {
-        const field = composeField();
-        if (field) focusComposeField(field);
-      });
+      if (state.defaultComposeLive === option.live) return;
+      setDefaultComposeLive(option.live);
+      syncComposeLiveControl();
     });
     bar.append(item);
   }

@@ -40,10 +40,14 @@ export const app = requireApp();
 export const TERM_FONT_KEY = "pairfob:termFont";
 export const TERM_WRAP_KEY = "pairfob:termWrap";
 export const TERM_FIT_KEY = "pairfob:termFit";
+export const TERM_COLS_KEY = "pairfob:termCols";
 export type TermFit = "pan" | "fit";
+export const TERM_COL_PRESETS = [80, 100, 120] as const;
+export type TermCols = (typeof TERM_COL_PRESETS)[number];
 export const KEYS_EXPANDED_KEY = "pairfob:keysExpanded";
 export const PAD_KIND_KEY = "pairfob:padKind";
-export const COMPOSE_LIVE_KEY = "pairfob:composeLive";
+export const DEFAULT_COMPOSE_LIVE_KEY = "pairfob:defaultComposeLive";
+export const PANE_COMPOSE_LIVE_KEY = "pairfob:paneComposeLive";
 export type PadKind = "keys" | "slash";
 export const LIST_GROUP_KEY = "pairfob:listGroup";
 export const PANE_TOUCHED_KEY = "pairfob:paneTouched";
@@ -90,6 +94,16 @@ function loadTermFit(): TermFit {
   }
 }
 
+function loadTermCols(): TermCols {
+  try {
+    const raw = Number(localStorage.getItem(TERM_COLS_KEY));
+    if (TERM_COL_PRESETS.includes(raw as TermCols)) return raw as TermCols;
+  } catch {
+    /* private mode or storage blocked */
+  }
+  return 80;
+}
+
 function loadKeysExpanded(): boolean {
   try {
     return localStorage.getItem(KEYS_EXPANDED_KEY) === "1";
@@ -106,9 +120,9 @@ function loadPadKind(): PadKind {
   }
 }
 
-function loadComposeLive(): boolean {
+function loadDefaultComposeLive(): boolean {
   try {
-    return localStorage.getItem(COMPOSE_LIVE_KEY) === "1";
+    return localStorage.getItem(DEFAULT_COMPOSE_LIVE_KEY) === "1";
   } catch {
     return false;
   }
@@ -150,6 +164,10 @@ export type AppState = {
   defaultTermMode: TermMode;
   /** Per-pane last chosen view. Missing ids use `defaultTermMode`. */
   paneTermModes: Record<string, TermMode>;
+  /** Default input behavior for panes without their own choice. */
+  defaultComposeLive: boolean;
+  /** Per-pane live/compose choice, scoped by the connected daemon in storage. */
+  paneComposeLive: Record<string, boolean>;
   agents: DashboardAgentCard[];
   paneText: string;
   paneHash: string;
@@ -157,6 +175,8 @@ export type AppState = {
   pairAbort: AbortController | null;
   /** Browser-reported reachability. `true` is a hint; `false` gates network work. */
   networkOnline: boolean;
+  /** Latest phone-to-Pairfob WebSocket heartbeat round trip. */
+  relayRttMs: number | null;
   refreshBusy: boolean;
   snapshotPending: boolean;
   /** When the last Snapshot landed, so a pane change can pull status forward. */
@@ -182,8 +202,9 @@ export type AppState = {
   /** Index of the terminal row whose action bar is open, or null. */
   paneRow: number | null;
   termWrap: boolean;
-  /** pan = keep 80 cols and slide; fit = resize the PTY to the phone. */
+  /** pan = keep the selected columns and slide; fit = resize the PTY to the phone. */
   termFit: TermFit;
+  termCols: TermCols;
   termSelect: boolean;
   keysExpanded: boolean;
   /** Expanded pad body: terminal keys or slash-command chips. */
@@ -235,12 +256,15 @@ export const state: AppState = {
   agentChat: false,
   defaultTermMode: loadDefaultTermMode(),
   paneTermModes: {},
+  defaultComposeLive: loadDefaultComposeLive(),
+  paneComposeLive: {},
   agents: [],
   paneText: "",
   paneHash: "",
   pairAwaitingApproval: false,
   pairAbort: null,
   networkOnline: navigator.onLine !== false,
+  relayRttMs: null,
   refreshBusy: false,
   snapshotPending: false,
   snapshotAt: 0,
@@ -261,6 +285,7 @@ export const state: AppState = {
   paneRow: null,
   termWrap: loadTermWrap(),
   termFit: loadTermFit(),
+  termCols: loadTermCols(),
   termSelect: false,
   keysExpanded: loadKeysExpanded(),
   padKind: loadPadKind(),
@@ -272,7 +297,7 @@ export const state: AppState = {
   composeDraft: "",
   composeFocused: false,
   composeIME: false,
-  composeLive: loadComposeLive(),
+  composeLive: loadDefaultComposeLive(),
   lastHerdSig: "",
   deviceList: [],
   pushEnabled: null,
@@ -366,6 +391,45 @@ export function setPaneTermMode(paneId: string, mode: TermMode): void {
   savePaneTermModes();
 }
 
+function paneComposeLiveKey(): string {
+  return `${PANE_COMPOSE_LIVE_KEY}:${state.credential?.daemonId || "anon"}`;
+}
+
+export function loadPaneComposeLive(): Record<string, boolean> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(paneComposeLiveKey()) || "{}") as unknown;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    const out: Record<string, boolean> = {};
+    for (const [paneId, live] of Object.entries(raw as Record<string, unknown>)) {
+      if (paneId && typeof live === "boolean") out[paneId] = live;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function savePaneComposeLive(): void {
+  try {
+    localStorage.setItem(paneComposeLiveKey(), JSON.stringify(state.paneComposeLive));
+  } catch {
+    /* storage blocked; the choice just does not persist */
+  }
+}
+
+export function paneComposeLive(paneId: string): boolean {
+  if (!paneId) return state.defaultComposeLive;
+  return Object.prototype.hasOwnProperty.call(state.paneComposeLive, paneId)
+    ? state.paneComposeLive[paneId]
+    : state.defaultComposeLive;
+}
+
+export function setPaneComposeLive(paneId: string, live: boolean): void {
+  if (!paneId || state.paneComposeLive[paneId] === live) return;
+  state.paneComposeLive = { ...state.paneComposeLive, [paneId]: live };
+  savePaneComposeLive();
+}
+
 export function saveDefaultTermMode(): void {
   try {
     localStorage.setItem(DEFAULT_TERM_MODE_KEY, state.defaultTermMode);
@@ -392,6 +456,20 @@ function prunePaneTermModes(): void {
   if (!changed) return;
   state.paneTermModes = next;
   savePaneTermModes();
+}
+
+function prunePaneComposeLive(): void {
+  if (!state.agents.length) return;
+  const panes = new Set(state.agents.map((agent) => agent.paneId));
+  let changed = false;
+  const next: Record<string, boolean> = {};
+  for (const [paneId, live] of Object.entries(state.paneComposeLive)) {
+    if (panes.has(paneId)) next[paneId] = live;
+    else changed = true;
+  }
+  if (!changed) return;
+  state.paneComposeLive = next;
+  savePaneComposeLive();
 }
 
 function completionSeenKey(): string {
@@ -429,6 +507,7 @@ export function replaceAgentsFromSnapshot(snapshot: SnapshotWire): DashboardAgen
   state.completionSeen = projected.seen;
   if (seenChanged) saveCompletionSeen();
   prunePaneTermModes();
+  prunePaneComposeLive();
   return previous;
 }
 
@@ -492,6 +571,14 @@ export function saveTermFit(): void {
   }
 }
 
+export function saveTermCols(): void {
+  try {
+    localStorage.setItem(TERM_COLS_KEY, String(state.termCols));
+  } catch {
+    /* storage blocked; the choice just does not persist */
+  }
+}
+
 export function saveKeysExpanded(): void {
   try {
     localStorage.setItem(KEYS_EXPANDED_KEY, state.keysExpanded ? "1" : "0");
@@ -508,12 +595,18 @@ export function savePadKind(): void {
   }
 }
 
-export function saveComposeLive(): void {
+export function saveDefaultComposeLive(): void {
   try {
-    localStorage.setItem(COMPOSE_LIVE_KEY, state.composeLive ? "1" : "0");
+    localStorage.setItem(DEFAULT_COMPOSE_LIVE_KEY, state.defaultComposeLive ? "1" : "0");
   } catch {
     /* storage blocked; the choice just does not persist */
   }
+}
+
+export function setDefaultComposeLive(live: boolean): void {
+  if (state.defaultComposeLive === live) return;
+  state.defaultComposeLive = live;
+  saveDefaultComposeLive();
 }
 
 /** Reset every per-pane view mode. Called whenever the open pane changes. */

@@ -74,7 +74,7 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("interactive touch controls keep a 44px target", () => {
-    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".lift button", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
+    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
       const match = rule(selector).match(/min-height:\s*(\d+)px/);
       expect(match, selector).not.toBeNull();
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);
@@ -130,6 +130,9 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".sheet-body")).toMatch(/overflow-y:\s*auto/);
     expect(rule(".sheet-body")).toMatch(/min-height:\s*0/);
     expect(rule(".sheet-close")).toMatch(/flex:\s*none/);
+    expect(rule(".sheet-fact-val")).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule(".sheet-fact-path")).toMatch(/font-family:\s*var\(--mono\)/);
+    expect(rule(".sheet-fact-path")).toMatch(/word-break:\s*break-all/);
   });
 
   test("the connect loading screen fills the viewport and centers its copy", () => {
@@ -317,10 +320,6 @@ describe("UI accessibility guardrails", () => {
     expect(rule("#app")).toMatch(/background:\s*var\(--bg\)/);
   });
 
-  test("phone history sheets do not nest a scroller in every item", () => {
-    expect(css).toMatch(/@media \(max-width: 899\.98px\)[\s\S]*?\.history-text\s*\{[\s\S]*?max-height:\s*none/);
-  });
-
   test("wrap mode reflows rows instead of forcing a horizontal drag", () => {
     expect(rule(".term.wrapped .term-inner")).toMatch(/width:\s*100%/);
     expect(rule(".term.wrapped .term-line")).toMatch(/display:\s*block/);
@@ -339,11 +338,13 @@ describe("UI accessibility guardrails", () => {
   test("the live terminal defaults to 80 columns with a side pan", () => {
     const fit = stateSrc.slice(stateSrc.indexOf("function loadTermFit"));
     expect(fit).toContain('getItem(TERM_FIT_KEY) === "fit" ? "fit" : "pan"');
+    const cols = stateSrc.slice(stateSrc.indexOf("function loadTermCols"));
+    expect(cols).toContain("TERM_COL_PRESETS.includes(raw as TermCols)");
+    expect(cols).toContain("return 80");
   });
 
-  test("terminal rows stay pannable even when they are tap targets", () => {
+  test("terminal rows stay pannable", () => {
     expect(rule(".term-line")).toMatch(/touch-action:\s*pan-x pan-y/);
-    expect(rule(".term [role=\"button\"]")).toMatch(/touch-action:\s*pan-x pan-y/);
     expect(rule('[role="button"]')).toMatch(/touch-action:\s*manipulation/);
   });
 
@@ -353,8 +354,7 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".key")).toMatch(/min-width:\s*0/);
   });
 
-  test("the lifted question and row actions sit in the flex column, not over the buffer", () => {
-    expect(rule(".lift")).not.toMatch(/position:\s*absolute/);
+  test("row actions sit in the flex column, not over the buffer", () => {
     expect(rule(".row-bar")).not.toMatch(/position:\s*absolute/);
     expect(rule(".session-extras")).toMatch(/flex:\s*0 0 auto/);
   });

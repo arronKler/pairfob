@@ -9,6 +9,7 @@ g.HTMLElement = happy.HTMLElement;
 g.HTMLButtonElement = happy.HTMLButtonElement;
 g.Node = happy.Node;
 g.PointerEvent = happy.PointerEvent;
+g.TouchEvent = happy.TouchEvent;
 g.WheelEvent = happy.WheelEvent;
 g.MouseEvent = happy.MouseEvent;
 g.KeyboardEvent = happy.KeyboardEvent;
@@ -31,6 +32,33 @@ function pointer(type: string, x: number, y: number, pointerType = "mouse"): Poi
   });
 }
 
+function touchPoint(identifier: number, x: number, y: number, target: EventTarget): Touch {
+  return {
+    identifier,
+    target,
+    clientX: x,
+    clientY: y,
+    screenX: x,
+    screenY: y,
+    pageX: x,
+    pageY: y,
+    radiusX: 1,
+    radiusY: 1,
+    rotationAngle: 0,
+    force: 1,
+  } as Touch;
+}
+
+function touchEvent(type: string, touches: Touch[], changedTouches = touches): TouchEvent {
+  const event = new TouchEvent(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    touches: { value: touches },
+    targetTouches: { value: touches },
+    changedTouches: { value: changedTouches },
+  });
+  return event;
+}
+
 const source = await Bun.file(new URL("./full-terminal-scroll.ts", import.meta.url)).text();
 
 describe("complete-terminal remote scroll", () => {
@@ -41,8 +69,100 @@ describe("complete-terminal remote scroll", () => {
   });
 
   test("a second finger drops the pan so pinch can change the type scale", () => {
-    expect(source).toContain("event.touches.length > 1");
+    expect(source).toContain("event.touches.length !== 1");
     expect(source).toContain('addEventListener("touchstart"');
+  });
+
+  test("native touch events pan overflow without relying on pointer delivery", () => {
+    const host = document.createElement("div");
+    const pan = document.createElement("div");
+    Object.defineProperty(pan, "clientWidth", { value: 100 });
+    Object.defineProperty(pan, "scrollWidth", { value: 300 });
+    host.append(pan);
+    document.body.append(host);
+    const calls: Call[] = [];
+    const stop = bindHostScroll(host, (direction, lines, source) => {
+      calls.push({ direction, lines, source });
+    }, () => undefined, { panXScroller: () => pan });
+    const start = touchPoint(7, 140, 120, host);
+    const move = touchPoint(7, 40, 124, host);
+    const down = touchEvent("touchstart", [start]);
+    const drag = touchEvent("touchmove", [move]);
+    host.dispatchEvent(down);
+    host.dispatchEvent(drag);
+    expect(down.defaultPrevented).toBeTrue();
+    expect(drag.defaultPrevented).toBeTrue();
+    expect(pan.scrollLeft).toBe(100);
+    expect(calls).toEqual([]);
+    stop();
+    host.remove();
+  });
+
+  test("native touch takes over a duplicate pointer stream exactly once", () => {
+    const host = document.createElement("div");
+    const pan = document.createElement("div");
+    Object.defineProperty(pan, "clientWidth", { value: 100 });
+    Object.defineProperty(pan, "scrollWidth", { value: 300 });
+    host.append(pan);
+    document.body.append(host);
+    const stop = bindHostScroll(host, () => undefined, () => undefined, { panXScroller: () => pan });
+    host.dispatchEvent(pointer("pointerdown", 140, 120, "touch"));
+    host.dispatchEvent(touchEvent("touchstart", [touchPoint(7, 140, 120, host)]));
+    host.dispatchEvent(pointer("pointermove", 40, 124, "touch"));
+    expect(pan.scrollLeft).toBe(0);
+    host.dispatchEvent(touchEvent("touchmove", [touchPoint(7, 40, 124, host)]));
+    expect(pan.scrollLeft).toBe(100);
+    stop();
+    host.remove();
+  });
+
+  test("guided mode leaves native touch scrolling to its CSS scrollport", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const stop = bindHostScroll(host, () => undefined, () => undefined, { grabTouch: false, tapAsClick: false });
+    const down = touchEvent("touchstart", [touchPoint(7, 80, 240, host)]);
+    const move = touchEvent("touchmove", [touchPoint(7, 80, 180, host)]);
+    host.dispatchEvent(down);
+    host.dispatchEvent(move);
+    expect(down.defaultPrevented).toBeFalse();
+    expect(move.defaultPrevented).toBeFalse();
+    stop();
+    host.remove();
+  });
+
+  test("native vertical touch scroll is forwarded once", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const calls: Call[] = [];
+    const stop = bindHostScroll(host, (direction, lines, source, at) => {
+      calls.push({ direction, lines, source, at });
+    }, () => ({ column: 4, row: 9 }));
+    host.dispatchEvent(touchEvent("touchstart", [touchPoint(7, 80, 240, host)]));
+    host.dispatchEvent(touchEvent("touchmove", [touchPoint(7, 80, 240 - SCROLL_LINE_PX * 3, host)]));
+    host.dispatchEvent(pointer("pointermove", 80, 240 - SCROLL_LINE_PX * 3, "touch"));
+    expect(calls).toEqual([{ direction: "down", lines: 3, source: "wheel", at: { column: 4, row: 9 } }]);
+    stop();
+    host.remove();
+  });
+
+  test("a duplicate touch and pointer tap synthesizes one mouse click", () => {
+    const host = document.createElement("div");
+    const xterm = document.createElement("div");
+    xterm.className = "xterm";
+    host.append(xterm);
+    document.body.append(host);
+    const clicks: string[] = [];
+    xterm.addEventListener("mousedown", () => clicks.push("down"));
+    xterm.addEventListener("mouseup", () => clicks.push("up"));
+    const stop = bindHostScroll(host, () => undefined, () => undefined);
+    const point = touchPoint(7, 80, 120, host);
+    host.dispatchEvent(pointer("pointerdown", 80, 120, "touch"));
+    host.dispatchEvent(touchEvent("touchstart", [point]));
+    host.dispatchEvent(touchEvent("touchend", [], [point]));
+    host.dispatchEvent(pointer("pointerup", 80, 120, "touch"));
+    expect(clicks).toEqual(["down", "up"]);
+    stop();
+    host.remove();
   });
 
   test("a vertical finger pan is forwarded as TUI wheel lines", () => {

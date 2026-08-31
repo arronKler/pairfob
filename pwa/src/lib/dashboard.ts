@@ -215,6 +215,34 @@ export function agentMeta(agent: AgentCard, group: ListGroup = "flat"): string {
   return bits.join(" · ");
 }
 
+export type AgentDetailRow = { key: string; value: string; kind?: "path" };
+
+/** Full coordinates for the list object menu. The card subtitle stays short. */
+export function agentDetailRows(agent: AgentCard, agents: AgentCard[] = [], group: ListGroup = "flat"): AgentDetailRow[] {
+  const title = agentTitle(agent, group);
+  const rows: AgentDetailRow[] = [];
+  const seen = new Set<string>();
+  const push = (key: string, value: string | undefined, kind?: "path") => {
+    const text = value?.trim() ?? "";
+    if (!text) return;
+    if (kind !== "path" && same(text, title)) return;
+    const id = `${key}\0${text}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    rows.push(kind ? { key, value: text, kind } : { key, value: text });
+  };
+  push(t("detail.status"), statusLabel(agent.status));
+  push(t("detail.agent"), whoLabel(agent));
+  push(t("detail.path"), agent.cwd, "path");
+  push(t("detail.workspace"), agent.workspaceLabel);
+  push(t("detail.tab"), visibleTabLabel(agent.tabLabel));
+  push(t("detail.task"), usefulTerminalTitle(agent));
+  if (tabIsSplit(agent, agents)) {
+    push(t("detail.layout"), t("detail.splitCount", { n: tabSiblings(agent, agents).length }));
+  }
+  return rows;
+}
+
 export function herdSignature(agents: DashboardAgentCard[]): string {
   return JSON.stringify(
     agents.map((agent) => [

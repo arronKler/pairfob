@@ -15,7 +15,10 @@ import (
 	"pairfob/internal/wsnet"
 )
 
-const relayHeartbeatInterval = 25 * time.Second
+const (
+	relayHeartbeatInterval = 25 * time.Second
+	relayStableConnection  = 10 * time.Second
+)
 
 type relayHeartbeatConn interface {
 	Send(envelope.Frame) error
@@ -136,16 +139,18 @@ func runRelay(link *relayLink, eng *daemon.Engine, relayURL, join string, first 
 		} else {
 			eng.RefreshPairing()
 		}
+		connectedAt := time.Now()
 		heartbeatStop := make(chan struct{})
 		heartbeatDone := make(chan struct{})
 		go func() {
 			runRelayHeartbeat(conn, relayHeartbeatInterval, heartbeatStop)
 			close(heartbeatDone)
 		}()
+		var recvErr error
 		for {
 			frame, err := conn.Recv()
 			if err != nil {
-				log.Printf("relay disconnected; retry in %s: %v", backoff, err)
+				recvErr = err
 				break
 			}
 			daemon.TraceFrame("recv", frame)
@@ -160,9 +165,22 @@ func runRelay(link *relayLink, eng *daemon.Engine, relayURL, join string, first 
 		if eng.ResetTransport() {
 			needNewPair = true
 		}
-		time.Sleep(backoff)
-		backoff = nextBackoff(backoff)
+		delay, next := relayReconnectBackoff(time.Since(connectedAt), backoff)
+		log.Printf("relay disconnected; retry in %s: %v", delay, recvErr)
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		backoff = next
 	}
+}
+
+// A link that was healthy gets one immediate reconnect attempt. A connection
+// that never became stable keeps the exponential backoff to avoid a hot loop.
+func relayReconnectBackoff(connectedFor, current time.Duration) (time.Duration, time.Duration) {
+	if connectedFor >= relayStableConnection {
+		return 0, current
+	}
+	return current, nextBackoff(current)
 }
 
 func nextBackoff(current time.Duration) time.Duration {

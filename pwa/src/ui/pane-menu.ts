@@ -11,16 +11,15 @@ import {
   createSelectedWorktree,
   layoutSelectedPane,
   listSelectedWorktrees,
-  openSelectedTerminalHistory,
   openSelectedWorktree,
   renamePane,
   splitSelectedPane,
 } from "../live-operations";
 import { openPane } from "../live";
 import { render } from "../paint";
-import { TERM_FONT_MAX, TERM_FONT_MIN, clampTermFont, saveTermFont, selectedAgent, state } from "../state";
+import { TERM_COL_PRESETS, TERM_FONT_MAX, TERM_FONT_MIN, clampTermFont, saveTermFont, selectedAgent, state } from "../state";
 import { canEnterAgentChat, enterAgentChat, leaveAgentChat } from "./agent-chat";
-import { enterFullTerminal, leaveFullTerminal, retryFullTerminal, setTermFit } from "./full-terminal";
+import { enterFullTerminal, leaveFullTerminal, retryFullTerminal, setFullTerminalComposeLive, setTermFit } from "./full-terminal";
 import { setComposeLive, toggleTermSelect, toggleTermWrap } from "./session-view";
 import { afterClose, present, sheet, sheetItem, sheetSection } from "./sheet";
 
@@ -97,17 +96,21 @@ export function openPaneMenu(): void {
     fitBar.setAttribute("role", "radiogroup");
     fitBar.setAttribute("aria-label", t("pane.width"));
     for (const option of [
-      { id: "fit" as const, label: t("pane.fit"), aria: t("pane.fitAria") },
-      { id: "pan" as const, label: t("pane.cols80Short"), aria: t("pane.panAria") },
+      { label: t("pane.fit"), aria: t("pane.fitAria"), on: state.termFit === "fit", run: () => setTermFit("fit") },
+      ...TERM_COL_PRESETS.map((cols) => ({
+        label: t("pane.colsShort", { cols }),
+        aria: t("pane.panColsAria", { cols }),
+        on: state.termFit === "pan" && state.termCols === cols,
+        run: () => setTermFit("pan", cols),
+      })),
     ]) {
-      const on = state.termFit === option.id;
-      const choice = button(option.label, `seg-item${on ? " on" : ""}`);
+      const choice = button(option.label, `seg-item${option.on ? " on" : ""}`);
       choice.setAttribute("role", "radio");
-      choice.setAttribute("aria-checked", on ? "true" : "false");
+      choice.setAttribute("aria-checked", option.on ? "true" : "false");
       choice.setAttribute("aria-label", option.aria);
       choice.addEventListener("click", () => {
-        if (on) return;
-        afterClose(parts.dialog, () => setTermFit(option.id));
+        if (option.on) return;
+        afterClose(parts.dialog, option.run);
       });
       fitBar.append(choice);
     }
@@ -116,7 +119,7 @@ export function openPaneMenu(): void {
   if (!state.operationCapabilities.zoom_pane && split) {
     parts.body.append(node("p", "empty-sub", t("pane.splitUnsupported")));
   }
-  if (!state.fullTerminal && !state.agentChat) {
+  if (!state.agentChat) {
     const inputBar = node("div", "seg menu-mode");
     inputBar.setAttribute("role", "radiogroup");
     inputBar.setAttribute("aria-label", t("pane.inputAria"));
@@ -131,7 +134,10 @@ export function openPaneMenu(): void {
       choice.setAttribute("aria-label", option.aria);
       choice.addEventListener("click", () => {
         if (on) return;
-        afterClose(parts.dialog, () => void setComposeLive(option.live));
+        afterClose(parts.dialog, () => {
+          if (state.fullTerminal) setFullTerminalComposeLive(option.live);
+          else void setComposeLive(option.live);
+        });
       });
       inputBar.append(choice);
     }
@@ -162,7 +168,6 @@ export function openPaneMenu(): void {
         state.termFontPx <= TERM_FONT_MIN,
       ),
       item(t("menu.copyScreen"), copyScreenText),
-      ...(state.operationCapabilities.history ? [item(t("menu.history"), openSelectedTerminalHistory)] : []),
     ]);
   }
   section(t("menu.new"), [

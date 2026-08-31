@@ -106,37 +106,13 @@ describe("guided pane no longer overlays earlier output", () => {
     ]);
   });
 
-  test("更早的输出 is a session-menu action when history is allowed", () => {
+  test("会话操作 has no 更早的输出 even when history is allowed", () => {
     bootGuided();
-    click("会话操作");
-    const sheet = document.querySelector("dialog.sheet");
-    expect(sheet?.textContent).toContain("更早的输出");
-    expect(app.querySelector(".term-more")).toBeNull();
-    expect(sheet?.querySelector(".sheet-head .sheet-close")).toBeTruthy();
-    expect(sheet?.querySelector(".sheet-body")?.textContent).toContain("更早的输出");
-    expect(sheet?.querySelector(".sheet-head")?.textContent).not.toContain("更早的输出");
-  });
-
-  test("the menu omits 更早的输出 when history is off", () => {
-    bootGuided();
-    state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES };
     click("会话操作");
     const sheet = document.querySelector("dialog.sheet");
     expect(sheet?.textContent).not.toContain("更早的输出");
-  });
-
-  test("the menu action opens a history sheet, not an overlay on the live buffer", async () => {
-    bootGuided();
-    click("会话操作");
-    const item = [...document.querySelectorAll("dialog.sheet button")].find((button) => button.textContent === "更早的输出");
-    if (!(item instanceof HTMLButtonElement)) throw new Error("missing 更早的输出");
-    item.click();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const modal = document.querySelector("dialog.history-modal");
-    expect(modal?.querySelector(".modal-title")?.textContent).toBe("更早的输出");
-    expect(modal?.textContent).toContain("old");
+    expect(document.querySelector("dialog.history-modal")).toBeNull();
     expect(app.querySelector(".term-more")).toBeNull();
-    expect(app.querySelector(".term-back")).toBeNull();
   });
 });
 

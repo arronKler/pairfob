@@ -44,7 +44,9 @@ export function bindHostScroll(
 ): () => void {
   const grabTouch = opts.grabTouch !== false;
   const tapAsClick = opts.tapAsClick !== false;
+  let source: "pointer" | "touch" | null = null;
   let pointer: number | null = null;
+  let touch: number | null = null;
   let lastX = 0;
   let lastY = 0;
   let panRemainder = 0;
@@ -54,48 +56,86 @@ export function bindHostScroll(
   let panXScroller: HTMLElement | null = null;
   let at: ScrollAt | undefined;
 
-  const resetPointer = () => {
+  const resetGesture = () => {
+    source = null;
     pointer = null;
+    touch = null;
     engaged = false;
     horizontal = false;
     panXScroller = null;
     panRemainder = 0;
+    at = undefined;
   };
 
-  const onDown = (event: PointerEvent) => {
-    if (pointer !== null || !event.isPrimary || event.button !== 0) return;
-    if ((event.target as HTMLElement | null)?.closest?.("button")) return;
-    pointer = event.pointerId;
-    lastX = event.clientX;
-    lastY = event.clientY;
+  const beginGesture = (
+    nextSource: "pointer" | "touch",
+    id: number,
+    point: Pick<PointerEvent, "clientX" | "clientY">,
+    canPanX: boolean,
+  ) => {
+    resetGesture();
+    source = nextSource;
+    if (nextSource === "pointer") pointer = id;
+    else touch = id;
+    lastX = point.clientX;
+    lastY = point.clientY;
     panRemainder = 0;
-    engaged = false;
-    horizontal = false;
-    at = cellAt(event.clientX, event.clientY);
-    if (event.pointerType === "touch" || event.pointerType === "pen") {
+    at = cellAt(point.clientX, point.clientY);
+    if (canPanX) {
       const candidate = opts.panXScroller?.() ?? null;
       if (candidate && candidate.scrollWidth > candidate.clientWidth) panXScroller = candidate;
     }
+  };
+
+  const moveGesture = (clientX: number, clientY: number): boolean => {
+    const dx = clientX - lastX;
+    const dy = clientY - lastY;
+    if (!engaged) {
+      if (Math.abs(dy) < ENGAGE_PX && Math.abs(dx) < ENGAGE_PX) return false;
+      if (Math.abs(dy) < Math.abs(dx) * 1.2) {
+        if (!panXScroller) {
+          resetGesture();
+          return false;
+        }
+        horizontal = true;
+      } else if (opts.capturePan && !opts.capturePan(dy)) {
+        resetGesture();
+        return false;
+      }
+      engaged = true;
+    }
+    lastX = clientX;
+    lastY = clientY;
+    if (horizontal && panXScroller) {
+      panXScroller.scrollLeft -= dx;
+      return true;
+    }
+    panRemainder -= dy;
+    const lines = Math.trunc(Math.abs(panRemainder) / SCROLL_LINE_PX);
+    if (!lines) return true;
+    const direction = panRemainder < 0 ? "up" : "down";
+    panRemainder %= SCROLL_LINE_PX;
+    scroll(direction, Math.min(lines, 40), "wheel", at);
+    return true;
+  };
+
+  const onDown = (event: PointerEvent) => {
+    if (source !== null || !event.isPrimary || event.button !== 0) return;
+    if ((event.target as HTMLElement | null)?.closest?.("button")) return;
+    beginGesture(
+      "pointer",
+      event.pointerId,
+      event,
+      event.pointerType === "touch" || event.pointerType === "pen",
+    );
     if (grabTouch && (event.pointerType === "touch" || event.pointerType === "pen")) event.preventDefault();
   };
 
   const onMove = (event: PointerEvent) => {
-    if (event.pointerId !== pointer) return;
-    const dx = event.clientX - lastX;
-    const dy = event.clientY - lastY;
-    if (!engaged) {
-      if (Math.abs(dy) < ENGAGE_PX && Math.abs(dx) < ENGAGE_PX) return;
-      if (Math.abs(dy) < Math.abs(dx) * 1.2) {
-        if (!panXScroller) {
-          resetPointer();
-          return;
-        }
-        horizontal = true;
-      } else if (opts.capturePan && !opts.capturePan(dy)) {
-        resetPointer();
-        return;
-      }
-      engaged = true;
+    if (source !== "pointer" || event.pointerId !== pointer) return;
+    const wasEngaged = engaged;
+    if (!moveGesture(event.clientX, event.clientY)) return;
+    if (!wasEngaged && engaged) {
       try {
         host.setPointerCapture?.(event.pointerId);
       } catch {
@@ -104,24 +144,13 @@ export function bindHostScroll(
       }
     }
     event.preventDefault();
-    lastX = event.clientX;
-    lastY = event.clientY;
-    if (horizontal && panXScroller) {
-      panXScroller.scrollLeft -= dx;
-      return;
-    }
-    panRemainder -= dy;
-    const lines = Math.trunc(Math.abs(panRemainder) / SCROLL_LINE_PX);
-    if (!lines) return;
-    const direction = panRemainder < 0 ? "up" : "down";
-    panRemainder %= SCROLL_LINE_PX;
-    scroll(direction, Math.min(lines, 40), "wheel", at);
   };
 
   const onUp = (event: PointerEvent) => {
-    if (event.pointerId !== pointer) return;
-    const tap = tapAsClick && !engaged && (event.pointerType === "touch" || event.pointerType === "pen");
-    resetPointer();
+    if (source !== "pointer" || event.pointerId !== pointer) return;
+    const tap = event.type === "pointerup" && tapAsClick && !engaged
+      && (event.pointerType === "touch" || event.pointerType === "pen");
+    resetGesture();
     if (tap) tapAsMouse(host, event);
   };
 
@@ -138,10 +167,51 @@ export function bindHostScroll(
     scroll(direction, Math.min(lines, 40), "wheel", cellAt(event.clientX, event.clientY));
   };
 
-  const onTouchStart = (event: TouchEvent) => {
-    if (event.touches.length > 1) {
-      resetPointer();
+  const findTouch = (list: TouchList, identifier: number): Touch | null => {
+    for (let index = 0; index < list.length; index++) {
+      if (list[index].identifier === identifier) return list[index];
     }
+    return null;
+  };
+
+  const onTouchStart = (event: TouchEvent) => {
+    if (!grabTouch) {
+      if (event.touches.length > 1) resetGesture();
+      return;
+    }
+    if (event.touches.length !== 1) {
+      resetGesture();
+      return;
+    }
+    if ((event.target as HTMLElement | null)?.closest?.("button")) return;
+    const point = event.touches[0];
+    beginGesture("touch", point.identifier, point, true);
+    event.preventDefault();
+  };
+
+  const onTouchMove = (event: TouchEvent) => {
+    if (source !== "touch" || touch === null) return;
+    if (event.touches.length !== 1) {
+      resetGesture();
+      return;
+    }
+    const point = findTouch(event.touches, touch);
+    if (!point) return;
+    event.preventDefault();
+    moveGesture(point.clientX, point.clientY);
+  };
+
+  const onTouchEnd = (event: TouchEvent) => {
+    if (source !== "touch" || touch === null) return;
+    const point = findTouch(event.changedTouches, touch);
+    if (!point) return;
+    const tap = tapAsClick && !engaged;
+    resetGesture();
+    if (tap) tapAsMouse(host, point);
+  };
+
+  const onTouchCancel = () => {
+    if (source === "touch") resetGesture();
   };
 
   host.addEventListener("pointerdown", onDown, { passive: false });
@@ -150,7 +220,10 @@ export function bindHostScroll(
   host.addEventListener("pointercancel", onUp);
   host.addEventListener("lostpointercapture", onUp);
   host.addEventListener("wheel", onWheel, { passive: false });
-  host.addEventListener("touchstart", onTouchStart, { passive: true });
+  host.addEventListener("touchstart", onTouchStart, { passive: false });
+  host.addEventListener("touchmove", onTouchMove, { passive: false });
+  host.addEventListener("touchend", onTouchEnd);
+  host.addEventListener("touchcancel", onTouchCancel);
   return () => {
     host.removeEventListener("pointerdown", onDown);
     host.removeEventListener("pointermove", onMove, { capture: true } as AddEventListenerOptions);
@@ -159,6 +232,9 @@ export function bindHostScroll(
     host.removeEventListener("lostpointercapture", onUp);
     host.removeEventListener("wheel", onWheel);
     host.removeEventListener("touchstart", onTouchStart);
+    host.removeEventListener("touchmove", onTouchMove);
+    host.removeEventListener("touchend", onTouchEnd);
+    host.removeEventListener("touchcancel", onTouchCancel);
   };
 }
 

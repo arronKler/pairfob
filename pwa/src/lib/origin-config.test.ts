@@ -20,6 +20,18 @@ describe("origin config", () => {
     expect(calls).toEqual(["no-store:/api/config"]);
   });
 
+  test("network failures become bad_relay instead of a generic TypeError", async () => {
+    try {
+      await loadOriginConfig(async () => {
+        throw new TypeError("Failed to fetch");
+      });
+      throw new Error("expected loadOriginConfig to reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ProtocolError);
+      expect((error as ProtocolError).code).toBe("bad_relay");
+    }
+  });
+
   test("ws URL is /v2/ws with role, daemon_id, and ticket", () => {
     const site = { protocol: "https:", host: "pairfob.com" };
     expect(clientWsURL(2, site)).toBe("wss://pairfob.com/v2/ws?role=client");

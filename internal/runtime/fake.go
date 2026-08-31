@@ -30,8 +30,8 @@ type PaneState struct {
 }
 
 func NewFake() *Fake {
-	// Agents box their dialogs and print a key hint underneath. Keep the demo
-	// buffer in that shape so prompt lifting is exercised the way it ships.
+	// Keep a mixed TUI buffer with an approval dialog and diagnostic rows so
+	// clients must render the terminal faithfully instead of inventing controls.
 	p := &PaneState{Text: "● Read README.md (18 lines)\n" +
 		"  ⎿  # Pairfob\n" +
 		"\n" +

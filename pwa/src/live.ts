@@ -17,7 +17,11 @@ import { nextTouchedAt } from "./lib/ranking";
 import { openPendingNotification } from "./notifications";
 import { panePollDelayMs, pokeRefreshAction, shouldPullStatus } from "./poll";
 import { clearAgentTraceCache } from "./lib/agent-trace-cache";
-import { bindPaneRefresh } from "./pane-refresh-request";
+import {
+  bindPaneRefresh,
+  type PaneReadObservation,
+  type PaneRefreshRequest,
+} from "./pane-refresh-request";
 import { render } from "./paint";
 import {
   FRIENDLY_ERROR,
@@ -25,7 +29,9 @@ import {
   clearNotice,
   loadPaneTouched,
   loadCompletionSeen,
+  loadPaneComposeLive,
   messageOf,
+  paneComposeLive,
   sessionEventNotice,
   loadPaneTermModes,
   paneTermMode,
@@ -42,7 +48,7 @@ import {
 import { isDesk } from "./viewport";
 import { composeField, dropQueuedKeys, paneReadLines, patchChromeTitle, patchSessionScreen, preserveCompose } from "./ui/session-view";
 import { canEnterAgentChat, patchAgentChat, refreshAgentTrace, restoreAgentTrace } from "./ui/agent-chat";
-import { disposeFullTerminal, enterFullTerminal, handleFullTerminalEvent, leaveFullTerminal } from "./ui/full-terminal";
+import { disposeFullTerminal, handleFullTerminalEvent, leaveFullTerminal } from "./ui/full-terminal";
 import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
 import { guidedScrollController } from "./ui/session/guided-scroll";
 import { track } from "./lib/telemetry";
@@ -52,9 +58,26 @@ const livePolling = createLivePolling({
   canReadPane: () => state.screen === "pane" && Boolean(state.paneId) && !state.fullTerminal,
   paneDelayMs: () => panePollDelayMs(state.agentChat, selectedAgent()?.status === "working"),
   refreshSnapshot: () => refreshSnapshot(),
-  refreshPane: () => refreshPaneRead(),
+  refreshPane: async () => { await refreshPaneRead(); },
 });
 let herdConfigRequest = 0;
+type PaneReadFlight = {
+  paneId: string;
+  startedAt: number;
+  promise: Promise<PaneReadObservation | null>;
+};
+type QueuedPaneRead = {
+  paneId: string;
+  postponeFallback: boolean;
+  promise: Promise<PaneReadObservation | null>;
+  resolve: (observation: PaneReadObservation | null) => void;
+};
+let paneReadFlight: PaneReadFlight | null = null;
+let queuedPaneRead: QueuedPaneRead | null = null;
+
+function monotonicNow(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
+}
 
 export async function reloadComputers(): Promise<void> {
   const catalog = await loadCatalog(location.origin);
@@ -117,8 +140,10 @@ export async function establish(pair: PairResult): Promise<void> {
   render();
   state.live?.close();
   if (state.live) state.live = null;
+  state.relayRttMs = null;
   state.paneTouched = loadPaneTouched();
   state.paneTermModes = loadPaneTermModes();
+  state.paneComposeLive = loadPaneComposeLive();
   await rememberLastUsed(pair.daemonId).catch(() => undefined);
   state.lastUsedDaemonId = pair.daemonId;
   state.live = await sessionOverWS(wsURL({ daemonId: pair.daemonId }), pair);
@@ -142,6 +167,11 @@ export async function establish(pair: PairResult): Promise<void> {
 function onSessionEvent(event: SessionEvent): void {
   if (guidedScrollController.handleEvent(event)) return;
   if (handleFullTerminalEvent(event) && (event.type === "terminal_frame" || event.type === "terminal_closed")) return;
+  if (event.type === "latency" && typeof event.rttMs === "number") {
+    state.relayRttMs = Math.max(0, Math.round(event.rttMs));
+    if (state.screen === "settings") render();
+    return;
+  }
   if (event.type === "poke" && document.visibilityState === "visible") {
     const action = pokeRefreshAction(state.screen, state.paneId, event.paneId, event.reason);
     if (action === "runtime") void refreshRuntimeState();
@@ -158,6 +188,7 @@ function onSessionEvent(event: SessionEvent): void {
     render();
     if (document.visibilityState === "visible") void refreshRuntimeState();
   } else if (event.type === "disconnected" || event.type === "reconnecting") {
+    state.relayRttMs = null;
     stopPolling();
     showStatus(sessionEventNotice(event), true);
     render();
@@ -219,19 +250,16 @@ export async function openPane(paneId: string): Promise<void> {
   rememberPane(paneId);
   state.paneId = paneId;
   resetPaneView();
+  state.composeLive = paneComposeLive(paneId);
   restoreAgentTrace(paneId);
   clearNotice();
   state.screen = "pane";
-  const hasExplicitMode = Object.prototype.hasOwnProperty.call(state.paneTermModes, paneId);
   const mode = paneTermMode(paneId);
   const agent = state.agents.find((item) => item.paneId === paneId);
   state.fullTerminal = mode === "full";
   state.agentChat = mode === "agent" && canEnterAgentChat(agent);
   render();
   preloadFullTerminalXterm();
-  if (!hasExplicitMode && !state.fullTerminal && !state.agentChat && state.composeLive) {
-    enterFullTerminal({ fallbackToGuidedLive: true });
-  }
   await refreshPane();
 }
 
@@ -298,24 +326,13 @@ export async function refreshSnapshot(): Promise<void> {
   }
 }
 
-export async function refreshPaneRead(): Promise<void> {
-  if (!state.live || !state.paneId || !state.live.isConnected() || !state.networkOnline || document.visibilityState === "hidden") return;
-  if (state.screen !== "pane" || state.fullTerminal) return;
-  if (state.agentChat) {
-    const changed = await refreshAgentTrace();
-    if (changed && shouldPullStatus(true, Date.now(), state.snapshotAt)) void refreshSnapshot();
-    return;
-  }
-  // A burst of key taps must not silently drop the read that shows their result.
-  if (state.paneReadBusy) {
-    state.paneReadPending = true;
-    return;
-  }
-  const paneId = state.paneId;
-  state.paneReadBusy = true;
+async function performPaneRead(paneId: string, startedAt: number): Promise<PaneReadObservation | null> {
+  const session = state.live;
+  if (!session || state.paneId !== paneId || !session.isConnected() || !state.networkOnline || document.visibilityState === "hidden") return null;
+  if (state.screen !== "pane" || state.fullTerminal || state.agentChat) return null;
   try {
-    const read = await state.live.paneRead(paneId, paneReadLines());
-    if (state.paneId !== paneId || state.screen !== "pane" || state.fullTerminal) return;
+    const read = await session.paneRead(paneId, paneReadLines());
+    if (state.live !== session || state.paneId !== paneId || state.screen !== "pane" || state.fullTerminal) return null;
     const nextText = typeof read?.text === "string" ? read.text : "";
     const nextHash = typeof read?.hash === "string" ? read.hash : "";
     const same = nextHash !== "" && nextHash === state.paneHash && nextText === state.paneText;
@@ -330,11 +347,13 @@ export async function refreshPaneRead(): Promise<void> {
       // acknowledged a completion. Rendering every poll would remount the
       // pane and wipe an in-progress text selection over nothing.
       if (acknowledged && isDesk() && !keep) render();
-      return;
+      return { paneId, text: nextText, hash: nextHash, changed: false, startedAt, completedAt: monotonicNow() };
     }
-    if (keep && patchSessionScreen()) return;
-    if (keep && composeField()) return;
+    const observation = () => ({ paneId, text: nextText, hash: nextHash, changed: true, startedAt, completedAt: monotonicNow() });
+    if (keep && patchSessionScreen()) return observation();
+    if (keep && composeField()) return observation();
     if (!patchSessionScreen()) render();
+    return observation();
   } catch (error) {
     const code = error instanceof ProtocolError ? error.code : "";
     if (code === "pane_not_found") {
@@ -344,19 +363,90 @@ export async function refreshPaneRead(): Promise<void> {
       if (state.screen === "pane" && state.paneId && !state.agents.some((agent) => agent.paneId === state.paneId)) {
         abandonOpenPane(t("err.paneGone"));
       }
-      return;
+      return null;
     }
     if (!(error instanceof ProtocolError && ["reconnecting", "disconnected"].includes(error.code))) {
       showError(messageOf(error));
       render();
     }
-  } finally {
-    state.paneReadBusy = false;
-    if (state.paneReadPending) {
-      state.paneReadPending = false;
-      void refreshPaneRead();
-    }
+    return null;
   }
+}
+
+function startPaneRead(paneId: string): Promise<PaneReadObservation | null> {
+  const startedAt = monotonicNow();
+  state.paneReadBusy = true;
+  const promise = performPaneRead(paneId, startedAt);
+  const flight = { paneId, startedAt, promise };
+  paneReadFlight = flight;
+  void promise.then(() => finishPaneRead(flight), () => finishPaneRead(flight));
+  return promise;
+}
+
+function finishPaneRead(flight: PaneReadFlight): void {
+  if (paneReadFlight !== flight) return;
+  paneReadFlight = null;
+  state.paneReadBusy = false;
+  const queued = queuedPaneRead;
+  queuedPaneRead = null;
+  state.paneReadPending = false;
+  if (!queued) return;
+  const next = startPaneRead(queued.paneId);
+  void next.then(
+    (observation) => {
+      if (queued.postponeFallback && observation) livePolling.deferPane();
+      queued.resolve(observation);
+    },
+    () => queued.resolve(null),
+  );
+}
+
+function queuePaneRead(paneId: string, request: PaneRefreshRequest): Promise<PaneReadObservation | null> {
+  if (queuedPaneRead && queuedPaneRead.paneId !== paneId) {
+    queuedPaneRead.resolve(null);
+    queuedPaneRead = null;
+  }
+  if (queuedPaneRead) {
+    queuedPaneRead.postponeFallback ||= request.postponeFallback === true;
+    return queuedPaneRead.promise;
+  }
+  let resolve!: (observation: PaneReadObservation | null) => void;
+  const promise = new Promise<PaneReadObservation | null>((done) => { resolve = done; });
+  queuedPaneRead = {
+    paneId,
+    postponeFallback: request.postponeFallback === true,
+    promise,
+    resolve,
+  };
+  state.paneReadPending = true;
+  return promise;
+}
+
+function postponeFallback(promise: Promise<PaneReadObservation | null>, enabled: boolean): Promise<PaneReadObservation | null> {
+  if (!enabled) return promise;
+  return promise.then((observation) => {
+    if (observation) livePolling.deferPane();
+    return observation;
+  });
+}
+
+export async function refreshPaneRead(request: PaneRefreshRequest = {}): Promise<PaneReadObservation | null> {
+  if (!state.live || !state.paneId || !state.live.isConnected() || !state.networkOnline || document.visibilityState === "hidden") return null;
+  if (state.screen !== "pane" || state.fullTerminal) return null;
+  if (state.agentChat) {
+    const changed = await refreshAgentTrace();
+    if (changed && shouldPullStatus(true, Date.now(), state.snapshotAt)) void refreshSnapshot();
+    return null;
+  }
+  const paneId = state.paneId;
+  const notBefore = request.notBefore ?? 0;
+  if (paneReadFlight) {
+    if (paneReadFlight.paneId === paneId && paneReadFlight.startedAt >= notBefore) {
+      return postponeFallback(paneReadFlight.promise, request.postponeFallback === true);
+    }
+    return queuePaneRead(paneId, request);
+  }
+  return postponeFallback(startPaneRead(paneId), request.postponeFallback === true);
 }
 
 export async function refreshFromSession(): Promise<void> {
@@ -384,4 +474,4 @@ export function stopPolling(): void {
   livePolling.stop();
 }
 
-bindPaneRefresh(refreshPane);
+bindPaneRefresh(refreshPaneRead);

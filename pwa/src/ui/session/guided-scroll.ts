@@ -25,6 +25,8 @@ type OpeningBridge = {
 };
 
 type Timer = ReturnType<typeof setTimeout>;
+type ScheduleTimer = (callback: () => void, delay: number) => Timer;
+type CancelTimer = (timer: Timer) => void;
 
 /**
  * Guided panes are snapshots, so they do not otherwise own a terminal
@@ -36,11 +38,19 @@ export class GuidedScrollController {
   private opening: OpeningBridge | null = null;
   private version = 0;
   private idleTimer: Timer | null = null;
+  private readonly schedule: ScheduleTimer;
+  private readonly cancel: CancelTimer;
 
   constructor(
-    private readonly schedule: (callback: () => void, delay: number) => Timer = setTimeout,
-    private readonly cancel: (timer: Timer) => void = clearTimeout,
-  ) {}
+    schedule: ScheduleTimer = globalThis.setTimeout,
+    cancel: CancelTimer = globalThis.clearTimeout,
+  ) {
+    // Browser timers require Window as their receiver. Keeping a bare native
+    // timer in an instance field and later calling `this.schedule(...)` makes
+    // Chrome throw "Illegal invocation" after a successful remote scroll.
+    this.schedule = (callback, delay) => schedule.call(globalThis, callback, delay);
+    this.cancel = (timer) => cancel.call(globalThis, timer);
+  }
 
   async scroll(target: GuidedScrollTarget, direction: "up" | "down", lines: number): Promise<boolean> {
     const bridge = await this.ensureBridge(target);

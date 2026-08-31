@@ -197,6 +197,7 @@ class SessionTransport {
   private heartbeat: ReturnType<typeof setInterval>;
   private heartbeatCounter = 0n;
   private expectedPong: Uint8Array | null = null;
+  private expectedPongAt = 0;
   private stopped = false;
   private stopError: ProtocolError | null = null;
   private disconnectHandlers = new Set<(error: ProtocolError) => void>();
@@ -210,7 +211,7 @@ class SessionTransport {
   ) {
     socket.use((frame) => this.receive(frame));
     socket.onClose((error) => this.disconnect(error));
-    this.heartbeat = globalThis.setInterval(() => {
+    const beat = () => {
       try {
         if (this.expectedPong) {
           this.disconnect(new ProtocolError("heartbeat_timeout", "relay 未及时响应心跳"));
@@ -219,11 +220,14 @@ class SessionTransport {
         }
         const payload = heartbeatPayload(++this.heartbeatCounter);
         this.expectedPong = payload;
+        this.expectedPongAt = performance.now();
         send(this.socket.ws, { version: 1, typ: Typ.PING, flags: 0, routeId: this.routeId, payload });
       } catch {
         this.disconnect(new ProtocolError("disconnected", "心跳发送失败"));
       }
-    }, HEARTBEAT_MS);
+    };
+    this.heartbeat = globalThis.setInterval(beat, HEARTBEAT_MS);
+    beat();
   }
 
   onDisconnect(handler: (error: ProtocolError) => void): void {
@@ -277,7 +281,10 @@ class SessionTransport {
       if (frame.typ === Typ.PONG) {
         requireHeartbeatPayload(frame.payload);
         if (!this.expectedPong || !sameBytes(frame.payload, this.expectedPong)) throw new ProtocolError("bad_frame", "PONG 未原样回显 PING");
+        const rttMs = Math.max(0, performance.now() - this.expectedPongAt);
         this.expectedPong = null;
+        this.expectedPongAt = 0;
+        this.emit({ type: "latency", rttMs });
         return;
       }
       if (frame.typ === Typ.DAEMON_REPLACED) {
@@ -481,6 +488,7 @@ class ReconnectingSession implements LiveSession {
   private connectAbort: AbortController | null = null;
   private networkAvailable = true;
   private attempt = 0;
+  private relayRttMs: number | null = null;
 
   private constructor(private readonly relayWS: string, private readonly pair: PairResult) {}
 
@@ -523,6 +531,7 @@ class ReconnectingSession implements LiveSession {
   };
   onEvent = (listener: (event: SessionEvent) => void): (() => void) => {
     this.listeners.add(listener);
+    if (this.relayRttMs !== null) listener({ type: "latency", rttMs: this.relayRttMs });
     return () => this.listeners.delete(listener);
   };
   ping = (t: number) => this.readRPC("Ping", { t_ms: t });
@@ -666,6 +675,7 @@ class ReconnectingSession implements LiveSession {
   }
 
   private emit(event: SessionEvent): void {
+    if (event.type === "latency" && typeof event.rttMs === "number") this.relayRttMs = event.rttMs;
     for (const listener of this.listeners) listener(event);
   }
 
@@ -698,7 +708,9 @@ class ReconnectingSession implements LiveSession {
       return;
     }
     this.emit({ type: "disconnected", code: error.code, message: error.message });
-    this.scheduleReconnect();
+    // A healthy session gets one immediate recovery attempt. Only failed
+    // reconnects enter the jittered exponential backoff below.
+    this.scheduleReconnect(true);
   }
 
   private scheduleReconnect(immediate = false): void {

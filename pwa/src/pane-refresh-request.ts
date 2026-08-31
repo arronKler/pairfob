@@ -1,4 +1,20 @@
-type PaneRefresh = () => Promise<void>;
+export type PaneRefreshRequest = {
+  /** Do not share a read that started before this monotonic timestamp. */
+  notBefore?: number;
+  /** Move the fallback poll after this explicit confirmation read. */
+  postponeFallback?: boolean;
+};
+
+export type PaneReadObservation = {
+  paneId: string;
+  text: string;
+  hash: string;
+  changed: boolean;
+  startedAt: number;
+  completedAt: number;
+};
+
+type PaneRefresh = (request?: PaneRefreshRequest) => Promise<PaneReadObservation | null>;
 
 let refreshPane: PaneRefresh | null = null;
 
@@ -8,6 +24,6 @@ export function bindPaneRefresh(refresh: PaneRefresh): void {
 }
 
 /** Request a read after an ordered terminal mutation; an unmounted UI is a no-op. */
-export function requestPaneRefresh(): Promise<void> {
-  return refreshPane?.() ?? Promise.resolve();
+export function requestPaneRefresh(request?: PaneRefreshRequest): Promise<PaneReadObservation | null> {
+  return refreshPane?.(request) ?? Promise.resolve(null);
 }

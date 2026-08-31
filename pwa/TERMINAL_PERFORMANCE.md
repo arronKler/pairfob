@@ -9,7 +9,7 @@
 - 生命周期：组件可用、bridge 打开、首个完整 frame 的耗时。
 - 命令：排队/合并/发送/完成/失败数，queue wait、RPC RTT，以及 pending command/input 峰值。
 - 输出：frame part/完整 frame 数、输入/渲染字节、frame assembly、xterm write drain，以及 pending write 峰值。
-- 交互：输入事件到下一完整 frame、以及到该 frame 完成 xterm write 的 p50/p95。
+- 交互：输入或滚动命令到下一完整 frame、以及到该 frame 完成 xterm write 的 p50/p95。
 
 采样只保存数值和命令类型，不保存终端输入、输出、RPC 参数或密钥。延迟窗口最多保留最近 128 个样本，同时保留全程 count/average/max。
 
@@ -23,6 +23,8 @@ location.reload();
 ```
 
 终端退出、断线、关闭或命令失败时会输出快照。自动化也可以监听 `pairfob:terminal-perf` document event；事件的 `detail` 就是同一份快照。
+
+控制模式的 PageUp/PageDown 另发出 `pairfob:pane-page-perf` 事件。每个样本包含点击到 mutation 开始、mutation RTT、ACK 到首次读取、点击到 hash 变化、确认读取次数和最终结果。它不包含 pane 内容、hash、RPC 参数或设备标识。首次读取紧跟 mutation 帧流水发送，因此 `ackToFirstReadMs` 可以为负数；daemon 按 session 串行执行两帧。翻页只发送一次 CSI mutation；若画面仍未变化，客户端以 80/160/320ms 间隔最多重试三次只读 `PaneRead`，并把普通 1.5s fallback 延后。
 
 ## 可重复基准
 

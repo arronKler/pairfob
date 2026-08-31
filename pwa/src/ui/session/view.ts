@@ -10,7 +10,6 @@ import { composeField, sizeCompose, syncSendButton } from "./compose";
 import { dockNode } from "./dock";
 import { queueKey } from "./keys";
 import { paneModel, type PaneModel } from "./model";
-import { promptPanel } from "./prompt-panel";
 import { openRow, rowBar } from "./rowbar";
 import { atBottom, fillTerm, restoreTermScroll, sessionScroll, stickBottom, syncJump, termElement, termView, toggleTermSelect } from "./term";
 
@@ -73,8 +72,6 @@ function fillExtras(host: HTMLElement, model: PaneModel): void {
   const parts: HTMLElement[] = [];
   const bar = rowBar(model);
   if (bar) parts.push(bar);
-  const panel = promptPanel(model);
-  if (panel) parts.push(panel);
   host.replaceChildren(...parts);
 }
 

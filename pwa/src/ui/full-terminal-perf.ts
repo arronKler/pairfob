@@ -49,10 +49,15 @@ export type TerminalPerfSnapshot = {
   latency: {
     inputToNextFrame: DurationSummary;
     inputToWrite: DurationSummary;
+    scrollToNextFrame: DurationSummary;
+    scrollToWrite: DurationSummary;
   };
 };
 
-export type TerminalInputFrameMarker = readonly number[];
+export type TerminalFrameMarker = {
+  input: readonly number[];
+  scroll: readonly number[];
+};
 
 class DurationWindow {
   private count = 0;
@@ -124,7 +129,10 @@ export class TerminalPerfTracker {
   private readonly write = new DurationWindow();
   private readonly inputToNextFrame = new DurationWindow();
   private readonly inputToWrite = new DurationWindow();
+  private readonly scrollToNextFrame = new DurationWindow();
+  private readonly scrollToWrite = new DurationWindow();
   private readonly pendingInputAt: number[] = [];
+  private readonly pendingScrollAt: number[] = [];
 
   readonly commandObserver: TerminalCommandPumpObserver = {
     queued: (_kind, coalesced, state) => {
@@ -138,6 +146,9 @@ export class TerminalPerfTracker {
       if (kind === "input") {
         this.pendingInputAt.push(this.now() - Math.max(0, queueWaitMs));
         if (this.pendingInputAt.length > SAMPLE_LIMIT) this.pendingInputAt.shift();
+      } else if (kind === "scroll") {
+        this.pendingScrollAt.push(this.now() - Math.max(0, queueWaitMs));
+        if (this.pendingScrollAt.length > SAMPLE_LIMIT) this.pendingScrollAt.shift();
       }
       this.observePending(state);
     },
@@ -146,15 +157,17 @@ export class TerminalPerfTracker {
       this.commandRTT.record(rttMs);
       this.observePending(state);
     },
-    failed: (_kind, _sequence, rttMs, dropped) => {
+    failed: (kind, _sequence, rttMs, dropped) => {
       this.commandFailed++;
       this.commandDropped += droppedCount(dropped);
       this.commandRTT.record(rttMs);
-      this.pendingInputAt.length = 0;
+      if (kind === "input") this.pendingInputAt.length = 0;
+      if (kind === "scroll") this.pendingScrollAt.length = 0;
     },
     stopped: (dropped) => {
       this.commandDropped += droppedCount(dropped);
       this.pendingInputAt.length = 0;
+      this.pendingScrollAt.length = 0;
     },
   };
 
@@ -188,7 +201,10 @@ export class TerminalPerfTracker {
     this.write.reset();
     this.inputToNextFrame.reset();
     this.inputToWrite.reset();
+    this.scrollToNextFrame.reset();
+    this.scrollToWrite.reset();
     this.pendingInputAt.length = 0;
+    this.pendingScrollAt.length = 0;
     this.clearLifecycleEntries();
     this.mark(PERF_ENTER_MARK);
   }
@@ -215,7 +231,7 @@ export class TerminalPerfTracker {
     this.ingressBytes += Math.max(0, bytes);
   }
 
-  frameAssembled(durationMs: number): TerminalInputFrameMarker {
+  frameAssembled(durationMs: number): TerminalFrameMarker {
     this.logicalFrames++;
     this.assembly.record(durationMs);
     if (this.firstFrameMs === null && this.active) {
@@ -223,8 +239,9 @@ export class TerminalPerfTracker {
       this.measure(PERF_FIRST_FRAME_MEASURE, PERF_ENTER_MARK);
     }
     const now = this.now();
-    const marker = this.pendingInputAt.splice(0);
-    for (const queuedAt of marker) this.inputToNextFrame.record(Math.max(0, now - queuedAt));
+    const marker = { input: this.pendingInputAt.splice(0), scroll: this.pendingScrollAt.splice(0) };
+    for (const queuedAt of marker.input) this.inputToNextFrame.record(Math.max(0, now - queuedAt));
+    for (const queuedAt of marker.scroll) this.scrollToNextFrame.record(Math.max(0, now - queuedAt));
     return marker;
   }
 
@@ -233,10 +250,11 @@ export class TerminalPerfTracker {
     this.peakPendingWriteBytes = Math.max(this.peakPendingWriteBytes, pendingBytes);
   }
 
-  writeCompleted(durationMs: number, marker: TerminalInputFrameMarker = []): void {
+  writeCompleted(durationMs: number, marker: TerminalFrameMarker = { input: [], scroll: [] }): void {
     this.write.record(durationMs);
     const now = this.now();
-    for (const queuedAt of marker) this.inputToWrite.record(Math.max(0, now - queuedAt));
+    for (const queuedAt of marker.input) this.inputToWrite.record(Math.max(0, now - queuedAt));
+    for (const queuedAt of marker.scroll) this.scrollToWrite.record(Math.max(0, now - queuedAt));
   }
 
   snapshot(reason = "snapshot"): TerminalPerfSnapshot {
@@ -271,6 +289,8 @@ export class TerminalPerfTracker {
       latency: {
         inputToNextFrame: this.inputToNextFrame.summary(),
         inputToWrite: this.inputToWrite.summary(),
+        scrollToNextFrame: this.scrollToNextFrame.summary(),
+        scrollToWrite: this.scrollToWrite.summary(),
       },
     };
   }

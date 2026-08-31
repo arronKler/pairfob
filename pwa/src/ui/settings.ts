@@ -62,6 +62,10 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   const conn = node("div", "set-card");
   conn.append(setRow(t("settings.computer"), state.herdHost || (state.credential ? computerTitle(state.credential) : t("settings.currentComputer"))));
   conn.append(setRow(t("settings.status"), status.text, status.tone));
+  conn.append(setRow(
+    t("settings.networkRtt"),
+    state.relayRttMs === null ? t("settings.networkRttPending") : t("settings.networkRttMs", { ms: state.relayRttMs }),
+  ));
   const self = state.deviceList.find((device) => device.self && !device.revoked_at);
   if (self) conn.append(setRow(t("settings.thisPhone"), self.label || t("settings.pairedPhone")));
   if (state.computers.length > 1) {

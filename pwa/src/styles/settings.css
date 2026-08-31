@@ -202,6 +202,47 @@ dialog.modal.sheet > form {
   padding: 4px 18px calc(18px + env(safe-area-inset-bottom, 0px));
 }
 
+.sheet-facts {
+  margin: 6px 0 8px;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet-facts dt,
+.sheet-facts dd { margin: 0; }
+
+.sheet-fact {
+  display: grid;
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+  gap: 4px 12px;
+  padding: 7px 0;
+  align-items: start;
+}
+
+.sheet-fact-key {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 620;
+  line-height: 1.45;
+}
+
+.sheet-fact-val {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 560;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.sheet-fact-path {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
+  word-break: break-all;
+}
+
 .sheet-head .modal-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -257,7 +298,7 @@ dialog.modal.sheet > form {
     animation: sheet-up 0.24s var(--ease);
   }
 }
-/* --- Operation dialogs (create / prompt / worktree / history) ------------------ */
+/* --- Operation dialogs (create / prompt / worktree) ------------------ */
 
 .operation-modal { max-height: min(34rem, calc(100dvh - 48px)); overflow: auto; }
 
@@ -346,103 +387,6 @@ dialog.modal.sheet > form {
   color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.55;
-}
-
-/* --- History ------------------------------------------------------------ */
-
-.history-tabs {
-  display: flex;
-  gap: 4px;
-  margin: 2px 0 10px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-}
-
-.history-tab {
-  flex: 1;
-  min-height: 44px;
-  border-radius: 9px;
-  color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 620;
-}
-
-.history-tab[aria-selected="true"] {
-  color: var(--ink);
-  background: var(--surface-3);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
-}
-
-.history-viewport {
-  max-height: min(52dvh, calc(100dvh - 20rem), 32rem);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-.history-list {
-  margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.history-item {
-  margin: 10px 0 0;
-  padding: 11px 13px;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-}
-
-.history-role {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 640;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 6px;
-}
-
-.history-text {
-  margin: 0;
-  font: 400 0.82rem/1.55 var(--mono);
-  color: var(--ink);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 18rem;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.terminal-history-text {
-  min-height: 12rem;
-  margin: 8px 0 0;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--term-bg);
-  color: var(--term-ink);
-  font: 400 0.78rem/1.45 var(--mono);
-  white-space: pre;
-  overflow-x: auto;
-  overflow-y: visible;
-  tab-size: 2;
-  -webkit-overflow-scrolling: touch;
-}
-
-@media (max-width: 899.98px) {
-  .history-list {
-    margin-top: 8px;
-  }
-
-  /* Nested per-item scroll inside a sheet cannot be panned on iOS. */
-  .history-text {
-    max-height: none;
-    overflow: visible;
-  }
 }
 
 /* --- Worktrees ------------------------------------------------------------- */
