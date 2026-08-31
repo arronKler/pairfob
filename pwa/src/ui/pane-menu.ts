@@ -179,7 +179,6 @@ export function openPaneMenu(): void {
     ...(state.operationCapabilities.resize_pane ? [item(t("menu.zoom"), () => layoutSelectedPane("resize"))] : []),
     ...(state.operationCapabilities.swap_pane && split ? [item(t("menu.swap"), () => layoutSelectedPane("swap"))] : []),
   ]);
-  section(t("pane.thisCell"), [item(t("menu.renamePane"), renamePane), item(t("op.closePane"), closePane, "danger")]);
-  parts.body.append(item(t("cancel"), parts.close));
+  parts.body.append(item(t("menu.renamePane"), renamePane), item(t("op.closePane"), closePane, "danger"), item(t("cancel"), parts.close));
   present(parts);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { agentMeta, agentTitle, canPromptAgent, choosePane, chromeName, herdSignature, mapSnapshotAgents, paneFillCopy, statusLabel, tabIsSplit } from "./dashboard.ts";
+import { agentMeta, agentTitle, canPromptAgent, choosePane, chromeName, herdSignature, mapSnapshotAgents, paneFillCopy, statusLabel, tabIsSplit, visibleTabLabel } from "./dashboard.ts";
 
 describe("dashboard mapping", () => {
   const snapshot = {
@@ -61,7 +61,7 @@ describe("dashboard mapping", () => {
   test("card copy uses a task title and short coordinates, not pane ids", () => {
     const agents = mapSnapshotAgents(snapshot);
     expect(agentTitle(agents[0])).toBe("auth pane");
-    expect(agentMeta(agents[0])).toBe("Pairfob · claude");
+    expect(agentMeta(agents[0])).toBe("claude · pairfob");
     expect(agentTitle(agents[1])).toBe("Relay");
     expect(agentMeta(agents[1])).toBe("codex · custom");
     expect(statusLabel("blocked")).toBe("等你");
@@ -71,23 +71,24 @@ describe("dashboard mapping", () => {
     const agents = mapSnapshotAgents(snapshot);
     expect(agentTitle(agents[0], "space")).toBe("auth pane");
     expect(agentMeta(agents[0], "space")).toBe("claude");
-    expect(agentTitle(agents[1], "space")).toBe("codex · custom");
-    expect(agentMeta(agents[1], "space")).toBe("");
+    expect(agentTitle(agents[1], "space")).toBe("codex");
+    expect(agentMeta(agents[1], "space")).toBe("custom");
     const unnamed = mapSnapshotAgents({
       workspaces: [{ workspace_id: "w1", label: "Pairfob", cwd: "/repo/pairfob" }],
       panes: [{ pane_id: "p1", workspace_id: "w1", agent: "codex", agent_status: "idle" }],
     })[0];
-    expect(agentTitle(unnamed)).toBe("codex · pairfob");
-    expect(agentMeta(unnamed, "space")).toBe("");
+    expect(agentTitle(unnamed)).toBe("codex");
+    expect(agentMeta(unnamed)).toBe("pairfob");
+    expect(agentMeta(unnamed, "space")).toBe("pairfob");
   });
 
-  test("agent grouping uses place as the unlabeled title", () => {
+  test("agent grouping keeps the agent in the title and the folder in the subtitle", () => {
     const unnamed = mapSnapshotAgents({
       workspaces: [{ workspace_id: "w1", label: "Pairfob", cwd: "/repo/pairfob" }],
       panes: [{ pane_id: "p1", workspace_id: "w1", agent: "codex", agent_status: "idle" }],
     })[0];
-    expect(agentTitle(unnamed, "agent")).toBe("pairfob");
-    expect(agentMeta(unnamed, "agent")).toBe("");
+    expect(agentTitle(unnamed, "agent")).toBe("codex");
+    expect(agentMeta(unnamed, "agent")).toBe("pairfob");
   });
 
   test("renders a renamed tab in session metadata", () => {
@@ -96,8 +97,10 @@ describe("dashboard mapping", () => {
       tabs: [{ tab_id: "t1", workspace_id: "w1", label: "fix-tab" }],
       panes: [{ pane_id: "p1", workspace_id: "w1", tab_id: "t1", agent: "codex", agent_status: "idle" }],
     });
-    expect(agentTitle(agent)).toBe("codex · pairfob");
-    expect(agentMeta(agent)).toBe("fix-tab");
+    expect(agentTitle(agent)).toBe("codex");
+    expect(agentMeta(agent)).toBe("pairfob · fix-tab");
+    expect(visibleTabLabel("main")).toBe("");
+    expect(visibleTabLabel("fix-tab")).toBe("fix-tab");
   });
 
   test("task-like terminal titles fill in for unnamed panes", () => {
@@ -107,7 +110,7 @@ describe("dashboard mapping", () => {
     });
     expect(agent.terminalTitle).toBe("Fix auth timeout");
     expect(agentTitle(agent)).toBe("Fix auth timeout");
-    expect(agentMeta(agent)).toBe("Pairfob · claude");
+    expect(agentMeta(agent)).toBe("claude · pairfob");
   });
 
   test("machine terminal titles never become the card title", () => {
@@ -119,8 +122,10 @@ describe("dashboard mapping", () => {
       workspaces: [{ workspace_id: "w1", label: "Pairfob", cwd: "/repo/pairfob" }],
       panes: [{ pane_id: "p1", workspace_id: "w1", agent: "claude", agent_status: "idle", terminal_title: "zsh" }],
     });
-    expect(agentTitle(pathTitle)).toBe("claude · pairfob");
-    expect(agentTitle(processTitle)).toBe("claude · pairfob");
+    expect(agentTitle(pathTitle)).toBe("claude");
+    expect(agentMeta(pathTitle)).toBe("pairfob");
+    expect(agentTitle(processTitle)).toBe("claude");
+    expect(agentMeta(processTitle)).toBe("pairfob");
   });
 
   test("a user pane name wins over workspace and terminal titles", () => {
@@ -129,7 +134,7 @@ describe("dashboard mapping", () => {
       panes: [{ pane_id: "p1", workspace_id: "w1", agent: "claude", agent_status: "idle", label: "auth pane", terminal_title: "Fix auth timeout" }],
     });
     expect(agentTitle(agent)).toBe("auth pane");
-    expect(agentMeta(agent)).toBe("修复登录问题 · claude · pairfob");
+    expect(agentMeta(agent)).toBe("claude · pairfob");
   });
 
   test("a named workspace wins over a terminal title when the pane has no name", () => {
@@ -172,8 +177,8 @@ describe("dashboard mapping", () => {
 
     expect(pane.agent).toBe("");
     expect(pane.hasAgent).toBe(false);
-    expect(agentTitle(pane)).toBe("终端 · pairfob");
-    expect(agentMeta(pane)).toBe("");
+    expect(agentTitle(pane)).toBe("终端");
+    expect(agentMeta(pane)).toBe("pairfob");
     expect(canPromptAgent(pane)).toBe(false);
     expect(canPromptAgent(undefined)).toBe(false);
   });
@@ -186,7 +191,7 @@ describe("dashboard mapping", () => {
     expect(pane.hasAgent).toBe(false);
     expect(pane.status).toBe("idle");
     expect(agentTitle(pane)).toBe("shell");
-    expect(agentMeta(pane)).toBe("");
+    expect(agentMeta(pane)).toBe("终端");
   });
 
   test("missing labels never expose internal ids as names", () => {
@@ -196,9 +201,18 @@ describe("dashboard mapping", () => {
       panes: [{ pane_id: "pane_internal_789", workspace_id: "ws_internal_123", tab_id: "tab_internal_456" }],
     });
     expect(agentTitle(pane)).toBe("终端");
-    expect(agentMeta(pane)).toBe("");
+    expect(agentMeta(pane)).toBe("终端");
     expect(agentTitle(pane)).not.toContain("ws_internal_123");
     expect(agentMeta(pane)).not.toContain("tab_internal_456");
+  });
+
+  test("every card keeps a subtitle even after grouping", () => {
+    const agents = mapSnapshotAgents(snapshot);
+    for (const group of ["flat", "space", "agent"] as const) {
+      for (const agent of agents) {
+        expect(agentMeta(agent, group), `${agent.paneId} ${group}`).not.toBe("");
+      }
+    }
   });
 
   test("only panes with an explicit runtime agent binding can be prompted", () => {
@@ -221,6 +235,7 @@ describe("dashboard mapping", () => {
       });
       expect(agentTitle(agent), terminalTitle).toBe(want);
       expect(chromeName(agent), terminalTitle).toBe(want);
+      expect(agentMeta(agent), terminalTitle).toBe("grok · pairfob");
       expect(agentTitle(agent), terminalTitle).not.toMatch(/Thinking|Waiting for response| - grok$/i);
     }
   });

@@ -148,7 +148,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "home.cardMenu": "Actions for {title}",
   "home.switcherEmpty": "No other sessions yet.",
   "home.switcherTitle": "Switch session",
-  "pane.menuTitle": "This screen",
+  "pane.menuTitle": "Session actions",
   "pane.sectionMode": "Mode",
   "cancel": "Cancel",
   "confirm": "Confirm",

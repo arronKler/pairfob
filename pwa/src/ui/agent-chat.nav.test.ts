@@ -333,7 +333,7 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(state.screen).toBe("pane");
     expect(paneTermMode("p1")).toBe("guided");
     expect(app.querySelector(".dock")).toBeTruthy();
-    expect(app.querySelector('button[aria-label="这一屏"]')).toBeTruthy();
+    expect(app.querySelector('button[aria-label="会话操作"]')).toBeTruthy();
   });
 
   test("swipe-back from agent-chat returns to the list", () => {
@@ -427,9 +427,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".agent-dock [data-app-notice]")).toBeNull();
   });
 
-  test("这一屏 omits terminal display actions in 对话", () => {
+  test("会话操作 omits terminal display actions in 对话", () => {
     bootAgentChat();
-    click('button[aria-label="这一屏"]');
+    click('button[aria-label="会话操作"]');
     const sheet = document.querySelector("dialog.sheet");
     expect(sheet?.textContent).toContain("模式");
     expect(sheet?.textContent).not.toContain("文字加大");

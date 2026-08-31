@@ -329,6 +329,8 @@
   margin: 8px 0 2px;
   padding: 0 2px;
   align-items: center;
+  -webkit-touch-callout: none;
+  user-select: none;
   text-align: left;
   text-transform: none;
   letter-spacing: 0.02em;
@@ -368,7 +370,6 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0;
   width: 100%;
   margin: 8px 0 0;
   padding: 0;
@@ -377,6 +378,8 @@
   border-radius: var(--r-lg);
   text-align: left;
   transition: border-color 0.15s ease, background 0.15s ease;
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .card-main {
@@ -386,8 +389,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 8px 14px 16px;
-  border-radius: var(--r-lg) 0 0 var(--r-lg);
+  padding: 14px 14px 14px 16px;
+  border-radius: inherit;
   cursor: pointer;
   text-align: left;
   appearance: none;
@@ -399,20 +402,6 @@
 .card-main:active { transform: scale(0.985); }
 
 .card-copy { flex: 1 1 auto; min-width: 0; }
-
-.card-split {
-  flex: none;
-  align-self: stretch;
-  width: 1px;
-  margin: 12px 0;
-  background: var(--line);
-}
-
-.card-more {
-  flex: none;
-  margin: 4px 6px 4px 2px;
-  color: var(--muted);
-}
 
 .card-title {
   display: flex;

@@ -128,7 +128,7 @@ describe("complete-terminal remembers its mode per pane", () => {
 
   test("leaving the terminal mode from the menu returns to guided", async () => {
     bootFullTerminal();
-    expect(app.querySelector('button[aria-label="这一屏"]')).toBeTruthy();
+    expect(app.querySelector('button[aria-label="会话操作"]')).toBeTruthy();
     expect(app.querySelector(".full-terminal-exit")).toBeNull();
     await leaveFullTerminal();
     expect(state.fullTerminal).toBe(false);
@@ -136,7 +136,7 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(paneTermMode("p1")).toBe("guided");
     expect(state.composeDraft).toBe(DRAFT);
     expect(app.querySelector(".dock")).toBeTruthy();
-    expect(app.querySelector('button[aria-label="这一屏"]')).toBeTruthy();
+    expect(app.querySelector('button[aria-label="会话操作"]')).toBeTruthy();
   });
 
   test("swipe-back from complete-terminal returns to the list", async () => {

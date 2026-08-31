@@ -146,7 +146,7 @@ export const zh = {
   "home.cardMenu": "{title}的操作",
   "home.switcherEmpty": "还没有读到别的会话。",
   "home.switcherTitle": "切换会话",
-  "pane.menuTitle": "这一屏",
+  "pane.menuTitle": "会话操作",
   "pane.sectionMode": "模式",
   "cancel": "取消",
   "confirm": "确认",

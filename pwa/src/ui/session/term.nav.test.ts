@@ -108,7 +108,7 @@ describe("guided pane no longer overlays earlier output", () => {
 
   test("更早的输出 is a session-menu action when history is allowed", () => {
     bootGuided();
-    click("这一屏");
+    click("会话操作");
     const sheet = document.querySelector("dialog.sheet");
     expect(sheet?.textContent).toContain("更早的输出");
     expect(app.querySelector(".term-more")).toBeNull();
@@ -120,14 +120,14 @@ describe("guided pane no longer overlays earlier output", () => {
   test("the menu omits 更早的输出 when history is off", () => {
     bootGuided();
     state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES };
-    click("这一屏");
+    click("会话操作");
     const sheet = document.querySelector("dialog.sheet");
     expect(sheet?.textContent).not.toContain("更早的输出");
   });
 
   test("the menu action opens a history sheet, not an overlay on the live buffer", async () => {
     bootGuided();
-    click("这一屏");
+    click("会话操作");
     const item = [...document.querySelectorAll("dialog.sheet button")].find((button) => button.textContent === "更早的输出");
     if (!(item instanceof HTMLButtonElement)) throw new Error("missing 更早的输出");
     item.click();

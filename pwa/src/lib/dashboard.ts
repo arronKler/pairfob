@@ -162,10 +162,14 @@ function usefulTerminalTitle(agent: AgentCard): string {
   return text.length > 256 ? text.slice(0, 256) : text;
 }
 
-function visibleTabLabel(label: string | undefined): string {
+export function visibleTabLabel(label: string | undefined): string {
   const text = label?.trim() ?? "";
   if (!text || HIDDEN_TAB_LABELS.has(text.toLowerCase())) return "";
   return text;
+}
+
+function whoLabel(agent: AgentCard): string {
+  return agent.agent.trim() || t("title.terminal");
 }
 
 export function agentTitle(agent: AgentCard, group: ListGroup = "flat"): string {
@@ -177,12 +181,7 @@ export function agentTitle(agent: AgentCard, group: ListGroup = "flat"): string 
   }
   const hint = usefulTerminalTitle(agent);
   if (hint) return hint;
-  const place = placeLabel(agent);
-  const who = agent.agent.trim();
-  if (group === "agent") return place || who || t("title.terminal");
-  const kind = who || t("title.terminal");
-  if (place && !same(kind, place)) return `${kind} · ${place}`;
-  return kind;
+  return whoLabel(agent);
 }
 
 export function chromeName(agent: AgentCard): string {
@@ -191,21 +190,28 @@ export function chromeName(agent: AgentCard): string {
 
 export function agentMeta(agent: AgentCard, group: ListGroup = "flat"): string {
   const title = agentTitle(agent, group);
+  const who = whoLabel(agent);
+  const workspace = agent.workspaceLabel?.trim() || "";
+  const dir = cwdName(agent.cwd);
+  const place = placeLabel(agent);
+  const tab = visibleTabLabel(agent.tabLabel);
   const bits: string[] = [];
   const push = (value: string | undefined) => {
     const text = value?.trim() ?? "";
     if (!text || alreadyShown(text, title, bits)) return;
     bits.push(text);
   };
-  if (group !== "space") {
-    const workspace = agent.workspaceLabel?.trim();
-    if (workspace) push(workspace);
+  if (group !== "agent") push(who);
+  if (group === "space") {
+    if (dir && !same(dir, workspace)) push(dir);
+  } else {
+    push(place);
   }
-  if (group !== "agent") push(agent.agent);
-  const tab = visibleTabLabel(agent.tabLabel);
-  if (tab && !same(tab, agent.workspaceLabel)) push(tab);
-  const dir = cwdName(agent.cwd);
-  if (dir && !same(dir, agent.workspaceLabel)) push(dir);
+  if (tab && !same(tab, workspace)) push(tab);
+  if (!bits.length) {
+    if (place && !same(place, title)) bits.push(place);
+    else bits.push(who);
+  }
   return bits.join(" · ");
 }
 

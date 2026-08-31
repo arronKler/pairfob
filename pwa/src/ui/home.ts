@@ -21,7 +21,8 @@ import {
   sectionTitle,
   statusLineNode,
 } from "./chrome";
-import { openListPaneMenu } from "./list-menu";
+import { openListPaneMenu, openListWorkspaceMenu } from "./list-menu";
+import { bindObjectPress } from "./press-menu";
 
 export function agentCard(agent: AgentCard): HTMLElement {
   const selected = agent.paneId === state.paneId;
@@ -29,6 +30,7 @@ export function agentCard(agent: AgentCard): HTMLElement {
   const card = node("article", `card status-${agent.status}${selected ? " sel" : ""}`);
   const main = button("", "card-main", () => void openPane(agent.paneId));
   main.setAttribute("aria-pressed", selected ? "true" : "false");
+  main.setAttribute("aria-haspopup", "menu");
   const copy = node("div", "card-copy");
   const titleRow = node("div", "card-title");
   titleRow.append(node("span", "card-name", title));
@@ -38,13 +40,11 @@ export function agentCard(agent: AgentCard): HTMLElement {
   const meta = agentMeta(agent, state.listGroup);
   if (meta) copy.append(node("p", "card-meta", meta));
   main.append(copy, chevron());
-  const split = node("span", "card-split");
-  split.setAttribute("aria-hidden", "true");
-  const more = button("", "icon-btn icon-more card-more", () => openListPaneMenu(agent));
-  more.setAttribute("aria-label", t("home.cardMenu", { title }));
-  more.disabled = state.operationBusy || !state.live?.isConnected();
-  more.addEventListener("click", (event) => event.stopPropagation());
-  card.append(main, split, more);
+  bindObjectPress(main, () => {
+    if (state.operationBusy || !state.live?.isConnected()) return;
+    openListPaneMenu(agent);
+  });
+  card.append(main);
   return card;
 }
 
@@ -76,13 +76,24 @@ export function fillHerdList(root: HTMLElement): void {
 function herdGroup(group: AgentGroup, groups: AgentGroup[]): HTMLElement {
   const collapsed = state.listGroupCollapsed[group.id] === true;
   const section = node("section", "herd-group");
-  section.append(groupToggle(group.title, group.items.length, !collapsed, () => {
+  const heading = groupToggle(group.title, group.items.length, !collapsed, () => {
     state.listGroupCollapsed = toggleGroupCollapsed(groups, state.listGroupCollapsed, group.id);
     render();
-  }));
+  });
+  if (state.listGroup === "space") {
+    const agent = group.items.find((item) => item.workspaceId) ?? group.items[0];
+    if (agent?.workspaceId) {
+      heading.setAttribute("aria-haspopup", "menu");
+      bindObjectPress(heading, () => {
+        if (state.operationBusy || !state.live?.isConnected()) return;
+        openListWorkspaceMenu(agent);
+      });
+    }
+  }
+  section.append(heading);
   const body = node("div", "herd-group-body");
   body.hidden = collapsed;
-  group.items.forEach((agent) => body.append(agentCard(agent)));
+  group.items.forEach((item) => body.append(agentCard(item)));
   section.append(body);
   return section;
 }

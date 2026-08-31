@@ -21,7 +21,7 @@ The default is a flat list, ordered by recent activity (create, status change, o
 
 Grouped headings toggle open and closed. The first group starts open; the rest start collapsed.
 
-The card title is the task identity: the session name if you set one; otherwise the workspace name when it is not just the directory name; otherwise a task-like terminal title (stripping live crumbs such as `Thinking` / `Waiting for response` and a trailing ` - grok`). If none of those exist, it shows **claude · pairfob** (“Agent · folder”), or **终端 · pairfob** for a shell. The next line is coordinates (workspace, Agent, a renamed tab, directory), omitting words already in the title and default tabs such as `main`. Internal IDs are never presented as names.
+The card title is a single identity: the session name if you set one; otherwise the workspace name when it is not just the directory name; otherwise a task-like terminal title (stripping live crumbs such as `Thinking` / `Waiting for response` and a trailing ` - grok`). If none of those exist, it shows **claude**, or **终端** for a shell. The next line is always coordinates in the form **claude · pairfob** (Agent · folder · a non-default tab), omitting words already in the title and default tabs such as `main`. Internal IDs are never presented as names.
 
 - **会话名** names this terminal surface only.
 - **标签页名** names the tab containing one or more sessions.
@@ -38,7 +38,7 @@ When Pairfob is connected, an empty list means there are no sessions yet; create
 
 **新建** appears in the top bar when the computer supports creating a session. The form can start a supported agent, or a **纯终端** pane with no agent. With no kinds listed, the dialog still opens and creates that terminal session.
 
-The card body opens the session. The trailing `···` is for this session: rename it, close it. A tab id offers 改标签页名; a split tab also offers 关闭整个标签页. 改工作区名 is here too, in every grouping mode.
+Tap a card to open it. Long-press (right-click on a computer) to rename or close that session. 改标签页名 appears only when the tab already has a visible name, or the tab is split; 关闭整个标签页 only when split. Grouped by workspace, long-press the group heading to rename the workspace; in other groupings that row sits at the bottom of the card menu.
 
 ## Inside a session
 
@@ -49,7 +49,7 @@ Chrome:
 - Left: back to the list (phone)
 - Center: name and status; tap to switch sessions
 - While working, an interrupt control is the same as Esc
-- Right: `···` **这一屏** (how this view looks and types, this pane's name, close this pane)
+- Right: `···` **会话操作** (how this view looks and types, this pane's name, close this pane)
 
 The three modes are under `···` → **模式**. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **设置**.
 
@@ -73,7 +73,7 @@ A dialog confirmed on the computer is already confirmed on the phone, and the re
 
 ## Actions that may appear on this view
 
-Tap the session chrome `···`. Missing items are not drawn. 改标签页名, 改工作区名, and 关闭整个标签页 live on the list card `···`, not here.
+Tap the session chrome `···`. Missing items are not drawn. 改标签页名, 改工作区名, and 关闭整个标签页 live on the list long-press menu, not here.
 
 | Group | May include |
 | --- | --- |
@@ -83,7 +83,7 @@ Tap the session chrome `···`. Missing items are not drawn. 改标签页名, �
 | 新建 | 新建标签页, 分屏 |
 | Worktree | Worktree 列表, 新建 Worktree, 打开 Worktree |
 | 布局 | 让这一格大一点, 和对面一格对调 |
-| 这一格 | 改会话名, 关闭这个会话 |
+| (ungrouped) | 改会话名, 关闭这个会话 |
 
 **更早的输出** is already-rendered, idle scrollback on the computer. A busy or scrolled-away terminal must become idle first. **对话** groups thinking and tools into a collapsible run that closes once the reply is in. Expand the run to see arguments and results.
 

@@ -50,7 +50,7 @@ describe("notification service worker", () => {
   });
 
   test("serves the repeat-load shell immediately and caches immutable assets first", () => {
-    expect(worker).toContain('const CACHE = "pairfob-shell-v7"');
+    expect(worker).toContain('const CACHE = "pairfob-shell-v8"');
     expect(worker).toContain("precacheShell()");
     expect(worker).toContain("shellAssetPaths(html)");
     expect(worker).toContain('request.mode === "navigate"');

@@ -47,13 +47,9 @@
 }
 
 .rail .card-main {
-  padding: 10px 6px 10px 12px;
-  border-radius: var(--r-md) 0 0 var(--r-md);
+  padding: 10px 12px;
+  border-radius: inherit;
 }
-
-.rail .card-split { margin: 8px 0; }
-
-.rail .card-more { margin: 2px 4px 2px 0; }
 
 .rail .card-name { font-size: 0.9rem; }
 .rail .card-meta { font-size: 0.74rem; }

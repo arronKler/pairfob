@@ -25,11 +25,12 @@ describe("user-facing documentation", () => {
     expect(app).toContain("**会话名**");
     expect(app).toContain("**标签页名**");
     expect(app).toContain("**工作区名**");
-    expect(app).toContain("卡片主体点进去");
-    expect(app).toContain("| 这一格 |");
+    expect(app).toContain("点卡片进去");
+    expect(app).toContain("长按");
     expect(app).not.toContain("| 管理 |");
+    expect(app).not.toContain("| 这一格 |");
     expect(app).toContain("claude · pairfob");
-    expect(app).toContain("终端 · pairfob");
+    expect(app).toContain("**终端**");
     expect(app).toContain("不会拿内部 ID 当名称");
     expect(app).not.toContain("未命名会话");
     expect(app).not.toContain("工作区：…");
@@ -51,7 +52,7 @@ describe("user-facing documentation", () => {
     expect(app).not.toContain("会话顶栏会直接显示 **历史**");
     expect(app).not.toContain("| 画面 |");
     expect(app).toContain("顶部「新建」");
-    expect(app).toContain("**这一屏**");
+    expect(app).toContain("**会话操作**");
     expect(docs).not.toContain("＋ 新建会话");
     expect(docs).not.toContain("不展示思维链");
   });
