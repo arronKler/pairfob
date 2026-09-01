@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestChecksumForAcceptsStarPrefix(t *testing.T) {
@@ -68,6 +70,57 @@ func TestUpdateExecutableRejectsHashMismatch(t *testing.T) {
 	err := updateExecutable(filepath.Join(t.TempDir(), "pairfob"), server.URL)
 	if err == nil || !strings.Contains(err.Error(), "SHA-256") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestArtifactDownloadHasASeparateRetryBudget(t *testing.T) {
+	if updateArtifactTimeout <= updateMetadataTimeout {
+		t.Fatalf("artifact timeout %s must exceed metadata timeout %s", updateArtifactTimeout, updateMetadataTimeout)
+	}
+	if updateArtifactAttempts < 2 {
+		t.Fatalf("artifact attempts=%d", updateArtifactAttempts)
+	}
+}
+
+func TestDownloadRetriesATimedOutResponseBody(t *testing.T) {
+	var requests atomic.Int32
+	payload := []byte("complete-binary")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requests.Add(1) == 1 {
+			w.WriteHeader(http.StatusOK)
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			time.Sleep(100 * time.Millisecond)
+			return
+		}
+		_, _ = w.Write(payload)
+	}))
+	t.Cleanup(server.Close)
+
+	got, err := fetchDownloadBytes(server.URL, 1024, downloadPolicy{
+		timeout:  20 * time.Millisecond,
+		attempts: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(payload) || requests.Load() != 2 {
+		t.Fatalf("payload=%q requests=%d", got, requests.Load())
+	}
+}
+
+func TestDownloadDoesNotRetryAPermanentHTTPStatus(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		http.Error(w, "missing", http.StatusNotFound)
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := fetchDownloadBytes(server.URL, 1024, downloadPolicy{timeout: time.Second, attempts: 3})
+	if err == nil || requests.Load() != 1 {
+		t.Fatalf("err=%v requests=%d", err, requests.Load())
 	}
 }
 
