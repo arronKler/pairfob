@@ -50,13 +50,13 @@ import { setFullTerminalInputMode, submitFullTerminalCompose, syncFullTerminalCo
 import { bindHostScroll, pageLineCount, scrollRail, type ScrollAt } from "./full-terminal-scroll";
 import { TerminalCommandPump, type TerminalCommand, type TerminalInputQueueOptions } from "./full-terminal-command";
 import { loadFullTerminalXterm, terminalWebglSupported } from "./full-terminal-loader";
+import { afterNextPaint, observeHostResize } from "./full-terminal-lifecycle";
 import { fullTerminalPerf } from "./full-terminal-perf";
 import { fullTerminalOptions, openWebglTerminal, WEBGL_CONTEXT_LOST, WEBGL_UNAVAILABLE } from "./full-terminal-renderer";
 import {
+  FullTerminalStatus,
   fullTerminalStateLayer,
   setFullTerminalDocumentMode,
-  syncFullTerminalState,
-  type FullTerminalStage,
 } from "./full-terminal-state";
 import { track } from "../lib/telemetry";
 import { chromeActionCluster, syncChromeStop } from "./session/chrome-actions";
@@ -72,6 +72,7 @@ let lockedFont: number | null = null;
 let fitting = false;
 let pinchResizeTimer = 0;
 let mounting = false;
+let cancelMount: (() => void) | null = null;
 let rendererVersion = 0;
 let bridgeId = "";
 let bridgePane = "";
@@ -80,9 +81,6 @@ let opening = false;
 let leaving: Promise<void> | null = null;
 let leaveSeq = 0;
 let commandPump: TerminalCommandPump | null = null;
-let statusText = "";
-let statusStage: FullTerminalStage = "loading";
-let retryAvailable = false;
 let lastFrameSequence: bigint | null = null;
 let pendingWriteBytes = 0;
 /** Last terminal.frame grid. Display clamps to this so a short PTY can scale-fill. */
@@ -91,29 +89,9 @@ let remoteGrid: { cols: number; rows: number } | null = null;
 let fittedSize: { cols: number; rows: number; cellWidth: number; cellHeight: number } | null = null;
 const assembler = new TerminalFrameAssembler();
 const MAX_RENDER_QUEUE_BYTES = 8 * 1024 * 1024;
+const terminalStatus = new FullTerminalStatus(() => syncStatus());
 function syncStatus(root: ParentNode = app): void {
-  syncFullTerminalState(root, {
-    stage: statusStage,
-    detail: statusText,
-    retry: state.fullTerminal && retryAvailable && !opening && !bridgeId,
-    busy: opening,
-  });
-}
-
-function setStatus(text: string, stage: FullTerminalStage = statusStage): void {
-  statusText = text;
-  statusStage = stage;
-  syncStatus();
-}
-
-function offerRetry(text: string): void {
-  retryAvailable = true;
-  setStatus(text, "error");
-}
-
-function waitForRestore(text: string): void {
-  retryAvailable = false;
-  setStatus(text, "waiting");
+  terminalStatus.sync(root, { active: state.fullTerminal, busy: opening, hasBridge: Boolean(bridgeId) });
 }
 
 function measureCellWidth(fontSize: number): number {
@@ -365,21 +343,29 @@ function handleRendererContextLoss(version: number): void {
   const reason = t("ft.loadFail", { error: WEBGL_CONTEXT_LOST });
   void suspendBridge(true, reason);
   disposeRenderer();
-  offerRetry(reason);
+  terminalStatus.fail(reason);
+}
+
+function scheduleMount(host: HTMLElement): void {
+  cancelMount?.();
+  cancelMount = afterNextPaint(() => {
+    cancelMount = null;
+    if (!state.fullTerminal || !host.isConnected) return;
+    void mount(host);
+  });
 }
 
 async function mount(host: HTMLElement): Promise<void> {
   const version = ++rendererVersion;
   mounting = true;
-  retryAvailable = false;
-  setStatus(t("ft.preparing"), "loading");
+  terminalStatus.reset(t("ft.preparing"));
   let module: typeof import("./full-terminal-xterm.ts");
   try {
     module = await loadFullTerminalXterm();
   } catch (error) {
     if (version !== rendererVersion) return;
     mounting = false;
-    offerRetry(t("ft.loadFail", { error: messageOf(error) }));
+    terminalStatus.fail(t("ft.loadFail", { error: messageOf(error) }));
     return;
   }
   if (version !== rendererVersion || !state.fullTerminal || !host.isConnected) return;
@@ -403,14 +389,22 @@ async function mount(host: HTMLElement): Promise<void> {
   } catch (error) {
     if (version !== rendererVersion) return;
     disposeRenderer();
-    offerRetry(t("ft.loadFail", { error: messageOf(error) }));
+    terminalStatus.fail(t("ft.loadFail", { error: messageOf(error) }));
     return;
   }
   fullTerminalPerf.componentReady();
-  terminal.registerLinkProvider(httpLinkProvider(terminal));
-  bindInput(host);
-  if (typeof ResizeObserver !== "undefined") {
-    resizeObserver = new ResizeObserver(() => {
+  const start = async () => {
+    try {
+      await document.fonts?.ready;
+    } catch {
+      /* system fonts; a missing FontFaceSet must not block the bridge */
+    }
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    if (version !== rendererVersion || !host.isConnected) return;
+    fit();
+    terminal?.registerLinkProvider(httpLinkProvider(terminal));
+    bindInput(host);
+    resizeObserver = observeHostResize(host, () => {
       const previousCols = terminal?.cols;
       const previousRows = terminal?.rows;
       const size = fit();
@@ -422,17 +416,6 @@ async function mount(host: HTMLElement): Promise<void> {
         cellHeight: size.cellHeight,
       });
     });
-    resizeObserver.observe(host);
-  }
-  const start = async () => {
-    try {
-      await document.fonts?.ready;
-    } catch {
-      /* system fonts; a missing FontFaceSet must not block the bridge */
-    }
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    if (version !== rendererVersion || !host.isConnected) return;
-    fit();
     if (state.composeLive && isDesk()) terminal?.focus();
     else closeTerminalKeyboard();
     void openBridge(false);
@@ -442,6 +425,8 @@ async function mount(host: HTMLElement): Promise<void> {
 
 function disposeRenderer(): void {
   rendererVersion++;
+  cancelMount?.();
+  cancelMount = null;
   stopCommandPump();
   unbindScroll?.();
   unbindScroll = null;
@@ -469,16 +454,15 @@ async function openBridge(takeover: boolean): Promise<void> {
   const paneId = state.paneId;
   if (opening || bridgeId || !session || !paneId || !state.fullTerminal || document.visibilityState === "hidden") return;
   if (!session.isConnected()) {
-    waitForRestore(t("ft.waitRestore"));
+    terminalStatus.wait(t("ft.waitRestore"));
     return;
   }
   const version = bridgeVersion;
   opening = true;
-  retryAvailable = false;
-  setStatus(takeover ? t("ft.takeover") : t("ft.opening"), "opening");
+  terminalStatus.start(takeover ? t("ft.takeover") : t("ft.opening"), "opening");
   fullTerminalPerf.bridgeStarted();
   try {
-    const size = fit();
+    const size = fittedSize ?? fit();
     const opened = await session.terminalOpen(paneId, size.cols, size.rows, takeover);
     if (version !== bridgeVersion || !state.fullTerminal || state.live !== session || state.paneId !== paneId) {
       await session.terminalClose(opened.terminalId).catch(() => undefined);
@@ -490,8 +474,7 @@ async function openBridge(takeover: boolean): Promise<void> {
     fullTerminalPerf.bridgeOpened();
     assembler.reset();
     lastFrameSequence = null;
-    retryAvailable = false;
-    setStatus(t("ft.live"), "live");
+    terminalStatus.start(t("ft.live"), "live");
     if (isDesk() || keyboard?.isOpen()) terminal?.focus();
     else closeTerminalKeyboard();
   } catch (error) {
@@ -502,11 +485,11 @@ async function openBridge(takeover: boolean): Promise<void> {
       await openBridge(true);
       return;
     }
-    offerRetry(t("ft.openFail", { error: messageOf(error) }));
+    terminalStatus.fail(t("ft.openFail", { error: messageOf(error) }));
   } finally {
     if (version === bridgeVersion) {
       opening = false;
-      setStatus(statusText);
+      syncStatus();
     }
   }
 }
@@ -524,17 +507,16 @@ async function suspendBridge(sendClose: boolean, reason?: string): Promise<void>
   remoteGrid = null;
   opening = false;
   if (sendClose && session && id) await session.terminalClose(id).catch(() => undefined);
-  offerRetry(reason ?? t("ft.paused"));
+  terminalStatus.fail(reason ?? t("ft.paused"));
 }
 
 export function retryFullTerminal(): void {
   if (opening || bridgeId) return;
   haptic(8);
-  retryAvailable = false;
-  setStatus(t("ft.opening"), "opening");
+  terminalStatus.start(t("ft.opening"), "opening");
   const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
   if (!terminal && host?.isConnected) {
-    void mount(host);
+    scheduleMount(host);
     return;
   }
   void openBridge(false);
@@ -573,9 +555,7 @@ export function enterFullTerminal(): void {
   setPaneTermMode(state.paneId, "full");
   state.agentChat = false;
   state.fullTerminal = true;
-  retryAvailable = false;
-  statusText = t("ft.preparing");
-  statusStage = "loading";
+  terminalStatus.reset(t("ft.preparing"));
   render();
 }
 
@@ -607,7 +587,7 @@ export function disposeFullTerminal(): void {
   leaving = null;
   state.fullTerminal = false;
   setFullTerminalDocumentMode(false);
-  retryAvailable = false;
+  terminalStatus.clearRetry();
   bridgeId = "";
   bridgePane = "";
   stopCommandPump();
@@ -675,7 +655,7 @@ export function renderFullTerminal(onBack: () => void, onMenu: () => void): void
   const titleWrap = node("div", "full-terminal-heading");
   titleWrap.append(
     node("strong", "full-terminal-title", selectedAgent() ? agentTitle(selectedAgent()!) : t("title.terminal")),
-    node("span", "full-terminal-status", statusText),
+    node("span", "full-terminal-status", terminalStatus.detail),
   );
   chrome.append(back, titleWrap, chromeActionCluster(onMenu));
   syncFullTerminalChrome();
@@ -695,7 +675,7 @@ export function renderFullTerminal(onBack: () => void, onMenu: () => void): void
   syncStatus(root);
   syncFullTerminalInput(root, host);
   app.replaceChildren(root);
-  void mount(host);
+  scheduleMount(host);
 }
 
 export function handleFullTerminalEvent(event: SessionEvent): boolean {
@@ -748,7 +728,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
         });
       }
       lastFrameSequence = sequence;
-      setStatus(t("ft.live"), "live");
+      terminalStatus.set(t("ft.live"), "live");
     } catch (error) {
       void suspendBridge(true, messageOf(error));
     }
@@ -766,7 +746,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
     pendingWriteBytes = 0;
     remoteGrid = null;
     fullTerminalPerf.publish("terminal_closed");
-    offerRetry(event.reason ? t("ft.closedReason", { reason: event.reason }) : t("ft.closed"));
+    terminalStatus.fail(event.reason ? t("ft.closedReason", { reason: event.reason }) : t("ft.closed"));
     return true;
   }
   if (event.type === "disconnected" || event.type === "reconnecting" || event.type === "terminal") {
@@ -780,11 +760,11 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
     pendingWriteBytes = 0;
     remoteGrid = null;
     fullTerminalPerf.publish(event.type);
-    waitForRestore(t("ft.waitRestore"));
+    terminalStatus.wait(t("ft.waitRestore"));
     return false;
   }
   if (event.type === "connected" && !bridgeId) {
-    setStatus(t("ft.restored"), "opening");
+    terminalStatus.set(t("ft.restored"), "opening");
     void openBridge(false);
   }
   return false;

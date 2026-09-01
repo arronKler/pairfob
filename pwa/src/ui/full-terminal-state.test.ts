@@ -7,7 +7,7 @@ for (const key of ["window", "document", "HTMLElement", "HTMLButtonElement", "No
   globals[key] = (happy as unknown as Record<string, unknown>)[key];
 }
 
-const { fullTerminalStateLayer, syncFullTerminalState } = await import("./full-terminal-state.ts");
+const { FullTerminalStatus, fullTerminalStateLayer, syncFullTerminalState } = await import("./full-terminal-state.ts");
 
 let retries = 0;
 
@@ -79,5 +79,20 @@ describe("full terminal centered state", () => {
 
     expect(view.querySelector<HTMLElement>(".full-terminal-state")?.hidden).toBe(true);
     expect(view.querySelector(".full-terminal-status")?.textContent).toBe("实时 · 端到端加密");
+  });
+
+  test("owns loading, retry, and repaint state for the terminal lifecycle", () => {
+    const view = root();
+    let paints = 0;
+    const status = new FullTerminalStatus(() => paints++);
+    status.reset("正在准备");
+    status.fail("连接超时");
+    status.sync(view, { active: true, busy: false, hasBridge: false });
+    expect(paints).toBe(2);
+    expect(view.querySelector<HTMLButtonElement>(".full-terminal-state-retry")?.hidden).toBeFalse();
+    status.wait("等待恢复");
+    status.sync(view, { active: true, busy: false, hasBridge: false });
+    expect(view.querySelector<HTMLButtonElement>(".full-terminal-state-retry")?.hidden).toBeTrue();
+    expect(view.querySelector(".full-terminal-status")?.textContent).toBe("等待恢复");
   });
 });

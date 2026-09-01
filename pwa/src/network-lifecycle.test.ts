@@ -8,8 +8,8 @@ describe("mobile network lifecycle wiring", () => {
     expect(main).toContain('window.addEventListener("offline"');
     expect(main).toContain('window.addEventListener("online"');
     expect(main).toContain('document.addEventListener("visibilitychange"');
-    expect(main).toContain("state.live?.setNetworkAvailable(available)");
-    expect(main).toContain("state.live?.reconnectNow()");
+    expect(main).toContain("setLiveNetworkAvailable(available)");
+    expect(main).toContain("reconnectLiveSessions()");
     expect(main).toContain("bootBlockedByNetwork");
     expect(main).toContain("void refreshRuntimeState()");
   });

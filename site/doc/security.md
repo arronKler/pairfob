@@ -9,6 +9,8 @@ description: After pairing, the session is encrypted. pairfob.com forwards messa
 
 It cannot see the session, what you type, or the agent conversation. What it can see is only what it needs to reach the right computer, plus enough to rate-limit abuse.
 
+On a P2P path, session bytes do not go through `pairfob.com`; the relay still only sees the ciphertext used to set up that path. To find a direct path, the browser asks Cloudflare’s public-address lookup, which sees this device’s public address. Pairfob does not run a bypass for firewalls; if a direct path cannot be found, the session stays on the relay.
+
 ## The computer only dials out
 
 You do not open ports at home and you do not bind Tailscale. The computer connects out to `pairfob.com`.

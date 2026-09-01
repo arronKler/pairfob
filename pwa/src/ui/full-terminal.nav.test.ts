@@ -44,7 +44,7 @@ const DRAFT = "keep-draft";
 
 function live() {
   return {
-    terminalOpen: () => new Promise(() => undefined),
+    terminalOpen: (_paneId: string, _cols: number, _rows: number) => new Promise(() => undefined),
     terminalClose: async () => undefined,
     terminalInput: async () => undefined,
     terminalResize: async () => undefined,
@@ -216,5 +216,40 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(status?.dataset.stage).toBe("waiting");
     expect(status?.textContent).toContain("正在恢复连接");
     expect(status?.textContent).not.toContain("old transport closed");
+  });
+
+  test("an initially disconnected pane opens once after the connection recovers", async () => {
+    let connected = false;
+    let opens = 0;
+    const session = live();
+    session.isConnected = () => connected;
+    session.terminalOpen = async (paneId, cols, rows) => {
+      opens++;
+      return {
+        operationId: "op_AAECAwQFBgcICQoL",
+        terminalId: "term_11111111111111111111111111111111",
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      };
+    };
+    bootFullTerminal(session);
+
+    handleFullTerminalEvent({ type: "reconnecting" });
+    await Promise.resolve();
+    expect(opens).toBe(0);
+    expect(app.querySelector<HTMLElement>(".full-terminal-state")?.dataset.stage).toBe("waiting");
+
+    connected = true;
+    handleFullTerminalEvent({ type: "connected" });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(opens).toBe(1);
+    expect(app.querySelector<HTMLElement>(".full-terminal-state")?.hidden).toBe(true);
+
+    handleFullTerminalEvent({ type: "connected" });
+    await Promise.resolve();
+    expect(opens).toBe(1);
   });
 });

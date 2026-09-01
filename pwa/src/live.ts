@@ -4,19 +4,20 @@ import {
   type SnapshotWire as Snapshot,
 } from "./lib/dashboard";
 import { t } from "./lib/i18n";
+import type { NetworkMode } from "./lib/network-mode";
 import { credentialIsBurned, phaseAfterComputers, sortComputers } from "./lib/computer-catalog";
 import { deleteCredential, loadCatalog, rememberLastUsed, saveCredential } from "./lib/credentials";
 import {
   NO_OPERATION_CAPABILITIES,
   parseRuntimeOperationsConfig,
 } from "./lib/operations";
-import { ProtocolError, sessionOverWS, type PairResult, type SessionEvent } from "./lib/protocol/client";
+import { ProtocolError, sessionOverWS, type LiveSession, type PairResult, type SessionEvent } from "./lib/protocol/client";
+import { ComputerSessions, type SessionConnector } from "./computer-sessions";
 import { createLivePolling } from "./live-polling";
 import { resetLiveConnectionState } from "./live-state";
 import { nextTouchedAt } from "./lib/ranking";
 import { openPendingNotification } from "./notifications";
 import { panePollDelayMs, pokeRefreshAction, shouldPullStatus } from "./poll";
-import { clearAgentTraceCache } from "./lib/agent-trace-cache";
 import {
   bindPaneRefresh,
   type PaneReadObservation,
@@ -62,13 +63,24 @@ const livePolling = createLivePolling({
   refreshSnapshot: () => refreshSnapshot(),
   refreshPane: async () => { await refreshPaneRead(); },
 });
+const computerSessions = new ComputerSessions(3);
+const connectComputerSession: SessionConnector = (credential) =>
+  sessionOverWS(wsURL({ daemonId: credential.daemonId }), credential, {
+    p2p: state.p2pEnabled,
+    networkMode: state.networkMode,
+  });
 let herdConfigRequest = 0;
+let liveViewVersion = 0;
 type PaneReadFlight = {
+  session: LiveSession;
+  viewVersion: number;
   paneId: string;
   startedAt: number;
   promise: Promise<PaneReadObservation | null>;
 };
 type QueuedPaneRead = {
+  session: LiveSession;
+  viewVersion: number;
   paneId: string;
   postponeFallback: boolean;
   promise: Promise<PaneReadObservation | null>;
@@ -81,18 +93,68 @@ function monotonicNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
+function liveViewIsCurrent(session: LiveSession, viewVersion: number): boolean {
+  return state.live === session && liveViewVersion === viewVersion;
+}
+
 export async function reloadComputers(): Promise<void> {
   const catalog = await loadCatalog(location.origin);
   state.lastUsedDaemonId = catalog.lastUsedDaemonId;
   state.computers = sortComputers(catalog.credentials, catalog.lastUsedDaemonId);
 }
 
+function resetPaneReadRequests(): void {
+  paneReadFlight = null;
+  queuedPaneRead?.resolve(null);
+  queuedPaneRead = null;
+  state.paneReadBusy = false;
+  state.paneReadPending = false;
+}
+
+function invalidateLiveView(): void {
+  liveViewVersion++;
+  herdConfigRequest++;
+  state.refreshBusy = false;
+  state.snapshotPending = false;
+  resetPaneReadRequests();
+}
+
 export function clearLiveConnection(): void {
+  const session = state.live;
+  const daemonId = state.credential?.daemonId;
   stopPolling();
+  dropQueuedKeys();
   guidedScrollController.dispose();
   disposeFullTerminal();
-  state.live?.close();
+  invalidateLiveView();
+  if (session && (!daemonId || !computerSessions.remove(daemonId, session))) session.close();
   resetLiveConnectionState();
+}
+
+export function closeComputerSession(daemonId: string): void {
+  if (state.credential?.daemonId === daemonId && state.live) {
+    clearLiveConnection();
+    return;
+  }
+  computerSessions.remove(daemonId);
+}
+
+export function setLiveNetworkAvailable(available: boolean): void {
+  computerSessions.setNetworkAvailable(available);
+  const active = state.live;
+  const daemonId = state.credential?.daemonId;
+  if (active && (!daemonId || !computerSessions.has(daemonId, active))) active.setNetworkAvailable(available);
+}
+
+export function reconnectLiveSessions(): void {
+  computerSessions.reconnectNow();
+  const active = state.live;
+  const daemonId = state.credential?.daemonId;
+  if (active && (!daemonId || !computerSessions.has(daemonId, active))) active.reconnectNow();
+}
+
+export function syncInactiveTransportMode(mode: NetworkMode, active?: LiveSession): void {
+  computerSessions.syncTransportMode(mode, active);
 }
 
 export async function landAfterDisconnect(opts: {
@@ -121,45 +183,46 @@ export async function landAfterDisconnect(opts: {
   render();
 }
 
-export async function establish(pair: PairResult): Promise<void> {
+export async function establish(pair: PairResult, connect: SessionConnector = connectComputerSession): Promise<void> {
   stopPolling();
-  clearAgentTraceCache();
-  disposeFullTerminal();
+  dropQueuedKeys();
+  guidedScrollController.dispose();
   state.phase = "resuming";
   state.credential = pair;
   state.addingComputer = false;
-  state.agents = [];
-  state.runtimeAgentStatuses = {};
-  state.completionSeen = {};
-  state.paneId = "";
-  state.herdHost = pair.hostname || "";
-  state.runtimeKind = "";
-  state.deviceList = [];
-  state.pushSubscribed = null;
-  state.lastHerdSig = "";
-  state.snapshotAt = 0;
-  resetPaneView();
   render();
-  state.live?.close();
-  if (state.live) state.live = null;
-  state.relayRttMs = null;
-  state.sessionTransport = "relay";
-  state.transportSwitching = false;
+  if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
+  else disposeFullTerminal();
+  invalidateLiveView();
+  resetLiveConnectionState();
+  state.phase = "resuming";
+  state.credential = pair;
+  state.addingComputer = false;
+  state.herdHost = pair.hostname || "";
+  state.snapshotAt = 0;
   state.paneTouched = loadPaneTouched();
   state.panePinned = loadPanePinned();
   state.paneTermModes = loadPaneTermModes();
   state.paneComposeLive = loadPaneComposeLive();
   await rememberLastUsed(pair.daemonId).catch(() => undefined);
   state.lastUsedDaemonId = pair.daemonId;
-  state.live = await sessionOverWS(wsURL({ daemonId: pair.daemonId }), pair, {
-    p2p: state.p2pEnabled,
-    networkMode: state.networkMode,
-  });
+  const activated = await computerSessions.activate(pair, connect);
+  const session = activated.session;
+  state.live = session;
+  state.relayRttMs = activated.lastLatencyMs;
+  state.sessionTransport = activated.transport;
+  if (!activated.reused && !computerSessions.bind(pair.daemonId, session, onSessionEvent)) {
+    computerSessions.remove(pair.daemonId, session);
+    throw new ProtocolError("disconnected", t("err.computerConnect"));
+  }
+  if (!computerSessions.has(pair.daemonId, session)) {
+    throw new ProtocolError("disconnected", t("err.computerConnect"));
+  }
   const seen = { ...pair, lastSeen: Math.floor(Date.now() / 1000) };
   state.credential = seen;
   await saveCredential(seen).catch(() => undefined);
-  state.live.onEvent(onSessionEvent);
-  state.live.setNetworkAvailable(state.networkOnline);
+  session.setNetworkAvailable(state.networkOnline);
+  if (activated.reused) void session.switchTransport(state.networkMode).catch(() => undefined);
   state.completionSeen = loadCompletionSeen();
   state.phase = "live";
   state.screen = "home";
@@ -172,7 +235,12 @@ export async function establish(pair: PairResult): Promise<void> {
   await reloadComputers().catch(() => undefined);
 }
 
-function onSessionEvent(event: SessionEvent): void {
+function onSessionEvent(daemonId: string, session: LiveSession, event: SessionEvent): void {
+  if (!computerSessions.has(daemonId, session)) return;
+  if (state.live !== session || state.credential?.daemonId !== daemonId) {
+    if (event.type === "terminal") void handleInactiveTerminal(daemonId, session, event.code);
+    return;
+  }
   if (guidedScrollController.handleEvent(event)) return;
   if (handleFullTerminalEvent(event) && (event.type === "terminal_frame" || event.type === "terminal_closed")) return;
   if (event.type === "latency" && typeof event.rttMs === "number") {
@@ -207,6 +275,14 @@ function onSessionEvent(event: SessionEvent): void {
   } else if (event.type === "terminal") {
     void handleTerminal(event);
   }
+}
+
+async function handleInactiveTerminal(daemonId: string, session: LiveSession, code = ""): Promise<void> {
+  if (!computerSessions.remove(daemonId, session)) return;
+  if (credentialIsBurned(code)) await deleteCredential(daemonId).catch(() => undefined);
+  await reloadComputers().catch(() => undefined);
+  if (state.screen === "computers") render();
+  track("pwa_disconnect", { result: code || "disconnected", extra: "inactive" });
 }
 
 export async function refreshRuntimeState(): Promise<void> {
@@ -270,6 +346,7 @@ export async function openPane(paneId: string): Promise<void> {
   const agent = state.agents.find((item) => item.paneId === paneId);
   state.fullTerminal = mode === "full";
   state.agentChat = mode === "agent" && canEnterAgentChat(agent);
+  acknowledgePaneCompletion(paneId);
   render();
   await refreshPane();
 }
@@ -283,14 +360,17 @@ function abandonOpenPane(message: string): void {
 }
 
 export async function refreshSnapshot(): Promise<void> {
-  if (!state.live || !state.live.isConnected() || !state.networkOnline || document.visibilityState === "hidden") return;
+  const session = state.live;
+  const viewVersion = liveViewVersion;
+  if (!session || !session.isConnected() || !state.networkOnline || document.visibilityState === "hidden") return;
   if (state.refreshBusy) {
     state.snapshotPending = true;
     return;
   }
   state.refreshBusy = true;
   try {
-    const snapshot = (await state.live.snapshot()) as Snapshot;
+    const snapshot = (await session.snapshot()) as Snapshot;
+    if (!liveViewIsCurrent(session, viewVersion)) return;
     state.snapshotAt = Date.now();
     const previous = replaceAgentsFromSnapshot(snapshot);
     state.paneTouched = nextTouchedAt(previous, state.agents, state.paneTouched);
@@ -326,24 +406,42 @@ export async function refreshSnapshot(): Promise<void> {
     if ((state.screen === "home" || state.screen === "settings" || state.screen === "computers") && unchanged) return;
     render();
   } catch (error) {
+    if (!liveViewIsCurrent(session, viewVersion)) return;
     if (!(error instanceof ProtocolError && ["reconnecting", "disconnected"].includes(error.code))) showError(messageOf(error));
     render();
   } finally {
-    state.refreshBusy = false;
-    if (state.snapshotPending) {
-      state.snapshotPending = false;
-      void refreshSnapshot();
+    if (liveViewIsCurrent(session, viewVersion)) {
+      state.refreshBusy = false;
+      if (state.snapshotPending) {
+        state.snapshotPending = false;
+        void refreshSnapshot();
+      }
     }
   }
 }
 
-async function performPaneRead(paneId: string, startedAt: number): Promise<PaneReadObservation | null> {
-  const session = state.live;
-  if (!session || state.paneId !== paneId || !session.isConnected() || !state.networkOnline || document.visibilityState === "hidden") return null;
+async function performPaneRead(
+  session: LiveSession,
+  viewVersion: number,
+  paneId: string,
+  startedAt: number,
+): Promise<PaneReadObservation | null> {
+  if (
+    !liveViewIsCurrent(session, viewVersion) ||
+    state.paneId !== paneId ||
+    !session.isConnected() ||
+    !state.networkOnline ||
+    document.visibilityState === "hidden"
+  ) return null;
   if (state.screen !== "pane" || state.fullTerminal || state.agentChat) return null;
   try {
     const read = await session.paneRead(paneId, paneReadLines());
-    if (state.live !== session || state.paneId !== paneId || state.screen !== "pane" || state.fullTerminal) return null;
+    if (
+      !liveViewIsCurrent(session, viewVersion) ||
+      state.paneId !== paneId ||
+      state.screen !== "pane" ||
+      state.fullTerminal
+    ) return null;
     const nextText = typeof read?.text === "string" ? read.text : "";
     const nextHash = typeof read?.hash === "string" ? read.hash : "";
     const same = nextHash !== "" && nextHash === state.paneHash && nextText === state.paneText;
@@ -366,6 +464,7 @@ async function performPaneRead(paneId: string, startedAt: number): Promise<PaneR
     if (!patchSessionScreen()) render();
     return observation();
   } catch (error) {
+    if (!liveViewIsCurrent(session, viewVersion)) return null;
     const code = error instanceof ProtocolError ? error.code : "";
     if (code === "pane_not_found") {
       state.paneText = "";
@@ -384,11 +483,11 @@ async function performPaneRead(paneId: string, startedAt: number): Promise<PaneR
   }
 }
 
-function startPaneRead(paneId: string): Promise<PaneReadObservation | null> {
+function startPaneRead(session: LiveSession, viewVersion: number, paneId: string): Promise<PaneReadObservation | null> {
   const startedAt = monotonicNow();
   state.paneReadBusy = true;
-  const promise = performPaneRead(paneId, startedAt);
-  const flight = { paneId, startedAt, promise };
+  const promise = performPaneRead(session, viewVersion, paneId, startedAt);
+  const flight = { session, viewVersion, paneId, startedAt, promise };
   paneReadFlight = flight;
   void promise.then(() => finishPaneRead(flight), () => finishPaneRead(flight));
   return promise;
@@ -402,7 +501,7 @@ function finishPaneRead(flight: PaneReadFlight): void {
   queuedPaneRead = null;
   state.paneReadPending = false;
   if (!queued) return;
-  const next = startPaneRead(queued.paneId);
+  const next = startPaneRead(queued.session, queued.viewVersion, queued.paneId);
   void next.then(
     (observation) => {
       if (queued.postponeFallback && observation) livePolling.deferPane();
@@ -412,9 +511,20 @@ function finishPaneRead(flight: PaneReadFlight): void {
   );
 }
 
-function queuePaneRead(paneId: string, request: PaneRefreshRequest): Promise<PaneReadObservation | null> {
-  if (queuedPaneRead && queuedPaneRead.paneId !== paneId) {
-    queuedPaneRead.resolve(null);
+function queuePaneRead(
+  session: LiveSession,
+  viewVersion: number,
+  paneId: string,
+  request: PaneRefreshRequest,
+): Promise<PaneReadObservation | null> {
+  const queued = queuedPaneRead;
+  const queuedForAnotherView = queued && (
+    queued.session !== session ||
+    queued.viewVersion !== viewVersion ||
+    queued.paneId !== paneId
+  );
+  if (queuedForAnotherView) {
+    queued.resolve(null);
     queuedPaneRead = null;
   }
   if (queuedPaneRead) {
@@ -424,6 +534,8 @@ function queuePaneRead(paneId: string, request: PaneRefreshRequest): Promise<Pan
   let resolve!: (observation: PaneReadObservation | null) => void;
   const promise = new Promise<PaneReadObservation | null>((done) => { resolve = done; });
   queuedPaneRead = {
+    session,
+    viewVersion,
     paneId,
     postponeFallback: request.postponeFallback === true,
     promise,
@@ -442,7 +554,9 @@ function postponeFallback(promise: Promise<PaneReadObservation | null>, enabled:
 }
 
 export async function refreshPaneRead(request: PaneRefreshRequest = {}): Promise<PaneReadObservation | null> {
-  if (!state.live || !state.paneId || !state.live.isConnected() || !state.networkOnline || document.visibilityState === "hidden") return null;
+  const session = state.live;
+  const viewVersion = liveViewVersion;
+  if (!session || !state.paneId || !session.isConnected() || !state.networkOnline || document.visibilityState === "hidden") return null;
   if (state.screen !== "pane" || state.fullTerminal) return null;
   if (state.agentChat) {
     const changed = await refreshAgentTrace();
@@ -452,12 +566,16 @@ export async function refreshPaneRead(request: PaneRefreshRequest = {}): Promise
   const paneId = state.paneId;
   const notBefore = request.notBefore ?? 0;
   if (paneReadFlight) {
-    if (paneReadFlight.paneId === paneId && paneReadFlight.startedAt >= notBefore) {
+    const reusableFlight = paneReadFlight.session === session &&
+      paneReadFlight.viewVersion === viewVersion &&
+      paneReadFlight.paneId === paneId &&
+      paneReadFlight.startedAt >= notBefore;
+    if (reusableFlight) {
       return postponeFallback(paneReadFlight.promise, request.postponeFallback === true);
     }
-    return queuePaneRead(paneId, request);
+    return queuePaneRead(session, viewVersion, paneId, request);
   }
-  return postponeFallback(startPaneRead(paneId), request.postponeFallback === true);
+  return postponeFallback(startPaneRead(session, viewVersion, paneId), request.postponeFallback === true);
 }
 
 export async function refreshFromSession(): Promise<void> {

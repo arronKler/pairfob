@@ -19,7 +19,7 @@ The default is a flat list, ordered by recent activity (create, status change, o
 - **按工作区** — Herdr workspaces
 - **按 Agent** — agent kinds
 
-Grouped headings toggle open and closed. The first group starts open; the rest start collapsed.
+Grouped headings toggle open and closed. The first group starts open; the rest start collapsed. When **置顶** is present, that section and the group under it start open.
 
 The card title is a single identity: the session name if you set one; otherwise the workspace name when it is not just the directory name; otherwise a task-like terminal title (stripping live crumbs such as `Thinking` / `Waiting for response` and a trailing ` - grok`). If none of those exist, it shows **claude**, or **终端** for a shell. The next line is always coordinates in the form **claude · pairfob** (Agent · folder · a non-default tab), omitting words already in the title and default tabs such as `main`. Internal IDs are never presented as names.
 
@@ -38,7 +38,7 @@ When Pairfob is connected, an empty list means there are no sessions yet; create
 
 **新建** appears in the top bar when the computer supports creating a session. The form can start a supported agent, or a **纯终端** pane with no agent. With no kinds listed, the dialog still opens and creates that terminal session.
 
-Tap a card to open it. Long-press (right-click on a computer) to rename or close that session. 改标签页名 appears only when the tab already has a visible name, or the tab is split; 关闭整个标签页 only when split. Grouped by workspace, long-press the group heading to rename the workspace; in other groupings that row sits at the bottom of the card menu.
+Tap a card to open it. Long-press (right-click on a computer) to **置顶**, rename, or close that session. Pinned sessions move into a **置顶** section at the top of the list and leave their workspace or Agent group; long-press again to **取消置顶**. 改标签页名 appears only when the tab already has a visible name, or the tab is split; 关闭整个标签页 only when split. Grouped by workspace, long-press the group heading to rename the workspace; in other groupings that row sits at the bottom of the card menu.
 
 ## Inside a session
 
@@ -94,7 +94,8 @@ The web surface does not offer arbitrary shell, deleting worktrees, or yanking t
 
 From the top-right of the list (**设置**).
 
-- **连接:** computer name, online state, this phone’s label (for example iPhone), and **网络连接方式** as **自动** / **P2P** / **Relay**. Auto prefers a direct path; P2P tries one now; Relay stays on the relay. The current path and round-trip sit on the same card. **添加另一台电脑** starts another pairing without replacing the current one. With more than one credential, **切换电脑** appears here and **电脑** appears in the top bar
+- **连接:** computer name, online state, this phone’s label (for example iPhone), and **网络连接方式** as **自动** / **P2P** / **Relay**. Auto prefers a direct path; P2P tries one now; Relay stays on the relay. The current path and round-trip sit on the same card. The choice is remembered in this browser. **添加另一台电脑** starts another pairing without replacing the current one. With more than one credential, **切换电脑** appears here and **电脑** appears in the top bar
+- **语言:** **跟随浏览器**, or pin **中文** / **English**. This only changes the Pairfob page on this device, not the language menu on the docs site
 - **会话列表:** grouping (**全部** / **按工作区** / **按 Agent**)
 - **模式:** defaults to **自动**, or can be pinned to **控制** / **终端** / **对话**. A later switch is remembered per session
 - **输入:** send after composing, or type live into the terminal. The trailing button only submits composed text; use the system keyboard or keypad for a deliberate bare Enter

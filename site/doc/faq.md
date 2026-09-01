@@ -54,7 +54,11 @@ No. `pairfob` only dials out. The home router does not need a Pairfob port.
 
 ## Can the relay see my code?
 
-It cannot see the session, what you type, or the conversation. See [What the relay cannot see](/security).
+It cannot see the session, what you type, or the conversation. On a P2P path, pairfob.com still cannot see the session; the public-address lookup used to try a direct path sees this device’s public address. See [What the relay cannot see](/security).
+
+## What if P2P cannot connect?
+
+The session stays on Relay. In **设置 → 网络连接方式**, pin **Relay** to stop automatic direct attempts, or **自动** to try again when a direct path is possible. If the site has P2P off, only Relay is available.
 
 ## Someone photographed the QR code.
 
@@ -112,7 +116,7 @@ New computer setup can close at any time. Computers already enrolled, and device
 
 ## Is the documentation Chinese-only?
 
-No. [中文文档](/zh/). Use the language menu in the top bar.
+No. [中文文档](/zh/). The language menu in the docs top bar changes the docs. The Pairfob page (`/pair`) has its own language under **设置 → 语言**.
 
 ## How do I report a problem?
 

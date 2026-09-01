@@ -74,6 +74,25 @@ describe("user-facing documentation", () => {
   test("documents the three network path choices on the settings connection card", () => {
     expect(app).toContain("**网络连接方式**");
     expect(app).toContain("**自动** / **P2P** / **Relay**");
+    expect(app).toContain("**语言**");
+    expect(app).toContain("**置顶**");
+    expect(app).toContain("**取消置顶**");
+  });
+
+  test("covers P2P path, pinning, and Pairfob language across the rest of the docs", async () => {
+    const glossary = await Bun.file(new URL("./zh/glossary.md", import.meta.url)).text();
+    const security = await Bun.file(new URL("./zh/security.md", import.meta.url)).text();
+    const troubleshoot = await Bun.file(new URL("./zh/troubleshoot.md", import.meta.url)).text();
+    expect(glossary).toContain("| P2P |");
+    expect(glossary).toContain("| 网络连接方式 |");
+    expect(glossary).not.toContain("系统键盘。默认模式");
+    expect(faq).toContain("P2P 直连失败了怎么办");
+    expect(faq).toContain("设置 → 网络连接方式");
+    expect(faq).toContain("设置 → 语言");
+    expect(troubleshoot).toContain("暂时无法建立 P2P，已继续使用 Relay");
+    expect(troubleshoot).toContain("当前站点未开放 P2P");
+    expect(security).toContain("走 P2P 直连时");
+    expect(security).toContain("公网地址");
   });
 
   test("documents the shipped multi-computer flow", () => {

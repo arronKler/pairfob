@@ -38,6 +38,8 @@ The app copy is Chinese. Match the string on screen:
 | 另一个窗口接管了这台手机 | Keep a single Pairfob page |
 | 无法读取站点配置 / 无法连上当前站点 | Network or wrong page |
 | 另一台电脑开启了配对 | Slot stolen; `pair` on the computer you mean |
+| 暂时无法建立 P2P，已继续使用 Relay | Direct path failed; the session stayed on Relay. To stop retries, set 网络连接方式 to **Relay** |
+| 当前站点未开放 P2P | This site has direct paths off; only Relay is available |
 
 ## doctor
 
@@ -63,6 +65,13 @@ The app copy is Chinese. Match the string on screen:
 - Scan failures: camera permission, or type instead
 - The computer must still be waiting in `pairfob pair`; Ctrl-C means open a new slot
 - Two computers running `pair` at once steal the slot from each other
+
+## Network path
+
+- Default **自动**: Relay first, then P2P when a direct path exists; a failed upgrade does not drop the session
+- Direct path keeps failing: 设置 → 网络连接方式 → **Relay**
+- To try a direct path again: **自动**, or **P2P** for one immediate attempt
+- **Relay** pauses automatic P2P retries in this browser
 
 ## Connected but cannot act
 

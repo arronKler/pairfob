@@ -24,6 +24,7 @@ g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
 happy.document.body.innerHTML = '<main id="app"></main>';
 
 const { setPaneComposeLive, state } = await import("./state.ts");
+const { NO_OPERATION_CAPABILITIES } = await import("./lib/operations.ts");
 const { setRenderer } = await import("./paint.ts");
 const { openPane, refreshPaneRead } = await import("./live.ts");
 
@@ -136,6 +137,44 @@ describe("desk pane reads on an idle screen", () => {
 });
 
 describe("per-pane input mode", () => {
+  test("opening a completed pane acknowledges it in every display mode", async () => {
+    for (const { mode, transport } of [
+      { mode: "guided", transport: "relay" },
+      { mode: "agent", transport: "relay" },
+      { mode: "full", transport: "p2p" },
+      { mode: "auto", transport: "p2p" },
+    ] as const) {
+      state.phase = "live";
+      state.screen = "home";
+      state.paneId = "";
+      state.networkOnline = true;
+      state.sessionTransport = transport;
+      state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES, history: true };
+      state.paneTermModes = { p1: mode };
+      state.agents = [{
+        paneId: "p1",
+        agent: "codex",
+        hasAgent: true,
+        status: "done",
+        workspaceLabel: "demo",
+        cwd: "/tmp/demo",
+        historyAvailable: true,
+      }];
+      state.runtimeAgentStatuses = { p1: "done" };
+      state.completionSeen = {};
+      state.live = {
+        isConnected: () => true,
+        paneRead: async () => ({ text: "done", hash: "hash-p1" }),
+        agentTrace: async () => ({ items: [], nextCursor: null, truncated: false }),
+      };
+
+      await openPane("p1");
+
+      expect(state.completionSeen).toEqual({ p1: true });
+      expect(state.agents[0].status).toBe("idle");
+    }
+  });
+
   test("switching panes restores each input choice without changing the display mode", async () => {
     state.phase = "live";
     state.screen = "home";
@@ -184,6 +223,9 @@ afterEach(() => {
   state.defaultComposeLive = false;
   state.paneComposeLive = {};
   state.paneTermModes = {};
+  state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES };
+  state.sessionTransport = "relay";
+  state.agentChat = false;
   state.fullTerminal = false;
   renders = 0;
 });

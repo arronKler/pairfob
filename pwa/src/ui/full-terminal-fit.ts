@@ -110,10 +110,15 @@ export function pickFontSize(args: {
 export const FULL_TERM_LINE_HEIGHT = 1.5;
 
 const GLYPH_PROBE = "W字█Åg";
+const glyphHeightCache = new WeakMap<Document, Map<string, number>>();
 
 /** Tallest ink box for the live font, including CJK fallback and bold. */
 export function measureGlyphHeight(fontFamily: string, fontSize: number): number {
   if (!(fontSize > 0) || typeof document === "undefined") return fontSize;
+  const key = `${fontFamily}\n${fontSize}`;
+  const cache = glyphHeightCache.get(document);
+  const cached = cache?.get(key);
+  if (cached !== undefined) return cached;
   const probe = document.createElement("span");
   probe.setAttribute("aria-hidden", "true");
   probe.style.cssText = [
@@ -131,7 +136,13 @@ export function measureGlyphHeight(fontFamily: string, fontSize: number): number
   probe.style.fontWeight = "700";
   height = Math.max(height, probe.getBoundingClientRect().height);
   probe.remove();
-  return height > 0 ? height : fontSize;
+  const measured = height > 0 ? height : fontSize;
+  if (!document.fonts || document.fonts.status === "loaded") {
+    const next = cache ?? new Map<string, number>();
+    next.set(key, measured);
+    if (!cache) glyphHeightCache.set(document, next);
+  }
+  return measured;
 }
 
 /**

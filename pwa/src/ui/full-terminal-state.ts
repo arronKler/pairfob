@@ -10,6 +10,53 @@ export interface FullTerminalStateView {
   busy: boolean;
 }
 
+export class FullTerminalStatus {
+  detail = "";
+  stage: FullTerminalStage = "loading";
+  private retryAvailable = false;
+
+  constructor(private readonly repaint: () => void) {}
+
+  set(detail: string, stage: FullTerminalStage = this.stage): void {
+    this.detail = detail;
+    this.stage = stage;
+    this.repaint();
+  }
+
+  fail(detail: string): void {
+    this.retryAvailable = true;
+    this.set(detail, "error");
+  }
+
+  wait(detail: string): void {
+    this.retryAvailable = false;
+    this.set(detail, "waiting");
+  }
+
+  start(detail: string, stage: "opening" | "live"): void {
+    this.retryAvailable = false;
+    this.set(detail, stage);
+  }
+
+  reset(detail: string): void {
+    this.retryAvailable = false;
+    this.set(detail, "loading");
+  }
+
+  clearRetry(): void {
+    this.retryAvailable = false;
+  }
+
+  sync(root: ParentNode, state: { active: boolean; busy: boolean; hasBridge: boolean }): void {
+    syncFullTerminalState(root, {
+      stage: this.stage,
+      detail: this.detail,
+      retry: state.active && this.retryAvailable && !state.busy && !state.hasBridge,
+      busy: state.busy,
+    });
+  }
+}
+
 const FULL_TERMINAL_DOCUMENT_CLASS = "full-terminal-active";
 
 export function setFullTerminalDocumentMode(active: boolean): void {

@@ -4,7 +4,7 @@ import { askConfirm } from "./lib/dom";
 import { t } from "./lib/i18n";
 import { ProtocolError, type PairResult } from "./lib/protocol/client";
 import {
-  clearLiveConnection,
+  closeComputerSession,
   establish,
   landAfterDisconnect,
   reloadComputers,
@@ -89,10 +89,8 @@ export async function forgetComputer(daemonId: string): Promise<void> {
     return;
   }
   const forgettingCurrent = state.credential?.daemonId === daemonId;
-  if (forgettingCurrent) {
-    clearLiveConnection();
-    state.credential = null;
-  }
+  closeComputerSession(daemonId);
+  if (forgettingCurrent) state.credential = null;
   await deleteCredential(daemonId);
   await reloadComputers();
   if (!state.computers.length) {

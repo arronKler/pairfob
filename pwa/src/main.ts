@@ -3,7 +3,14 @@ import { detectLang, initI18n, langPref, setLang, t } from "./lib/i18n";
 import { computerTitle, pickResumeCredential } from "./lib/computer-catalog";
 import { loadOriginConfig } from "./lib/origin-config";
 import { resumeComputer } from "./computers";
-import { reloadComputers, refreshRuntimeState, startPolling, stopPolling } from "./live";
+import {
+  reconnectLiveSessions,
+  reloadComputers,
+  refreshRuntimeState,
+  setLiveNetworkAvailable,
+  startPolling,
+  stopPolling,
+} from "./live";
 import { applyOriginPairingPolicy, beginPairing } from "./pairing";
 import { render as paint, setRenderer } from "./paint";
 import { app, capturePairingFragment, clearNotice, messageOf, showError, showStatus, state, termLineHeightPx } from "./state";
@@ -83,7 +90,7 @@ setRenderer(render);
 function applyNetworkAvailability(available: boolean): void {
   const changed = state.networkOnline !== available;
   state.networkOnline = available;
-  state.live?.setNetworkAvailable(available);
+  setLiveNetworkAvailable(available);
   if (!available) {
     stopPolling();
     if (state.phase === "live") showStatus(t("net.offline"), true);
@@ -96,7 +103,7 @@ function applyNetworkAvailability(available: boolean): void {
   }
   if (state.sessionTransport === "p2p") preloadFullTerminalXterm();
   if (changed || !state.live?.isConnected()) showStatus(t("net.restored"), true);
-  if (!changed) state.live?.reconnectNow();
+  if (!changed) reconnectLiveSessions();
   startPolling();
   void refreshRuntimeState();
   paint();

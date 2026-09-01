@@ -78,13 +78,13 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(mountFn).not.toContain("state.fullTerminal = false");
     expect(mountFn).not.toContain("render()");
     expect(mountFn).toContain('t("ft.loadFail"');
-    expect(mountFn).toContain("offerRetry");
+    expect(mountFn).toContain("terminalStatus.fail");
 
     const openFn = fn("async function openBridge(", "async function suspendBridge(");
     expect(openFn).not.toContain("state.fullTerminal = false");
     expect(openFn).not.toContain("disposeRenderer()");
     expect(openFn).not.toContain("render()");
-    expect(openFn).toContain("offerRetry");
+    expect(openFn).toContain("terminalStatus.fail");
     expect(openFn).toContain('t("ft.openFail"');
     expect(openFn).toContain("if (!session.isConnected())");
     expect(openFn).toContain("version !== bridgeVersion");
@@ -134,9 +134,18 @@ describe("complete-terminal chrome stays a distinct surface", () => {
 
   test("retry remounts a missing renderer instead of leaving the mode", () => {
     const retry = fn("export function retryFullTerminal(", "export function enterFullTerminal(");
-    expect(retry).toContain("mount(host)");
+    expect(retry).toContain("scheduleMount(host)");
     expect(retry).toContain("openBridge(false)");
     expect(retry).not.toContain("state.fullTerminal = false");
+  });
+
+  test("paints the loading shell before mounting xterm and skips the observer's initial duplicate fit", () => {
+    const renderFn = fn("export function renderFullTerminal(", "export function handleFullTerminalEvent(");
+    const mountFn = fn("async function mount(", "function disposeRenderer(");
+    expect(renderFn).toContain("scheduleMount(host)");
+    expect(renderFn.indexOf("app.replaceChildren(root)")).toBeLessThan(renderFn.indexOf("scheduleMount(host)"));
+    expect(mountFn).toContain("observeHostResize(host");
+    expect(mountFn.indexOf("fit();")).toBeLessThan(mountFn.indexOf("observeHostResize(host"));
   });
 
   test("leave paints the guided session itself and does not chain a list jump", () => {

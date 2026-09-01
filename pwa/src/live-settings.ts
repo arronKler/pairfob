@@ -5,6 +5,7 @@ import { reportMutationError } from "./mutations";
 import { render } from "./paint";
 import { haptic, setNetworkMode, showError, showStatus, state } from "./state";
 import { track } from "./lib/telemetry";
+import { syncInactiveTransportMode } from "./live";
 
 let networkModeSeq = 0;
 
@@ -77,9 +78,11 @@ export async function selectNetworkMode(mode: NetworkMode): Promise<void> {
   const session = state.live;
   const seq = ++networkModeSeq;
   if (!session) {
+    syncInactiveTransportMode(mode);
     render();
     return;
   }
+  syncInactiveTransportMode(mode, session);
   const fromP2P = state.sessionTransport === "p2p";
   const connected = session.isConnected();
   state.transportSwitching = true;
