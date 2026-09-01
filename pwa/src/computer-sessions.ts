@@ -1,5 +1,11 @@
 import type { NetworkMode } from "./lib/network-mode";
-import type { LiveSession, PairResult, SessionEvent } from "./lib/protocol/client";
+import type {
+  FinishedP2PAttemptObservation,
+  LiveSession,
+  P2PAttemptObservation,
+  PairResult,
+  SessionEvent,
+} from "./lib/protocol/client";
 import type { ReconnectReason } from "./lib/protocol/session-types";
 
 type SessionEntry = {
@@ -10,16 +16,27 @@ type SessionEntry = {
   activated: number;
   lastLatencyMs: number | null;
   transport: "relay" | "p2p";
+  lastP2PAttempt: FinishedP2PAttemptObservation | null;
+  attemptListener: P2PAttemptListener | null;
 };
 
-export type SessionConnector = (pair: PairResult) => Promise<LiveSession>;
+export type SessionConnector = (
+  pair: PairResult,
+  observeP2PAttempt: (observation: P2PAttemptObservation) => void,
+) => Promise<LiveSession>;
 export type SessionListener = (daemonId: string, session: LiveSession, event: SessionEvent) => void;
+export type P2PAttemptListener = (
+  daemonId: string,
+  session: LiveSession,
+  attempt: FinishedP2PAttemptObservation,
+) => void;
 
 export type ActivatedSession = {
   session: LiveSession;
   reused: boolean;
   lastLatencyMs: number | null;
   transport: "relay" | "p2p";
+  lastP2PAttempt: FinishedP2PAttemptObservation | null;
 };
 
 /** Page-local, lazily populated sessions. A full page load creates a fresh pool. */
@@ -40,11 +57,27 @@ export class ComputerSessions {
         reused: true,
         lastLatencyMs: existing.lastLatencyMs,
         transport: existing.transport,
+        lastP2PAttempt: existing.lastP2PAttempt,
       };
     }
     if (existing) this.remove(pair.daemonId, existing.session);
 
-    const session = await connect(pair);
+    let connected: LiveSession | null = null;
+    let pendingAttempt: FinishedP2PAttemptObservation | null = null;
+    const session = await connect(pair, (observation) => {
+      const { result, extra } = observation;
+      if (result === "cancelled") return;
+      const attempt: FinishedP2PAttemptObservation = { result, extra };
+      pendingAttempt = attempt;
+      if (!connected) return;
+      const current = this.entries.get(pair.daemonId);
+      if (!current || current.session !== connected || current.deviceId !== pair.deviceId || current.fingerprint !== pair.fp) {
+        return;
+      }
+      current.lastP2PAttempt = attempt;
+      current.attemptListener?.(pair.daemonId, connected, attempt);
+    });
+    connected = session;
     const entry: SessionEntry = {
       deviceId: pair.deviceId,
       fingerprint: pair.fp,
@@ -53,13 +86,20 @@ export class ComputerSessions {
       activated: ++this.activation,
       lastLatencyMs: null,
       transport: "relay",
+      lastP2PAttempt: pendingAttempt,
+      attemptListener: null,
     };
     this.entries.set(pair.daemonId, entry);
     this.evictOverflow(pair.daemonId);
-    return { session, reused: false, lastLatencyMs: null, transport: "relay" };
+    return { session, reused: false, lastLatencyMs: null, transport: "relay", lastP2PAttempt: pendingAttempt };
   }
 
-  bind(daemonId: string, session: LiveSession, listen: SessionListener): boolean {
+  bind(
+    daemonId: string,
+    session: LiveSession,
+    listen: SessionListener,
+    listenP2PAttempt?: P2PAttemptListener,
+  ): boolean {
     const entry = this.entries.get(daemonId);
     if (!entry || entry.session !== session || entry.unsubscribe) return false;
     const unsubscribe = session.onEvent((event) => {
@@ -77,6 +117,7 @@ export class ComputerSessions {
       return false;
     }
     entry.unsubscribe = unsubscribe;
+    entry.attemptListener = listenP2PAttempt ?? null;
     return true;
   }
 

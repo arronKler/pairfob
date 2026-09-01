@@ -38,6 +38,7 @@ export {
   type DeviceSummary,
   type LiveSession,
   type SessionEvent,
+  type FinishedP2PAttemptObservation,
   type P2PAttemptObservation,
 } from "./session-ws.ts";
 export {

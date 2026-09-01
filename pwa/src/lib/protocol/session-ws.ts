@@ -53,6 +53,7 @@ import {
   TERMINAL_RPC_TIMEOUT_MS,
 } from "./session-transport.ts";
 import type { DeviceSummary, LiveSession, ReconnectReason, SessionEvent } from "./session-types.ts";
+import { TransportSwitchBarrier, type TransportSwitchLease } from "./transport-switch.ts";
 import {
   encodeTerminalInput,
   parseTerminalCloseResult,
@@ -104,7 +105,7 @@ async function connectSession(
 const TERMINAL_CODES = new Set(["revoked", "unpaired", "too_many_devices", "bad_proof", "bad_signature"]);
 const UNCERTAIN_MUTATION_TRANSPORT_CODES = new Set(["timeout", "disconnected", "heartbeat_timeout", "daemon_replaced"]);
 
-export type { P2PAttemptObservation } from "./session-direct.ts";
+export type { FinishedP2PAttemptObservation, P2PAttemptObservation } from "./session-direct.ts";
 
 export type SessionOptions = {
   p2p?: boolean;
@@ -137,8 +138,7 @@ class ReconnectingSession implements LiveSession {
   private attempt = 0;
   private lastRttMs: number | null = null;
   private lastTransport: "relay" | "p2p" = "relay";
-  private switchWait: Promise<void> | null = null;
-  private finishSwitch: (() => void) | null = null;
+  private readonly transportSwitch = new TransportSwitchBarrier();
   private deferredDisconnect: ProtocolError | null = null;
   private readonly direct: DirectSessionDriver;
 
@@ -159,8 +159,8 @@ class ReconnectingSession implements LiveSession {
       getTransport: () => session.transport,
       setTransport: (transport) => { session.transport = transport; },
       beginSwitch: () => session.beginSwitch(),
-      endSwitch: () => session.endSwitch(),
-      switchWait: () => session.switchWait,
+      ownsSwitch: (lease) => session.transportSwitch.owns(lease),
+      endSwitch: (lease) => session.endSwitch(lease),
       emit: (event) => session.emit(event),
       observe: (observation) => session.observeDirectAttempt(observation),
       onDisconnect: (source, error) => session.onDisconnect(source, error),
@@ -336,7 +336,7 @@ class ReconnectingSession implements LiveSession {
   }
 
   private async captureTransport(): Promise<SessionTransport | null> {
-    while (this.switchWait) await this.switchWait;
+    while (this.transportSwitch.wait()) await this.transportSwitch.wait();
     return this.transport;
   }
 
@@ -402,7 +402,7 @@ class ReconnectingSession implements LiveSession {
 
   private onDisconnect(source: SessionTransport, error: ProtocolError): void {
     if (this.stopped || this.transport !== source) return;
-    if (this.switchWait) {
+    if (this.transportSwitch.wait()) {
       this.deferredDisconnect = error;
       return;
     }
@@ -424,17 +424,14 @@ class ReconnectingSession implements LiveSession {
     this.scheduleReconnect(true);
   }
 
-  private beginSwitch(): void {
-    if (this.switchWait) throw new ProtocolError("conflict", "transport switch already active");
-    this.switchWait = new Promise<void>((resolve) => { this.finishSwitch = resolve; });
+  private beginSwitch(): TransportSwitchLease {
+    const lease = this.transportSwitch.begin();
     this.deferredDisconnect = null;
+    return lease;
   }
 
-  private endSwitch(): void {
-    const finish = this.finishSwitch;
-    this.finishSwitch = null;
-    this.switchWait = null;
-    finish?.();
+  private endSwitch(lease: TransportSwitchLease): boolean {
+    return this.transportSwitch.end(lease);
   }
 
   private scheduleReconnect(immediate = false): void {

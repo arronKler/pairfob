@@ -6,7 +6,8 @@ export const DIRECT_ICE_GRACE_MS = 2_000;
 export const DIRECT_HEALTH_PING_MS = 3_000;
 /** Minimum gap between ICE restarts so a flapping path cannot loop. */
 export const DIRECT_RESTART_MIN_INTERVAL_MS = 15_000;
-export const DIRECT_RESTART_TIMEOUT_MS = 20_000;
+/** Must exceed the daemon's 20s restart budget plus relay and queue overhead. */
+export const DIRECT_RESTART_TIMEOUT_MS = 30_000;
 
 /** Back off failed direct upgrades while jittering repeated probes across clients. */
 export function directRetryDelay(attempt: number, random = Math.random): number {

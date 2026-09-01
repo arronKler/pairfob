@@ -6,10 +6,12 @@ import (
 	"testing"
 )
 
+func testBool(value bool) *bool { return &value }
+
 func TestWriteDoctorIsHuman(t *testing.T) {
 	var buf bytes.Buffer
 	writeDoctor(&buf, health{
-		Version: "dev", Running: true, Phones: 2, HerdrOK: true, HerdrNote: "on", Origin: "pairfob.com", P2P: true,
+		Version: "dev", Running: true, Phones: 2, HerdrOK: true, HerdrNote: "on", Origin: "pairfob.com", P2P: testBool(true),
 	})
 	got := buf.String()
 	if strings.Contains(got, "{") || strings.Contains(got, "daemon_id") {
@@ -41,8 +43,16 @@ func TestWriteDoctorSanitizesOriginNote(t *testing.T) {
 
 func TestWriteDoctorP2POff(t *testing.T) {
 	var buf bytes.Buffer
-	writeDoctor(&buf, health{Version: "dev", P2P: false, HerdrNote: "on"})
+	writeDoctor(&buf, health{Version: "dev", P2P: testBool(false), HerdrNote: "on"})
 	if !strings.Contains(buf.String(), "off — this computer is relay-only") {
+		t.Fatalf("%s", buf.String())
+	}
+}
+
+func TestWriteDoctorP2PUnknown(t *testing.T) {
+	var buf bytes.Buffer
+	writeDoctor(&buf, health{Version: "dev", HerdrNote: "on"})
+	if !strings.Contains(buf.String(), "unknown — restart Pairfob to check") {
 		t.Fatalf("%s", buf.String())
 	}
 }

@@ -27,6 +27,7 @@ type Pairing struct {
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
 	Host      string    `json:"host,omitempty"`
 	Runtime   string    `json:"runtime,omitempty"`
+	P2P       *bool     `json:"p2p,omitempty"`
 }
 
 // Device is the operator-visible device row. It must never carry a PSK, UA,

@@ -5,7 +5,7 @@ import { setLang } from "./i18n.ts";
 
 const liveSrc = await Bun.file(new URL("../live.ts", import.meta.url)).text();
 const operationSrc = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
-const stateSrc = await Bun.file(new URL("../state.ts", import.meta.url)).text();
+const stateSrc = await Bun.file(new URL("../state-notices.ts", import.meta.url)).text();
 const chromeSrc = await Bun.file(new URL("../ui/chrome.ts", import.meta.url)).text();
 const mainSrc = await Bun.file(new URL("../main.ts", import.meta.url)).text();
 const liveSettingsSrc = await Bun.file(new URL("../live-settings.ts", import.meta.url)).text();

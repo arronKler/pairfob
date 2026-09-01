@@ -11,7 +11,14 @@ import {
   NO_OPERATION_CAPABILITIES,
   parseRuntimeOperationsConfig,
 } from "./lib/operations";
-import { ProtocolError, sessionOverWS, type LiveSession, type PairResult, type SessionEvent } from "./lib/protocol/client";
+import {
+  ProtocolError,
+  sessionOverWS,
+  type FinishedP2PAttemptObservation,
+  type LiveSession,
+  type PairResult,
+  type SessionEvent,
+} from "./lib/protocol/client";
 import type { ReconnectReason } from "./lib/protocol/session-types";
 import { ComputerSessions, type SessionConnector } from "./computer-sessions";
 import { createLivePolling } from "./live-polling";
@@ -65,15 +72,14 @@ const livePolling = createLivePolling({
   refreshPane: async () => { await refreshPaneRead(); },
 });
 const computerSessions = new ComputerSessions(3);
-const connectComputerSession: SessionConnector = (credential) =>
+const connectComputerSession: SessionConnector = (credential, observeP2PAttempt) =>
   sessionOverWS(wsURL({ daemonId: credential.daemonId }), credential, {
     p2p: state.p2pEnabled,
     networkMode: state.networkMode,
-    onP2PAttempt: ({ result, extra }) => {
+    onP2PAttempt: (observation) => {
+      const { result, extra } = observation;
       track("pwa_p2p", { result, extra });
-      if (result === "cancelled") return;
-      state.lastP2PAttempt = { result, extra };
-      if (state.screen === "settings") render();
+      observeP2PAttempt(observation);
     },
   });
 let herdConfigRequest = 0;
@@ -218,7 +224,8 @@ export async function establish(pair: PairResult, connect: SessionConnector = co
   state.live = session;
   state.relayRttMs = activated.lastLatencyMs;
   state.sessionTransport = activated.transport;
-  if (!activated.reused && !computerSessions.bind(pair.daemonId, session, onSessionEvent)) {
+  state.lastP2PAttempt = activated.lastP2PAttempt;
+  if (!activated.reused && !computerSessions.bind(pair.daemonId, session, onSessionEvent, onP2PAttempt)) {
     computerSessions.remove(pair.daemonId, session);
     throw new ProtocolError("disconnected", t("err.computerConnect"));
   }
@@ -240,6 +247,16 @@ export async function establish(pair: PairResult, connect: SessionConnector = co
   startPolling();
   await refreshRuntimeState();
   await reloadComputers().catch(() => undefined);
+}
+
+function onP2PAttempt(
+  daemonId: string,
+  session: LiveSession,
+  attempt: FinishedP2PAttemptObservation,
+): void {
+  if (state.live !== session || state.credential?.daemonId !== daemonId) return;
+  state.lastP2PAttempt = attempt;
+  if (state.screen === "settings") render();
 }
 
 function onSessionEvent(daemonId: string, session: LiveSession, event: SessionEvent): void {

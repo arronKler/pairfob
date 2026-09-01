@@ -220,10 +220,11 @@ type liveAdmin struct {
 
 func (a liveAdmin) Status() admin.Pairing {
 	st := a.eng.PairingStatus()
+	p2p := a.eng.Direct != nil
 	return admin.Pairing{
 		Ref: st.Ref, Code: st.Code, URL: st.URL, Loc: st.Loc,
 		Admitted: st.Admitted, Ready: st.Ready, Devices: st.Devices,
-		ExpiresAt: st.ExpiresAt, Host: a.eng.HostName(), Runtime: a.eng.RuntimeKind(),
+		ExpiresAt: st.ExpiresAt, Host: a.eng.HostName(), Runtime: a.eng.RuntimeKind(), P2P: &p2p,
 	}
 }
 

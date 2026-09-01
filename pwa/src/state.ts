@@ -22,21 +22,27 @@ import {
 } from "./lib/ranking";
 import { type PairErrorField } from "./lib/ui-model";
 import { parseNotificationTarget, type NotificationTarget } from "./lib/notification-target";
-import { type DeviceSummary, type LiveSession, type PairResult } from "./lib/protocol/client";
+import {
+  type DeviceSummary,
+  type FinishedP2PAttemptObservation,
+  type LiveSession,
+  type PairResult,
+} from "./lib/protocol/client";
 import { loadNetworkMode, persistNetworkMode, type NetworkMode } from "./lib/network-mode";
 import { parseTermMode, TERM_MODE_OPTIONS, type TermMode } from "./lib/terminal-mode";
 import type { MuxProtocol } from "./lib/protocol/mux";
 import { NO_OPERATION_CAPABILITIES, type AgentTraceItem, type OperationCapabilities } from "./lib/operations";
-import { sameNoticeScope, type NoticeScope } from "./lib/notice-scope";
+import type { NoticeScope } from "./lib/notice-scope";
 import { SNAPSHOT_FALLBACK_MS, PANE_READ_FALLBACK_MS } from "./poll";
+import { createNoticeLifecycle, type Notice } from "./state-notices";
 import { isDesk } from "./viewport";
 
 export { SNAPSHOT_FALLBACK_MS, PANE_READ_FALLBACK_MS };
+export { STATUS_NOTICE_MS, type Notice } from "./state-notices";
 export { FRIENDLY_ERROR, GENERIC_NOTICE, genericNotice, messageOf, noticeFor, sessionEventNotice } from "./lib/notices";
 
 export type Phase = "boot" | "connect" | "pairing" | "resuming" | "live" | "pick";
 export type Screen = "home" | "pane" | "settings" | "computers";
-export type Notice = { text: string; tone: "error" | "status"; scope?: NoticeScope };
 export type StatusTone = "live" | "warn" | "off" | "demo";
 export type AgentTraceLoadState = "cold" | "loading" | "ready" | "error";
 
@@ -193,7 +199,7 @@ export type AppState = {
   /** Settings preference for Auto / P2P / Relay. The live path is `sessionTransport`. */
   networkMode: NetworkMode;
   /** Last finished P2P attempt for the settings path card. Cancelled attempts are ignored. */
-  lastP2PAttempt: { result: "connected" | "failed"; extra: string } | null;
+  lastP2PAttempt: FinishedP2PAttemptObservation | null;
   /** A user-requested transport change is negotiating or reconnecting. */
   transportSwitching: boolean;
   refreshBusy: boolean;
@@ -715,79 +721,15 @@ export function wsURL(query?: { daemonId?: string; pairTicket?: string }): strin
   return clientWsURL(state.originProtocol, location, query);
 }
 
-export const STATUS_NOTICE_MS = 2800;
-
-let noticeTimer: number | null = null;
-
-function stopNoticeTimer(): void {
-  if (noticeTimer === null) return;
-  window.clearTimeout(noticeTimer);
-  noticeTimer = null;
-}
-
-/** Remove the live toast node. A full paint remounts the pane and kicks the keyboard. */
-function dropAppNotice(text?: string): void {
-  for (const node of app.querySelectorAll("[data-app-notice]")) {
-    if (text !== undefined && node.textContent !== text) continue;
-    node.remove();
-  }
-}
-
-export function captureNoticeScope(): NoticeScope {
-  return {
-    phase: state.phase,
-    screen: state.screen,
-    daemonId: state.credential?.daemonId ?? null,
-    paneId: state.paneId,
-  };
-}
-
-export function noticeScopeIsCurrent(scope: NoticeScope): boolean {
-  return sameNoticeScope(scope, captureNoticeScope());
-}
-
-export function visibleNotice(): Notice | null {
-  const notice = state.notice;
-  if (!notice?.scope || noticeScopeIsCurrent(notice.scope)) return notice;
-  return null;
-}
-
-export function clearNotice(): void {
-  stopNoticeTimer();
-  state.notice = null;
-  dropAppNotice();
-}
-
-export function clearNoticeForScope(scope: NoticeScope): void {
-  if (!state.notice?.scope || !sameNoticeScope(state.notice.scope, scope)) return;
-  clearNotice();
-}
-
-function scheduleNoticeDismiss(text: string, tone: Notice["tone"]): void {
-  noticeTimer = window.setTimeout(() => {
-    noticeTimer = null;
-    if (state.notice?.tone !== tone || state.notice.text !== text) return;
-    state.notice = null;
-    dropAppNotice(text);
-  }, STATUS_NOTICE_MS);
-}
-
-/** Landing-page errors pass `true` so the copy stays until the next action. */
-export function showError(text: string, scopeOrPersist?: NoticeScope | boolean, persist = false): void {
-  stopNoticeTimer();
-  const scope = typeof scopeOrPersist === "object" && scopeOrPersist ? scopeOrPersist : undefined;
-  const keep = typeof scopeOrPersist === "boolean" ? scopeOrPersist : persist;
-  state.notice = { text, tone: "error", ...(scope ? { scope } : {}) };
-  if (keep || !text) return;
-  scheduleNoticeDismiss(text, "error");
-}
-
-export function showStatus(text: string, persist = false, scope?: NoticeScope): void {
-  stopNoticeTimer();
-  state.notice = { text, tone: "status", ...(scope ? { scope } : {}) };
-  if (persist || !text) return;
-  scheduleNoticeDismiss(text, "status");
-}
+export const {
+  captureNoticeScope,
+  noticeScopeIsCurrent,
+  visibleNotice,
+  clearNotice,
+  clearNoticeForScope,
+  showError,
+  showStatus,
+} = createNoticeLifecycle(state, app);
 
 export function selectedAgent(): DashboardAgentCard | undefined {
   return state.agents.find((agent) => agent.paneId === state.paneId);

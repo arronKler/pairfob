@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { ComputerSessions } from "./computer-sessions.ts";
-import type { LiveSession, PairResult, SessionEvent } from "./lib/protocol/client.ts";
+import type { LiveSession, P2PAttemptObservation, PairResult, SessionEvent } from "./lib/protocol/client.ts";
+
+type AttemptObserver = (observation: P2PAttemptObservation) => void;
 
 type FakeSession = LiveSession & {
   closed: number;
@@ -131,5 +133,45 @@ describe("page-local computer sessions", () => {
     expect(b.reconnects).toBe(1);
     expect(a.transports).toEqual(["relay"]);
     expect(b.transports).toEqual([]);
+  });
+
+  test("keeps finished P2P diagnostics with the computer that produced them", async () => {
+    const pool = new ComputerSessions();
+    const attempts = new Map<string, AttemptObserver>();
+    const connect = async (credential: PairResult, observe: AttemptObserver) => {
+      attempts.set(credential.daemonId, observe);
+      return fakeSession();
+    };
+
+    const a = await pool.activate(pair("a"), connect);
+    pool.bind("a", a.session, () => undefined);
+    const b = await pool.activate(pair("b"), connect);
+    pool.bind("b", b.session, () => undefined);
+    attempts.get("a")?.({ result: "failed", extra: "ice_timeout" });
+    attempts.get("b")?.({ result: "connected", extra: "complete" });
+
+    expect((await pool.activate(pair("a"), connect)).lastP2PAttempt).toEqual({
+      result: "failed",
+      extra: "ice_timeout",
+    });
+    expect((await pool.activate(pair("b"), connect)).lastP2PAttempt).toEqual({
+      result: "connected",
+      extra: "complete",
+    });
+  });
+
+  test("ignores late P2P diagnostics from a replaced credential", async () => {
+    const pool = new ComputerSessions();
+    const attempts: AttemptObserver[] = [];
+    const connect = async (_credential: PairResult, observe: AttemptObserver) => {
+      attempts.push(observe);
+      return fakeSession();
+    };
+    await pool.activate(pair("a", "phone_old"), connect);
+    const replacement = await pool.activate(pair("a", "phone_new"), connect);
+    attempts[0]({ result: "failed", extra: "ice_timeout" });
+
+    expect((await pool.activate(pair("a", "phone_new"), connect)).session).toBe(replacement.session);
+    expect((await pool.activate(pair("a", "phone_new"), connect)).lastP2PAttempt).toBeNull();
   });
 });

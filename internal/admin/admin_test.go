@@ -173,8 +173,9 @@ func TestListenModeIsOwnerOnly(t *testing.T) {
 }
 
 func TestPairAndDeviceOps(t *testing.T) {
+	p2p := false
 	svc := &fake{
-		status: Pairing{Ref: "abc", Ready: true, Host: "box", Runtime: "herdr"},
+		status: Pairing{Ref: "abc", Ready: true, Host: "box", Runtime: "herdr", P2P: &p2p},
 		devices: []Device{{
 			ID: "dev_12345678", Label: "iPhone", SubscriptionCount: 1,
 		}},
@@ -187,6 +188,9 @@ func TestPairAndDeviceOps(t *testing.T) {
 	}
 	if strings.Contains(string(status.Result), `"sas"`) || strings.Contains(string(status.Result), "device_psk") {
 		t.Fatalf("status=%s", status.Result)
+	}
+	if !strings.Contains(string(status.Result), `"p2p":false`) {
+		t.Fatalf("status missing live P2P state: %s", status.Result)
 	}
 	ready, err := Call(sock, Request{Op: "pair.wait", PairRef: "abc"})
 	if err != nil || svc.waited != "abc" || !strings.Contains(string(ready.Result), `"ready":true`) {

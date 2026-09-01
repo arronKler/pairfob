@@ -16,9 +16,15 @@ import type { PairResult } from "./pair-ws.ts";
 import { SessionTransport } from "./session-transport.ts";
 import type { ReconnectReason, SessionEvent } from "./session-types.ts";
 import { commitDirectSession, prepareDirectSession, restartDirectSession } from "./session-upgrade.ts";
+import type { TransportSwitchLease } from "./transport-switch.ts";
 
 export type P2PAttemptObservation = {
   result: "connected" | "failed" | "cancelled";
+  extra: DirectICEGathering | DirectFailureDiagnostic;
+};
+
+export type FinishedP2PAttemptObservation = {
+  result: "connected" | "failed";
   extra: DirectICEGathering | DirectFailureDiagnostic;
 };
 
@@ -31,9 +37,9 @@ export type DirectSessionHost = {
   networkMode: NetworkMode;
   getTransport(): SessionTransport | null;
   setTransport(transport: SessionTransport): void;
-  beginSwitch(): void;
-  endSwitch(): void;
-  switchWait(): Promise<void> | null;
+  beginSwitch(): TransportSwitchLease;
+  ownsSwitch(lease: TransportSwitchLease): boolean;
+  endSwitch(lease: TransportSwitchLease): boolean;
   emit(event: SessionEvent): void;
   observe(observation: P2PAttemptObservation): void;
   onDisconnect(source: SessionTransport, error: ProtocolError): void;
@@ -59,7 +65,6 @@ export class DirectSessionDriver {
     this.directAbort = null;
     this.restartAbort?.abort();
     this.restartAbort = null;
-    this.directAttempt = null;
     this.clearDirectRetry();
     this.unwatchIce?.();
     this.unwatchIce = null;
@@ -220,13 +225,14 @@ export class DirectSessionDriver {
 
   private async runDirectUpgrade(relay: SessionTransport, controller: AbortController): Promise<void> {
     let candidate: Awaited<ReturnType<typeof prepareDirectSession>> | null = null;
+    let switchLease: TransportSwitchLease | null = null;
     try {
       candidate = await prepareDirectSession(relay, this.host.pair, muxProtocolFromRelayURL(this.host.relayWS), controller.signal);
       const iceGathering = candidate.iceGathering;
       if (this.host.stopped || this.host.getTransport() !== relay || !this.host.networkAvailable) {
         throw new DirectError("cancelled", "P2P 直连尝试已取消");
       }
-      this.host.beginSwitch();
+      switchLease = this.host.beginSwitch();
       await relay.waitIdle();
       const direct = await commitDirectSession(relay, candidate, (event) => this.host.emit(event));
       candidate = null;
@@ -248,19 +254,16 @@ export class DirectSessionDriver {
         result: diagnostic === "cancelled" ? "cancelled" : "failed",
         extra: diagnostic,
       });
-      const deferred = this.host.peekDeferredDisconnect();
-      if (deferred && this.host.getTransport() === relay) {
-        this.host.takeDeferredDisconnect();
-        this.host.finishDisconnect(deferred);
-      }
       throw error;
     } finally {
       candidate?.close();
-      if (this.host.switchWait()) this.host.endSwitch();
-      const deferred = this.host.peekDeferredDisconnect();
-      if (deferred && this.host.getTransport()) {
-        this.host.takeDeferredDisconnect();
-        this.host.finishDisconnect(deferred);
+      if (switchLease && this.host.ownsSwitch(switchLease)) {
+        const deferred = this.host.peekDeferredDisconnect();
+        if (deferred && this.host.getTransport()) {
+          this.host.takeDeferredDisconnect();
+          this.host.finishDisconnect(deferred);
+        }
+        this.host.endSwitch(switchLease);
       }
     }
   }

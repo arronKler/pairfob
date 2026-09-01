@@ -60,6 +60,30 @@ func TestAnnounceStartupStaysQuietWhenUnpaired(t *testing.T) {
 	}
 }
 
+func TestLiveAdminStatusReportsActualP2PState(t *testing.T) {
+	a, _ := mux.NewPipePair(8)
+	eng := daemon.NewEngine(nil, a, runtime.NewFake())
+	status := (liveAdmin{eng: eng}).Status()
+	if status.P2P == nil || *status.P2P {
+		t.Fatalf("P2P=%v, want disabled", status.P2P)
+	}
+	eng.Direct = newWebRTCAcceptor()
+	status = (liveAdmin{eng: eng}).Status()
+	if status.P2P == nil || !*status.P2P {
+		t.Fatalf("P2P=%v, want enabled", status.P2P)
+	}
+}
+
+func TestLoadDaemonP2PIgnoresCallerEnvironment(t *testing.T) {
+	t.Setenv("PAIRFOB_P2P", "1")
+	disabled := false
+	sock := startAdminService(t, &interactiveAdmin{status: admin.Pairing{P2P: &disabled}})
+	got, err := loadDaemonP2P(sock)
+	if err != nil || got == nil || *got {
+		t.Fatalf("P2P=%v err=%v, want running daemon disabled", got, err)
+	}
+}
+
 func testSocket(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "kn")
