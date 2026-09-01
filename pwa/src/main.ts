@@ -102,7 +102,7 @@ function applyNetworkAvailability(available: boolean): void {
     return;
   }
   if (state.sessionTransport === "p2p") preloadFullTerminalXterm();
-  if (changed || !state.live?.isConnected()) showStatus(t("net.restored"), true);
+  if (changed || !state.live?.isConnected()) showStatus(t("net.restored"));
   if (!changed) reconnectLiveSessions();
   startPolling();
   void refreshRuntimeState();
@@ -180,7 +180,7 @@ async function boot(): Promise<void> {
     state.p2pEnabled = config.p2p;
   } catch (error) {
     state.phase = "connect";
-    showError(messageOf(error));
+    showError(messageOf(error), true);
     track("pwa_boot", { result: "bad_relay", extra: "connect" });
     paint();
     return;
@@ -189,7 +189,7 @@ async function boot(): Promise<void> {
     await reloadComputers();
   } catch (error) {
     state.phase = "connect";
-    showError(messageOf(error));
+    showError(messageOf(error), true);
     track("pwa_boot", { result: "connect", extra: "connect" });
     paint();
     return;
@@ -199,7 +199,7 @@ async function boot(): Promise<void> {
     : undefined;
   if (state.notificationTarget && !notificationPair) {
     state.notificationTarget = null;
-    showError(t("err.notifyComputerGone"));
+    showError(t("err.notifyComputerGone"), true);
   }
   if (applyOriginPairingPolicy()) {
     state.phase = state.computers.length ? "pick" : "connect";

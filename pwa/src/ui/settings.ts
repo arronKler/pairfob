@@ -12,7 +12,7 @@ import { render } from "../paint";
 import { app, setDefaultTermMode, state } from "../state";
 import { isDesk } from "../viewport";
 import { composeLiveControl } from "./session-view";
-import { backBar, feedbackNode, herdStatus, languageControl, listGroupControl, noteNode, setRow } from "./chrome";
+import { appendNotice, backBar, feedbackNode, herdStatus, languageControl, listGroupControl, setRow } from "./chrome";
 
 const NETWORK_MODE_COPY: Record<NetworkMode, "settings.networkAuto" | "settings.networkP2P" | "settings.networkRelay"> = {
   auto: "settings.networkAuto",
@@ -36,6 +36,28 @@ function networkModeControl(): HTMLElement {
     bar.append(item);
   }
   return bar;
+}
+
+function networkPathCopy(): string {
+  if (state.sessionTransport === "p2p") {
+    return state.relayRttMs === null
+      ? t("settings.networkP2PPending")
+      : t("settings.networkRttP2P", { ms: state.relayRttMs });
+  }
+  if (state.p2pEnabled && state.networkMode === "p2p") {
+    return state.relayRttMs === null
+      ? t("settings.networkP2PRelayPending")
+      : t("settings.networkP2PRelay", { ms: state.relayRttMs });
+  }
+  return state.relayRttMs === null
+    ? t("settings.networkRelayPending")
+    : t("settings.networkRttRelay", { ms: state.relayRttMs });
+}
+
+function networkModeNote(): string {
+  if (!state.p2pEnabled) return t("settings.networkP2POff");
+  if (state.networkMode === "p2p") return t("settings.networkP2PNote");
+  return t("settings.networkNote");
 }
 
 function defaultTermModeControl(): HTMLElement {
@@ -81,19 +103,15 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
       }),
     );
   }
+  appendNotice(container);
   const status = herdStatus();
   container.append(node("h2", "set-title", t("settings.connection")));
   const conn = node("div", "set-card");
   conn.append(setRow(t("settings.computer"), state.herdHost || (state.credential ? computerTitle(state.credential) : t("settings.currentComputer"))));
   conn.append(setRow(t("settings.status"), status.text, status.tone));
-  conn.append(setRow(
-    t("settings.networkRtt"),
-    state.relayRttMs === null
-      ? t(state.sessionTransport === "p2p" ? "settings.networkP2PPending" : "settings.networkRelayPending")
-      : t(state.sessionTransport === "p2p" ? "settings.networkRttP2P" : "settings.networkRttRelay", { ms: state.relayRttMs }),
-  ));
+  conn.append(setRow(t("settings.networkRtt"), networkPathCopy()));
   const networkModeRow = node("div", "set-row set-row-stack network-mode-row");
-  networkModeRow.append(node("p", "set-note", t(state.p2pEnabled ? "settings.networkNote" : "settings.networkP2POff")));
+  networkModeRow.append(node("p", "set-note", networkModeNote()));
   networkModeRow.append(networkModeControl());
   conn.append(networkModeRow);
   const self = state.deviceList.find((device) => device.self && !device.revoked_at);
@@ -207,8 +225,6 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   if (state.devicesError || state.pushConfigError) {
     container.append(button(t("retry"), "btn btn-small btn-ghost retry", refreshSettings));
   }
-  const feedback = noteNode();
-  if (feedback) container.append(feedback);
 }
 
 export function renderSettings(): void {

@@ -145,16 +145,4 @@
   cursor: default;
 }
 
-/* Floating toast notice above the dock. */
-.dock .notice {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: calc(100% + 8px);
-  margin: 0;
-  background: rgba(20, 25, 34, 0.95);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
-  animation: sheet-up 0.2s var(--ease);
-}
+

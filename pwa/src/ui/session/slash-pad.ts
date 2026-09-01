@@ -8,15 +8,15 @@ import { setComposeText } from "./compose";
 
 const PAD_KIND_LABEL = () => t("slash.padKind");
 
-function selectPadKind(kind: PadKind): void {
+function selectPadKind(kind: PadKind, repaint: () => void): void {
   if (state.padKind === kind) return;
   clearModifiers();
   state.padKind = kind;
   savePadKind();
-  render();
+  repaint();
 }
 
-export function padModeBar(): HTMLElement {
+export function padModeBar(repaint: () => void = render): HTMLElement {
   const bar = node("div", "seg pad-mode");
   bar.setAttribute("role", "radiogroup");
   bar.setAttribute("aria-label", PAD_KIND_LABEL());
@@ -30,13 +30,13 @@ export function padModeBar(): HTMLElement {
     item.setAttribute("role", "radio");
     item.setAttribute("aria-checked", selected ? "true" : "false");
     item.addEventListener("pointerdown", (event) => event.preventDefault());
-    item.addEventListener("click", () => selectPadKind(option.kind));
+    item.addEventListener("click", () => selectPadKind(option.kind, repaint));
     bar.append(item);
   }
   return bar;
 }
 
-export function slashPad(): HTMLElement {
+export function slashPad(selectCommand: (text: string) => void = setComposeText): HTMLElement {
   const row = node("div", "slash-pad");
   row.setAttribute("role", "group");
   row.setAttribute("aria-label", t("slash.agentCmds"));
@@ -45,7 +45,7 @@ export function slashPad(): HTMLElement {
     el.type = "button";
     el.setAttribute("aria-label", command.ariaKey ? t(command.ariaKey) : t("slash.insert", { label: command.label }));
     el.addEventListener("pointerdown", (event) => event.preventDefault());
-    el.addEventListener("click", () => setComposeText(command.token));
+    el.addEventListener("click", () => selectCommand(command.token));
     row.append(el);
   }
   return row;

@@ -4,6 +4,7 @@ import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { saveKeysExpanded, state } from "../state";
 import { PRIMARY_KEYS, SECONDARY_KEYS, TERTIARY_KEYS, bindModifier, clearModifiers, paintKey, withModifiers, type KeySpec } from "./keypad";
+import { padModeBar, slashPad } from "./session/slash-pad";
 
 const REPEAT_DELAY_MS = 380;
 const REPEAT_EVERY_MS = 90;
@@ -269,15 +270,18 @@ export function syncKeyboardButton(root: ParentNode, open: boolean): void {
 export function fullTerminalPad(
   send: (key: string) => void,
   keyboard?: { toggle: () => void; isOpen: () => boolean },
+  selectCommand: (text: string) => void = () => undefined,
 ): HTMLElement {
   const pad = node("div", "full-terminal-pad");
+  const controls = node("div", "full-terminal-pad-controls");
+  pad.append(controls);
   const paint = () => {
-    pad.replaceChildren();
+    controls.replaceChildren();
     if (keyboard) {
       const kb = button("", "full-terminal-kb");
       kb.type = "button";
-      pad.append(kb);
-      syncKeyboardButton(pad, keyboard.isOpen());
+      controls.append(kb);
+      syncKeyboardButton(controls, keyboard.isOpen());
       kb.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -296,9 +300,14 @@ export function fullTerminalPad(
       paint();
     });
     primary.append(more);
-    pad.append(primary);
+    controls.append(primary);
     if (state.keysExpanded) {
-      pad.append(keyRow(SECONDARY_KEYS, t("keys.more"), send), keyRow(TERTIARY_KEYS, t("keys.mods"), send));
+      controls.append(padModeBar(paint));
+      if (state.padKind === "slash") {
+        controls.append(slashPad(selectCommand));
+        return;
+      }
+      controls.append(keyRow(SECONDARY_KEYS, t("keys.more"), send), keyRow(TERTIARY_KEYS, t("keys.mods"), send));
     }
   };
   paint();

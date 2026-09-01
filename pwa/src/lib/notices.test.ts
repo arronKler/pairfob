@@ -7,6 +7,9 @@ const liveSrc = await Bun.file(new URL("../live.ts", import.meta.url)).text();
 const operationSrc = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
 const stateSrc = await Bun.file(new URL("../state.ts", import.meta.url)).text();
 const chromeSrc = await Bun.file(new URL("../ui/chrome.ts", import.meta.url)).text();
+const mainSrc = await Bun.file(new URL("../main.ts", import.meta.url)).text();
+const liveSettingsSrc = await Bun.file(new URL("../live-settings.ts", import.meta.url)).text();
+const pairingSrc = await Bun.file(new URL("../pairing.ts", import.meta.url)).text();
 
 function fnBody(source: string, name: string): string {
   const start = source.indexOf(`function ${name}`);
@@ -124,6 +127,11 @@ describe("shipped user notices", () => {
     expect(operationSrc).toContain("showStatus(pending, true, noticeScope)");
     expect(operationSrc).toContain("showStatus(success, false, noticeScope)");
     expect(liveSrc).toContain("showStatus(sessionEventNotice(event), true)");
+    expect(mainSrc).toContain('showStatus(t("net.offline"), true)');
+    expect(mainSrc).toContain('showStatus(t("net.restored")');
+    expect(mainSrc).not.toContain('showStatus(t("net.restored"), true)');
+    expect(liveSettingsSrc).toContain("else clearNotice()");
+    expect(pairingSrc).not.toContain("showStatus(messageOf(error), true)");
   });
 
   test("prompt notices and refreshes stay with the pane that started the task", () => {
@@ -145,10 +153,16 @@ describe("shipped user notices", () => {
 
   test("status toast timeout drops the live notice without remounting the pane", () => {
     const showStatus = fnBody(stateSrc, "showStatus");
+    const showError = fnBody(stateSrc, "showError");
+    const schedule = fnBody(stateSrc, "scheduleNoticeDismiss");
     const clearNotice = fnBody(stateSrc, "clearNotice");
     const dropAppNotice = fnBody(stateSrc, "dropAppNotice");
     expect(stateSrc).toContain("STATUS_NOTICE_MS = 2800");
-    expect(showStatus).toContain("dropAppNotice(text)");
+    expect(showStatus).toContain('scheduleNoticeDismiss(text, "status")');
+    expect(showError).toContain('scheduleNoticeDismiss(text, "error")');
+    expect(showError).toContain("const keep = typeof scopeOrPersist === \"boolean\" ? scopeOrPersist : persist");
+    expect(schedule).toContain("dropAppNotice(text)");
+    expect(schedule).not.toContain("render(");
     expect(showStatus).not.toContain("render(");
     expect(clearNotice).toContain("dropAppNotice()");
     expect(dropAppNotice).toContain('querySelectorAll("[data-app-notice]")');

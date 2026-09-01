@@ -176,8 +176,8 @@ export async function landAfterDisconnect(opts: {
   if (!state.computers.length) state.credential = null;
   if (!opts.silent) {
     const burned = credentialIsBurned(code) && (code === "revoked" || code === "unpaired");
-    if (opts.error) showError(burned ? FRIENDLY_ERROR.revoked : messageOf(opts.error));
-    else if (code) showError(burned ? FRIENDLY_ERROR.revoked : sessionEventNotice({ type: "terminal", code }));
+    if (opts.error) showError(burned ? FRIENDLY_ERROR.revoked : messageOf(opts.error), true);
+    else if (code) showError(burned ? FRIENDLY_ERROR.revoked : sessionEventNotice({ type: "terminal", code }), true);
   }
   track("pwa_disconnect", { result: code || "disconnected" });
   render();
@@ -355,7 +355,7 @@ function abandonOpenPane(message: string): void {
   disposeFullTerminal();
   state.screen = "home";
   resetPaneView();
-  showError(message);
+  showError(message, true);
   render();
 }
 

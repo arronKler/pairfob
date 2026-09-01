@@ -164,3 +164,8 @@
 
 /* Session chrome: the ‹ glyph sits high in the em box; nudge it onto the title. */
 .chrome .back { padding-bottom: 3px; }
+
+.pane-root > .notice {
+  flex: none;
+  margin: 8px 10px 0;
+}

@@ -8,7 +8,15 @@ describe("computer picker copy", () => {
     expect(source).toContain('t("computers.offlineLede")');
     expect(source).toContain('t("computers.pick")');
     expect(source).toContain('t("computers.multiLede")');
+  });
+
+  test("adding another computer is a list row, not a ghost caption", () => {
+    expect(source).toContain("switch-item computer-add");
+    expect(source).toContain("add-mark");
+    expect(source).toContain('t("settings.addComputer")');
     expect(source).toContain('t("computers.addHint")');
+    expect(source).not.toContain("btn-ghost computer-add");
+    expect(source).not.toContain('node("p", "lede", t("computers.addHint"))');
   });
 
   test("forgetting a computer is local and does not say revoke", () => {

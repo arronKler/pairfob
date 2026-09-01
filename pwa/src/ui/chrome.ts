@@ -20,6 +20,11 @@ export function noteNode(): HTMLElement | null {
   return element;
 }
 
+export function appendNotice(host: ParentNode): void {
+  const notice = noteNode();
+  if (notice) host.append(notice);
+}
+
 export function spinnerNode(): HTMLElement {
   const spinner = node("span", "spinner");
   spinner.setAttribute("aria-hidden", "true");

@@ -2,7 +2,6 @@ import { node } from "../../lib/dom";
 import { t } from "../../lib/i18n";
 import { render } from "../../paint";
 import { saveKeysExpanded, state } from "../../state";
-import { noteNode } from "../chrome";
 import { PRIMARY_KEYS, SECONDARY_KEYS, TERTIARY_KEYS, bindModifier, clearModifiers, paintKey, type KeySpec } from "../keypad";
 import { composeForm, insertNewline } from "./compose";
 import { bindKeyPress } from "./keys";
@@ -66,7 +65,5 @@ export function dockNode(includeBack: boolean): { dock: HTMLElement; input: HTML
   dock.append(keyPad());
   const { form, input } = composeForm(includeBack);
   dock.append(form);
-  const error = noteNode();
-  if (error) dock.append(error);
   return { dock, input };
 }

@@ -24,6 +24,14 @@ describe("home chrome", () => {
     expect(source).not.toContain("issues/new");
     expect(source).not.toContain("homeFeedback");
   });
+
+  test("app notices sit above the session cards", () => {
+    const home = source.slice(source.indexOf("export function renderHome"));
+    const noticeAt = home.indexOf("appendNotice(root)");
+    const listAt = home.indexOf("fillHerdList(root)");
+    expect(noticeAt).toBeGreaterThan(-1);
+    expect(listAt).toBeGreaterThan(noticeAt);
+  });
 });
 
 describe("home pinned sessions", () => {

@@ -6,7 +6,7 @@ import { formatDeviceAge } from "../lib/ui-model";
 import { render } from "../paint";
 import { app, state } from "../state";
 import { isDesk } from "../viewport";
-import { backBar, brandNode, chevron, noteNode } from "./chrome";
+import { appendNotice, backBar, brandNode, chevron } from "./chrome";
 
 function computerMeta(daemonId: string, lastSeen?: number): string {
   const current = state.phase === "live" && state.credential?.daemonId === daemonId;
@@ -31,6 +31,18 @@ function computerRow(pair: typeof state.computers[number]): HTMLElement {
   return row;
 }
 
+function addComputerRow(): HTMLButtonElement {
+  const add = button("", "switch-item computer-add", beginAddComputer);
+  const mark = node("span", "add-mark");
+  mark.setAttribute("aria-hidden", "true");
+  const main = node("span", "switch-main");
+  const head = node("span", "switch-head");
+  head.append(node("span", "switch-name", t("settings.addComputer")));
+  main.append(head, node("span", "switch-meta", t("computers.addHint")));
+  add.append(mark, main, chevron());
+  return add;
+}
+
 export function fillComputers(container: HTMLElement | DocumentFragment, withBack: boolean): void {
   if (withBack) {
     container.append(
@@ -50,13 +62,10 @@ export function fillComputers(container: HTMLElement | DocumentFragment, withBac
       ),
     );
   }
+  appendNotice(container);
   const list = node("div", "computer-list");
   state.computers.forEach((pair) => list.append(computerRow(pair)));
-  container.append(list);
-  container.append(button(t("settings.addComputer"), "btn btn-ghost computer-add", beginAddComputer));
-  container.append(node("p", "lede", t("computers.addHint")));
-  const error = noteNode();
-  if (error) container.append(error);
+  container.append(list, addComputerRow());
 }
 
 export function renderComputers(): void {

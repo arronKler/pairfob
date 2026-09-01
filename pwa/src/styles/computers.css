@@ -36,4 +36,17 @@
 
 .computer-forget:active { color: var(--danger-bright); }
 
-.computer-add { margin-top: 18px; }
+.computer-add {
+  margin-top: 16px;
+  min-height: 52px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  align-items: center;
+}
+
+.computer-add .switch-name { color: var(--accent); }
+
+.computer-add .switch-meta {
+  white-space: normal;
+  line-height: 1.45;
+}

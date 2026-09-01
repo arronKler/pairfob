@@ -58,6 +58,7 @@ afterEach(() => {
   state.composeIME = false;
   state.composeLive = false;
   state.keysExpanded = false;
+  state.padKind = "keys";
   state.paneComposeLive = {};
   localStorage.clear();
 });
@@ -129,6 +130,39 @@ describe("complete-terminal compose input", () => {
     });
     (root.querySelector('[aria-label="Enter"]') as HTMLButtonElement).click();
     expect(sent).toEqual([["confirm", true]]);
+  });
+
+  test("expanded command chips fill compose mode and stream in live mode", () => {
+    state.keysExpanded = false;
+    state.padKind = "keys";
+    const sent: Array<[string, boolean]> = [];
+    const root = render((text, enter) => {
+      sent.push([text, enter]);
+      return true;
+    });
+    (root.querySelector('[aria-label="更多按键"]') as HTMLButtonElement).click();
+    expect(root.querySelector(".full-terminal-compose-input")).toBeTruthy();
+    const commandMode = [...root.querySelectorAll<HTMLButtonElement>(".pad-mode button")]
+      .find((el) => el.textContent === "命令");
+    commandMode?.click();
+    expect(root.querySelector(".full-terminal-compose-input")).toBeTruthy();
+    (root.querySelector('[aria-label="插入 /goal，接着填目标"]') as HTMLButtonElement).click();
+    expect(state.composeDraft).toBe("/goal ");
+    expect((root.querySelector(".full-terminal-compose-input") as HTMLTextAreaElement).value).toBe("/goal ");
+    expect(sent).toEqual([]);
+
+    state.composeLive = true;
+    syncFullTerminalControls(root, {
+      sendKey: () => undefined,
+      sendCompose: (text, enter) => {
+        sent.push([text, enter]);
+        return true;
+      },
+      keyboard: keyboard(),
+      desk: false,
+    });
+    (root.querySelector('[aria-label="插入 /clear"]') as HTMLButtonElement).click();
+    expect(sent).toEqual([["/clear", false]]);
   });
 
   test("switching modes persists the pane choice and preserves rejected drafts", () => {

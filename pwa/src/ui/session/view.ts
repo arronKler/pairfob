@@ -4,7 +4,7 @@ import { t } from "../../lib/i18n";
 import { type AgentCard } from "../../lib/ranking";
 import { app, selectedAgent, state } from "../../state";
 import { isDesk } from "../../viewport";
-import { backButton, noteNode } from "../chrome";
+import { appendNotice, backButton } from "../chrome";
 import { chromeActionCluster, syncChromeStop } from "./chrome-actions";
 import { composeField, sizeCompose, syncSendButton } from "./compose";
 import { dockNode } from "./dock";
@@ -79,8 +79,6 @@ function selectBar(): HTMLElement {
   const bar = node("div", "select-bar");
   bar.append(node("p", "select-hint", t("term.selectHint")));
   bar.append(button(t("term.done"), "btn btn-small", () => toggleTermSelect(false)));
-  const error = noteNode();
-  if (error) bar.append(error);
   return bar;
 }
 
@@ -95,6 +93,7 @@ export function fillSession(
     container.append(node("p", "empty-sub", t("err.paneGone")));
     return;
   }
+  appendNotice(container);
   const model = paneModel();
   container.append(termView(model, openRow));
   const extras = node("div", "session-extras");

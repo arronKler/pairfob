@@ -88,7 +88,7 @@ async function pasteFromClipboard(): Promise<void> {
     if (!code) {
       state.pairManualOpen = true;
       state.pairErrorTarget = "code";
-      showError(t("err.noClipboardCode"));
+      showError(t("err.noClipboardCode"), true);
       render();
       focusPairCode();
       return;
@@ -222,7 +222,7 @@ export function renderConnect(): void {
     form.addEventListener("submit", onPairSubmit);
   }
   wrap.append(form);
-  if (!state.pairErrorTarget && feedback) wrap.append(feedback);
+  if (!state.pairErrorTarget && feedback) wrap.insertBefore(feedback, form);
   wrap.append(node("p", "trust", t("connect.trust")));
   if (!adding) wrap.append(connectLang());
   app.replaceChildren(wrap);

@@ -2,6 +2,7 @@ import { node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { app, selectedAgent, state } from "../state";
 import { fillAgentChat } from "./agent-chat";
+import { appendNotice } from "./chrome";
 import { renderRail } from "./home";
 import { sessionHandlers } from "./pane";
 import { fillSession, finishSessionPaint, sessionScroll } from "./session-view";
@@ -32,6 +33,7 @@ export function renderDesk(): void {
       input = fillSession(pane, selected, false, handlers);
       main.append(pane);
     } else {
+      appendNotice(main);
       const empty = node("div", "main-empty");
       empty.append(node("p", "empty-title", t("desk.pickTitle")), node("p", "empty-sub", t("desk.pickSub")));
       main.append(empty);

@@ -100,10 +100,23 @@ afterEach(() => {
   state.paneId = "";
   state.listGroup = "flat";
   state.panePinned = {};
+  state.notice = null;
   app.replaceChildren();
 });
 
 describe("session list object controls", () => {
+  test("app notices sit above the session cards", () => {
+    boot();
+    state.notice = { text: "网络已恢复，正在确认连接…", tone: "status" };
+    renderHome();
+    const page = app.querySelector(".page");
+    const children = page ? [...page.children] : [];
+    const noticeIdx = children.findIndex((el) => el.hasAttribute("data-app-notice"));
+    const listIdx = children.findIndex((el) => el.classList.contains("herd-list"));
+    expect(noticeIdx).toBeGreaterThan(-1);
+    expect(listIdx).toBeGreaterThan(noticeIdx);
+  });
+
   test("the card is a single open control with no trailing menu button", () => {
     boot();
     expect(app.querySelectorAll("article.card")).toHaveLength(3);

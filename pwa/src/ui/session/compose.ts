@@ -408,7 +408,7 @@ export async function submitTyped(allowBareEnter = false): Promise<void> {
     }
     if (outcome === "stalled") {
       if (state.live === session && noticeScopeIsCurrent(noticeScope)) {
-        showError(stallNotice(), noticeScope);
+        showError(stallNotice(), noticeScope, true);
         render();
       } else {
         clearNoticeForScope(noticeScope);

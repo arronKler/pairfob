@@ -388,13 +388,14 @@ describe("agent-chat remembers its mode per pane", () => {
       agentTrace: async () => { throw new ProtocolError("too_large", "response exceeds protocol limit"); },
     } as typeof state.live;
     await refreshAgentTrace();
-    const notice = app.querySelector(".agent-dock [data-app-notice]");
+    const notice = app.querySelector(".agent-chat-root > [data-app-notice]");
     expect(notice?.textContent).toContain("没能完整读取");
+    expect(app.querySelector(".agent-dock [data-app-notice]")).toBeNull();
     expect(app.querySelector(".agent-stream [data-app-notice]")).toBeNull();
     expect(app.textContent).not.toContain("没有发送");
     expect(app.textContent).toContain("looks fine");
     expect(patchAgentChat({ follow: true })).toBe(true);
-    expect(app.querySelector(".agent-dock [data-app-notice]")).toBe(notice);
+    expect(app.querySelector(".agent-chat-root > [data-app-notice]")).toBe(notice);
   });
 
   test("blocked agents get a way back to the guided confirm UI", () => {

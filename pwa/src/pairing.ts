@@ -14,7 +14,7 @@ function rejectLocal(target: PairErrorField, text: string): void {
   state.phase = "connect";
   state.pairManualOpen = true;
   state.pairErrorTarget = target;
-  showError(text);
+  showError(text, true);
   render();
   queueMicrotask(() => (app.querySelector(`[name="${target}"]`) as HTMLInputElement | null)?.focus());
 }
@@ -104,15 +104,15 @@ export async function beginPairing(rawCode: string): Promise<void> {
     if (shouldForgetPairFragment(code)) state.fragment = null;
     if (code === "pairing_cancelled" && (state.addingComputer || state.computers.length || state.live)) {
       cancelAddComputer();
-      showStatus(messageOf(error), true);
+      showStatus(messageOf(error));
       render();
       return;
     }
     state.pairErrorTarget = pairErrorField(code);
     state.pairManualOpen = code === "pairing_cancelled" ? !scanned : true;
     state.phase = "connect";
-    if (code === "pairing_cancelled") showStatus(messageOf(error), true);
-    else showError(messageOf(error));
+    if (code === "pairing_cancelled") showStatus(messageOf(error));
+    else showError(messageOf(error), true);
     render();
     if (state.pairErrorTarget) {
       queueMicrotask(() => (app.querySelector(`[name="${state.pairErrorTarget}"]`) as HTMLInputElement | null)?.focus());

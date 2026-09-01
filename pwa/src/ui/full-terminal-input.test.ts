@@ -103,6 +103,7 @@ describe("complete-terminal xterm keyboard gate", () => {
 describe("complete-terminal pad chrome", () => {
   test("shows esc and arrows, then more keys after expand", () => {
     state.keysExpanded = false;
+    state.padKind = "keys";
     const sent: string[] = [];
     const pad = fullTerminalPad((key) => sent.push(key));
     document.body.append(pad);
@@ -117,12 +118,31 @@ describe("complete-terminal pad chrome", () => {
     expect(expanded).toContain("Shift");
     expect(expanded).toContain("Cmd");
     expect(expanded).toContain("Ctrl+A");
+    expect(pad.querySelector(".pad-mode")?.getAttribute("aria-label")).toBe("扩展键盘形态");
     (pad.querySelector('[aria-label="上箭头"]') as HTMLButtonElement).dispatchEvent(
       new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }),
     );
     expect(sent).toEqual(["up"]);
     pad.remove();
     state.keysExpanded = false;
+  });
+
+  test("expanded commands use the same switch and slash catalog as guided mode", () => {
+    state.keysExpanded = true;
+    state.padKind = "keys";
+    const selected: string[] = [];
+    const pad = fullTerminalPad(() => undefined, undefined, (text) => selected.push(text));
+    document.body.append(pad);
+    const commandMode = [...pad.querySelectorAll<HTMLButtonElement>(".pad-mode button")]
+      .find((el) => el.textContent === "命令");
+    commandMode?.click();
+    expect(state.padKind).toBe("slash");
+    expect(pad.querySelector('[aria-checked="true"]')?.textContent).toBe("命令");
+    (pad.querySelector('[aria-label="插入 /clear"]') as HTMLButtonElement).click();
+    expect(selected).toEqual(["/clear"]);
+    pad.remove();
+    state.keysExpanded = false;
+    state.padKind = "keys";
   });
 
   test("the type field is a named control separate from scroll and pad keys", () => {

@@ -760,21 +760,30 @@ export function clearNoticeForScope(scope: NoticeScope): void {
   clearNotice();
 }
 
-export function showError(text: string, scope?: NoticeScope): void {
+function scheduleNoticeDismiss(text: string, tone: Notice["tone"]): void {
+  noticeTimer = window.setTimeout(() => {
+    noticeTimer = null;
+    if (state.notice?.tone !== tone || state.notice.text !== text) return;
+    state.notice = null;
+    dropAppNotice(text);
+  }, STATUS_NOTICE_MS);
+}
+
+/** Landing-page errors pass `true` so the copy stays until the next action. */
+export function showError(text: string, scopeOrPersist?: NoticeScope | boolean, persist = false): void {
   stopNoticeTimer();
+  const scope = typeof scopeOrPersist === "object" && scopeOrPersist ? scopeOrPersist : undefined;
+  const keep = typeof scopeOrPersist === "boolean" ? scopeOrPersist : persist;
   state.notice = { text, tone: "error", ...(scope ? { scope } : {}) };
+  if (keep || !text) return;
+  scheduleNoticeDismiss(text, "error");
 }
 
 export function showStatus(text: string, persist = false, scope?: NoticeScope): void {
   stopNoticeTimer();
   state.notice = { text, tone: "status", ...(scope ? { scope } : {}) };
   if (persist || !text) return;
-  noticeTimer = window.setTimeout(() => {
-    noticeTimer = null;
-    if (state.notice?.tone !== "status" || state.notice.text !== text) return;
-    state.notice = null;
-    dropAppNotice(text);
-  }, STATUS_NOTICE_MS);
+  scheduleNoticeDismiss(text, "status");
 }
 
 export function selectedAgent(): DashboardAgentCard | undefined {

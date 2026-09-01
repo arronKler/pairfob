@@ -64,7 +64,7 @@ describe("compose send button", () => {
     expect(guarded).toContain("retryRead:");
     expect(guarded).not.toContain("showStatus(");
     expect(composeSource).not.toContain('t("compose.submitPending")');
-    expect(composeSource).toContain('showError(stallNotice(), noticeScope)');
+    expect(composeSource).toContain("showError(stallNotice(), noticeScope, true)");
   });
 
   test("batch and live input share the UTF-8 wire budget", () => {

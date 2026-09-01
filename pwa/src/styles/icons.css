@@ -118,6 +118,27 @@
     linear-gradient(currentColor, currentColor) center / 2px 11px no-repeat;
 }
 
+.add-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: rgba(110, 168, 254, 0.16);
+  color: var(--accent);
+}
+
+.add-mark::before {
+  content: "";
+  width: 11px;
+  height: 11px;
+  background:
+    linear-gradient(currentColor, currentColor) center / 11px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 2px 11px no-repeat;
+}
+
 .icon-stop::before {
   content: "";
   width: 12px;

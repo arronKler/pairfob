@@ -49,6 +49,15 @@ describe("pane header keeps status surfaces in step", () => {
     expect(viewSource).not.toContain("promptPanel");
   });
 
+  test("app notices sit under the chrome, not in the dock or select bar", () => {
+    const fill = viewSource.slice(viewSource.indexOf("export function fillSession"), viewSource.indexOf("export function finishSessionPaint"));
+    expect(fill.indexOf("appendNotice(container)")).toBeGreaterThan(fill.indexOf("chromeNode("));
+    expect(fill.indexOf("termView(")).toBeGreaterThan(fill.indexOf("appendNotice(container)"));
+    const select = viewSource.slice(viewSource.indexOf("function selectBar("), viewSource.indexOf("export function fillSession"));
+    expect(select).not.toContain("noteNode");
+    expect(select).not.toContain("appendNotice");
+  });
+
   test("the status dot sits with the status line so the title can use the full width", () => {
     const body = viewSource.slice(viewSource.indexOf("function titleBody("), viewSource.indexOf("function syncChromeStatus("));
     expect(body).toContain("chrome-name");

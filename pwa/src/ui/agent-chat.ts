@@ -367,9 +367,9 @@ function chatDockNotice(): Notice | null {
   return { text: state.agentTraceNote, tone: state.agentTraceLoadState === "error" ? "error" : "status" };
 }
 
-function paintChatNotice(dock: HTMLElement): void {
+function paintChatNotice(root: HTMLElement): void {
   const want = chatDockNotice();
-  const existing = dock.querySelector("[data-app-notice]");
+  const existing = root.querySelector(":scope > [data-app-notice]");
   if (!want) {
     existing?.remove();
     return;
@@ -384,18 +384,22 @@ function paintChatNotice(dock: HTMLElement): void {
   existing?.remove();
   const note = feedbackNode(want);
   note.setAttribute("data-app-notice", "");
-  dock.append(note);
+  const chrome = root.querySelector(":scope > .chrome");
+  if (chrome?.nextSibling) root.insertBefore(note, chrome.nextSibling);
+  else root.prepend(note);
 }
 
 function syncChatDock(agent = selectedAgent()): void {
   syncChatCompose(agent);
   const dock = app.querySelector(".agent-dock");
-  if (!(dock instanceof HTMLElement)) return;
-  const blocked = agent?.status === "blocked";
-  const existing = dock.querySelector(".agent-confirm");
-  if (blocked && !existing) dock.prepend(confirmBar());
-  else if (!blocked && existing) existing.remove();
-  paintChatNotice(dock);
+  if (dock instanceof HTMLElement) {
+    const blocked = agent?.status === "blocked";
+    const existing = dock.querySelector(".agent-confirm");
+    if (blocked && !existing) dock.prepend(confirmBar());
+    else if (!blocked && existing) existing.remove();
+  }
+  const root = app.querySelector(".agent-chat-root");
+  if (root instanceof HTMLElement) paintChatNotice(root);
 }
 
 function patchChatChrome(chrome: HTMLElement, selected: ReturnType<typeof selectedAgent>): void {
@@ -520,7 +524,6 @@ function chatCompose(selectedHasAgent: boolean): { dock: HTMLElement; input: HTM
   form.append(input, send);
   if (selectedAgent()?.status === "blocked") dock.append(confirmBar());
   dock.append(form, hint);
-  paintChatNotice(dock);
   return { dock, input };
 }
 
@@ -625,6 +628,7 @@ export function fillAgentChat(
   jump.addEventListener("click", jumpToLatest);
   wrap.append(stream, jump);
   container.append(chatChrome(onBack, includeBack, onMenu, onSwitch, selected), wrap, dock);
+  paintChatNotice(container);
   sizeChatCompose(input);
   if (!state.agentTraceBusy && state.agentTraceLoadState === "cold") void refreshAgentTrace();
   if (state.agentTraceFollow) requestAnimationFrame(stickAgentStream);

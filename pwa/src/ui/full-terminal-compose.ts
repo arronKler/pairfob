@@ -43,6 +43,20 @@ function sizeField(field: HTMLTextAreaElement): void {
   field.style.height = `${Math.min(Math.max(field.scrollHeight, COMPOSE_MIN_PX), COMPOSE_MAX_PX)}px`;
 }
 
+function setComposeText(root: ParentNode, text: string): void {
+  const next = fitOperationPrompt(text).text;
+  state.composeDraft = next;
+  const input = root.querySelector<HTMLTextAreaElement>(".full-terminal-compose-input");
+  if (!input) return;
+  input.value = next;
+  sizeField(input);
+  const send = root.querySelector<HTMLButtonElement>(".full-terminal-compose-send");
+  send?.setAttribute("aria-label", next.trim() ? t("compose.sendEnterAria") : t("compose.enterAria"));
+  input.focus();
+  input.setSelectionRange(next.length, next.length);
+  haptic(4);
+}
+
 function composeForm(send: FullTerminalControlsOptions["sendCompose"]): HTMLFormElement {
   const form = node("form", "full-terminal-compose-form");
   const label = node("label", "sr-only", t("compose.batchAria"));
@@ -147,7 +161,14 @@ export function syncFullTerminalControls(root: HTMLElement, options: FullTermina
     }
     options.sendKey(key);
   };
-  pad = fullTerminalPad(routeKey, state.composeLive ? options.keyboard : undefined);
+  const selectCommand = (text: string): void => {
+    if (state.composeLive) {
+      options.sendCompose(text, false);
+      return;
+    }
+    setComposeText(pad, text);
+  };
+  pad = fullTerminalPad(routeKey, state.composeLive ? options.keyboard : undefined, selectCommand);
   pad.dataset.inputMode = mode;
   if (!state.composeLive) pad.append(composeForm(options.sendCompose));
   if (current) current.replaceWith(pad);

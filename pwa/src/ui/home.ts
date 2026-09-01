@@ -18,6 +18,7 @@ import { openSettings } from "../live-settings";
 import { render } from "../paint";
 import { app, state } from "../state";
 import {
+  appendNotice,
   brandNode,
   chevron,
   emptyNode,
@@ -25,7 +26,6 @@ import {
   herdBanners,
   herdStatus,
   listGroupControl,
-  noteNode,
   sectionTitle,
   statusLineNode,
 } from "./chrome";
@@ -132,9 +132,8 @@ export function renderHome(): void {
   top.append(brandNode(status.tone, true), liveActions());
   root.append(top, statusLineNode(status));
   herdBanners(root, status);
+  appendNotice(root);
   fillHerdList(root);
-  const error = noteNode();
-  if (error) root.append(error);
   app.replaceChildren(root);
 }
 

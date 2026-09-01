@@ -14,7 +14,8 @@ describe("expanded pad modes", () => {
   });
 
   test("slash chips fill compose instead of sending keys", () => {
-    expect(pad).toContain("setComposeText(command.token)");
+    expect(pad).toContain("= setComposeText");
+    expect(pad).toContain("selectCommand(command.token)");
     expect(pad).not.toContain("queueKey");
     expect(pad).not.toContain("sendPad");
     expect(compose).toContain("export function setComposeText");

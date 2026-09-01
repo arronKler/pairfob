@@ -136,4 +136,27 @@ describe("settings network transport", () => {
     expect(group().querySelector('[aria-checked="true"]')?.textContent).toBe("P2P");
     expect(choice("P2P").disabled).toBeFalse();
   });
+
+  test("explains a restored P2P preference while Relay bootstraps or retries", async () => {
+    const targets: Array<"auto" | "relay" | "p2p"> = [];
+    state.p2pEnabled = true;
+    state.networkMode = "p2p";
+    state.sessionTransport = "relay";
+    state.relayRttMs = 36;
+    state.live = {
+      isConnected: () => true,
+      switchTransport: async (target: "auto" | "relay" | "p2p") => {
+        targets.push(target);
+      },
+    } as typeof state.live;
+    setRenderer(paint);
+    paint();
+
+    expect(app.textContent).toContain("P2P 优先 · 当前 Relay · 36 毫秒");
+    expect(app.querySelector(".network-mode-row")?.textContent).toContain("无需重新切换");
+    expect(group().querySelector('[aria-checked="true"]')?.textContent).toBe("P2P");
+    choice("P2P").click();
+    await settle();
+    expect(targets).toEqual(["p2p"]);
+  });
 });

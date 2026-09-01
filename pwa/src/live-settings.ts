@@ -3,7 +3,7 @@ import { type NetworkMode } from "./lib/network-mode";
 import { parseRuntimeOperationsConfig } from "./lib/operations";
 import { reportMutationError } from "./mutations";
 import { render } from "./paint";
-import { haptic, setNetworkMode, showError, showStatus, state } from "./state";
+import { clearNotice, haptic, setNetworkMode, showError, showStatus, state } from "./state";
 import { track } from "./lib/telemetry";
 import { syncInactiveTransportMode } from "./live";
 
@@ -96,6 +96,7 @@ export async function selectNetworkMode(mode: NetworkMode): Promise<void> {
     await session.switchTransport(mode);
     if (seq !== networkModeSeq || state.live !== session) return;
     if (mode === "p2p" && state.sessionTransport === "p2p") showStatus(t("settings.networkP2PConnected"));
+    else clearNotice();
   } catch {
     if (seq !== networkModeSeq || state.live !== session) return;
     showError(t(mode === "relay" ? "settings.networkRelayFailed" : "settings.networkP2PFailed"));

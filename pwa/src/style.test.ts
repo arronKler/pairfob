@@ -59,6 +59,8 @@ describe("UI accessibility guardrails", () => {
     expect(chevron).not.toMatch(/var\(--faint\)/);
     expect(rule(".manual-pair[open] summary::after")).toMatch(/rotate\(180deg\)/);
     expect(rule(".btn-scan::before")).toMatch(/linear-gradient\(currentColor/);
+    expect(rule(".add-mark::before")).toMatch(/linear-gradient\(currentColor/);
+    expect(rule(".add-mark::before")).toMatch(/content:\s*""/);
     expect(css).toMatch(/\.chev,\s*\.group-chev,\s*\.pill-toggle::after\s*\{[^}]*clip-path:\s*polygon\(/);
     expect(rule(".pin-mark")).toMatch(/clip-path:\s*polygon\(/);
     expect(css).toMatch(/\.key-more::after,\s*\.icon-more::after\s*\{[^}]*box-shadow:/);
@@ -75,7 +77,7 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("interactive touch controls keep a 44px target", () => {
-    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-state-retry", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
+    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".computer-add", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-state-retry", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
       const match = rule(selector).match(/min-height:\s*(\d+)px/);
       expect(match, selector).not.toBeNull();
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);
