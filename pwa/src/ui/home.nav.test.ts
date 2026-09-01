@@ -26,7 +26,7 @@ g.matchMedia = happy.matchMedia.bind(happy);
 g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
 happy.document.body.innerHTML = '<main id="app"></main>';
 
-const { app, state } = await import("../state.ts");
+const { app, replaceAgentsFromSnapshot, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderHome } = await import("./home.ts");
 const { NO_OPERATION_CAPABILITIES } = await import("../lib/operations.ts");
@@ -36,6 +36,7 @@ function boot(): void {
   state.screen = "home";
   state.paneId = "p1";
   state.listGroup = "flat";
+  state.panePinned = {};
   state.operationBusy = false;
   state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES };
   state.agents = [
@@ -98,6 +99,7 @@ afterEach(() => {
   state.agents = [];
   state.paneId = "";
   state.listGroup = "flat";
+  state.panePinned = {};
   app.replaceChildren();
 });
 
@@ -169,5 +171,41 @@ describe("session list object controls", () => {
     const cardSheet = document.querySelector("dialog.sheet");
     expect(cardSheet?.textContent).toContain("改会话名");
     expect(cardSheet?.textContent).not.toContain("改工作区名");
+  });
+
+  test("pinning a session puts it in the pinned section at the top", async () => {
+    boot();
+    cardNamed("two").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    const pin = [...document.querySelectorAll("dialog.sheet .menu-item")].find((el) => el.textContent === "置顶");
+    if (!(pin instanceof HTMLButtonElement)) throw new Error("missing pin action");
+    pin.click();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const titles = [...app.querySelectorAll(".section-title")].map((el) => el.textContent);
+    expect(titles[0]).toContain("置顶");
+    const first = app.querySelector("article.card");
+    expect(first?.classList.contains("pinned")).toBe(true);
+    expect(first?.textContent).toContain("two");
+    expect(first?.querySelector(".pin-mark")).not.toBeNull();
+
+    cardNamed("two").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    const unpin = [...document.querySelectorAll("dialog.sheet .menu-item")].find((el) => el.textContent === "取消置顶");
+    if (!(unpin instanceof HTMLButtonElement)) throw new Error("missing unpin action");
+    unpin.click();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect([...app.querySelectorAll(".section-title")].map((el) => el.textContent).join("")).not.toContain("置顶");
+    expect(app.querySelector("article.card.pinned")).toBeNull();
+  });
+});
+
+describe("session list pin persistence", () => {
+  test("an empty snapshot does not drop pins; missing panes do", () => {
+    state.panePinned = { p1: 9, p2: 8 };
+    replaceAgentsFromSnapshot({ panes: [] });
+    expect(state.panePinned).toEqual({ p1: 9, p2: 8 });
+    replaceAgentsFromSnapshot({
+      workspaces: [{ workspace_id: "w", label: "W", cwd: "/" }],
+      panes: [{ pane_id: "p2", workspace_id: "w", cwd: "/", agent: "claude", agent_status: "idle" }],
+    });
+    expect(state.panePinned).toEqual({ p2: 8 });
   });
 });

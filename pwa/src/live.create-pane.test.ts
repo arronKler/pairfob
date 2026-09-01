@@ -116,6 +116,21 @@ describe("a created pane opens through the normal pane-open path", () => {
     expect(app.querySelector(".agent-chat-root")).toBeNull();
     expect(app.querySelector(".term")).toBeTruthy();
   });
+
+  test("new conversations use the safe Control fallback for Auto before P2P is active", async () => {
+    boot();
+    state.sessionTransport = "relay";
+    setDefaultTermMode("auto");
+
+    const created = startNewConversation();
+    await submitConversationForm("/tmp/demo");
+    await created;
+
+    expect(state.paneId).toBe("p2");
+    expect(state.agentChat).toBe(false);
+    expect(state.fullTerminal).toBe(false);
+    expect(app.querySelector(".term")).toBeTruthy();
+  });
 });
 
 afterEach(() => {
@@ -131,6 +146,7 @@ afterEach(() => {
   state.agentTraceSig = "";
   state.agentTraceTail = 0;
   state.operationBusy = false;
-  setDefaultTermMode("guided");
+  state.sessionTransport = "relay";
+  setDefaultTermMode("auto");
   app.replaceChildren();
 });

@@ -2,8 +2,11 @@ import { locale, t } from "./i18n.ts";
 
 export type PairErrorField = "code" | null;
 
-/** User-facing names for the three pane views. Internal ids stay guided / full / agent. */
+/** User-facing names for pane preferences. Auto resolves to one concrete view when a pane opens. */
 export const TERM_MODE_LABEL = {
+  get auto(): string {
+    return t("mode.auto");
+  },
   get guided(): string {
     return t("mode.guided");
   },
@@ -17,6 +20,9 @@ export const TERM_MODE_LABEL = {
 
 /** Session-menu labels. Terminal is not “make this pane taller”. */
 export const TERM_MODE_MENU = {
+  get auto(): string {
+    return t("mode.autoMenu");
+  },
   get guided(): string {
     return TERM_MODE_LABEL.guided;
   },

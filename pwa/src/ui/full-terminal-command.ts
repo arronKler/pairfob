@@ -22,6 +22,10 @@ export type TerminalCommandQueueState = {
   inputBytes: number;
 };
 
+export type TerminalInputQueueOptions = {
+  isolate?: boolean;
+};
+
 export type TerminalCommandPumpObserver = {
   queued?: (kind: TerminalCommand["kind"], coalesced: boolean, state: TerminalCommandQueueState) => void;
   sent?: (
@@ -48,6 +52,7 @@ export type TerminalCommandPumpObserver = {
 type QueuedCommand = {
   command: TerminalCommand;
   queuedAt: number;
+  mergeInput: boolean;
 };
 
 type InFlightCommand = QueuedCommand & {
@@ -85,12 +90,13 @@ export class TerminalCommandPump {
     this.observer = options.observer;
   }
 
-  enqueueInput(data: Uint8Array): void {
+  enqueueInput(data: Uint8Array, options: TerminalInputQueueOptions = {}): void {
     if (this.stopped || data.byteLength === 0) return;
+    const mergeInput = options.isolate !== true;
     let offset = 0;
     while (offset < data.byteLength) {
       const tail = this.queue[this.queue.length - 1];
-      if (tail?.command.kind === "input" && tail.command.data.byteLength < TERMINAL_INPUT_CHUNK) {
+      if (mergeInput && tail?.mergeInput && tail.command.kind === "input" && tail.command.data.byteLength < TERMINAL_INPUT_CHUNK) {
         const take = Math.min(TERMINAL_INPUT_CHUNK - tail.command.data.byteLength, data.byteLength - offset);
         const combined = new Uint8Array(tail.command.data.byteLength + take);
         combined.set(tail.command.data);
@@ -102,7 +108,7 @@ export class TerminalCommandPump {
         continue;
       }
       const take = Math.min(TERMINAL_INPUT_CHUNK, data.byteLength - offset);
-      this.enqueue({ kind: "input", data: data.slice(offset, offset + take) });
+      this.enqueue({ kind: "input", data: data.slice(offset, offset + take) }, mergeInput);
       offset += take;
     }
   }
@@ -138,8 +144,8 @@ export class TerminalCommandPump {
     return this.state();
   }
 
-  private enqueue(command: TerminalCommand): void {
-    this.queue.push({ command, queuedAt: this.now() });
+  private enqueue(command: TerminalCommand, mergeInput = true): void {
+    this.queue.push({ command, queuedAt: this.now(), mergeInput });
     if (command.kind === "input") this.queuedInputBytes += command.data.byteLength;
     this.observer?.queued?.(command.kind, false, this.state());
     this.drain();

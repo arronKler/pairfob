@@ -43,8 +43,16 @@ export type CellSize = { width: number; height: number };
 
 export type HostInner = { width: number; height: number };
 
-function clamp(value: number, min: number, max: number): number {
+export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+export function panCanvas(host: HTMLElement): HTMLElement | null {
+  return host.querySelector(".full-terminal-canvas") as HTMLElement | null;
+}
+
+export function terminalMount(host: HTMLElement): HTMLElement {
+  return panCanvas(host) ?? host;
 }
 
 function snapFont(value: number): number {

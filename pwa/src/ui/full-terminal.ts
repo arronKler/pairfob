@@ -2,7 +2,7 @@ import type { FitAddon } from "@xterm/addon-fit";
 import type { Terminal } from "@xterm/xterm";
 
 import { agentTitle } from "../lib/dashboard";
-import { button, node } from "../lib/dom";
+import { node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { backButton } from "./chrome";
 import {
@@ -19,6 +19,7 @@ import { app, haptic, messageOf, saveTermCols, saveTermFit, selectedAgent, setPa
 import { isDesk } from "../viewport";
 import {
   bindFontPinch,
+  clamp,
   clearScreenScale,
   cssCellOf,
   displayGrid,
@@ -27,12 +28,14 @@ import {
   integerizeDomRows,
   measureGlyphHeight,
   paintedFontSize,
+  panCanvas,
   pickFontSize,
   pitchLineHeight,
   probePanCanvas,
   ptyCols,
   sizePanCanvas,
   snapCellLineHeight,
+  terminalMount,
   visualCells,
 } from "./full-terminal-fit";
 import {
@@ -45,10 +48,16 @@ import {
 } from "./full-terminal-input";
 import { setFullTerminalInputMode, submitFullTerminalCompose, syncFullTerminalControls } from "./full-terminal-compose";
 import { bindHostScroll, pageLineCount, scrollRail, type ScrollAt } from "./full-terminal-scroll";
-import { TerminalCommandPump, type TerminalCommand } from "./full-terminal-command";
-import { loadFullTerminalXterm } from "./full-terminal-loader";
+import { TerminalCommandPump, type TerminalCommand, type TerminalInputQueueOptions } from "./full-terminal-command";
+import { loadFullTerminalXterm, terminalWebglSupported } from "./full-terminal-loader";
 import { fullTerminalPerf } from "./full-terminal-perf";
-import { fullTerminalOptions, openWebglTerminal, WEBGL_CONTEXT_LOST } from "./full-terminal-renderer";
+import { fullTerminalOptions, openWebglTerminal, WEBGL_CONTEXT_LOST, WEBGL_UNAVAILABLE } from "./full-terminal-renderer";
+import {
+  fullTerminalStateLayer,
+  setFullTerminalDocumentMode,
+  syncFullTerminalState,
+  type FullTerminalStage,
+} from "./full-terminal-state";
 import { track } from "../lib/telemetry";
 import { chromeActionCluster, syncChromeStop } from "./session/chrome-actions";
 import { guidedScrollController } from "./session/guided-scroll";
@@ -72,6 +81,7 @@ let leaving: Promise<void> | null = null;
 let leaveSeq = 0;
 let commandPump: TerminalCommandPump | null = null;
 let statusText = "";
+let statusStage: FullTerminalStage = "loading";
 let retryAvailable = false;
 let lastFrameSequence: bigint | null = null;
 let pendingWriteBytes = 0;
@@ -81,39 +91,29 @@ let remoteGrid: { cols: number; rows: number } | null = null;
 let fittedSize: { cols: number; rows: number; cellWidth: number; cellHeight: number } | null = null;
 const assembler = new TerminalFrameAssembler();
 const MAX_RENDER_QUEUE_BYTES = 8 * 1024 * 1024;
-const FULL_TERMINAL_DOCUMENT_CLASS = "full-terminal-active";
-
-function setFullTerminalDocumentMode(active: boolean): void {
-  document.documentElement.classList.toggle(FULL_TERMINAL_DOCUMENT_CLASS, active);
+function syncStatus(root: ParentNode = app): void {
+  syncFullTerminalState(root, {
+    stage: statusStage,
+    detail: statusText,
+    retry: state.fullTerminal && retryAvailable && !opening && !bridgeId,
+    busy: opening,
+  });
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function statusElement(): HTMLElement | null {
-  return app.querySelector(".full-terminal-status");
-}
-
-function retryElement(): HTMLButtonElement | null {
-  return app.querySelector(".full-terminal-retry");
-}
-
-function syncRetry(): void {
-  const retry = retryElement();
-  if (retry) retry.hidden = !state.fullTerminal || !retryAvailable || opening || Boolean(bridgeId);
-}
-
-function setStatus(text: string): void {
+function setStatus(text: string, stage: FullTerminalStage = statusStage): void {
   statusText = text;
-  const status = statusElement();
-  if (status) status.textContent = text;
-  syncRetry();
+  statusStage = stage;
+  syncStatus();
 }
 
 function offerRetry(text: string): void {
   retryAvailable = true;
-  setStatus(text);
+  setStatus(text, "error");
+}
+
+function waitForRestore(text: string): void {
+  retryAvailable = false;
+  setStatus(text, "waiting");
 }
 
 function measureCellWidth(fontSize: number): number {
@@ -132,14 +132,6 @@ function liveSize(cols: number, rows: number): { cols: number; rows: number; cel
     cellWidth: visual.width || Math.round(measured?.width || 0),
     cellHeight: visual.height || Math.round(measured?.height || 0),
   };
-}
-
-function panCanvas(host: HTMLElement): HTMLElement | null {
-  return host.querySelector(".full-terminal-canvas") as HTMLElement | null;
-}
-
-function terminalMount(host: HTMLElement): HTMLElement {
-  return panCanvas(host) ?? host;
 }
 
 function fit(): { cols: number; rows: number; cellWidth: number; cellHeight: number } {
@@ -278,8 +270,8 @@ function startCommandPump(
   });
 }
 
-function sendInput(data: Uint8Array): void {
-  commandPump?.enqueueInput(data);
+function sendInput(data: Uint8Array, options?: TerminalInputQueueOptions): void {
+  commandPump?.enqueueInput(data, options);
 }
 
 function sendComposedInput(text: string, enter: boolean): boolean {
@@ -380,6 +372,7 @@ async function mount(host: HTMLElement): Promise<void> {
   const version = ++rendererVersion;
   mounting = true;
   retryAvailable = false;
+  setStatus(t("ft.preparing"), "loading");
   let module: typeof import("./full-terminal-xterm.ts");
   try {
     module = await loadFullTerminalXterm();
@@ -405,6 +398,7 @@ async function mount(host: HTMLElement): Promise<void> {
   fitAddon = new module.FitAddon();
   terminal.loadAddon(fitAddon);
   try {
+    if (!terminalWebglSupported()) throw new Error(WEBGL_UNAVAILABLE);
     openWebglTerminal(terminal, module.WebglAddon, terminalMount(host), () => handleRendererContextLoss(version));
   } catch (error) {
     if (version !== rendererVersion) return;
@@ -474,10 +468,14 @@ async function openBridge(takeover: boolean): Promise<void> {
   const session = state.live;
   const paneId = state.paneId;
   if (opening || bridgeId || !session || !paneId || !state.fullTerminal || document.visibilityState === "hidden") return;
+  if (!session.isConnected()) {
+    waitForRestore(t("ft.waitRestore"));
+    return;
+  }
   const version = bridgeVersion;
   opening = true;
   retryAvailable = false;
-  setStatus(takeover ? t("ft.takeover") : t("ft.opening"));
+  setStatus(takeover ? t("ft.takeover") : t("ft.opening"), "opening");
   fullTerminalPerf.bridgeStarted();
   try {
     const size = fit();
@@ -493,10 +491,11 @@ async function openBridge(takeover: boolean): Promise<void> {
     assembler.reset();
     lastFrameSequence = null;
     retryAvailable = false;
-    setStatus(t("ft.live"));
+    setStatus(t("ft.live"), "live");
     if (isDesk() || keyboard?.isOpen()) terminal?.focus();
     else closeTerminalKeyboard();
   } catch (error) {
+    if (version !== bridgeVersion || !state.fullTerminal || state.live !== session || state.paneId !== paneId) return;
     if (error instanceof ProtocolError && error.code === "conflict" && !takeover
       && window.confirm(t("ft.takeoverAsk"))) {
       opening = false;
@@ -532,7 +531,7 @@ export function retryFullTerminal(): void {
   if (opening || bridgeId) return;
   haptic(8);
   retryAvailable = false;
-  setStatus(t("ft.opening"));
+  setStatus(t("ft.opening"), "opening");
   const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
   if (!terminal && host?.isConnected) {
     void mount(host);
@@ -575,7 +574,8 @@ export function enterFullTerminal(): void {
   state.agentChat = false;
   state.fullTerminal = true;
   retryAvailable = false;
-  statusText = t("ft.opening");
+  statusText = t("ft.preparing");
+  statusStage = "loading";
   render();
 }
 
@@ -624,7 +624,7 @@ function syncFullTerminalChrome(): void {
   const chrome = app.querySelector(".full-terminal-chrome");
   if (!(chrome instanceof HTMLElement)) return;
   syncChromeStop(chrome, selectedAgent()?.status === "working", interruptFullTerminal);
-  syncRetry();
+  syncStatus();
 }
 
 function syncFullTerminalInput(root: HTMLElement, host: HTMLElement): void {
@@ -661,7 +661,7 @@ export function renderFullTerminal(onBack: () => void, onMenu: () => void): void
   if (mounted) {
     const title = app.querySelector(".full-terminal-title");
     if (title) title.textContent = selectedAgent() ? agentTitle(selectedAgent()!) : t("title.terminal");
-    setStatus(statusText);
+    syncStatus();
     syncFullTerminalChrome();
     const host = mounted.querySelector<HTMLElement>(".full-terminal-host");
     if (host) syncFullTerminalInput(mounted as HTMLElement, host);
@@ -684,7 +684,7 @@ export function renderFullTerminal(onBack: () => void, onMenu: () => void): void
   if (state.termFit === "pan") host.classList.add("is-pan");
   const pan = node("div", "full-terminal-pan");
   pan.append(node("div", "full-terminal-canvas"));
-  host.append(scrollRail(
+  host.append(fullTerminalStateLayer(retryFullTerminal), scrollRail(
     (direction, lines, source) => {
       haptic(4);
       sendScroll(direction, lines, source);
@@ -692,6 +692,7 @@ export function renderFullTerminal(onBack: () => void, onMenu: () => void): void
     pageScrollLines,
   ), pan);
   root.append(chrome, host);
+  syncStatus(root);
   syncFullTerminalInput(root, host);
   app.replaceChildren(root);
   void mount(host);
@@ -747,7 +748,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
         });
       }
       lastFrameSequence = sequence;
-      setStatus(t("ft.live"));
+      setStatus(t("ft.live"), "live");
     } catch (error) {
       void suspendBridge(true, messageOf(error));
     }
@@ -779,11 +780,11 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
     pendingWriteBytes = 0;
     remoteGrid = null;
     fullTerminalPerf.publish(event.type);
-    offerRetry(t("ft.waitRestore"));
+    waitForRestore(t("ft.waitRestore"));
     return false;
   }
   if (event.type === "connected" && !bridgeId) {
-    setStatus(t("ft.restored"));
+    setStatus(t("ft.restored"), "opening");
     void openBridge(false);
   }
   return false;

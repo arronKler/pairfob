@@ -54,15 +54,6 @@
   -webkit-appearance: none;
 }
 
-.full-terminal-retry {
-  color: var(--accent);
-  border: 1px solid rgba(110, 168, 254, 0.35);
-}
-
-.full-terminal-retry[hidden] {
-  display: none;
-}
-
 .full-terminal-action:active {
   background: #27313e;
 }
@@ -130,6 +121,97 @@
   overflow: hidden;
   background: #090c10;
   touch-action: none;
+}
+
+.full-terminal-state {
+  position: absolute;
+  inset: 4px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px;
+  color: var(--term-ink);
+  background: #090c10;
+  text-align: center;
+}
+
+.full-terminal-state[hidden] {
+  display: none;
+}
+
+.full-terminal-state-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(233, 237, 243, 0.18);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: full-terminal-state-spin 0.8s linear infinite;
+}
+
+.full-terminal-state[data-stage="error"] .full-terminal-state-spinner {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--error) 18%, transparent);
+  animation: none;
+}
+
+.full-terminal-state[data-stage="error"] .full-terminal-state-spinner::before {
+  content: "!";
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--error);
+  font-size: 1.15rem;
+  font-weight: 750;
+}
+
+.full-terminal-state-copy {
+  display: flex;
+  max-width: 32rem;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.full-terminal-state-title {
+  font-size: 1.05rem;
+  font-weight: 680;
+}
+
+.full-terminal-state-detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.full-terminal-state-retry {
+  min-width: 96px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid rgba(110, 168, 254, 0.4);
+  border-radius: 12px;
+  color: var(--accent);
+  background: rgba(110, 168, 254, 0.1);
+  font-size: 0.9rem;
+  font-weight: 660;
+}
+
+.full-terminal-state-retry[hidden] {
+  display: none;
+}
+
+.full-terminal-state-retry:active {
+  background: rgba(110, 168, 254, 0.2);
+}
+
+@keyframes full-terminal-state-spin {
+  to { transform: rotate(360deg); }
 }
 
 .full-terminal-pan {
@@ -253,6 +335,12 @@ html.full-terminal-active body {
 
 @media (min-width: 900px) {
   .full-terminal-kb { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .full-terminal-state-spinner {
+    animation: none;
+  }
 }
 
 .full-terminal-host .xterm {

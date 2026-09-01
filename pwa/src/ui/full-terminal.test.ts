@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const source = await Bun.file(new URL("./full-terminal.ts", import.meta.url)).text();
+const stateView = await Bun.file(new URL("./full-terminal-state.ts", import.meta.url)).text();
 const dock = await Bun.file(new URL("./session/dock.ts", import.meta.url)).text();
 const view = await Bun.file(new URL("./session/view.ts", import.meta.url)).text();
 const pane = await Bun.file(new URL("./pane.ts", import.meta.url)).text();
@@ -85,12 +86,21 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(openFn).not.toContain("render()");
     expect(openFn).toContain("offerRetry");
     expect(openFn).toContain('t("ft.openFail"');
+    expect(openFn).toContain("if (!session.isConnected())");
+    expect(openFn).toContain("version !== bridgeVersion");
+    expect(openFn.indexOf("version !== bridgeVersion", openFn.indexOf("catch (error)"))).toBeGreaterThan(
+      openFn.indexOf("catch (error)"),
+    );
   });
 
   test("complete-terminal entry has no hidden live-input coupling", () => {
     const enter = fn("export function enterFullTerminal(", "export function leaveFullTerminal(");
     expect(enter).not.toContain("fallbackToGuidedLive");
     expect(source).not.toContain("guidedLiveFallback");
+  });
+
+  test("checks the shared WebGL capability before activating the real addon", () => {
+    expect(source).toContain("if (!terminalWebglSupported()) throw new Error(WEBGL_UNAVAILABLE)");
   });
 
   test("entering complete-terminal records the pane mode", () => {
@@ -150,7 +160,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     const renderFn = fn("export function renderFullTerminal(", "export function handleFullTerminalEvent(");
     const leaveFn = fn("export function leaveFullTerminal(", "export function disposeFullTerminal(");
     const disposeFn = fn("export function disposeFullTerminal(", "function interruptFullTerminal(");
-    expect(source).toContain('const FULL_TERMINAL_DOCUMENT_CLASS = "full-terminal-active"');
+    expect(stateView).toContain('const FULL_TERMINAL_DOCUMENT_CLASS = "full-terminal-active"');
     expect(renderFn).toContain("setFullTerminalDocumentMode(true)");
     expect(leaveFn).toContain("setFullTerminalDocumentMode(false)");
     expect(disposeFn).toContain("setFullTerminalDocumentMode(false)");

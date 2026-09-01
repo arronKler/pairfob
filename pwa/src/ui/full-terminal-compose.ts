@@ -28,10 +28,13 @@ export function submitFullTerminalCompose(
   text: string,
   enter: boolean,
   ready: boolean,
-  send: (data: Uint8Array) => void,
+  send: (data: Uint8Array, options?: { isolate?: boolean }) => void,
 ): boolean {
   if (!ready) return false;
-  send(new TextEncoder().encode(enter ? `${text}\r` : text));
+  if (text) send(new TextEncoder().encode(text));
+  // Keep Enter as its own terminal command. Some TUIs treat a text payload
+  // ending in CR as pasted input instead of a deliberate Enter key press.
+  if (enter) send(new Uint8Array([0x0d]), { isolate: true });
   return true;
 }
 

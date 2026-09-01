@@ -32,7 +32,13 @@ happy.document.body.innerHTML = '<main id="app"></main>';
 const { app, paneTermMode, setPaneTermMode, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderPane, goBackFromPane } = await import("./pane.ts");
-const { disposeFullTerminal, leaveFullTerminal, setFullTerminalComposeLive, setTermFit } = await import("./full-terminal.ts");
+const {
+  disposeFullTerminal,
+  handleFullTerminalEvent,
+  leaveFullTerminal,
+  setFullTerminalComposeLive,
+  setTermFit,
+} = await import("./full-terminal.ts");
 
 const DRAFT = "keep-draft";
 
@@ -52,7 +58,7 @@ function live() {
   };
 }
 
-function bootFullTerminal(): void {
+function bootFullTerminal(session = live()): void {
   disposeFullTerminal();
   state.phase = "live";
   state.screen = "pane";
@@ -68,7 +74,7 @@ function bootFullTerminal(): void {
     workspaceLabel: "demo",
     cwd: "/tmp/demo",
   }];
-  state.live = live();
+  state.live = session;
   state.fullTerminal = true;
   setPaneTermMode("p1", "full");
   setRenderer(() => renderPane());
@@ -190,5 +196,25 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(state.screen).toBe("home");
     expect(state.composeDraft).toBe("");
     expect(paneTermMode("p1")).toBe("guided");
+  });
+
+  test("a stale open failure cannot replace the reconnecting state", async () => {
+    let rejectOpen: ((reason?: unknown) => void) | undefined;
+    const session = live();
+    session.terminalOpen = () => new Promise((_resolve, reject) => { rejectOpen = reject; });
+    bootFullTerminal(session);
+
+    handleFullTerminalEvent({ type: "connected" });
+    await Promise.resolve();
+    expect(rejectOpen).toBeDefined();
+    handleFullTerminalEvent({ type: "disconnected" });
+    rejectOpen?.(new Error("old transport closed"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const status = app.querySelector<HTMLElement>(".full-terminal-state");
+    expect(status?.dataset.stage).toBe("waiting");
+    expect(status?.textContent).toContain("正在恢复连接");
+    expect(status?.textContent).not.toContain("old transport closed");
   });
 });

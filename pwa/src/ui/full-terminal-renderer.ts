@@ -10,7 +10,10 @@ export const WEBGL_CONTEXT_LOST = "WebGL terminal renderer lost its graphics con
 
 export function supportsWebgl2(): boolean {
   try {
-    return document.createElement("canvas").getContext("webgl2") !== null;
+    const context = document.createElement("canvas").getContext("webgl2");
+    if (!context) return false;
+    context.getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
   } catch {
     return false;
   }
@@ -55,7 +58,6 @@ export function openWebglTerminal(
   mount: HTMLElement,
   onContextLoss: () => void,
 ): void {
-  if (!supportsWebgl2()) throw new Error(WEBGL_UNAVAILABLE);
   const renderer = new Webgl();
   renderer.onContextLoss(onContextLoss);
   terminal.loadAddon(renderer);

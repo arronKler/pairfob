@@ -60,6 +60,7 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".manual-pair[open] summary::after")).toMatch(/rotate\(180deg\)/);
     expect(rule(".btn-scan::before")).toMatch(/linear-gradient\(currentColor/);
     expect(css).toMatch(/\.chev,\s*\.group-chev,\s*\.pill-toggle::after\s*\{[^}]*clip-path:\s*polygon\(/);
+    expect(rule(".pin-mark")).toMatch(/clip-path:\s*polygon\(/);
     expect(css).toMatch(/\.key-more::after,\s*\.icon-more::after\s*\{[^}]*box-shadow:/);
     expect(css).toMatch(/\.key-more\[aria-expanded="true"\]::after\s*\{[^}]*clip-path:\s*polygon\(/);
     expect(css).not.toMatch(/content:\s*"▾"|content:\s*"⌄"|content:\s*"›"|content:\s*"\+"/);
@@ -74,7 +75,7 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("interactive touch controls keep a 44px target", () => {
-    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
+    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-state-retry", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".slash-cmd"]) {
       const match = rule(selector).match(/min-height:\s*(\d+)px/);
       expect(match, selector).not.toBeNull();
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);
@@ -239,6 +240,16 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".full-terminal-host .xterm-screen")).toMatch(/overflow:\s*hidden/);
     expect(rule(".full-terminal-host .xterm-screen")).not.toMatch(/transform-origin:\s*0 0/);
     expect(rule(".full-terminal-host")).not.toMatch(/padding:\s*5px 0 0 7px/);
+  });
+
+  test("terminal startup and failure states are centered above the canvas", () => {
+    expect(rule(".full-terminal-state")).toMatch(/position:\s*absolute/);
+    expect(rule(".full-terminal-state")).toMatch(/align-items:\s*center/);
+    expect(rule(".full-terminal-state")).toMatch(/justify-content:\s*center/);
+    expect(rule(".full-terminal-state")).toMatch(/text-align:\s*center/);
+    expect(rule(".full-terminal-state")).toMatch(/z-index:\s*2/);
+    expect(rule(".full-terminal-state-retry")).toMatch(/min-height:\s*44px/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.full-terminal-state-spinner\s*\{[^}]*animation:\s*none/);
   });
 
   test("long terminal lines expand the scrollport instead of being clipped", () => {

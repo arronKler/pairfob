@@ -1,9 +1,12 @@
 import { t } from "./lib/i18n";
+import { type NetworkMode } from "./lib/network-mode";
 import { parseRuntimeOperationsConfig } from "./lib/operations";
 import { reportMutationError } from "./mutations";
 import { render } from "./paint";
-import { haptic, showError, showStatus, state } from "./state";
+import { haptic, setNetworkMode, showError, showStatus, state } from "./state";
 import { track } from "./lib/telemetry";
+
+let networkModeSeq = 0;
 
 export function openSettings(): void {
   state.screen = "settings";
@@ -64,6 +67,39 @@ export async function refreshSettings(): Promise<void> {
   }
   state.settingsLoading = false;
   if (state.screen === "settings") render();
+}
+
+export async function selectNetworkMode(mode: NetworkMode): Promise<void> {
+  if (mode === "p2p" && !state.p2pEnabled) return;
+  const retry = mode === "p2p" && state.sessionTransport !== "p2p";
+  if (state.networkMode === mode && !retry) return;
+  setNetworkMode(mode);
+  const session = state.live;
+  const seq = ++networkModeSeq;
+  if (!session) {
+    render();
+    return;
+  }
+  const fromP2P = state.sessionTransport === "p2p";
+  const connected = session.isConnected();
+  state.transportSwitching = true;
+  if (connected) {
+    if (mode === "p2p") showStatus(t("settings.networkTryingP2P"), true);
+    else if (mode === "relay" && fromP2P) showStatus(t("settings.networkSwitchingRelay"), true);
+    else if (mode === "auto" && !fromP2P && state.p2pEnabled) showStatus(t("settings.networkTryingP2P"));
+  }
+  render();
+  try {
+    await session.switchTransport(mode);
+    if (seq !== networkModeSeq || state.live !== session) return;
+    if (mode === "p2p" && state.sessionTransport === "p2p") showStatus(t("settings.networkP2PConnected"));
+  } catch {
+    if (seq !== networkModeSeq || state.live !== session) return;
+    showError(t(mode === "relay" ? "settings.networkRelayFailed" : "settings.networkP2PFailed"));
+  } finally {
+    if (seq === networkModeSeq && state.live === session) state.transportSwitching = false;
+    render();
+  }
 }
 
 function vapidKey(value: string): ArrayBuffer {

@@ -119,12 +119,23 @@ globalThis.runTerminalBenchmark = async () => {
     convertEol: false,
   });
   const fit = new module.FitAddon();
+  const webgl = new module.WebglAddon();
+  let contextLosses = 0;
+  webgl.onContextLoss(() => contextLosses++);
   terminal.loadAddon(fit);
+  terminal.loadAddon(webgl);
   const openStarted = performance.now();
-  terminal.open(document.querySelector("#terminal"));
+  const mount = document.querySelector("#terminal");
+  terminal.open(mount);
   fit.fit();
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const openReadyMs = performance.now() - openStarted;
+  const canvases = [...mount.querySelectorAll(".xterm-screen canvas")];
+  const domFallback = mount.querySelector(".xterm-rows") !== null;
+  const webglCanvasCount = canvases.filter((canvas) => {
+    try { return canvas.getContext("webgl2") !== null; } catch { return false; }
+  }).length;
+  if (domFallback || webglCanvasCount === 0) throw new Error("benchmark did not activate the WebGL2 renderer");
 
   const row = "\\x1b[32mworker\\x1b[0m 0123456789 abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ\\r\\n";
   const frame = row.repeat(48);
@@ -141,6 +152,15 @@ globalThis.runTerminalBenchmark = async () => {
   const writeDrainMs = performance.now() - writeStarted;
   const heapAfter = performance.memory?.usedJSHeapSize ?? null;
   observer?.disconnect();
+  if (contextLosses > 0) throw new Error("WebGL context was lost " + contextLosses + " time(s)");
+  const renderer = {
+    kind: "webgl2",
+    canvasCount: canvases.length,
+    webglCanvasCount,
+    domFallback,
+    contextLosses,
+    canvasBackingBytesEstimate: canvases.reduce((total, canvas) => total + canvas.width * canvas.height * 4, 0),
+  };
   terminal.dispose();
   return {
     viewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
@@ -157,6 +177,7 @@ globalThis.runTerminalBenchmark = async () => {
       maxMs: round(longTasks.length ? Math.max(...longTasks) : 0),
     },
     heapDeltaBytes: heapBefore === null || heapAfter === null ? null : heapAfter - heapBefore,
+    renderer,
   };
 };
 </script>`;
@@ -328,7 +349,7 @@ try {
   const scriptAsset = compressedAssets.get(scriptPath)!;
   const styleAsset = compressedAssets.get(stylePath)!;
   console.log(JSON.stringify({
-    benchmark: "pairfob-terminal-mobile-renderer",
+    benchmark: "pairfob-terminal-mobile-webgl-renderer",
     profile: MOBILE_PROFILE,
     assets: {
       scriptRawBytes: scriptAsset.rawBytes,

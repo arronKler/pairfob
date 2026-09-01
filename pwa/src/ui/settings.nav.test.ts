@@ -24,6 +24,7 @@ const {
   DEFAULT_TERM_MODE_KEY,
   DEFAULT_COMPOSE_LIVE_KEY,
   app,
+  loadPaneTermModes,
   paneComposeLive,
   paneTermMode,
   parseTermMode,
@@ -73,7 +74,8 @@ function bootHomeWithStalePane(): void {
 afterEach(() => {
   state.screen = "home";
   state.paneId = "";
-  state.defaultTermMode = "guided";
+  state.defaultTermMode = "auto";
+  state.networkMode = "auto";
   state.paneTermModes = {};
   state.defaultComposeLive = false;
   state.paneComposeLive = {};
@@ -102,21 +104,22 @@ describe("settings back", () => {
 });
 
 describe("default terminal mode", () => {
-  test("parseTermMode fails closed to guided", () => {
+  test("parseTermMode fails closed to auto", () => {
+    expect(parseTermMode("auto")).toBe("auto");
     expect(parseTermMode("full")).toBe("full");
     expect(parseTermMode("agent")).toBe("agent");
     expect(parseTermMode("guided")).toBe("guided");
-    expect(parseTermMode("nope")).toBe("guided");
+    expect(parseTermMode("nope")).toBe("auto");
     expect(parseTermMode(null, "full")).toBe("full");
   });
 
-  test("settings offers the three views and persists the choice", () => {
+  test("settings offers auto and the three explicit views, then persists an override", () => {
     bootHomeWithStalePane();
     click("设置");
     const group = app.querySelector('[aria-label="默认模式"]');
     expect(group).toBeTruthy();
-    expect([...group!.querySelectorAll("button")].map((el) => el.textContent)).toEqual(["控制", "终端", "对话"]);
-    expect(group!.querySelector('[aria-checked="true"]')?.textContent).toBe("控制");
+    expect([...group!.querySelectorAll("button")].map((el) => el.textContent)).toEqual(["自动", "控制", "终端", "对话"]);
+    expect(group!.querySelector('[aria-checked="true"]')?.textContent).toBe("自动");
     click("终端");
     expect(state.defaultTermMode).toBe("full");
     expect(localStorage.getItem(DEFAULT_TERM_MODE_KEY)).toBe("full");
@@ -131,6 +134,13 @@ describe("default terminal mode", () => {
     setDefaultTermMode("agent");
     expect(paneTermMode("p1")).toBe("guided");
     expect(paneTermMode("p2")).toBe("agent");
+  });
+
+  test("a per-pane Auto choice survives storage reload", () => {
+    state.credential = null;
+    state.paneTermModes = {};
+    setPaneTermMode("p1", "auto");
+    expect(loadPaneTermModes()).toEqual({ p1: "auto" });
   });
 });
 

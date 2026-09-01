@@ -42,7 +42,7 @@ Tap a card to open it. Long-press (right-click on a computer) to rename or close
 
 ## Inside a session
 
-Opening a session lands in **控制**: the session already open on the computer, operated on the phone. Not a remote-desktop screenshot, not another terminal in the browser.
+Opening a session defaults to **自动**: Terminal on a P2P direct connection when the browser supports WebGL2 and Save-Data is off, otherwise Control. The session remains on the computer; this is not a remote-desktop screenshot or another terminal running in the browser.
 
 Chrome:
 
@@ -51,10 +51,11 @@ Chrome:
 - While working, an interrupt control is the same as Esc
 - Right: `···` **会话操作** (how this view looks and types, this pane's name, close this pane)
 
-The three modes are under `···` → **模式**. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **设置**.
+The four choices are under `···` → **模式**. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **设置**.
 
 | Mode | What it is |
 | --- | --- |
+| **自动** | Chooses when the session opens: Terminal on P2P with WebGL2 unless Save-Data is on, otherwise Control |
 | **控制** | Phone UI for this session: tappable choices, system keyboard |
 | **终端** | A real terminal. Use for vim or a full-screen TUI. On a phone the default is an 80-column view you pan sideways; **适应屏幕** resizes the computer to the phone width. Vertical pan still scrolls remotely |
 | **对话** | Message the Agent (this is where you send a task; it is not a `···` menu item). The run collapses after the reply |
@@ -77,7 +78,7 @@ Tap the session chrome `···`. Missing items are not drawn. 改标签页名, �
 
 | Group | May include |
 | --- | --- |
-| 模式 | 控制, 终端（vim / TUI）, 对话 |
+| 模式 | 自动, 控制, 终端（vim / TUI）, 对话 |
 | 输入 | 组字, 实时 (控制) |
 | 显示 | 长行自动折行 (控制), 宽度 适应屏幕 / 80 列 (终端), 选择文本, 文字加大/减小, 复制画面文本. **对话** does not show this group |
 | 新建 | 新建标签页, 分屏 |
@@ -93,9 +94,9 @@ The web surface does not offer arbitrary shell, deleting worktrees, or yanking t
 
 From the top-right of the list (**设置**).
 
-- **连接:** computer name, online state, this phone’s label (for example iPhone). **添加另一台电脑** starts another pairing without replacing the current one. With more than one credential, **切换电脑** appears here and **电脑** appears in the top bar
+- **连接:** computer name, online state, this phone’s label (for example iPhone), and **网络连接方式** as **自动** / **P2P** / **Relay**. Auto prefers a direct path; P2P tries one now; Relay stays on the relay. The current path and round-trip sit on the same card. **添加另一台电脑** starts another pairing without replacing the current one. With more than one credential, **切换电脑** appears here and **电脑** appears in the top bar
 - **会话列表:** grouping (**全部** / **按工作区** / **按 Agent**)
-- **模式:** default when opening a session — **控制** / **终端** / **对话**. A later switch is remembered per session
+- **模式:** defaults to **自动**, or can be pinned to **控制** / **终端** / **对话**. A later switch is remembered per session
 - **输入:** send after composing, or type live into the terminal. The trailing button only submits composed text; use the system keyboard or keypad for a deliberate bare Enter
 - **通知:** see [Notifications](/push). Once enabled, this phone is notified when an Agent needs you or finishes; if the computer has not enabled push, it shows **电脑端未开启**
 - **已配对设备:** label, last used, and notification state. The current row is marked **这台手机**. This phone can unpair only itself

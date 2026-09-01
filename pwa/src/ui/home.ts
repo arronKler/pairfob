@@ -1,7 +1,15 @@
 import { agentMeta, agentTitle, statusLabel } from "../lib/dashboard";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
-import { groupAgents, syncGroupCollapsed, toggleGroupCollapsed, type AgentCard, type AgentGroup } from "../lib/ranking";
+import {
+  groupAgents,
+  paneIsPinned,
+  PINNED_GROUP_ID,
+  syncGroupCollapsed,
+  toggleGroupCollapsed,
+  type AgentCard,
+  type AgentGroup,
+} from "../lib/ranking";
 import { emptySessionCopy } from "../lib/ui-model";
 import { openComputers } from "../computers";
 import { openPane } from "../live";
@@ -26,13 +34,19 @@ import { bindObjectPress } from "./press-menu";
 
 export function agentCard(agent: AgentCard): HTMLElement {
   const selected = agent.paneId === state.paneId;
+  const pinned = paneIsPinned(state.panePinned, agent.paneId);
   const title = agentTitle(agent, state.listGroup);
-  const card = node("article", `card status-${agent.status}${selected ? " sel" : ""}`);
+  const card = node("article", `card status-${agent.status}${selected ? " sel" : ""}${pinned ? " pinned" : ""}`);
   const main = button("", "card-main", () => void openPane(agent.paneId));
   main.setAttribute("aria-pressed", selected ? "true" : "false");
   main.setAttribute("aria-haspopup", "menu");
   const copy = node("div", "card-copy");
   const titleRow = node("div", "card-title");
+  if (pinned) {
+    const mark = node("span", "pin-mark");
+    mark.setAttribute("aria-hidden", "true");
+    titleRow.append(mark, node("span", "sr-only", t("home.pinned")));
+  }
   titleRow.append(node("span", "card-name", title));
   const pill = statusLabel(agent.status);
   if (pill) titleRow.append(node("span", `pill pill-${agent.status}`, pill));
@@ -59,7 +73,7 @@ export function fillHerdList(root: HTMLElement): void {
     root.append(emptyNode(copy.title, copy.detail));
     return;
   }
-  const groups = groupAgents(state.agents, state.listGroup, state.paneTouched);
+  const groups = groupAgents(state.agents, state.listGroup, state.paneTouched, state.panePinned);
   const list = node("div", "herd-list");
   if (state.listGroup === "flat") {
     for (const group of groups) {
@@ -80,7 +94,7 @@ function herdGroup(group: AgentGroup, groups: AgentGroup[]): HTMLElement {
     state.listGroupCollapsed = toggleGroupCollapsed(groups, state.listGroupCollapsed, group.id);
     render();
   });
-  if (state.listGroup === "space") {
+  if (state.listGroup === "space" && group.id !== PINNED_GROUP_ID) {
     const agent = group.items.find((item) => item.workspaceId) ?? group.items[0];
     if (agent?.workspaceId) {
       heading.setAttribute("aria-haspopup", "menu");

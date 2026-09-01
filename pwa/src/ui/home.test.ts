@@ -26,6 +26,15 @@ describe("home chrome", () => {
   });
 });
 
+describe("home pinned sessions", () => {
+  test("cards mark pinned panes and pass pins into grouping", () => {
+    expect(source).toContain("paneIsPinned");
+    expect(source).toContain("pin-mark");
+    expect(source).toContain("groupAgents(state.agents, state.listGroup, state.paneTouched, state.panePinned)");
+    expect(source).toContain("group.id !== PINNED_GROUP_ID");
+  });
+});
+
 describe("home grouped list", () => {
   test("grouped headings toggle and start with later groups collapsed", () => {
     expect(source).toContain("groupToggle");

@@ -305,6 +305,8 @@
   color: var(--ink);
 }
 
+.seg-item:disabled { opacity: 0.45; }
+
 .herd-list .section-title:first-child,
 .herd-list .herd-group:first-child .group-title {
   margin-top: 10px;

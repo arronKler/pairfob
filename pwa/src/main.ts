@@ -19,6 +19,7 @@ import { stickAgentStream } from "./ui/agent-chat";
 import { handlePaneKey, stickBottom } from "./ui/session-view";
 import { node } from "./lib/dom";
 import { handleFullTerminalVisibility } from "./ui/full-terminal";
+import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
 import { track } from "./lib/telemetry";
 
 initI18n();
@@ -93,6 +94,7 @@ function applyNetworkAvailability(available: boolean): void {
     if (bootBlockedByNetwork && state.phase === "connect") void boot();
     return;
   }
+  if (state.sessionTransport === "p2p") preloadFullTerminalXterm();
   if (changed || !state.live?.isConnected()) showStatus(t("net.restored"), true);
   if (!changed) state.live?.reconnectNow();
   startPolling();

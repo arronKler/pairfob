@@ -1,5 +1,5 @@
 import { Window } from "happy-dom";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { ITerminalAddon } from "@xterm/xterm";
 import type { RendererTerminal } from "./full-terminal-renderer.ts";
 
@@ -8,8 +8,10 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.window = happy;
 g.document = happy.document;
 g.HTMLElement = happy.HTMLElement;
+const originalGetContext = happy.HTMLCanvasElement.prototype.getContext;
 
-const { WEBGL_UNAVAILABLE, fullTerminalOptions, openWebglTerminal } = await import("./full-terminal-renderer.ts");
+const { WEBGL_UNAVAILABLE, fullTerminalOptions, openWebglTerminal, supportsWebgl2 } =
+  await import("./full-terminal-renderer.ts");
 
 function enableWebgl2(): void {
   happy.HTMLCanvasElement.prototype.getContext = ((kind: string) => {
@@ -28,7 +30,26 @@ class FakeWebgl {
   }
 }
 
+afterEach(() => {
+  happy.HTMLCanvasElement.prototype.getContext = originalGetContext;
+});
+
 describe("complete-terminal renderer", () => {
+  test("releases the temporary WebGL2 capability context", () => {
+    let lost = 0;
+    happy.HTMLCanvasElement.prototype.getContext = ((kind: string) => {
+      if (kind !== "webgl2") return null;
+      return {
+        getExtension(name: string) {
+          return name === "WEBGL_lose_context" ? { loseContext: () => lost++ } : null;
+        },
+      } as unknown as WebGL2RenderingContext;
+    }) as typeof happy.HTMLCanvasElement.prototype.getContext;
+
+    expect(supportsWebgl2()).toBeTrue();
+    expect(lost).toBe(1);
+  });
+
   test("loads WebGL before opening and forwards context loss", () => {
     enableWebgl2();
     const mount = document.createElement("div");
@@ -72,7 +93,7 @@ describe("complete-terminal renderer", () => {
       .toThrow(WEBGL_UNAVAILABLE);
   });
 
-  test("rejects an unsupported browser before xterm can install its DOM fallback", () => {
+  test("uses the actual addon result instead of allocating a second capability context", () => {
     happy.HTMLCanvasElement.prototype.getContext = (() => null) as typeof happy.HTMLCanvasElement.prototype.getContext;
     const mount = document.createElement("div");
     let opened = false;
@@ -81,7 +102,7 @@ describe("complete-terminal renderer", () => {
       open() { opened = true; },
     };
     expect(() => openWebglTerminal(terminal, FakeWebgl, mount, () => undefined)).toThrow(WEBGL_UNAVAILABLE);
-    expect(opened).toBeFalse();
+    expect(opened).toBeTrue();
   });
 
   test("keeps the strict terminal cell and color configuration together", () => {

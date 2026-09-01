@@ -10,10 +10,21 @@ import {
   type RuntimeAgentStatuses,
   type SeenCompletions,
 } from "./lib/completion-attention";
-import { parseListGroup, touchPane, type ListGroup, type TouchedAt } from "./lib/ranking";
+import {
+  parseListGroup,
+  parsePinnedAt,
+  prunePinnedAt,
+  togglePinnedAt,
+  touchPane,
+  type ListGroup,
+  type PinnedAt,
+  type TouchedAt,
+} from "./lib/ranking";
 import { type PairErrorField } from "./lib/ui-model";
 import { parseNotificationTarget, type NotificationTarget } from "./lib/notification-target";
 import { type DeviceSummary, type LiveSession, type PairResult } from "./lib/protocol/client";
+import { loadNetworkMode, persistNetworkMode, type NetworkMode } from "./lib/network-mode";
+import { parseTermMode, TERM_MODE_OPTIONS, type TermMode } from "./lib/terminal-mode";
 import type { MuxProtocol } from "./lib/protocol/mux";
 import { NO_OPERATION_CAPABILITIES, type AgentTraceItem, type OperationCapabilities } from "./lib/operations";
 import { sameNoticeScope, type NoticeScope } from "./lib/notice-scope";
@@ -51,9 +62,12 @@ export const PANE_COMPOSE_LIVE_KEY = "pairfob:paneComposeLive";
 export type PadKind = "keys" | "slash";
 export const LIST_GROUP_KEY = "pairfob:listGroup";
 export const PANE_TOUCHED_KEY = "pairfob:paneTouched";
+export const PANE_PINNED_KEY = "pairfob:panePinned";
 export const PANE_TERM_MODE_KEY = "pairfob:paneTermMode";
 export const DEFAULT_TERM_MODE_KEY = "pairfob:defaultTermMode";
-export type TermMode = "guided" | "full" | "agent";
+export { NETWORK_MODE_KEY } from "./lib/network-mode";
+export { parseTermMode };
+export type { NetworkMode, TermMode };
 export const COMPLETION_SEEN_KEY = "pairfob:completionSeen";
 export const COMPOSE_MIN_PX = 46;
 export const COMPOSE_MAX_PX = 136;
@@ -128,15 +142,11 @@ function loadDefaultComposeLive(): boolean {
   }
 }
 
-export function parseTermMode(raw: string | null | undefined, fallback: TermMode = "guided"): TermMode {
-  return raw === "guided" || raw === "full" || raw === "agent" ? raw : fallback;
-}
-
 function loadDefaultTermMode(): TermMode {
   try {
     return parseTermMode(localStorage.getItem(DEFAULT_TERM_MODE_KEY));
   } catch {
-    return "guided";
+    return "auto";
   }
 }
 
@@ -161,9 +171,9 @@ export type AppState = {
   fullTerminal: boolean;
   /** Structured agent-execution view instead of the snapshot terminal. */
   agentChat: boolean;
-  /** Fallback when a pane has no stored view of its own. */
+  /** Fallback preference when a pane has no stored mode of its own. */
   defaultTermMode: TermMode;
-  /** Per-pane last chosen view. Missing ids use `defaultTermMode`. */
+  /** Per-pane mode preference. Missing ids use `defaultTermMode`. */
   paneTermModes: Record<string, TermMode>;
   /** Default input behavior for panes without their own choice. */
   defaultComposeLive: boolean;
@@ -180,6 +190,10 @@ export type AppState = {
   relayRttMs: number | null;
   /** Active encrypted session path; P2P is attempted without blocking relay use. */
   sessionTransport: "relay" | "p2p";
+  /** Settings preference for Auto / P2P / Relay. The live path is `sessionTransport`. */
+  networkMode: NetworkMode;
+  /** A user-requested transport change is negotiating or reconnecting. */
+  transportSwitching: boolean;
   refreshBusy: boolean;
   snapshotPending: boolean;
   /** When the last Snapshot landed, so a pane change can pull status forward. */
@@ -216,6 +230,7 @@ export type AppState = {
   /** true = that grouped heading is collapsed. Missing ids follow first-open. */
   listGroupCollapsed: Record<string, boolean>;
   paneTouched: TouchedAt;
+  panePinned: PinnedAt;
   runtimeAgentStatuses: RuntimeAgentStatuses;
   completionSeen: SeenCompletions;
   composeDraft: string;
@@ -270,6 +285,8 @@ export const state: AppState = {
   networkOnline: navigator.onLine !== false,
   relayRttMs: null,
   sessionTransport: "relay",
+  networkMode: loadNetworkMode(),
+  transportSwitching: false,
   refreshBusy: false,
   snapshotPending: false,
   snapshotAt: 0,
@@ -297,6 +314,7 @@ export const state: AppState = {
   listGroup: loadListGroup(),
   listGroupCollapsed: {},
   paneTouched: {},
+  panePinned: {},
   runtimeAgentStatuses: {},
   completionSeen: {},
   composeDraft: "",
@@ -358,6 +376,31 @@ export function rememberPane(paneId: string): void {
   savePaneTouched();
 }
 
+function panePinnedKey(): string {
+  return `${PANE_PINNED_KEY}:${state.credential?.daemonId || "anon"}`;
+}
+
+export function loadPanePinned(): PinnedAt {
+  try {
+    return parsePinnedAt(JSON.parse(localStorage.getItem(panePinnedKey()) || "{}") as unknown);
+  } catch {
+    return {};
+  }
+}
+
+export function savePanePinned(): void {
+  try {
+    localStorage.setItem(panePinnedKey(), JSON.stringify(state.panePinned));
+  } catch {
+    /* storage blocked; the choice just does not persist */
+  }
+}
+
+export function togglePanePin(paneId: string): void {
+  state.panePinned = togglePinnedAt(state.panePinned, paneId);
+  savePanePinned();
+}
+
 function paneTermModeKey(): string {
   return `${PANE_TERM_MODE_KEY}:${state.credential?.daemonId || "anon"}`;
 }
@@ -368,7 +411,7 @@ export function loadPaneTermModes(): Record<string, TermMode> {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
     const out: Record<string, TermMode> = {};
     for (const [paneId, mode] of Object.entries(raw as Record<string, unknown>)) {
-      if (paneId && (mode === "guided" || mode === "full" || mode === "agent")) out[paneId] = mode;
+      if (paneId && TERM_MODE_OPTIONS.includes(mode as TermMode)) out[paneId] = mode as TermMode;
     }
     return out;
   } catch {
@@ -449,6 +492,12 @@ export function setDefaultTermMode(mode: TermMode): void {
   saveDefaultTermMode();
 }
 
+export function setNetworkMode(mode: NetworkMode): void {
+  if (state.networkMode === mode) return;
+  state.networkMode = mode;
+  persistNetworkMode(mode);
+}
+
 function prunePaneTermModes(): void {
   if (!state.agents.length) return;
   const live = new Set(state.agents.map((agent) => agent.paneId));
@@ -513,6 +562,16 @@ export function replaceAgentsFromSnapshot(snapshot: SnapshotWire): DashboardAgen
   if (seenChanged) saveCompletionSeen();
   prunePaneTermModes();
   prunePaneComposeLive();
+  if (state.agents.length) {
+    const pinned = prunePinnedAt(
+      state.panePinned,
+      state.agents.map((agent) => agent.paneId),
+    );
+    if (pinned !== state.panePinned) {
+      state.panePinned = pinned;
+      savePanePinned();
+    }
+  }
   return previous;
 }
 

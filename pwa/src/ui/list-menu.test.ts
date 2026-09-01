@@ -9,6 +9,9 @@ describe("list object menu", () => {
     expect(source).toContain("export function openListPaneMenu(agent: AgentCard)");
     expect(source).toContain("renamePane(agent)");
     expect(source).toContain("closePane(agent)");
+    expect(source).toContain("togglePanePin(agent.paneId)");
+    expect(source).toContain('t("menu.pin")');
+    expect(source).toContain('t("menu.unpin")');
     expect(source).toContain("renameTab(agent)");
     expect(source).toContain("closeTab(agent)");
     expect(source).toContain("renameWorkspace(agent)");
@@ -29,13 +32,14 @@ describe("list object menu", () => {
     expect(source).toContain("agentDetailRows(agent, state.agents, state.listGroup)");
     expect(source).toContain("sheet-facts");
     expect(source).toContain("sheet-fact-path");
-    expect(source).not.toContain("agent.paneId");
+    const facts = source.slice(source.indexOf("function appendPaneFacts"), source.indexOf("export function openListPaneMenu"));
+    expect(facts).not.toContain("paneId");
   });
 
   test("workspace rename leaves the card when the list is grouped by workspace", () => {
     expect(source).toContain('state.listGroup !== "space"');
     expect(source).toContain("export function openListWorkspaceMenu");
-    expect(home).toContain('state.listGroup === "space"');
+    expect(home).toContain('state.listGroup === "space" && group.id !== PINNED_GROUP_ID');
     expect(home).toContain("openListWorkspaceMenu(agent)");
     expect(source).not.toContain("list_worktrees");
     expect(source).not.toContain("createSelectedTab");

@@ -63,12 +63,24 @@ afterEach(() => {
 });
 
 describe("complete-terminal compose input", () => {
-  test("encodes one composed submission with its trailing Enter", () => {
+  test("sends composed text before a distinct Enter command", () => {
+    const sent: Array<{ text: string; isolate: boolean | undefined }> = [];
+    const send = (data: Uint8Array, options?: { isolate?: boolean }): void => {
+      sent.push({ text: new TextDecoder().decode(data), isolate: options?.isolate });
+    };
+    expect(submitFullTerminalCompose("中文", true, true, send)).toBe(true);
+    expect(sent).toEqual([
+      { text: "中文", isolate: undefined },
+      { text: "\r", isolate: true },
+    ]);
+    expect(submitFullTerminalCompose("later", false, false, send)).toBe(false);
+    expect(sent).toHaveLength(2);
+  });
+
+  test("sends an empty compose submission as an Enter command", () => {
     const sent: Uint8Array[] = [];
-    expect(submitFullTerminalCompose("中文", true, true, (data) => sent.push(data))).toBe(true);
-    expect(new TextDecoder().decode(sent[0])).toBe("中文\r");
-    expect(submitFullTerminalCompose("later", false, false, (data) => sent.push(data))).toBe(false);
-    expect(sent).toHaveLength(1);
+    expect(submitFullTerminalCompose("", true, true, (data) => sent.push(data))).toBe(true);
+    expect(sent).toEqual([new Uint8Array([0x0d])]);
   });
 
   test("keeps local IME text until the terminal accepts it", () => {

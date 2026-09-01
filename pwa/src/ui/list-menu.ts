@@ -1,9 +1,10 @@
 import { agentDetailRows, agentTitle, tabIsSplit, visibleTabLabel } from "../lib/dashboard";
 import { node } from "../lib/dom";
 import { t } from "../lib/i18n";
-import { type AgentCard } from "../lib/ranking";
+import { paneIsPinned, type AgentCard } from "../lib/ranking";
 import { closePane, closeTab, renamePane, renameTab, renameWorkspace } from "../live-operations";
-import { state } from "../state";
+import { render } from "../paint";
+import { state, togglePanePin } from "../state";
 import { present, sheet, sheetItem } from "./sheet";
 
 function appendPaneFacts(body: HTMLElement, agent: AgentCard): void {
@@ -27,7 +28,15 @@ export function openListPaneMenu(agent: AgentCard): void {
   const split = tabIsSplit(agent, state.agents);
   const namedTab = Boolean(visibleTabLabel(agent.tabLabel));
   appendPaneFacts(parts.body, agent);
-  parts.body.append(item(t("menu.renamePane"), () => renamePane(agent)), item(t("op.closePane"), () => closePane(agent), "danger"));
+  const pinned = paneIsPinned(state.panePinned, agent.paneId);
+  parts.body.append(
+    item(pinned ? t("menu.unpin") : t("menu.pin"), () => {
+      togglePanePin(agent.paneId);
+      render();
+    }),
+    item(t("menu.renamePane"), () => renamePane(agent)),
+    item(t("op.closePane"), () => closePane(agent), "danger"),
+  );
   if (namedTab || split) parts.body.append(item(t("menu.renameTab"), () => renameTab(agent)));
   if (split) parts.body.append(item(t("op.closeTab"), () => closeTab(agent), "danger"));
   if (agent.workspaceId && state.listGroup !== "space") {

@@ -2,7 +2,8 @@ import { agentMeta, agentTitle, paneFillCopy, statusLabel, tabIsSplit } from "..
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { chevron } from "./chrome";
-import { groupAgents } from "../lib/ranking";
+import { groupAgents, paneIsPinned } from "../lib/ranking";
+import { TERM_MODE_OPTIONS } from "../lib/terminal-mode";
 import { TERM_MODE_LABEL, TERM_MODE_MENU } from "../lib/ui-model";
 import {
   closePane,
@@ -17,11 +18,12 @@ import {
 } from "../live-operations";
 import { openPane } from "../live";
 import { render } from "../paint";
-import { TERM_COL_PRESETS, TERM_FONT_MAX, TERM_FONT_MIN, clampTermFont, saveTermFont, selectedAgent, state } from "../state";
-import { canEnterAgentChat, enterAgentChat, leaveAgentChat } from "./agent-chat";
-import { enterFullTerminal, leaveFullTerminal, retryFullTerminal, setFullTerminalComposeLive, setTermFit } from "./full-terminal";
+import { TERM_COL_PRESETS, TERM_FONT_MAX, TERM_FONT_MIN, clampTermFont, paneTermMode, saveTermFont, selectedAgent, state } from "../state";
+import { canEnterAgentChat } from "./agent-chat";
+import { retryFullTerminal, setFullTerminalComposeLive, setTermFit } from "./full-terminal";
 import { setComposeLive, toggleTermSelect, toggleTermWrap } from "./session-view";
 import { afterClose, present, sheet, sheetItem, sheetSection } from "./sheet";
+import { selectPaneTermMode } from "./terminal-mode";
 
 export function fillSelectedPane(): void {
   void layoutSelectedPane("zoom");
@@ -30,12 +32,17 @@ export function fillSelectedPane(): void {
 export function openPaneSwitcher(): void {
   const parts = sheet(t("home.switcherTitle"));
   const list = node("div", "switch-list");
-  for (const group of groupAgents(state.agents, state.listGroup, state.paneTouched)) {
+  for (const group of groupAgents(state.agents, state.listGroup, state.paneTouched, state.panePinned)) {
     for (const agent of group.items) {
       const item = node("button", `switch-item${agent.paneId === state.paneId ? " on" : ""}`);
       item.type = "button";
       const main = node("span", "switch-main");
       const head = node("span", "switch-head");
+      if (paneIsPinned(state.panePinned, agent.paneId)) {
+        const mark = node("span", "pin-mark");
+        mark.setAttribute("aria-hidden", "true");
+        head.append(mark);
+      }
       head.append(node("span", `agent-dot agent-${agent.status}`), node("span", "switch-name", agentTitle(agent, state.listGroup)));
       main.append(head);
       const status = statusLabel(agent.status);
@@ -60,32 +67,24 @@ export function openPaneMenu(): void {
   const item = (label: string, action: () => void | Promise<void>, variant: "" | "danger" = "", disabled = false) =>
     sheetItem(parts, label, action, variant, disabled);
   const section = (label: string, entries: HTMLButtonElement[]) => sheetSection(parts, label, entries);
-  const leaveToGuided = () => {
-    if (state.fullTerminal) void leaveFullTerminal();
-    else if (state.agentChat) leaveAgentChat();
-  };
-  const currentMode = state.fullTerminal ? "full" : state.agentChat ? "agent" : "guided";
+  const currentMode = paneTermMode(state.paneId);
   const modeBar = node("div", "seg menu-mode");
   modeBar.setAttribute("role", "radiogroup");
   modeBar.setAttribute("aria-label", t("mode.aria"));
-  for (const option of [
-    { id: "guided" as const, run: leaveToGuided },
-    { id: "full" as const, run: enterFullTerminal, aria: TERM_MODE_MENU.full },
-    { id: "agent" as const, run: enterAgentChat },
-  ]) {
-    const selected = currentMode === option.id;
-    const choice = button(TERM_MODE_LABEL[option.id], `seg-item${selected ? " on" : ""}`);
+  for (const mode of TERM_MODE_OPTIONS) {
+    const selected = currentMode === mode;
+    const choice = button(TERM_MODE_LABEL[mode], `seg-item${selected ? " on" : ""}`);
     choice.setAttribute("role", "radio");
     choice.setAttribute("aria-checked", selected ? "true" : "false");
-    if (option.aria) choice.setAttribute("aria-label", option.aria);
-    choice.disabled = option.id === "agent" && !selected && !canEnterAgentChat();
+    choice.setAttribute("aria-label", TERM_MODE_MENU[mode]);
+    choice.disabled = mode === "agent" && !selected && !canEnterAgentChat();
     choice.addEventListener("click", () => {
       if (selected) return;
-      afterClose(parts.dialog, option.run);
+      afterClose(parts.dialog, () => selectPaneTermMode(mode));
     });
     modeBar.append(choice);
   }
-  parts.body.append(node("h3", "menu-section-title", t("pane.sectionMode")), modeBar);
+  parts.body.append(node("h3", "menu-section-title", t("pane.sectionMode")), modeBar, node("p", "empty-sub", t("mode.autoHint")));
 
   const selected = selectedAgent();
   const split = tabIsSplit(selected, state.agents);

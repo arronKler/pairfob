@@ -18,9 +18,48 @@ export interface AgentCard {
 }
 
 export type TouchedAt = Record<string, number>;
+export type PinnedAt = Record<string, number>;
 
-export function rankAgents(agents: AgentCard[], touchedAt: TouchedAt = {}): AgentCard[] {
+export const PINNED_GROUP_ID = "pairfob:pinned";
+
+export function parsePinnedAt(raw: unknown): PinnedAt {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: PinnedAt = {};
+  for (const [paneId, stamp] of Object.entries(raw as Record<string, unknown>)) {
+    if (paneId && typeof stamp === "number" && Number.isFinite(stamp) && stamp > 0) out[paneId] = stamp;
+  }
+  return out;
+}
+
+export function paneIsPinned(pinnedAt: PinnedAt, paneId: string): boolean {
+  return (pinnedAt[paneId] ?? 0) > 0;
+}
+
+export function togglePinnedAt(current: PinnedAt, paneId: string, now = Date.now()): PinnedAt {
+  if (!paneId) return current;
+  if (paneIsPinned(current, paneId)) {
+    const next = { ...current };
+    delete next[paneId];
+    return next;
+  }
+  return { ...current, [paneId]: now };
+}
+
+export function prunePinnedAt(current: PinnedAt, liveIds: Iterable<string>): PinnedAt {
+  const live = liveIds instanceof Set ? liveIds : new Set(liveIds);
+  const out: PinnedAt = {};
+  let changed = false;
+  for (const [paneId, stamp] of Object.entries(current)) {
+    if (live.has(paneId) && stamp > 0) out[paneId] = stamp;
+    else changed = true;
+  }
+  return changed ? out : current;
+}
+
+export function rankAgents(agents: AgentCard[], touchedAt: TouchedAt = {}, pinnedAt: PinnedAt = {}): AgentCard[] {
   return [...agents].sort((a, b) => {
+    const pinnedDelta = Number(paneIsPinned(pinnedAt, b.paneId)) - Number(paneIsPinned(pinnedAt, a.paneId));
+    if (pinnedDelta !== 0) return pinnedDelta;
     const delta = (touchedAt[b.paneId] ?? 0) - (touchedAt[a.paneId] ?? 0);
     if (delta !== 0) return delta;
     return a.paneId.localeCompare(b.paneId);
@@ -84,45 +123,64 @@ function groupTouched(group: AgentGroup, touchedAt: TouchedAt): number {
   return latest;
 }
 
-export function groupAgents(agents: AgentCard[], mode: ListGroup, touchedAt: TouchedAt = {}): AgentGroup[] {
-  const ranked = rankAgents(agents, touchedAt);
-  if (mode === "flat") {
-    return ranked.length ? [{ id: "all", title: t("group.sessions"), items: ranked }] : [];
-  }
-  const groups = new Map<string, AgentGroup>();
-  const order: string[] = [];
+export function groupAgents(
+  agents: AgentCard[],
+  mode: ListGroup,
+  touchedAt: TouchedAt = {},
+  pinnedAt: PinnedAt = {},
+): AgentGroup[] {
+  const ranked = rankAgents(agents, touchedAt, pinnedAt);
+  const pinnedItems: AgentCard[] = [];
+  const rest: AgentCard[] = [];
   for (const agent of ranked) {
+    if (paneIsPinned(pinnedAt, agent.paneId)) pinnedItems.push(agent);
+    else rest.push(agent);
+  }
+  const groups: AgentGroup[] = [];
+  if (pinnedItems.length) {
+    groups.push({ id: PINNED_GROUP_ID, title: t("group.pinned"), items: pinnedItems });
+  }
+  if (mode === "flat") {
+    if (rest.length) groups.push({ id: "all", title: t("group.sessions"), items: rest });
+    return groups;
+  }
+  const buckets = new Map<string, AgentGroup>();
+  const order: string[] = [];
+  for (const agent of rest) {
     const { id, title } = groupKey(agent, mode);
-    let group = groups.get(id);
+    let group = buckets.get(id);
     if (!group) {
       group = { id, title, items: [] };
-      groups.set(id, group);
+      buckets.set(id, group);
       order.push(id);
     }
     group.items.push(agent);
   }
-  return order
-    .map((id) => {
-      const group = groups.get(id)!;
-      return { id: group.id, title: group.title, items: rankAgents(group.items, touchedAt) };
-    })
-    .sort((left, right) => {
-      const unbound = Number(left.id === "unbound") - Number(right.id === "unbound");
-      if (unbound !== 0) return unbound;
-      const recency = groupTouched(right, touchedAt) - groupTouched(left, touchedAt);
-      if (recency !== 0) return recency;
-      return left.title.localeCompare(right.title, "zh-CN");
-    });
+  return groups.concat(
+    order
+      .map((id) => {
+        const group = buckets.get(id)!;
+        return { id: group.id, title: group.title, items: rankAgents(group.items, touchedAt, pinnedAt) };
+      })
+      .sort((left, right) => {
+        const unbound = Number(left.id === "unbound") - Number(right.id === "unbound");
+        if (unbound !== 0) return unbound;
+        const recency = groupTouched(right, touchedAt) - groupTouched(left, touchedAt);
+        if (recency !== 0) return recency;
+        return left.title.localeCompare(right.title, "zh-CN");
+      }),
+  );
 }
 
-/** First group starts open; later groups start collapsed. Known ids keep their last choice. */
+/** First group starts open; a leading pinned section also leaves the next group open. */
 export function syncGroupCollapsed(
   groups: AgentGroup[],
   current: Record<string, boolean>,
 ): Record<string, boolean> {
   const next: Record<string, boolean> = {};
+  const openCount = groups[0]?.id === PINNED_GROUP_ID ? 2 : 1;
   groups.forEach((group, index) => {
-    next[group.id] = current[group.id] ?? index > 0;
+    next[group.id] = current[group.id] ?? index >= openCount;
   });
   return next;
 }

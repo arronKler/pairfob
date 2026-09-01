@@ -43,6 +43,8 @@ import {
 import { helloClientBody, muxProtocolFromRelayURL, muxSubprotocol, sessionAttachBody, type MuxProtocol } from "./mux.ts";
 import type { PairResult } from "./pair-ws.ts";
 import { reconnectDelay } from "./reconnect-policy.ts";
+import { parseNetworkMode, type NetworkMode } from "../network-mode.ts";
+import { directRetryDelay } from "./direct-retry-policy.ts";
 import { establishSessionEpoch } from "./session-handshake.ts";
 import { isRecord } from "./session-message.ts";
 import {
@@ -103,7 +105,7 @@ async function connectSession(
 const TERMINAL_CODES = new Set(["revoked", "unpaired", "too_many_devices", "bad_proof", "bad_signature"]);
 const UNCERTAIN_MUTATION_TRANSPORT_CODES = new Set(["timeout", "disconnected", "heartbeat_timeout", "daemon_replaced"]);
 
-export type SessionOptions = { p2p?: boolean };
+export type SessionOptions = { p2p?: boolean; networkMode?: NetworkMode };
 
 /** Run one mutation transport attempt and preserve whether its encrypted frame was sent. */
 export async function trackMutationDelivery<T>(runOnce: (markSent: () => void) => Promise<T>): Promise<T> {
@@ -126,6 +128,10 @@ class ReconnectingSession implements LiveSession {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectAbort: AbortController | null = null;
   private directAbort: AbortController | null = null;
+  private directAttempt: Promise<void> | null = null;
+  private directRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private directRetryAttempt = 0;
+  private networkMode: NetworkMode = "auto";
   private networkAvailable = true;
   private attempt = 0;
   private lastRttMs: number | null = null;
@@ -138,7 +144,9 @@ class ReconnectingSession implements LiveSession {
     private readonly relayWS: string,
     private readonly pair: PairResult,
     private readonly options: SessionOptions,
-  ) {}
+  ) {
+    this.networkMode = parseNetworkMode(options.networkMode);
+  }
 
   static async create(relayWS: string, pair: PairResult, options: SessionOptions): Promise<ReconnectingSession> {
     const session = new ReconnectingSession(relayWS, pair, options);
@@ -147,15 +155,49 @@ class ReconnectingSession implements LiveSession {
   }
 
   isConnected = (): boolean => this.transport !== null;
+  switchTransport = async (target: NetworkMode): Promise<void> => {
+    if (this.stopped) throw new ProtocolError("disconnected", "连接已断开");
+    this.networkMode = target;
+    const transport = this.transport;
+    if (target === "relay") {
+      this.clearDirectRetry();
+      this.directAbort?.abort();
+      if (transport?.kind === "p2p") {
+        transport.suspend(new ProtocolError("disconnected", "正在切换到 Relay"));
+      }
+      return;
+    }
+    if (!this.options.p2p || typeof RTCPeerConnection === "undefined") {
+      if (target === "p2p") throw new ProtocolError("p2p_unavailable", "当前环境不支持 P2P 直连");
+      return;
+    }
+    if (!this.networkAvailable || !transport || transport.kind === "p2p") return;
+    if (target === "auto") {
+      this.startAutomaticDirectUpgrade(transport);
+      return;
+    }
+    this.clearDirectRetry();
+    try {
+      await this.startDirectUpgrade(transport);
+    } catch (error) {
+      this.scheduleDirectRetry(transport);
+      throw error;
+    }
+  };
   reconnectNow = (): void => {
     if (this.stopped || !this.networkAvailable) return;
     if (this.transport) {
       const transport = this.transport;
-      void transport.rpc("Ping", { t_ms: Date.now() }, 8_000).catch((error) => {
-        if (this.transport === transport && error instanceof ProtocolError && error.code === "timeout") {
-          transport.suspend(new ProtocolError("disconnected", "前台探测失败"));
-        }
-      });
+      void transport.rpc("Ping", { t_ms: Date.now() }, 8_000).then(
+        () => {
+          if (this.transport === transport && transport.kind === "relay") this.startAutomaticDirectUpgrade(transport);
+        },
+        (error) => {
+          if (this.transport === transport && error instanceof ProtocolError && error.code === "timeout") {
+            transport.suspend(new ProtocolError("disconnected", "前台探测失败"));
+          }
+        },
+      );
       return;
     }
     if (this.reconnecting) return;
@@ -172,6 +214,7 @@ class ReconnectingSession implements LiveSession {
     }
     if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    this.clearDirectRetry();
     this.connectAbort?.abort();
     this.directAbort?.abort();
     const transport = this.transport;
@@ -277,6 +320,8 @@ class ReconnectingSession implements LiveSession {
     this.connectAbort = null;
     this.directAbort?.abort();
     this.directAbort = null;
+    this.directAttempt = null;
+    this.clearDirectRetry();
     if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.transport?.close();
@@ -356,7 +401,8 @@ class ReconnectingSession implements LiveSession {
     transport.onDisconnect((error) => this.onDisconnect(transport, error));
     if (this.transport !== transport) return;
     this.emit({ type: "connected" });
-    if (this.options.p2p) void this.tryDirectUpgrade(transport);
+    this.directRetryAttempt = 0;
+    this.startAutomaticDirectUpgrade(transport);
   }
 
   private onDisconnect(source: SessionTransport, error: ProtocolError): void {
@@ -365,11 +411,13 @@ class ReconnectingSession implements LiveSession {
       this.deferredDisconnect = error;
       return;
     }
+    if (source.kind === "relay") this.directAbort?.abort();
     this.finishDisconnect(error);
   }
 
   private finishDisconnect(error: ProtocolError): void {
     this.transport = null;
+    this.clearDirectRetry();
     if (TERMINAL_CODES.has(error.code) || error.code === "kicked") {
       this.stopped = true;
       this.emit({ type: "terminal", code: error.code, message: error.message });
@@ -394,43 +442,92 @@ class ReconnectingSession implements LiveSession {
     finish?.();
   }
 
-  private async tryDirectUpgrade(relay: SessionTransport): Promise<void> {
-    if (this.stopped || this.transport !== relay || relay.kind !== "relay" || this.directAbort) return;
+  private startAutomaticDirectUpgrade(relay: SessionTransport): void {
+    if (!this.canAutoUpgrade(relay) || this.directAttempt) return;
+    this.clearDirectRetry();
+    void this.startDirectUpgrade(relay).then(
+      () => { this.directRetryAttempt = 0; },
+      () => this.scheduleDirectRetry(relay),
+    );
+  }
+
+  private canAutoUpgrade(relay: SessionTransport): boolean {
+    return this.options.p2p === true && this.networkMode !== "relay" && typeof RTCPeerConnection !== "undefined" &&
+      !this.stopped && this.networkAvailable && this.transport === relay && relay.kind === "relay";
+  }
+
+  private startDirectUpgrade(relay: SessionTransport): Promise<void> {
+    if (this.directAttempt) return this.directAttempt;
+    if (!this.canAutoUpgrade(relay)) return Promise.reject(new ProtocolError("p2p_unavailable", "P2P 直连当前不可用"));
     const controller = new AbortController();
     this.directAbort = controller;
+    const attempt = this.runDirectUpgrade(relay, controller);
+    this.directAttempt = attempt;
+    void attempt.then(
+      () => this.finishDirectAttempt(attempt, controller, relay),
+      () => this.finishDirectAttempt(attempt, controller, relay),
+    );
+    return attempt;
+  }
+
+  private finishDirectAttempt(attempt: Promise<void>, controller: AbortController, relay: SessionTransport): void {
+    if (this.directAttempt === attempt) this.directAttempt = null;
+    if (this.directAbort === controller) this.directAbort = null;
+    const active = this.transport;
+    if (active && active !== relay && active.kind === "relay") this.startAutomaticDirectUpgrade(active);
+  }
+
+  private async runDirectUpgrade(relay: SessionTransport, controller: AbortController): Promise<void> {
     let candidate: Awaited<ReturnType<typeof prepareDirectSession>> | null = null;
     try {
       candidate = await prepareDirectSession(relay, this.pair, muxProtocolFromRelayURL(this.relayWS), controller.signal);
-      if (this.stopped || this.transport !== relay || !this.networkAvailable) return;
+      if (this.stopped || this.transport !== relay || !this.networkAvailable) {
+        throw new ProtocolError("p2p_unavailable", "P2P 直连尝试已取消");
+      }
       this.beginSwitch();
       await relay.waitIdle();
       const direct = await commitDirectSession(relay, candidate, (event) => this.emit(event));
       candidate = null;
       if (this.stopped || this.transport !== relay || !this.networkAvailable) {
         direct.transport.close();
-        return;
+        throw new ProtocolError("p2p_unavailable", "P2P 直连切换已取消");
       }
       this.deferredDisconnect = null;
       this.transport = direct.transport;
       direct.transport.onDisconnect((error) => this.onDisconnect(direct.transport, error));
       this.emit({ type: "latency", rttMs: direct.rttMs, transport: "p2p" });
+      this.clearDirectRetry();
       relay.close();
-    } catch {
+    } catch (error) {
       const deferred = this.deferredDisconnect;
       if (deferred && this.transport === relay) {
         this.deferredDisconnect = null;
         this.finishDisconnect(deferred);
       }
+      throw error;
     } finally {
       candidate?.close();
       if (this.switchWait) this.endSwitch();
-      if (this.directAbort === controller) this.directAbort = null;
       const deferred = this.deferredDisconnect;
       if (deferred && this.transport) {
         this.deferredDisconnect = null;
         this.finishDisconnect(deferred);
       }
     }
+  }
+
+  private scheduleDirectRetry(relay: SessionTransport): void {
+    if (!this.canAutoUpgrade(relay) || this.directRetryTimer !== null) return;
+    const delay = directRetryDelay(this.directRetryAttempt++);
+    this.directRetryTimer = globalThis.setTimeout(() => {
+      this.directRetryTimer = null;
+      this.startAutomaticDirectUpgrade(relay);
+    }, delay);
+  }
+
+  private clearDirectRetry(): void {
+    if (this.directRetryTimer !== null) clearTimeout(this.directRetryTimer);
+    this.directRetryTimer = null;
   }
 
   private scheduleReconnect(immediate = false): void {

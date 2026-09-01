@@ -37,7 +37,7 @@ bun run perf:terminal
 它包含两层：
 
 1. `perf:terminal:command` 使用虚拟时钟，在 80/180/350ms RTT 下复现高频输入，比较命令泵与“一次输入一次 RPC”的串行完成时间，并检查 sequence 连续及 payload 上限。
-2. `perf:terminal:browser` 先做生产构建，以 gzip 传输产物，再用全新 Chrome profile 测量 390×844、3x DPR、4x CPU、固定网络下的 xterm chunk 冷/热加载、组件打开、约 1MiB 输出排空、long task 和 heap 增量。热加载模拟 pane 空闲预加载后的模块缓存命中。
+2. `perf:terminal:browser` 先做生产构建，以 gzip 传输产物，再用全新 Chrome profile 测量 390×844、3x DPR、4x CPU、固定网络下的 xterm chunk 冷/热加载、WebGL2 组件打开、约 1MiB 输出排空、long task、heap 增量和 canvas backing-store 估算。它加载与产品相同的 `WebglAddon`，并断言没有 DOM fallback 或 context loss；热加载模拟 P2P 建连后空闲预载的模块缓存命中。
 
 浏览器路径可通过 `PAIRFOB_CHROME` 指定。基准使用隔离页面测 renderer；真实配对、WSS、daemon 与 Android 前后台恢复仍需单独做真机验收。
 

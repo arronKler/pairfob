@@ -51,6 +51,35 @@ describe("TerminalCommandPump", () => {
     expect(requests[1].command).toEqual({ kind: "input", data: new Uint8Array([2, 3, 4]) });
   });
 
+  test("keeps a non-coalescing input boundary behind queued text", async () => {
+    const requests: Array<{ command: TerminalCommand; sequence: number; done: Deferred }> = [];
+    const pump = new TerminalCommandPump({
+      execute: (command, sequence) => {
+        const done = deferred();
+        requests.push({ command, sequence, done });
+        return done.promise;
+      },
+      onError: () => undefined,
+    });
+
+    pump.enqueueInput(new Uint8Array([1]));
+    pump.enqueueInput(new Uint8Array([2, 3]));
+    pump.enqueueInput(new Uint8Array([0x0d]), { isolate: true });
+    pump.enqueueInput(new Uint8Array([4]));
+    expect(requests).toHaveLength(1);
+
+    requests[0].done.resolve();
+    await flush();
+    expect(requests[1].command).toEqual({ kind: "input", data: new Uint8Array([2, 3]) });
+    requests[1].done.resolve();
+    await flush();
+    expect(requests[2].command).toEqual({ kind: "input", data: new Uint8Array([0x0d]) });
+    requests[2].done.resolve();
+    await flush();
+    expect(requests[3].command).toEqual({ kind: "input", data: new Uint8Array([4]) });
+    expect(requests.map((item) => item.sequence)).toEqual([1, 2, 3, 4]);
+  });
+
   test("keeps only the latest adjacent resize while preserving command order", async () => {
     const requests: Array<{ command: TerminalCommand; sequence: number; done: Deferred }> = [];
     const pump = new TerminalCommandPump({

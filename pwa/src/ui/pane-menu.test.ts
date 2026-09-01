@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const source = await Bun.file(new URL("./pane-menu.ts", import.meta.url)).text();
+const modeSource = await Bun.file(new URL("./terminal-mode.ts", import.meta.url)).text();
 const liveSource = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
 const chromeSource = await Bun.file(new URL("./session/view.ts", import.meta.url)).text();
 const termSource = await Bun.file(new URL("./session/term.ts", import.meta.url)).text();
@@ -25,7 +26,7 @@ describe("session view sheet", () => {
 
   test("conversation transcripts open the agent-chat mode, not a history sheet", () => {
     expect(source).toContain("TERM_MODE_LABEL");
-    expect(source).toContain("enterAgentChat");
+    expect(modeSource).toContain("enterAgentChat");
     expect(source).toContain("canEnterAgentChat()");
     expect(source).not.toMatch(/\bopenSelectedHistory\b/);
     expect(source).not.toContain("openSelectedTerminalHistory");
@@ -48,11 +49,11 @@ describe("session view sheet", () => {
 
   test("pane modes switch from a tab bar; other actions stay a labeled list", () => {
     expect(source).toContain("menu-mode");
+    expect(source).toContain("TERM_MODE_OPTIONS");
     expect(source).toContain("TERM_MODE_LABEL");
-    expect(source).toContain("TERM_MODE_MENU.full");
-    expect(source).toContain("enterFullTerminal");
-    expect(source).toContain("enterAgentChat");
-    expect(source).toContain("leaveToGuided");
+    expect(source).toContain("TERM_MODE_MENU[mode]");
+    expect(source).toContain("selectPaneTermMode");
+    expect(source).toContain('t("mode.autoHint")');
     expect(source).toContain('item(t("pane.reconnect"), retryFullTerminal)');
     expect(source).toContain("fill.menu");
     expect(source).toContain("fillSelectedPane");

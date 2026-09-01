@@ -79,6 +79,8 @@
   justify-content: flex-start;
 }
 
+.network-mode-row { flex-wrap: wrap; }
+
 .set-note { margin: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.55; }
 
 .tech-note {

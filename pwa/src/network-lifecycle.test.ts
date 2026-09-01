@@ -20,4 +20,12 @@ describe("mobile network lifecycle wiring", () => {
     expect(session).toContain("Capture one transport; mutation RPCs are never replayed");
     expect(session).toContain('transport.rpc("Ping", { t_ms: Date.now() }, 8_000)');
   });
+
+  test("failed direct upgrades retry with backoff and foreground events probe immediately", () => {
+    expect(session).toContain("this.scheduleDirectRetry(relay)");
+    expect(session).toContain("directRetryDelay(this.directRetryAttempt++)");
+    expect(session).toContain("this.startAutomaticDirectUpgrade(transport)");
+    expect(session).toContain("this.networkMode = target");
+    expect(session).toContain('this.networkMode !== "relay"');
+  });
 });

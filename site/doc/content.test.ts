@@ -36,18 +36,19 @@ describe("user-facing documentation", () => {
     expect(app).not.toContain("工作区：…");
   });
 
-  test("names the three pane modes the same way the PWA does", () => {
+  test("names Auto and the three concrete pane modes the same way the PWA does", () => {
+    expect(app).toContain("| **自动** |");
     expect(app).toContain("| **控制** |");
     expect(app).toContain("| **终端** |");
     expect(app).toContain("| **对话** |");
-    expect(app).toContain("| 模式 | 控制、终端（vim / TUI）、对话");
+    expect(app).toContain("| 模式 | 自动、控制、终端（vim / TUI）、对话");
     expect(app).toContain("| 输入 |");
     expect(app).toContain("| 显示 |");
     expect(app).not.toContain("更早的输出");
     expect(app).not.toContain("给 Agent 发任务");
     expect(app).not.toContain("铺满全屏");
     expect(docs).not.toContain("| Agent | 给 Agent 发任务 |");
-    expect(app).toContain("**模式**：点开会话时默认进 **控制** / **终端** / **对话**");
+    expect(app).toContain("**模式**：点开会话时默认用 **自动**");
     expect(app).not.toContain("完整终端");
     expect(app).not.toContain("会话顶栏会直接显示 **历史**");
     expect(app).not.toContain("| 画面 |");
@@ -68,6 +69,11 @@ describe("user-facing documentation", () => {
     expect(faqEn).toContain("https://github.com/arronKler/pairfob/issues/new");
     expect(faq).toContain("安全漏洞请走");
     expect(faqEn).toContain("GitHub Security Advisories");
+  });
+
+  test("documents the three network path choices on the settings connection card", () => {
+    expect(app).toContain("**网络连接方式**");
+    expect(app).toContain("**自动** / **P2P** / **Relay**");
   });
 
   test("documents the shipped multi-computer flow", () => {

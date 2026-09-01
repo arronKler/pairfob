@@ -2,10 +2,15 @@ import { describe, expect, test } from "bun:test";
 import {
   groupAgents,
   nextTouchedAt,
+  paneIsPinned,
   parseListGroup,
+  parsePinnedAt,
+  PINNED_GROUP_ID,
+  prunePinnedAt,
   rankAgents,
   syncGroupCollapsed,
   toggleGroupCollapsed,
+  togglePinnedAt,
   touchPane,
   type AgentCard,
 } from "./ranking";
@@ -25,6 +30,33 @@ describe("rankAgents", () => {
 
   test("falls back to pane id when nothing has been touched", () => {
     expect(rankAgents(sample).map((item) => item.paneId)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  test("pinned sessions sit above recency and keep recency among themselves", () => {
+    const r = rankAgents(sample, { d: 40, c: 30, a: 20, b: 10 }, { a: 9, d: 1 });
+    expect(r.map((item) => item.paneId)).toEqual(["d", "a", "c", "b"]);
+  });
+});
+
+describe("pane pins", () => {
+  test("parsePinnedAt keeps finite positive stamps", () => {
+    expect(parsePinnedAt({ a: 3, b: 0, c: -1, d: "8", "": 9, e: Number.NaN })).toEqual({ a: 3 });
+    expect(parsePinnedAt(null)).toEqual({});
+    expect(parsePinnedAt(["a"])).toEqual({});
+  });
+
+  test("toggle pins and unpins a pane", () => {
+    const pinned = togglePinnedAt({}, "a", 11);
+    expect(paneIsPinned(pinned, "a")).toBe(true);
+    expect(pinned.a).toBe(11);
+    expect(togglePinnedAt(pinned, "a", 12)).toEqual({});
+    expect(togglePinnedAt(pinned, "")).toBe(pinned);
+  });
+
+  test("prune drops panes that left the snapshot and keeps the same object when unchanged", () => {
+    const current = { a: 1, b: 2 };
+    expect(prunePinnedAt(current, ["a"])).toEqual({ a: 1 });
+    expect(prunePinnedAt(current, ["a", "b"])).toBe(current);
   });
 });
 
@@ -82,6 +114,22 @@ describe("groupAgents", () => {
     expect(parseListGroup("agent")).toBe("agent");
     expect(parseListGroup("needs")).toBe("flat");
   });
+
+  test("pinned sessions form a top section and leave their original groups", () => {
+    const groups = groupAgents(sample, "space", { b: 20, a: 10, c: 9, d: 1 }, { a: 5, d: 6 });
+    expect(groups.map((group) => group.id)).toEqual([PINNED_GROUP_ID, "w-x", "w-k"]);
+    expect(groups[0].title).toBe("置顶");
+    expect(groups[0].items.map((item) => item.paneId)).toEqual(["a", "d"]);
+    expect(groups[1].items.map((item) => item.paneId)).toEqual(["b"]);
+    expect(groups[2].items.map((item) => item.paneId)).toEqual(["c"]);
+  });
+
+  test("a fully pinned flat list is only the pinned section", () => {
+    const groups = groupAgents(sample, "flat", {}, { a: 1, b: 1, c: 1, d: 1 });
+    expect(groups).toHaveLength(1);
+    expect(groups[0].id).toBe(PINNED_GROUP_ID);
+    expect(groups[0].items).toHaveLength(4);
+  });
 });
 
 describe("group collapse", () => {
@@ -89,6 +137,15 @@ describe("group collapse", () => {
 
   test("opens only the first group until the user toggles", () => {
     expect(syncGroupCollapsed(groups, {})).toEqual({ "w-x": false, "w-k": true });
+  });
+
+  test("keeps the first workspace open when a pinned section is present", () => {
+    const pinned = groupAgents(sample, "space", { b: 20, a: 10 }, { a: 1 });
+    expect(syncGroupCollapsed(pinned, {})).toEqual({
+      [PINNED_GROUP_ID]: false,
+      "w-x": false,
+      "w-k": true,
+    });
   });
 
   test("keeps a toggled group when the list reorders", () => {

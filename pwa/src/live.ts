@@ -28,6 +28,7 @@ import {
   acknowledgePaneCompletion,
   clearNotice,
   loadPaneTouched,
+  loadPanePinned,
   loadCompletionSeen,
   loadPaneComposeLive,
   messageOf,
@@ -50,6 +51,7 @@ import { composeField, dropQueuedKeys, paneReadLines, patchChromeTitle, patchSes
 import { canEnterAgentChat, patchAgentChat, refreshAgentTrace, restoreAgentTrace } from "./ui/agent-chat";
 import { disposeFullTerminal, handleFullTerminalEvent, leaveFullTerminal } from "./ui/full-terminal";
 import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
+import { resolvedPaneTermMode } from "./ui/terminal-mode";
 import { guidedScrollController } from "./ui/session/guided-scroll";
 import { track } from "./lib/telemetry";
 
@@ -142,12 +144,17 @@ export async function establish(pair: PairResult): Promise<void> {
   if (state.live) state.live = null;
   state.relayRttMs = null;
   state.sessionTransport = "relay";
+  state.transportSwitching = false;
   state.paneTouched = loadPaneTouched();
+  state.panePinned = loadPanePinned();
   state.paneTermModes = loadPaneTermModes();
   state.paneComposeLive = loadPaneComposeLive();
   await rememberLastUsed(pair.daemonId).catch(() => undefined);
   state.lastUsedDaemonId = pair.daemonId;
-  state.live = await sessionOverWS(wsURL({ daemonId: pair.daemonId }), pair, { p2p: state.p2pEnabled });
+  state.live = await sessionOverWS(wsURL({ daemonId: pair.daemonId }), pair, {
+    p2p: state.p2pEnabled,
+    networkMode: state.networkMode,
+  });
   const seen = { ...pair, lastSeen: Math.floor(Date.now() / 1000) };
   state.credential = seen;
   await saveCredential(seen).catch(() => undefined);
@@ -169,8 +176,10 @@ function onSessionEvent(event: SessionEvent): void {
   if (guidedScrollController.handleEvent(event)) return;
   if (handleFullTerminalEvent(event) && (event.type === "terminal_frame" || event.type === "terminal_closed")) return;
   if (event.type === "latency" && typeof event.rttMs === "number") {
+    const previousTransport = state.sessionTransport;
     state.relayRttMs = Math.max(0, Math.round(event.rttMs));
     state.sessionTransport = event.transport ?? state.sessionTransport;
+    if (state.sessionTransport === "p2p" && previousTransport !== "p2p") preloadFullTerminalXterm();
     if (state.screen === "settings") render();
     return;
   }
@@ -257,12 +266,11 @@ export async function openPane(paneId: string): Promise<void> {
   restoreAgentTrace(paneId);
   clearNotice();
   state.screen = "pane";
-  const mode = paneTermMode(paneId);
+  const mode = resolvedPaneTermMode(paneTermMode(paneId));
   const agent = state.agents.find((item) => item.paneId === paneId);
   state.fullTerminal = mode === "full";
   state.agentChat = mode === "agent" && canEnterAgentChat(agent);
   render();
-  preloadFullTerminalXterm();
   await refreshPane();
 }
 

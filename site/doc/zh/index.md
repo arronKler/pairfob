@@ -21,7 +21,7 @@ pageClass: pf-intro
   </article>
   <article>
     <p class="pf-claim-t">电脑做得到的才画</p>
-    <p>新建、分屏、worktree、控制 / 终端 / 对话，都以电脑当时为准。做不到的，手机上不会出现，也不会假装成功。</p>
+    <p>新建、分屏、worktree、自动 / 控制 / 终端 / 对话，都以电脑当时为准。做不到的，手机上不会出现，也不会假装成功。</p>
   </article>
   <article>
     <p class="pf-claim-t">家里不开端口</p>

@@ -2,17 +2,41 @@ import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { type DeviceSummary } from "../lib/protocol/client";
 import { formatDeviceAge, notificationAction, shortDeviceId, TERM_MODE_LABEL } from "../lib/ui-model";
+import { NETWORK_MODE_OPTIONS, type NetworkMode } from "../lib/network-mode";
+import { TERM_MODE_OPTIONS } from "../lib/terminal-mode";
 import { beginAddComputer, openComputers } from "../computers";
 import { computerTitle } from "../lib/computer-catalog";
 import { revokeSelf } from "../live-operations";
-import { enablePush, refreshSettings } from "../live-settings";
+import { enablePush, refreshSettings, selectNetworkMode } from "../live-settings";
 import { render } from "../paint";
-import { app, setDefaultTermMode, state, type TermMode } from "../state";
+import { app, setDefaultTermMode, state } from "../state";
 import { isDesk } from "../viewport";
 import { composeLiveControl } from "./session-view";
 import { backBar, feedbackNode, herdStatus, languageControl, listGroupControl, noteNode, setRow } from "./chrome";
 
-const TERM_MODE_OPTIONS: TermMode[] = ["guided", "full", "agent"];
+const NETWORK_MODE_COPY: Record<NetworkMode, "settings.networkAuto" | "settings.networkP2P" | "settings.networkRelay"> = {
+  auto: "settings.networkAuto",
+  p2p: "settings.networkP2P",
+  relay: "settings.networkRelay",
+};
+
+function networkModeControl(): HTMLElement {
+  const bar = node("div", "seg");
+  bar.setAttribute("role", "radiogroup");
+  bar.setAttribute("aria-label", t("settings.networkAria"));
+  if (state.transportSwitching) bar.setAttribute("aria-busy", "true");
+  for (const id of NETWORK_MODE_OPTIONS) {
+    const selected = state.networkMode === id;
+    const item = button(t(NETWORK_MODE_COPY[id]), `seg-item${selected ? " on" : ""}`, () => {
+      void selectNetworkMode(id);
+    });
+    item.setAttribute("role", "radio");
+    item.setAttribute("aria-checked", selected ? "true" : "false");
+    item.disabled = id === "p2p" && !state.p2pEnabled;
+    bar.append(item);
+  }
+  return bar;
+}
 
 function defaultTermModeControl(): HTMLElement {
   const bar = node("div", "seg");
@@ -65,9 +89,13 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   conn.append(setRow(
     t("settings.networkRtt"),
     state.relayRttMs === null
-      ? t("settings.networkRttPending")
+      ? t(state.sessionTransport === "p2p" ? "settings.networkP2PPending" : "settings.networkRelayPending")
       : t(state.sessionTransport === "p2p" ? "settings.networkRttP2P" : "settings.networkRttRelay", { ms: state.relayRttMs }),
   ));
+  const networkModeRow = node("div", "set-row set-row-stack network-mode-row");
+  networkModeRow.append(node("p", "set-note", t(state.p2pEnabled ? "settings.networkNote" : "settings.networkP2POff")));
+  networkModeRow.append(networkModeControl());
+  conn.append(networkModeRow);
   const self = state.deviceList.find((device) => device.self && !device.revoked_at);
   if (self) conn.append(setRow(t("settings.thisPhone"), self.label || t("settings.pairedPhone")));
   if (state.computers.length > 1) {

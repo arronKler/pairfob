@@ -86,6 +86,7 @@ export type LiveSession = {
   terminalClose: (terminalId: string) => Promise<unknown>;
   onEvent: (listener: (event: SessionEvent) => void) => () => void;
   isConnected: () => boolean;
+  switchTransport: (target: "auto" | "p2p" | "relay") => Promise<void>;
   reconnectNow: () => void;
   setNetworkAvailable: (available: boolean) => void;
   close: () => void;
