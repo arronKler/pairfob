@@ -139,9 +139,9 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   conn.append(setRow(t("settings.computer"), state.herdHost || (state.credential ? computerTitle(state.credential) : t("settings.currentComputer"))));
   conn.append(setRow(t("settings.status"), status.text, status.tone));
   conn.append(setRow(t("settings.networkRtt"), networkPathCopy()));
-  const p2pFail = networkP2PFailCopy();
-  if (p2pFail) conn.append(node("p", "set-note network-p2p-fail", p2pFail));
   const networkModeRow = node("div", "set-row set-row-stack network-mode-row");
+  const p2pFail = networkP2PFailCopy();
+  if (p2pFail) networkModeRow.append(node("p", "set-note network-p2p-fail", p2pFail));
   if (!state.p2pEnabled) networkModeRow.append(node("p", "set-note", t("settings.networkP2POff")));
   networkModeRow.append(networkModeControl());
   conn.append(networkModeRow);

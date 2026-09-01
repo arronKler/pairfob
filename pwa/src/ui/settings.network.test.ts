@@ -194,7 +194,24 @@ describe("settings network transport", () => {
     paint();
 
     expect(app.textContent).toContain("Relay 中继 · 24 毫秒");
-    expect(app.querySelector(".network-p2p-fail")?.textContent).toContain("手机浏览器未能收集直连地址");
+    const fail = app.querySelector(".network-mode-row .network-p2p-fail");
+    expect(fail?.textContent).toContain("手机浏览器未能收集直连地址");
+    expect(fail?.parentElement?.classList.contains("network-mode-row")).toBeTrue();
     expect(app.textContent).not.toContain("ice_timeout");
+  });
+
+  test("keeps a channel-failure note inside the padded network-mode row", () => {
+    state.p2pEnabled = true;
+    state.networkMode = "auto";
+    state.sessionTransport = "relay";
+    state.relayRttMs = 18;
+    state.lastP2PAttempt = { result: "failed", extra: "channel_timeout" };
+    state.live = { isConnected: () => true } as typeof state.live;
+    setRenderer(paint);
+    paint();
+
+    const fail = app.querySelector(".network-mode-row .network-p2p-fail");
+    expect(fail?.textContent).toBe("两端网络无法互相直连，常见于蜂窝网络或严格 NAT。");
+    expect(app.querySelector(".set-card > .network-p2p-fail")).toBeNull();
   });
 });
