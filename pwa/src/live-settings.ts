@@ -1,6 +1,7 @@
 import { t } from "./lib/i18n";
 import { type NetworkMode } from "./lib/network-mode";
 import { parseRuntimeOperationsConfig } from "./lib/operations";
+import { directFailureDiagnostic } from "./lib/protocol/client";
 import { reportMutationError } from "./mutations";
 import { render } from "./paint";
 import { clearNotice, haptic, setNetworkMode, showError, showStatus, state } from "./state";
@@ -8,6 +9,31 @@ import { track } from "./lib/telemetry";
 import { syncInactiveTransportMode } from "./live";
 
 let networkModeSeq = 0;
+
+function p2pFailureMessage(error: unknown): string {
+  const diagnostic = directFailureDiagnostic(error);
+  let detail = "";
+  switch (diagnostic) {
+    case "ice_timeout":
+    case "ice_failed":
+    case "offer":
+      detail = t("settings.networkP2PFailedICE");
+      break;
+    case "channel_timeout":
+    case "channel_failed":
+      detail = t("settings.networkP2PFailedChannel");
+      break;
+    case "signal":
+    case "answer":
+      detail = t("settings.networkP2PFailedSignal");
+      break;
+    case "handshake":
+    case "commit":
+    case "probe":
+      detail = t("settings.networkP2PFailedVerify");
+  }
+  return detail ? `${t("settings.networkP2PFailed")} ${detail}` : t("settings.networkP2PFailed");
+}
 
 export function openSettings(): void {
   state.screen = "settings";
@@ -97,9 +123,9 @@ export async function selectNetworkMode(mode: NetworkMode): Promise<void> {
     if (seq !== networkModeSeq || state.live !== session) return;
     if (mode === "p2p" && state.sessionTransport === "p2p") showStatus(t("settings.networkP2PConnected"));
     else clearNotice();
-  } catch {
+  } catch (error) {
     if (seq !== networkModeSeq || state.live !== session) return;
-    showError(t(mode === "relay" ? "settings.networkRelayFailed" : "settings.networkP2PFailed"));
+    showError(mode === "relay" ? t("settings.networkRelayFailed") : p2pFailureMessage(error));
   } finally {
     if (seq === networkModeSeq && state.live === session) state.transportSwitching = false;
     render();

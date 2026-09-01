@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -230,6 +231,147 @@ func TestResetTransportKeepsOnlyEstablishedP2P(t *testing.T) {
 		if value != 0 {
 			t.Fatal("relay key was not wiped")
 		}
+	}
+}
+
+type restartLink struct {
+	mux.Conn
+	answer  string
+	calls   atomic.Int32
+	started chan struct{}
+	wait    chan struct{}
+	err     error
+}
+
+func (r *restartLink) Restart(context.Context, string) (string, error) {
+	r.calls.Add(1)
+	if r.started != nil {
+		close(r.started)
+	}
+	if r.wait != nil {
+		<-r.wait
+	}
+	if r.err != nil {
+		return "", r.err
+	}
+	return r.answer, nil
+}
+
+func TestTransportRestartAnswersOnEstablishedP2P(t *testing.T) {
+	p2pLink, p2pPeer := mux.NewPipePair(16)
+	eng := NewEngine(nil, p2pLink, runtime.NewFake())
+	route := [16]byte{8}
+	key := randomTestBytes(t, 32)
+	answer := "v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n"
+	link := &restartLink{Conn: p2pLink, answer: answer}
+	parent := &sess{
+		routeID: route, deviceID: "dev_direct", state: "established", transport: "p2p", link: link,
+		c2s: &aead.Direction{Key: randomTestBytes(t, 32), Dir: aead.DirClient},
+		s2c: &aead.Direction{Key: append([]byte(nil), key...), Dir: aead.DirServer},
+	}
+	eng.mu.Lock()
+	eng.sessions[route] = parent
+	eng.mu.Unlock()
+	params, _ := json.Marshal(transportRestartParams{
+		AttemptID: "p2p_0123456789abcdef",
+		SDP:       answer,
+	})
+	eng.rpcTransportRestart(parent, "req_restart", params)
+	reply, ok := p2pPeer.RecvTimeout(time.Second)
+	if !ok {
+		t.Fatal("restart reply was not sent")
+	}
+	plain, err := aead.Open(&aead.Direction{Key: key, Dir: aead.DirServer}, route, reply.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response struct {
+		OK     bool   `json:"ok"`
+		ID     string `json:"id"`
+		Result struct {
+			AttemptID string `json:"attempt_id"`
+			SDP       string `json:"sdp"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(plain, &response) != nil || !response.OK || response.ID != "req_restart" ||
+		response.Result.AttemptID != "p2p_0123456789abcdef" || response.Result.SDP != answer {
+		t.Fatalf("restart response=%s", plain)
+	}
+	if link.calls.Load() != 1 {
+		t.Fatalf("Restart calls = %d, want 1", link.calls.Load())
+	}
+}
+
+func TestTransportRestartRejectedOnRelaySession(t *testing.T) {
+	relayLink, relayPeer := mux.NewPipePair(16)
+	eng := NewEngine(nil, relayLink, runtime.NewFake())
+	route := [16]byte{9}
+	key := randomTestBytes(t, 32)
+	parent := &sess{
+		routeID: route, deviceID: "dev_direct", state: "established", transport: "relay", link: relayLink,
+		c2s: &aead.Direction{Key: randomTestBytes(t, 32), Dir: aead.DirClient},
+		s2c: &aead.Direction{Key: append([]byte(nil), key...), Dir: aead.DirServer},
+	}
+	eng.mu.Lock()
+	eng.sessions[route] = parent
+	eng.mu.Unlock()
+	params, _ := json.Marshal(transportRestartParams{
+		AttemptID: "p2p_0123456789abcdef",
+		SDP:       "v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n",
+	})
+	eng.rpcTransportRestart(parent, "req_restart", params)
+	reply, ok := relayPeer.RecvTimeout(time.Second)
+	if !ok {
+		t.Fatal("error reply was not sent")
+	}
+	plain, err := aead.Open(&aead.Direction{Key: key, Dir: aead.DirServer}, route, reply.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(plain), "unsupported") {
+		t.Fatalf("relay restart reply=%s", plain)
+	}
+}
+
+func TestTransportRestartAllowsOneNegotiation(t *testing.T) {
+	p2pLink, _ := mux.NewPipePair(16)
+	eng := NewEngine(nil, p2pLink, runtime.NewFake())
+	route := [16]byte{10}
+	link := &restartLink{
+		Conn: p2pLink, answer: "v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n",
+		started: make(chan struct{}), wait: make(chan struct{}),
+	}
+	parent := &sess{
+		routeID: route, deviceID: "dev_direct", state: "established", transport: "p2p", link: link,
+		c2s: &aead.Direction{Key: randomTestBytes(t, 32), Dir: aead.DirClient},
+		s2c: &aead.Direction{Key: randomTestBytes(t, 32), Dir: aead.DirServer},
+	}
+	eng.mu.Lock()
+	eng.sessions[route] = parent
+	eng.mu.Unlock()
+	params, _ := json.Marshal(transportRestartParams{
+		AttemptID: "p2p_0123456789abcdef",
+		SDP:       "v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n",
+	})
+	done := make(chan struct{})
+	go func() {
+		eng.rpcTransportRestart(parent, "first", params)
+		close(done)
+	}()
+	select {
+	case <-link.started:
+	case <-time.After(time.Second):
+		t.Fatal("first restart did not start")
+	}
+	eng.rpcTransportRestart(parent, "second", params)
+	close(link.wait)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("first restart did not finish")
+	}
+	if got := link.calls.Load(); got != 1 {
+		t.Fatalf("Restart calls = %d, want 1", got)
 	}
 }
 

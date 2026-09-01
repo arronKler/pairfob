@@ -112,6 +112,45 @@ func TestWebRTCAcceptorCarriesPairfobFramesBothWays(t *testing.T) {
 		t.Fatal("caller did not receive frame")
 	}
 
+	restarter, ok := link.(interface {
+		Restart(context.Context, string) (string, error)
+	})
+	if !ok {
+		t.Fatal("webRTCConn does not implement Restart")
+	}
+	restartOffer, err := caller.CreateOffer(&webrtc.OfferOptions{ICERestart: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restartGathered := webrtc.GatheringCompletePromise(caller)
+	if err := caller.SetLocalDescription(restartOffer); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-restartGathered:
+	case <-ctx.Done():
+		t.Fatal("restart ICE gathering timed out")
+	}
+	restartAnswer, err := restarter.Restart(ctx, caller.LocalDescription().SDP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := caller.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: restartAnswer}); err != nil {
+		t.Fatal(err)
+	}
+	ping := envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: route, Payload: []byte{9, 8, 7}}
+	if err := link.Send(ping); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-callerFrames:
+		if got.Typ != envelope.TypFWD || string(got.Payload) != string(ping.Payload) {
+			t.Fatalf("post-restart frame=%+v", got)
+		}
+	case <-ctx.Done():
+		t.Fatal("caller did not receive frame after ICE restart")
+	}
+
 	link.Close()
 	select {
 	case <-closed:

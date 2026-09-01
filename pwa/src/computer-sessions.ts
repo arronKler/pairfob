@@ -1,5 +1,6 @@
 import type { NetworkMode } from "./lib/network-mode";
 import type { LiveSession, PairResult, SessionEvent } from "./lib/protocol/client";
+import type { ReconnectReason } from "./lib/protocol/session-types";
 
 type SessionEntry = {
   deviceId: string;
@@ -103,8 +104,8 @@ export class ComputerSessions {
     for (const entry of this.entries.values()) entry.session.setNetworkAvailable(available);
   }
 
-  reconnectNow(): void {
-    for (const entry of this.entries.values()) entry.session.reconnectNow();
+  reconnectNow(reason: ReconnectReason = "probe"): void {
+    for (const entry of this.entries.values()) entry.session.reconnectNow(reason);
   }
 
   syncTransportMode(mode: NetworkMode, except?: LiveSession): void {

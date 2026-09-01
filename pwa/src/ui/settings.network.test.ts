@@ -9,6 +9,7 @@ for (const key of ["window", "document", "navigator", "HTMLElement", "HTMLButton
 happy.document.body.innerHTML = '<main id="app"></main>';
 
 const { NETWORK_MODE_KEY, app, clearNotice, setNetworkMode, state } = await import("../state.ts");
+const { DirectError } = await import("../lib/protocol/direct-peer.ts");
 const { setRenderer } = await import("../paint.ts");
 const { fillSettings } = await import("./settings.ts");
 
@@ -43,6 +44,7 @@ afterEach(() => {
   setNetworkMode("auto");
   localStorage.removeItem(NETWORK_MODE_KEY);
   state.networkMode = "auto";
+  state.lastP2PAttempt = null;
   clearNotice();
   app.replaceChildren();
 });
@@ -137,6 +139,22 @@ describe("settings network transport", () => {
     expect(choice("P2P").disabled).toBeFalse();
   });
 
+  test("explains a browser-side ICE timeout without exposing raw network data", async () => {
+    state.p2pEnabled = true;
+    state.live = {
+      isConnected: () => true,
+      switchTransport: async () => { throw new DirectError("ice_timeout", "candidate 192.0.2.1 failed"); },
+    } as typeof state.live;
+    setRenderer(paint);
+    paint();
+
+    choice("P2P").click();
+    await settle();
+
+    expect(state.notice?.text).toContain("手机浏览器未能收集直连地址");
+    expect(state.notice?.text).not.toContain("192.0.2.1");
+  });
+
   test("explains a restored P2P preference while Relay bootstraps or retries", async () => {
     const targets: Array<"auto" | "relay" | "p2p"> = [];
     state.p2pEnabled = true;
@@ -158,5 +176,20 @@ describe("settings network transport", () => {
     choice("P2P").click();
     await settle();
     expect(targets).toEqual(["p2p"]);
+  });
+
+  test("shows the last automatic P2P failure on Auto without exposing addresses", () => {
+    state.p2pEnabled = true;
+    state.networkMode = "auto";
+    state.sessionTransport = "relay";
+    state.relayRttMs = 24;
+    state.lastP2PAttempt = { result: "failed", extra: "ice_timeout" };
+    state.live = { isConnected: () => true } as typeof state.live;
+    setRenderer(paint);
+    paint();
+
+    expect(app.textContent).toContain("Relay 中继 · 24 毫秒");
+    expect(app.querySelector(".network-p2p-fail")?.textContent).toContain("手机浏览器未能收集直连地址");
+    expect(app.textContent).not.toContain("ice_timeout");
   });
 });

@@ -268,6 +268,8 @@ func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
 		go e.rpcTransportOffer(s, id, params)
 	case "TransportCommit":
 		e.rpcTransportCommit(s, id, params)
+	case "TransportRestart":
+		go e.rpcTransportRestart(s, id, params)
 	default:
 		e.replyErr(s, id, "unknown_op", op)
 	}

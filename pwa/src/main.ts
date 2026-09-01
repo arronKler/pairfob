@@ -103,7 +103,7 @@ function applyNetworkAvailability(available: boolean): void {
   }
   if (state.sessionTransport === "p2p") preloadFullTerminalXterm();
   if (changed || !state.live?.isConnected()) showStatus(t("net.restored"));
-  if (!changed) reconnectLiveSessions();
+  if (!changed) reconnectLiveSessions("probe");
   startPolling();
   void refreshRuntimeState();
   paint();
@@ -117,6 +117,12 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("online", () => applyNetworkAvailability(true));
 window.addEventListener("offline", () => applyNetworkAvailability(false));
+const networkConnection = (navigator as Navigator & { connection?: EventTarget; mozConnection?: EventTarget; webkitConnection?: EventTarget }).connection
+  ?? (navigator as Navigator & { mozConnection?: EventTarget }).mozConnection
+  ?? (navigator as Navigator & { webkitConnection?: EventTarget }).webkitConnection;
+networkConnection?.addEventListener("change", () => {
+  if (state.phase === "live" && state.networkOnline) reconnectLiveSessions("path");
+});
 window.addEventListener("pageshow", () => {
   if (document.visibilityState === "visible") applyNetworkAvailability(navigator.onLine !== false);
 });

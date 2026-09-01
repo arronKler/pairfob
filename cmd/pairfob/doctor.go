@@ -21,6 +21,7 @@ type health struct {
 	Enrolled   bool
 	Origin     string
 	OriginNote string
+	P2P        bool
 }
 
 func doctorCommand(sock string) error {
@@ -38,7 +39,7 @@ func doctorCommand(sock string) error {
 var errDoctor = fmt.Errorf("not ready")
 
 func gatherHealth(sock string) (health, error) {
-	h := health{Version: version, Running: daemonIsLive(sock)}
+	h := health{Version: version, Running: daemonIsLive(sock), P2P: getenv("PAIRFOB_P2P", "1") != "0"}
 	store, err := state.Open("")
 	if err != nil {
 		return h, err
@@ -103,6 +104,7 @@ func writeDoctor(w io.Writer, h health) {
 	fmt.Fprintf(w, "  Running     %s\n", yesNo(h.Running, "yes", "no — it starts at login after install"))
 	fmt.Fprintf(w, "  Paired      %d\n", h.Phones)
 	fmt.Fprintf(w, "  Herdr       %s\n", h.HerdrNote)
+	fmt.Fprintf(w, "  P2P         %s\n", yesNo(h.P2P, "on", "off — this computer is relay-only"))
 	origin := h.Origin
 	if origin == "" {
 		origin = "local"

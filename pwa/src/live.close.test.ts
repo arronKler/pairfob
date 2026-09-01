@@ -11,6 +11,7 @@ for (const key of [
   "HTMLElement",
   "HTMLButtonElement",
   "HTMLDialogElement",
+  "HTMLFormElement",
   "Node",
   "DocumentFragment",
   "localStorage",
@@ -28,7 +29,7 @@ happy.document.body.innerHTML = '<main id="app"></main>';
 const { state } = await import("./state.ts");
 const { setRenderer } = await import("./paint.ts");
 const { cacheAgentTrace, cachedAgentTrace } = await import("./lib/agent-trace-cache.ts");
-const { closePane, closeTab, renamePane } = await import("./live-operations.ts");
+const { closePane, closeTab, createSelectedTab, renamePane } = await import("./live-operations.ts");
 
 function agent(partial: Partial<AgentCard> & Pick<AgentCard, "paneId">): AgentCard {
   return {
@@ -95,6 +96,7 @@ afterEach(() => {
   state.agents = [];
   state.operationBusy = false;
   state.fullTerminal = false;
+  state.operationCapabilities = { ...state.operationCapabilities, create_tab: false };
 });
 
 describe("object mutations target the given pane", () => {
@@ -163,6 +165,30 @@ describe("object mutations target the given pane", () => {
     expect(cachedAgentTrace("p1")).toBeNull();
     expect(cachedAgentTrace("p1b")).toBeNull();
     expect(cachedAgentTrace("p2")?.note).toBe("p2");
+  });
+
+  test("create tab uses the card workspace, not the open pane", async () => {
+    boot(p1, [p2]);
+    state.operationCapabilities = { ...state.operationCapabilities, create_tab: true };
+    const created: Array<{ workspace_id: string; cwd?: string }> = [];
+    const session = state.live!;
+    state.live = {
+      ...session,
+      createTab: async (params: { workspace_id: string; cwd?: string }) => {
+        created.push(params);
+        return {};
+      },
+    };
+    const done = createSelectedTab(p2);
+    await Promise.resolve();
+    const dialog = happy.document.querySelector("dialog.operation-modal");
+    const form = dialog?.querySelector("form");
+    if (!(form instanceof happy.HTMLFormElement)) throw new Error("missing create-tab form");
+    form.dispatchEvent(new happy.Event("submit", { bubbles: true, cancelable: true }));
+    await done;
+    expect(created).toEqual([{ workspace_id: "w2", cwd: "/tmp/demo" }]);
+    expect(state.paneId).toBe("p1");
+    expect(state.screen).toBe("pane");
   });
 
   test("rename uses the card pane id, not the open pane", async () => {

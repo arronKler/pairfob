@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 
 	"github.com/pion/webrtc/v4"
@@ -102,10 +103,46 @@ type webRTCConn struct {
 	onFrame   func(mux.Conn, envelope.Frame)
 	onClose   func(mux.Conn)
 	mu        sync.Mutex
+	restartMu sync.Mutex
 	channel   *webrtc.DataChannel
 	closed    bool
 	closeOnce sync.Once
 	assembler p2pFrameAssembler
+}
+
+func (c *webRTCConn) Restart(ctx context.Context, offer string) (string, error) {
+	if !c.restartMu.TryLock() {
+		return "", errors.New("P2P restart already active")
+	}
+	defer c.restartMu.Unlock()
+	c.mu.Lock()
+	if c.closed || c.peer == nil {
+		c.mu.Unlock()
+		return "", errors.New("P2P connection is closed")
+	}
+	peer := c.peer
+	c.mu.Unlock()
+	if err := peer.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer}); err != nil {
+		return "", err
+	}
+	answer, err := peer.CreateAnswer(nil)
+	if err != nil {
+		return "", err
+	}
+	gathered := webrtc.GatheringCompletePromise(peer)
+	if err := peer.SetLocalDescription(answer); err != nil {
+		return "", err
+	}
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-gathered:
+	}
+	local := peer.LocalDescription()
+	if local == nil || local.SDP == "" || !strings.Contains(local.SDP, "m=application") {
+		return "", errors.New("WebRTC restart answer missing local description")
+	}
+	return local.SDP, nil
 }
 
 func (c *webRTCConn) attach(channel *webrtc.DataChannel) bool {

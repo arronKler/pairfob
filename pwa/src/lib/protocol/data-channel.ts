@@ -1,5 +1,6 @@
 import { enqueueHandshakeFrame } from "./frame-socket.ts";
 import { DirectFrameAssembler, splitDirectFrame } from "./direct-frame.ts";
+import { DIRECT_ICE_GRACE_MS } from "./direct-retry-policy.ts";
 import { decode, encode, type Frame } from "./envelope.ts";
 import { ProtocolError } from "./errors.ts";
 import type { FrameChannel } from "./frame-channel.ts";
@@ -12,6 +13,10 @@ function toBytes(data: unknown): Uint8Array {
   throw new ProtocolError("bad_frame", "DataChannel 收到非二进制帧");
 }
 
+export type DataFrameChannelOptions = {
+  iceGraceMs?: number;
+};
+
 /** RTCDataChannel adapter at the same frame seam as FrameSocket. */
 export class DataFrameChannel implements FrameChannel {
   readonly kind = "p2p" as const;
@@ -19,10 +24,21 @@ export class DataFrameChannel implements FrameChannel {
   private waiters: Array<{ resolve: (frame: Frame) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }> = [];
   private handler: ((frame: Frame) => void) | null = null;
   private closeHandlers = new Set<(error: ProtocolError) => void>();
+  private iceUnhealthy: (() => void) | null = null;
   private ended = false;
+  private icePaused = false;
+  private iceGrace: ReturnType<typeof setTimeout> | null = null;
+  private readonly iceGraceMs: number;
   private assembler = new DirectFrameAssembler();
+  private readonly onICEState = () => this.handleICE();
+  private readonly onConnectionState = () => this.handleICE();
 
-  constructor(private readonly channel: RTCDataChannel, private readonly peer: RTCPeerConnection) {
+  constructor(
+    private readonly channel: RTCDataChannel,
+    private readonly peer: RTCPeerConnection,
+    options: DataFrameChannelOptions = {},
+  ) {
+    this.iceGraceMs = options.iceGraceMs ?? DIRECT_ICE_GRACE_MS;
     channel.binaryType = "arraybuffer";
     channel.addEventListener("message", (event) => {
       try {
@@ -49,6 +65,44 @@ export class DataFrameChannel implements FrameChannel {
       this.fail(new ProtocolError("disconnected", "P2P DataChannel 错误"));
       this.close();
     });
+    peer.addEventListener("iceconnectionstatechange", this.onICEState);
+    peer.addEventListener("connectionstatechange", this.onConnectionState);
+    this.handleICE();
+  }
+
+  peerConnection(): RTCPeerConnection {
+    return this.peer;
+  }
+
+  iceHealthy(): boolean {
+    const ice = this.peer.iceConnectionState;
+    return ice === "connected" || ice === "completed";
+  }
+
+  iceDisconnected(): boolean {
+    return this.peer.iceConnectionState === "disconnected";
+  }
+
+  icePending(): boolean {
+    const ice = this.peer.iceConnectionState;
+    return ice === "new" || ice === "checking";
+  }
+
+  pauseIceWatch(): void {
+    this.icePaused = true;
+    this.clearIceGrace();
+  }
+
+  resumeIceWatch(): void {
+    this.icePaused = false;
+    this.handleICE();
+  }
+
+  onIceUnhealthy(handler: () => void): () => void {
+    this.iceUnhealthy = handler;
+    return () => {
+      if (this.iceUnhealthy === handler) this.iceUnhealthy = null;
+    };
   }
 
   send(frame: Frame): void {
@@ -65,6 +119,7 @@ export class DataFrameChannel implements FrameChannel {
   }
 
   close(): void {
+    this.detachPeer();
     try { this.channel.close(); } catch { /* already closed */ }
     try { this.peer.close(); } catch { /* already closed */ }
     this.fail(new ProtocolError("closed", "P2P 连接已关闭"));
@@ -96,9 +151,49 @@ export class DataFrameChannel implements FrameChannel {
     return () => this.closeHandlers.delete(handler);
   }
 
+  private handleICE(): void {
+    if (this.ended || this.icePaused) return;
+    const ice = this.peer.iceConnectionState;
+    const connection = this.peer.connectionState;
+    if (ice === "failed" || ice === "closed" || connection === "failed" || connection === "closed") {
+      this.clearIceGrace();
+      this.fail(new ProtocolError("disconnected", "P2P ICE 失败"));
+      this.close();
+      return;
+    }
+    if (ice === "connected" || ice === "completed") {
+      this.clearIceGrace();
+      return;
+    }
+    if (ice !== "disconnected") return;
+    if (this.iceGrace !== null) return;
+    this.iceGrace = globalThis.setTimeout(() => {
+      this.iceGrace = null;
+      if (this.ended || this.icePaused || this.iceHealthy()) return;
+      if (this.iceUnhealthy) this.iceUnhealthy();
+      else {
+        this.fail(new ProtocolError("disconnected", "P2P ICE 已断开"));
+        this.close();
+      }
+    }, this.iceGraceMs);
+  }
+
+  private clearIceGrace(): void {
+    if (this.iceGrace === null) return;
+    clearTimeout(this.iceGrace);
+    this.iceGrace = null;
+  }
+
+  private detachPeer(): void {
+    this.clearIceGrace();
+    this.peer.removeEventListener("iceconnectionstatechange", this.onICEState);
+    this.peer.removeEventListener("connectionstatechange", this.onConnectionState);
+  }
+
   private fail(error: ProtocolError): void {
     if (this.ended) return;
     this.ended = true;
+    this.detachPeer();
     for (const waiter of this.waiters.splice(0)) {
       clearTimeout(waiter.timer);
       waiter.reject(error);

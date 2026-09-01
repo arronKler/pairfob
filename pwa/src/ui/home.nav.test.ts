@@ -141,6 +141,8 @@ describe("session list object controls", () => {
     expect(plain?.textContent).not.toContain("改标签页名");
     expect(plain?.textContent).not.toContain("关闭整个标签页");
     expect(plain?.textContent).toContain("改工作区名");
+    expect(plain?.textContent).not.toContain("在同一工作区再开一页");
+    expect(plain?.textContent).not.toContain("分屏");
     expect(plain?.textContent).not.toContain("取消");
     plain?.remove();
 
@@ -178,12 +180,36 @@ describe("session list object controls", () => {
     expect(sheet?.querySelector(".modal-title")?.textContent).toBe("alpha");
     expect(sheet?.textContent).toContain("改工作区名");
     expect(sheet?.textContent).not.toContain("改会话名");
+    expect(sheet?.textContent).not.toContain("在这个工作区新建标签页");
     sheet?.remove();
 
     cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const cardSheet = document.querySelector("dialog.sheet");
     expect(cardSheet?.textContent).toContain("改会话名");
     expect(cardSheet?.textContent).not.toContain("改工作区名");
+  });
+
+  test("create_tab offers another tab on the card and the workspace heading", () => {
+    boot();
+    state.operationCapabilities = { ...state.operationCapabilities, create_tab: true };
+    renderHome();
+    cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    const card = document.querySelector("dialog.sheet");
+    expect(card?.textContent).toContain("在同一工作区再开一页");
+    expect(card?.textContent).not.toContain("分屏");
+    expect(card?.textContent).not.toContain("在这个工作区新建标签页");
+    card?.remove();
+
+    state.listGroup = "space";
+    renderHome();
+    const heading = [...app.querySelectorAll(".group-title")].find((el) => el.textContent?.includes("alpha"));
+    if (!(heading instanceof HTMLButtonElement)) throw new Error("missing workspace heading");
+    heading.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    const group = document.querySelector("dialog.sheet");
+    expect(group?.textContent).toContain("在这个工作区新建标签页");
+    expect(group?.textContent).toContain("改工作区名");
+    expect(group?.textContent).not.toContain("分屏");
+    expect(group?.textContent).not.toContain("改会话名");
   });
 
   test("pinning a session puts it in the pinned section at the top", async () => {

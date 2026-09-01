@@ -113,16 +113,16 @@ export async function startNewConversation(): Promise<void> {
   });
 }
 
-export async function createSelectedTab(): Promise<void> {
+export async function createSelectedTab(agent: AgentCard | undefined = selectedAgent()): Promise<void> {
   const session = state.live;
-  const selected = selectedAgent();
-  if (!session || !selected?.workspaceId || !state.operationCapabilities.create_tab) return;
-  const input = await askCreateTab(selected.cwd);
+  if (!session || !agent?.workspaceId || !state.operationCapabilities.create_tab) return;
+  const input = await askCreateTab(agent.cwd);
   if (!input || state.live !== session) return;
+  const workspaceId = agent.workspaceId;
   await runHerdOperation(
     t("op.creatingTab"),
     t("op.createdTab"),
-    () => session.createTab({ workspace_id: selected.workspaceId!, ...input }),
+    () => session.createTab({ workspace_id: workspaceId, ...input }),
     { after: selectCreatedPane },
   );
 }

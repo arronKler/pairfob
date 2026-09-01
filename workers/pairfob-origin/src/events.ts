@@ -14,6 +14,7 @@ export const BEACON_EVENTS = new Set([
   "pwa_terminal",
   "pwa_agent_trace",
   "pwa_settings",
+  "pwa_p2p",
   "pwa_add_computer",
   "site_copy",
 ]);

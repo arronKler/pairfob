@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { Direction, DIR_C, DIR_S } from "./aead.ts";
+import { DataFrameChannel } from "./data-channel.ts";
 import { decodeUTF8, Typ, type Frame } from "./envelope.ts";
 import { ProtocolError } from "./errors.ts";
 import type { FrameChannel } from "./frame-channel.ts";
-import { commitDirectSession, type PreparedDirectSession } from "./session-upgrade.ts";
+import { directFailureDiagnostic } from "./direct-peer.ts";
+import { commitDirectSession, restartDirectSession, type PreparedDirectSession } from "./session-upgrade.ts";
 import { SessionTransport } from "./session-transport.ts";
 
 class DirectLoopback implements FrameChannel {
@@ -49,6 +51,7 @@ function directCandidate(): PreparedDirectSession {
   const channel = new DirectLoopback(routeId, c2sKey.slice(), s2cKey.slice());
   return {
     attemptId: "p2p_0123456789abcdef",
+    iceGathering: "complete",
     channel,
     epoch: {
       routeId,
@@ -100,5 +103,33 @@ describe("atomic direct commit", () => {
     const error = await commitDirectSession(relay, directCandidate(), () => undefined).catch((caught) => caught);
     expect(error).toBeInstanceOf(ProtocolError);
     expect((error as ProtocolError).code).toBe("bad_message");
+    expect(directFailureDiagnostic(error)).toBe("commit");
+  });
+});
+
+describe("in-band ICE restart", () => {
+  test("treats an unknown_op daemon as unsupported without closing the channel", async () => {
+    const transport = {
+      kind: "p2p",
+      rpc: async () => {
+        throw new ProtocolError("unknown_op", "TransportRestart");
+      },
+    } as unknown as SessionTransport;
+    const channel = {
+      pauseIceWatch() {},
+      resumeIceWatch() {},
+      peerConnection() {
+        return {
+          createOffer: async () => ({ type: "offer", sdp: "v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n" }),
+          setLocalDescription: async () => undefined,
+          setRemoteDescription: async () => undefined,
+          localDescription: { sdp: "v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=candidate:1 1 UDP 1 192.0.2.1 5000 typ host\r\n" },
+          iceGatheringState: "complete",
+          addEventListener() {},
+          removeEventListener() {},
+        };
+      },
+    } as unknown as DataFrameChannel;
+    await expect(restartDirectSession(transport, channel)).resolves.toBe("unsupported");
   });
 });

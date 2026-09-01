@@ -11,6 +11,7 @@ describe("session view sheet", () => {
   test("this-view menu keeps pane rename and close, not parent-object admin", () => {
     expect(source).toContain('sheet(t("pane.menuTitle"))');
     expect(source).toContain('item(t("menu.newTab"), createSelectedTab)');
+    expect(liveSource).toContain("export async function createSelectedTab(agent: AgentCard | undefined = selectedAgent())");
     expect(source).not.toContain('section(t("pane.thisCell")');
     expect(source).toContain('item(t("menu.renamePane"), renamePane)');
     expect(source).toContain('item(t("op.closePane"), closePane, "danger")');

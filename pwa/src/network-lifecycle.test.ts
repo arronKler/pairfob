@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 const main = await Bun.file(new URL("./main.ts", import.meta.url)).text();
-const session = await Bun.file(new URL("./lib/protocol/session-ws.ts", import.meta.url)).text();
+const session = [
+  await Bun.file(new URL("./lib/protocol/session-ws.ts", import.meta.url)).text(),
+  await Bun.file(new URL("./lib/protocol/session-direct.ts", import.meta.url)).text(),
+  await Bun.file(new URL("./lib/protocol/session-upgrade.ts", import.meta.url)).text(),
+].join("\n");
 
 describe("mobile network lifecycle wiring", () => {
   test("offline gates work and online or foreground wakes the session", () => {
@@ -9,7 +13,8 @@ describe("mobile network lifecycle wiring", () => {
     expect(main).toContain('window.addEventListener("online"');
     expect(main).toContain('document.addEventListener("visibilitychange"');
     expect(main).toContain("setLiveNetworkAvailable(available)");
-    expect(main).toContain("reconnectLiveSessions()");
+    expect(main).toContain('reconnectLiveSessions("probe")');
+    expect(main).toContain('reconnectLiveSessions("path")');
     expect(main).toContain("bootBlockedByNetwork");
     expect(main).toContain("void refreshRuntimeState()");
   });
@@ -26,6 +31,9 @@ describe("mobile network lifecycle wiring", () => {
     expect(session).toContain("directRetryDelay(this.directRetryAttempt++)");
     expect(session).toContain("this.startAutomaticDirectUpgrade(transport)");
     expect(session).toContain("this.networkMode = target");
-    expect(session).toContain('this.networkMode !== "relay"');
+    expect(session).toContain('this.host.networkMode !== "relay"');
+    expect(session).toContain("this.resetBackoff()");
+    expect(session).toContain("DIRECT_HEALTH_PING_MS");
+    expect(session).toContain("TransportRestart");
   });
 });

@@ -38,6 +38,7 @@ describe("POST /v2/events", () => {
       beacon([
         { name: "pwa_boot", result: "ok", extra: "connect" },
         { name: "pwa_agent_trace", result: "content", extra: "lt_100ms" },
+        { name: "pwa_p2p", result: "failed", extra: "ice_timeout" },
         { name: "enroll", result: "ok" },
       ]),
       env,
@@ -45,8 +46,10 @@ describe("POST /v2/events", () => {
     expect(ok.status).toBe(200);
     expect(snapshot().pwa_boot).toBe(1);
     expect(snapshot().pwa_agent_trace).toBe(1);
+    expect(snapshot().pwa_p2p).toBe(1);
     expect(snapshot().enroll).toBeUndefined();
     expect(metrics.points.some((p) => p.blobs?.[0] === "pwa_boot")).toBe(true);
+    expect(metrics.points.some((p) => p.blobs?.[0] === "pwa_p2p" && p.blobs?.[3] === "ice_timeout")).toBe(true);
     expect(metrics.points.some((p) => p.blobs?.[0] === "enroll")).toBe(false);
   });
 

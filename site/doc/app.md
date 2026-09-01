@@ -38,7 +38,7 @@ When Pairfob is connected, an empty list means there are no sessions yet; create
 
 **新建** appears in the top bar when the computer supports creating a session. The form can start a supported agent, or a **纯终端** pane with no agent. With no kinds listed, the dialog still opens and creates that terminal session.
 
-Tap a card to open it. Long-press (right-click on a computer) to **置顶**, rename, or close that session. Pinned sessions move into a **置顶** section at the top of the list and leave their workspace or Agent group; long-press again to **取消置顶**. 改标签页名 appears only when the tab already has a visible name, or the tab is split; 关闭整个标签页 only when split. Grouped by workspace, long-press the group heading to rename the workspace; in other groupings that row sits at the bottom of the card menu.
+Tap a card to open it. Long-press (right-click on a computer) to **置顶**, open another tab in this workspace, rename, or close that session. Pinned sessions move into a **置顶** section at the top of the list and leave their workspace or Agent group; long-press again to **取消置顶**. 改标签页名 appears only when the tab already has a visible name, or the tab is split; 关闭整个标签页 only when split. Grouped by workspace, long-press the group heading to create a tab in that workspace or rename it; in other groupings the workspace rename row sits at the bottom of the card menu. Those create-tab actions appear only when the computer supports them. Split stays in `···` after you open a session.
 
 ## Inside a session
 

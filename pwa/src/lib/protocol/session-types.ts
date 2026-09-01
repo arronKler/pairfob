@@ -87,7 +87,10 @@ export type LiveSession = {
   onEvent: (listener: (event: SessionEvent) => void) => () => void;
   isConnected: () => boolean;
   switchTransport: (target: "auto" | "p2p" | "relay") => Promise<void>;
-  reconnectNow: () => void;
+  /** `path` is a real network change; `probe` is foreground/visibility only. */
+  reconnectNow: (reason?: ReconnectReason) => void;
   setNetworkAvailable: (available: boolean) => void;
   close: () => void;
 };
+
+export type ReconnectReason = "probe" | "path";

@@ -2,7 +2,7 @@ import { agentDetailRows, agentTitle, tabIsSplit, visibleTabLabel } from "../lib
 import { node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { paneIsPinned, type AgentCard } from "../lib/ranking";
-import { closePane, closeTab, renamePane, renameTab, renameWorkspace } from "../live-operations";
+import { closePane, closeTab, createSelectedTab, renamePane, renameTab, renameWorkspace } from "../live-operations";
 import { render } from "../paint";
 import { state, togglePanePin } from "../state";
 import { present, sheet, sheetItem } from "./sheet";
@@ -29,11 +29,15 @@ export function openListPaneMenu(agent: AgentCard): void {
   const namedTab = Boolean(visibleTabLabel(agent.tabLabel));
   appendPaneFacts(parts.body, agent);
   const pinned = paneIsPinned(state.panePinned, agent.paneId);
+  const canCreateTab = Boolean(agent.workspaceId && state.operationCapabilities.create_tab);
   parts.body.append(
     item(pinned ? t("menu.unpin") : t("menu.pin"), () => {
       togglePanePin(agent.paneId);
       render();
     }),
+  );
+  if (canCreateTab) parts.body.append(item(t("menu.newTabBeside"), () => createSelectedTab(agent)));
+  parts.body.append(
     item(t("menu.renamePane"), () => renamePane(agent)),
     item(t("op.closePane"), () => closePane(agent), "danger"),
   );
@@ -48,6 +52,9 @@ export function openListPaneMenu(agent: AgentCard): void {
 export function openListWorkspaceMenu(agent: AgentCard): void {
   if (!agent.workspaceId) return;
   const parts = sheet(agent.workspaceLabel || t("workspace.unnamed"));
+  if (state.operationCapabilities.create_tab) {
+    parts.body.append(sheetItem(parts, t("menu.newTabInWorkspace"), () => createSelectedTab(agent)));
+  }
   parts.body.append(sheetItem(parts, t("menu.renameWorkspace"), () => renameWorkspace(agent)));
   present(parts);
 }

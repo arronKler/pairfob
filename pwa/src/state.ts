@@ -192,6 +192,8 @@ export type AppState = {
   sessionTransport: "relay" | "p2p";
   /** Settings preference for Auto / P2P / Relay. The live path is `sessionTransport`. */
   networkMode: NetworkMode;
+  /** Last finished P2P attempt for the settings path card. Cancelled attempts are ignored. */
+  lastP2PAttempt: { result: "connected" | "failed"; extra: string } | null;
   /** A user-requested transport change is negotiating or reconnecting. */
   transportSwitching: boolean;
   refreshBusy: boolean;
@@ -286,6 +288,7 @@ export const state: AppState = {
   relayRttMs: null,
   sessionTransport: "relay",
   networkMode: loadNetworkMode(),
+  lastP2PAttempt: null,
   transportSwitching: false,
   refreshBusy: false,
   snapshotPending: false,

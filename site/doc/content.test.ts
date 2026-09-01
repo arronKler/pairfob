@@ -91,6 +91,8 @@ describe("user-facing documentation", () => {
     expect(faq).toContain("设置 → 语言");
     expect(troubleshoot).toContain("暂时无法建立 P2P，已继续使用 Relay");
     expect(troubleshoot).toContain("当前站点未开放 P2P");
+    expect(troubleshoot).toContain("会立刻再试");
+    expect(troubleshoot).toContain("没有 TURN");
     expect(security).toContain("走 P2P 直连时");
     expect(security).toContain("公网地址");
   });

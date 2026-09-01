@@ -49,6 +49,7 @@ The app copy is Chinese. Match the string on screen:
 | Herdr off | Automatic startup did not complete. Confirm Herdr 0.7+ is installed, run `herdr` |
 | Origin … not set up | Rerun the installer |
 | Paired 0 | `pairfob pair` |
+| P2P off | This computer is relay-only (`PAIRFOB_P2P=0`) |
 
 ## Install and enroll
 
@@ -69,9 +70,13 @@ The app copy is Chinese. Match the string on screen:
 ## Network path
 
 - Default **自动**: Relay first, then P2P when a direct path exists; a failed upgrade does not drop the session
+- Switching Wi-Fi or coming back online probes immediately and resets the P2P retry timer
+- Settings shows why the last direct attempt failed while the session stays on Relay
 - Direct path keeps failing: 设置 → 网络连接方式 → **Relay**
 - To try a direct path again: **自动**, or **P2P** for one immediate attempt
 - **Relay** pauses automatic P2P retries in this browser
+- Pairfob does not run TURN; a strict NAT stays on Relay
+- If an existing P2P path loses ICE, the session drops back to Relay without disconnecting, then retries the upgrade
 
 ## Connected but cannot act
 

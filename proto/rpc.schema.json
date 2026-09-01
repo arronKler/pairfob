@@ -428,7 +428,8 @@
             "TerminalScroll",
             "TerminalClose",
             "TransportOffer",
-            "TransportCommit"
+            "TransportCommit",
+            "TransportRestart"
           ]
         },
         "params": { "type": "object" }
@@ -1018,6 +1019,22 @@
                 "properties": {
                   "attempt_id": { "$ref": "#/$defs/transportAttemptId" },
                   "route_id": { "$ref": "#/$defs/transportRouteId" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "TransportRestart" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["attempt_id", "sdp"],
+                "properties": {
+                  "attempt_id": { "$ref": "#/$defs/transportAttemptId" },
+                  "sdp": { "$ref": "#/$defs/sessionDescription" }
                 },
                 "additionalProperties": false
               }

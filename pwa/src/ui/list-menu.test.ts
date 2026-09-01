@@ -15,6 +15,7 @@ describe("list object menu", () => {
     expect(source).toContain("renameTab(agent)");
     expect(source).toContain("closeTab(agent)");
     expect(source).toContain("renameWorkspace(agent)");
+    expect(source).toContain("createSelectedTab(agent)");
     expect(source).not.toContain("selectedAgent()");
     expect(source).not.toContain("state.paneId");
   });
@@ -42,7 +43,15 @@ describe("list object menu", () => {
     expect(home).toContain('state.listGroup === "space" && group.id !== PINNED_GROUP_ID');
     expect(home).toContain("openListWorkspaceMenu(agent)");
     expect(source).not.toContain("list_worktrees");
-    expect(source).not.toContain("createSelectedTab");
+  });
+
+  test("the list can create a tab in the card's workspace, not a split", () => {
+    expect(source).toContain("state.operationCapabilities.create_tab");
+    expect(source).toContain('t("menu.newTabBeside")');
+    expect(source).toContain('t("menu.newTabInWorkspace")');
+    expect(source).toContain("createSelectedTab(agent)");
+    expect(source).not.toContain("splitSelectedPane");
+    expect(source).not.toContain('t("menu.split")');
   });
 
   test("the list card is one control; long-press opens the object menu", () => {

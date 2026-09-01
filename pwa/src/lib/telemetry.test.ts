@@ -28,6 +28,11 @@ describe("PWA telemetry", () => {
       result: "content",
       extra: "lt_100ms",
     });
+    expect(sanitizeBeaconEvent("pwa_p2p", { result: "failed", extra: "ice_timeout" })).toEqual({
+      name: "pwa_p2p",
+      result: "failed",
+      extra: "ice_timeout",
+    });
     expect(encodeBeaconBody([{ name: "pwa_live" }])).toBe(JSON.stringify({ v: 2, events: [{ name: "pwa_live" }] }));
   });
 

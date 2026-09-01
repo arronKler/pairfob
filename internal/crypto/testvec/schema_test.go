@@ -83,7 +83,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
 		"CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
-		"TransportOffer", "TransportCommit",
+		"TransportOffer", "TransportCommit", "TransportRestart",
 	}
 	if got := schema.Defs["request"].Properties["op"].Enum; !slices.Equal(got, wantOps) {
 		t.Fatalf("RPC op surface\n got: %q\nwant: %q", got, wantOps)
@@ -144,8 +144,9 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		t.Errorf("ListWorktrees must require exactly one explicit scope, got oneOf=%v", listWorktrees.OneOf)
 	}
 	for op, fields := range map[string][]string{
-		"TransportOffer":  {"attempt_id", "sdp"},
-		"TransportCommit": {"attempt_id", "route_id"},
+		"TransportOffer":   {"attempt_id", "sdp"},
+		"TransportCommit":  {"attempt_id", "route_id"},
+		"TransportRestart": {"attempt_id", "sdp"},
 	} {
 		params := paramsByOp[op]
 		wantFields := slices.Clone(fields)

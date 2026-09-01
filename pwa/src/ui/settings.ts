@@ -60,6 +60,30 @@ function networkModeNote(): string {
   return t("settings.networkNote");
 }
 
+function networkP2PFailCopy(): string {
+  if (!state.p2pEnabled || state.networkMode === "relay" || state.sessionTransport === "p2p") return "";
+  const attempt = state.lastP2PAttempt;
+  if (!attempt || attempt.result !== "failed") return "";
+  switch (attempt.extra) {
+    case "ice_timeout":
+    case "ice_failed":
+    case "offer":
+      return t("settings.networkP2PFailedICE");
+    case "channel_timeout":
+    case "channel_failed":
+      return t("settings.networkP2PFailedChannel");
+    case "signal":
+    case "answer":
+      return t("settings.networkP2PFailedSignal");
+    case "handshake":
+    case "commit":
+    case "probe":
+      return t("settings.networkP2PFailedVerify");
+    default:
+      return t("settings.networkP2PFailed");
+  }
+}
+
 function defaultTermModeControl(): HTMLElement {
   const bar = node("div", "seg");
   bar.setAttribute("role", "radiogroup");
@@ -110,6 +134,8 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   conn.append(setRow(t("settings.computer"), state.herdHost || (state.credential ? computerTitle(state.credential) : t("settings.currentComputer"))));
   conn.append(setRow(t("settings.status"), status.text, status.tone));
   conn.append(setRow(t("settings.networkRtt"), networkPathCopy()));
+  const p2pFail = networkP2PFailCopy();
+  if (p2pFail) conn.append(node("p", "set-note network-p2p-fail", p2pFail));
   const networkModeRow = node("div", "set-row set-row-stack network-mode-row");
   networkModeRow.append(node("p", "set-note", networkModeNote()));
   networkModeRow.append(networkModeControl());

@@ -47,6 +47,7 @@ pairfob service status
 | Herdr off | 自动启动没有成功；确认已安装 Herdr 0.7+，在这台电脑运行 `herdr` |
 | Origin … not set up | 再跑一遍安装脚本 |
 | Paired 0 | `pairfob pair` |
+| P2P off | 这台电脑只用中继（`PAIRFOB_P2P=0`） |
 
 ## 安装和登记
 
@@ -67,9 +68,13 @@ pairfob service status
 ## 网络连接方式
 
 - 默认 **自动**：先走 Relay，能直连就升 P2P；升不上去会话不会断
+- 切换 Wi-Fi 或重新上线会立刻再试，并重置 P2P 重试间隔
+- 设置里能看到上次直连失败的原因，会话仍留在 Relay
 - 直连一直失败：设置 → 网络连接方式 → **Relay**
 - 想再试直连：改回 **自动**，或选 **P2P** 立即尝试一次
 - 选 **Relay** 后，这次浏览器里不会再自动试 P2P
+- 没有 TURN；对称 NAT 会留在 Relay
+- 已经在 P2P 上但 ICE 断了，会话会掉回 Relay 再升级，不会整段断开
 
 ## 连上了但不能操作
 

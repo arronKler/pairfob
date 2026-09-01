@@ -1,5 +1,6 @@
 import { Direction } from "./aead.ts";
 import { b64url } from "./bytes.ts";
+import { DataFrameChannel } from "./data-channel.ts";
 import { decodeUTF8, Typ, type Frame } from "./envelope.ts";
 import { envelopeError, HEARTBEAT_MS, heartbeatPayload, requireHeartbeatPayload, sameBytes } from "./frame-socket.ts";
 import type { FrameChannel, FrameChannelKind } from "./frame-channel.ts";
@@ -63,6 +64,10 @@ export class SessionTransport {
   }
 
   get kind(): FrameChannelKind { return this.channel.kind; }
+
+  directChannel(): DataFrameChannel | null {
+    return this.channel instanceof DataFrameChannel ? this.channel : null;
+  }
 
   onDisconnect(handler: (error: ProtocolError) => void): void {
     this.disconnectHandlers.add(handler);

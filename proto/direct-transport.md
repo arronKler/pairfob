@@ -43,8 +43,21 @@ advertises support and the browser provides WebRTC. The daemon may still reject
 the offer when its local P2P switch is off. A failed attempt leaves the
 authenticated Relay session active. While that Relay stays healthy, the phone
 retries after approximately 30 seconds, 2 minutes, 5 minutes, and then at a
-jittered interval capped at 10 minutes. Returning online or to the foreground triggers an
-immediate probe; mobile browsers may suspend timers while fully backgrounded.
+jittered interval capped at 10 minutes. Returning online, a network-path change,
+or returning to the foreground probes immediately and resets that backoff.
+An established P2P path that loses ICE drops back to a fresh Relay session
+without ending the logical session, then retries the upgrade. Pairfob does not
+operate TURN.
+
+## ICE restart
+
+An established P2P session may send `TransportRestart` on the live DataChannel
+with a fresh `p2p_` attempt ID and an `iceRestart` offer SDP. The daemon answers
+on the same PeerConnection. Route ID, AEAD epoch, and DeviceHello are unchanged.
+The RPC is valid only on an established P2P session. A daemon that does not
+implement it returns `unknown_op` or `unsupported`; the phone keeps the current
+path when ICE is still connected, otherwise it falls back to Relay. Attempts are
+at least 15 seconds apart. Foreground/visibility probes do not restart ICE.
 
 The settings screen offers Auto, P2P, and Relay. Auto is the default: the phone
 establishes Relay first and attempts P2P as described above. P2P runs one

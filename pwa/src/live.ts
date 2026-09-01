@@ -12,6 +12,7 @@ import {
   parseRuntimeOperationsConfig,
 } from "./lib/operations";
 import { ProtocolError, sessionOverWS, type LiveSession, type PairResult, type SessionEvent } from "./lib/protocol/client";
+import type { ReconnectReason } from "./lib/protocol/session-types";
 import { ComputerSessions, type SessionConnector } from "./computer-sessions";
 import { createLivePolling } from "./live-polling";
 import { resetLiveConnectionState } from "./live-state";
@@ -68,6 +69,12 @@ const connectComputerSession: SessionConnector = (credential) =>
   sessionOverWS(wsURL({ daemonId: credential.daemonId }), credential, {
     p2p: state.p2pEnabled,
     networkMode: state.networkMode,
+    onP2PAttempt: ({ result, extra }) => {
+      track("pwa_p2p", { result, extra });
+      if (result === "cancelled") return;
+      state.lastP2PAttempt = { result, extra };
+      if (state.screen === "settings") render();
+    },
   });
 let herdConfigRequest = 0;
 let liveViewVersion = 0;
@@ -146,11 +153,11 @@ export function setLiveNetworkAvailable(available: boolean): void {
   if (active && (!daemonId || !computerSessions.has(daemonId, active))) active.setNetworkAvailable(available);
 }
 
-export function reconnectLiveSessions(): void {
-  computerSessions.reconnectNow();
+export function reconnectLiveSessions(reason: ReconnectReason = "probe"): void {
+  computerSessions.reconnectNow(reason);
   const active = state.live;
   const daemonId = state.credential?.daemonId;
-  if (active && (!daemonId || !computerSessions.has(daemonId, active))) active.reconnectNow();
+  if (active && (!daemonId || !computerSessions.has(daemonId, active))) active.reconnectNow(reason);
 }
 
 export function syncInactiveTransportMode(mode: NetworkMode, active?: LiveSession): void {

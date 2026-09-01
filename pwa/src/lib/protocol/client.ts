@@ -1,5 +1,9 @@
 export { ProtocolError } from "./errors.ts";
 export {
+  directFailureDiagnostic,
+  type DirectFailureDiagnostic,
+} from "./direct-peer.ts";
+export {
   MAX_HANDSHAKE_QUEUE,
   enqueueHandshakeFrame,
   heartbeatPayload,
@@ -34,6 +38,7 @@ export {
   type DeviceSummary,
   type LiveSession,
   type SessionEvent,
+  type P2PAttemptObservation,
 } from "./session-ws.ts";
 export {
   TerminalFrameAssembler,

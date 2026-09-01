@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	directOfferTimeout = 6 * time.Second
-	directReadyTTL     = 20 * time.Second
-	maxSDPBytes        = 64 * 1024
+	directOfferTimeout   = 6 * time.Second
+	directReadyTTL       = 20 * time.Second
+	directRestartTimeout = 20 * time.Second
+	maxSDPBytes          = 64 * 1024
 )
 
 var directAttemptPattern = regexp.MustCompile(`^p2p_[A-Za-z0-9_-]{16,64}$`)
@@ -32,6 +33,15 @@ type transportOfferParams struct {
 type transportCommitParams struct {
 	AttemptID string `json:"attempt_id"`
 	RouteID   string `json:"route_id"`
+}
+
+type transportRestartParams struct {
+	AttemptID string `json:"attempt_id"`
+	SDP       string `json:"sdp"`
+}
+
+type directRestarter interface {
+	Restart(context.Context, string) (string, error)
 }
 
 func validDirectSDP(sdp string) bool {
@@ -305,4 +315,50 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 	parent.sendMu.Unlock()
 	stopSessionRPC(candidate)
 	e.audit("p2p_committed", map[string]any{"device_id": parent.deviceID})
+}
+
+func (e *Engine) rpcTransportRestart(parent *sess, id string, params json.RawMessage) {
+	var input transportRestartParams
+	if badParams(params, &input) || !directAttemptPattern.MatchString(input.AttemptID) || !validDirectSDP(input.SDP) {
+		e.replyErr(parent, id, "invalid_argument", "invalid WebRTC restart")
+		return
+	}
+	e.mu.Lock()
+	parentActive := parent.state == "established" && parent.transport == "p2p" && e.sessions[parent.routeID] == parent
+	parentBusy := parent.directBusy
+	link := parent.link
+	if parentActive && !parentBusy {
+		parent.directBusy = true
+	}
+	e.mu.Unlock()
+	if !parentActive {
+		e.replyErr(parent, id, "unsupported", "P2P restart unavailable")
+		return
+	}
+	if parentBusy {
+		e.replyErr(parent, id, "conflict", "P2P negotiation already active")
+		return
+	}
+	defer func() {
+		e.mu.Lock()
+		parent.directBusy = false
+		e.mu.Unlock()
+	}()
+	restarter, ok := link.(directRestarter)
+	if !ok || link == nil {
+		e.replyErr(parent, id, "unsupported", "P2P restart unavailable")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), directRestartTimeout)
+	defer cancel()
+	answer, err := restarter.Restart(ctx, input.SDP)
+	if err != nil || !validDirectSDP(answer) {
+		e.replyErr(parent, id, "unsupported", "P2P restart failed")
+		e.audit("p2p_restart_failed", map[string]any{"device_id": parent.deviceID})
+		return
+	}
+	if !e.reply(parent, id, map[string]any{"attempt_id": input.AttemptID, "sdp": answer}) {
+		return
+	}
+	e.audit("p2p_restart", map[string]any{"device_id": parent.deviceID})
 }
