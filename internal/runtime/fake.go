@@ -211,6 +211,8 @@ func (f *Fake) Execute(ctx context.Context, session SessionRef, operationID stri
 		return f.closePaneLocked(operationID, value.PaneID)
 	case CloseTabCommand:
 		return f.closeTabLocked(operationID, value.TabID)
+	case CloseWorkspaceCommand:
+		return f.closeWorkspaceLocked(operationID, value.WorkspaceID)
 	case CreateConversationCommand:
 		return f.createConversationLocked(operationID, value)
 	case CreateTabCommand:
@@ -361,6 +363,41 @@ func (f *Fake) closeTabLocked(operationID, tabID string) (Receipt, error) {
 	removed := []EntityRef{{Kind: EntityTab, ID: tabID}}
 	for _, pane := range f.Snap.Panes {
 		if pane.TabID == tabID {
+			delete(f.Panes, pane.PaneID)
+			removed = append(removed, EntityRef{Kind: EntityPane, ID: pane.PaneID})
+			continue
+		}
+		panes = append(panes, pane)
+	}
+	f.Snap.Panes = panes
+	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Removed: removed}, nil
+}
+
+func (f *Fake) closeWorkspaceLocked(operationID, workspaceID string) (Receipt, error) {
+	found := false
+	for i := range f.Snap.Workspaces {
+		if f.Snap.Workspaces[i].WorkspaceID == workspaceID {
+			f.Snap.Workspaces = append(f.Snap.Workspaces[:i], f.Snap.Workspaces[i+1:]...)
+			found = true
+			break
+		}
+	}
+	if !found {
+		return notApplied(operationID, notFoundFault("workspace.close", EntityWorkspace, workspaceID))
+	}
+	tabs := f.Snap.Tabs[:0]
+	removed := []EntityRef{{Kind: EntityWorkspace, ID: workspaceID}}
+	for _, tab := range f.Snap.Tabs {
+		if tab.WorkspaceID == workspaceID {
+			removed = append(removed, EntityRef{Kind: EntityTab, ID: tab.TabID})
+			continue
+		}
+		tabs = append(tabs, tab)
+	}
+	f.Snap.Tabs = tabs
+	panes := f.Snap.Panes[:0]
+	for _, pane := range f.Snap.Panes {
+		if pane.WorkspaceID == workspaceID {
 			delete(f.Panes, pane.PaneID)
 			removed = append(removed, EntityRef{Kind: EntityPane, ID: pane.PaneID})
 			continue

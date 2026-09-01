@@ -269,6 +269,11 @@ export function tabSiblings(agent: AgentCard | undefined, agents: AgentCard[]): 
   return agents.filter((item) => item.paneId === agent.paneId);
 }
 
+export function workspaceSiblings(agent: AgentCard | undefined, agents: AgentCard[]): AgentCard[] {
+  if (!agent?.workspaceId) return [];
+  return agents.filter((item) => item.workspaceId === agent.workspaceId);
+}
+
 export function tabIsSplit(agent: AgentCard | undefined, agents: AgentCard[]): boolean {
   return tabSiblings(agent, agents).length > 1;
 }

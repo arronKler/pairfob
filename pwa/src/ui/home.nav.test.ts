@@ -141,6 +141,7 @@ describe("session list object controls", () => {
     expect(plain?.textContent).not.toContain("改标签页名");
     expect(plain?.textContent).not.toContain("关闭整个标签页");
     expect(plain?.textContent).toContain("改工作区名");
+    expect(plain?.textContent).toContain("关闭这个工作区");
     expect(plain?.textContent).not.toContain("在同一工作区再开一页");
     expect(plain?.textContent).not.toContain("分屏");
     expect(plain?.textContent).not.toContain("取消");
@@ -179,6 +180,7 @@ describe("session list object controls", () => {
     const sheet = document.querySelector("dialog.sheet");
     expect(sheet?.querySelector(".modal-title")?.textContent).toBe("alpha");
     expect(sheet?.textContent).toContain("改工作区名");
+    expect(sheet?.textContent).toContain("关闭这个工作区");
     expect(sheet?.textContent).not.toContain("改会话名");
     expect(sheet?.textContent).not.toContain("在这个工作区新建标签页");
     sheet?.remove();
@@ -187,6 +189,7 @@ describe("session list object controls", () => {
     const cardSheet = document.querySelector("dialog.sheet");
     expect(cardSheet?.textContent).toContain("改会话名");
     expect(cardSheet?.textContent).not.toContain("改工作区名");
+    expect(cardSheet?.textContent).not.toContain("关闭这个工作区");
   });
 
   test("create_tab offers another tab on the card and the workspace heading", () => {
@@ -208,6 +211,7 @@ describe("session list object controls", () => {
     const group = document.querySelector("dialog.sheet");
     expect(group?.textContent).toContain("在这个工作区新建标签页");
     expect(group?.textContent).toContain("改工作区名");
+    expect(group?.textContent).toContain("关闭这个工作区");
     expect(group?.textContent).not.toContain("分屏");
     expect(group?.textContent).not.toContain("改会话名");
   });

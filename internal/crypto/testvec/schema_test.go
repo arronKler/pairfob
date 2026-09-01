@@ -79,7 +79,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	wantOps := []string{
 		"Ping", "GetConfig", "Snapshot", "PaneRead", "SendText", "SendKeys",
 		"PushSubscribe", "RevokeDevice", "ListDevices", "History", "AgentTrace", "RenamePane",
-		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab",
+		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace",
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
 		"CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
@@ -114,7 +114,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	}
 	for _, op := range []string{
 		"SendText", "SendKeys", "PushSubscribe", "RevokeDevice", "RenamePane", "RenameTab",
-		"RenameWorkspace", "ClosePane", "CloseTab", "CreateConversation", "CreateTab", "SplitPane",
+		"RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace", "CreateConversation", "CreateTab", "SplitPane",
 		"PromptAgent", "CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
 	} {

@@ -1,5 +1,5 @@
 import { parseAnsi } from "./lib/ansi";
-import { agentTitle, canPromptAgent, tabSiblings } from "./lib/dashboard";
+import { agentTitle, canPromptAgent, tabSiblings, workspaceSiblings } from "./lib/dashboard";
 import { askConfirm, askText } from "./lib/dom";
 import { t } from "./lib/i18n";
 import { clearAgentTraceCache, forgetAgentTrace } from "./lib/agent-trace-cache";
@@ -332,6 +332,23 @@ export async function closeTab(agent: AgentCard | undefined = selectedAgent()): 
   const tabId = agent.tabId;
   const siblings = tabSiblings(agent, state.agents);
   await runHerdOperation(t("op.closingTab"), t("op.closedTab"), () => session.closeTab(tabId), {
+    after: async () => {
+      for (const pane of siblings) forgetAgentTrace(pane.paneId);
+      const open = state.paneId;
+      if (open && siblings.some((pane) => pane.paneId === open)) dropPaneIfCurrent(open);
+      await refreshFromSession();
+    },
+  });
+}
+
+export async function closeWorkspace(agent: AgentCard | undefined = selectedAgent()): Promise<void> {
+  const session = state.live;
+  if (!session || !agent?.workspaceId) return;
+  const label = agent.workspaceLabel || t("workspace.unnamed");
+  if (!(await askConfirm(t("op.closeWorkspaceAsk", { title: label }), t("op.closeWorkspace")))) return;
+  const workspaceId = agent.workspaceId;
+  const siblings = workspaceSiblings(agent, state.agents);
+  await runHerdOperation(t("op.closingWorkspace"), t("op.closedWorkspace"), () => session.closeWorkspace(workspaceId), {
     after: async () => {
       for (const pane of siblings) forgetAgentTrace(pane.paneId);
       const open = state.paneId;

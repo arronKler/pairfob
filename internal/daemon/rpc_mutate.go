@@ -112,6 +112,24 @@ func (e *Engine) rpcCloseTab(s *sess, id string, params json.RawMessage) {
 	e.reply(s, id, map[string]any{"ok": true, "operation_id": operationID, "outcome": receipt.Outcome})
 }
 
+func (e *Engine) rpcCloseWorkspace(s *sess, id string, params json.RawMessage) {
+	var p struct {
+		Session     *string `json:"session"`
+		OperationID string  `json:"operation_id"`
+		WorkspaceID string  `json:"workspace_id"`
+	}
+	if badParams(params, &p) || !validID(p.WorkspaceID) || invalidSession(p.Session) {
+		e.replyErr(s, id, "unknown_op", "invalid params")
+		return
+	}
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.CloseWorkspaceCommand{WorkspaceID: p.WorkspaceID}, "workspace_not_found")
+	if !ok {
+		return
+	}
+	e.audit("close_workspace", map[string]any{"device_id": s.deviceID, "workspace_id": p.WorkspaceID})
+	e.reply(s, id, map[string]any{"ok": true, "operation_id": operationID, "outcome": receipt.Outcome})
+}
+
 func (e *Engine) rpcCreateConversation(s *sess, id string, params json.RawMessage) {
 	var p struct {
 		Session     *string `json:"session"`

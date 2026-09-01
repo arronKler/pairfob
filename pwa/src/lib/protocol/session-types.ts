@@ -60,6 +60,7 @@ export type LiveSession = {
   renameWorkspace: (workspaceId: string, label: string) => Promise<unknown>;
   closePane: (paneId: string) => Promise<unknown>;
   closeTab: (tabId: string) => Promise<unknown>;
+  closeWorkspace: (workspaceId: string) => Promise<unknown>;
   createConversation: (params: CreateConversationInput) => Promise<CreateConversationResult>;
   createTab: (params: CreateTabInput) => Promise<CreatedPaneResult>;
   splitPane: (params: SplitPaneInput) => Promise<CreatedPaneResult>;

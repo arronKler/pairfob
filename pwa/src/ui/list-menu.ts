@@ -2,7 +2,7 @@ import { agentDetailRows, agentTitle, tabIsSplit, visibleTabLabel } from "../lib
 import { node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { paneIsPinned, type AgentCard } from "../lib/ranking";
-import { closePane, closeTab, createSelectedTab, renamePane, renameTab, renameWorkspace } from "../live-operations";
+import { closePane, closeTab, closeWorkspace, createSelectedTab, renamePane, renameTab, renameWorkspace } from "../live-operations";
 import { render } from "../paint";
 import { state, togglePanePin } from "../state";
 import { present, sheet, sheetItem } from "./sheet";
@@ -44,7 +44,10 @@ export function openListPaneMenu(agent: AgentCard): void {
   if (namedTab || split) parts.body.append(item(t("menu.renameTab"), () => renameTab(agent)));
   if (split) parts.body.append(item(t("op.closeTab"), () => closeTab(agent), "danger"));
   if (agent.workspaceId && state.listGroup !== "space") {
-    parts.body.append(item(t("menu.renameWorkspace"), () => renameWorkspace(agent)));
+    parts.body.append(
+      item(t("menu.renameWorkspace"), () => renameWorkspace(agent)),
+      item(t("op.closeWorkspace"), () => closeWorkspace(agent), "danger"),
+    );
   }
   present(parts);
 }
@@ -52,9 +55,14 @@ export function openListPaneMenu(agent: AgentCard): void {
 export function openListWorkspaceMenu(agent: AgentCard): void {
   if (!agent.workspaceId) return;
   const parts = sheet(agent.workspaceLabel || t("workspace.unnamed"));
+  const item = (label: string, action: () => void | Promise<void>, variant: "" | "danger" = "") =>
+    sheetItem(parts, label, action, variant);
   if (state.operationCapabilities.create_tab) {
-    parts.body.append(sheetItem(parts, t("menu.newTabInWorkspace"), () => createSelectedTab(agent)));
+    parts.body.append(item(t("menu.newTabInWorkspace"), () => createSelectedTab(agent)));
   }
-  parts.body.append(sheetItem(parts, t("menu.renameWorkspace"), () => renameWorkspace(agent)));
+  parts.body.append(
+    item(t("menu.renameWorkspace"), () => renameWorkspace(agent)),
+    item(t("op.closeWorkspace"), () => closeWorkspace(agent), "danger"),
+  );
   present(parts);
 }

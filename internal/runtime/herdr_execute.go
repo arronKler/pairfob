@@ -61,6 +61,11 @@ func (h *Herdr) Execute(ctx context.Context, session SessionRef, operationID str
 			return notApplied(operationID, invalidFault("tab.close", "tab id is required"))
 		}
 		return h.closeMutation(ctx, session, operationID, "tab.close", map[string]any{"tab_id": value.TabID}, EntityRef{Kind: EntityTab, ID: value.TabID})
+	case CloseWorkspaceCommand:
+		if value.WorkspaceID == "" {
+			return notApplied(operationID, invalidFault("workspace.close", "workspace id is required"))
+		}
+		return h.closeMutation(ctx, session, operationID, "workspace.close", map[string]any{"workspace_id": value.WorkspaceID}, EntityRef{Kind: EntityWorkspace, ID: value.WorkspaceID})
 	case CreateConversationCommand:
 		return h.createConversation(ctx, session, operationID, value)
 	case CreateTabCommand:

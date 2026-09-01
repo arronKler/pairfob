@@ -224,6 +224,8 @@ func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
 		e.rpcClosePane(s, id, params)
 	case "CloseTab":
 		e.rpcCloseTab(s, id, params)
+	case "CloseWorkspace":
+		e.rpcCloseWorkspace(s, id, params)
 	case "CreateConversation":
 		e.rpcCreateConversation(s, id, params)
 	case "CreateTab":

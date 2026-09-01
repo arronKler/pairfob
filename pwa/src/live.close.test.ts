@@ -29,7 +29,7 @@ happy.document.body.innerHTML = '<main id="app"></main>';
 const { state } = await import("./state.ts");
 const { setRenderer } = await import("./paint.ts");
 const { cacheAgentTrace, cachedAgentTrace } = await import("./lib/agent-trace-cache.ts");
-const { closePane, closeTab, createSelectedTab, renamePane } = await import("./live-operations.ts");
+const { closePane, closeTab, closeWorkspace, createSelectedTab, renamePane } = await import("./live-operations.ts");
 
 function agent(partial: Partial<AgentCard> & Pick<AgentCard, "paneId">): AgentCard {
   return {
@@ -73,6 +73,7 @@ function boot(open: AgentCard, extras: AgentCard[] = []): void {
     renamePane: async () => undefined,
     closePane: async () => undefined,
     closeTab: async () => undefined,
+    closeWorkspace: async () => undefined,
   };
   setRenderer(() => undefined);
 }
@@ -160,6 +161,31 @@ describe("object mutations target the given pane", () => {
     await confirmDanger();
     await done;
     expect(closed).toEqual(["t1"]);
+    expect(state.paneId).toBe("p2");
+    expect(state.screen).toBe("pane");
+    expect(cachedAgentTrace("p1")).toBeNull();
+    expect(cachedAgentTrace("p1b")).toBeNull();
+    expect(cachedAgentTrace("p2")?.note).toBe("p2");
+  });
+
+  test("closing a workspace drops every pane in that workspace", async () => {
+    boot(p2, [p1, p1b]);
+    cache("p1");
+    cache("p1b");
+    cache("p2");
+    const closed: string[] = [];
+    const session = state.live!;
+    state.live = {
+      ...session,
+      closeWorkspace: async (workspaceId: string) => {
+        closed.push(workspaceId);
+      },
+      snapshot: async () => ({ panes: [{ pane_id: "p2", workspace_id: "w2", tab_id: "t2", agent: "claude" }] }),
+    };
+    const done = closeWorkspace(p1);
+    await confirmDanger();
+    await done;
+    expect(closed).toEqual(["w1"]);
     expect(state.paneId).toBe("p2");
     expect(state.screen).toBe("pane");
     expect(cachedAgentTrace("p1")).toBeNull();

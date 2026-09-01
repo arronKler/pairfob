@@ -216,6 +216,21 @@ func TestHistoryIsTypedUnsupported(t *testing.T) {
 	}
 }
 
+func TestFakeCloseWorkspaceRemovesTabsAndPanes(t *testing.T) {
+	fake := NewFake()
+	receipt, err := fake.Execute(context.Background(), DefaultSession(), "op-close-ws", CloseWorkspaceCommand{WorkspaceID: "w0"})
+	if err != nil || receipt.Outcome != OutcomeApplied {
+		t.Fatalf("receipt=%+v err=%v", receipt, err)
+	}
+	snapshot := observeFakeSnapshot(t, fake)
+	if len(snapshot.Workspaces) != 0 || len(snapshot.Tabs) != 0 || len(snapshot.Panes) != 0 {
+		t.Fatalf("snapshot still has workspace objects: %+v", snapshot)
+	}
+	if _, err := fake.Execute(context.Background(), DefaultSession(), "op-close-missing", CloseWorkspaceCommand{WorkspaceID: "w0"}); err == nil {
+		t.Fatal("expected missing workspace close to fail")
+	}
+}
+
 func observeFakeSnapshot(t *testing.T, fake *Fake) Snapshot {
 	t.Helper()
 	view, err := fake.Observe(context.Background(), DefaultSession(), SnapshotQuery{})

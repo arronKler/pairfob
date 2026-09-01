@@ -15,6 +15,7 @@ describe("list object menu", () => {
     expect(source).toContain("renameTab(agent)");
     expect(source).toContain("closeTab(agent)");
     expect(source).toContain("renameWorkspace(agent)");
+    expect(source).toContain("closeWorkspace(agent)");
     expect(source).toContain("createSelectedTab(agent)");
     expect(source).not.toContain("selectedAgent()");
     expect(source).not.toContain("state.paneId");
@@ -25,6 +26,7 @@ describe("list object menu", () => {
     expect(source).toContain("tabIsSplit(agent, state.agents)");
     expect(source).toContain('t("menu.renameTab")');
     expect(source).toContain('t("op.closeTab")');
+    expect(source).toContain('t("op.closeWorkspace")');
     expect(source).not.toContain("sheetSection");
     expect(source).not.toContain('t("cancel")');
   });

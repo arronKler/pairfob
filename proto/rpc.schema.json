@@ -412,6 +412,7 @@
             "RenameWorkspace",
             "ClosePane",
             "CloseTab",
+            "CloseWorkspace",
             "CreateConversation",
             "CreateTab",
             "SplitPane",
@@ -691,6 +692,23 @@
                 "properties": {
                   "operation_id": { "$ref": "#/$defs/operationId" },
                   "tab_id": { "$ref": "#/$defs/tabId" },
+                  "session": { "$ref": "#/$defs/session" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "CloseWorkspace" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["operation_id", "workspace_id"],
+                "properties": {
+                  "operation_id": { "$ref": "#/$defs/operationId" },
+                  "workspace_id": { "$ref": "#/$defs/workspaceId" },
                   "session": { "$ref": "#/$defs/session" }
                 },
                 "additionalProperties": false

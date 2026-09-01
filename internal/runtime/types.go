@@ -246,6 +246,10 @@ type CloseTabCommand struct{ TabID string }
 
 func (CloseTabCommand) runtimeCommand() {}
 
+type CloseWorkspaceCommand struct{ WorkspaceID string }
+
+func (CloseWorkspaceCommand) runtimeCommand() {}
+
 type CreateConversationCommand struct {
 	CWD   string
 	Label string

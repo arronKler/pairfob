@@ -250,6 +250,7 @@ class ReconnectingSession implements LiveSession {
   renameWorkspace = (workspaceId: string, label: string) => this.trackedMutation("RenameWorkspace", { workspace_id: workspaceId, label });
   closePane = (paneId: string) => this.trackedMutation("ClosePane", { pane_id: paneId });
   closeTab = (tabId: string) => this.trackedMutation("CloseTab", { tab_id: tabId });
+  closeWorkspace = (workspaceId: string) => this.trackedMutation("CloseWorkspace", { workspace_id: workspaceId });
   createConversation = (params: CreateConversationInput): Promise<CreateConversationResult> =>
     this.parsedMutation("CreateConversation", params, parseCreateConversationResult);
   createTab = (params: CreateTabInput): Promise<CreatedPaneResult> =>
