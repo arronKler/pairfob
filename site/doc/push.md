@@ -11,7 +11,7 @@ Completion means exactly `working → done`. Starting pairfob does not replay no
 
 Notification types cannot currently be selected separately: needs-you and completion alerts are subscribed together. A newer state for the same session replaces its older notification, so completion does not leave a stale needs-you alert in the tray.
 
-Pairfob works without push: open the page or the Home Screen icon; **等你** cards are still emphasized.
+Pairfob works without push: open the page or the Home Screen icon; **Needs you** cards are still emphasized.
 
 ## Enable on the computer
 
@@ -33,13 +33,13 @@ pairfob service restart
 ## Subscribe on the phone
 
 1. The computer already has push enabled and the service is up
-2. Pairfob → **设置** → **通知**
-3. Tap **打开通知** when it is enabled
+2. Pairfob → **Settings** → **Notifications**
+3. Tap **Turn on notifications** when it is enabled
 4. The browser asks for system permission once
 
-If the computer has not enabled push, the button reads **电脑端未开启**, with a short setup note. Browsers without Web Notifications say so; they do not fake a subscription.
+If the computer has not enabled push, the button reads **Off on the computer**, with a short setup note. Browsers without Web Notifications say so; they do not fake a subscription.
 
-**设置** shows whether this phone has notifications on.
+**Settings** shows whether this phone has notifications on.
 
 ## After you open a notification
 

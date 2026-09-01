@@ -29,7 +29,7 @@ No. There is no “sync to phone”. Sitting down does not need a sync back. See
 
 Locking the screen is fine. Pairfob does not need the desktop unlocked. The login session, `pairfob`, and Herdr keep running behind the lock.
 
-Closing the lid only works if the machine does **not** actually sleep. A laptop’s default lid-close is sleep: processes freeze, the network drops, and the phone shows **电脑现在不在线**. Pairfob cannot wake a sleeping computer, and it cannot unlock the machine.
+Closing the lid only works if the machine does **not** actually sleep. A laptop’s default lid-close is sleep: processes freeze, the network drops, and the phone shows **The computer is offline**. Pairfob cannot wake a sleeping computer, and it cannot unlock the machine.
 
 To leave and keep using the phone:
 
@@ -58,7 +58,7 @@ It cannot see the session, what you type, or the conversation. On a P2P path, pa
 
 ## What if P2P cannot connect?
 
-The session stays on Relay. In **设置 → 网络连接方式**, pin **Relay** to stop automatic direct attempts, or **自动** to try again when a direct path is possible. If the site has P2P off, only Relay is available.
+The session stays on Relay. In **Settings → Network path**, pin **Relay** to stop automatic direct attempts, or **Auto** to try again when a direct path is possible. If the site has P2P off, only Relay is available.
 
 ## Someone photographed the QR code.
 
@@ -74,7 +74,7 @@ This device is unpaired. Run `pairfob pair` again. Other devices on the computer
 
 ## Can one phone talk to two computers?
 
-Yes. Install pairfob on the other computer with the same command, run `pairfob pair` there, then **设置 → 添加另一台电脑**. The phone keeps both credentials and reconnects to the last one you used. Switch from **电脑** on the home screen. A computer that is offline stays on the list; that is not the same as unpaired. See [Multiple devices](/devices).
+Yes. Install pairfob on the other computer with the same command, run `pairfob pair` there, then **Settings → Add another computer**. The phone keeps both credentials and reconnects to the last one you used. Switch from **Computers** on the home screen. A computer that is offline stays on the list; that is not the same as unpaired. See [Multiple devices](/devices).
 
 ## Why 14 glyphs when typing?
 
@@ -82,7 +82,7 @@ Yes. Install pairfob on the other computer with the same command, run `pairfob p
 
 ## Can I reuse the install command?
 
-Yes. Each computer runs `curl -fsSL https://pairfob.com/install.sh | sh` on its own. Then pair it from the phone: **设置 → 添加另一台电脑**. Update with `pairfob update`.
+Yes. Each computer runs `curl -fsSL https://pairfob.com/install.sh | sh` on its own. Then pair it from the phone: **Settings → Add another computer**. Update with `pairfob update`.
 
 ## Install failed on enroll.
 
@@ -90,11 +90,11 @@ Check the network and `pairfob doctor`. If this network has enrolled too many co
 
 ## The list is empty.
 
-In order: `pairfob doctor` — is Herdr `on`? The empty title **还没有读到会话** means Herdr is closed; **还没有会话** means you are connected but there is no session yet. Did pairing finish (not still on the scan page)?
+In order: `pairfob doctor` — is Herdr `on`? **Herdr is not running on the computer** means Herdr is closed; **No sessions yet** with a create hint means you are connected but there is no session yet. Did pairing finish (not still on the scan page)?
 
-## Why is there no 新建 / 分屏 / Worktree?
+## Why is there no New / Split / Worktree?
 
-The live Herdr does not support that yet. Upgrade and **restart the running Herdr**, not only install another CLI binary. With no agent kinds listed, **新建** still opens a terminal pane.
+The live Herdr does not support that yet. Upgrade and **restart the running Herdr**, not only install another CLI binary. With no agent kinds listed, **New** still opens a terminal pane.
 
 ## I tapped and I am not sure the computer did it.
 
@@ -102,7 +102,7 @@ Do not tap again. Look at the frame or refresh the list. Pairfob does not retry 
 
 ## Notifications will not turn on.
 
-They are off by default. Enable push on the computer, then `pairfob service restart`. Subscribe in **设置 → 通知**. See [Notifications](/push).
+They are off by default. Enable push on the computer, then `pairfob service restart`. Subscribe in **Settings → Notifications**. See [Notifications](/push).
 
 ## Can I let a coworker scan this code?
 
@@ -116,7 +116,7 @@ New computer setup can close at any time. Computers already enrolled, and device
 
 ## Is the documentation Chinese-only?
 
-No. [中文文档](/zh/). The language menu in the docs top bar changes the docs. The Pairfob page (`/pair`) has its own language under **设置 → 语言**.
+No. [Chinese docs](/zh/). The language menu in the docs top bar switches the docs. Pairfob (`/pair`) has its own control under **Settings → Language**. Both remember the same `pairfob_lang` preference.
 
 ## How do I report a problem?
 

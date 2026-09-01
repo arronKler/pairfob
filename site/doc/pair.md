@@ -32,13 +32,13 @@ If another computer also runs `pairfob pair`, the old code dies. The phone may s
 
 ## Connecting the other device
 
-Open <a href="/pair">pairfob.com/pair</a>. The pairing page copy is Chinese (**连上你的电脑**). A device that is already paired goes straight to the session list.
+Open <a href="/pair">pairfob.com/pair</a>. The pairing page follows the same language as Pairfob (**Connect your computer** in English). A device that is already paired goes straight to the session list.
 
-### Scan (preferred) — **扫码连接**
+### Scan (preferred) — **Scan to connect**
 
 Point the camera at the QR on the computer. Camera permission is only for that scan.
 
-### Type it — **无法扫码？输入配对码**
+### Type it — **Can't scan? Type the pairing code**
 
 Typing needs **8 secret glyphs + 6 locator glyphs**. There is no 8-glyph-only hand entry.
 
@@ -62,23 +62,23 @@ If it is not your device, refuse on the computer (Ctrl-C or wait for expiry) and
 
 A code is **spent when used**, and it also expires. Do not use a code from chat or last week’s screenshot.
 
-The pairing page copy is Chinese. Match the string on screen:
+Match the string on screen (English Pairfob):
 
 | You see | Meaning | Do this |
 | --- | --- | --- |
-| 配对码过期或已经用过 | Slot rotated, or the code is dead | Use the code the computer is **printing now** |
-| 请完整输入电脑上显示的配对码 / 还没输完整：需要 14 位 | Locator missing | Paste 8+6 together |
-| 配对码不正确 | Does not match | New code; do not permute the old one |
-| 配对连接超时 | Network, or the computer left the wait | Scan or type the current code again |
-| 尝试太频繁 | This side is rate-limited | Wait |
-| 另一台电脑开启了配对 | A newer `pair` took the slot | Open pairing on the computer you mean to use |
+| That pairing code is spent or expired | Slot rotated, or the code is dead | Use the code the computer is **printing now** |
+| Enter the full pairing code / 14 glyphs needed | Locator missing | Paste 8+6 together |
+| That pairing code is incorrect | Does not match | New code; do not permute the old one |
+| Pairing timed out | Network, or the computer left the wait | Scan or type the current code again |
+| Too many attempts | This side is rate-limited | Wait |
+| Another computer started pairing | A newer `pair` took the slot | Open pairing on the computer you mean to use |
 
 ## After pairing
 
 - Opening <a href="/pair">pairfob.com/pair</a> reconnects to the last computer this browser used
-- Another computer on this phone: install pairfob there with the same command, run `pairfob pair`, then **设置 → 添加另一台电脑** — [Multiple devices](/devices)
+- Another computer on this phone: install pairfob there with the same command, run `pairfob pair`, then **Settings → Add another computer** — [Multiple devices](/devices)
 - Another device: run `pairfob pair` again and scan with the **new** device — [Multiple devices](/devices)
-- On the phone, **设置** can unpair only itself (**解除这台手机的配对**). Revoke others with `pairfob forget N` on the computer
+- On the phone, **Settings** can unpair only itself (**Unpair this phone**). Revoke others with `pairfob forget N` on the computer
 
 ## Do not
 

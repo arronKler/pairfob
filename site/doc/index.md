@@ -21,7 +21,7 @@ pageClass: pf-intro
   </article>
   <article>
     <p class="pf-claim-t">Only what the computer can do</p>
-    <p>New conversations, splits, worktrees, and 自动 / 控制 / 终端 / 对话 follow the computer. If it cannot do it, the phone does not draw it and does not pretend it succeeded.</p>
+    <p>New conversations, splits, worktrees, and Auto / Control / Terminal / Chat follow the computer. If it cannot do it, the phone does not draw it and does not pretend it succeeded.</p>
   </article>
   <article>
     <p class="pf-claim-t">No inbound ports at home</p>

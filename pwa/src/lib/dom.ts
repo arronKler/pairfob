@@ -105,6 +105,41 @@ export function askText(title: string, initial = "", maxLength?: number, fieldLa
   });
 }
 
+export type HelpBlock = string | HTMLElement;
+
+/** Centered read-only copy. Stays a dialog, not the mobile action sheet. */
+export function showHelp(title: string, blocks: HelpBlock[]): void {
+  for (const stale of document.querySelectorAll("dialog.help")) stale.remove();
+  const { dialog, form, trigger } = modal(title);
+  dialog.classList.add("help");
+  const heading = form.querySelector("h2.modal-title");
+  const dismiss = button("×", "icon-btn help-close", () => dialog.close());
+  dismiss.setAttribute("aria-label", t("close"));
+  const head = node("div", "help-head");
+  if (heading) head.append(heading);
+  head.append(dismiss);
+  form.prepend(head);
+  const described: string[] = [];
+  for (const block of blocks) {
+    const el = typeof block === "string" ? node("p", "help-copy", block) : block;
+    if (!el.id) el.id = `help-copy-${dialogSerial}-${described.length}`;
+    described.push(el.id);
+    form.append(el);
+  }
+  if (described.length) dialog.setAttribute("aria-describedby", described.join(" "));
+  dialog.addEventListener(
+    "close",
+    () => {
+      dialog.remove();
+      restoreFocus(trigger);
+    },
+    { once: true },
+  );
+  document.body.append(dialog);
+  dialog.showModal();
+  dismiss.focus();
+}
+
 export function askConfirm(message: string, confirmLabel?: string): Promise<boolean> {
   return new Promise((resolve) => {
     const { dialog, form, trigger } = modal(t("op.dangerTitle"));

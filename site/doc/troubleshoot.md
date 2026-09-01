@@ -19,27 +19,26 @@ pairfob service status
 
 ## Sentences in the UI
 
-The app copy is Chinese. Match the string on screen:
+Match the English Pairfob string on screen:
 
 | You see | Do this first |
 | --- | --- |
-| 电脑现在不在线 | Sleep, a closed lid, a dropped network, or `pairfob` not running. Wake the computer; you do not pair again. Then `pairfob doctor` |
-| 电脑上的 Herdr 现在没开 / 电脑上的 Herdr 没有运行 | The machine is up, but Herdr quit. Open Herdr; Pairfob recovers automatically |
-| 还没有读到会话 | Herdr is closed; the empty-state detail says to open it |
-| 还没有会话 | Connected, but there is no session yet — create one or open a terminal on the computer |
-| 请完整输入电脑上显示的配对码 | Hand entry is 8+6 glyphs |
-| 配对码还没输完整：需要 14 位 | Include the locator |
-| 配对码过期或已经用过 | `pairfob pair` again on the computer |
-| 配对码不正确 | Use the code being printed now; do not edit the old one |
-| 尝试太频繁 | Wait; do not loop |
-| 当前 Herdr 版本还不支持这个操作 | Computer Herdr, not a missing phone button |
-| 电脑可能已经执行了操作 | Do not double-tap; look at the frame |
-| 这个会话已经不在了 | Back to the list |
-| 另一个窗口接管了这台手机 | Keep a single Pairfob page |
-| 无法读取站点配置 / 无法连上当前站点 | Network or wrong page |
-| 另一台电脑开启了配对 | Slot stolen; `pair` on the computer you mean |
-| 暂时无法建立 P2P，已继续使用 Relay | Direct path failed; the session stayed on Relay. To stop retries, set 网络连接方式 to **Relay** |
-| 当前站点未开放 P2P | This site has direct paths off; only Relay is available |
+| The computer is offline | Sleep, a closed lid, a dropped network, or `pairfob` not running. Wake the computer; you do not pair again. Then `pairfob doctor` |
+| Herdr is not running on the computer | The machine is up, but Herdr quit. Open Herdr; Pairfob recovers automatically |
+| No sessions yet | Connected, but there is no session yet — create one or open a terminal on the computer |
+| Enter the full pairing code shown on the computer | Hand entry is 8+6 glyphs |
+| The pairing code is not complete: 14 glyphs needed | Include the locator |
+| That pairing code is spent or expired | `pairfob pair` again on the computer |
+| That pairing code is incorrect | Use the code being printed now; do not edit the old one |
+| Too many attempts | Wait; do not loop |
+| This Herdr version cannot do that yet | Computer Herdr, not a missing phone button |
+| The computer may already have run that action | Do not double-tap; look at the frame |
+| That session is gone | Back to the list |
+| Another window took over this phone | Keep a single Pairfob page |
+| Could not read site config / Could not reach this site | Network or wrong page |
+| Another computer started pairing | Slot stolen; `pair` on the computer you mean |
+| P2P is temporarily unavailable. Relay remains active | Direct path failed; the session stayed on Relay. To stop retries, set Network path to **Relay** |
+| P2P is unavailable on this site | This site has direct paths off; only Relay is available |
 
 ## doctor
 
@@ -69,11 +68,11 @@ The app copy is Chinese. Match the string on screen:
 
 ## Network path
 
-- Default **自动**: Relay first, then P2P when a direct path exists; a failed upgrade does not drop the session
+- Default **Auto**: Relay first, then P2P when a direct path exists; a failed upgrade does not drop the session
 - Switching Wi-Fi or coming back online probes immediately and resets the P2P retry timer
 - Settings shows why the last direct attempt failed while the session stays on Relay
-- Direct path keeps failing: 设置 → 网络连接方式 → **Relay**
-- To try a direct path again: **自动**, or **P2P** for one immediate attempt
+- Direct path keeps failing: Settings → Network path → **Relay**
+- To try a direct path again: **Auto**, or **P2P** for one immediate attempt
 - **Relay** pauses automatic P2P retries in this browser
 - Pairfob does not run TURN; a strict NAT stays on Relay
 - If an existing P2P path loses ICE, the session drops back to Relay without disconnecting, then retries the upgrade
@@ -88,8 +87,8 @@ The app copy is Chinese. Match the string on screen:
 ## Sleep, lock, lid
 
 - Locked screen, machine still up: should work. Pairfob does not need the desktop unlocked
-- Closed lid / sleep: the phone shows **电脑现在不在线**. Open the lid or wake it. Do not pair again; the computer stays on the list
-- Herdr quit while the machine is awake: **电脑上的 Herdr 现在没开**
+- Closed lid / sleep: the phone shows **The computer is offline**. Open the lid or wake it. Do not pair again; the computer stays on the list
+- Herdr quit while the machine is awake: **Herdr is not running on the computer**
 - Pairfob cannot wake a sleeping computer. Details: [FAQ](/faq)
 
 ## Still stuck

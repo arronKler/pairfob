@@ -1,4 +1,4 @@
-import { button, node } from "../lib/dom";
+import { button, node, showHelp, type HelpBlock } from "../lib/dom";
 import { type LangPref, langPref, setLangPref, t } from "../lib/i18n";
 import { type ListGroup } from "../lib/ranking";
 import { render } from "../paint";
@@ -189,5 +189,21 @@ export function setRow(key: string, value: string, tone?: StatusTone): HTMLEleme
   if (tone) val.append(statusDotNode(tone));
   val.append(document.createTextNode(value));
   row.append(val);
+  return row;
+}
+
+export function helpButton(title: string, blocks: HelpBlock[] | (() => HelpBlock[])): HTMLButtonElement {
+  const btn = button("", "icon-btn set-help", () => {
+    showHelp(title, typeof blocks === "function" ? blocks() : blocks);
+  });
+  btn.setAttribute("aria-label", t("settings.helpAria", { topic: title }));
+  btn.setAttribute("aria-haspopup", "dialog");
+  return btn;
+}
+
+export function setHeading(text: string, help?: HelpBlock[] | (() => HelpBlock[])): HTMLElement {
+  const row = node("div", "set-heading");
+  row.append(node("h2", "set-title", text));
+  if (help) row.append(helpButton(text, help));
   return row;
 }

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
 const g = globalThis as unknown as Record<string, unknown>;
-for (const key of ["window", "document", "navigator", "HTMLElement", "HTMLButtonElement", "Node", "DocumentFragment", "localStorage"] as const) {
+for (const key of ["window", "document", "navigator", "HTMLElement", "HTMLButtonElement", "HTMLDialogElement", "Node", "DocumentFragment", "localStorage"] as const) {
   g[key] = (happy as unknown as Record<string, unknown>)[key];
 }
 happy.document.body.innerHTML = '<main id="app"></main>';
@@ -36,6 +36,7 @@ async function settle(): Promise<void> {
 }
 
 afterEach(() => {
+  for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
   state.live = null;
   state.p2pEnabled = false;
   state.sessionTransport = "relay";
@@ -171,7 +172,11 @@ describe("settings network transport", () => {
     paint();
 
     expect(app.textContent).toContain("P2P 优先 · 当前 Relay · 36 毫秒");
-    expect(app.querySelector(".network-mode-row")?.textContent).toContain("无需重新切换");
+    expect(app.querySelector(".network-mode-row")?.textContent).not.toContain("无需重新切换");
+    const help = app.querySelector('[aria-label="连接的说明"]');
+    if (!(help instanceof HTMLButtonElement)) throw new Error("missing connection help");
+    help.click();
+    expect(document.querySelector("dialog.help")?.textContent).toContain("无需重新切换");
     expect(group().querySelector('[aria-checked="true"]')?.textContent).toBe("P2P");
     choice("P2P").click();
     await settle();

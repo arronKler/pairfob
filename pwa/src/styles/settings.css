@@ -23,8 +23,30 @@
   line-height: 1.15;
 }
 
-.settings-page .topbar + .set-title,
-.main-settings .topbar + .set-title { margin-top: 14px; }
+.settings-page .topbar + .set-heading,
+.main-settings .topbar + .set-heading { margin-top: 6px; }
+
+.set-heading {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 18px 0 -6px;
+  min-height: 44px;
+}
+
+.set-heading .set-title {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.set-heading .set-help {
+  margin-right: -12px;
+  color: var(--muted);
+}
+
+.settings-page .set-help,
+.main-settings .set-help { color: var(--muted); }
 
 .set-title {
   margin: 26px 0 0;
@@ -83,23 +105,7 @@
 
 .set-note { margin: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.55; }
 
-.tech-note {
-  margin-top: 12px;
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.55;
-}
-
-.tech-note summary {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  cursor: pointer;
-  color: var(--muted);
-}
-
-.tech-note p { margin: 4px 0 0; }
-.tech-note code { color: var(--accent); font-family: var(--mono); font-size: 0.82em; }
+.set-row .seg { width: 100%; }
 
 .device { padding: 13px 15px; border-top: 1px solid var(--line); }
 .device:first-child { border-top: 0; }
@@ -137,6 +143,53 @@ dialog.modal {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+@keyframes help-in {
+  from { transform: scale(0.97); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+dialog.modal.help {
+  width: min(22rem, calc(100vw - 40px));
+  max-height: min(70dvh, 28rem);
+  margin: auto;
+  padding: 16px 16px 18px;
+}
+
+dialog.modal.help > form { animation: help-in 0.18s var(--ease); }
+
+.help-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: -6px -6px 0 0;
+}
+
+.help-head .modal-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 8px;
+}
+
+.help-close {
+  margin: -2px -2px 0 0;
+  color: var(--ink);
+}
+
+.help-copy {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.help-copy + .help-copy { margin-top: 8px; }
+
+.help-copy code {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.86em;
 }
 
 dialog.modal::backdrop {
@@ -298,6 +351,18 @@ dialog.modal.sheet > form {
   /* Transform on <dialog> itself knocks it out of the centered top layer. */
   dialog.modal > form {
     animation: sheet-up 0.24s var(--ease);
+  }
+
+  dialog.modal.help {
+    margin: auto;
+    width: min(22rem, calc(100vw - 40px));
+    border-radius: var(--r-xl);
+    border-bottom: 1px solid var(--line-strong);
+    padding-bottom: 18px;
+  }
+
+  dialog.modal.help > form {
+    animation: help-in 0.18s var(--ease);
   }
 }
 /* --- Operation dialogs (create / prompt / worktree) ------------------ */

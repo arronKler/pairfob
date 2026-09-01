@@ -12,7 +12,7 @@ import { render } from "../paint";
 import { app, setDefaultTermMode, state } from "../state";
 import { isDesk } from "../viewport";
 import { composeLiveControl } from "./session-view";
-import { appendNotice, backBar, feedbackNode, herdStatus, languageControl, listGroupControl, setRow } from "./chrome";
+import { appendNotice, backBar, feedbackNode, herdStatus, languageControl, listGroupControl, setHeading, setRow } from "./chrome";
 
 const NETWORK_MODE_COPY: Record<NetworkMode, "settings.networkAuto" | "settings.networkP2P" | "settings.networkRelay"> = {
   auto: "settings.networkAuto",
@@ -54,10 +54,15 @@ function networkPathCopy(): string {
     : t("settings.networkRttRelay", { ms: state.relayRttMs });
 }
 
-function networkModeNote(): string {
-  if (!state.p2pEnabled) return t("settings.networkP2POff");
+function networkHelpCopy(): string {
   if (state.networkMode === "p2p") return t("settings.networkP2PNote");
   return t("settings.networkNote");
+}
+
+function helpWithCode(before: string, code: string, after: string): HTMLParagraphElement {
+  const copy = node("p", "help-copy");
+  copy.append(document.createTextNode(before), node("code", "", code), document.createTextNode(after));
+  return copy;
 }
 
 function networkP2PFailCopy(): string {
@@ -129,7 +134,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   }
   appendNotice(container);
   const status = herdStatus();
-  container.append(node("h2", "set-title", t("settings.connection")));
+  container.append(setHeading(t("settings.connection"), [networkHelpCopy(), t("settings.addComputerHint")]));
   const conn = node("div", "set-card");
   conn.append(setRow(t("settings.computer"), state.herdHost || (state.credential ? computerTitle(state.credential) : t("settings.currentComputer"))));
   conn.append(setRow(t("settings.status"), status.text, status.tone));
@@ -137,56 +142,53 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   const p2pFail = networkP2PFailCopy();
   if (p2pFail) conn.append(node("p", "set-note network-p2p-fail", p2pFail));
   const networkModeRow = node("div", "set-row set-row-stack network-mode-row");
-  networkModeRow.append(node("p", "set-note", networkModeNote()));
+  if (!state.p2pEnabled) networkModeRow.append(node("p", "set-note", t("settings.networkP2POff")));
   networkModeRow.append(networkModeControl());
   conn.append(networkModeRow);
   const self = state.deviceList.find((device) => device.self && !device.revoked_at);
   if (self) conn.append(setRow(t("settings.thisPhone"), self.label || t("settings.pairedPhone")));
   if (state.computers.length > 1) {
-    const switchRow = node("div", "set-row set-row-stack");
-    switchRow.append(node("p", "set-note", t("settings.computersCount", { n: state.computers.length })));
+    const switchRow = node("div", "set-row");
     switchRow.append(button(t("settings.switchComputer"), "btn btn-small", openComputers));
     conn.append(switchRow);
   }
-  const addRow = node("div", "set-row set-row-stack");
-  addRow.append(node("p", "set-note", t("settings.addComputerHint")));
+  const addRow = node("div", "set-row");
   addRow.append(button(t("settings.addComputer"), "btn btn-small", beginAddComputer));
   conn.append(addRow);
   container.append(conn);
 
-  container.append(node("h2", "set-title", t("settings.language")));
+  container.append(setHeading(t("settings.language"), [t("settings.languageNote")]));
   const langCard = node("div", "set-card");
-  const langRow = node("div", "set-row set-row-stack");
-  langRow.append(node("p", "set-note", t("settings.languageNote")));
+  const langRow = node("div", "set-row");
   langRow.append(languageControl());
   langCard.append(langRow);
   container.append(langCard);
 
-  container.append(node("h2", "set-title", t("settings.list")));
+  container.append(setHeading(t("settings.list"), [t("settings.listNote")]));
   const listCard = node("div", "set-card");
-  const listRow = node("div", "set-row set-row-stack");
-  listRow.append(node("p", "set-note", t("settings.listNote")));
+  const listRow = node("div", "set-row");
   listRow.append(listGroupControl());
   listCard.append(listRow);
   container.append(listCard);
 
-  container.append(node("h2", "set-title", t("settings.mode")));
+  container.append(setHeading(t("settings.mode"), [t("settings.modeNote")]));
   const modeCard = node("div", "set-card");
-  const modeRow = node("div", "set-row set-row-stack");
-  modeRow.append(node("p", "set-note", t("settings.modeNote")));
+  const modeRow = node("div", "set-row");
   modeRow.append(defaultTermModeControl());
   modeCard.append(modeRow);
   container.append(modeCard);
 
-  container.append(node("h2", "set-title", t("settings.input")));
+  container.append(setHeading(t("settings.input"), [t("settings.inputNote")]));
   const inputCard = node("div", "set-card");
-  const inputRow = node("div", "set-row set-row-stack");
-  inputRow.append(node("p", "set-note", t("settings.inputNote")));
+  const inputRow = node("div", "set-row");
   inputRow.append(composeLiveControl());
   inputCard.append(inputRow);
   container.append(inputCard);
 
-  container.append(node("h2", "set-title", t("settings.notifications")));
+  const notifyHelp = state.pushEnabled === false && !state.settingsLoading
+    ? [helpWithCode(t("settings.pushHowtoBody"), "PAIRFOB_PUSH=1", t("settings.pushHowtoTail"))]
+    : undefined;
+  container.append(setHeading(t("settings.notifications"), notifyHelp));
   const pushCard = node("div", "set-card");
   const pushRow = node("div", "set-row set-row-stack");
   pushRow.append(
@@ -207,19 +209,12 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   pushRow.append(pushButton);
   pushCard.append(pushRow);
   container.append(pushCard);
-  if (state.pushEnabled === false && !state.settingsLoading) {
-    const details = node("details", "tech-note");
-    details.append(node("summary", "", t("settings.pushHowto")));
-    details.append(
-      node("p", "", t("settings.pushHowtoBody")),
-      node("code", "", "PAIRFOB_PUSH=1"),
-      document.createTextNode(t("settings.pushHowtoTail")),
-    );
-    container.append(details);
-  }
   if (state.pushConfigError) container.append(feedbackNode({ text: state.pushConfigError, tone: "error" }));
 
-  container.append(node("h2", "set-title", t("settings.devices")));
+  const deviceHelp = state.deviceList.length
+    ? [helpWithCode(t("settings.manageOthersBody"), "pairfob device revoke <device_id>", t("settings.sentenceEnd"))]
+    : undefined;
+  container.append(setHeading(t("settings.devices"), deviceHelp));
   if (state.settingsLoading && !state.deviceList.length) {
     container.append(feedbackNode({ text: t("settings.devicesLoading"), tone: "status" }));
   } else if (state.devicesError) {
@@ -228,19 +223,11 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
     const list = node("div", "set-card device-card");
     state.deviceList.forEach((device) => list.append(deviceRow(device)));
     container.append(list);
-    const management = node("details", "tech-note");
-    management.append(node("summary", "", t("settings.manageOthers")));
-    management.append(
-      node("p", "", t("settings.manageOthersBody")),
-      node("code", "", "pairfob device revoke <device_id>"),
-      document.createTextNode(t("settings.sentenceEnd")),
-    );
-    container.append(management);
   } else {
     container.append(node("p", "empty-sub", t("settings.noOtherDevices")));
   }
 
-  container.append(node("h2", "set-title", t("settings.danger")));
+  container.append(setHeading(t("settings.danger")));
   const danger = node("div", "set-card");
   const dangerRow = node("div", "set-row set-row-stack");
   dangerRow.append(node("p", "set-note", t("settings.unpairNote")));

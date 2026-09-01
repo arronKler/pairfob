@@ -27,14 +27,14 @@ pairfob list
 
 ```
 1  iPhone  just now
-2  Android 手机  2 hours ago
+2  Android phone  2 hours ago
 
 Unpair one: pairfob forget 1
 ```
 
 If nothing is paired: `Nothing paired yet. Pair one: pairfob pair`.
 
-The phone **设置** page also lists devices and marks the current one as **这台手机**.
+The phone **Settings** page also lists devices and marks the current one as **This phone**.
 
 ## Revoke
 
@@ -46,7 +46,7 @@ pairfob forget 1
 
 `pairfob forget iPhone` works when the name is unique. Collisions require the index.
 
-On the phone, **设置 → 危险操作 → 解除这台手机的配对** can only drop **itself**. That is intentional: a lost phone that can still open Pairfob can at most kick itself, not the rest of the household. `forget N` from `list` is the usual computer path.
+On the phone, **Settings → Danger zone → Unpair this phone** can only drop **itself**. That is intentional: a lost phone that can still open Pairfob can at most kick itself, not the rest of the household. `forget N` from `list` is the usual computer path.
 
 To drop a phone you can no longer hold:
 
@@ -66,13 +66,13 @@ Each computer enrolls and pairs on its own. Same installer, new pairing:
 
 1. On the other computer: `curl -fsSL https://pairfob.com/install.sh | sh`
 2. There: `pairfob pair`
-3. On this phone: **设置 → 添加另一台电脑**, then scan that computer’s current code
+3. On this phone: **Settings → Add another computer**, then scan that computer’s current code
 
-The phone keeps one credential per computer and reconnects to the last one you used. Home shows **电脑** when more than one credential is stored.
+The phone keeps one credential per computer and reconnects to the last one you used. Home shows **Computers** when more than one credential is stored.
 
 A computer that is asleep or offline stays on the list. Pairfob does not delete that credential, and it does not send you back to the scan page. Wake it; you do not pair again. A locked screen is fine; a closed lid only works if the machine does not sleep.
 
-**忘记** on a row only drops the credential in this browser. The computer still lists this device until you `forget` it there. **解除这台手机的配对** still only affects the current computer pairing.
+**Forget** on a row only drops the credential in this browser. The computer still lists this device until you `forget` it there. **Unpair this phone** still only affects the current computer pairing.
 
 ## Another window
 

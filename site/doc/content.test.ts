@@ -168,6 +168,30 @@ describe("user-facing documentation", () => {
     expect(push).toContain("不会补发旧通知");
   });
 
+  test("English docs quote English Pairfob labels, not Chinese chrome", async () => {
+    const glob = new Bun.Glob("*.md");
+    const chunks: string[] = [];
+    for await (const path of glob.scan({ cwd: import.meta.dir, absolute: true })) {
+      chunks.push(await Bun.file(path).text());
+    }
+    const en = chunks.join("\n").replaceAll("中文", "");
+    expect(en).not.toMatch(/[\u4e00-\u9fff]/);
+    const appEn = await Bun.file(new URL("./app.md", import.meta.url)).text();
+    const pairEn = await Bun.file(new URL("./pair.md", import.meta.url)).text();
+    const faqEn = await Bun.file(new URL("./faq.md", import.meta.url)).text();
+    expect(appEn).toContain("**Settings**");
+    expect(appEn).toContain("**Pin to top**");
+    expect(appEn).toContain("**Needs you**");
+    expect(appEn).toContain("| **Control** |");
+    expect(appEn).toContain("**Network path**");
+    expect(appEn).not.toContain("The app chrome is currently Chinese");
+    expect(pairEn).toContain("**Connect your computer**");
+    expect(pairEn).toContain("**Scan to connect**");
+    expect(pairEn).not.toContain("The pairing page copy is Chinese");
+    expect(faqEn).toContain("Settings → Language");
+    expect(faqEn).toContain("Settings → Add another computer");
+  });
+
   test("lock screen and lid-close are distinct, and sleep cannot be woken", async () => {
     const faqEn = await Bun.file(new URL("./faq.md", import.meta.url)).text();
     const continueZh = await Bun.file(new URL("./zh/continue.md", import.meta.url)).text();

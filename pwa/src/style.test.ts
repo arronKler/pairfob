@@ -66,6 +66,17 @@ describe("UI accessibility guardrails", () => {
     expect(css).toMatch(/\.key-more::after,\s*\.icon-more::after\s*\{[^}]*box-shadow:/);
     expect(css).toMatch(/\.key-more\[aria-expanded="true"\]::after\s*\{[^}]*clip-path:\s*polygon\(/);
     expect(css).not.toMatch(/content:\s*"▾"|content:\s*"⌄"|content:\s*"›"|content:\s*"\+"/);
+    expect(rule(".set-help::before")).toMatch(/content:\s*""/);
+    expect(rule(".set-help::before")).toMatch(/mask:/);
+    expect(rule(".set-help::before")).not.toMatch(/content:\s*"\?"/);
+  });
+
+  test("settings help copy is a centered dialog even on a phone width", () => {
+    expect(rule("dialog.modal.help")).toMatch(/margin:\s*auto/);
+    expect(rule("dialog.modal.help")).not.toMatch(/margin:\s*auto auto 0/);
+    expect(css).toMatch(/@media \(max-width: 899\.98px\)[\s\S]*dialog\.modal\.help\s*\{[^}]*margin:\s*auto;/);
+    expect(rule(".help-copy")).toMatch(/line-height:\s*1\.55/);
+    expect(css).toMatch(/\.set-heading\s*\{[^}]*min-height:\s*44px/);
   });
 
   test("dialog confirm is the filled action and cancel stays quiet", () => {
