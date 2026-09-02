@@ -472,36 +472,84 @@ dialog.modal.sheet > form {
 }
 
 .worktree-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   margin: 8px 0 0;
-  padding: 11px 13px;
+}
+
+.worktree-card {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  min-height: 70px;
+  gap: 11px;
+  padding: 11px 12px;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
+  color: var(--ink);
+  text-align: left;
 }
 
-.worktree-item > div { min-width: 0; }
+.worktree-card:not(.worktree-card-static):active { background: #232c38; }
+.worktree-card:not(.worktree-card-static):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.worktree-card:disabled { opacity: 0.58; }
 
-.worktree-item strong {
-  display: block;
+.worktree-icon {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: rgba(110, 168, 254, 0.13);
+}
+
+.worktree-icon::before {
+  position: absolute;
+  inset: 7px;
+  background: var(--accent);
+  content: "";
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='6' cy='5' r='2.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3Ccircle cx='18' cy='6' r='2.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3Ccircle cx='6' cy='19' r='2.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3Cpath d='M6 7.5v9M8.5 17c5.2-.7 8.2-3.6 9.2-8.5' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='6' cy='5' r='2.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3Ccircle cx='18' cy='6' r='2.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3Ccircle cx='6' cy='19' r='2.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3Cpath d='M6 7.5v9M8.5 17c5.2-.7 8.2-3.6 9.2-8.5' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.worktree-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+
+.worktree-title {
   font-size: 0.88rem;
   font-weight: 620;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.worktree-branch {
+  color: var(--accent);
+  font: 550 0.72rem/1.35 var(--mono);
+  overflow-wrap: anywhere;
 }
 
 .worktree-path {
-  display: block;
-  margin-top: 3px;
   color: var(--muted);
-  font: 500 0.72rem var(--mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font: 500 0.69rem/1.4 var(--mono);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
-.worktree-item .btn-small { flex: none; }
+.worktree-tail { display: flex; align-items: center; gap: 7px; }
+.worktree-opened {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(70, 214, 140, 0.12);
+  color: var(--ok);
+  font-size: 0.65rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.worktree-chevron { color: var(--muted); font-size: 1.25rem; line-height: 1; }
+
+@media (max-width: 430px) {
+  .worktree-card { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 9px; padding: 11px 10px; }
+  .worktree-icon { width: 28px; height: 28px; }
+  .worktree-opened { padding-right: 6px; padding-left: 6px; }
+}

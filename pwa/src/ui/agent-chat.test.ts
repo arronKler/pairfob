@@ -63,7 +63,7 @@ describe("agent-chat is a first-class pane mode", () => {
   test("leave paints guided itself; list-back keeps the mode", () => {
     const leave = fn("export function leaveAgentChat(", "function paintItems(");
     expect(leave).toContain('setPaneTermMode(state.paneId, "guided")');
-    expect(pane).toContain("renderAgentChat(goBackFromPane, openPaneMenu, openPaneSwitcher)");
+    expect(pane).toContain("renderAgentChat(goBackFromPane, () => void openSelectedWorkspace(), openPaneMenu, openPaneSwitcher)");
     const back = pane.slice(pane.indexOf("export function goBackFromPane("), pane.indexOf("export function sessionHandlers("));
     expect(back).toContain("if (state.agentChat)");
     expect(back).toContain("rememberGuided: false");
@@ -71,7 +71,7 @@ describe("agent-chat is a first-class pane mode", () => {
 
   test("guided chrome and the desk main column both host the mode", () => {
     expect(view).not.toContain("handlers.onAgentChat");
-    expect(desk).toContain("fillAgentChat");
+    expect(desk).toContain("fillAgentChat(chat, handlers.onBack, false, handlers.onWorkspace, handlers.onMenu, handlers.onSwitch)");
     expect(desk).toContain("state.agentChat");
     expect(desk).toContain('node("div", "pane-root")');
     expect(desk).toContain("fillSession(pane, selected, false, handlers)");

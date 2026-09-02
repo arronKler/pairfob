@@ -1,10 +1,17 @@
 import { button, node } from "../../lib/dom";
 import { t } from "../../lib/i18n";
+import { labEnabled } from "../../lib/labs";
 import { haptic, state } from "../../state";
 
-/** Right cluster shared by Control / Terminal / Chat: interrupt when working, then this-view menu. */
-export function chromeActionCluster(onMenu: () => void): HTMLElement {
+/** Right cluster shared by Control / Terminal / Chat: inspect, interrupt when working, then this-view menu. */
+export function chromeActionCluster(onWorkspace: () => void, onMenu: () => void): HTMLElement {
   const actions = node("div", "chrome-actions");
+  if (labEnabled("workspace")) {
+    const workspace = button("", "icon-btn icon-workspace", onWorkspace);
+    workspace.setAttribute("aria-label", t("workspace.open"));
+    workspace.title = t("workspace.open");
+    actions.append(workspace);
+  }
   const menu = button("", "icon-btn icon-more", onMenu);
   menu.setAttribute("aria-label", t("pane.menuTitle"));
   menu.disabled = state.operationBusy;

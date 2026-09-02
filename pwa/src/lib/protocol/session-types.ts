@@ -18,6 +18,15 @@ import type {
   ZoomPaneInput,
 } from "../operations.ts";
 import type { TerminalFramePart, TerminalOpenResult } from "./terminal.ts";
+import type {
+  GitBranches,
+  GitDiff,
+  GitLayer,
+  GitStatus,
+  WorkspaceDescriptor,
+  WorkspaceDirectoryPage,
+  WorkspaceFile,
+} from "../workspace.ts";
 
 export interface SessionEvent {
   type: "connected" | "disconnected" | "reconnecting" | "latency" | "poke" | "terminal" | "terminal_frame" | "terminal_closed";
@@ -68,6 +77,12 @@ export type LiveSession = {
   history: (paneId: string, cursor?: string | null, limit?: number) => Promise<unknown>;
   agentTrace: (paneId: string, cursor?: string | null, limit?: number) => Promise<AgentTracePage>;
   listWorktrees: (params: ListWorktreesInput) => Promise<unknown>;
+  workspaceOpen: (paneId: string) => Promise<WorkspaceDescriptor>;
+  workspaceList: (paneId: string, path?: string, cursor?: string, limit?: number) => Promise<WorkspaceDirectoryPage>;
+  workspaceRead: (paneId: string, path: string) => Promise<WorkspaceFile>;
+  gitStatus: (paneId: string) => Promise<GitStatus>;
+  gitDiff: (paneId: string, path: string, layer: GitLayer) => Promise<GitDiff>;
+  gitBranches: (paneId: string) => Promise<GitBranches>;
   createWorktree: (params: CreateWorktreeInput) => Promise<CreateWorktreeResult>;
   openWorktree: (params: OpenWorktreeInput) => Promise<OpenWorktreeResult>;
   resizePane: (params: ResizePaneInput) => Promise<LayoutMutationResult>;

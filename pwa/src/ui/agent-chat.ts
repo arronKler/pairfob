@@ -570,6 +570,7 @@ async function submitAgentPrompt(): Promise<void> {
 function chatChrome(
   onBack: () => void,
   includeBack: boolean,
+  onWorkspace: () => void,
   onMenu: () => void,
   onSwitch: () => void,
   selected: ReturnType<typeof selectedAgent>,
@@ -597,7 +598,7 @@ function chatChrome(
   } else {
     title.append(node("span", "chrome-name", t("mode.agent")));
   }
-  chrome.append(title, chromeActionCluster(onMenu));
+  chrome.append(title, chromeActionCluster(onWorkspace, onMenu));
   syncChromeStop(chrome, selected?.status === "working", () => {
     const session = state.live;
     const paneId = state.paneId;
@@ -611,6 +612,7 @@ export function fillAgentChat(
   container: HTMLElement,
   onBack: () => void,
   includeBack: boolean,
+  onWorkspace: () => void,
   onMenu: () => void,
   onSwitch: () => void,
 ): HTMLTextAreaElement {
@@ -627,7 +629,7 @@ export function fillAgentChat(
   jump.hidden = state.agentTraceFollow || !state.agentTraceUnread;
   jump.addEventListener("click", jumpToLatest);
   wrap.append(stream, jump);
-  container.append(chatChrome(onBack, includeBack, onMenu, onSwitch, selected), wrap, dock);
+  container.append(chatChrome(onBack, includeBack, onWorkspace, onMenu, onSwitch, selected), wrap, dock);
   paintChatNotice(container);
   sizeChatCompose(input);
   if (!state.agentTraceBusy && state.agentTraceLoadState === "cold") void refreshAgentTrace();
@@ -635,8 +637,8 @@ export function fillAgentChat(
   return input;
 }
 
-export function renderAgentChat(onBack: () => void, onMenu: () => void, onSwitch: () => void): void {
+export function renderAgentChat(onBack: () => void, onWorkspace: () => void, onMenu: () => void, onSwitch: () => void): void {
   const root = node("div", "pane-root agent-chat-root");
-  fillAgentChat(root, onBack, true, onMenu, onSwitch);
+  fillAgentChat(root, onBack, true, onWorkspace, onMenu, onSwitch);
   app.replaceChildren(root);
 }

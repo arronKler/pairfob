@@ -1,6 +1,8 @@
 import { node } from "../lib/dom";
+import { labEnabled } from "../lib/labs";
 import { render } from "../paint";
 import { app, haptic, resetPaneView, selectedAgent, state } from "../state";
+import { enterWorkspace } from "../workspace";
 import { isDesk } from "../viewport";
 import { openPaneMenu, openPaneSwitcher } from "./pane-menu";
 import { dropQueuedKeys, fillSession, finishSessionPaint, sessionScroll, type SessionHandlers } from "./session-view";
@@ -8,6 +10,14 @@ import { leaveAgentChat, renderAgentChat } from "./agent-chat";
 import { leaveFullTerminal, renderFullTerminal } from "./full-terminal";
 
 export { openPaneMenu, openPaneSwitcher };
+
+export async function openSelectedWorkspace(): Promise<void> {
+  if (!labEnabled("workspace")) return;
+  const returnView = state.fullTerminal ? "full" : state.agentChat ? "agent" : "guided";
+  if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
+  if (state.agentChat) leaveAgentChat({ rememberGuided: false, paint: false });
+  await enterWorkspace(state.paneId, returnView);
+}
 
 export function goBackFromPane(): void {
   if (state.fullTerminal) {
@@ -39,16 +49,17 @@ export function sessionHandlers(): SessionHandlers {
     onBack: goBackFromPane,
     onMenu: openPaneMenu,
     onSwitch: openPaneSwitcher,
+    onWorkspace: () => void openSelectedWorkspace(),
   };
 }
 
 export function renderPane(): void {
   if (state.fullTerminal) {
-    renderFullTerminal(goBackFromPane, openPaneMenu);
+    renderFullTerminal(goBackFromPane, () => void openSelectedWorkspace(), openPaneMenu);
     return;
   }
   if (state.agentChat) {
-    renderAgentChat(goBackFromPane, openPaneMenu, openPaneSwitcher);
+    renderAgentChat(goBackFromPane, () => void openSelectedWorkspace(), openPaneMenu, openPaneSwitcher);
     return;
   }
   const scroll = sessionScroll();

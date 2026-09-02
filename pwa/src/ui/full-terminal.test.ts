@@ -15,9 +15,9 @@ function fn(name: string, next: string): string {
 }
 
 describe("complete-terminal chrome stays a distinct surface", () => {
-  test("chrome matches the other pane modes: stop plus more", () => {
+  test("chrome matches the other pane modes: stop, workspace, and more", () => {
     const renderFn = fn("export function renderFullTerminal(", "export function handleFullTerminalEvent(");
-    expect(renderFn).toContain("chromeActionCluster(onMenu)");
+    expect(renderFn).toContain("chromeActionCluster(onWorkspace, onMenu)");
     expect(renderFn).toContain("syncFullTerminalChrome()");
     expect(source).toContain("syncChromeStop(chrome, selectedAgent()?.status === \"working\", interruptFullTerminal)");
     expect(renderFn).not.toContain('button("退出"');
@@ -156,7 +156,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(leave).toContain("setPaneTermMode(state.paneId, \"guided\")");
     expect(leave).toContain("render()");
     expect(pane).not.toContain("onFullTerminal: enterFullTerminal");
-    expect(pane).toContain("renderFullTerminal(goBackFromPane, openPaneMenu)");
+    expect(pane).toContain("renderFullTerminal(goBackFromPane, () => void openSelectedWorkspace(), openPaneMenu)");
     expect(pane).not.toContain(".then(goBackFromPane)");
     expect(pane).not.toContain("onExit:");
     const back = pane.slice(pane.indexOf("export function goBackFromPane("), pane.indexOf("export function sessionHandlers("));

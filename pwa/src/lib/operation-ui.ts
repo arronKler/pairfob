@@ -338,14 +338,34 @@ function asyncDialog(title: string): DialogParts {
 }
 
 function worktreeTitle(item: WorktreeSummary): string {
-  return item.label || item.branch || item.path || "Worktree";
+  if (item.label) return item.label;
+  if (item.branch) return item.branch;
+  const segments = item.path.split(/[\\/]/).filter(Boolean);
+  return segments.at(-1) || item.path || "Worktree";
+}
+
+function fillWorktreeCard(card: HTMLElement, item: WorktreeSummary, actionable: boolean): void {
+  const icon = node("span", "worktree-icon");
+  icon.setAttribute("aria-hidden", "true");
+  const copy = node("span", "worktree-copy");
+  copy.append(node("strong", "worktree-title", worktreeTitle(item)));
+  if (item.label && item.branch) copy.append(node("span", "worktree-branch", item.branch));
+  copy.append(node("code", "worktree-path", item.path));
+  const tail = node("span", "worktree-tail");
+  if (item.openWorkspaceId) tail.append(node("span", "worktree-opened", t("form.worktreeOpened")));
+  if (actionable) {
+    const chevron = node("span", "worktree-chevron", "›");
+    chevron.setAttribute("aria-hidden", "true");
+    tail.append(chevron);
+  }
+  card.append(icon, copy, tail);
 }
 
 export async function showWorktrees(
   load: () => Promise<unknown>,
   open?: (item: WorktreeSummary) => Promise<void>,
 ): Promise<void> {
-  const parts = asyncDialog("Worktree");
+  const parts = asyncDialog(t("menu.worktrees"));
   const status = node("p", "notice notice-status", t("form.worktreesLoading"));
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
@@ -358,14 +378,10 @@ export async function showWorktrees(
     status.textContent = items.length ? t("form.worktreesCount", { n: items.length }) : t("form.worktreesEmpty");
     for (const item of items) {
       const row = node("li", "worktree-item");
-      const copy = node("div");
-      copy.append(node("strong", "", worktreeTitle(item)));
-      copy.append(node("code", "worktree-path", item.path));
-      row.append(copy);
       if (open) {
         const openItem = open;
-        const openButton = button(t("open"), "btn btn-small btn-primary", async () => {
-          openButton.disabled = true;
+        const card = button("", "worktree-card", async () => {
+          card.disabled = true;
           parts.body.setAttribute("aria-busy", "true");
           status.className = "notice notice-status";
           status.setAttribute("role", "status");
@@ -377,11 +393,17 @@ export async function showWorktrees(
             status.className = "notice notice-error";
             status.setAttribute("role", "alert");
             status.textContent = messageOf(error);
-            openButton.disabled = false;
+            card.disabled = false;
             parts.body.setAttribute("aria-busy", "false");
           }
         });
-        row.append(openButton);
+        card.setAttribute("aria-label", t("form.openWorktreeNamed", { title: worktreeTitle(item) }));
+        fillWorktreeCard(card, item, true);
+        row.append(card);
+      } else {
+        const card = node("div", "worktree-card worktree-card-static");
+        fillWorktreeCard(card, item, false);
+        row.append(card);
       }
       list.append(row);
     }

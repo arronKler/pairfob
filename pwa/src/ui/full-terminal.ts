@@ -635,7 +635,7 @@ export function setFullTerminalComposeLive(live: boolean): void {
   });
 }
 
-export function renderFullTerminal(onBack: () => void, onMenu: () => void): void {
+export function renderFullTerminal(onBack: () => void, onWorkspace: () => void, onMenu: () => void): void {
   setFullTerminalDocumentMode(true);
   const mounted = app.querySelector(".full-terminal-root");
   if (mounted) {
@@ -657,7 +657,7 @@ export function renderFullTerminal(onBack: () => void, onMenu: () => void): void
     node("strong", "full-terminal-title", selectedAgent() ? agentTitle(selectedAgent()!) : t("title.terminal")),
     node("span", "full-terminal-status", terminalStatus.detail),
   );
-  chrome.append(back, titleWrap, chromeActionCluster(onMenu));
+  chrome.append(back, titleWrap, chromeActionCluster(onWorkspace, onMenu));
   syncFullTerminalChrome();
   const host = node("div", "full-terminal-host");
   host.setAttribute("aria-label", t("title.terminal"));

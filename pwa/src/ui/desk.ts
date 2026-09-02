@@ -26,7 +26,7 @@ export function renderDesk(): void {
     const handlers = sessionHandlers();
     if (selected && state.paneId && state.agentChat) {
       const chat = node("div", "pane-root agent-chat-root");
-      input = fillAgentChat(chat, handlers.onBack, false, handlers.onMenu, handlers.onSwitch);
+      input = fillAgentChat(chat, handlers.onBack, false, handlers.onWorkspace, handlers.onMenu, handlers.onSwitch);
       main.append(chat);
     } else if (selected && state.paneId) {
       const pane = node("div", "pane-root");

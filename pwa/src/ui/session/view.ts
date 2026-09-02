@@ -17,6 +17,7 @@ export type SessionHandlers = {
   onBack: () => void;
   onMenu: () => void;
   onSwitch: () => void;
+  onWorkspace: () => void;
 };
 
 function statusLine(selected: AgentCard): string {
@@ -63,7 +64,7 @@ function chromeNode(selected: AgentCard | undefined, includeBack: boolean, handl
   title.addEventListener("click", handlers.onSwitch);
   title.append(...(selected ? titleBody(selected) : [node("span", "chrome-name", t("title.session"))]));
   chrome.append(title);
-  chrome.append(chromeActionCluster(handlers.onMenu));
+  chrome.append(chromeActionCluster(handlers.onWorkspace, handlers.onMenu));
   if (selected) syncChromeStatus(chrome, title, selected);
   return chrome;
 }

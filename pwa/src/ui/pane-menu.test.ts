@@ -19,6 +19,8 @@ describe("session view sheet", () => {
     expect(source).not.toContain('item("改工作区名"');
     expect(source).not.toContain('item("关闭整个标签页"');
     expect(source).not.toContain('section("管理"');
+    expect(source).not.toContain('t("workspace.open")');
+    expect(source).not.toContain("enterWorkspace");
     expect(liveSource).toContain('t("op.renamePane")');
     expect(liveSource).toContain('t("op.renameTab")');
     expect(liveSource).toContain('t("op.renameWorkspace")');

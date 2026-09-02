@@ -67,6 +67,19 @@
   box-shadow: -6px 0 currentColor, 6px 0 currentColor;
 }
 
+.icon-workspace::before {
+  content: "";
+  box-sizing: border-box;
+  width: 17px;
+  height: 16px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  background:
+    linear-gradient(currentColor, currentColor) 3px 4px / 9px 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) 3px 8px / 7px 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) 3px 12px / 10px 1.5px no-repeat;
+}
+
 .key-more[aria-expanded="true"]::after {
   width: 9px;
   height: 6px;

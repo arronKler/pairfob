@@ -28,7 +28,7 @@ export type PokeRefreshKind = "runtime" | "snapshot" | "paneread" | "ignore";
  * fallback; a mismatched pane poke never triggers Snapshot.
  */
 export function pokeRefreshAction(
-  screen: "home" | "pane" | "settings" | "computers",
+  screen: "home" | "pane" | "workspace" | "settings" | "computers",
   openPaneId: string,
   pokePaneId?: string,
   reason?: string,

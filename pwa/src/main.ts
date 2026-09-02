@@ -22,6 +22,7 @@ import { renderDesk } from "./ui/desk";
 import { renderHome } from "./ui/home";
 import { initSwipeBack, renderPane } from "./ui/pane";
 import { renderSettings } from "./ui/settings";
+import { renderWorkspace } from "./ui/workspace";
 import { stickAgentStream } from "./ui/agent-chat";
 import { handlePaneKey, stickBottom } from "./ui/session-view";
 import { node } from "./lib/dom";
@@ -40,6 +41,10 @@ capturePairingFragment();
 let bootBlockedByNetwork = false;
 
 function renderLive(): void {
+  if (state.screen === "workspace") {
+    renderWorkspace();
+    return;
+  }
   if (state.fullTerminal) {
     renderPane();
     return;
@@ -55,14 +60,16 @@ function renderLive(): void {
 }
 
 function render(): void {
-  const desk = state.phase === "live" && isDesk() && !state.fullTerminal;
+  const workspace = state.phase === "live" && state.screen === "workspace";
+  const desk = state.phase === "live" && isDesk() && !state.fullTerminal && !workspace;
   const session = state.phase === "live" && state.screen === "pane" && (!desk || state.fullTerminal);
   const booting = state.phase === "boot" || state.phase === "resuming";
   app.classList.toggle("session", session);
   app.classList.toggle("desk", desk);
+  app.classList.toggle("workspace", workspace);
   app.classList.toggle("boot-screen", booting);
-  document.documentElement.classList.toggle("lock", session || desk || booting);
-  document.body.classList.toggle("lock", session || desk || booting);
+  document.documentElement.classList.toggle("lock", session || desk || workspace || booting);
+  document.body.classList.toggle("lock", session || desk || workspace || booting);
   app.style.setProperty("--term-fs", `${state.termFontPx}px`);
   app.style.setProperty("--term-lh", `${termLineHeightPx(state.termFontPx)}px`);
   app.setAttribute("aria-busy", state.operationBusy ? "true" : "false");

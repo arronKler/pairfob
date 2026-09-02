@@ -135,6 +135,16 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".icon-stop")).not.toMatch(/background:\s*rgba\(255, 178, 36/);
   });
 
+  test("workspace controls use a centered refresh mark and mobile-sized change rows", () => {
+    expect(rule(".workspace-refresh::before")).toMatch(/mask:/);
+    expect(rule(".workspace-refresh::before")).toMatch(/width:\s*18px/);
+    expect(css).not.toMatch(/\.workspace-refresh::after\s*\{/);
+    expect(rule(".workspace-change-group-title")).toMatch(/min-height:\s*44px/);
+    expect(rule(".workspace-change")).toMatch(/min-height:\s*50px/);
+    expect(rule(".workspace-layer-label")).not.toMatch(/border|border-radius|min-height/);
+    expect(rule(".workspace-detail-name")).toMatch(/flex:\s*1/);
+  });
+
   test("session sheets keep a close control on screen when the list is long", () => {
     expect(rule("dialog.modal.sheet")).toMatch(/overflow:\s*hidden/);
     expect(rule("dialog.modal.sheet")).toMatch(/padding:\s*0/);

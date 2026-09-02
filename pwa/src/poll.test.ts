@@ -61,7 +61,7 @@ describe("pane changes pull agent status forward", () => {
 
 describe("poke refresh router", () => {
   const rows: Array<{
-    screen: "home" | "pane" | "settings" | "computers";
+    screen: "home" | "pane" | "workspace" | "settings" | "computers";
     openPaneId: string;
     pokePaneId?: string;
     want: "snapshot" | "paneread" | "ignore";
@@ -69,6 +69,7 @@ describe("poke refresh router", () => {
     { screen: "home", openPaneId: "", want: "snapshot" },
     { screen: "home", openPaneId: "", pokePaneId: "p1", want: "snapshot" },
     { screen: "settings", openPaneId: "p1", pokePaneId: "p1", want: "snapshot" },
+    { screen: "workspace", openPaneId: "p1", pokePaneId: "p1", want: "snapshot" },
     { screen: "computers", openPaneId: "p1", pokePaneId: "p1", want: "snapshot" },
     { screen: "pane", openPaneId: "p1", pokePaneId: "p1", want: "paneread" },
     { screen: "pane", openPaneId: "p1", pokePaneId: "p2", want: "ignore" },

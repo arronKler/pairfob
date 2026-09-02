@@ -422,12 +422,21 @@ export async function refreshSnapshot(): Promise<void> {
       if (isDesk()) render();
       return;
     }
+    if (state.screen === "workspace" && state.paneId && !state.agents.some((agent) => agent.paneId === state.paneId)) {
+      state.screen = "home";
+      state.paneId = "";
+      state.paneText = "";
+      state.paneHash = "";
+      showError(t("err.paneGone"), true);
+      render();
+      return;
+    }
     if (state.paneId && !state.agents.some((agent) => agent.paneId === state.paneId)) {
       state.paneId = "";
       state.paneText = "";
       state.paneHash = "";
     }
-    if ((state.screen === "home" || state.screen === "settings" || state.screen === "computers") && unchanged) return;
+    if ((state.screen === "home" || state.screen === "workspace" || state.screen === "settings" || state.screen === "computers") && unchanged) return;
     render();
   } catch (error) {
     if (!liveViewIsCurrent(session, viewVersion)) return;

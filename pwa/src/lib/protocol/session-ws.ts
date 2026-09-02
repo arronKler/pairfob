@@ -53,6 +53,15 @@ import {
   TERMINAL_RPC_TIMEOUT_MS,
 } from "./session-transport.ts";
 import type { DeviceSummary, LiveSession, ReconnectReason, SessionEvent } from "./session-types.ts";
+import {
+  parseGitBranches,
+  parseGitDiff,
+  parseGitStatus,
+  parseWorkspaceDescriptor,
+  parseWorkspaceDirectory,
+  parseWorkspaceFile,
+  type GitLayer,
+} from "../workspace.ts";
 import { TransportSwitchBarrier, type TransportSwitchLease } from "./transport-switch.ts";
 import {
   encodeTerminalInput,
@@ -266,6 +275,15 @@ class ReconnectingSession implements LiveSession {
   agentTrace = async (paneId: string, cursor: string | null = null, limit = 50): Promise<AgentTracePage> =>
     parseAgentTracePage(await this.readRPC("AgentTrace", { pane_id: paneId, cursor, limit }));
   listWorktrees = (params: ListWorktreesInput) => this.readRPC("ListWorktrees", params);
+  workspaceOpen = async (paneId: string) => parseWorkspaceDescriptor(await this.readRPC("WorkspaceOpen", { pane_id: paneId }));
+  workspaceList = async (paneId: string, path = "", cursor = "", limit = 120) =>
+    parseWorkspaceDirectory(await this.readRPC("WorkspaceList", { pane_id: paneId, path, cursor, limit }));
+  workspaceRead = async (paneId: string, path: string) =>
+    parseWorkspaceFile(await this.readRPC("WorkspaceRead", { pane_id: paneId, path }));
+  gitStatus = async (paneId: string) => parseGitStatus(await this.readRPC("GitStatus", { pane_id: paneId }));
+  gitDiff = async (paneId: string, path: string, layer: GitLayer) =>
+    parseGitDiff(await this.readRPC("GitDiff", { pane_id: paneId, path, layer }));
+  gitBranches = async (paneId: string) => parseGitBranches(await this.readRPC("GitBranches", { pane_id: paneId }));
   createWorktree = (params: CreateWorktreeInput): Promise<CreateWorktreeResult> =>
     this.parsedMutation("CreateWorktree", params, parseCreateWorktreeResult);
   openWorktree = (params: OpenWorktreeInput): Promise<OpenWorktreeResult> =>

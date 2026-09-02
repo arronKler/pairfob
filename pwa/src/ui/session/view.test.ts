@@ -35,13 +35,21 @@ describe("pane header keeps status surfaces in step", () => {
 
   test("pane modes live in the more menu, not as extra chrome slots", () => {
     const chrome = viewSource.slice(viewSource.indexOf("function chromeNode("), viewSource.indexOf("function fillExtras("));
-    expect(chrome).toContain("chromeActionCluster(handlers.onMenu)");
+    expect(chrome).toContain("chromeActionCluster(handlers.onWorkspace, handlers.onMenu)");
     expect(chrome).not.toContain("mode-switch");
     expect(chrome).not.toContain("完整终端");
     expect(chrome).not.toContain("进入对话");
     expect(chrome).not.toContain("更多操作");
     expect(viewSource).not.toContain("full-terminal-retry");
     expect(viewSource).not.toContain("退出完整终端");
+  });
+
+  test("workspace inspection is a first-class trailing action before more", () => {
+    expect(actionsSource).toContain('if (labEnabled("workspace"))');
+    expect(actionsSource).toContain('button("", "icon-btn icon-workspace", onWorkspace)');
+    expect(actionsSource).toContain('workspace.setAttribute("aria-label", t("workspace.open"))');
+    expect(actionsSource.indexOf("actions.append(workspace)")).toBeGreaterThan(-1);
+    expect(actionsSource.indexOf("actions.append(workspace)")).toBeLessThan(actionsSource.indexOf("actions.append(menu)"));
   });
 
   test("in-place pane reads keep the terminal Enter control in sync", () => {
