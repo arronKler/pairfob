@@ -81,6 +81,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"PushSubscribe", "RevokeDevice", "ListDevices", "History", "AgentTrace", "RenamePane",
 		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace",
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
+		"WorkspaceOpen", "WorkspaceList", "WorkspaceRead", "GitStatus", "GitDiff", "GitBranches",
 		"CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
 		"TransportOffer", "TransportCommit", "TransportRestart",
@@ -143,6 +144,31 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		!slices.Equal(listWorktrees.OneOf[1].Required, []string{"cwd"}) {
 		t.Errorf("ListWorktrees must require exactly one explicit scope, got oneOf=%v", listWorktrees.OneOf)
 	}
+	for _, op := range []string{"WorkspaceOpen", "GitStatus", "GitBranches"} {
+		params := paramsByOp[op]
+		if got, want := sortedPropertyNames(params.Properties), []string{"pane_id", "session"}; !slices.Equal(got, want) || !slices.Equal(params.Required, []string{"pane_id"}) {
+			t.Errorf("%s params fields=%q required=%q", op, got, params.Required)
+		}
+		if params.AdditionalProperties == nil || *params.AdditionalProperties {
+			t.Errorf("%s params must reject additional properties", op)
+		}
+	}
+	for op, required := range map[string][]string{
+		"WorkspaceList": {"pane_id"},
+		"WorkspaceRead": {"pane_id", "path"},
+		"GitDiff":       {"pane_id", "path", "layer"},
+	} {
+		params := paramsByOp[op]
+		gotRequired := slices.Clone(params.Required)
+		sort.Strings(gotRequired)
+		sort.Strings(required)
+		if !slices.Equal(gotRequired, required) {
+			t.Errorf("%s required params=%q, want %q", op, gotRequired, required)
+		}
+		if params.AdditionalProperties == nil || *params.AdditionalProperties {
+			t.Errorf("%s params must reject additional properties", op)
+		}
+	}
 	for op, fields := range map[string][]string{
 		"TransportOffer":   {"attempt_id", "sdp"},
 		"TransportCommit":  {"attempt_id", "route_id"},
@@ -194,6 +220,17 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"path", "branch", "label", "is_bare", "is_detached", "is_prunable", "is_linked_worktree", "open_workspace_id",
 	})
 	requireExactObject(t, schema.Defs, "listWorktreesResult", []string{"worktrees"})
+	requireExactObject(t, schema.Defs, "workspaceFeatures", []string{"files", "git_status", "git_diff", "git_branches"})
+	requireExactObject(t, schema.Defs, "workspaceRepository", []string{"name", "branch", "head", "detached"})
+	requireExactObject(t, schema.Defs, "workspaceOpenResult", []string{"name", "root", "features", "git"})
+	requireExactObject(t, schema.Defs, "workspaceEntry", []string{"name", "path", "kind", "size", "modified_ms", "hidden"})
+	requireExactObject(t, schema.Defs, "workspaceListResult", []string{"path", "entries", "next_cursor", "truncated", "revision"})
+	requireExactObject(t, schema.Defs, "workspaceReadResult", []string{"path", "kind", "size", "modified_ms", "content", "truncated", "revision"})
+	requireExactObject(t, schema.Defs, "gitChange", []string{"path", "original_path", "index", "worktree"})
+	requireExactObject(t, schema.Defs, "gitStatusResult", []string{"branch", "head", "upstream", "ahead", "behind", "changes", "truncated", "revision"})
+	requireExactObject(t, schema.Defs, "gitDiffResult", []string{"path", "layer", "patch", "additions", "deletions", "binary", "truncated", "revision"})
+	requireExactObject(t, schema.Defs, "gitBranch", []string{"name", "kind", "current", "head", "upstream"})
+	requireExactObject(t, schema.Defs, "gitBranchesResult", []string{"items", "truncated", "revision"})
 	requireExactObject(t, schema.Defs, "worktreeMutationResult", []string{
 		"operation_id", "workspace_id", "tab_id", "pane_id", "path", "branch", "outcome",
 	})

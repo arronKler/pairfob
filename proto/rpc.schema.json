@@ -292,6 +292,158 @@
       },
       "additionalProperties": false
     },
+    "workspaceFeatures": {
+      "type": "object",
+      "required": ["files", "git_status", "git_diff", "git_branches"],
+      "properties": {
+        "files": { "type": "boolean" },
+        "git_status": { "type": "boolean" },
+        "git_diff": { "type": "boolean" },
+        "git_branches": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceRepository": {
+      "type": "object",
+      "required": ["name", "branch", "head", "detached"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "branch": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 },
+        "head": { "type": "string", "maxLength": 128 },
+        "detached": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceOpenResult": {
+      "type": "object",
+      "required": ["name", "root", "features", "git"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "root": { "$ref": "#/$defs/path" },
+        "features": { "$ref": "#/$defs/workspaceFeatures" },
+        "git": {
+          "oneOf": [
+            { "$ref": "#/$defs/workspaceRepository" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "workspaceEntry": {
+      "type": "object",
+      "required": ["name", "path", "kind", "size", "modified_ms", "hidden"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "kind": { "enum": ["directory", "file", "symlink", "other"] },
+        "size": { "type": "integer", "minimum": 0 },
+        "modified_ms": { "type": "integer" },
+        "hidden": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceListResult": {
+      "type": "object",
+      "required": ["path", "entries", "next_cursor", "truncated", "revision"],
+      "properties": {
+        "path": { "type": "string", "maxLength": 4096 },
+        "entries": {
+          "type": "array",
+          "maxItems": 240,
+          "items": { "$ref": "#/$defs/workspaceEntry" }
+        },
+        "next_cursor": { "type": ["string", "null"], "maxLength": 32 },
+        "truncated": { "type": "boolean" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceReadResult": {
+      "type": "object",
+      "required": ["path", "kind", "size", "modified_ms", "content", "truncated", "revision"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "kind": { "enum": ["text", "binary"] },
+        "size": { "type": "integer", "minimum": 0 },
+        "modified_ms": { "type": "integer" },
+        "content": { "type": "string", "maxLength": 131072 },
+        "truncated": { "type": "boolean" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "gitChange": {
+      "type": "object",
+      "required": ["path", "original_path", "index", "worktree"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "original_path": { "type": ["string", "null"], "minLength": 1, "maxLength": 4096 },
+        "index": { "type": "string", "minLength": 1, "maxLength": 1 },
+        "worktree": { "type": "string", "minLength": 1, "maxLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "gitStatusResult": {
+      "type": "object",
+      "required": ["branch", "head", "upstream", "ahead", "behind", "changes", "truncated", "revision"],
+      "properties": {
+        "branch": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 },
+        "head": { "type": "string", "maxLength": 128 },
+        "upstream": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 },
+        "ahead": { "type": "integer", "minimum": 0 },
+        "behind": { "type": "integer", "minimum": 0 },
+        "changes": {
+          "type": "array",
+          "maxItems": 1200,
+          "items": { "$ref": "#/$defs/gitChange" }
+        },
+        "truncated": { "type": "boolean" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "gitDiffResult": {
+      "type": "object",
+      "required": ["path", "layer", "patch", "additions", "deletions", "binary", "truncated", "revision"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "layer": { "enum": ["worktree", "staged"] },
+        "patch": { "type": "string", "maxLength": 184320 },
+        "additions": { "type": "integer", "minimum": 0 },
+        "deletions": { "type": "integer", "minimum": 0 },
+        "binary": { "type": "boolean" },
+        "truncated": { "type": "boolean" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "gitBranch": {
+      "type": "object",
+      "required": ["name", "kind", "current", "head", "upstream"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "kind": { "enum": ["local", "remote"] },
+        "current": { "type": "boolean" },
+        "head": { "type": "string", "maxLength": 128 },
+        "upstream": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 }
+      },
+      "additionalProperties": false
+    },
+    "gitBranchesResult": {
+      "type": "object",
+      "required": ["items", "truncated", "revision"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 400,
+          "items": { "$ref": "#/$defs/gitBranch" }
+        },
+        "truncated": { "type": "boolean" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "worktreeMutationResult": {
       "type": "object",
       "required": ["operation_id", "workspace_id", "tab_id", "pane_id", "path", "branch", "outcome"],
@@ -418,6 +570,12 @@
             "SplitPane",
             "PromptAgent",
             "ListWorktrees",
+            "WorkspaceOpen",
+            "WorkspaceList",
+            "WorkspaceRead",
+            "GitStatus",
+            "GitDiff",
+            "GitBranches",
             "CreateWorktree",
             "OpenWorktree",
             "ResizePane",
@@ -807,6 +965,108 @@
                   { "required": ["workspace_id"] },
                   { "required": ["cwd"] }
                 ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceOpen" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "GitStatus" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "GitBranches" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceList" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "path": { "type": "string", "maxLength": 4096 },
+                  "cursor": { "type": "string", "maxLength": 32 },
+                  "limit": { "type": "integer", "minimum": 0, "maximum": 240 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceRead" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id", "path"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "path": { "type": "string", "minLength": 1, "maxLength": 4096 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "GitDiff" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id", "path", "layer"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                  "layer": { "enum": ["worktree", "staged"] }
+                },
                 "additionalProperties": false
               }
             }
