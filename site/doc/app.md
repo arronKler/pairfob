@@ -100,10 +100,10 @@ From the top-right of the list (**Settings**).
 - **Mode:** defaults to **Auto**, or can be pinned to **Control** / **Terminal** / **Chat**. A later switch is remembered per session
 - **Input:** send after composing, or type live into the terminal. The trailing button only submits composed text; use the system keyboard or keypad for a deliberate bare Enter
 - **Notifications:** see [Notifications](/push). Once enabled, this phone is notified when an Agent needs you or finishes; if the computer has not enabled push, it shows **Off on the computer**
-- **Paired devices:** label, last used, and notification state. The current row is marked **This phone**. This phone can unpair only itself
+- **Paired devices:** label, online or offline, last used, and notification state. The current row is marked **This phone**. Other rows have **Unpair**; already unpaired rows are omitted
 - **Danger zone:** **Unpair this phone**. Pairing is required to connect again
 
-A lost phone that can still open Pairfob can at most kick itself; it cannot kick the rest of the household. Kick others with `pairfob forget N` on the computer — [Multiple devices](/devices).
+A lost phone that can still open Pairfob can also unpair other devices from Settings. `pairfob forget` that phone on the computer immediately — [Multiple devices](/devices).
 
 ## Another window
 

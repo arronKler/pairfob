@@ -172,6 +172,8 @@ export type AppState = {
   computers: PairResult[];
   lastUsedDaemonId: string | null;
   addingComputer: boolean;
+  /** Live computer-list back target. Home may still land on the open pane. */
+  computersFrom: "home" | "settings";
   paneId: string;
   /** Raw Herdr ANSI controller is mounted instead of the guided pane view. */
   fullTerminal: boolean;
@@ -278,6 +280,7 @@ export const state: AppState = {
   computers: [],
   lastUsedDaemonId: null,
   addingComputer: false,
+  computersFrom: "home",
   paneId: "",
   fullTerminal: false,
   agentChat: false,

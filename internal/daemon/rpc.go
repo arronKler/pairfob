@@ -106,8 +106,11 @@ func decodeStrictJSON(data []byte, dst any) error {
 }
 
 var resourceName = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,256}$`)
+var deviceIDName = regexp.MustCompile(`^dev_[A-Za-z0-9_-]{8,128}$`)
 
 func validID(id string) bool { return resourceName.MatchString(id) }
+
+func validDeviceID(id string) bool { return deviceIDName.MatchString(id) }
 
 func validRequestID(id string) bool { return id != "" && len(id) <= 128 && utf8.ValidString(id) }
 

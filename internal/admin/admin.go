@@ -1,7 +1,8 @@
 // Package admin is the local operator seam for a running pairfob.
 //
-// The daemon is headless. Pairing Y/N, rotating a code, and device revoke
-// happen over a 0600 Unix socket in the state directory — not a browser page.
+// The daemon is headless. Pairing Y/N and rotating a code happen over a 0600
+// Unix socket in the state directory. Device revoke is also available from an
+// established phone session.
 package admin
 
 import (

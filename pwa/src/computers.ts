@@ -30,6 +30,8 @@ export async function resumeComputer(pair: PairResult): Promise<void> {
 }
 
 export function openComputers(): void {
+  if (state.screen === "settings") state.computersFrom = "settings";
+  else if (state.screen !== "computers") state.computersFrom = "home";
   state.screen = "computers";
   render();
 }
@@ -59,7 +61,7 @@ export function cancelAddComputer(): void {
   clearNotice();
   if (state.live) {
     state.phase = "live";
-    state.screen = state.computers.length > 1 ? "computers" : "settings";
+    state.screen = "computers";
     startPolling();
     void refreshFromSession();
     render();

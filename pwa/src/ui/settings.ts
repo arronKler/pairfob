@@ -1,18 +1,18 @@
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { type DeviceSummary } from "../lib/protocol/client";
-import { formatDeviceAge, notificationAction, shortDeviceId, TERM_MODE_LABEL } from "../lib/ui-model";
+import { formatDeviceAge, notificationAction, shortDeviceId, TERM_MODE_LABEL, visiblePairedDevices } from "../lib/ui-model";
 import { NETWORK_MODE_OPTIONS, type NetworkMode } from "../lib/network-mode";
 import { TERM_MODE_OPTIONS } from "../lib/terminal-mode";
-import { beginAddComputer, openComputers } from "../computers";
+import { openComputers } from "../computers";
 import { computerTitle } from "../lib/computer-catalog";
-import { revokeSelf } from "../live-operations";
+import { revokeDevice, revokeSelf } from "../live-operations";
 import { enablePush, refreshSettings, selectNetworkMode } from "../live-settings";
 import { render } from "../paint";
 import { app, setDefaultTermMode, state } from "../state";
 import { isDesk } from "../viewport";
 import { composeLiveControl } from "./session-view";
-import { appendNotice, backBar, feedbackNode, herdStatus, languageControl, listGroupControl, setHeading, setRow } from "./chrome";
+import { appendNotice, backBar, feedbackNode, herdStatus, languageControl, listGroupControl, setHeading, setNavRow, setRow } from "./chrome";
 
 const NETWORK_MODE_COPY: Record<NetworkMode, "settings.networkAuto" | "settings.networkP2P" | "settings.networkRelay"> = {
   auto: "settings.networkAuto",
@@ -89,6 +89,12 @@ function networkP2PFailCopy(): string {
   }
 }
 
+function labeledStack(label: string, control: HTMLElement): HTMLElement {
+  const row = node("div", "set-row set-row-stack set-field");
+  row.append(node("span", "set-key", label), control);
+  return row;
+}
+
 function defaultTermModeControl(): HTMLElement {
   const bar = node("div", "seg");
   bar.setAttribute("role", "radiogroup");
@@ -109,17 +115,25 @@ function defaultTermModeControl(): HTMLElement {
 
 function deviceRow(device: DeviceSummary): HTMLElement {
   const row = node("div", "device");
+  const body = node("div", "device-body");
   const head = node("div", "device-head");
-  head.append(node("strong", "device-name", device.label || t("device.unnamed")));
+  const name = device.label || t("device.unnamed");
+  head.append(node("strong", "device-name", name));
   if (device.self) head.append(node("span", "pill pill-live", t("device.self")));
-  if (device.revoked_at) head.append(node("span", "pill pill-off", t("device.revoked")));
+  else if (device.connected === true) head.append(node("span", "pill pill-live", t("device.connected")));
+  else if (device.connected === false) head.append(node("span", "pill pill-idle", t("device.offline")));
   const id = node("code", "device-id", shortDeviceId(device.device_id));
   id.title = device.device_id;
-  const activity = device.revoked_at
-    ? t("device.revokedAt", { when: formatDeviceAge(device.revoked_at) })
-    : t("device.lastUsed", { when: formatDeviceAge(device.last_seen || device.created_at) });
+  const activity = t("device.lastUsed", { when: formatDeviceAge(device.last_seen || device.created_at) });
   const notifications = device.subscription_count ? t("device.notifyOn") : t("device.notifyOff");
-  row.append(head, id, node("p", "device-meta", activity + notifications));
+  body.append(head, id, node("p", "device-meta", activity + notifications));
+  row.append(body);
+  if (!device.self) {
+    const forget = button(t("settings.unpairOther"), "device-forget", () => void revokeDevice(device));
+    forget.setAttribute("aria-label", t("settings.unpairOtherAria", { name }));
+    forget.disabled = !state.live?.isConnected();
+    row.append(forget);
+  }
   return row;
 }
 
@@ -134,9 +148,15 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   }
   appendNotice(container);
   const status = herdStatus();
-  container.append(setHeading(t("settings.connection"), [networkHelpCopy(), t("settings.addComputerHint")]));
+  container.append(setHeading(t("settings.connection"), [networkHelpCopy()]));
   const conn = node("div", "set-card");
-  conn.append(setRow(t("settings.computer"), state.herdHost || (state.credential ? computerTitle(state.credential) : t("settings.currentComputer"))));
+  conn.append(
+    setNavRow(
+      t("settings.computer"),
+      state.herdHost || (state.credential ? computerTitle(state.credential) : t("settings.currentComputer")),
+      openComputers,
+    ),
+  );
   conn.append(setRow(t("settings.status"), status.text, status.tone));
   conn.append(setRow(t("settings.networkRtt"), networkPathCopy()));
   const networkModeRow = node("div", "set-row set-row-stack network-mode-row");
@@ -147,14 +167,6 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   conn.append(networkModeRow);
   const self = state.deviceList.find((device) => device.self && !device.revoked_at);
   if (self) conn.append(setRow(t("settings.thisPhone"), self.label || t("settings.pairedPhone")));
-  if (state.computers.length > 1) {
-    const switchRow = node("div", "set-row");
-    switchRow.append(button(t("settings.switchComputer"), "btn btn-small", openComputers));
-    conn.append(switchRow);
-  }
-  const addRow = node("div", "set-row");
-  addRow.append(button(t("settings.addComputer"), "btn btn-small", beginAddComputer));
-  conn.append(addRow);
   container.append(conn);
 
   container.append(setHeading(t("settings.language"), [t("settings.languageNote")]));
@@ -171,19 +183,11 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   listCard.append(listRow);
   container.append(listCard);
 
-  container.append(setHeading(t("settings.mode"), [t("settings.modeNote")]));
-  const modeCard = node("div", "set-card");
-  const modeRow = node("div", "set-row");
-  modeRow.append(defaultTermModeControl());
-  modeCard.append(modeRow);
-  container.append(modeCard);
-
-  container.append(setHeading(t("settings.input"), [t("settings.inputNote")]));
-  const inputCard = node("div", "set-card");
-  const inputRow = node("div", "set-row");
-  inputRow.append(composeLiveControl());
-  inputCard.append(inputRow);
-  container.append(inputCard);
+  container.append(setHeading(t("settings.defaults"), [t("settings.modeNote"), t("settings.inputNote")]));
+  const defaultsCard = node("div", "set-card");
+  defaultsCard.append(labeledStack(t("settings.mode"), defaultTermModeControl()));
+  defaultsCard.append(labeledStack(t("settings.input"), composeLiveControl()));
+  container.append(defaultsCard);
 
   const notifyHelp = state.pushEnabled === false && !state.settingsLoading
     ? [helpWithCode(t("settings.pushHowtoBody"), "PAIRFOB_PUSH=1", t("settings.pushHowtoTail"))]
@@ -211,17 +215,18 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   container.append(pushCard);
   if (state.pushConfigError) container.append(feedbackNode({ text: state.pushConfigError, tone: "error" }));
 
-  const deviceHelp = state.deviceList.length
-    ? [helpWithCode(t("settings.manageOthersBody"), "pairfob device revoke <device_id>", t("settings.sentenceEnd"))]
+  const devices = visiblePairedDevices(state.deviceList);
+  const deviceHelp = devices.some((device) => !device.self)
+    ? [helpWithCode(t("settings.manageOthersBody"), "pairfob forget N", t("settings.sentenceEnd"))]
     : undefined;
   container.append(setHeading(t("settings.devices"), deviceHelp));
-  if (state.settingsLoading && !state.deviceList.length) {
+  if (state.settingsLoading && !devices.length) {
     container.append(feedbackNode({ text: t("settings.devicesLoading"), tone: "status" }));
   } else if (state.devicesError) {
     container.append(feedbackNode({ text: state.devicesError, tone: "error" }));
-  } else if (state.deviceList.length) {
+  } else if (devices.length) {
     const list = node("div", "set-card device-card");
-    state.deviceList.forEach((device) => list.append(deviceRow(device)));
+    devices.forEach((device) => list.append(deviceRow(device)));
     container.append(list);
   } else {
     container.append(node("p", "empty-sub", t("settings.noOtherDevices")));

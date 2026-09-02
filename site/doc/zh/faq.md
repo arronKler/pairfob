@@ -66,7 +66,7 @@ description: 账号、Herdr、锁屏、合盖、断网、丢失手机、Windows�
 
 ## 手机丢了怎么办？
 
-电脑上 `pairfob list`，对对应序号 `pairfob forget N`。那台手机上的凭证作废。丢失的手机最多只能解除自己，解除不了你的其他设备。
+电脑上 `pairfob list`，对对应序号 `pairfob forget N`。那台手机上的凭证作废。丢失的手机如果还能打开 Pairfob，也可以从设置里解除其他设备，所以要立刻在电脑上 forget。
 
 ## 清掉 Safari 数据之后？
 

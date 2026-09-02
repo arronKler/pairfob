@@ -192,6 +192,16 @@ export function setRow(key: string, value: string, tone?: StatusTone): HTMLEleme
   return row;
 }
 
+export function setNavRow(key: string, value: string, onClick: () => void): HTMLButtonElement {
+  const row = button("", "set-row set-nav", onClick);
+  row.setAttribute("aria-label", key);
+  row.append(node("span", "set-key", key));
+  const val = node("span", "set-val");
+  val.append(document.createTextNode(value), chevron());
+  row.append(val);
+  return row;
+}
+
 export function helpButton(title: string, blocks: HelpBlock[] | (() => HelpBlock[])): HTMLButtonElement {
   const btn = button("", "icon-btn set-help", () => {
     showHelp(title, typeof blocks === "function" ? blocks() : blocks);

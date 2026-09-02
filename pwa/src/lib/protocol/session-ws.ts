@@ -244,7 +244,7 @@ class ReconnectingSession implements LiveSession {
       ...(extra?.expected_signature ? { expected_signature: extra.expected_signature } : {}),
     });
   listDevices = () => this.readRPC("ListDevices", {}) as Promise<{ devices?: DeviceSummary[] }>;
-  revokeSelf = (deviceId: string) => this.trackedMutation("RevokeDevice", { device_id: deviceId });
+  revokeDevice = (deviceId: string) => this.trackedMutation("RevokeDevice", { device_id: deviceId });
   pushSubscribe = (subscription: PushSubscriptionJSON) => {
     const keys = subscription.keys || {};
     return this.trackedMutation("PushSubscribe", {

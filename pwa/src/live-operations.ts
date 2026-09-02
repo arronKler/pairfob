@@ -20,7 +20,7 @@ import {
   askWorktree,
   showWorktrees,
 } from "./lib/operation-ui";
-import { ProtocolError } from "./lib/protocol/client";
+import { ProtocolError, type DeviceSummary } from "./lib/protocol/client";
 import { type AgentCard } from "./lib/ranking";
 import { landAfterDisconnect, openPane, refreshFromSession, refreshPane } from "./live";
 import { reconcileAmbiguousMutation, reportMutationError } from "./mutations";
@@ -49,10 +49,34 @@ export async function revokeSelf(): Promise<void> {
   )
     return;
   try {
-    await session.revokeSelf(state.credential.deviceId);
+    await session.revokeDevice(state.credential.deviceId);
     const daemonId = state.credential.daemonId;
     await landAfterDisconnect({ daemonId, code: "revoked", silent: true });
     showStatus(t("live.unpaired"));
+  } catch (error) {
+    await reportMutationError(session, error);
+  }
+  render();
+}
+
+export async function revokeDevice(device: DeviceSummary): Promise<void> {
+  if (device.self) {
+    await revokeSelf();
+    return;
+  }
+  const session = state.live;
+  const name = device.label || t("device.unnamed");
+  if (!session || !state.credential || !(await askConfirm(t("live.unpairDeviceAsk", { name }), t("settings.unpairOther")))) {
+    return;
+  }
+  try {
+    await session.revokeDevice(device.device_id);
+    const listed = await session.listDevices();
+    if (state.live === session) {
+      state.deviceList = Array.isArray(listed.devices) ? listed.devices : [];
+      state.devicesError = "";
+    }
+    showStatus(t("live.unpairedDevice", { name }));
   } catch (error) {
     await reportMutationError(session, error);
   }

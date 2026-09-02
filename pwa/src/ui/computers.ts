@@ -47,7 +47,7 @@ export function fillComputers(container: HTMLElement | DocumentFragment, withBac
   if (withBack) {
     container.append(
       backBar(t("computers.title"), () => {
-        state.screen = isDesk() && state.paneId ? "pane" : "home";
+        state.screen = state.computersFrom === "settings" ? "settings" : isDesk() && state.paneId ? "pane" : "home";
         render();
       }),
     );

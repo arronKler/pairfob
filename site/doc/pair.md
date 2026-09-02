@@ -78,7 +78,7 @@ Match the string on screen (English Pairfob):
 - Opening <a href="/pair">pairfob.com/pair</a> reconnects to the last computer this browser used
 - Another computer on this phone: install pairfob there with the same command, run `pairfob pair`, then **Settings → Add another computer** — [Multiple devices](/devices)
 - Another device: run `pairfob pair` again and scan with the **new** device — [Multiple devices](/devices)
-- On the phone, **Settings** can unpair only itself (**Unpair this phone**). Revoke others with `pairfob forget N` on the computer
+- On the phone, **Settings → Paired devices** can unpair other devices. The computer can also `pairfob forget N`
 
 ## Do not
 

@@ -428,6 +428,15 @@ func (e *Engine) closeDeviceSessions(deviceID, code string) {
 	}
 }
 
+func (e *Engine) deviceConnectedLocked(deviceID string) bool {
+	for _, s := range e.sessions {
+		if s.deviceID == deviceID && (s.state == "established" || s.state == "upgrade_ready") {
+			return true
+		}
+	}
+	return false
+}
+
 // ResetTransport drops relay sessions and uncommitted direct candidates after
 // the daemon relay WebSocket dies. Established P2P sessions are independent of
 // that socket and remain live. Persistent credentials and daemon keys remain.

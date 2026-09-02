@@ -68,7 +68,9 @@ describe("computer picker add row", () => {
     expect(add?.classList.contains("btn-ghost")).toBe(false);
     expect(add?.querySelector(".add-mark")).toBeTruthy();
     expect(add?.querySelector(".switch-name")?.textContent).toBe("添加另一台电脑");
-    expect(add?.querySelector(".switch-meta")?.textContent).toBe("另一台电脑要先装 pairfob，再执行 pairfob pair。");
+    expect(add?.querySelector(".switch-meta")?.textContent).toBe(
+      "先装 pairfob 再执行 pairfob pair。只是多一条凭证，不会替换现在这台。",
+    );
     expect(app.querySelector(".computer-add + .lede")).toBeNull();
     expect(app.querySelectorAll(".computer-row")).toHaveLength(2);
   });
@@ -79,7 +81,7 @@ describe("computer picker add row", () => {
     const add = app.querySelector(".computer-add");
     expect(add?.querySelector(".switch-name")?.textContent).toBe("Add another computer");
     expect(add?.querySelector(".switch-meta")?.textContent).toBe(
-      "Install pairfob on the other computer, then run pairfob pair.",
+      "Install pairfob, then run pairfob pair. This adds a credential; it does not replace this one.",
     );
   });
 });

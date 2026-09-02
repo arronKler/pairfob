@@ -66,7 +66,7 @@ Until you press Enter on the computer, they cannot pair. If you already pressed 
 
 ## I lost the phone.
 
-`pairfob list` on the computer, then `pairfob forget N` for that row. Credentials on the phone are then useless. A lost phone can at most revoke itself, not your other devices.
+`pairfob list` on the computer, then `pairfob forget N` for that row. Credentials on the phone are then useless. A lost phone that can still open Pairfob can also unpair others from Settings, so forget it on the computer immediately.
 
 ## I cleared Safari data.
 

@@ -47,6 +47,7 @@ export interface DeviceSummary {
   last_seen?: number;
   revoked_at?: number | null;
   self?: boolean;
+  connected?: boolean;
   subscription_count?: number;
 }
 
@@ -62,7 +63,7 @@ export type LiveSession = {
   ) => Promise<unknown>;
   sendText: (paneId: string, text: string) => Promise<unknown>;
   listDevices: () => Promise<{ devices?: DeviceSummary[] }>;
-  revokeSelf: (deviceId: string) => Promise<unknown>;
+  revokeDevice: (deviceId: string) => Promise<unknown>;
   pushSubscribe: (subscription: PushSubscriptionJSON) => Promise<unknown>;
   renamePane: (paneId: string, label: string | null) => Promise<unknown>;
   renameTab: (tabId: string, label: string) => Promise<unknown>;

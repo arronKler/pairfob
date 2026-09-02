@@ -7,6 +7,7 @@ import {
   pairErrorField,
   shortDeviceId,
   shouldForgetPairFragment,
+  visiblePairedDevices,
 } from "./ui-model";
 
 describe("UI model", () => {
@@ -38,6 +39,16 @@ describe("UI model", () => {
     expect(formatDeviceAge(1_000, 1_020)).toBe("刚刚");
     expect(formatDeviceAge(1_000, 1_180)).toBe("3 分钟前");
     expect(formatDeviceAge(undefined, 1_180)).toBe("从未使用");
+  });
+
+  test("paired device list hides revoked rows and keeps this phone first", () => {
+    const rows = visiblePairedDevices([
+      { device_id: "dev_old", label: "Old", last_seen: 90, connected: false, revoked_at: 80 },
+      { device_id: "dev_stale", label: "Stale", last_seen: 40, connected: false },
+      { device_id: "dev_live", label: "Live", last_seen: 20, connected: true },
+      { device_id: "dev_self", label: "Phone", self: true, last_seen: 10, connected: true },
+    ]);
+    expect(rows.map((device) => device.device_id)).toEqual(["dev_self", "dev_live", "dev_stale"]);
   });
 
   test("distinguishes an empty session list from an offline Herdr", () => {

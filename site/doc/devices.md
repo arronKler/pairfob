@@ -1,6 +1,6 @@
 ---
 title: Multiple devices
-description: Pair another device with a new code. A phone can revoke only itself; use forget on the computer for others.
+description: Pair another device with a new code. Settings can unpair others; the computer can also forget.
 ---
 
 # Multiple devices
@@ -34,9 +34,11 @@ Unpair one: pairfob forget 1
 
 If nothing is paired: `Nothing paired yet. Pair one: pairfob pair`.
 
-The phone **Settings** page also lists devices and marks the current one as **This phone**.
+The phone **Settings** page also lists devices: the current row is **This phone**, others show online or offline. Already unpaired rows are omitted.
 
 ## Revoke
+
+On the phone, **Settings → Paired devices** has **Unpair** on every other row. That device disconnects immediately and must scan again. **Danger zone → Unpair this phone** still only drops this device.
 
 On the computer, use the `list` index:
 
@@ -46,9 +48,7 @@ pairfob forget 1
 
 `pairfob forget iPhone` works when the name is unique. Collisions require the index.
 
-On the phone, **Settings → Danger zone → Unpair this phone** can only drop **itself**. That is intentional: a lost phone that can still open Pairfob can at most kick itself, not the rest of the household. `forget N` from `list` is the usual computer path.
-
-To drop a phone you can no longer hold:
+To drop a phone you can no longer hold, prefer the computer:
 
 1. `pairfob list` on the computer
 2. `pairfob forget N`
@@ -72,7 +72,7 @@ The phone keeps one credential per computer and reconnects to the last one you u
 
 A computer that is asleep or offline stays on the list. Pairfob does not delete that credential, and it does not send you back to the scan page. Wake it; you do not pair again. A locked screen is fine; a closed lid only works if the machine does not sleep.
 
-**Forget** on a row only drops the credential in this browser. The computer still lists this device until you `forget` it there. **Unpair this phone** still only affects the current computer pairing.
+**Forget** on a row only drops the credential in this browser. The computer still lists this device until you `forget` it there or **Unpair** it under Settings → Paired devices. **Unpair this phone** still only affects the current computer pairing.
 
 ## Another window
 

@@ -1,4 +1,5 @@
 import { locale, t } from "./i18n.ts";
+import { type DeviceSummary } from "./protocol/session-types.ts";
 
 export type PairErrorField = "code" | null;
 
@@ -87,6 +88,16 @@ export function friendlyDeviceLabel(userAgent: string): string {
 export function shortDeviceId(deviceId: string): string {
   if (deviceId.length <= 16) return deviceId;
   return `${deviceId.slice(0, 8)}…${deviceId.slice(-4)}`;
+}
+
+export function visiblePairedDevices(devices: DeviceSummary[]): DeviceSummary[] {
+  return devices
+    .filter((device) => !device.revoked_at)
+    .sort((left, right) => {
+      if (!!left.self !== !!right.self) return left.self ? -1 : 1;
+      if (!!left.connected !== !!right.connected) return left.connected ? -1 : 1;
+      return (right.last_seen || 0) - (left.last_seen || 0);
+    });
 }
 
 export function formatDeviceAge(timestamp: number | undefined, now = Math.floor(Date.now() / 1000)): string {

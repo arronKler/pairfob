@@ -37,11 +37,13 @@ const {
 const { setRenderer } = await import("../paint.ts");
 const { renderHome } = await import("./home.ts");
 const { renderSettings } = await import("./settings.ts");
+const { renderComputers } = await import("./computers.ts");
 const { renderPane } = await import("./pane.ts");
 const { lang, setLang, setLangPref, t } = await import("../lib/i18n.ts");
 
 function paint(): void {
   if (state.screen === "settings") renderSettings();
+  else if (state.screen === "computers") renderComputers();
   else if (state.screen === "pane") renderPane();
   else renderHome();
 }
@@ -73,6 +75,7 @@ function bootHomeWithStalePane(): void {
 
 afterEach(() => {
   state.screen = "home";
+  state.computersFrom = "home";
   state.paneId = "";
   state.defaultTermMode = "auto";
   state.networkMode = "auto";
@@ -88,6 +91,23 @@ afterEach(() => {
     /* ignore */
   }
   app.replaceChildren();
+});
+
+describe("settings computers", () => {
+  test("one computer row opens the list that both switches and adds", () => {
+    bootHomeWithStalePane();
+    click("设置");
+    expect(app.querySelector("button.set-nav")?.getAttribute("aria-label")).toBe("电脑");
+    expect([...app.querySelectorAll("button")].map((el) => el.textContent)).not.toContain("切换电脑");
+    expect([...app.querySelectorAll("button")].map((el) => el.textContent)).not.toContain("添加另一台电脑");
+    click("电脑");
+    expect(state.screen).toBe("computers");
+    expect(state.computersFrom).toBe("settings");
+    expect(app.querySelector(".computer-add")).toBeTruthy();
+    click("返回");
+    expect(state.screen).toBe("settings");
+    expect(app.querySelector(".topbar-title")?.textContent).toBe("设置");
+  });
 });
 
 describe("settings back", () => {
@@ -116,6 +136,10 @@ describe("default terminal mode", () => {
   test("settings offers auto and the three explicit views, then persists an override", () => {
     bootHomeWithStalePane();
     click("设置");
+    const defaults = [...app.querySelectorAll(".set-heading")].find((row) => row.querySelector(".set-title")?.textContent === "会话默认");
+    const card = defaults?.nextElementSibling;
+    expect(card?.querySelector('[aria-label="默认模式"]')).toBeTruthy();
+    expect(card?.querySelector('[aria-label="终端输入方式"]')).toBeTruthy();
     const group = app.querySelector('[aria-label="默认模式"]');
     expect(group).toBeTruthy();
     expect([...group!.querySelectorAll("button")].map((el) => el.textContent)).toEqual(["自动", "控制", "终端", "对话"]);

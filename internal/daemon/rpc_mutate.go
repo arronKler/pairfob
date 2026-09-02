@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"sort"
 	"unicode/utf8"
 
 	"pairfob/internal/runtime"
@@ -234,8 +236,8 @@ func (e *Engine) rpcRevokeDevice(s *sess, id string, params json.RawMessage) {
 		DeviceID    string `json:"device_id"`
 		Reason      string `json:"reason"`
 	}
-	if badParams(params, &p) || p.DeviceID != s.deviceID || utf8.RuneCountInString(p.Reason) > 256 {
-		e.replyErr(s, id, "forbidden", "v1 may only revoke self")
+	if badParams(params, &p) || !validDeviceID(p.DeviceID) || utf8.RuneCountInString(p.Reason) > 256 {
+		e.replyErr(s, id, "forbidden", "invalid revoke")
 		return
 	}
 	operationID, ok := mutationOperationID(p.OperationID, id, true)
@@ -254,12 +256,18 @@ func (e *Engine) rpcRevokeDevice(s *sess, id string, params json.RawMessage) {
 		return runtime.Receipt{OperationID: operationID, Outcome: runtime.OutcomeApplied}, nil
 	})
 	if err != nil {
+		if errors.Is(err, errRevoked) {
+			_ = e.reply(s, id, map[string]any{"ok": true, "operation_id": operationID, "outcome": receipt.Outcome})
+			return
+		}
 		e.replyErr(s, id, "internal", "persistent device update failed")
 		return
 	}
 	defer e.closeDeviceSessions(p.DeviceID, "revoked")
 	_ = e.reply(s, id, map[string]any{"ok": true, "operation_id": operationID, "outcome": receipt.Outcome})
-	e.audit("device_revoke_requested", map[string]any{"device_id": p.DeviceID, "has_reason": p.Reason != ""})
+	e.audit("device_revoke_requested", map[string]any{
+		"device_id": p.DeviceID, "actor_device_id": s.deviceID, "has_reason": p.Reason != "",
+	})
 }
 
 func (e *Engine) rpcListDevices(s *sess, id string, params json.RawMessage) {
@@ -271,12 +279,37 @@ func (e *Engine) rpcListDevices(s *sess, id string, params json.RawMessage) {
 	e.mu.Lock()
 	list := make([]map[string]any, 0, len(e.Devices))
 	for _, d := range e.Devices {
+		if d.RevokedAt != nil {
+			continue
+		}
 		list = append(list, map[string]any{
 			"device_id": d.ID, "label": d.Label, "created_at": d.Created,
-			"last_seen": d.LastSeen, "revoked_at": d.RevokedAt, "self": d.ID == s.deviceID,
+			"last_seen": d.LastSeen, "self": d.ID == s.deviceID,
+			"connected":          e.deviceConnectedLocked(d.ID),
 			"subscription_count": len(d.PushSubscriptions),
 		})
 	}
 	e.mu.Unlock()
+	sort.Slice(list, func(i, j int) bool {
+		a, b := list[i], list[j]
+		aSelf, _ := a["self"].(bool)
+		bSelf, _ := b["self"].(bool)
+		if aSelf != bSelf {
+			return aSelf
+		}
+		aOn, _ := a["connected"].(bool)
+		bOn, _ := b["connected"].(bool)
+		if aOn != bOn {
+			return aOn
+		}
+		aSeen, _ := a["last_seen"].(int64)
+		bSeen, _ := b["last_seen"].(int64)
+		if aSeen != bSeen {
+			return aSeen > bSeen
+		}
+		aID, _ := a["device_id"].(string)
+		bID, _ := b["device_id"].(string)
+		return aID < bID
+	})
 	e.reply(s, id, map[string]any{"devices": list})
 }
