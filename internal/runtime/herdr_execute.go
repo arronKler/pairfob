@@ -40,17 +40,17 @@ func (h *Herdr) Execute(ctx context.Context, session SessionRef, operationID str
 		if value.PaneID == "" {
 			return notApplied(operationID, invalidFault("pane.rename", "pane id is required"))
 		}
-		return h.simpleMutation(ctx, session, operationID, "pane.rename", map[string]any{"pane_id": value.PaneID, "label": value.Label}, EntityRef{Kind: EntityPane, ID: value.PaneID})
+		return h.renameMutation(ctx, session, operationID, "pane.rename", map[string]any{"pane_id": value.PaneID, "label": value.Label}, EntityRef{Kind: EntityPane, ID: value.PaneID})
 	case RenameTabCommand:
 		if value.TabID == "" || value.Label == "" {
 			return notApplied(operationID, invalidFault("tab.rename", "tab id and label are required"))
 		}
-		return h.simpleMutation(ctx, session, operationID, "tab.rename", map[string]any{"tab_id": value.TabID, "label": value.Label}, EntityRef{Kind: EntityTab, ID: value.TabID})
+		return h.renameMutation(ctx, session, operationID, "tab.rename", map[string]any{"tab_id": value.TabID, "label": value.Label}, EntityRef{Kind: EntityTab, ID: value.TabID})
 	case RenameWorkspaceCommand:
 		if value.WorkspaceID == "" || value.Label == "" {
 			return notApplied(operationID, invalidFault("workspace.rename", "workspace id and label are required"))
 		}
-		return h.simpleMutation(ctx, session, operationID, "workspace.rename", map[string]any{"workspace_id": value.WorkspaceID, "label": value.Label}, EntityRef{Kind: EntityWorkspace, ID: value.WorkspaceID})
+		return h.renameMutation(ctx, session, operationID, "workspace.rename", map[string]any{"workspace_id": value.WorkspaceID, "label": value.Label}, EntityRef{Kind: EntityWorkspace, ID: value.WorkspaceID})
 	case ClosePaneCommand:
 		if value.PaneID == "" {
 			return notApplied(operationID, invalidFault("pane.close", "pane id is required"))
@@ -129,6 +129,17 @@ func (h *Herdr) simpleMutation(ctx context.Context, session SessionRef, operatio
 		return receiptForError(operationID, err), err
 	}
 	if err := expectResponseType(raw, method, "ok"); err != nil {
+		return receiptForError(operationID, err), err
+	}
+	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Updated: []EntityRef{target}}, nil
+}
+
+func (h *Herdr) renameMutation(ctx context.Context, session SessionRef, operationID, method string, params any, target EntityRef) (Receipt, error) {
+	raw, err := h.call(ctx, session, method, params, true)
+	if err != nil {
+		return receiptForError(operationID, err), err
+	}
+	if err := expectRenameResponse(raw, method, target); err != nil {
 		return receiptForError(operationID, err), err
 	}
 	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Updated: []EntityRef{target}}, nil
@@ -458,6 +469,44 @@ func expectResponseType(raw json.RawMessage, operation, wanted string) error {
 	}
 	if err := json.Unmarshal(raw, &response); err != nil || response.Type != wanted {
 		return responseFault(operation, "invalid Herdr mutation response", err, true)
+	}
+	return nil
+}
+
+func expectRenameResponse(raw json.RawMessage, operation string, target EntityRef) error {
+	var response struct {
+		Type string `json:"type"`
+		Pane struct {
+			PaneID string `json:"pane_id"`
+		} `json:"pane"`
+		Tab struct {
+			TabID string `json:"tab_id"`
+		} `json:"tab"`
+		Workspace struct {
+			WorkspaceID string `json:"workspace_id"`
+		} `json:"workspace"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return responseFault(operation, "invalid Herdr rename response", err, true)
+	}
+	wantedType, responseID := "", ""
+	switch target.Kind {
+	case EntityPane:
+		wantedType, responseID = "pane_info", response.Pane.PaneID
+	case EntityTab:
+		wantedType, responseID = "tab_info", response.Tab.TabID
+	case EntityWorkspace:
+		wantedType, responseID = "workspace_info", response.Workspace.WorkspaceID
+	default:
+		return responseFault(operation, "invalid Herdr rename target", nil, true)
+	}
+	// Herdr protocol 19 returned a generic acknowledgement. Protocol 20
+	// returns the renamed entity, which we bind to the requested target.
+	if response.Type == "ok" {
+		return nil
+	}
+	if response.Type != wantedType || responseID != target.ID {
+		return responseFault(operation, "invalid Herdr rename response", nil, true)
 	}
 	return nil
 }

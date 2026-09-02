@@ -282,6 +282,59 @@ func TestHerdrInvalidKeyStaysAKeyError(t *testing.T) {
 	}
 }
 
+func TestHerdrRenameAcceptsEntityInfoResponses(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		method  string
+		command Command
+		target  EntityRef
+		result  map[string]any
+	}{
+		{
+			name: "pane", method: "pane.rename", command: RenamePaneCommand{PaneID: "w1:p1"},
+			target: EntityRef{Kind: EntityPane, ID: "w1:p1"},
+			result: map[string]any{"type": "pane_info", "pane": map[string]any{"pane_id": "w1:p1"}},
+		},
+		{
+			name: "tab", method: "tab.rename", command: RenameTabCommand{TabID: "w1:t1", Label: "renamed"},
+			target: EntityRef{Kind: EntityTab, ID: "w1:t1"},
+			result: map[string]any{"type": "tab_info", "tab": map[string]any{"tab_id": "w1:t1"}},
+		},
+		{
+			name: "workspace", method: "workspace.rename", command: RenameWorkspaceCommand{WorkspaceID: "w1", Label: "renamed"},
+			target: EntityRef{Kind: EntityWorkspace, ID: "w1"},
+			result: map[string]any{"type": "workspace_info", "workspace": map[string]any{"workspace_id": "w1"}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			socket, _ := startScriptedHerdr(t, func(request scriptedRequest) scriptedReply {
+				if request.Method == tc.method {
+					return scriptedReply{Result: tc.result}
+				}
+				return standardReply(request)
+			})
+			receipt, err := NewHerdr(socket).Execute(context.Background(), DefaultSession(), "op_AAECAwQFBgcICQoL", tc.command)
+			if err != nil || receipt.Outcome != OutcomeApplied || len(receipt.Updated) != 1 || receipt.Updated[0] != tc.target {
+				t.Fatalf("receipt=%+v err=%v", receipt, err)
+			}
+		})
+	}
+}
+
+func TestHerdrRenameRejectsMismatchedEntityResponse(t *testing.T) {
+	socket, _ := startScriptedHerdr(t, func(request scriptedRequest) scriptedReply {
+		if request.Method == "pane.rename" {
+			return scriptedReply{Result: map[string]any{"type": "pane_info", "pane": map[string]any{"pane_id": "w1:p2"}}}
+		}
+		return standardReply(request)
+	})
+	receipt, err := NewHerdr(socket).Execute(context.Background(), DefaultSession(), "op_AAECAwQFBgcICQoL", RenamePaneCommand{PaneID: "w1:p1"})
+	fault, ok := AsFault(err)
+	if !ok || fault.Code != CodeInternal || fault.Outcome != OutcomeUnknown || receipt.Outcome != OutcomeUnknown {
+		t.Fatalf("receipt=%+v fault=%+v err=%v", receipt, fault, err)
+	}
+}
+
 func assertSafeHerdrParams(t *testing.T, requests []scriptedRequest) {
 	t.Helper()
 	seen := map[string]bool{}
