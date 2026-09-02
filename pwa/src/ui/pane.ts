@@ -1,5 +1,4 @@
 import { node } from "../lib/dom";
-import { labEnabled } from "../lib/labs";
 import { render } from "../paint";
 import { app, haptic, resetPaneView, selectedAgent, state } from "../state";
 import { enterWorkspace } from "../workspace";
@@ -12,7 +11,6 @@ import { leaveFullTerminal, renderFullTerminal } from "./full-terminal";
 export { openPaneMenu, openPaneSwitcher };
 
 export async function openSelectedWorkspace(): Promise<void> {
-  if (!labEnabled("workspace")) return;
   const returnView = state.fullTerminal ? "full" : state.agentChat ? "agent" : "guided";
   if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
   if (state.agentChat) leaveAgentChat({ rememberGuided: false, paint: false });

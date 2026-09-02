@@ -45,7 +45,7 @@ describe("pane header keeps status surfaces in step", () => {
   });
 
   test("workspace inspection is a first-class trailing action before more", () => {
-    expect(actionsSource).toContain('if (labEnabled("workspace"))');
+    expect(actionsSource).not.toContain("labEnabled");
     expect(actionsSource).toContain('button("", "icon-btn icon-workspace", onWorkspace)');
     expect(actionsSource).toContain('workspace.setAttribute("aria-label", t("workspace.open"))');
     expect(actionsSource.indexOf("actions.append(workspace)")).toBeGreaterThan(-1);
