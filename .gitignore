@@ -1,6 +1,7 @@
 # dependencies
 node_modules/
-pwa/.pnpm-store
+.pnpm-store
+
 
 # build / pack (rebuild with bun / scripts/pack-origin-assets.sh / release.sh)
 pwa/dist

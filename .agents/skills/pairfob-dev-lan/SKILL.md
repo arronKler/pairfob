@@ -25,7 +25,53 @@ Without a TTY: `PAIRFOB_STATE_DIR=.dev/state .dev/pairfob pair new`, then `pair 
 
 ## LAN + camera (phone)
 
-getUserMedia needs HTTPS, so LAN bind switches the origin to HTTPS and mints a 30-day local CA:
+getUserMedia needs HTTPS. Prefer ACME DNS-01 when the developer has a domain;
+otherwise use the local CA fallback below.
+
+### Publicly trusted ACME certificate
+
+Create a DNS-only A record for a hostname the developer controls, pointing to
+the computer's LAN IPv4. Cloudflare records must be grey-cloud/DNS-only. Then:
+
+```
+PAIRFOB_ACME_DOMAIN=pairfob-dev.example.com \
+PAIRFOB_ACME_DNS=cloudflare \
+PAIRFOB_ACME_EMAIL=you@example.com \
+CF_DNS_API_TOKEN='<zone-scoped token>' \
+./scripts/dev-up.sh
+```
+
+Setting `PAIRFOB_ACME_DOMAIN` defaults the listener to `0.0.0.0:18786` and the
+origin to `https://<domain>:18786`. The script checks that the domain resolves
+to the current LAN IPv4, obtains or renews a DNS-01 certificate, and prints the
+PWA URL. No CA profile is installed on the phone. The phone must still be on a
+network that routes to that private address; ACME does not cross NAT.
+
+The first run downloads pinned `lego` to `.dev/tools` and verifies its release
+SHA-256. ACME account data, certificate, and private key stay under `.dev/acme`
+(gitignored). Never print or
+copy DNS credentials. Use a non-identifying hostname because public certificates
+are normally visible in Certificate Transparency logs. Use a zone-scoped token
+with only the provider permissions needed for DNS-01. Supported providers and
+common credential variables:
+
+| `PAIRFOB_ACME_DNS` | Credentials |
+| --- | --- |
+| `cloudflare` | `CF_DNS_API_TOKEN` (Zone DNS Edit and Zone Read) |
+| `route53` | AWS credential chain or `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| `alidns` | `ALICLOUD_ACCESS_KEY`, `ALICLOUD_SECRET_KEY` |
+| `tencentcloud` | `TENCENTCLOUD_SECRET_ID`, `TENCENTCLOUD_SECRET_KEY` |
+| `huaweicloud` | `HUAWEICLOUD_ACCESS_KEY_ID`, `HUAWEICLOUD_SECRET_ACCESS_KEY`, `HUAWEICLOUD_REGION` |
+| `digitalocean` | `DO_AUTH_TOKEN` |
+
+Use `PAIRFOB_ACME_SKIP_DNS_CHECK=1` only when split DNS makes the developer
+machine's answer intentionally differ from the phone's answer. Certificate
+renewal defaults to 30 days before expiry (`PAIRFOB_ACME_RENEW_DAYS`).
+
+### Local CA fallback
+
+Without `PAIRFOB_ACME_DOMAIN`, LAN bind switches the origin to HTTPS and mints
+a 30-day local CA:
 
 ```
 ./scripts/dev-down.sh
@@ -51,7 +97,7 @@ The phone must be on the same LAN. A `https://100.x` / VPN address that the phon
 - Default talks to the real local Herdr socket. `PAIRFOB_DEV_FAKE_RUNTIME=1` is demo data only.
 - State lives in `.dev/state` unless `PAIRFOB_STATE_DIR` is set. Reuse the printed `PAIRFOB_STATE_DIR` for `pair` / `doctor`.
 - Already-running origin: `dev-up` exits and tells you to `dev-down` first. Do that rather than starting a second wrangler.
-- Logs: `.dev/origin.log`, `.dev/daemon.log`, `.dev/cahttp.log`. Health is `/v2/health` (HTTPS health goes through `127.0.0.1` with `--cacert .dev/tls/ca.crt`).
+- Logs: `.dev/origin.log`, `.dev/daemon.log`, `.dev/cahttp.log`. Health is `/v2/health`. Local-CA health goes through `127.0.0.1` with `--cacert .dev/tls/ca.crt`; ACME health uses the configured hostname and system trust.
 
 This loop is not a production deploy and does not publish `/dl/`.
 

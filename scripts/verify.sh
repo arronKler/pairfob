@@ -15,6 +15,7 @@ bash -n "$ROOT/scripts/install.sh"
 bash -n "$ROOT/scripts/release.sh"
 bash -n "$ROOT/scripts/pack-origin-assets.sh"
 bash -n "$ROOT/scripts/ship-guard.sh"
+bash -n "$ROOT/scripts/dev-acme.sh"
 bash -n "$ROOT/scripts/dev-up.sh"
 bash -n "$ROOT/scripts/dev-down.sh"
 
@@ -24,6 +25,7 @@ go test ./...
 go test -race ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 bun test scripts/load-mux.test.ts
+bun test scripts/dev-acme.test.ts
 (cd "$ROOT/site/doc" && bun test)
 
 (

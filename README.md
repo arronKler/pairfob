@@ -82,6 +82,25 @@ Local pairing against the same Worker as production:
 `PAIRFOB_HERDR_AUTOSTART=0` to skip starting Herdr. Never enable
 `PAIRFOB_DEV_AUTO_ADMIT` outside an isolated test.
 
+For phone testing without installing a local CA, create a DNS-only A record
+that points a hostname you control to this computer's LAN IPv4, then use the
+optional DNS-01 mode:
+
+```sh
+PAIRFOB_ACME_DOMAIN=pairfob-dev.example.com \
+PAIRFOB_ACME_DNS=cloudflare \
+PAIRFOB_ACME_EMAIL=you@example.com \
+CF_DNS_API_TOKEN='<zone-scoped token>' \
+./scripts/dev-up.sh
+```
+
+The hostname makes `dev-up.sh` listen on the LAN automatically. The first run
+downloads a pinned, checksum-verified `lego` under `.dev/tools`; certificates
+and ACME account data stay under `.dev/acme` and are reused until renewal is needed. Supported DNS
+providers are `cloudflare`, `route53`, `alidns`, `tencentcloud`, `huaweicloud`,
+and `digitalocean`. The A record must not use an HTTP proxy/CDN because the
+private address must remain visible to devices on the same LAN.
+
 Cross-compile downloadable binaries with `./scripts/release.sh`. Pack the origin
 (including `/dl/` when `PAIRFOB_PACK_DL=1`) with `scripts/pack-origin-assets.sh`.
 
