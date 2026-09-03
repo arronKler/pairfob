@@ -21,7 +21,7 @@ import {
   visibleNotice,
   type Notice,
 } from "../state";
-import { backButton, feedbackNode } from "./chrome";
+import { backButton, canInterruptAgent, feedbackNode } from "./chrome";
 import { leaveFullTerminal } from "./full-terminal";
 import { chromeActionCluster, syncChromeStop } from "./session/chrome-actions";
 import { paintAgentStream, readDetailsState, type AgentEmptySpec } from "./agent-chat-stream";
@@ -420,7 +420,7 @@ function patchChatChrome(chrome: HTMLElement, selected: ReturnType<typeof select
         : t("chrome.switchAria", { title: chromeName(selected) }),
     );
   }
-  syncChromeStop(chrome, selected?.status === "working", () => {
+  syncChromeStop(chrome, canInterruptAgent(selected?.status ?? ""), () => {
     const session = state.live;
     const paneId = state.paneId;
     if (!session || !paneId) return;
@@ -599,7 +599,7 @@ function chatChrome(
     title.append(node("span", "chrome-name", t("mode.agent")));
   }
   chrome.append(title, chromeActionCluster(onWorkspace, onMenu));
-  syncChromeStop(chrome, selected?.status === "working", () => {
+  syncChromeStop(chrome, canInterruptAgent(selected?.status ?? ""), () => {
     const session = state.live;
     const paneId = state.paneId;
     if (!session || !paneId) return;

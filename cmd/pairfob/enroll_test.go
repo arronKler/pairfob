@@ -17,7 +17,6 @@ import (
 )
 
 func TestEnrollV2PersistsTokensAndOmitsOrigin(t *testing.T) {
-	grant := "jg_" + strings.Repeat("cd", 16)
 	var sawOrigin string
 	var sawCookie bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +34,7 @@ func TestEnrollV2PersistsTokensAndOmitsOrigin(t *testing.T) {
 			DaemonID       string `json:"daemon_id"`
 			ReconnectToken string `json:"reconnect_token"`
 		}
-		if json.NewDecoder(r.Body).Decode(&req) != nil || req.V != 2 || req.JoinGrant != grant ||
+		if json.NewDecoder(r.Body).Decode(&req) != nil || req.V != 2 || req.JoinGrant != "" ||
 			!daemonIDPattern.MatchString(req.DaemonID) || !reconnectTokenPattern.MatchString(req.ReconnectToken) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
@@ -51,7 +50,7 @@ func TestEnrollV2PersistsTokensAndOmitsOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	relay, err := enrollV2(store, server.URL, grant)
+	relay, err := enrollV2(store, server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,6 +76,44 @@ func TestEnrollV2PersistsTokensAndOmitsOrigin(t *testing.T) {
 	}
 	if !daemonIDPattern.MatchString(id.DaemonID) || !strings.Contains(relay.URL, "daemon_id="+id.DaemonID) {
 		t.Fatalf("daemon_id=%q", id.DaemonID)
+	}
+}
+
+func TestEnrollV2OldPendingJoinGrantIsNotSent(t *testing.T) {
+	var sawGrant bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if _, ok := req["join_grant"]; ok {
+			sawGrant = true
+			http.Error(w, "unexpected grant", http.StatusBadRequest)
+			return
+		}
+		daemonID, _ := req["daemon_id"].(string)
+		token, _ := req["reconnect_token"].(string)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true, "daemon_id": daemonID, "reconnect_token": token,
+		})
+	}))
+	defer server.Close()
+	store, err := state.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SavePendingEnroll(state.PendingEnroll{
+		Origin: server.URL, JoinGrant: "jg_" + strings.Repeat("ab", 16),
+		DaemonID: "d_" + strings.Repeat("11", 10), ReconnectToken: "rt_" + strings.Repeat("22", 16), CreatedAt: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := enrollV2(store, server.URL); err != nil {
+		t.Fatal(err)
+	}
+	if sawGrant {
+		t.Fatal("old pending join_grant was sent")
 	}
 }
 
@@ -108,7 +145,7 @@ func TestEnrollV2GrantlessOmitsJoinGrant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	relay, err := enrollV2(store, server.URL, "")
+	relay, err := enrollV2(store, server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +202,6 @@ func TestLiveAdminRekeyUpdatesRunningEngine(t *testing.T) {
 }
 
 func TestEnrollV2RetriesTheSamePendingCredentialAfterResponseLoss(t *testing.T) {
-	grant := "jg_" + strings.Repeat("ab", 16)
 	var calls atomic.Int32
 	var firstMu sync.Mutex
 	var firstDaemonID, firstToken string
@@ -175,7 +211,7 @@ func TestEnrollV2RetriesTheSamePendingCredentialAfterResponseLoss(t *testing.T) 
 			DaemonID       string `json:"daemon_id"`
 			ReconnectToken string `json:"reconnect_token"`
 		}
-		if json.NewDecoder(r.Body).Decode(&req) != nil || req.JoinGrant != grant {
+		if json.NewDecoder(r.Body).Decode(&req) != nil || req.JoinGrant != "" {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -205,7 +241,7 @@ func TestEnrollV2RetriesTheSamePendingCredentialAfterResponseLoss(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := enrollV2(store, server.URL, grant); err == nil {
+	if _, err := enrollV2(store, server.URL); err == nil {
 		t.Fatal("lost enroll response reported success")
 	}
 	firstMu.Lock()
@@ -214,7 +250,7 @@ func TestEnrollV2RetriesTheSamePendingCredentialAfterResponseLoss(t *testing.T) 
 	if pending, ok, err := store.LoadPendingEnroll(); err != nil || !ok || pending.DaemonID != wantID {
 		t.Fatalf("pending=%+v ok=%t err=%v", pending, ok, err)
 	}
-	relay, err := enrollV2(store, server.URL, "")
+	relay, err := enrollV2(store, server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,14 +366,13 @@ func configuredV2Store(t *testing.T, daemonID, reconnect, origin string) *state.
 }
 
 func TestEnrollCommandWritesRelayAgainstOrigin(t *testing.T) {
-	grant := "jg_" + strings.Repeat("ef", 16)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			JoinGrant      string `json:"join_grant"`
 			DaemonID       string `json:"daemon_id"`
 			ReconnectToken string `json:"reconnect_token"`
 		}
-		if json.NewDecoder(r.Body).Decode(&req) != nil || req.JoinGrant != grant {
+		if json.NewDecoder(r.Body).Decode(&req) != nil || req.JoinGrant != "" {
 			http.Error(w, "bad", 400)
 			return
 		}
@@ -352,7 +387,7 @@ func TestEnrollCommandWritesRelayAgainstOrigin(t *testing.T) {
 	t.Setenv("PAIRFOB_JOIN_GRANT", "")
 	t.Setenv("PAIRFOB_ORIGIN", "")
 	sock := filepath.Join(dir, "not-running.sock")
-	if err := enrollCommand([]string{"--grant", grant, "--origin", server.URL}, sock); err != nil {
+	if err := enrollCommand([]string{"--origin", server.URL}, sock); err != nil {
 		t.Fatal(err)
 	}
 	store, err := state.Open(dir)
@@ -369,7 +404,7 @@ func TestEnrollCommandRefusesWhileDaemonRuns(t *testing.T) {
 	a, _ := mux.NewPipePair(4)
 	eng := daemon.NewEngine(nil, a, runtime.NewFake())
 	sock := startLiveAdmin(t, eng)
-	err := enrollCommand([]string{"--grant", "jg_" + strings.Repeat("aa", 16)}, sock)
+	err := enrollCommand(nil, sock)
 	if err == nil || !strings.Contains(err.Error(), "running") {
 		t.Fatalf("got %v", err)
 	}
@@ -425,14 +460,12 @@ func TestVersionLineIncludesDevBuild(t *testing.T) {
 }
 
 func TestEnrollV2OriginRejectsAreHumanNextSteps(t *testing.T) {
-	grant := "jg_" + strings.Repeat("ab", 16)
 	cases := []struct {
 		code   string
 		status int
 		want   string
 	}{
-		{code: "bad_grant", status: 400, want: "Re-run the installer"},
-		{code: "grant_exhausted", status: 409, want: "Re-run the installer"},
+		{code: "rate_limited", status: 429, want: "too many computers"},
 		{code: "unexpected_wire", status: 400, want: "pairfob doctor"},
 	}
 	for _, tc := range cases {
@@ -449,7 +482,7 @@ func TestEnrollV2OriginRejectsAreHumanNextSteps(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = enrollV2(store, server.URL, grant)
+			_, err = enrollV2(store, server.URL)
 			if err == nil {
 				t.Fatal("expected rejection")
 			}
@@ -458,7 +491,7 @@ func TestEnrollV2OriginRejectsAreHumanNextSteps(t *testing.T) {
 				t.Fatalf("got %q want substring %q", got, tc.want)
 			}
 			assertOperatorText(t, got)
-			if strings.Contains(got, grant) || strings.Contains(got, "enroll rejected") || strings.Contains(got, tc.code) {
+			if strings.Contains(got, "enroll rejected") || strings.Contains(got, tc.code) {
 				t.Fatalf("leaked wire material: %q", got)
 			}
 		})
@@ -474,35 +507,31 @@ func TestEnrollV2UnreachableOriginIsHuman(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = enrollV2(store, server.URL, "jg_"+strings.Repeat("cd", 16))
+	_, err = enrollV2(store, server.URL)
 	if err == nil || !strings.Contains(err.Error(), "pairfob doctor") {
 		t.Fatalf("got %v", err)
 	}
 	assertOperatorText(t, err.Error())
 }
 
-func TestEnrollCommandRefusesWhenAlreadySetUp(t *testing.T) {
-	grant := "jg_" + strings.Repeat("11", 16)
+func TestEnrollCommandRejectsJoinGrant(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PAIRFOB_STATE_DIR", dir)
 	t.Setenv("PAIRFOB_JOIN_TOKEN", "")
 	t.Setenv("PAIRFOB_JOIN_GRANT", "")
 	t.Setenv("PAIRFOB_ORIGIN", "")
-	store, err := state.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveRelay(state.Relay{URL: "wss://pairfob.com/v2/ws?role=daemon&daemon_id=d_0123456789abcdef0123", ReconnectToken: "rt_" + strings.Repeat("22", 16), Protocol: 2}); err != nil {
-		t.Fatal(err)
-	}
-	err = enrollCommand([]string{"--grant", grant, "--origin", "https://pairfob.com"}, filepath.Join(dir, "not-running.sock"))
-	if err == nil || !strings.Contains(err.Error(), "already set up") || !strings.Contains(err.Error(), "pairfob pair") {
+	sock := filepath.Join(dir, "not-running.sock")
+	err := enrollCommand([]string{"--grant", "jg_" + strings.Repeat("11", 16)}, sock)
+	if err == nil || !strings.Contains(err.Error(), "join grant") {
 		t.Fatalf("got %v", err)
 	}
 	assertOperatorText(t, err.Error())
-	if strings.Contains(err.Error(), grant) {
-		t.Fatalf("leaked install code: %v", err)
+	t.Setenv("PAIRFOB_JOIN_GRANT", "jg_"+strings.Repeat("22", 16))
+	err = enrollCommand([]string{"--origin", "https://pairfob.com"}, sock)
+	if err == nil || !strings.Contains(err.Error(), "join grant") {
+		t.Fatalf("got %v", err)
 	}
+	assertOperatorText(t, err.Error())
 }
 
 func TestEnrollCommandAlreadySetUpWithoutGrantIsNoop(t *testing.T) {

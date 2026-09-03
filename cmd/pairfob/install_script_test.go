@@ -57,6 +57,15 @@ func TestInstallScriptDownloadsVerifiesAndInstalls(t *testing.T) {
 	}
 }
 
+func TestInstallScriptRejectsJoinGrant(t *testing.T) {
+	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
+	cmd := exec.Command("sh", script, "--grant", "jg_"+strings.Repeat("ab", 16), "--no-service", "--no-enroll", "--prefix", t.TempDir())
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "join grant") {
+		t.Fatalf("err=%v out=%s", err, out)
+	}
+}
+
 func TestInstallScriptEnrollsWithoutOptionalArgs(t *testing.T) {
 	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
 	name := artifactName(runtime.GOOS, runtime.GOARCH)

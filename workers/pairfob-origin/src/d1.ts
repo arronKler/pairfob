@@ -14,8 +14,6 @@ export const COMPENSATE_DAEMON_USED_SQL =
 
 export const DELETE_DAEMON_SQL = "DELETE FROM daemons WHERE daemon_id = ?";
 
-export const SELECT_GRANT_BY_HASH_SQL = "SELECT * FROM grants WHERE grant_hash = ?";
-
 export const SELECT_GRANT_BY_ID_SQL = "SELECT * FROM grants WHERE grant_id = ?";
 
 export const SELECT_DAEMON_SQL = "SELECT * FROM daemons WHERE daemon_id = ?";
@@ -31,13 +29,8 @@ export const RELEASE_KICK_QUOTA_SQL =
 export const MARK_QUOTA_RELEASED_SQL =
   "UPDATE daemons SET quota_released_at = ? WHERE daemon_id = ? AND kicked_at IS NOT NULL AND quota_released_at IS NULL";
 
-export const REVOKE_GRANT_SQL = "UPDATE grants SET revoked_at = ? WHERE grant_id = ? AND revoked_at IS NULL";
-
-export const INSERT_GRANT_SQL =
-  "INSERT INTO grants (grant_id, grant_hash, max_daemons, used, label, created_at, revoked_at) VALUES (?, ?, ?, 0, ?, ?, NULL)";
-
-// The per-IP cap lives in the INSERT so two concurrent signups from one address
-// cannot both read an under-quota count and then both write.
+// The per-IP cap lives in the INSERT so two concurrent open enrolls from one
+// address cannot both read an under-quota count and then both write.
 export const INSERT_SELF_GRANT_SQL =
   "INSERT INTO self_grants (grant_id, ip_hash, created_at) SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM self_grants WHERE ip_hash = ? AND created_at > ?) < ?";
 
@@ -64,10 +57,6 @@ export interface DaemonRow {
   kicked_at: number | null;
   enroll_ip_hash: string | null;
   quota_released_at: number | null;
-}
-
-export async function getGrantByHash(db: D1Database, hash: string): Promise<GrantRow | null> {
-  return db.prepare(SELECT_GRANT_BY_HASH_SQL).bind(hash).first<GrantRow>();
 }
 
 export async function getGrantById(db: D1Database, grantId: string): Promise<GrantRow | null> {
@@ -112,19 +101,9 @@ export async function compensateEnroll(db: D1Database, grantId: string, daemonId
   ]);
 }
 
-export async function insertGrant(
-  db: D1Database,
-  row: { grant_id: string; grant_hash: string; max_daemons: number; label: string | null; created_at: number },
-): Promise<void> {
-  await db
-    .prepare(INSERT_GRANT_SQL)
-    .bind(row.grant_id, row.grant_hash, row.max_daemons, row.label, row.created_at)
-    .run();
-}
-
 /**
- * Claims one per-IP signup slot and mints the grant in the same batch, so a
- * refused claim cannot leave a usable grant behind. Rows at or below
+ * Claims one per-IP open-enroll slot and mints the grant in the same batch, so
+ * a refused claim cannot leave a usable grant behind. Rows at or below
  * `window_start` are outside the counting window, so pruning them is safe.
  */
 export async function insertSelfServeGrant(
@@ -165,11 +144,6 @@ export async function kickDaemonRow(
     db.prepare(MARK_QUOTA_RELEASED_SQL).bind(now, daemonId),
   ]);
   return { kicked: (results[0]?.meta.changes ?? 0) === 1, grant_id: row.grant_id };
-}
-
-export async function revokeGrantRow(db: D1Database, grantId: string, now: number): Promise<boolean> {
-  const r = await db.prepare(REVOKE_GRANT_SQL).bind(now, grantId).run();
-  return r.meta.changes === 1;
 }
 
 export async function listLiveDaemonIds(db: D1Database, limit = 32): Promise<string[]> {

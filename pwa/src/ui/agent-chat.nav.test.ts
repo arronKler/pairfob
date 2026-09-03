@@ -132,7 +132,8 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".agent-tool")).toBeTruthy();
     expect(app.querySelector(".agent-assistant")?.textContent).toContain("looks fine");
     expect(app.querySelector(".agent-user")?.textContent).toContain("inspect this");
-    expect(app.querySelector(".agent-user-role")?.textContent).toBe("你");
+    expect(app.querySelector(".agent-user-role")).toBeNull();
+    expect(app.querySelector(".agent-user-text")?.textContent).toBe("inspect this");
     expect(app.querySelector(".agent-process-summary")?.textContent).toContain("正在执行");
     expect(app.querySelector(".agent-stream-inner")).toBeTruthy();
     const title = app.querySelector(".agent-chat-root .chrome-title");
@@ -355,6 +356,8 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".agent-dock textarea")).toBe(field);
     expect(state.composeDraft).toBe("");
     expect(app.textContent).toContain("hello there");
+    expect(app.querySelector(".agent-user-role")).toBeNull();
+    expect([...app.querySelectorAll(".agent-user-text")].at(-1)?.textContent).toBe("hello there");
     expect(state.agents[0]?.status).toBe("working");
   });
 
@@ -409,6 +412,17 @@ describe("agent-chat remembers its mode per pane", () => {
     go.click();
     expect(state.agentChat).toBe(false);
     expect(paneTermMode("p1")).toBe("guided");
+  });
+
+  test("unknown agents do not show the confirm bar", () => {
+    bootAgentChat();
+    state.agents[0].status = "unknown";
+    renderPane();
+    expect(app.querySelector(".agent-confirm")).toBeNull();
+    expect(app.textContent).not.toContain("等你确认");
+    expect(app.querySelector(".chrome-meta-text")?.textContent).toBe("未知");
+    expect(app.querySelector(".agent-unknown")).not.toBeNull();
+    expect(app.querySelector(".icon-stop")).toBeNull();
   });
 
   test("a failed empty read offers retry in the centered empty state", async () => {

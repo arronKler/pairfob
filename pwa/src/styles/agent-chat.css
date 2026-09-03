@@ -117,14 +117,6 @@
   color: var(--ink);
 }
 
-.agent-user-role {
-  display: block;
-  margin: 0 0 4px;
-  font-size: 0.7rem;
-  font-weight: 650;
-  color: var(--muted);
-}
-
 .agent-user-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

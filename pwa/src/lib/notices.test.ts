@@ -33,8 +33,6 @@ const REQUIRED_PUBLIC_CODES = [
   "revoked",
   "herdr_offline",
   "unknown_outcome",
-  "bad_grant",
-  "grant_exhausted",
   "heartbeat_timeout",
   "wrong_protocol",
 ];
@@ -74,6 +72,8 @@ describe("shipped user notices", () => {
   test("unknown codes fail closed and drop wire dumps", () => {
     expect(noticeFor("")).toBe(genericNotice());
     expect(noticeFor("not_a_real_code")).toBe(genericNotice());
+    expect(noticeFor("bad_grant")).toBe(genericNotice());
+    expect(noticeFor("grant_exhausted")).toBe(genericNotice());
     assertPublicNotice(genericNotice());
     const dumped = messageOf(new ProtocolError("not_a_real_code", "device_psk=deadbeef daemon websocket gone"));
     expect(dumped).toBe(genericNotice());

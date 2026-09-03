@@ -24,6 +24,7 @@ import {
   emptyNode,
   groupToggle,
   herdBanners,
+  herdLiveness,
   herdStatus,
   listGroupControl,
   sectionTitle,
@@ -31,12 +32,16 @@ import {
 } from "./chrome";
 import { openListPaneMenu, openListWorkspaceMenu } from "./list-menu";
 import { bindObjectPress } from "./press-menu";
+import { worktreeProgressList } from "./worktree-progress";
 
 export function agentCard(agent: AgentCard): HTMLElement {
   const selected = agent.paneId === state.paneId;
   const pinned = paneIsPinned(state.panePinned, agent.paneId);
   const title = agentTitle(agent, state.listGroup);
-  const card = node("article", `card status-${agent.status}${selected ? " sel" : ""}${pinned ? " pinned" : ""}`);
+  // Unverifiable snapshots keep their cards but never paint last-known
+  // done/idle as a fresh fact.
+  const stale = herdLiveness() === "unverifiable";
+  const card = node("article", `card status-${agent.status}${stale ? " unverifiable" : ""}${selected ? " sel" : ""}${pinned ? " pinned" : ""}`);
   const main = button("", "card-main", () => void openPane(agent.paneId));
   main.setAttribute("aria-pressed", selected ? "true" : "false");
   main.setAttribute("aria-haspopup", "menu");
@@ -48,8 +53,8 @@ export function agentCard(agent: AgentCard): HTMLElement {
     titleRow.append(mark, node("span", "sr-only", t("home.pinned")));
   }
   titleRow.append(node("span", "card-name", title));
-  const pill = statusLabel(agent.status);
-  if (pill) titleRow.append(node("span", `pill pill-${agent.status}`, pill));
+  const pill = stale ? t("status.unverifiable") : statusLabel(agent.status);
+  if (pill) titleRow.append(node("span", `pill pill-${stale ? "unknown" : agent.status}`, pill));
   copy.append(titleRow);
   const meta = agentMeta(agent, state.listGroup);
   if (meta) copy.append(node("p", "card-meta", meta));
@@ -63,12 +68,15 @@ export function agentCard(agent: AgentCard): HTMLElement {
 }
 
 export function fillHerdList(root: HTMLElement): void {
+  const jobCards = worktreeProgressList();
+  if (jobCards) root.append(jobCards);
   root.append(listGroupControl());
   if (!state.agents.length) {
     const copy = emptySessionCopy(
       state.runtimeKind,
       state.live?.isConnected() === true,
       state.operationCapabilities.create_conversation,
+      state.networkOnline,
     );
     root.append(emptyNode(copy.title, copy.detail));
     return;

@@ -24,6 +24,20 @@ export type SnapshotWire = {
   }>;
 };
 
+/** Present wait/work/idle/done; missing or unrecognized wire status is unknown only when an agent is bound. */
+function snapshotAgentStatus(hasAgent: boolean, wire: string | undefined): AgentCard["status"] {
+  if (!hasAgent) return "idle";
+  switch (wire) {
+    case "blocked":
+    case "working":
+    case "idle":
+    case "done":
+      return wire;
+    default:
+      return "unknown";
+  }
+}
+
 export function mapSnapshotAgents(snapshot: SnapshotWire): DashboardAgentCard[] {
   const workspace = new Map((snapshot.workspaces || []).map((item) => [item.workspace_id, item]));
   const tabs = new Map((snapshot.tabs || []).map((item) => [item.tab_id, item]));
@@ -32,7 +46,7 @@ export function mapSnapshotAgents(snapshot: SnapshotWire): DashboardAgentCard[] 
     .map((pane) => {
       const ws = workspace.get(pane.workspace_id);
       const agent = pane.agent?.trim() || "";
-      const knownStatus = ["blocked", "working", "idle", "done"].includes(pane.agent_status || "");
+      const hasAgent = agent !== "";
       return {
         paneId: pane.pane_id!,
         paneLabel: pane.label?.trim() || undefined,
@@ -41,8 +55,8 @@ export function mapSnapshotAgents(snapshot: SnapshotWire): DashboardAgentCard[] 
         tabLabel: pane.tab_id ? tabs.get(pane.tab_id)?.label?.trim() || undefined : undefined,
         workspaceId: pane.workspace_id,
         agent,
-        hasAgent: agent !== "",
-        status: (knownStatus ? pane.agent_status : agent ? "unknown" : "idle") as AgentCard["status"],
+        hasAgent,
+        status: snapshotAgentStatus(hasAgent, pane.agent_status),
         workspaceLabel: ws?.label?.trim() || "",
         cwd: pane.cwd || ws?.cwd || "",
         viewportRows: pane.scroll?.viewport_rows,
@@ -308,7 +322,7 @@ export function statusLabel(status: AgentCard["status"]): string {
       return t("status.done");
     case "idle":
       return t("status.idle");
-    default:
-      return "";
+    case "unknown":
+      return t("status.unknown");
   }
 }

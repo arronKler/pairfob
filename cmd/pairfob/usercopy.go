@@ -7,14 +7,8 @@ import (
 
 func enrollNotice(code string) string {
 	switch code {
-	case "bad_grant":
-		return "setup was refused. Re-run the installer."
-	case "grant_exhausted":
-		return "setup was refused. Re-run the installer."
 	case "rate_limited":
 		return "this network has set up too many computers today. Try again tomorrow."
-	case "forbidden":
-		return "new computer setup is closed on this site right now. Computers already set up keep working."
 	default:
 		return "setup did not complete. Run pairfob doctor."
 	}
@@ -22,10 +16,6 @@ func enrollNotice(code string) string {
 
 func enrollRejected(code string) error {
 	return errors.New(enrollNotice(code))
-}
-
-func alreadyEnrolledError() error {
-	return errors.New("this computer is already set up. Pair a device with pairfob pair, or pass --force only to replace this setup.")
 }
 
 func publicOriginError(err error) error {
@@ -71,12 +61,13 @@ func doctorOriginNote(raw string) string {
 	switch {
 	case strings.Contains(raw, "JOIN_TOKEN"):
 		return "do not set PAIRFOB_JOIN_TOKEN"
+	case strings.Contains(raw, "JOIN_GRANT"):
+		return "do not set PAIRFOB_JOIN_GRANT"
 	case strings.Contains(raw, "not set up"):
 		return "not set up — re-run the installer"
 	case strings.Contains(raw, "protocol does not match"):
 		return "origin protocol does not match this computer"
-	case strings.Contains(raw, "JOIN_GRANT"),
-		strings.Contains(raw, "daemon_id"),
+	case strings.Contains(raw, "daemon_id"),
 		strings.Contains(raw, "{"),
 		strings.Contains(raw, ".json"),
 		strings.Contains(raw, "PAIRFOB_"):

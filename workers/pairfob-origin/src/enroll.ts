@@ -1,6 +1,5 @@
 import {
   DAEMON_ID_RE,
-  JOIN_GRANT_RE,
   OPEN_ENROLL_MAX_DAEMONS,
   PROTOCOL,
   RECONNECT_TOKEN_RE,
@@ -13,10 +12,8 @@ import {
   compensateEnroll,
   enrollDaemonBatch,
   getDaemon,
-  getGrantByHash,
   getGrantById,
   insertSelfServeGrant,
-  type GrantRow,
 } from "./d1.ts";
 import type { Env } from "./env.ts";
 import { buildOf, clientIP, errorJson, hasBrowserOrigin, jsonResponse, noStore, readJSON } from "./http.ts";
@@ -28,7 +25,6 @@ export async function handleEnroll(req: Request, env: Env, now = Date.now()): Pr
   const store = noStore();
   if (req.method !== "POST") return errorJson(build, 405, "bad_token", store);
   if (hasBrowserOrigin(req)) return errorJson(build, 403, "forbidden", store);
-  if (env.ENROLL_OPEN === "0") return errorJson(build, 403, "forbidden", store);
   if (!env.IP_HASH_PEPPER) return errorJson(build, 500, "internal", store);
 
   const ip = clientIP(req);
@@ -39,7 +35,6 @@ export async function handleEnroll(req: Request, env: Env, now = Date.now()): Pr
   }
 
   const body = await readJSON(req);
-  const join = typeof body?.join_grant === "string" ? body.join_grant : "";
   const daemonId = typeof body?.daemon_id === "string" ? body.daemon_id : "";
   const reconnectToken = typeof body?.reconnect_token === "string" ? body.reconnect_token : "";
   if (!body || body.v !== PROTOCOL || !DAEMON_ID_RE.test(daemonId) || !RECONNECT_TOKEN_RE.test(reconnectToken)) {
@@ -53,8 +48,8 @@ export async function handleEnroll(req: Request, env: Env, now = Date.now()): Pr
     let recovered = existing.kicked_at == null &&
       await verifyRoomEnroll(env, daemonId, reconnectHash, existing.grant_id);
     // D1-only crash: finish Room with the same reconnect hash. Possession of
-    // daemon_id + reconnect_token is enough; join_grant is optional compatibility.
-    if (!recovered && existing.kicked_at == null && await mayFinishRoom(env, join, existing.grant_id)) {
+    // daemon_id + reconnect_token is enough.
+    if (!recovered && existing.kicked_at == null) {
       recovered = await enrollRoom(env, daemonId, reconnectHash, existing.grant_id);
     }
     if (!recovered) {
@@ -65,9 +60,21 @@ export async function handleEnroll(req: Request, env: Env, now = Date.now()): Pr
     return enrollSuccess(build, daemonId, reconnectToken, existing.grant_id, store);
   }
 
-  const resolved = await resolveGrant(env, join, ip, now, build, store, daemonId);
-  if ("response" in resolved) return resolved.response;
-  const grant = resolved.grant;
+  const grantId = await mintOpenGrant(env, ip, now);
+  if (grantId === "rate_limited") {
+    observeEnroll(env, "rate_limited", daemonId);
+    observeError(env, "rate_limited", daemonId);
+    return errorJson(build, 429, "rate_limited", store);
+  }
+  if (!grantId) {
+    observeEnroll(env, "internal", daemonId);
+    return errorJson(build, 500, "internal", store);
+  }
+  const grant = await getGrantById(env.DB, grantId);
+  if (!grant) {
+    observeEnroll(env, "internal", daemonId);
+    return errorJson(build, 500, "internal", store);
+  }
 
   const enrollIpHash = await hmacSha256Hex(env.IP_HASH_PEPPER, ip);
 
@@ -87,8 +94,11 @@ export async function handleEnroll(req: Request, env: Env, now = Date.now()): Pr
     const again = (await getGrantById(env.DB, grant.grant_id)) ?? grant;
     const code = classifyCasMiss(again, now);
     observeEnroll(env, code, daemonId);
-    const status = code === "rate_limited" ? 429 : code === "grant_exhausted" ? 409 : 400;
-    return errorJson(build, status, code, store);
+    if (code === "rate_limited") {
+      observeError(env, "rate_limited", daemonId);
+      return errorJson(build, 429, "rate_limited", store);
+    }
+    return errorJson(build, 500, "internal", store);
   }
 
   const roomRes = await enrollRoom(env, daemonId, reconnectHash, grant.grant_id);
@@ -115,59 +125,13 @@ function enrollSuccess(
   }, headers);
 }
 
-async function mayFinishRoom(env: Env, join: string, grantId: string): Promise<boolean> {
-  if (join === "") return true;
-  if (!JOIN_GRANT_RE.test(join)) return false;
-  const retryGrant = await getGrantByHash(env.DB, await sha256Hex(join));
-  return retryGrant?.grant_id === grantId && retryGrant.revoked_at == null;
-}
-
-async function resolveGrant(
-  env: Env,
-  join: string,
-  ip: string,
-  now: number,
-  build: string,
-  store: Record<string, string>,
-  daemonId: string,
-): Promise<{ grant: GrantRow } | { response: Response }> {
-  if (JOIN_GRANT_RE.test(join)) {
-    const grant = await getGrantByHash(env.DB, await sha256Hex(join));
-    if (!grant || grant.revoked_at != null) {
-      observeEnroll(env, "bad_grant", daemonId);
-      return { response: errorJson(build, 400, "bad_grant", store) };
-    }
-    return { grant };
-  }
-  if (join !== "") {
-    observeEnroll(env, "bad_grant", daemonId);
-    return { response: errorJson(build, 400, "bad_grant", store) };
-  }
-  const grantId = await mintOpenGrant(env, ip, now);
-  if (grantId === "rate_limited") {
-    observeEnroll(env, "rate_limited", daemonId);
-    observeError(env, "rate_limited", daemonId);
-    return { response: errorJson(build, 429, "rate_limited", store) };
-  }
-  if (!grantId) {
-    observeEnroll(env, "internal", daemonId);
-    return { response: errorJson(build, 500, "internal", store) };
-  }
-  const grant = await getGrantById(env.DB, grantId);
-  if (!grant) {
-    observeEnroll(env, "internal", daemonId);
-    return { response: errorJson(build, 500, "internal", store) };
-  }
-  return { grant };
-}
-
-/** Internal 1-slot grant. The minted jg_ is never returned to the client. */
+/** Internal 1-slot grant. The hash is not a user credential. */
 async function mintOpenGrant(env: Env, ip: string, now: number): Promise<string | "rate_limited" | null> {
   const grantId = "g_" + randomHex(8);
   try {
     const claimed = await insertSelfServeGrant(env.DB, {
       grant_id: grantId,
-      grant_hash: await sha256Hex("jg_" + randomHex(16)),
+      grant_hash: await sha256Hex(randomHex(16)),
       ip_hash: await hmacSha256Hex(env.IP_HASH_PEPPER, ip),
       max_daemons: OPEN_ENROLL_MAX_DAEMONS,
       label: "open-enroll",

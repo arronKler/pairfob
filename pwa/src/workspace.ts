@@ -1,3 +1,4 @@
+import { adoptDiffNoteScope } from "./lib/diff-notes";
 import type {
   GitBranches,
   GitDiff,
@@ -120,6 +121,7 @@ function restoreCachedModel(session: NonNullable<typeof state.live>, paneId: str
   branchesVersion++;
   workspaceSession = session;
   Object.assign(workspaceModel, cached, { returnView });
+  bindDiffNotes(session, paneId, cached.diff);
   return true;
 }
 
@@ -151,6 +153,7 @@ function reset(paneId: string, returnView: WorkspaceReturnView): void {
     loadingBranches: false,
     error: "",
   } satisfies WorkspaceModel);
+  adoptDiffNoteScope(null);
 }
 
 export async function enterWorkspace(
@@ -190,6 +193,10 @@ export async function enterWorkspace(
   }
 }
 
+function bindDiffNotes(session: object, paneId: string, diff: GitDiff | null): void {
+  adoptDiffNoteScope(diff?.revision ? { session, paneId, revision: diff.revision } : null);
+}
+
 export function leaveWorkspace(): void {
   const paneId = workspaceModel.paneId;
   const session = state.live;
@@ -198,6 +205,7 @@ export function leaveWorkspace(): void {
   statusVersion++;
   branchesVersion++;
   cacheCurrentModel();
+  adoptDiffNoteScope(null);
   clearNotice();
   if (!paneId || !session) {
     state.screen = "home";
@@ -321,10 +329,14 @@ export async function loadGitDiff(path: string, layer: GitLayer): Promise<void> 
   workspaceModel.detailPath = path;
   workspaceModel.diffLayer = layer;
   workspaceModel.diff = null;
+  adoptDiffNoteScope(null);
   render();
   try {
     const diff = await session.gitDiff(paneId, path, layer);
-    if (current(version, session, paneId) && contentRequest === contentVersion) workspaceModel.diff = diff;
+    if (current(version, session, paneId) && contentRequest === contentVersion) {
+      workspaceModel.diff = diff;
+      bindDiffNotes(session, paneId, diff);
+    }
   } catch (error) {
     if (current(version, session, paneId) && contentRequest === contentVersion) workspaceModel.error = workspaceError(error);
   } finally {

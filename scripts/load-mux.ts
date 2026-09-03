@@ -6,7 +6,7 @@
  * the production sharding model instead of tripping one Room's hello cap.
  *
  *   bun scripts/load-mux.ts --dry-run
- *   bun scripts/load-mux.ts --origin http://127.0.0.1:8787 --join-grant jg_… --n 1
+ *   bun scripts/load-mux.ts --origin http://127.0.0.1:8787 --n 1
  *   bun scripts/load-mux.ts --origin https://pairfob.com --credentials /secure/daemon-creds.json --n 10000
  */
 
@@ -24,7 +24,6 @@ export interface LoadConfig {
   origin: string;
   target: string;
   credentialsPath: string;
-  joinGrant: string;
   n: number;
   holdMs: number;
   concurrency: number;
@@ -42,6 +41,9 @@ export function parseArgs(argv: string[]): LoadConfig {
     const arg = argv[i];
     if (!arg.startsWith("--")) continue;
     const key = arg.slice(2);
+    if (key === "join-grant" || key.startsWith("join-grant=")) {
+      throw new Error("--join-grant is not used");
+    }
     const next = argv[i + 1];
     if (!next || next.startsWith("--")) args.set(key, "1");
     else {
@@ -58,7 +60,6 @@ export function parseArgs(argv: string[]): LoadConfig {
     origin,
     target,
     credentialsPath: args.get("credentials") ?? "",
-    joinGrant: args.get("join-grant") ?? "",
     n,
     holdMs: holdSeconds * 1_000,
     concurrency,
@@ -72,11 +73,8 @@ export function validateConfig(config: LoadConfig): void {
   if (config.dryRun) return;
   if (!config.origin) throw new Error("--origin is required for every live run, including --target runs");
   if (!config.target) throw new Error("a ws(s) /v2/ws target is required");
-  if (!config.credentialsPath && !config.joinGrant) {
-    throw new Error("use --credentials for a distributed run or --join-grant for a one-socket smoke");
-  }
   if (!config.credentialsPath && config.n > 1) {
-    throw new Error("--join-grant can create one Room only; n>1 requires --credentials");
+    throw new Error("n>1 requires --credentials");
   }
 }
 
@@ -97,7 +95,7 @@ export function banner(config: LoadConfig): string {
 
 async function loadCredentials(config: LoadConfig): Promise<LoadCredential[]> {
   if (!config.credentialsPath) {
-    return [await enroll(config.origin, config.joinGrant)];
+    return [await enroll(config.origin)];
   }
   const info = await stat(config.credentialsPath);
   if (!info.isFile()) throw new Error("--credentials must name a regular file");
@@ -126,8 +124,7 @@ function validateCredential(value: unknown, index: number): LoadCredential {
   return { daemon_id: daemonId, reconnect_token: reconnectToken };
 }
 
-async function enroll(origin: string, grant: string): Promise<LoadCredential> {
-  if (!/^jg_[0-9a-f]{32}$/.test(grant)) throw new Error("--join-grant is invalid");
+async function enroll(origin: string): Promise<LoadCredential> {
   const credential = {
     daemon_id: "d_" + randomHex(10),
     reconnect_token: "rt_" + randomHex(16),
@@ -135,7 +132,7 @@ async function enroll(origin: string, grant: string): Promise<LoadCredential> {
   const response = await fetch(`${origin}/v2/enroll`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ v: 2, join_grant: grant, ...credential }),
+    body: JSON.stringify({ v: 2, ...credential }),
   });
   const body = await response.json() as { daemon_id?: string; reconnect_token?: string; error?: { code?: string } };
   if (!response.ok || body.daemon_id !== credential.daemon_id || body.reconnect_token !== credential.reconnect_token) {

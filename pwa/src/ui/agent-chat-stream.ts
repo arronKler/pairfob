@@ -98,7 +98,6 @@ function processCard(turn: AgentTurn, live: boolean, kept: DetailsState): HTMLEl
 
 function userBubble(item: AgentTraceItem): HTMLElement {
   const article = node("article", "agent-user");
-  article.append(node("strong", "agent-user-role", t("hist.you")));
   article.append(node("div", "agent-user-text", item.text || ""));
   return article;
 }

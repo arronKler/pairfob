@@ -22,7 +22,6 @@ import (
 )
 
 var (
-	joinGrantPattern      = regexp.MustCompile(`^jg_[0-9a-f]{32}$`)
 	daemonIDPattern       = regexp.MustCompile(`^d_[0-9a-f]{20}$`)
 	reconnectTokenPattern = regexp.MustCompile(`^rt_[0-9a-f]{32}$`)
 )
@@ -58,16 +57,13 @@ func enrollCommand(args []string, sock string) error {
 	origin := fs.String("origin", "", "")
 	force := fs.Bool("force", false, "")
 	if err := fs.Parse(args); err != nil {
-		return errors.New("usage: pairfob enroll [--grant jg_…] [--origin URL] [--force]")
+		return errors.New("usage: pairfob enroll [--origin URL] [--force]")
 	}
 	if strings.TrimSpace(os.Getenv("PAIRFOB_JOIN_TOKEN")) != "" {
 		return errors.New("this setup does not use a join token")
 	}
-	if *grant == "" {
-		*grant = strings.TrimSpace(os.Getenv("PAIRFOB_JOIN_GRANT"))
-	}
-	if *grant != "" && !joinGrantPattern.MatchString(*grant) {
-		return errors.New("that --grant value isn't valid")
+	if *grant != "" || strings.TrimSpace(os.Getenv("PAIRFOB_JOIN_GRANT")) != "" {
+		return errors.New("this setup does not use a join grant")
 	}
 	if *origin == "" {
 		*origin = strings.TrimRight(strings.TrimSpace(os.Getenv("PAIRFOB_ORIGIN")), "/")
@@ -95,20 +91,17 @@ func enrollCommand(args []string, sock string) error {
 		return err
 	}
 	if existing.ReconnectToken != "" && !*force {
-		if *grant == "" {
-			fmt.Printf("This computer is already set up.\nPair a device after Pairfob is running: pairfob pair\n")
-			return nil
-		}
-		return alreadyEnrolledError()
+		fmt.Printf("This computer is already set up.\nPair a device after Pairfob is running: pairfob pair\n")
+		return nil
 	}
-	if _, err := enrollV2(store, *origin, *grant); err != nil {
+	if _, err := enrollV2(store, *origin); err != nil {
 		return err
 	}
 	fmt.Printf("This computer is ready on %s.\nPair a device after Pairfob is running: pairfob pair\n", originHost(*origin))
 	return nil
 }
 
-func enrollV2(store *state.Store, origin, joinGrant string) (state.Relay, error) {
+func enrollV2(store *state.Store, origin string) (state.Relay, error) {
 	if store == nil {
 		return state.Relay{}, errors.New("state store required")
 	}
@@ -125,9 +118,6 @@ func enrollV2(store *state.Store, origin, joinGrant string) (state.Relay, error)
 		return state.Relay{}, errors.New("this computer already started setup for a different site. Re-run the installer.")
 	}
 	if !exists {
-		if joinGrant != "" && !joinGrantPattern.MatchString(joinGrant) {
-			return state.Relay{}, errors.New("that --grant value isn't valid")
-		}
 		daemonID, err := randomHostedValue("d_", 10)
 		if err != nil {
 			return state.Relay{}, err
@@ -137,17 +127,12 @@ func enrollV2(store *state.Store, origin, joinGrant string) (state.Relay, error)
 			return state.Relay{}, err
 		}
 		pending = state.PendingEnroll{
-			Origin: origin, JoinGrant: joinGrant, DaemonID: daemonID,
+			Origin: origin, DaemonID: daemonID,
 			ReconnectToken: reconnectToken, CreatedAt: time.Now().Unix(),
 		}
 		if err := store.SavePendingEnroll(pending); err != nil {
 			return state.Relay{}, err
 		}
-	} else {
-		if joinGrant != "" && joinGrant != pending.JoinGrant {
-			return state.Relay{}, errors.New("this computer already started setup. Re-run the installer.")
-		}
-		joinGrant = pending.JoinGrant
 	}
 	var body struct {
 		OK             bool   `json:"ok"`
@@ -159,9 +144,6 @@ func enrollV2(store *state.Store, origin, joinGrant string) (state.Relay, error)
 	}
 	payload := map[string]any{
 		"v": 2, "daemon_id": pending.DaemonID, "reconnect_token": pending.ReconnectToken,
-	}
-	if joinGrant != "" {
-		payload["join_grant"] = joinGrant
 	}
 	if err := postOriginJSON(origin+"/v2/enroll", payload, 15*time.Second, &body); err != nil {
 		return state.Relay{}, publicOriginError(err)

@@ -17,15 +17,15 @@ Create two custom Rate Limiting rules (or equivalent WAF rate-limit). Counting u
 | Rule | Expression | Limit | Action |
 | --- | --- | --- | --- |
 | pair-intent | `http.request.uri.path eq "/v2/pair-intent"` and `http.request.method eq "POST"` | **10 / 10 minutes / IP** | Block (429). Must run **before** any Index Durable Object RPC. |
-| enroll | `http.request.uri.path eq "/v2/enroll"` and `http.request.method eq "POST"` | **5 / hour / IP** | Block (429). Worker also enforces 1 / minute / grant. |
+| enroll | `http.request.uri.path eq "/v2/enroll"` and `http.request.method eq "POST"` | **5 / hour / IP** | Block (429). Worker also caps open enroll per hashed IP. |
 | session Upgrade | `http.request.uri.path eq "/v2/ws"` and `http.request.uri.query contains "role=client"` and `not http.request.uri.query contains "pair_ticket="` | **60 / minute / IP** | Block (429). QR + SessionWS. |
 | events beacon | `http.request.uri.path eq "/v2/events"` and `http.request.method eq "POST"` | **60 / minute / IP** | Block (429). First-party PWA/site beacons only. |
 
 Hand-entry is already capped by pair-intent; do **not** put `pair_loc` on `/v2/ws` (Worker returns 404 unpaired without Index lookup).
 
-## `ENROLL_OPEN`
+## Abuse caps
 
-Worker env `ENROLL_OPEN=0` rejects **new** `POST /v2/enroll` (403). Product enroll has no user-visible grant; this flag is the kill switch. Existing DaemonRooms and live WebSockets stay up and continue to accrue duration until clients disconnect. For an emergency cost stop: kick every daemon (`POST /v2/admin/daemons/:id/kick`) after closing enroll.
+Open enroll is always on. Cost control is the per-IP D1 cap (`SELF_GRANT_PER_IP` per `SELF_GRANT_WINDOW_MS`), the isolate `allowEnrollIP` first pass, and the WAF enroll rule above. For an emergency cost stop: kick daemons (`POST /v2/admin/daemons/:id/kick`).
 
 ## Headers the WAF must not strip
 

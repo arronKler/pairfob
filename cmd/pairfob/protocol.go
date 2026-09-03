@@ -52,6 +52,9 @@ func inferMux(env muxEnv) (muxPlan, error) {
 	if env.JoinToken != "" {
 		return muxPlan{}, errors.New("PAIRFOB_JOIN_TOKEN is not used")
 	}
+	if env.JoinGrant != "" {
+		return muxPlan{}, errors.New("PAIRFOB_JOIN_GRANT is not used")
+	}
 	plan, err := inferMuxProtocol(env)
 	if err != nil {
 		return plan, err
@@ -106,8 +109,6 @@ func inferMuxProtocol(env muxEnv) (muxPlan, error) {
 			return muxPlan{}, errors.New("PAIRFOB_RELAY_WS must use /v2/ws")
 		}
 		source = "PAIRFOB_RELAY_WS"
-	} else if env.JoinGrant != "" {
-		source = "PAIRFOB_JOIN_GRANT"
 	} else if env.PendingEnrollOrigin != "" {
 		source = "enroll-pending.json"
 	} else {

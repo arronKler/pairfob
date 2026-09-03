@@ -5,17 +5,14 @@ import {
   COMPENSATE_USED_SQL,
   DELETE_DAEMON_SQL,
   INSERT_DAEMON_SQL,
-  INSERT_GRANT_SQL,
   INSERT_SELF_GRANT_ROW_SQL,
   INSERT_SELF_GRANT_SQL,
   KICK_DAEMON_SQL,
   MARK_QUOTA_RELEASED_SQL,
   PRUNE_SELF_GRANTS_SQL,
   RELEASE_KICK_QUOTA_SQL,
-  REVOKE_GRANT_SQL,
   LIST_LIVE_DAEMON_IDS_SQL,
   SELECT_DAEMON_SQL,
-  SELECT_GRANT_BY_HASH_SQL,
   SELECT_GRANT_BY_ID_SQL,
   type DaemonRow,
   type GrantRow,
@@ -53,7 +50,6 @@ export interface SelfGrantRow {
 
 export class FakeD1 implements D1Database {
   grants = new Map<string, GrantRow>();
-  grantsByHash = new Map<string, string>();
   daemons = new Map<string, DaemonRow>();
   selfGrants = new Map<string, SelfGrantRow>();
   enrollNonces = new Map<string, string>();
@@ -146,20 +142,6 @@ export class FakeD1 implements D1Database {
       const ok = this.daemons.delete(String(values[0]));
       return changes(ok ? 1 : 0);
     }
-    if (s === INSERT_GRANT_SQL) {
-      const row: GrantRow = {
-        grant_id: String(values[0]),
-        grant_hash: String(values[1]),
-        max_daemons: Number(values[2]),
-        used: 0,
-        label: (values[3] as string | null) ?? null,
-        created_at: Number(values[4]),
-        revoked_at: null,
-        last_enroll_at: null,
-      };
-      this.putGrant(row);
-      return changes(1);
-    }
     if (s === INSERT_SELF_GRANT_SQL) {
       const grantID = String(values[0]);
       const ipHash = String(values[1]);
@@ -226,22 +208,12 @@ export class FakeD1 implements D1Database {
       daemon.quota_released_at = Number(values[0]);
       return changes(1);
     }
-    if (s === REVOKE_GRANT_SQL) {
-      const g = this.grants.get(String(values[1]));
-      if (!g || g.revoked_at != null) return changes(0);
-      g.revoked_at = Number(values[0]);
-      return changes(1);
-    }
     if (s.startsWith("SELECT")) return changes(0);
     throw new Error("unhandled SQL: " + s);
   }
 
   first<T>(sql: string, values: unknown[]): T | null {
     const s = sql.replace(/\s+/g, " ").trim();
-    if (s === SELECT_GRANT_BY_HASH_SQL) {
-      const id = this.grantsByHash.get(String(values[0]));
-      return (id ? this.grants.get(id) : null) as T | null;
-    }
     if (s === SELECT_GRANT_BY_ID_SQL) {
       return (this.grants.get(String(values[0])) ?? null) as T | null;
     }
@@ -269,7 +241,6 @@ export class FakeD1 implements D1Database {
 
   putGrant(row: GrantRow): void {
     this.grants.set(row.grant_id, row);
-    this.grantsByHash.set(row.grant_hash, row.grant_id);
   }
 }
 

@@ -121,7 +121,7 @@ func runDaemon(store *state.Store, sock string) error {
 		runtimeConfig.Origin = origin
 	}
 	if plan.NeedEnroll {
-		relay, err := enrollV2(store, plan.Origin, env.JoinGrant)
+		relay, err := enrollV2(store, plan.Origin)
 		if err != nil {
 			return fmt.Errorf("enroll: %w", err)
 		}

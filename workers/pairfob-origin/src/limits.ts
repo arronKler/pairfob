@@ -4,7 +4,6 @@ export const LIMITS = {
   enrollIP: { n: 5, windowMs: 60 * 60 * 1000 },
   intentIP: { n: 10, windowMs: 10 * 60 * 1000 },
   sessionIP: { n: 60, windowMs: 60 * 1000 },
-  signupIP: { n: 8, windowMs: 60 * 60 * 1000 },
   eventsIP: { n: 60, windowMs: 60 * 1000 },
 } as const;
 
@@ -33,14 +32,6 @@ export function allowIntentIP(ip: string, now: number): boolean {
 
 export function allowSessionIP(ip: string, now: number): boolean {
   return allow(`session-ip:${ip}`, LIMITS.sessionIP.n, LIMITS.sessionIP.windowMs, now);
-}
-
-/**
- * Cheap first pass only. This bucket is per-isolate, so the authoritative
- * signup quota is the D1 per-IP cap in `insertSelfServeGrant`.
- */
-export function allowSignupIP(ip: string, now: number): boolean {
-  return allow(`signup-ip:${ip}`, LIMITS.signupIP.n, LIMITS.signupIP.windowMs, now);
 }
 
 export function allowEventsIP(ip: string, now: number): boolean {

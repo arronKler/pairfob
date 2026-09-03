@@ -8,7 +8,5 @@ export interface Env {
   IP_HASH_PEPPER: string;
   BUILD?: string;
   P2P_OPEN?: string;
-  ENROLL_OPEN?: string;
   INTENT_PAD_MS?: string;
-  SIGNUP_OPEN?: string;
 }

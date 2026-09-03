@@ -1,5 +1,14 @@
 import { parseAnsi } from "./lib/ansi";
 import { agentTitle, canPromptAgent, tabSiblings, workspaceSiblings } from "./lib/dashboard";
+import {
+  beginDiffNoteSend,
+  composeDiffNotesPrompt,
+  diffNoteScope,
+  diffNoteSendOpen,
+  diffNotesFor,
+  endDiffNoteSend,
+  removeDiffNotes,
+} from "./lib/diff-notes";
 import { askConfirm, askText } from "./lib/dom";
 import { t } from "./lib/i18n";
 import { clearAgentTraceCache, forgetAgentTrace } from "./lib/agent-trace-cache";
@@ -11,6 +20,7 @@ import {
   type ListWorktreesInput,
   type WorktreeDraft,
 } from "./lib/operations";
+import { type GitLayer } from "./lib/workspace";
 import {
   askAgentPrompt,
   askCreateConversation,
@@ -20,8 +30,9 @@ import {
   askWorktree,
   showWorktrees,
 } from "./lib/operation-ui";
-import { ProtocolError, type DeviceSummary } from "./lib/protocol/client";
+import { ProtocolError, type DeviceSummary, type LiveSession } from "./lib/protocol/client";
 import { type AgentCard } from "./lib/ranking";
+import { startWorktreeJob, type WorktreeJobDriver } from "./lib/worktree-jobs";
 import { landAfterDisconnect, openPane, refreshFromSession, refreshPane } from "./live";
 import { reconcileAmbiguousMutation, reportMutationError } from "./mutations";
 import { render } from "./paint";
@@ -126,6 +137,33 @@ async function selectCreatedPane(result: { pane_id?: string }): Promise<void> {
   if (paneId) await openPane(paneId);
 }
 
+/**
+ * CreateWorktree runs as a background job card instead of a global
+ * `operationBusy` lock: `git fetch` + `worktree add` can take a while and the
+ * rest of the app must stay usable meanwhile. Retry means a new create call
+ * with a fresh operation_id; cancel only drops the card (there is no cancel
+ * RPC), and a late result is ignored.
+ */
+function worktreeJobDriver(session: LiveSession, scope: ListWorktreesInput): WorktreeJobDriver {
+  return {
+    create: (input) => session.createWorktree(input),
+    // The job outlives the dialog, so every later effect re-checks the session:
+    // a computer switch mid-create must not open a pane from the old herd.
+    refresh: async () => {
+      if (state.live === session) await refreshFromSession();
+    },
+    openPane: async (paneId) => {
+      if (state.live === session) await openPane(paneId);
+    },
+    reconcile: (error) => reconcileAmbiguousMutation(session, error, scope),
+    messageOf,
+    repaint: render,
+    succeeded: () => {
+      if (state.live === session) showStatus(t("op.createdWorktree"));
+    },
+  };
+}
+
 export async function startNewConversation(): Promise<void> {
   const session = state.live;
   if (!session || !state.operationCapabilities.create_conversation) return;
@@ -186,6 +224,48 @@ export async function promptSelectedAgent(): Promise<void> {
   );
 }
 
+/**
+ * Batch every diff note for one path/layer into ONE PromptAgent call; never
+ * one RPC per comment. Oversize batches are refused, never silently clipped,
+ * and mutations are never retried automatically on ambiguous outcomes.
+ */
+export async function sendDiffNotesToAgent(path: string, layer: GitLayer): Promise<void> {
+  const session = state.live;
+  const selected = selectedAgent();
+  const owner = diffNoteScope();
+  if (!session || !path || !owner || !canPromptAgent(selected) || !state.operationCapabilities.prompt_agent) return;
+  if (state.operationBusy || diffNoteSendOpen() || !session.isConnected()) return;
+  if (owner.session !== session || owner.paneId !== selected.paneId) return;
+  const list = diffNotesFor(path, layer);
+  if (!list.length) return;
+  const composed = composeDiffNotesPrompt(path, layer, list);
+  if (composed.truncated) {
+    showError(t("diffNotes.tooBig"));
+    render();
+    return;
+  }
+  const sentIds = list.map((note) => note.id);
+  const noticeScope = captureNoticeScope();
+  beginDiffNoteSend(sentIds);
+  try {
+    await runHerdOperation(
+      t("op.sendingTask"),
+      t("op.sentTask"),
+      () => session.promptAgent({ pane_id: selected.paneId, text: composed.text }),
+      {
+        noticeScope,
+        after: async () => {
+          removeDiffNotes(sentIds);
+          markPaneSubmitted(selected.paneId);
+          if (state.live === session && noticeScopeIsCurrent(noticeScope)) await refreshPane();
+        },
+      },
+    );
+  } finally {
+    endDiffNoteSend();
+  }
+}
+
 function selectedWorktreeDefaults(): WorktreeDraft | null {
   const selected = selectedAgent();
   return selected ? worktreeScope(selected.workspaceId, selected.cwd) : null;
@@ -222,10 +302,12 @@ export async function createSelectedWorktree(): Promise<void> {
   if (!session || !defaults || !state.operationCapabilities.create_worktree) return;
   const input = await askWorktree("create", defaults);
   if (!input || state.live !== session) return;
-  await runHerdOperation(t("op.creatingWorktree"), t("op.createdWorktree"), () => session.createWorktree(input), {
-    after: selectCreatedPane,
-    reconcileWorktrees: defaults,
-  });
+  // No `operationBusy` here on purpose: the create runs as a job card so other
+  // sessions stay tappable while the daemon does fetch + worktree add.
+  if (!startWorktreeJob(worktreeJobDriver(session, defaults), input)) {
+    showError(t("op.worktreeJobLimit"));
+    render();
+  }
 }
 
 export async function openSelectedWorktree(): Promise<void> {

@@ -21,7 +21,7 @@ describe("pane header keeps status surfaces in step", () => {
     const start = viewSource.indexOf("function syncChromeStatus(");
     const sync = viewSource.slice(start, viewSource.indexOf("function chromeNode("));
     expect(sync).toContain('"aria-label"');
-    expect(sync).toContain("syncChromeStop(chrome, selected.status === \"working\"");
+    expect(sync).toContain("syncChromeStop(chrome, canInterruptAgent(selected.status)");
     expect(sync).not.toContain("title.after");
     expect(actionsSource).toContain(".icon-stop");
     expect(actionsSource).toContain('t("pane.interrupt")');

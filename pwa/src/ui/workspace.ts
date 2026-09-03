@@ -1,5 +1,6 @@
 import { button, node } from "../lib/dom";
 import { highlightSource } from "../lib/syntax-highlight";
+import { diffNoteTarget } from "../lib/diff-notes";
 import {
   gitChangeKind,
   gitLayers,
@@ -28,6 +29,7 @@ import {
 } from "../workspace";
 import { appendNotice, backButton, chevron, spinnerNode } from "./chrome";
 import { present, sheet, sheetItem, sheetSection } from "./sheet";
+import { diffLineHasNote, diffNoteCards, diffNotesBar, openDiffNoteEditor } from "./workspace-diff-notes";
 
 const MAX_RENDERED_DIFF_LINES = 800;
 let modifiedDateLocale = "";
@@ -321,6 +323,8 @@ function diffDetail(): HTMLElement {
   else {
     const table = node("div", "workspace-diff");
     table.setAttribute("role", "table");
+    // Truncated diffs hide lines, so note pins could target the wrong content.
+    const noteable = !diff.truncated;
     for (const line of parsed.slice(0, MAX_RENDERED_DIFF_LINES)) {
       const row = node("div", `workspace-diff-line diff-${line.kind}`);
       row.setAttribute("role", "row");
@@ -329,10 +333,23 @@ function diffDetail(): HTMLElement {
         node("span", "diff-line-number", line.newLine === null ? "" : String(line.newLine)),
         node("code", "diff-line-text", line.text || " "),
       );
+      const target = noteable ? diffNoteTarget(diff.path, workspaceModel.diffLayer, line) : null;
+      if (target) {
+        row.classList.add("diff-noteable");
+        if (diffLineHasNote(target)) row.classList.add("has-note");
+        row.title = t("diffNotes.addTitle");
+        row.addEventListener("click", () => {
+          if (state.operationBusy) return;
+          openDiffNoteEditor(target);
+        });
+      }
       table.append(row);
+      if (target) table.append(...diffNoteCards(target));
     }
     detail.append(table);
     if (parsed.length > MAX_RENDERED_DIFF_LINES) detail.append(node("p", "workspace-limit", t("workspace.diffRenderLimit", { count: MAX_RENDERED_DIFF_LINES })));
+    const notesBar = diffNotesBar(diff.path, workspaceModel.diffLayer);
+    if (notesBar) detail.append(notesBar);
   }
   if (diff.truncated) detail.append(node("p", "workspace-limit", t("workspace.diffTruncated")));
   return detail;

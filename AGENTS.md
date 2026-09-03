@@ -18,9 +18,7 @@ pairfob --loopback--> HarnessRuntime
 The relay / DO is frame-level only and does not parse `FWD`. Identity and keys
 live only on the daemon. Reads and writes require an `Established` session. The
 product relay is `workers/pairfob-origin` (`pairfob.v2`). `https://pairfob.com`
-is this project's official instance. New computer setup can close
-(`SIGNUP_OPEN` / `ENROLL_OPEN`); that is a cost valve, and already-enrolled
-computers keep working. User docs do not offer a self-hosted origin. The
+is this project's official instance. User docs do not offer a self-hosted origin. The
 `internal/mux` Hub is an in-process test stand-in, not a deployable origin.
 
 ## File size (hard limit)

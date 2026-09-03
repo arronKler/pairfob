@@ -7,10 +7,19 @@ describe("load-mux configuration", () => {
       .toThrow("--origin is required");
   });
 
-  test("one grant cannot pretend to distribute a multi-room load", () => {
+  test("n>1 without credentials cannot pretend to distribute a multi-room load", () => {
     expect(() => parseArgs([
-      "--origin", "https://pairfob.com", "--join-grant", "jg_" + "ab".repeat(16), "--n", "1000",
+      "--origin", "https://pairfob.com", "--n", "1000",
     ])).toThrow("n>1 requires --credentials");
+  });
+
+  test("join-grant is rejected", () => {
+    expect(() => parseArgs([
+      "--origin", "https://pairfob.com", "--join-grant", "jg_" + "ab".repeat(16), "--n", "1",
+    ])).toThrow("--join-grant is not used");
+    expect(() => parseArgs([
+      "--origin", "https://pairfob.com", "--join-grant=jg_" + "ab".repeat(16), "--n", "1",
+    ])).toThrow("--join-grant is not used");
   });
 
   test("a distributed operational run has a concrete target and no secret path in its banner", () => {

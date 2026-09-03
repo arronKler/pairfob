@@ -1,5 +1,6 @@
 import { button, node, showHelp, type HelpBlock } from "../lib/dom";
 import { type LangPref, langPref, setLangPref, t } from "../lib/i18n";
+import { runtimeLiveness, type RuntimeLiveness } from "../lib/runtime-liveness";
 import { type ListGroup } from "../lib/ranking";
 import { render } from "../paint";
 import { clearNotice, saveListGroup, state, type Notice, type StatusTone, visibleNotice } from "../state";
@@ -162,18 +163,37 @@ export function emptyNode(title: string, sub: string): HTMLElement {
   return empty;
 }
 
+/** Interrupt is a mutation: only a live, currently-working agent may show Stop. */
+export function canInterruptAgent(status: string): boolean {
+  return status === "working" && herdLiveness() === "live";
+}
+
+/** Loss of contact is never process death: only a connected session that reports `runtime=offline` is exited. */
+export function herdLiveness(): RuntimeLiveness {
+  return runtimeLiveness({
+    connected: state.live?.isConnected() === true,
+    networkOnline: state.networkOnline,
+    runtimeKind: state.runtimeKind,
+  });
+}
+
 export function herdStatus(): { tone: StatusTone; text: string } {
   if (!state.networkOnline) return { tone: "warn", text: t("chrome.networkOffline") };
-  if (state.live && !state.live.isConnected()) return { tone: "warn", text: t("chrome.reconnecting") };
+  const verdict = herdLiveness();
+  if (verdict === "unverifiable") {
+    const connected = state.live?.isConnected() === true;
+    return { tone: "warn", text: connected ? t("chrome.unverifiable") : t("chrome.reconnecting") };
+  }
+  if (verdict === "exited") return { tone: "off", text: t("chrome.herdrOff") };
   if (state.runtimeKind === "fake") return { tone: "demo", text: t("chrome.demo") };
-  if (state.runtimeKind === "offline") return { tone: "off", text: t("chrome.herdrOff") };
   if (state.herdHost) return { tone: "live", text: t("chrome.connectedHost", { host: state.herdHost }) };
   return { tone: "live", text: t("chrome.connected") };
 }
 
-export function herdBanners(target: HTMLElement, status: { tone: StatusTone }): void {
+export function herdBanners(target: HTMLElement, status: { tone: StatusTone }, verdict: RuntimeLiveness = herdLiveness()): void {
   if (status.tone === "demo") target.append(bannerNode("demo", t("chrome.demoBanner")));
   else if (status.tone === "off") target.append(bannerNode("off", t("chrome.herdrOffBanner")));
+  else if (verdict === "unverifiable" && state.agents.length > 0) target.append(bannerNode("warn", t("chrome.staleBanner")));
 }
 
 export function backBar(title: string, onBack: () => void): HTMLElement {

@@ -132,18 +132,18 @@ describe("user-facing documentation", () => {
     expect(docs).not.toContain("/self-host");
   });
 
-  test("names the official instance, Apache-2.0, and closed enroll", async () => {
+  test("names the official instance and Apache-2.0", async () => {
     const faqEn = await Bun.file(new URL("./faq.md", import.meta.url)).text();
     const indexZh = await Bun.file(new URL("./zh/index.md", import.meta.url)).text();
     const indexEn = await Bun.file(new URL("./index.md", import.meta.url)).text();
     expect(faq).toContain("官方实例");
     expect(faq).toContain("Apache-2.0");
     expect(faq).toContain("https://github.com/arronKler/pairfob");
-    expect(faq).toContain("新电脑登记随时可能关上");
+    expect(faq).not.toContain("新电脑登记随时可能关上");
     expect(faqEn).toContain("official instance");
     expect(faqEn).toContain("Apache-2.0");
     expect(faqEn).toContain("https://github.com/arronKler/pairfob");
-    expect(faqEn).toContain("New computer setup can close");
+    expect(faqEn).not.toContain("New computer setup can close");
     expect(indexZh).not.toContain("官方实例");
     expect(indexEn).not.toContain("Official instance");
     expect(indexZh).not.toContain("不适合当什么");

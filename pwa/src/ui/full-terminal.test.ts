@@ -19,7 +19,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     const renderFn = fn("export function renderFullTerminal(", "export function handleFullTerminalEvent(");
     expect(renderFn).toContain("chromeActionCluster(onWorkspace, onMenu)");
     expect(renderFn).toContain("syncFullTerminalChrome()");
-    expect(source).toContain("syncChromeStop(chrome, selectedAgent()?.status === \"working\", interruptFullTerminal)");
+    expect(source).toContain("syncChromeStop(chrome, canInterruptAgent(selectedAgent()?.status ?? \"\"), interruptFullTerminal)");
     expect(renderFn).not.toContain('button("退出"');
     expect(renderFn).not.toContain("full-terminal-exit");
     expect(renderFn).not.toContain('button("重连"');
@@ -133,10 +133,24 @@ describe("complete-terminal chrome stays a distinct surface", () => {
   });
 
   test("retry remounts a missing renderer instead of leaving the mode", () => {
+    const resume = fn("function resumeFullTerminal(", "export function retryFullTerminal(");
     const retry = fn("export function retryFullTerminal(", "export function enterFullTerminal(");
-    expect(retry).toContain("scheduleMount(host)");
-    expect(retry).toContain("openBridge(false)");
+    const open = fn("async function openBridge(", "async function suspendBridge(");
+    expect(resume).toContain("scheduleMount(host)");
+    expect(resume).toContain("openBridge(false)");
+    expect(resume).toContain('document.visibilityState === "hidden"');
+    expect(resume).toContain("bridgeVersion++");
+    expect(retry).toContain("resumeFullTerminal()");
+    expect(retry).not.toContain("terminalStatus.start");
     expect(retry).not.toContain("state.fullTerminal = false");
+    expect(open.indexOf('document.visibilityState === "hidden"')).toBeLessThan(open.indexOf("terminalStatus.start"));
+  });
+
+  test("drops stale frames before treating a forward sequence jump as a gap", () => {
+    const eventFn = fn("export function handleFullTerminalEvent(", "export function handleFullTerminalVisibility(");
+    expect(eventFn.indexOf("sequence <= lastFrameSequence")).toBeLessThan(
+      eventFn.indexOf("sequence !== lastFrameSequence + 1n"),
+    );
   });
 
   test("paints the loading shell before mounting xterm and skips the observer's initial duplicate fit", () => {

@@ -4,7 +4,7 @@ set -eu
 
 usage() {
   cat <<'EOF'
-usage: install.sh [--origin URL] [--prefix DIR] [--grant jg_…] [--no-service] [--no-enroll]
+usage: install.sh [--origin URL] [--prefix DIR] [--no-service] [--no-enroll]
 
 Downloads the pairfob binary for this machine, verifies SHA-256, enrolls
 against pairfob.com (or --origin), and installs a user-level service that
@@ -14,7 +14,6 @@ starts at login.
 EOF
 }
 
-GRANT=""
 ORIGIN=""
 PREFIX="${PAIRFOB_INSTALL_PREFIX:-}"
 NO_SERVICE=0
@@ -24,14 +23,9 @@ BASE="${BASE%/}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --grant)
-      [ "$#" -ge 2 ] || { echo "install.sh: --grant needs a value" >&2; exit 1; }
-      GRANT="$2"
-      shift 2
-      ;;
-    --grant=*)
-      GRANT="${1#--grant=}"
-      shift
+    --grant | --grant=*)
+      echo "install.sh: this setup does not use a join grant" >&2
+      exit 1
       ;;
     --origin)
       [ "$#" -ge 2 ] || { echo "install.sh: --origin needs a value" >&2; exit 1; }
@@ -162,9 +156,6 @@ echo "installed ${dest}"
 
 if [ "$NO_ENROLL" -eq 0 ]; then
   set --
-  if [ -n "$GRANT" ]; then
-    set -- "$@" --grant "$GRANT"
-  fi
   if [ -n "$ORIGIN" ]; then
     set -- "$@" --origin "$ORIGIN"
   fi

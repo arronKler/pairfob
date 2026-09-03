@@ -59,7 +59,7 @@ describe("static content security policy", () => {
   });
 
   test("JSON routes never widen the policy", async () => {
-    for (const path of ["/api/config", "/v2/health", "/v2/grants", "/v2/events"]) {
+    for (const path of ["/api/config", "/v2/health", "/v2/enroll", "/v2/events"]) {
       expect(await cspOf(path)).not.toContain(REMOTE_CHALLENGE);
     }
   });

@@ -22,7 +22,6 @@ import { allowSessionIP } from "./limits.ts";
 import { observeError, observeUpgrade } from "./metrics.ts";
 import { handlePairIntent } from "./pair-intent.ts";
 import { handleRekey } from "./rekey.ts";
-import { handleSignup } from "./signup.ts";
 
 const PLACEHOLDER = `<!doctype html><meta charset="utf-8"><title>Pairfob</title><h1>Pairfob</h1><p>Hosted origin. Production copies pwa/dist into R2.</p>`;
 
@@ -53,7 +52,7 @@ export async function handleFetch(req: Request, env: Env): Promise<Response> {
   if (path === "/v2/rekey") return handleRekey(req, env);
   if (path === "/v2/pair-intent") return handlePairIntent(req, env);
   if (path === "/v2/events") return handleEvents(req, env);
-  if (path === "/v2/grants") return handleSignup(req, env);
+  if (path === "/v2/grants") return errorJson(build, 404, "unbound", noStore());
 
   const admin = await handleAdmin(req, env);
   if (admin) return admin;

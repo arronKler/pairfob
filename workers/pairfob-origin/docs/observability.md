@@ -25,7 +25,7 @@ Labels are fail-closed: only `[A-Za-z0-9._:-]{1,64}`. `jg_` / `rt_` / `it_` / `p
 
 ### Server events
 
-`enroll`, `pair_intent`, `signup`, `ws_open`, `ws_close`, `bind`, `fwd`, `alarm_late`, `error`, `page`
+`enroll`, `pair_intent`, `ws_open`, `ws_close`, `bind`, `fwd`, `alarm_late`, `error`, `page`
 
 `page` dimensions: `home`, `home_zh`, `pair`, `docs`, `install`, `download`. Asset files are not counted.
 
@@ -79,7 +79,7 @@ Live sockets are **not** AE gauges. Sample them with `GET /v2/admin/stats` (up t
 ## Runbook
 
 1. GB-s / connection jump: `rg "acceptWebSocket|server\\.accept\\(|setTimeout" workers/` and confirm `server.accept(` is absent from the bundle.
-2. `ENROLL_OPEN=0` stops new rooms; live duration continues until disconnect. Emergency cost stop: kick daemons.
+2. Emergency cost stop: kick daemons (`POST /v2/admin/daemons/:id/kick`).
 3. Kick: `POST /v2/admin/daemons/:id/kick`.
 4. Pair-intent `unpaired` vs `ok` is occupancy-safe: miss and slot mismatch share the same 404, and unpaired points must not leak `pair_loc`.
 5. If invocation logs ever include a `pair_ticket` query, turn on query-string redaction in the dashboard (Workers Observability cannot redact path segments).

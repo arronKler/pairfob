@@ -30,14 +30,19 @@ func TestInferMuxTable(t *testing.T) {
 		},
 		{
 			name:       "env v2 enroll",
-			env:        muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", JoinGrant: grant, Origin: "https://pairfob.com"},
+			env:        muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", Origin: "https://pairfob.com"},
 			protocol:   2,
 			needEnroll: true,
 		},
 		{
 			name: "join token always rejected",
-			env:  muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", JoinGrant: grant, JoinToken: "pf_dev", Origin: "https://pairfob.com"},
+			env:  muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", JoinToken: "pf_dev", Origin: "https://pairfob.com"},
 			err:  "JOIN_TOKEN",
+		},
+		{
+			name: "join grant always rejected",
+			env:  muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", JoinGrant: grant, Origin: "https://pairfob.com"},
+			err:  "JOIN_GRANT",
 		},
 		{
 			name:       "env v2 missing grant enrolls hosted",
@@ -47,13 +52,7 @@ func TestInferMuxTable(t *testing.T) {
 		},
 		{
 			name:       "env v2 derives origin from relay ws",
-			env:        muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", JoinGrant: grant},
-			protocol:   2,
-			needEnroll: true,
-		},
-		{
-			name:       "grant only defaults hosted origin",
-			env:        muxEnv{JoinGrant: grant},
+			env:        muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon"},
 			protocol:   2,
 			needEnroll: true,
 		},
@@ -80,7 +79,7 @@ func TestInferMuxTable(t *testing.T) {
 		},
 		{
 			name: "v1 relay url rejected",
-			env:  muxEnv{RelayWS: v1URL, JoinGrant: grant},
+			env:  muxEnv{RelayWS: v1URL},
 			err:  "/v2/ws",
 		},
 		{
@@ -95,12 +94,12 @@ func TestInferMuxTable(t *testing.T) {
 		},
 		{
 			name: "protocol env 1 rejected",
-			env:  muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", ProtocolEnv: "1", JoinGrant: grant},
+			env:  muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", ProtocolEnv: "1"},
 			err:  "PAIRFOB_PROTOCOL must be 2",
 		},
 		{
 			name:       "protocol env matches v2",
-			env:        muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", ProtocolEnv: "2", JoinGrant: grant, Origin: "https://pairfob.com"},
+			env:        muxEnv{RelayWS: "wss://pairfob.com/v2/ws?role=daemon", ProtocolEnv: "2", Origin: "https://pairfob.com"},
 			protocol:   2,
 			needEnroll: true,
 		},
@@ -108,6 +107,11 @@ func TestInferMuxTable(t *testing.T) {
 			name: "stored v2 still rejects join token",
 			env:  muxEnv{StoredProtocol: 2, StoredURL: v2URL, StoredToken: "rt_x", JoinToken: "pf_dev"},
 			err:  "JOIN_TOKEN",
+		},
+		{
+			name: "stored v2 still rejects join grant",
+			env:  muxEnv{StoredProtocol: 2, StoredURL: v2URL, StoredToken: "rt_x", JoinGrant: grant},
+			err:  "JOIN_GRANT",
 		},
 		{
 			name:     "first match stored over env path",
@@ -126,7 +130,7 @@ func TestInferMuxTable(t *testing.T) {
 		},
 		{
 			name: "new v2 relay origin conflict",
-			env:  muxEnv{RelayWS: "wss://relay.example/v2/ws?role=daemon", JoinGrant: grant, Origin: "https://pairfob.com"},
+			env:  muxEnv{RelayWS: "wss://relay.example/v2/ws?role=daemon", Origin: "https://pairfob.com"},
 			err:  "conflicts",
 		},
 	}
@@ -155,18 +159,15 @@ func TestInferMuxTable(t *testing.T) {
 	}
 }
 
-func TestMuxEnvFromProcessGrantOnlyDoesNotInventV1Relay(t *testing.T) {
+func TestMuxEnvFromProcessGrantOnlyIsRejected(t *testing.T) {
 	t.Setenv("PAIRFOB_RELAY_WS", "")
 	t.Setenv("PAIRFOB_PROTOCOL", "")
 	t.Setenv("PAIRFOB_JOIN_TOKEN", "")
 	t.Setenv("PAIRFOB_ORIGIN", "")
 	t.Setenv("PAIRFOB_JOIN_GRANT", "jg_"+strings.Repeat("a", 32))
-	plan, err := inferMux(muxEnvFromProcess(state.Relay{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if plan.Protocol != 2 || !plan.NeedEnroll || plan.Origin != defaultHostedOrigin {
-		t.Fatalf("plan=%+v", plan)
+	_, err := inferMux(muxEnvFromProcess(state.Relay{}))
+	if err == nil || !strings.Contains(err.Error(), "JOIN_GRANT") {
+		t.Fatalf("got %v", err)
 	}
 }
 

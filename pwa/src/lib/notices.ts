@@ -57,8 +57,6 @@ const FRIENDLY_CODES = [
   "bad_proof",
   "bad_signature",
   "invalid_credential",
-  "bad_grant",
-  "grant_exhausted",
 ] as const;
 
 const FRIENDLY_SET = new Set<string>(FRIENDLY_CODES);

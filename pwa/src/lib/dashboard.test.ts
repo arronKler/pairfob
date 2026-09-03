@@ -65,6 +65,9 @@ describe("dashboard mapping", () => {
     expect(agentTitle(agents[1])).toBe("Relay");
     expect(agentMeta(agents[1])).toBe("codex · custom");
     expect(statusLabel("blocked")).toBe("等你");
+    expect(statusLabel("unknown")).toBe("未知");
+    expect(statusLabel("unknown")).not.toBe("");
+    expect(statusLabel("unknown")).not.toBe(statusLabel("idle"));
   });
 
   test("space grouping puts the agent on the card instead of repeating the workspace", () => {
@@ -192,6 +195,40 @@ describe("dashboard mapping", () => {
     expect(pane.status).toBe("idle");
     expect(agentTitle(pane)).toBe("shell");
     expect(agentMeta(pane)).toBe("终端");
+  });
+
+  test("agentless shells stay idle even when the wire carries a recognized agent status", () => {
+    for (const wire of ["working", "blocked", "done", "idle"] as const) {
+      const [pane] = mapSnapshotAgents({
+        workspaces: [{ workspace_id: "w1", label: "shell" }],
+        panes: [{ pane_id: "p1", workspace_id: "w1", agent_status: wire }],
+      });
+      expect(pane.hasAgent, wire).toBe(false);
+      expect(pane.status, wire).toBe("idle");
+    }
+  });
+
+  test("an agent pane with missing or unrecognized status is unknown, not idle", () => {
+    const [omitted] = mapSnapshotAgents({
+      workspaces: [{ workspace_id: "w1", label: "Pairfob" }],
+      panes: [{ pane_id: "p1", workspace_id: "w1", agent: "claude" }],
+    });
+    expect(omitted.hasAgent).toBe(true);
+    expect(omitted.status).toBe("unknown");
+
+    const [empty] = mapSnapshotAgents({
+      workspaces: [{ workspace_id: "w1", label: "Pairfob" }],
+      panes: [{ pane_id: "p1", workspace_id: "w1", agent: "claude", agent_status: "" }],
+    });
+    expect(empty.status).toBe("unknown");
+
+    const [mystery] = mapSnapshotAgents({
+      workspaces: [{ workspace_id: "w1", label: "Pairfob" }],
+      panes: [{ pane_id: "p1", workspace_id: "w1", agent: "claude", agent_status: "mystery" }],
+    });
+    expect(mystery.status).toBe("unknown");
+    expect(statusLabel(mystery.status)).toBe("未知");
+    expect(statusLabel(mystery.status)).not.toBe(statusLabel("idle"));
   });
 
   test("missing labels never expose internal ids as names", () => {

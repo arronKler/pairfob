@@ -38,6 +38,8 @@ function boot(): void {
   state.listGroup = "flat";
   state.panePinned = {};
   state.operationBusy = false;
+  state.runtimeKind = "herdr";
+  state.networkOnline = true;
   state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES };
   state.agents = [
     {
@@ -123,6 +125,20 @@ describe("session list object controls", () => {
     expect(app.querySelector(".card-more")).toBeNull();
     expect(app.querySelector(".card-split")).toBeNull();
     expect(cardNamed("one").getAttribute("aria-haspopup")).toBe("menu");
+  });
+
+  test("an unknown agent status shows the unknown pill and is not Needs you", () => {
+    boot();
+    state.agents[0].status = "unknown";
+    renderHome();
+    const card = cardNamed("one").closest("article.card");
+    expect(card?.classList.contains("status-unknown")).toBe(true);
+    expect(card?.classList.contains("status-blocked")).toBe(false);
+    const pill = card?.querySelector(".pill-unknown");
+    expect(pill).not.toBeNull();
+    expect(pill?.textContent).toBe("未知");
+    expect(pill?.textContent).not.toBe("空闲");
+    expect(card?.querySelector(".pill-idle")).toBeNull();
   });
 
   test("a default tab is not offered rename; a named or split tab is", () => {

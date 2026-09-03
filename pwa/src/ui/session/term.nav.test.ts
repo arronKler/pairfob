@@ -116,6 +116,26 @@ describe("guided pane no longer overlays earlier output", () => {
   });
 });
 
+describe("interrupt while unverifiable", () => {
+  test("a working pane hides Stop after a disconnect or failed GetConfig", () => {
+    bootGuided();
+    state.agents[0].status = "working";
+    state.runtimeKind = "herdr";
+    renderPane();
+    expect(app.querySelector(".icon-stop")).not.toBeNull();
+
+    state.live = { ...live(), isConnected: () => false };
+    renderPane();
+    expect(app.querySelector(".icon-stop")).toBeNull();
+    expect(app.querySelector(".chrome-meta-text")?.textContent).toContain("未知");
+
+    state.live = live();
+    state.runtimeKind = "";
+    renderPane();
+    expect(app.querySelector(".icon-stop")).toBeNull();
+  });
+});
+
 describe("control-mode TUI page rail", () => {
   test("outer arrows send mouse-wheel TerminalScroll instead of cursor keys", async () => {
     bootGuided();

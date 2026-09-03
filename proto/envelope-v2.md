@@ -41,7 +41,7 @@ No cookies. Enroll, pair-intent, rekey, and config responses use
 | GET | `/` `/assets/*` `/sw.js` `/manifest.webmanifest` `/pair` | - | PWA with the complete security-header set |
 | GET | `/api/config` | - | `{protocol:2, build,p2p}`; `p2p` is the direct-upgrade kill switch |
 | GET | `/v2/health` | - | `{ok:true, protocol:2}` |
-| POST | `/v2/enroll` | Absent or non-browser | Validate and echo the client-persisted `daemon_id` / `reconnect_token`, with optional `join_grant` |
+| POST | `/v2/enroll` | Absent or non-browser | Validate and echo the client-persisted `daemon_id` / `reconnect_token` |
 | POST | `/v2/pair-intent` | **Same-origin required** | Metered locator lookup; 10 requests per 10 minutes per IP |
 | POST | `/v2/rekey` | Absent or non-browser | Atomically replace the old reconnect token with the client-persisted new token and echo it |
 | GET | `/v2/ws` | Phone must be same-origin; daemon may omit Origin | Upgrade with `pairfob.v2` |
@@ -80,9 +80,10 @@ Successful response:
 
 ### enroll
 
-The product path omits `join_grant`. The Worker mints an internal one-slot
-grant for that enrollment, subject to a per-IP cap. The compatibility path
-still accepts `join_grant` as `jg_` plus 32 lowercase hex characters.
+The enroll body is `{v:2, daemon_id, reconnect_token}`. A leftover
+`join_grant` field is ignored. The Worker mints an internal one-slot grant for
+that enrollment, subject to a per-IP cap. The minted grant is not a user
+credential and is never returned as `join_grant`.
 
 Before enrollment, `pairfob` generates and persists `daemon_id` as `d_` plus
 20 lowercase hex characters (10 random bytes) and `reconnect_token` as `rt_`
@@ -99,15 +100,13 @@ replaces the token when the current hash matches the old value. If the current
 hash already matches the new value, the repeated request succeeds
 idempotently. The response must echo the new token.
 
-Failures use `bad_grant` or `grant_exhausted`. The grant update is:
-`UPDATE grants SET used = used + 1 WHERE grant_hash=? AND revoked_at IS NULL AND used < max_daemons`.
-A Room failure must compensate the `used` increment.
+The grant update is an internal CAS on the minted one-slot row. A Room failure
+must compensate the `used` increment. Per-IP open-enroll exhaustion uses
+`rate_limited`.
 
-Kick preserves the row, sets `kicked_at`, and decrements `used`. Revoke does not
-disconnect already established connections.
+Kick preserves the row, sets `kicked_at`, and decrements `used`.
 
-`PAIRFOB_JOIN_TOKEN` is forbidden. The product path does not require
-`PAIRFOB_JOIN_GRANT`; that variable exists only for compatibility.
+`PAIRFOB_JOIN_TOKEN` and `PAIRFOB_JOIN_GRANT` are forbidden.
 
 ## WebSocket Upgrade query
 
@@ -182,8 +181,8 @@ Common mux error codes are `unbound`, `unpaired`, `pair_busy`, `pair_timeout`,
 `too_many_devices`, `kicked`, `daemon_offline`, `rate_limited`, `wrong_ws`, and
 `bad_token`.
 
-v2 enrollment and index error codes are `locator_required`, `bad_grant`,
-`grant_exhausted`, `enroll_required`, and `index_unavailable`.
+v2 enrollment and index error codes are `locator_required`, `enroll_required`,
+and `index_unavailable`.
 
 ## Heartbeat
 

@@ -447,6 +447,42 @@
 .diff-hunk { background: rgba(110, 168, 254, 0.12); color: #9fc3ff; }
 .diff-meta { color: var(--muted); }
 
+.workspace-diff-line.diff-noteable { cursor: pointer; }
+.workspace-diff-line.diff-noteable:active { background: rgba(110, 168, 254, 0.2); }
+.workspace-diff-line.has-note { box-shadow: inset 3px 0 0 var(--accent); }
+
+.workspace-diff-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 100%;
+  margin: 3px 0 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.diff-note-mark { flex: none; color: var(--accent); }
+.diff-note-body { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.74rem; line-height: 1.5; }
+.diff-note-actions { display: flex; gap: 4px; flex: none; }
+.diff-note-action { min-width: 44px; min-height: 44px; font-size: 0.7rem; }
+
+.workspace-notes-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.workspace-notes-count { flex: none; color: var(--muted); font-size: 0.74rem; }
+.workspace-notes-hint { flex: 1; min-width: 0; color: var(--warn); font-size: 0.7rem; }
+.workspace-notes-send { flex: none; min-height: 44px; margin-left: auto; }
+.diff-note-modal .operation-field textarea { min-height: 5.5rem; }
+
 .workspace-limit {
   margin: 0;
   padding: 9px 12px calc(9px + env(safe-area-inset-bottom, 0px));

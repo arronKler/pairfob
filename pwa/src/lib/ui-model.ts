@@ -1,5 +1,6 @@
 import { locale, t } from "./i18n.ts";
 import { type DeviceSummary } from "./protocol/session-types.ts";
+import { runtimeLiveness } from "./runtime-liveness.ts";
 
 export type PairErrorField = "code" | null;
 
@@ -47,11 +48,15 @@ export function shouldForgetPairFragment(code: string): boolean {
   return ["unpaired", "bad_pair_code", "pairing_replaced", "pairing_expired", "fp_mismatch", "bad_relay", "sas_required", "pairing_cancelled", "revoked"].includes(code);
 }
 
-export function emptySessionCopy(runtimeKind: string, connected: boolean, canCreate: boolean): EmptySessionCopy {
-  if (!connected) {
-    return { title: t("empty.reconnectingTitle"), detail: t("empty.reconnectingDetail") };
+export function emptySessionCopy(runtimeKind: string, connected: boolean, canCreate: boolean, networkOnline = true): EmptySessionCopy {
+  const verdict = runtimeLiveness({ connected, networkOnline, runtimeKind });
+  if (verdict === "unverifiable") {
+    if (!connected || !networkOnline) {
+      return { title: t("empty.reconnectingTitle"), detail: t("empty.reconnectingDetail") };
+    }
+    return { title: t("empty.unverifiableTitle"), detail: t("empty.unverifiableDetail") };
   }
-  if (runtimeKind === "offline") {
+  if (verdict === "exited") {
     return { title: t("empty.offlineTitle"), detail: t("empty.offlineDetail") };
   }
   return {

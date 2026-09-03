@@ -52,11 +52,10 @@ Match the English Pairfob string on screen:
 
 ## Install and enroll
 
-- Do not set `PAIRFOB_JOIN_TOKEN`
+- Do not set `PAIRFOB_JOIN_TOKEN` or `PAIRFOB_JOIN_GRANT`
 - Checksum mismatch: the script fails closed
 - Unsupported OS (Windows): the script refuses
 - If `~/.local/bin` is not on PATH, `pairfob` is “not found” even when the service is installed
-- If the installer says setup is closed: new computers cannot enroll right now. Computers already set up keep working
 
 ## Pairing
 

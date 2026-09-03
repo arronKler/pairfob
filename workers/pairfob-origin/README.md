@@ -6,7 +6,7 @@ Envelope codec stays `version=0x01`; FWD bytes are opaque. Mux control JSON is `
 
 ## Interactive local origin
 
-From the repo root, `../../scripts/dev-up.sh` packs the PWA, starts `wrangler dev` on loopback, mints a grant, and enrolls `pairfob`. That is the pairing/debug loop. Miniflare is still **not** a hibernation proof.
+From the repo root, `../../scripts/dev-up.sh` packs the PWA, starts `wrangler dev` on loopback, and enrolls `pairfob`. That is the pairing/debug loop. Miniflare is still **not** a hibernation proof.
 
 ## Local tests (no Cloudflare account)
 
@@ -32,7 +32,7 @@ OPERATOR_TOKEN=dev-operator
 IP_HASH_PEPPER=dev-pepper-not-for-prod
 ```
 
-`wrangler.jsonc` `compatibility_date` is `2026-08-26`. Durable Object classes: `DaemonRoom`, `PairingIndex` (SQLite). Apply all ordered D1 migrations in `migrations/`; `0005_grant_enroll_rate.sql` makes the per-grant enroll window authoritative in D1, and `0006_self_serve_grants.sql` adds the per-IP signup ledger.
+`wrangler.jsonc` `compatibility_date` is `2026-08-26`. Durable Object classes: `DaemonRoom`, `PairingIndex` (SQLite). Apply all ordered D1 migrations in `migrations/`; `0005_grant_enroll_rate.sql` makes the per-grant enroll window authoritative in D1, and `0006_self_serve_grants.sql` adds the per-IP open-enroll ledger.
 
 `P2P_OPEN=1` advertises the WebRTC direct-upgrade feature in `/api/config`.
 Set it to `0` to stop new or reloaded PWA sessions from attempting the upgrade;
@@ -40,21 +40,11 @@ existing direct sessions continue until they reconnect. Old daemons reject
 negotiation and also stay on relay. A daemon can disable its adapter with
 `PAIRFOB_P2P=0` before restart.
 
-Mint a grant (prints `join_grant` once):
+## Open enroll
 
-```
-bun run src/mint.ts --label lab
-# or POST /v2/admin/grants with Authorization: Bearer $OPERATOR_TOKEN
-```
-
-## Self-serve signup
-
-`/v2/grants` lets a visitor mint their own grant from the landing page, so the
-official instance is not invite-only. `GET` reports whether signup is open; a
-same-origin browser `POST` mints a `max_daemons=2` grant labelled `self-serve`.
-Signup is open by default. `SIGNUP_OPEN=0` is the cost valve: new computers
-cannot enroll; existing rooms keep working. `ENROLL_OPEN=0` is the matching
-Worker switch on `POST /v2/enroll`.
+The product path is grantless: `pairfob` journals `daemon_id` and a reconnect
+token, then `POST /v2/enroll` with no `join_grant`. The Worker mints an internal
+one-slot grant. Retired `/v2/grants` and `/v2/admin/grants` are `404 unbound`.
 
 The authoritative abuse cap is `SELF_GRANT_PER_IP` grants per hashed IP per
 `SELF_GRANT_WINDOW_MS`, enforced inside the D1 `INSERT` so concurrent requests
@@ -79,4 +69,4 @@ Workers Logs plus Analytics Engine dataset `pairfob` (binding `METRICS`). First-
 
 ## WAF
 
-See `docs/waf.md`. `ENROLL_OPEN=0` stops new rooms; live duration continues until disconnect/kick.
+See `docs/waf.md`. Emergency cost stop: kick daemons.

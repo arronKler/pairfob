@@ -349,6 +349,9 @@ export async function refreshHerdConfig(): Promise<boolean> {
     if (request === herdConfigRequest && state.live === session) {
       state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES };
       state.agentKinds = [];
+      // A failed GetConfig is unverifiable, not Herdr-exited: drop the stale
+      // kind so the verdict does not keep claiming a last-known runtime.
+      state.runtimeKind = "";
       return true;
     }
     return false;

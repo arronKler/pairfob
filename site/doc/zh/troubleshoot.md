@@ -51,11 +51,10 @@ pairfob service status
 
 ## 安装和登记
 
-- 不要设 `PAIRFOB_JOIN_TOKEN`
+- 不要设 `PAIRFOB_JOIN_TOKEN` 或 `PAIRFOB_JOIN_GRANT`
 - 校验和对不上时安装脚本会直接失败
 - 不支持的 OS（Windows）脚本会拒绝
 - `~/.local/bin` 不在 PATH 时，敲 `pairfob` 会找不到命令，并不是服务没装上
-- 安装脚本提示登记已关闭：现在不能给新电脑登记。已经装好的电脑继续可用
 
 ## 配对
 

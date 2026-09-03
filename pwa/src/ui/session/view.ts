@@ -4,7 +4,7 @@ import { t } from "../../lib/i18n";
 import { type AgentCard } from "../../lib/ranking";
 import { app, selectedAgent, state } from "../../state";
 import { isDesk } from "../../viewport";
-import { appendNotice, backButton } from "../chrome";
+import { appendNotice, backButton, canInterruptAgent, herdLiveness } from "../chrome";
 import { chromeActionCluster, syncChromeStop } from "./chrome-actions";
 import { composeField, sizeCompose, syncSendButton } from "./compose";
 import { dockNode } from "./dock";
@@ -20,12 +20,17 @@ export type SessionHandlers = {
   onWorkspace: () => void;
 };
 
+/** While the verdict is unverifiable, last-known done/idle is not a fresh fact. */
+function statusCopy(selected: AgentCard): string {
+  return herdLiveness() === "unverifiable" ? t("status.unverifiable") : statusLabel(selected.status);
+}
+
 function statusLine(selected: AgentCard): string {
-  return [statusLabel(selected.status), agentMeta(selected)].filter(Boolean).join(" · ");
+  return [statusCopy(selected), agentMeta(selected)].filter(Boolean).join(" · ");
 }
 
 function chromeMeta(selected: AgentCard): string {
-  return [statusLabel(selected.status), cwdName(selected.cwd), tabIsSplit(selected, state.agents) ? t("chrome.split") : ""]
+  return [statusCopy(selected), cwdName(selected.cwd), tabIsSplit(selected, state.agents) ? t("chrome.split") : ""]
     .filter(Boolean)
     .join(" · ");
 }
@@ -34,8 +39,9 @@ function titleBody(selected: AgentCard): HTMLElement[] {
   const name = node("span", "chrome-name", chromeName(selected));
   const line = chromeMeta(selected);
   if (!line) return [name];
+  const stale = herdLiveness() === "unverifiable";
   const meta = node("span", "chrome-meta");
-  meta.append(node("span", `agent-dot agent-${selected.status}`), node("span", "chrome-meta-text", line));
+  meta.append(node("span", `agent-dot agent-${stale ? "unknown" : selected.status}`), node("span", "chrome-meta-text", line));
   return [name, meta];
 }
 
@@ -51,7 +57,7 @@ function syncChromeStatus(chrome: HTMLElement, title: HTMLElement, selected: Age
     "aria-label",
     line ? t("chrome.switchAriaMeta", { title: agentTitle(selected), line }) : t("chrome.switchAria", { title: agentTitle(selected) }),
   );
-  syncChromeStop(chrome, selected.status === "working", () => queueKey("esc"));
+  syncChromeStop(chrome, canInterruptAgent(selected.status), () => queueKey("esc"));
 }
 
 function chromeNode(selected: AgentCard | undefined, includeBack: boolean, handlers: SessionHandlers): HTMLElement {

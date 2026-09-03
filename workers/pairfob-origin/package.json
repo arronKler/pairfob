@@ -8,7 +8,6 @@
     "typecheck": "tsc --noEmit",
     "e2e": "bun test e2e",
     "e2e:wrangler": "vitest run --config vitest.config.ts",
-    "mint": "bun run src/mint.ts",
     "pack-assets": "bash ../../scripts/pack-origin-assets.sh"
   },
   "devDependencies": {

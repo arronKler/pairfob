@@ -63,6 +63,20 @@ describe("UI model", () => {
     expect(emptySessionCopy("herdr", false, true).title).toBe("正在重新连接");
   });
 
+  test("empty copy never claims there are no sessions while unverifiable", () => {
+    expect(emptySessionCopy("herdr", false, true)).toEqual({
+      title: "正在重新连接",
+      detail: "连接恢复后会自动更新会话列表。",
+    });
+    expect(emptySessionCopy("herdr", true, true, false).title).toBe("正在重新连接");
+    expect(emptySessionCopy("offline", false, true).title).toBe("正在重新连接");
+    expect(emptySessionCopy("", true, true)).toEqual({
+      title: "无法确认会话",
+      detail: "Herdr 暂未响应，恢复后会自动更新列表。",
+    });
+    expect(emptySessionCopy("something-new", true, false).title).toBe("无法确认会话");
+  });
+
   test("notification action reflects this phone's subscription", () => {
     expect(notificationAction(true, false, true, false)).toEqual({ label: "打开通知", disabled: false });
     expect(notificationAction(true, true, true, false)).toEqual({ label: "通知已开启", disabled: true });

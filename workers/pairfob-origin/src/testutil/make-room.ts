@@ -110,9 +110,7 @@ export function testEnv(opts?: {
   d1?: FakeD1;
   rooms?: FakeRoomNamespace;
   index?: FakeIndexNamespace;
-  enrollOpen?: string;
   assets?: Fetcher;
-  signupOpen?: string;
   metrics?: FakeMetrics;
 }): Env {
   const d1 = opts?.d1 ?? new FakeD1();
@@ -130,8 +128,6 @@ export function testEnv(opts?: {
     IP_HASH_PEPPER: "dev-pepper-not-for-prod",
     BUILD: "test",
     INTENT_PAD_MS: "0",
-    ENROLL_OPEN: opts?.enrollOpen,
     ASSETS: opts?.assets,
-    SIGNUP_OPEN: opts?.signupOpen,
   };
 }

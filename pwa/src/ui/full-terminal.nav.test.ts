@@ -1,7 +1,8 @@
 import { Window } from "happy-dom";
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 
 const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
+let visibility: DocumentVisibilityState = "visible";
 const g = globalThis as unknown as Record<string, unknown>;
 for (const key of [
   "window",
@@ -27,7 +28,72 @@ g.matchMedia = happy.matchMedia.bind(happy);
 g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
 g.cancelAnimationFrame = happy.cancelAnimationFrame.bind(happy);
 g.visualViewport = happy.visualViewport;
+Object.defineProperty(happy.document, "visibilityState", {
+  configurable: true,
+  get: () => visibility,
+});
 happy.document.body.innerHTML = '<main id="app"></main>';
+
+class TestTerminal {
+  cols = 80;
+  rows = 24;
+  modes = { applicationCursorKeysMode: false };
+  options: { fontSize?: number; lineHeight?: number; letterSpacing?: number };
+  _core = { _renderService: { dimensions: { css: { cell: { width: 8, height: 16 } } } } };
+  private root: HTMLElement | null = null;
+
+  constructor(options: { fontSize?: number; lineHeight?: number; letterSpacing?: number }) {
+    this.options = { ...options };
+  }
+
+  loadAddon(_addon: object): void {}
+
+  open(mount: HTMLElement): void {
+    this.root = document.createElement("div");
+    this.root.className = "xterm";
+    const screen = document.createElement("div");
+    screen.className = "xterm-screen";
+    screen.append(document.createElement("canvas"));
+    const input = document.createElement("textarea");
+    input.className = "xterm-helper-textarea";
+    this.root.append(screen, input);
+    mount.append(this.root);
+  }
+
+  resize(cols: number, rows: number): void {
+    this.cols = cols;
+    this.rows = rows;
+  }
+
+  registerLinkProvider(_provider: object): void {}
+  onData(_listener: (value: string) => void): void {}
+  onBinary(_listener: (value: string) => void): void {}
+  onResize(_listener: () => void): void {}
+  input(_value: string): void {}
+  focus(): void {}
+  reset(): void {}
+  write(_data: Uint8Array, done?: () => void): void { done?.(); }
+  dispose(): void { this.root?.remove(); }
+}
+
+class TestFitAddon {
+  fit(): void {}
+}
+
+class TestWebglAddon {
+  onContextLoss(_listener: () => void): void {}
+}
+
+mock.module("./full-terminal-loader", () => ({
+  fullTerminalSupported: () => true,
+  terminalWebglSupported: () => true,
+  loadFullTerminalXterm: async () => ({
+    Terminal: TestTerminal,
+    FitAddon: TestFitAddon,
+    WebglAddon: TestWebglAddon,
+  }),
+  preloadFullTerminalXterm: () => {},
+}));
 
 const { app, paneTermMode, setPaneTermMode, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
@@ -35,6 +101,7 @@ const { renderPane, goBackFromPane } = await import("./pane.ts");
 const {
   disposeFullTerminal,
   handleFullTerminalEvent,
+  handleFullTerminalVisibility,
   leaveFullTerminal,
   setFullTerminalComposeLive,
   setTermFit,
@@ -87,11 +154,20 @@ function click(selector: string): void {
   el.click();
 }
 
+async function waitUntil(predicate: () => boolean, label: string): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (predicate()) return;
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 10));
+  }
+  throw new Error(`timed out waiting for ${label}`);
+}
+
 beforeAll(() => {
   setRenderer(() => renderPane());
 });
 
 afterEach(async () => {
+  visibility = "visible";
   await leaveFullTerminal({ rememberGuided: false, paint: false });
   disposeFullTerminal();
   state.screen = "pane";
@@ -204,8 +280,7 @@ describe("complete-terminal remembers its mode per pane", () => {
     session.terminalOpen = () => new Promise((_resolve, reject) => { rejectOpen = reject; });
     bootFullTerminal(session);
 
-    handleFullTerminalEvent({ type: "connected" });
-    await Promise.resolve();
+    await waitUntil(() => rejectOpen !== undefined, "pending terminal open");
     expect(rejectOpen).toBeDefined();
     handleFullTerminalEvent({ type: "disconnected" });
     rejectOpen?.(new Error("old transport closed"));
@@ -235,6 +310,7 @@ describe("complete-terminal remembers its mode per pane", () => {
       };
     };
     bootFullTerminal(session);
+    await waitUntil(() => app.querySelector(".xterm") !== null, "terminal renderer");
 
     handleFullTerminalEvent({ type: "reconnecting" });
     await Promise.resolve();
@@ -243,13 +319,189 @@ describe("complete-terminal remembers its mode per pane", () => {
 
     connected = true;
     handleFullTerminalEvent({ type: "connected" });
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitUntil(() => opens === 1, "recovered terminal open");
     expect(opens).toBe(1);
     expect(app.querySelector<HTMLElement>(".full-terminal-state")?.hidden).toBe(true);
 
     handleFullTerminalEvent({ type: "connected" });
     await Promise.resolve();
     expect(opens).toBe(1);
+  });
+
+  test("connected waits for the renderer instead of opening a bridge early", async () => {
+    let opens = 0;
+    const session = live();
+    session.terminalOpen = async (paneId, cols, rows) => {
+      opens++;
+      return {
+        operationId: "op_AAECAwQFBgcICQoL",
+        terminalId: "term_11111111111111111111111111111111",
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      };
+    };
+    bootFullTerminal(session);
+
+    handleFullTerminalEvent({ type: "connected" });
+    expect(opens).toBe(0);
+    expect(app.querySelector(".xterm")).toBeNull();
+    await waitUntil(() => opens === 1, "renderer-backed terminal open");
+    expect(app.querySelector(".xterm")).toBeTruthy();
+  });
+
+  test("a full frame can resync while stale frames are ignored and a forward delta gap closes", async () => {
+    let closes = 0;
+    let opens = 0;
+    const terminalId = "term_11111111111111111111111111111111";
+    const session = live();
+    session.terminalOpen = async (paneId, cols, rows) => {
+      opens++;
+      return {
+        operationId: "op_AAECAwQFBgcICQoL",
+        terminalId,
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      };
+    };
+    session.terminalClose = async () => { closes++; };
+    bootFullTerminal(session);
+    await waitUntil(() => opens === 1, "terminal open");
+
+    const terminalFrame = (sequence: string, full: boolean) => ({
+      type: "terminal_frame" as const,
+      terminalId,
+      terminalFrame: {
+        terminalId,
+        sequence,
+        width: 80,
+        height: 24,
+        full,
+        index: 0,
+        count: 1,
+        data: new Uint8Array([65]),
+      },
+    });
+    handleFullTerminalEvent(terminalFrame("1", true));
+    handleFullTerminalEvent(terminalFrame("1", false));
+    handleFullTerminalEvent(terminalFrame("3", true));
+    handleFullTerminalEvent(terminalFrame("4", false));
+    handleFullTerminalEvent(terminalFrame("2", false));
+    await Promise.resolve();
+    expect(closes).toBe(0);
+
+    handleFullTerminalEvent(terminalFrame("6", false));
+    await Promise.resolve();
+    expect(closes).toBe(1);
+  });
+
+  test("retry remains available while hidden and reopens when visible", async () => {
+    let opens = 0;
+    const terminalId = "term_11111111111111111111111111111111";
+    const session = live();
+    session.terminalOpen = async (paneId, cols, rows) => {
+      opens++;
+      return {
+        operationId: "op_AAECAwQFBgcICQoL",
+        terminalId,
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      };
+    };
+    bootFullTerminal(session);
+    await waitUntil(() => opens === 1, "initial terminal open");
+    handleFullTerminalEvent({ type: "terminal_closed", terminalId, reason: "frame gap" });
+
+    visibility = "hidden";
+    click(".full-terminal-state-retry");
+    const status = app.querySelector<HTMLElement>(".full-terminal-state");
+    expect(opens).toBe(1);
+    expect(status?.dataset.stage).toBe("error");
+    expect(status?.querySelector<HTMLButtonElement>(".full-terminal-state-retry")?.hidden).toBeFalse();
+
+    visibility = "visible";
+    handleFullTerminalVisibility(false);
+    await waitUntil(() => opens === 2, "visible terminal reopen");
+    expect(status?.hidden).toBeTrue();
+    expect(status?.dataset.stage).toBe("live");
+    expect(app.querySelector(".xterm")).toBeTruthy();
+  });
+
+  test("a late close cannot replace a newer successful open", async () => {
+    let resolveClose = () => {};
+    const oldClose = new Promise<void>((resolve) => { resolveClose = resolve; });
+    let opens = 0;
+    const session = live();
+    session.terminalOpen = async (paneId, cols, rows) => ({
+      operationId: "op_AAECAwQFBgcICQoL",
+      terminalId: `term_${String(++opens).padStart(32, "1")}`,
+      paneId,
+      cols,
+      rows,
+      encoding: "ansi" as const,
+    });
+    session.terminalClose = () => oldClose;
+    bootFullTerminal(session);
+    await waitUntil(() => opens === 1, "initial terminal open");
+
+    visibility = "hidden";
+    handleFullTerminalVisibility(true);
+    visibility = "visible";
+    handleFullTerminalVisibility(false);
+    await waitUntil(() => opens === 2, "newer terminal open");
+    const status = app.querySelector<HTMLElement>(".full-terminal-state");
+    expect(opens).toBe(2);
+    expect(status?.hidden).toBeTrue();
+
+    resolveClose();
+    await Promise.resolve();
+    expect(status?.hidden).toBeTrue();
+    expect(status?.dataset.stage).toBe("live");
+  });
+
+  test("a late close cannot replace a newer open failure", async () => {
+    let resolveClose = () => {};
+    const oldClose = new Promise<void>((resolve) => { resolveClose = resolve; });
+    let opens = 0;
+    const session = live();
+    session.terminalOpen = async (paneId, cols, rows) => {
+      opens++;
+      if (opens > 1) throw new Error("new open failed");
+      return {
+        operationId: "op_AAECAwQFBgcICQoL",
+        terminalId: "term_11111111111111111111111111111111",
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      };
+    };
+    session.terminalClose = () => oldClose;
+    bootFullTerminal(session);
+    await waitUntil(() => opens === 1, "initial terminal open");
+
+    visibility = "hidden";
+    handleFullTerminalVisibility(true);
+    visibility = "visible";
+    handleFullTerminalVisibility(false);
+    await waitUntil(
+      () => app.querySelector<HTMLElement>(".full-terminal-state")?.dataset.stage === "error",
+      "newer terminal open failure",
+    );
+    const status = app.querySelector<HTMLElement>(".full-terminal-state");
+    const failureText = status?.textContent;
+    expect(status?.dataset.stage).toBe("error");
+    expect(status?.querySelector<HTMLButtonElement>(".full-terminal-state-retry")?.hidden).toBeFalse();
+
+    resolveClose();
+    await Promise.resolve();
+    expect(status?.textContent).toBe(failureText);
+    expect(status?.textContent).not.toContain("终端连接已暂停");
+    expect(status?.querySelector<HTMLButtonElement>(".full-terminal-state-retry")?.hidden).toBeFalse();
   });
 });

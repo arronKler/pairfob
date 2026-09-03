@@ -108,4 +108,16 @@ describe("worker static overlay", () => {
     expect(res.headers.get("Content-Type")).toContain("text/plain");
     expect(await res.text()).toContain("pairfob");
   });
+
+  test("retired /v2/grants does not mint a join grant", async () => {
+    const res = await handleFetch(
+      new Request("https://pairfob.com/v2/grants", {
+        method: "POST",
+        headers: { Origin: "https://pairfob.com" },
+      }),
+      testEnv(),
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: { code: "unbound" } });
+  });
 });

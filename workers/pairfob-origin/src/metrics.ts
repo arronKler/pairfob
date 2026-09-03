@@ -114,10 +114,6 @@ export function observeError(env: MetricsEnv, code: string, daemonId = ""): void
   emit(env, { event: "error", result: code, extra: code, daemonId });
 }
 
-export function observeSignup(env: MetricsEnv, result: string): void {
-  emit(env, { event: "signup", result });
-}
-
 export function observePage(env: MetricsEnv, pathClass: string): void {
   emit(env, { event: "page", dim: pathClass });
 }

@@ -24,35 +24,18 @@ func assertOperatorText(t *testing.T, text string) {
 }
 
 func TestEnrollNoticesNameANextStep(t *testing.T) {
-	for _, code := range []string{"bad_grant", "grant_exhausted", "not_a_code"} {
+	for _, code := range []string{"rate_limited", "not_a_code"} {
 		text := enrollNotice(code)
 		assertOperatorText(t, text)
-		if !strings.Contains(text, "install") && !strings.Contains(text, "pairfob doctor") {
-			t.Fatalf("%s: %q", code, text)
-		}
 		if strings.Contains(text, code) {
 			t.Fatalf("raw code in notice: %q", text)
 		}
 	}
-	if !strings.Contains(enrollNotice("bad_grant"), "Re-run the installer") {
-		t.Fatal(enrollNotice("bad_grant"))
+	if !strings.Contains(enrollNotice("rate_limited"), "too many computers") {
+		t.Fatal(enrollNotice("rate_limited"))
 	}
-	if !strings.Contains(enrollNotice("grant_exhausted"), "Re-run the installer") {
-		t.Fatal(enrollNotice("grant_exhausted"))
-	}
-}
-
-func TestEnrollClosedNoticeKeepsExistingComputers(t *testing.T) {
-	text := enrollNotice("forbidden")
-	assertOperatorText(t, text)
-	if !strings.Contains(text, "closed") {
-		t.Fatalf("%q", text)
-	}
-	if !strings.Contains(text, "already set up") {
-		t.Fatalf("%q", text)
-	}
-	if strings.Contains(text, "forbidden") {
-		t.Fatalf("raw code in notice: %q", text)
+	if !strings.Contains(enrollNotice("not_a_code"), "pairfob doctor") {
+		t.Fatal(enrollNotice("not_a_code"))
 	}
 }
 
@@ -67,6 +50,9 @@ func TestDoctorOriginNoteDropsInternals(t *testing.T) {
 	}
 	if !strings.Contains(doctorOriginNote("PAIRFOB_JOIN_TOKEN is not used"), "JOIN_TOKEN") {
 		t.Fatal(doctorOriginNote("PAIRFOB_JOIN_TOKEN is not used"))
+	}
+	if !strings.Contains(doctorOriginNote("PAIRFOB_JOIN_GRANT is not used"), "JOIN_GRANT") {
+		t.Fatal(doctorOriginNote("PAIRFOB_JOIN_GRANT is not used"))
 	}
 }
 

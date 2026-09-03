@@ -4,7 +4,7 @@ import type { Terminal } from "@xterm/xterm";
 import { agentTitle } from "../lib/dashboard";
 import { node } from "../lib/dom";
 import { t } from "../lib/i18n";
-import { backButton } from "./chrome";
+import { backButton, canInterruptAgent } from "./chrome";
 import {
   ProtocolError,
   TerminalFrameAssembler,
@@ -64,7 +64,7 @@ import { guidedScrollController } from "./session/guided-scroll";
 
 let terminal: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
-let resizeObserver: ResizeObserver | null = null;
+let resizeObserver: ReturnType<typeof observeHostResize> = null;
 let unbindScroll: (() => void) | null = null;
 let unbindPinch: (() => void) | null = null;
 let keyboard: TerminalKeyboard | null = null;
@@ -415,7 +415,7 @@ async function mount(host: HTMLElement): Promise<void> {
         cellWidth: size.cellWidth,
         cellHeight: size.cellHeight,
       });
-    });
+    }, { settleHeight: !isDesk() });
     if (state.composeLive && isDesk()) terminal?.focus();
     else closeTerminalKeyboard();
     void openBridge(false);
@@ -452,12 +452,12 @@ function disposeRenderer(): void {
 async function openBridge(takeover: boolean): Promise<void> {
   const session = state.live;
   const paneId = state.paneId;
-  if (opening || bridgeId || !session || !paneId || !state.fullTerminal || document.visibilityState === "hidden") return;
+  if (opening || bridgeId || !terminal || !session || !paneId || !state.fullTerminal || document.visibilityState === "hidden") return;
   if (!session.isConnected()) {
     terminalStatus.wait(t("ft.waitRestore"));
     return;
   }
-  const version = bridgeVersion;
+  const version = ++bridgeVersion;
   opening = true;
   terminalStatus.start(takeover ? t("ft.takeover") : t("ft.opening"), "opening");
   fullTerminalPerf.bridgeStarted();
@@ -497,8 +497,9 @@ async function openBridge(takeover: boolean): Promise<void> {
 async function suspendBridge(sendClose: boolean, reason?: string): Promise<void> {
   const session = state.live;
   const id = bridgeId;
+  const renderer = rendererVersion;
   stopCommandPump();
-  bridgeVersion++;
+  const version = ++bridgeVersion;
   bridgeId = "";
   bridgePane = "";
   assembler.reset();
@@ -507,19 +508,28 @@ async function suspendBridge(sendClose: boolean, reason?: string): Promise<void>
   remoteGrid = null;
   opening = false;
   if (sendClose && session && id) await session.terminalClose(id).catch(() => undefined);
+  if (version !== bridgeVersion || renderer !== rendererVersion || bridgeId || opening || !state.fullTerminal) return;
   terminalStatus.fail(reason ?? t("ft.paused"));
+}
+
+function resumeFullTerminal(): void {
+  if (opening || bridgeId || document.visibilityState === "hidden") return;
+  const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
+  if (!terminal) {
+    if (!mounting && host?.isConnected) {
+      bridgeVersion++;
+      scheduleMount(host);
+    }
+    return;
+  }
+  fit();
+  void openBridge(false);
 }
 
 export function retryFullTerminal(): void {
   if (opening || bridgeId) return;
   haptic(8);
-  terminalStatus.start(t("ft.opening"), "opening");
-  const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
-  if (!terminal && host?.isConnected) {
-    scheduleMount(host);
-    return;
-  }
-  void openBridge(false);
+  resumeFullTerminal();
 }
 
 export function setTermFit(next: TermFit, cols: TermCols = state.termCols): void {
@@ -603,7 +613,7 @@ function interruptFullTerminal(): void {
 function syncFullTerminalChrome(): void {
   const chrome = app.querySelector(".full-terminal-chrome");
   if (!(chrome instanceof HTMLElement)) return;
-  syncChromeStop(chrome, selectedAgent()?.status === "working", interruptFullTerminal);
+  syncChromeStop(chrome, canInterruptAgent(selectedAgent()?.status ?? ""), interruptFullTerminal);
   syncStatus();
 }
 
@@ -690,11 +700,11 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
       if (!frame) return true;
       const commandMarker = fullTerminalPerf.frameAssembled(performance.now() - assembledAt);
       const sequence = BigInt(frame.sequence);
+      if (lastFrameSequence !== null && sequence <= lastFrameSequence) return true;
       if (!frame.full && lastFrameSequence !== null && sequence !== lastFrameSequence + 1n) {
         void suspendBridge(true, t("ft.gap"));
         return true;
       }
-      if (lastFrameSequence !== null && sequence <= lastFrameSequence) return true;
       if (pendingWriteBytes + frame.data.byteLength > MAX_RENDER_QUEUE_BYTES) {
         void suspendBridge(true, t("ft.tooFast"));
         return true;
@@ -765,7 +775,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
   }
   if (event.type === "connected" && !bridgeId) {
     terminalStatus.set(t("ft.restored"), "opening");
-    void openBridge(false);
+    resumeFullTerminal();
   }
   return false;
 }
@@ -773,8 +783,5 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
 export function handleFullTerminalVisibility(hidden: boolean): void {
   if (!state.fullTerminal) return;
   if (hidden) void suspendBridge(true);
-  else if (!bridgeId) {
-    fit();
-    void openBridge(false);
-  }
+  else resumeFullTerminal();
 }

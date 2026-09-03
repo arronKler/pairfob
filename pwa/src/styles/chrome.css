@@ -447,6 +447,39 @@
 }
 .card.sel { border-color: rgba(110, 168, 254, 0.55); background: rgba(110, 168, 254, 0.08); }
 
+/* Unverifiable snapshot: keep the card, dim it so last-known state reads as stale. */
+.card.unverifiable { opacity: 0.66; }
+.card.unverifiable .card-name,
+.card.unverifiable .card-meta { color: var(--muted); }
+
+/* --- Worktree job cards ------------------------------------------------------- */
+
+.worktree-job {
+  padding: 12px 14px;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.worktree-job-body { flex: 1 1 auto; min-width: 0; }
+
+.worktree-job-spinner { width: 16px; height: 16px; border-width: 2px; }
+
+.worktree-job-error { color: var(--error); }
+
+.worktree-job-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+
+.worktree-job-actions .btn {
+  width: auto;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;

@@ -41,7 +41,9 @@ describe("agent-chat is a first-class pane mode", () => {
     expect(paint).toContain('t("chat.runningEllipsis")');
     expect(paint).toContain("agent-assistant");
     expect(paint).toContain("agent-stream-inner");
-    expect(paint).toContain("agent-user-role");
+    expect(paint).toContain("agent-user-text");
+    expect(paint).not.toContain("agent-user-role");
+    expect(paint).not.toContain("hist.you");
     expect(paint).toContain("agent-empty");
     expect(paint).toContain("agent-empty-sub");
     expect(paint).not.toContain('"empty-sub"');
