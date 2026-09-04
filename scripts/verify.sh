@@ -18,6 +18,8 @@ bash -n "$ROOT/scripts/ship-guard.sh"
 bash -n "$ROOT/scripts/dev-acme.sh"
 bash -n "$ROOT/scripts/dev-up.sh"
 bash -n "$ROOT/scripts/dev-down.sh"
+bash -n "$ROOT/plugin/herdr/open-pane.sh"
+bash -n "$ROOT/plugin/herdr/pairfob.sh"
 
 jq empty proto/pairfob-vectors.json proto/pgp-words.json proto/rpc.schema.json
 go vet ./...
@@ -26,6 +28,7 @@ go test -race ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 bun test scripts/load-mux.test.ts
 bun test scripts/dev-acme.test.ts
+bun test plugin/herdr/plugin.test.ts
 (cd "$ROOT/site/doc" && bun test)
 
 (
