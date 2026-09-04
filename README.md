@@ -3,11 +3,31 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![pairfob.com](https://img.shields.io/badge/site-pairfob.com-111111)](https://pairfob.com)
 
+**English** | [简体中文](README_zh.md)
+
 The phone surface for [Herdr](https://herdr.dev). Codex, Claude, and Grok keep
 running on your computer; the phone opens those same live sessions. Pair once.
 The computer dials out — no inbound ports, no Tailscale.
 
 ![The same live agent list on a computer running Herdr and on a phone running Pairfob](site/readme-hero.png)
+
+## What you get
+
+- **The same sessions, not copies.** The phone reads the rendered pane and
+  sends keys back to the PTY; a session stays one session on both sides.
+- **End-to-end encrypted.** SPAKE2+ pairing with an authenticated code and
+  Argon2id-hardened session keys. Keys live only on the computer and the
+  paired device; the relay forwards ciphertext it cannot read.
+- **Direct when possible.** An established session upgrades to a WebRTC
+  DataChannel in the background and keeps the relay as fallback.
+- **Outbound only.** The computer dials out; no inbound ports, no VPN.
+- **Three pane modes.** Control (the phone-friendly default), Terminal (the
+  real PTY), and Chat with the agent.
+- **Workspace inspection.** Browse files and read git status, diff, and
+  branches from the phone, read-only.
+- **Optional notifications.** Push when an agent needs you or finishes a task.
+- **中文 / English.** The phone UI follows the browser language or a pinned
+  choice.
 
 ## Install
 
@@ -17,6 +37,18 @@ macOS or Linux. Herdr 0.7 or newer.
 curl -fsSL https://pairfob.com/install.sh | sh
 pairfob pair
 ```
+
+Or install Pairfob as a Herdr community plugin (Herdr 0.8.2 or newer):
+
+```sh
+herdr plugin install arronKler/pairfob
+herdr plugin action invoke pair --plugin pairfob
+```
+
+The first **Pair a device** action installs the same verified standalone binary
+and user service, then opens pairing in an interactive Herdr overlay. Removing the
+plugin removes only the Herdr entrypoints; Pairfob and its paired-device state
+remain independently installed. See [`plugin/herdr/`](plugin/herdr/README.md).
 
 On the phone, open [pairfob.com/pair](https://pairfob.com/pair) and scan. Press
 Enter once on the computer to admit the device.
@@ -45,13 +77,17 @@ pairfob list
 pairfob forget 1
 pairfob update
 pairfob doctor
+pairfob service status
 pairfob version
 ```
 
-With no subcommand, `pairfob` prints a short status when the daemon is already
-running. `pair`, `list`, and `forget` talk to that daemon over
-`$PAIRFOB_STATE_DIR/pairfob.sock` (0600). A second computer runs the same
-installer; pair it from the phone with **Settings → Add another computer**.
+With no subcommand, `pairfob` prints a short status when the daemon is running
+and starts it otherwise. `pair`, `list`, and `forget` talk to that daemon over
+`$PAIRFOB_STATE_DIR/pairfob.sock` (0600); `forget` also accepts a device name.
+`pairfob service` manages the login service (`status`, `start`, `stop`,
+`restart`, `install`, `uninstall`), and `pairfob help` lists the rest.
+A second computer runs the same installer; pair it from the phone with
+**Settings → Add another computer**.
 
 ## Develop
 
@@ -59,6 +95,11 @@ installer; pair it from the phone with **Settings → Add another computer**.
 (cd pwa && bun install)
 ./scripts/verify.sh
 ```
+
+`scripts/verify.sh` is the gate before sending a change: gofmt, vet, Go tests
+(including race), vuln check, PWA / Worker / site tests, typecheck, and the
+production build. If your change touches protocol primitives or test vectors,
+regenerate them with `go run ./cmd/genvectors` first.
 
 Local pairing against the same Worker as production:
 
@@ -119,6 +160,14 @@ it does not replay. Paths and cwd fail closed outside live snapshot roots or
 Each pane can switch among **控制** (Control, the default phone UI), **终端**
 (Terminal, the real PTY), and **对话** (Chat). The product loop is not a
 terminal emulator: read the rendered pane, send keys back to the PTY.
+
+## Contributing
+
+Issues and pull requests are welcome at
+[github.com/arronKler/pairfob](https://github.com/arronKler/pairfob). Make
+`./scripts/verify.sh` pass before sending a change. The envelope, vectors, and
+RPC fields under `proto/` are frozen by design — a change there needs its own
+discussion, not an incidental tweak; see [Protocol](#protocol).
 
 ## License
 

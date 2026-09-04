@@ -23,8 +23,8 @@ site/doc/.vitepress/cache
 log/
 ui-review/
 
-# operator-only ship runbook (keep on the machine that deploys pairfob.com)
-.agents/skills/pairfob-ship/
+# local agent skills and runbooks
+.agents/
 
 # secrets and env (keep *.example)
 .wrangler

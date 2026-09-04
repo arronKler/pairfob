@@ -1,0 +1,55 @@
+id = "pairfob"
+name = "Pairfob"
+version = "0.1.0"
+min_herdr_version = "0.8.2"
+description = "Open your live Herdr sessions securely from a phone or another device"
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "pair"
+title = "Pairfob: Pair a device"
+description = "Install Pairfob if needed, then open interactive device pairing"
+contexts = ["global"]
+command = ["sh", "plugin/herdr/open-pane.sh", "pair"]
+
+[[actions]]
+id = "doctor"
+title = "Pairfob: Check this computer"
+description = "Show Pairfob, Herdr, origin, and transport health"
+contexts = ["global"]
+command = ["sh", "plugin/herdr/open-pane.sh", "doctor"]
+
+[[actions]]
+id = "start"
+title = "Pairfob: Start"
+description = "Start the installed Pairfob user service"
+contexts = ["global"]
+command = ["sh", "plugin/herdr/pairfob.sh", "start"]
+
+[[actions]]
+id = "stop"
+title = "Pairfob: Stop"
+description = "Stop the installed Pairfob user service"
+contexts = ["global"]
+command = ["sh", "plugin/herdr/pairfob.sh", "stop"]
+
+[[actions]]
+id = "update"
+title = "Pairfob: Update"
+description = "Download, verify, and install the latest Pairfob binary"
+contexts = ["global"]
+command = ["sh", "plugin/herdr/pairfob.sh", "update"]
+
+[[panes]]
+id = "pair"
+title = "Pairfob: Pair a device"
+description = "Scan a QR code and approve this device"
+placement = "overlay"
+command = ["sh", "plugin/herdr/pairfob.sh", "pair"]
+
+[[panes]]
+id = "doctor"
+title = "Pairfob: Check this computer"
+description = "Inspect Pairfob and Herdr health"
+placement = "overlay"
+command = ["sh", "plugin/herdr/pairfob.sh", "doctor"]
