@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  BOARD_CELL_H,
+  BOARD_CELL_W,
   catalogFromSnapshot,
   fallbackTabLayout,
   fitBoardCamera,
@@ -37,7 +39,7 @@ const agents: AgentCard[] = [
 ];
 
 describe("tab layout mapping", () => {
-  test("parses herdr pane rects into fractional boxes", () => {
+  test("parses herdr pane rects into cell-pixel boxes", () => {
     const layouts = parseSnapshotLayouts({
       layouts: [
         {
@@ -56,9 +58,16 @@ describe("tab layout mapping", () => {
     });
     expect(layouts).toHaveLength(1);
     const boxes = paneBoxes(layouts[0]);
-    expect(boxes[0]).toEqual({ paneId: "w1:p1", focused: true, left: 0, top: 0, width: 0.6, height: 1 });
-    expect(boxes[1].left).toBeCloseTo(0.6);
-    expect(boxes[1].width).toBeCloseTo(0.4);
+    expect(boxes[0]).toEqual({
+      paneId: "w1:p1",
+      focused: true,
+      left: 0,
+      top: 0,
+      width: 60 * BOARD_CELL_W,
+      height: 40 * BOARD_CELL_H,
+    });
+    expect(boxes[1].left).toBe(60 * BOARD_CELL_W);
+    expect(boxes[1].width).toBe(40 * BOARD_CELL_W);
   });
 
   test("a stacked split keeps the TUI cell occupancy after subtracting the tab origin", () => {
@@ -79,19 +88,43 @@ describe("tab layout mapping", () => {
       ],
     });
     const boxes = paneBoxes(layouts[0]);
-    expect(boxes[0].height).toBeCloseTo(0.5);
-    expect(boxes[1].top).toBeCloseTo(0.5);
-    expect(boxes[1].height).toBeCloseTo(0.5);
-    expect(boxes[2].left).toBeCloseTo(107 / 213);
-    expect(boxes[2].height).toBe(1);
+    expect(boxes[0].height).toBe(30 * BOARD_CELL_H);
+    expect(boxes[1].top).toBe(30 * BOARD_CELL_H);
+    expect(boxes[1].height).toBe(30 * BOARD_CELL_H);
+    expect(boxes[2].left).toBe(107 * BOARD_CELL_W);
+    expect(boxes[2].height).toBe(60 * BOARD_CELL_H);
+  });
+
+  test("a 1:1:2 row keeps the double pane twice as wide as a neighbor", () => {
+    const layouts = parseSnapshotLayouts({
+      layouts: [
+        {
+          workspace_id: "w1",
+          tab_id: "w1:t2",
+          zoomed: false,
+          focused_pane_id: "p5",
+          area: { x: 26, y: 1, width: 213, height: 60 },
+          panes: [
+            { pane_id: "p4", focused: false, rect: { x: 26, y: 1, width: 53, height: 60 } },
+            { pane_id: "pJ", focused: false, rect: { x: 79, y: 1, width: 54, height: 60 } },
+            { pane_id: "p5", focused: true, rect: { x: 133, y: 1, width: 106, height: 60 } },
+          ],
+        },
+      ],
+    });
+    const boxes = paneBoxes(layouts[0]);
+    expect(boxes.map((box) => box.width)).toEqual([53 * BOARD_CELL_W, 54 * BOARD_CELL_W, 106 * BOARD_CELL_W]);
+    expect(boxes[2].left).toBe(107 * BOARD_CELL_W);
+    expect(boxes[0].width + boxes[1].width + boxes[2].width).toBe(213 * BOARD_CELL_W);
+    expect(boxes[2].width).toBe(2 * boxes[0].width);
   });
 
   test("falls back to equal columns when a tab has no layout", () => {
     const layout = layoutForTab("w1:t1", [], agents);
     expect(layout?.panes).toHaveLength(2);
     const boxes = paneBoxes(layout!);
-    expect(boxes[0].width).toBeCloseTo(0.5);
-    expect(boxes[1].left).toBeCloseTo(0.5);
+    expect(boxes[0].width).toBe(60 * BOARD_CELL_W);
+    expect(boxes[1].left).toBe(60 * BOARD_CELL_W);
   });
 
   test("a split pane keeps its layout cell grid for a phone open", () => {

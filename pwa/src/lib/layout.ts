@@ -184,6 +184,12 @@ export function panePtySize(
   );
 }
 
+/** One terminal cell on the board. Height is 2× width, like a typical mono glyph. */
+export const BOARD_CELL_W = 8;
+export const BOARD_CELL_H = 16;
+export const BOARD_CELL_PX = BOARD_CELL_W;
+
+/** Stage-pixel boxes. Percentages on `<button>` tiles collapse toward min-content and paint 1:1:2 as 1:1:1. */
 export function paneBoxes(layout: TabLayout): PaneBox[] {
   const { area } = layout;
   if (area.width <= 0 || area.height <= 0) return [];
@@ -191,10 +197,10 @@ export function paneBoxes(layout: TabLayout): PaneBox[] {
     .map((pane) => ({
       paneId: pane.paneId,
       focused: pane.focused || pane.paneId === layout.focusedPaneId,
-      left: (pane.rect.x - area.x) / area.width,
-      top: (pane.rect.y - area.y) / area.height,
-      width: pane.rect.width / area.width,
-      height: pane.rect.height / area.height,
+      left: (pane.rect.x - area.x) * BOARD_CELL_W,
+      top: (pane.rect.y - area.y) * BOARD_CELL_H,
+      width: pane.rect.width * BOARD_CELL_W,
+      height: pane.rect.height * BOARD_CELL_H,
     }))
     .filter((box) => box.width > 0 && box.height > 0);
 }
@@ -228,10 +234,6 @@ export function resolveBoardFocus(
   return { workspaceId: nextSpace, tabId: nextTab };
 }
 
-/** One terminal cell on the board. Height is 2× width, like a typical mono glyph. */
-export const BOARD_CELL_W = 8;
-export const BOARD_CELL_H = 16;
-export const BOARD_CELL_PX = BOARD_CELL_W;
 export const BOARD_SCALE_MIN = 0.12;
 export const BOARD_SCALE_MAX = 4;
 

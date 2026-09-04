@@ -116,10 +116,12 @@ function paneTile(box: PaneBox, layout: TabLayout, titles: Record<string, string
   const title = titles[box.paneId] || box.paneId;
   const tile = button("", `board-pane status-${agent?.status || "idle"}${selected ? " sel" : ""}${box.focused ? " focused" : ""}`);
   tile.dataset.paneId = box.paneId;
-  tile.style.left = `${box.left * 100}%`;
-  tile.style.top = `${box.top * 100}%`;
-  tile.style.width = `${box.width * 100}%`;
-  tile.style.height = `${box.height * 100}%`;
+  tile.style.left = `${box.left}px`;
+  tile.style.top = `${box.top}px`;
+  tile.style.width = `${box.width}px`;
+  tile.style.height = `${box.height}px`;
+  tile.style.minWidth = `${box.width}px`;
+  tile.style.minHeight = `${box.height}px`;
   tile.setAttribute("aria-label", t("board.paneAria", { title }));
   const head = node("span", "board-pane-head");
   head.append(node("span", `agent-dot agent-${agent?.status || "idle"}`), node("span", "board-pane-name", title));

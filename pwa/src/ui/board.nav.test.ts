@@ -111,8 +111,8 @@ describe("board screen", () => {
     boot();
     const panes = [...app.querySelectorAll(".board-pane")];
     expect(panes).toHaveLength(2);
-    expect(panes[0].style.width).toBe("60%");
-    expect(panes[1].style.left).toBe("60%");
+    expect(panes[0].style.width).toBe("480px");
+    expect(panes[1].style.left).toBe("480px");
     expect(app.textContent).toContain("alpha");
     expect(app.textContent).toContain("beta");
     expect(app.querySelector(".board-tab-new")?.textContent).toContain("新建标签页");
@@ -195,6 +195,39 @@ describe("board screen", () => {
     expect(chips).toContain("pairfob · test/pairfob");
     expect(chips).toContain("pairfob · github/pairfob");
     expect([...app.querySelectorAll(".board-tab")].map((el) => el.textContent)).toContain("第 1 页");
+  });
+
+  test("a 1:1:2 tab paints the double pane at twice the cell width", () => {
+    boot();
+    replaceAgentsFromSnapshot({
+      focused: { workspace_id: "w1", tab_id: "w1:t2", pane_id: "w1:p5" },
+      workspaces: [{ workspace_id: "w1", label: "alpha" }],
+      tabs: [{ tab_id: "w1:t2", workspace_id: "w1", label: "split" }],
+      panes: [
+        { pane_id: "w1:p4", workspace_id: "w1", tab_id: "w1:t2", cwd: "/tmp/a", agent: "claude", agent_status: "idle", label: "a" },
+        { pane_id: "w1:pJ", workspace_id: "w1", tab_id: "w1:t2", cwd: "/tmp/a", agent: "codex", agent_status: "idle", label: "b" },
+        { pane_id: "w1:p5", workspace_id: "w1", tab_id: "w1:t2", cwd: "/tmp/a", agent: "grok", agent_status: "working", label: "c" },
+      ],
+      layouts: [
+        {
+          workspace_id: "w1",
+          tab_id: "w1:t2",
+          zoomed: false,
+          focused_pane_id: "w1:p5",
+          area: { x: 26, y: 1, width: 213, height: 60 },
+          panes: [
+            { pane_id: "w1:p4", focused: false, rect: { x: 26, y: 1, width: 53, height: 60 } },
+            { pane_id: "w1:pJ", focused: false, rect: { x: 79, y: 1, width: 54, height: 60 } },
+            { pane_id: "w1:p5", focused: true, rect: { x: 133, y: 1, width: 106, height: 60 } },
+          ],
+        },
+      ],
+    });
+    renderBoard();
+    const panes = [...app.querySelectorAll<HTMLElement>(".board-pane")];
+    expect(panes.map((el) => el.style.width)).toEqual(["424px", "432px", "848px"]);
+    expect(panes[2].style.left).toBe("856px");
+    expect((app.querySelector(".board-stage") as HTMLElement).style.width).toBe("1704px");
   });
 
   test("new tab stays on the board after the capability button is shown", () => {
