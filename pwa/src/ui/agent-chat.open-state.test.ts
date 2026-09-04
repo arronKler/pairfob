@@ -53,6 +53,7 @@ function bootIdleChat(): void {
   state.agentTraceSig = "seed";
   state.agentTraceLoadState = "ready";
   state.agentTracePending = "";
+  state.agentTracePendingBase = [];
   state.agentTraceFollow = true;
   setRenderer(() => renderPane());
   renderPane();
@@ -117,6 +118,7 @@ afterEach(() => {
   state.agentTraceSig = "";
   state.agentTraceTail = 0;
   state.agentTracePending = "";
+  state.agentTracePendingBase = [];
   state.agentTraceNext = null;
   state.live = null;
   state.paneId = "";

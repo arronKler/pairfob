@@ -3,8 +3,13 @@ import type { AgentTraceItem } from "./operations";
 
 export type AgentTurn = {
   user?: AgentTraceItem;
-  steps: AgentTraceItem[];
-  replies: AgentTraceItem[];
+  /** Source-ordered events after the user message. Never bucket by kind here. */
+  items: AgentTraceItem[];
+};
+
+export type AgentTurnBlock = {
+  type: "process" | "reply";
+  items: AgentTraceItem[];
 };
 
 const PATH_KEYS = ["path", "file_path", "file", "target_file", "filename", "targetFile"];
@@ -18,21 +23,60 @@ export function groupAgentTurns(items: AgentTraceItem[]): AgentTurn[] {
   let current: AgentTurn | null = null;
   const take = (): AgentTurn => {
     if (!current) {
-      current = { steps: [], replies: [] };
+      current = { items: [] };
       turns.push(current);
     }
     return current;
   };
   for (const item of items) {
     if (item.type === "user") {
-      current = { user: item, steps: [], replies: [] };
+      current = { user: item, items: [] };
       turns.push(current);
       continue;
     }
-    if (item.type === "assistant") take().replies.push(item);
-    else take().steps.push(item);
+    take().items.push(item);
   }
   return turns;
+}
+
+/** Preserve source order while coalescing only adjacent UI duties. */
+export function groupAgentTurnBlocks(items: AgentTraceItem[]): AgentTurnBlock[] {
+  const blocks: AgentTurnBlock[] = [];
+  for (const item of items) {
+    const type: AgentTurnBlock["type"] = item.type === "assistant" ? "reply" : "process";
+    const last = blocks[blocks.length - 1];
+    if (last?.type === type) last.items.push(item);
+    else blocks.push({ type, items: [item] });
+  }
+  return blocks;
+}
+
+/** Complete agent messages are separate prose blocks; streaming chunks merge in the journal first. */
+export function replyText(items: AgentTraceItem[]): string {
+  return items.map((item) => item.text || "").filter(Boolean).join("\n\n");
+}
+
+export type AgentTraceMerge = {
+  items: AgentTraceItem[];
+  /** Number of leading items from the later segment already present in the earlier one. */
+  overlap: number;
+};
+
+/** Tail pages may repeat their owning user as context; keep that user at the source position once. */
+export function mergeAgentTraceSegments(earlier: AgentTraceItem[], later: AgentTraceItem[]): AgentTraceMerge {
+  const head = later[0];
+  if (head?.type === "user") {
+    for (let index = earlier.length - 1; index >= 0; index -= 1) {
+      const item = earlier[index];
+      if (item.type !== "user") continue;
+      const priorTail = earlier.slice(index + 1);
+      if (item.text === head.text && priorTail.at(-1)?.type !== "assistant") {
+        return { items: [...earlier, ...later.slice(1)], overlap: 1 };
+      }
+      break;
+    }
+  }
+  return { items: [...earlier, ...later], overlap: 0 };
 }
 
 /** Newest AgentTrace pages are a tail window; a long run can start mid-turn. */
@@ -44,23 +88,30 @@ export function firstTurnNeedsUser(items: AgentTraceItem[], nextCursor: string |
 export function turnKey(turn: AgentTurn): string {
   const user = turn.user?.text || "";
   const userPart = turn.user ? `u:${user.length}:${user.slice(0, 48)}` : "u:none";
-  const first = turn.steps[0];
+  const first = turn.items[0];
   if (first) {
-    return `${userPart}:s:${first.type}:${first.name || ""}:${(first.text || first.input || "").slice(0, 24)}`;
+    return `${userPart}:s:${first.type}:${first.name || ""}:${(first.input || "").slice(0, 24)}`;
   }
-  const reply = turn.replies[0]?.text || "";
-  return `${userPart}:r:${reply.length}:${reply.slice(0, 24)}`;
+  return userPart;
 }
 
-export function stepKey(item: AgentTraceItem): string {
+export function stepKey(item: AgentTraceItem, index = 0, scope = ""): string {
   return [
+    scope,
+    String(index),
     item.type,
     item.name || "",
-    String((item.text || "").length),
-    (item.text || "").slice(0, 48),
     (item.input || "").slice(0, 24),
-    String(item.output?.length ?? 0),
   ].join(":");
+}
+
+export type AgentToolState = "running" | "done" | "error";
+
+/** Providers only expose an explicit error sentinel today; do not guess from arbitrary output. */
+export function toolState(item: AgentTraceItem): AgentToolState {
+  if (!item.output) return "running";
+  if (/^(?:失败|failed|error|errored)$/i.test(item.output.trim())) return "error";
+  return "done";
 }
 
 export function processTitle(steps: AgentTraceItem[], live: boolean): string {
@@ -134,7 +185,5 @@ export function toolSummary(item: AgentTraceItem): string {
 
 export function stepSummary(item: AgentTraceItem): string {
   if (item.type === "thinking") return t("trace.think");
-  const label = toolSummary(item);
-  if (item.type === "tool" && !item.output) return `${label} · ${t("trace.runningTool")}`;
-  return label;
+  return toolSummary(item);
 }

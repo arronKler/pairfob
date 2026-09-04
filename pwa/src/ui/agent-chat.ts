@@ -1,7 +1,7 @@
 import { canPromptAgent, chromeName, statusLabel } from "../lib/dashboard";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
-import { firstTurnNeedsUser } from "../lib/agent-trace-view";
+import { firstTurnNeedsUser, mergeAgentTraceSegments } from "../lib/agent-trace-view";
 import { cacheAgentTrace, cachedAgentTrace } from "../lib/agent-trace-cache";
 import type { AgentTraceItem, AgentTracePage } from "../lib/operations";
 import { ProtocolError } from "../lib/protocol/errors";
@@ -17,6 +17,8 @@ import {
   markPaneSubmitted,
   selectedAgent,
   setPaneTermMode,
+  showError,
+  showStatus,
   state,
   visibleNotice,
   type Notice,
@@ -48,7 +50,7 @@ const OLDER_FILL_MAX = 4;
 let traceRequest = 0;
 
 function streamSig(items: AgentTraceItem[], working: boolean): string {
-  return `${fingerprint(items)}|${working ? 1 : 0}|${state.agentTraceLoadState}`;
+  return `${fingerprint(items)}|${working ? 1 : 0}|${state.agentTraceLoadState}|${state.agentTraceTruncated ? 1 : 0}`;
 }
 
 function applyTracePage(page: AgentTracePage, older: boolean): boolean {
@@ -58,10 +60,12 @@ function applyTracePage(page: AgentTracePage, older: boolean): boolean {
       state.agentTraceNext = page.nextCursor;
       return changed;
     }
-    state.agentTraceItems = [...page.items, ...state.agentTraceItems];
+    const tailWasWholeView = state.agentTraceItems.length === state.agentTraceTail;
+    const merged = mergeAgentTraceSegments(page.items, state.agentTraceItems);
+    state.agentTraceItems = merged.items;
+    if (tailWasWholeView) state.agentTraceTail = Math.max(0, state.agentTraceTail - merged.overlap);
     state.agentTraceNext = page.nextCursor;
     absorbPending(state.agentTraceItems);
-    if (page.truncated) state.agentTraceNote = t("chat.truncated");
     return true;
   }
   const sig = fingerprint(page.items);
@@ -73,8 +77,9 @@ function applyTracePage(page: AgentTracePage, older: boolean): boolean {
   }
   const kept = Math.max(0, state.agentTraceItems.length - state.agentTraceTail);
   const prefix = kept > 0 ? state.agentTraceItems.slice(0, kept) : [];
-  state.agentTraceItems = [...prefix, ...page.items];
-  state.agentTraceTail = page.items.length;
+  const merged = mergeAgentTraceSegments(prefix, page.items);
+  state.agentTraceItems = merged.items;
+  state.agentTraceTail = page.items.length - merged.overlap;
   state.agentTraceSig = sig;
   if (prefix.length === 0) state.agentTraceNext = page.nextCursor;
   absorbPending(state.agentTraceItems);
@@ -86,6 +91,7 @@ function rememberTrace(paneId: string): void {
     items: state.agentTraceItems,
     nextCursor: state.agentTraceNext,
     note: state.agentTraceNote,
+    truncated: state.agentTraceTruncated,
     signature: state.agentTraceSig,
     tail: state.agentTraceTail,
   });
@@ -97,6 +103,7 @@ export function restoreAgentTrace(paneId: string): boolean {
   state.agentTraceItems = entry.items;
   state.agentTraceNext = entry.nextCursor;
   state.agentTraceNote = entry.note;
+  state.agentTraceTruncated = entry.truncated;
   state.agentTraceSig = entry.signature;
   state.agentTraceTail = entry.tail;
   state.agentTraceLoadState = "ready";
@@ -185,13 +192,42 @@ function syncAgentDraft(input: HTMLTextAreaElement, hint: HTMLElement): void {
 function absorbPending(items: AgentTraceItem[]): void {
   const pending = state.agentTracePending.trim();
   if (!pending) return;
-  if (items.some((item) => item.type === "user" && item.text === pending)) state.agentTracePending = "";
+  const boundary = pendingBoundary(items);
+  if (items.slice(boundary).some((item) => item.type === "user" && item.text === pending)) {
+    state.agentTracePending = "";
+    state.agentTracePendingBase = [];
+  }
+}
+
+/** Tool outputs and live text may grow in place without moving the event itself. */
+function sameTracePosition(before: AgentTraceItem, after: AgentTraceItem): boolean {
+  if (before.type !== after.type) return false;
+  if (before.type === "tool" && after.type === "tool") {
+    return before.name === after.name && before.input === after.input && before.text === after.text;
+  }
+  const left = before.text || "";
+  const right = after.text || "";
+  return left === right || ((before.type === "assistant" || before.type === "thinking") && right.startsWith(left));
+}
+
+function pendingBoundary(items: AgentTraceItem[]): number {
+  const baseline = state.agentTracePendingBase;
+  let index = 0;
+  while (index < baseline.length && index < items.length && sameTracePosition(baseline[index], items[index])) {
+    index += 1;
+  }
+  return index;
 }
 
 function visibleItems(): AgentTraceItem[] {
   const pending = state.agentTracePending.trim();
   if (!pending) return state.agentTraceItems;
-  return [...state.agentTraceItems, { type: "user", text: pending }];
+  const boundary = pendingBoundary(state.agentTraceItems);
+  return [
+    ...state.agentTraceItems.slice(0, boundary),
+    { type: "user", text: pending },
+    ...state.agentTraceItems.slice(boundary),
+  ];
 }
 
 export function canEnterAgentChat(agent: { historyAvailable?: boolean; hasAgent?: boolean } | null | undefined = selectedAgent()): boolean {
@@ -220,7 +256,10 @@ export async function refreshAgentTrace(older = false): Promise<boolean> {
   if (!older && !state.agentTraceItems.length && !state.agentTracePending) state.agentTraceLoadState = "loading";
   stream?.setAttribute("aria-busy", "true");
   syncOlderButton();
-  if (!older) state.agentTraceNote = "";
+  if (!older) {
+    state.agentTraceNote = "";
+    state.agentTraceTruncated = false;
+  }
   let changed = false;
   try {
     let cursor: string | null = older ? state.agentTraceNext : null;
@@ -237,8 +276,7 @@ export async function refreshAgentTrace(older = false): Promise<boolean> {
         measured = true;
       }
       const applied = applyTracePage(page, cursor !== null);
-      if (page.truncated) state.agentTraceNote = t("chat.truncated");
-      else if (!cursor) state.agentTraceNote = "";
+      if (page.truncated) state.agentTraceTruncated = true;
       changed = applied || changed;
       pulls += 1;
       state.agentTraceLoadState = "ready";
@@ -270,6 +308,7 @@ export async function refreshAgentTrace(older = false): Promise<boolean> {
       state.agentTraceNext = null;
       state.agentTraceSig = "";
       state.agentTraceTail = 0;
+      state.agentTraceTruncated = false;
       state.agentTraceNote = state.agentTracePending ? "" : traceUnavailableNote();
       if (!patchAgentChat({ follow: true })) render();
       return false;
@@ -316,7 +355,20 @@ export function leaveAgentChat(opts?: { rememberGuided?: boolean; paint?: boolea
   traceRequest++;
   state.agentTraceBusy = false;
   state.agentTracePending = "";
+  state.agentTracePendingBase = [];
   if (opts?.paint !== false) render();
+}
+
+async function copyAgentReply(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    haptic(6);
+    showStatus(t("chat.copiedReply"));
+  } catch {
+    showError(t("err.copyDenied"));
+  }
+  const root = app.querySelector(".agent-chat-root");
+  if (root instanceof HTMLElement) paintChatNotice(root);
 }
 
 function paintItems(items: AgentTraceItem[], working: boolean, stream: HTMLElement | null): HTMLElement {
@@ -336,6 +388,8 @@ function paintItems(items: AgentTraceItem[], working: boolean, stream: HTMLEleme
       if (follow) state.agentTraceUnread = false;
       syncAgentJump();
     },
+    onCopyReply: copyAgentReply,
+    truncated: state.agentTraceTruncated,
   });
   next.querySelector(".agent-stream-inner")?.prepend(olderButton());
   return next;
@@ -534,6 +588,7 @@ async function submitAgentPrompt(): Promise<void> {
   if (!session || !selected || !text || !canSend(selected) || state.operationBusy) return;
   state.operationBusy = true;
   state.composeDraft = "";
+  state.agentTracePendingBase = state.agentTraceItems.map((item) => ({ ...item }));
   state.agentTracePending = text;
   state.agentTraceFollow = true;
   const field = composeEl();
@@ -552,6 +607,7 @@ async function submitAgentPrompt(): Promise<void> {
   } catch (error) {
     state.composeDraft = text;
     state.agentTracePending = "";
+    state.agentTracePendingBase = [];
     state.agentTraceNote = messageOf(error);
     const restore = composeEl();
     if (restore) {

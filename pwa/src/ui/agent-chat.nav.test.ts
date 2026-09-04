@@ -87,7 +87,9 @@ function bootAgentChat(): void {
   ];
   state.agentTraceTail = state.agentTraceItems.length;
   state.agentTraceSig = "seed";
+  state.agentTraceTruncated = false;
   state.agentTracePending = "";
+  state.agentTracePendingBase = [];
   state.agentTraceFollow = true;
   state.agentTraceUnread = false;
   setPaneTermMode("p1", "agent");
@@ -113,10 +115,12 @@ afterEach(() => {
   state.agentTraceItems = [];
   state.agentTraceLoadState = "cold";
   state.agentTracePending = "";
+  state.agentTracePendingBase = [];
   state.agentTraceNext = null;
   state.agentTraceFollow = true;
   state.agentTraceBusy = false;
   state.agentTraceNote = "";
+  state.agentTraceTruncated = false;
   state.notice = null;
   state.live = null;
   clearAgentTraceCache();
@@ -129,6 +133,7 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".agent-chat-root")).toBeTruthy();
     expect(app.querySelector(".agent-process")).toBeTruthy();
     expect(app.querySelector(".agent-thinking")).toBeTruthy();
+    expect(app.querySelector(".agent-thinking-preview")?.textContent).toBe("I will read it");
     expect(app.querySelector(".agent-tool")).toBeTruthy();
     expect(app.querySelector(".agent-assistant")?.textContent).toContain("looks fine");
     expect(app.querySelector(".agent-user")?.textContent).toContain("inspect this");
@@ -234,6 +239,45 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.textContent).toContain("owning prompt");
   });
 
+  test("deduplicates a repeated page-context user without losing older steps on refresh", async () => {
+    bootAgentChat();
+    let latestOutput = "latest-old";
+    state.agentTraceItems = [];
+    state.agentTraceTail = 0;
+    state.agentTraceLoadState = "cold";
+    state.agentTraceSig = "";
+    state.live = {
+      ...live(),
+      agentTrace: async (_paneId: string, cursor: string | null) => cursor
+        ? {
+            items: [
+              { type: "user" as const, text: "owning prompt" },
+              { type: "tool" as const, name: "Early", output: "early" },
+            ],
+            nextCursor: null,
+            truncated: false,
+          }
+        : {
+            items: [
+              { type: "user" as const, text: "owning prompt" },
+              { type: "tool" as const, name: "Latest", output: latestOutput },
+            ],
+            nextCursor: "older-1",
+            truncated: false,
+          },
+    } as typeof state.live;
+
+    await refreshAgentTrace();
+    await refreshAgentTrace(true);
+    expect(state.agentTraceItems.filter((item) => item.type === "user")).toHaveLength(1);
+    expect(state.agentTraceItems.map((item) => item.name || item.text)).toEqual(["owning prompt", "Early", "Latest"]);
+
+    latestOutput = "latest-new";
+    await refreshAgentTrace();
+    expect(state.agentTraceItems.map((item) => item.name || item.text)).toEqual(["owning prompt", "Early", "Latest"]);
+    expect(state.agentTraceItems.at(-1)?.output).toBe("latest-new");
+  });
+
   test("a stale pane request cannot replace or unlock the current conversation", async () => {
     bootAgentChat();
     let finishP1: ((page: { items: Array<{ type: "assistant"; text: string }>; nextCursor: null; truncated: false }) => void) | undefined;
@@ -290,6 +334,79 @@ describe("agent-chat remembers its mode per pane", () => {
     const users = [...app.querySelectorAll(".agent-user-text")].map((el) => el.textContent);
     expect(users).toEqual(["first question", "inspect this"]);
     expect(app.querySelectorAll(".agent-assistant")).toHaveLength(2);
+  });
+
+  test("keeps preamble, tool, and final reply in source order", () => {
+    bootAgentChat();
+    state.agents[0].status = "idle";
+    state.agentTraceItems = [
+      { type: "user", text: "inspect this" },
+      { type: "assistant", text: "I will inspect it first." },
+      { type: "tool", name: "Read", input: "{\"path\":\"a.ts\"}", output: "ok" },
+      { type: "assistant", text: "Everything is fine." },
+    ];
+    expect(patchAgentChat({ follow: true })).toBe(true);
+
+    const fold = app.querySelector(".agent-reply-fold");
+    const preamble = fold?.querySelector(".agent-assistant-intermediate");
+    const tool = fold?.querySelector(".agent-tool");
+    const final = app.querySelector(".agent-assistant-final");
+    if (!(fold instanceof HTMLElement) || !(preamble instanceof HTMLElement) || !(tool instanceof HTMLElement) || !(final instanceof HTMLElement)) {
+      throw new Error("missing chronological reply fold");
+    }
+    expect(preamble.textContent).toContain("I will inspect it first.");
+    expect(tool.textContent).toContain("Read a.ts");
+    expect(final.textContent).toContain("Everything is fine.");
+    expect(Boolean(preamble.compareDocumentPosition(tool) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(Boolean(fold.compareDocumentPosition(final) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
+  test("anchors an optimistic prompt before output that arrives ahead of its transcript echo", () => {
+    bootAgentChat();
+    state.agentTracePendingBase = state.agentTraceItems.map((item) => ({ ...item }));
+    state.agentTracePending = "new question";
+    state.agentTraceItems = [...state.agentTraceItems, { type: "thinking", text: "new work already arrived" }];
+    expect(patchAgentChat({ follow: true })).toBe(true);
+
+    const pending = [...app.querySelectorAll<HTMLElement>(".agent-user")].at(-1);
+    const work = [...app.querySelectorAll<HTMLElement>(".agent-thinking")].at(-1);
+    if (!pending || !work) throw new Error("missing optimistic turn");
+    expect(pending.textContent).toContain("new question");
+    expect(work.textContent).toContain("思考");
+    expect(Boolean(pending.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
+  test("shows explicit running, completed, and failed tool states", () => {
+    bootAgentChat();
+    state.agents[0].status = "idle";
+    state.agentTraceItems = [
+      { type: "user", text: "run tools" },
+      { type: "tool", name: "First" },
+      { type: "tool", name: "Second", output: "ok" },
+      { type: "tool", name: "Third", output: "失败" },
+    ];
+    expect(patchAgentChat({ follow: true })).toBe(true);
+    expect([...app.querySelectorAll(".agent-tool-state")].map((item) => item.getAttribute("aria-label"))).toEqual([
+      "执行中",
+      "完成",
+      "失败",
+    ]);
+  });
+
+  test("copies only the completed final reply", async () => {
+    let copied = "";
+    Object.defineProperty(happy.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text: string) => { copied = text; } },
+    });
+    bootAgentChat();
+    state.agents[0].status = "idle";
+    expect(patchAgentChat({ follow: true })).toBe(true);
+    click(".agent-reply-copy");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(copied).toBe("looks fine");
+    expect(app.querySelector(".agent-chat-root > [data-app-notice]")?.textContent).toContain("已复制回答");
   });
 
   test("older history sits in the stream so it scrolls away from the latest turn", () => {
@@ -370,6 +487,24 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(patchAgentChat({ follow: true })).toBe(true);
     expect(app.querySelector(".agent-dock textarea")).toBe(field);
     expect(field.value).toBe("keep me");
+  });
+
+  test("renders trace clipping as a quiet stream note instead of a pinned global notice", async () => {
+    bootAgentChat();
+    state.live = {
+      ...live(),
+      agentTrace: async () => ({ ...(await live().agentTrace()), truncated: true }),
+    } as typeof state.live;
+    await refreshAgentTrace();
+
+    const limit = app.querySelector(".agent-stream-inner > .agent-trace-limit");
+    expect(limit?.textContent).toBe("部分较长内容已省略");
+    expect(app.querySelector(".agent-chat-root > [data-app-notice]")).toBeNull();
+    expect(state.agentTraceNote).toBe("");
+
+    state.live = live() as typeof state.live;
+    await refreshAgentTrace();
+    expect(app.querySelector(".agent-trace-limit")).toBeNull();
   });
 
   test("composer enforces the 32 KiB wire limit for multibyte text", () => {

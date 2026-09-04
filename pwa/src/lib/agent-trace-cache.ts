@@ -4,6 +4,7 @@ export type AgentTraceCacheEntry = {
   items: AgentTraceItem[];
   nextCursor: string | null;
   note: string;
+  truncated: boolean;
   signature: string;
   tail: number;
 };

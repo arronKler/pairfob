@@ -440,6 +440,10 @@ export const en: { [K in keyof typeof zh]: string } = {
   "trace.thinkN": "Run · thinking and {n} tools",
   "trace.think": "Thinking",
   "trace.runningTool": "running",
+  "trace.doneTool": "done",
+  "trace.failedTool": "failed",
+  "trace.runningSteps": "Running · {n} steps",
+  "trace.nSteps": "Run · {n} steps",
 
   "key.up": "Up arrow",
   "key.down": "Down arrow",
@@ -567,7 +571,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "desk.pickTitle": "Pick a session",
   "desk.pickSub": "Tap one in the list. This pane shows the terminal on the computer.",
 
-  "chat.truncated": "Some content was truncated",
+  "chat.truncated": "Some long content was omitted",
   "chat.noTrace": "No agent record to read yet. Sent messages land in this chat.",
   "chat.readingProcess": "Reading the run",
   "chat.noChat": "No chat yet",
@@ -584,6 +588,9 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chat.result": "Output",
   "chat.runningEllipsis": "Running…",
   "chat.streamAria": "Chat",
+  "chat.copyReply": "Copy reply",
+  "chat.copyReplyAria": "Copy this agent reply",
+  "chat.copiedReply": "Reply copied",
 
   "workspace.title": "Workspace",
   "workspace.open": "Browse files and changes",

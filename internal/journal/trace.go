@@ -24,6 +24,7 @@ type TracePage struct {
 type parsedEvent struct {
 	Event
 	call       string
+	mergeKey   string
 	outputOnly bool
 }
 
@@ -175,14 +176,14 @@ func grokToolName(title, metaName, kind string) string {
 }
 
 func canMerge(window []parsedEvent, ev parsedEvent) bool {
-	if ev.outputOnly || len(window) == 0 {
+	if ev.outputOnly || ev.mergeKey == "" || len(window) == 0 {
 		return false
 	}
 	if ev.Type != "user" && ev.Type != "assistant" && ev.Type != "thinking" {
 		return false
 	}
 	last := window[len(window)-1]
-	return last.Type == ev.Type && ev.Text != "" && last.Text != ""
+	return last.Type == ev.Type && last.mergeKey == ev.mergeKey && ev.Text != "" && last.Text != ""
 }
 
 func placeholderOutput(output string) bool {
@@ -374,6 +375,7 @@ func parseGrokTrace(line []byte) []parsedEvent {
 		Params struct {
 			Update struct {
 				SessionUpdate string          `json:"sessionUpdate"`
+				MessageID     string          `json:"messageId"`
 				ToolCallID    string          `json:"toolCallId"`
 				Title         string          `json:"title"`
 				Kind          string          `json:"kind"`
@@ -395,19 +397,19 @@ func parseGrokTrace(line []byte) []parsedEvent {
 		if text == "" {
 			return nil
 		}
-		return []parsedEvent{{Event: Event{Type: "user", Text: text}}}
+		return []parsedEvent{{Event: Event{Type: "user", Text: text}, mergeKey: grokMergeKey("user", u.MessageID)}}
 	case "agent_message_chunk":
 		text := grokChunkText(u.Content)
 		if text == "" {
 			return nil
 		}
-		return []parsedEvent{{Event: Event{Type: "assistant", Text: text}}}
+		return []parsedEvent{{Event: Event{Type: "assistant", Text: text}, mergeKey: grokMergeKey("assistant", u.MessageID)}}
 	case "agent_thought_chunk":
 		text := grokChunkText(u.Content)
 		if text == "" {
 			return nil
 		}
-		return []parsedEvent{{Event: Event{Type: "thinking", Text: text}}}
+		return []parsedEvent{{Event: Event{Type: "thinking", Text: text}, mergeKey: grokMergeKey("thinking", u.MessageID)}}
 	case "tool_call":
 		name := grokToolName(u.Title, grokMetaName(u.Meta), u.Kind)
 		if name == "" {
@@ -438,6 +440,13 @@ func parseGrokTrace(line []byte) []parsedEvent {
 	default:
 		return nil
 	}
+}
+
+func grokMergeKey(kind, messageID string) string {
+	if messageID == "" {
+		return kind
+	}
+	return kind + ":" + messageID
 }
 
 func grokChunkText(raw json.RawMessage) string {

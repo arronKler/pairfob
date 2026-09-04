@@ -218,11 +218,15 @@ export type AppState = BoardViewState & {
   agentTraceNext: string | null;
   agentTraceBusy: boolean;
   agentTraceNote: string;
+  /** Some visible trace payload was clipped to fit the bounded response. */
+  agentTraceTruncated: boolean;
   agentTraceSig: string;
   agentTraceLoadState: AgentTraceLoadState;
   agentTraceTail: number;
   /** User bubble shown before the transcript has caught up. */
   agentTracePending: string;
+  /** Trace snapshot immediately before the optimistic user turn was submitted. */
+  agentTracePendingBase: AgentTraceItem[];
   /** Pin the stream to the newest turn unless the reader scrolls up. */
   agentTraceFollow: boolean;
   /** True when the transcript advanced while the reader was scrolled up. */
@@ -312,10 +316,12 @@ export const state: AppState = {
   agentTraceNext: null,
   agentTraceBusy: false,
   agentTraceNote: "",
+  agentTraceTruncated: false,
   agentTraceSig: "",
   agentTraceLoadState: "cold",
   agentTraceTail: 0,
   agentTracePending: "",
+  agentTracePendingBase: [],
   agentTraceFollow: true,
   agentTraceUnread: false,
   paneRow: null,
@@ -711,10 +717,12 @@ export function resetPaneView(): void {
   state.agentTraceNext = null;
   state.agentTraceBusy = false;
   state.agentTraceNote = "";
+  state.agentTraceTruncated = false;
   state.agentTraceSig = "";
   state.agentTraceLoadState = "cold";
   state.agentTraceTail = 0;
   state.agentTracePending = "";
+  state.agentTracePendingBase = [];
   state.agentTraceFollow = true;
   state.agentTraceUnread = false;
   // keysExpanded / padKind stay: they are keypad preferences, not per-pane view

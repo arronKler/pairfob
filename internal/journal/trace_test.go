@@ -61,6 +61,25 @@ func TestCodexTraceKeepsThinkingAndToolBodies(t *testing.T) {
 	}
 }
 
+func TestCodexTraceKeepsAdjacentCompleteMessagesSeparate(t *testing.T) {
+	root := t.TempDir()
+	id := "session_12345678"
+	path := filepath.Join(root, "sessions", "2026", "08", "28", "rollout-"+id+".jsonl")
+	message := func(text string) map[string]any {
+		return map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "message", "role": "assistant", "content": []map[string]any{{"type": "output_text", "text": text}},
+		}}
+	}
+	writeLines(t, path, message("First complete message."), message("Second complete message."))
+	page, err := (&Reader{CodexRoot: root}).ReadTrace(Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}, nil, 20)
+	if err != nil || len(page.Items) != 2 {
+		t.Fatalf("page=%+v err=%v", page, err)
+	}
+	if page.Items[0].Text != "First complete message." || page.Items[1].Text != "Second complete message." {
+		t.Fatalf("messages were merged or reordered: %+v", page.Items)
+	}
+}
+
 func TestClaudeTraceKeepsThinkingAndToolBodies(t *testing.T) {
 	root := t.TempDir()
 	id := "12345678-abcd-4321-abcd-1234567890ab"
@@ -130,6 +149,25 @@ func TestGrokTraceMergesChunksAndToolUpdates(t *testing.T) {
 	}
 }
 
+func TestGrokTraceDoesNotMergeDifferentMessageStreams(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "sessions", "project", "session_abcdefgh", "updates.jsonl")
+	chunk := func(messageID, text string) map[string]any {
+		return map[string]any{"method": "session/update", "params": map[string]any{"update": map[string]any{
+			"sessionUpdate": "agent_message_chunk", "messageId": messageID,
+			"content": map[string]any{"type": "text", "text": text},
+		}}}
+	}
+	writeLines(t, path, chunk("message-1", "First."), chunk("message-2", "Second."))
+	page, err := (&Reader{GrokRoot: root}).ReadTrace(Ref{Source: "herdr:grok", Agent: "grok", Kind: "id", Value: "session_abcdefgh"}, nil, 20)
+	if err != nil || len(page.Items) != 2 {
+		t.Fatalf("page=%+v err=%v", page, err)
+	}
+	if page.Items[0].Text != "First." || page.Items[1].Text != "Second." {
+		t.Fatalf("message streams were merged or reordered: %+v", page.Items)
+	}
+}
+
 func TestGrokTraceMarksCompletedToolsWithoutBodies(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "sessions", "project", "session_abcdefgh", "updates.jsonl")
@@ -185,11 +223,8 @@ func TestTraceTailPaginationAndCursorBinding(t *testing.T) {
 	writeLines(t, path, message("user", "one"), message("assistant", "two"), message("user", "three"))
 	ref := Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}
 	page, err := (&Reader{CodexRoot: root}).ReadTrace(ref, nil, 2)
-	if err != nil || len(page.Items) < 2 || page.Items[len(page.Items)-2].Text != "two" || page.Items[len(page.Items)-1].Text != "three" || page.NextCursor == nil {
+	if err != nil || len(page.Items) != 2 || page.Items[0].Text != "two" || page.Items[1].Text != "three" || page.NextCursor == nil {
 		t.Fatalf("newest page=%+v err=%v", page, err)
-	}
-	if page.Items[0].Type != "user" || page.Items[0].Text != "one" {
-		t.Fatalf("owning user missing from newest page=%+v", page.Items)
 	}
 	older, err := (&Reader{CodexRoot: root}).ReadTrace(ref, page.NextCursor, 2)
 	if err != nil || len(older.Items) != 1 || older.Items[0].Text != "one" || older.NextCursor != nil {
@@ -201,7 +236,7 @@ func TestTraceTailPaginationAndCursorBinding(t *testing.T) {
 	}
 }
 
-func TestTraceKeepsUserWhenNewestPageStartsMidTurn(t *testing.T) {
+func TestTracePaginatesUserWhenNewestPageStartsMidTurn(t *testing.T) {
 	root := t.TempDir()
 	id := "session_12345678"
 	path := filepath.Join(root, "sessions", "2026", "08", "28", "rollout-"+id+".jsonl")
@@ -228,18 +263,38 @@ func TestTraceKeepsUserWhenNewestPageStartsMidTurn(t *testing.T) {
 	)
 	ref := Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}
 	page, err := (&Reader{CodexRoot: root}).ReadTrace(ref, nil, 2)
-	if err != nil || len(page.Items) != 3 || page.NextCursor == nil {
+	if err != nil || len(page.Items) != 2 || page.NextCursor == nil {
 		t.Fatalf("page=%+v err=%v", page, err)
 	}
-	if page.Items[0].Type != "user" || page.Items[0].Text != "inspect this" {
-		t.Fatalf("user=%+v", page.Items[0])
-	}
-	if page.Items[1].Type != "tool" || page.Items[2].Type != "assistant" || page.Items[2].Text != "done" {
+	if page.Items[0].Type != "tool" || page.Items[1].Type != "assistant" || page.Items[1].Text != "done" {
 		t.Fatalf("tail=%+v", page.Items)
 	}
 	older, err := (&Reader{CodexRoot: root}).ReadTrace(ref, page.NextCursor, 4)
-	if err != nil || len(older.Items) < 2 || older.Items[0].Text != "inspect this" {
+	if err != nil || len(older.Items) != 3 || older.Items[0].Text != "inspect this" || older.NextCursor != nil {
 		t.Fatalf("older=%+v err=%v", older, err)
+	}
+}
+
+func TestTracePageNeverExceedsRequestedLimit(t *testing.T) {
+	root := t.TempDir()
+	id := "session_12345678"
+	path := filepath.Join(root, "sessions", "2026", "08", "28", "rollout-"+id+".jsonl")
+	lines := make([]any, 0, 202)
+	lines = append(lines, map[string]any{"type": "response_item", "payload": map[string]any{
+		"type": "message", "role": "user", "content": []map[string]any{{"type": "input_text", "text": "inspect this"}},
+	}})
+	for range 201 {
+		lines = append(lines, map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "function_call", "name": "Read", "call_id": "call", "arguments": `{"path":"a.ts"}`,
+		}})
+	}
+	writeLines(t, path, lines...)
+	page, err := (&Reader{CodexRoot: root}).ReadTrace(Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}, nil, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 200 {
+		t.Fatalf("items=%d, want 200", len(page.Items))
 	}
 }
 

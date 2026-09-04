@@ -36,6 +36,7 @@ type traceCacheEntry struct {
 type traceWindow struct {
 	items     []parsedEvent
 	starts    []int
+	limit     int
 	pageBytes int
 	older     bool
 	truncated bool
@@ -184,7 +185,7 @@ func readTracePage(path string, ref Ref, end, limit int, parse traceParser) (Tra
 }
 
 func parseTraceWindow(data []byte, base, limit int, parse traceParser) (traceWindow, error) {
-	window := traceWindow{items: make([]parsedEvent, 0, limit), starts: make([]int, 0, limit)}
+	window := traceWindow{items: make([]parsedEvent, 0, limit), starts: make([]int, 0, limit), limit: limit}
 	dropFront := func() {
 		if len(window.items) == 0 {
 			return
@@ -262,7 +263,7 @@ func (window *traceWindow) page(ref Ref, scanStart int, limited bool) TracePage 
 		}
 	}
 	page := TracePage{Items: make([]Event, 0, len(window.items)+1), Truncated: window.truncated || limited}
-	if window.orphan != nil && (len(window.items) == 0 || window.items[0].Type != "user") && window.pageBytes+eventSize(window.orphan.Event) <= maxTraceItemsBytes {
+	if window.orphan != nil && len(window.items) < window.limit && (len(window.items) == 0 || window.items[0].Type != "user") && window.pageBytes+eventSize(window.orphan.Event) <= maxTraceItemsBytes {
 		page.Items = append(page.Items, window.orphan.Event)
 	}
 	for _, event := range window.items {

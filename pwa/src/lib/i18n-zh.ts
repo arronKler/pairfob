@@ -438,6 +438,10 @@ export const zh = {
   "trace.thinkN": "执行过程 · 思考与 {n} 个工具",
   "trace.think": "思考",
   "trace.runningTool": "执行中",
+  "trace.doneTool": "完成",
+  "trace.failedTool": "失败",
+  "trace.runningSteps": "正在执行 · {n} 步",
+  "trace.nSteps": "执行过程 · {n} 步",
 
   "key.up": "上箭头",
   "key.down": "下箭头",
@@ -565,7 +569,7 @@ export const zh = {
   "desk.pickTitle": "选择一个会话",
   "desk.pickSub": "从左侧的列表点一个，这里会显示电脑上的终端画面。",
 
-  "chat.truncated": "部分内容已截断",
+  "chat.truncated": "部分较长内容已省略",
   "chat.noTrace": "还没有可读取的 Agent 记录。发出去的消息会写进这个对话。",
   "chat.readingProcess": "正在读取执行过程",
   "chat.noChat": "还没有对话",
@@ -582,6 +586,9 @@ export const zh = {
   "chat.result": "结果",
   "chat.runningEllipsis": "正在执行…",
   "chat.streamAria": "对话",
+  "chat.copyReply": "复制回答",
+  "chat.copyReplyAria": "复制这条 Agent 回答",
+  "chat.copiedReply": "已复制回答",
 
   "workspace.title": "工作区",
   "workspace.open": "查看文件与更改",

@@ -48,7 +48,7 @@ const p2 = agent({ paneId: "p2", paneLabel: "two", tabId: "t2", workspaceId: "w2
 const p1b = agent({ paneId: "p1b", paneLabel: "split", tabId: "t1" });
 
 function cache(paneId: string): void {
-  cacheAgentTrace(paneId, { items: [], nextCursor: null, note: paneId, signature: paneId, tail: 0 });
+  cacheAgentTrace(paneId, { items: [], nextCursor: null, note: paneId, truncated: false, signature: paneId, tail: 0 });
 }
 
 function boot(open: AgentCard, extras: AgentCard[] = []): void {

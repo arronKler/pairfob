@@ -2,8 +2,13 @@ import { describe, expect, test } from "bun:test";
 import {
   firstTurnNeedsUser,
   groupAgentTurns,
+  groupAgentTurnBlocks,
+  mergeAgentTraceSegments,
   processTitle,
+  replyText,
   stepSummary,
+  stepKey,
+  toolState,
   toolSummary,
   turnKey,
 } from "./agent-trace-view";
@@ -18,8 +23,7 @@ describe("groupAgentTurns", () => {
     ]);
     expect(turns).toHaveLength(1);
     expect(turns[0].user?.text).toBe("inspect this");
-    expect(turns[0].steps.map((step) => step.type)).toEqual(["thinking", "tool"]);
-    expect(turns[0].replies).toHaveLength(1);
+    expect(turns[0].items.map((item) => item.type)).toEqual(["thinking", "tool", "assistant"]);
   });
 
   test("a later user message starts a new turn", () => {
@@ -30,9 +34,24 @@ describe("groupAgentTurns", () => {
       { type: "thinking", text: "next" },
     ]);
     expect(turns).toHaveLength(2);
-    expect(turns[0].replies[0]?.text).toBe("first");
-    expect(turns[1].steps).toHaveLength(1);
-    expect(turns[1].replies).toHaveLength(0);
+    expect(turns[0].items[0]?.text).toBe("first");
+    expect(turns[1].items).toHaveLength(1);
+  });
+
+  test("keeps an assistant preamble before a tool and the final reply after it", () => {
+    const turn = groupAgentTurns([
+      { type: "user", text: "inspect this" },
+      { type: "assistant", text: "I will check first." },
+      { type: "tool", name: "Read", input: '{"path":"a.ts"}', output: "ok" },
+      { type: "assistant", text: "Everything is fine." },
+    ])[0];
+    const blocks = groupAgentTurnBlocks(turn.items);
+    expect(blocks.map((block) => block.type)).toEqual(["reply", "process", "reply"]);
+    expect(blocks.flatMap((block) => block.items).map((item) => item.type)).toEqual([
+      "assistant",
+      "tool",
+      "assistant",
+    ]);
   });
 
   test("a tail that starts mid-run still needs its user page", () => {
@@ -53,8 +72,54 @@ describe("toolSummary", () => {
   });
 
   test("pending tools stay one line", () => {
-    expect(stepSummary({ type: "tool", name: "Read", input: '{"path":"a.ts"}' })).toBe("Read a.ts · 执行中");
+    expect(stepSummary({ type: "tool", name: "Read", input: '{"path":"a.ts"}' })).toBe("Read a.ts");
     expect(stepSummary({ type: "thinking", text: "secret chain" })).toBe("思考");
+  });
+
+  test("reports only explicit tool states and keeps identity stable across output updates", () => {
+    const pending = { type: "tool" as const, name: "Read", input: '{"path":"a.ts"}' };
+    expect(toolState(pending)).toBe("running");
+    expect(toolState({ ...pending, output: "ok" })).toBe("done");
+    expect(toolState({ ...pending, output: "失败" })).toBe("error");
+    expect(stepKey(pending, 2)).toBe(stepKey({ ...pending, output: "ok" }, 2));
+  });
+});
+
+describe("replyText", () => {
+  test("keeps complete adjacent messages as separate paragraphs", () => {
+    expect(replyText([
+      { type: "assistant", text: "First." },
+      { type: "assistant", text: "Second." },
+    ])).toBe("First.\n\nSecond.");
+  });
+});
+
+describe("mergeAgentTraceSegments", () => {
+  test("deduplicates the owning user repeated across a page seam", () => {
+    const merged = mergeAgentTraceSegments(
+      [{ type: "user", text: "inspect" }, { type: "tool", name: "Read", output: "first" }],
+      [{ type: "user", text: "inspect" }, { type: "tool", name: "Read", output: "last" }],
+    );
+    expect(merged.overlap).toBe(1);
+    expect(merged.items.map((item) => item.type)).toEqual(["user", "tool", "tool"]);
+  });
+
+  test("does not merge different user turns", () => {
+    const merged = mergeAgentTraceSegments(
+      [{ type: "user", text: "first" }, { type: "assistant", text: "done" }],
+      [{ type: "user", text: "second" }, { type: "assistant", text: "done" }],
+    );
+    expect(merged.overlap).toBe(0);
+    expect(merged.items.filter((item) => item.type === "user")).toHaveLength(2);
+  });
+
+  test("keeps repeated prompts when the earlier turn has a completed reply", () => {
+    const merged = mergeAgentTraceSegments(
+      [{ type: "user", text: "continue" }, { type: "assistant", text: "first done" }],
+      [{ type: "user", text: "continue" }, { type: "assistant", text: "second done" }],
+    );
+    expect(merged.overlap).toBe(0);
+    expect(merged.items.filter((item) => item.type === "user")).toHaveLength(2);
   });
 });
 
@@ -73,8 +138,10 @@ describe("turnKey", () => {
   test("identity comes from the user text, not a sliding index", () => {
     const turn = {
       user: { type: "user" as const, text: "inspect this" },
-      steps: [{ type: "tool" as const, name: "Read", input: '{"path":"a.ts"}', output: "ok" }],
-      replies: [{ type: "assistant" as const, text: "done" }],
+      items: [
+        { type: "tool" as const, name: "Read", input: '{"path":"a.ts"}', output: "ok" },
+        { type: "assistant" as const, text: "done" },
+      ],
     };
     expect(turnKey(turn)).toContain("inspect this");
     expect(turnKey(turn)).toContain("Read");

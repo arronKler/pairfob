@@ -4,11 +4,15 @@ import { markdownEl } from "../lib/agent-markdown";
 import { spinnerNode } from "./chrome";
 import {
   groupAgentTurns,
+  groupAgentTurnBlocks,
   processTitle,
+  replyText,
   stepKey,
   stepSummary,
+  toolState,
   turnKey,
   type AgentTurn,
+  type AgentTurnBlock,
 } from "../lib/agent-trace-view";
 import type { AgentTraceItem } from "../lib/operations";
 import { state } from "../state";
@@ -66,10 +70,38 @@ function applyOpen(card: HTMLDetailsElement, key: string, auto: boolean, kept: D
   bindToggle(card);
 }
 
-function stepCard(item: AgentTraceItem, kept: DetailsState): HTMLElement {
-  const card = node("details", `agent-step agent-${item.type}`);
-  applyOpen(card, stepKey(item), false, kept);
-  const summary = node("summary", "agent-step-summary", stepSummary(item));
+function toolStateMark(item: AgentTraceItem): HTMLElement {
+  const status = toolState(item);
+  const label = status === "running"
+    ? t("trace.runningTool")
+    : status === "error"
+      ? t("trace.failedTool")
+      : t("trace.doneTool");
+  const mark = node("span", `agent-tool-state agent-tool-state-${status}`);
+  mark.setAttribute("aria-label", label);
+  mark.title = label;
+  if (status === "running") mark.append(spinnerNode());
+  else mark.textContent = status === "error" ? "!" : "✓";
+  return mark;
+}
+
+function thinkingPreview(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function stepCard(item: AgentTraceItem, index: number, scope: string, kept: DetailsState): HTMLElement {
+  const status = item.type === "tool" ? ` is-${toolState(item)}` : "";
+  const card = node("details", `agent-step agent-${item.type}${status}`);
+  applyOpen(card, stepKey(item, index, scope), false, kept);
+  const summary = node("summary", "agent-step-summary");
+  if (item.type === "tool") summary.append(toolStateMark(item));
+  summary.append(node("span", "agent-step-title", stepSummary(item)));
+  if (item.type === "thinking" && item.text) {
+    const previewText = thinkingPreview(item.text);
+    const preview = node("span", "agent-thinking-preview", previewText);
+    preview.title = previewText;
+    summary.append(preview);
+  }
   card.append(summary);
   if (item.type === "thinking" && item.text) card.append(node("pre", "agent-step-body", item.text));
   if (item.input) {
@@ -86,12 +118,30 @@ function stepCard(item: AgentTraceItem, kept: DetailsState): HTMLElement {
   return card;
 }
 
-function processCard(turn: AgentTurn, live: boolean, kept: DetailsState): HTMLElement {
+function appendProcessItems(
+  items: AgentTraceItem[],
+  kept: DetailsState,
+  body: HTMLElement,
+  scope: string,
+  offset = 0,
+): number {
+  for (const [index, item] of items.entries()) body.append(stepCard(item, offset + index, scope, kept));
+  return offset + items.length;
+}
+
+function processCard(
+  turn: AgentTurn,
+  items: AgentTraceItem[],
+  blockIndex: number,
+  live: boolean,
+  kept: DetailsState,
+): HTMLElement {
+  const scope = `${turnKey(turn)}:${blockIndex}`;
   const card = node("details", "agent-process");
-  applyOpen(card, `p:${turnKey(turn)}`, live, kept);
-  card.append(node("summary", "agent-process-summary", processTitle(turn.steps, live)));
+  applyOpen(card, `p:${scope}`, live, kept);
+  card.append(node("summary", "agent-process-summary", processTitle(items, live)));
   const body = node("div", "agent-process-body");
-  for (const step of turn.steps) body.append(stepCard(step, kept));
+  appendProcessItems(items, kept, body, scope);
   card.append(body);
   return card;
 }
@@ -102,17 +152,93 @@ function userBubble(item: AgentTraceItem): HTMLElement {
   return article;
 }
 
-function assistantReply(item: AgentTraceItem): HTMLElement {
-  const article = node("article", "agent-assistant");
-  article.append(markdownEl(item.text || ""));
+function assistantReply(
+  items: AgentTraceItem[],
+  final: boolean,
+  live: boolean,
+  onCopy?: (text: string) => void | Promise<void>,
+): HTMLElement {
+  const text = replyText(items);
+  const article = node("article", `agent-assistant${final ? " agent-assistant-final" : " agent-assistant-intermediate"}`);
+  article.append(markdownEl(text));
+  if (final && !live && onCopy && text) {
+    const actions = node("div", "agent-reply-actions");
+    const copy = button(t("chat.copyReply"), "agent-reply-copy", () => onCopy(text));
+    copy.setAttribute("aria-label", t("chat.copyReplyAria"));
+    actions.append(copy);
+    article.append(actions);
+  }
   return article;
 }
 
-function paintTurn(turn: AgentTurn, live: boolean, kept: DetailsState, into: HTMLElement): void {
+function foldTitle(blocks: AgentTurnBlock[]): string {
+  const count = blocks.reduce((total, block) => total + block.items.length, 0);
+  return t("trace.nSteps", { n: count });
+}
+
+function appendFoldBlock(
+  block: AgentTurnBlock,
+  kept: DetailsState,
+  into: HTMLElement,
+  scope: string,
+  offset: number,
+  onCopy?: (text: string) => void | Promise<void>,
+): number {
+  if (block.type === "reply") {
+    into.append(assistantReply(block.items, false, false, onCopy));
+    return offset + block.items.length;
+  }
+  return appendProcessItems(block.items, kept, into, scope, offset);
+}
+
+function processFold(
+  turn: AgentTurn,
+  blocks: AgentTurnBlock[],
+  kept: DetailsState,
+  onCopy?: (text: string) => void | Promise<void>,
+): HTMLElement {
+  const card = node("details", "agent-process agent-reply-fold");
+  applyOpen(card, `f:${turnKey(turn)}`, false, kept);
+  const summary = node("summary", "agent-process-summary agent-reply-fold-summary");
+  summary.append(node("span", "agent-reply-fold-title", foldTitle(blocks)));
+  const body = node("div", "agent-process-body agent-reply-fold-body");
+  let offset = 0;
+  for (const block of blocks) offset = appendFoldBlock(block, kept, body, turnKey(turn), offset, onCopy);
+  card.append(summary, body);
+  return card;
+}
+
+function runStatus(stepCount: number): HTMLElement {
+  const status = node("div", "agent-run-status");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const label = stepCount ? t("trace.runningSteps", { n: stepCount }) : t("chat.runningEllipsis");
+  status.append(spinnerNode(), node("span", "", label));
+  return status;
+}
+
+function paintTurn(
+  turn: AgentTurn,
+  live: boolean,
+  kept: DetailsState,
+  into: HTMLElement,
+  onCopy?: (text: string) => void | Promise<void>,
+): void {
   if (turn.user) into.append(userBubble(turn.user));
-  if (turn.steps.length) into.append(processCard(turn, live, kept));
-  else if (live && !turn.replies.length) into.append(node("p", "agent-live", t("chat.runningEllipsis")));
-  for (const reply of turn.replies) into.append(assistantReply(reply));
+  const blocks = groupAgentTurnBlocks(turn.items);
+  const finalReply = !live && blocks.at(-1)?.type === "reply" ? blocks.length - 1 : -1;
+  if (finalReply > 0) into.append(processFold(turn, blocks.slice(0, finalReply), kept, onCopy));
+  if (finalReply >= 0) {
+    into.append(assistantReply(blocks[finalReply].items, true, live, onCopy));
+  } else {
+    let lastProcess = -1;
+    for (const [index, block] of blocks.entries()) if (block.type === "process") lastProcess = index;
+    for (const [index, block] of blocks.entries()) {
+      if (block.type === "process") into.append(processCard(turn, block.items, index, live && index === lastProcess, kept));
+      else into.append(assistantReply(block.items, false, live, onCopy));
+    }
+  }
+  if (live) into.append(runStatus(turn.items.length));
 }
 
 export type AgentEmptyKind = "loading" | "working" | "empty" | "error";
@@ -146,6 +272,8 @@ export function paintAgentStream(opts: {
   onRetry?: () => void;
   onNeedOlder?: () => void;
   onFollow?: (follow: boolean) => void;
+  onCopyReply?: (text: string) => void | Promise<void>;
+  truncated?: boolean;
 }): HTMLElement {
   const stream = node("div", "agent-stream");
   const inner = node("div", "agent-stream-inner");
@@ -155,9 +283,12 @@ export function paintAgentStream(opts: {
   stream.tabIndex = 0;
   const kept = opts.kept ?? emptyDetails();
   if (!opts.items.length) inner.append(emptyPanel(opts.empty, opts.onRetry));
+  if (opts.truncated && opts.items.length) {
+    inner.append(node("p", "agent-trace-limit", t("chat.truncated")));
+  }
   const turns = groupAgentTurns(opts.items);
   for (const [index, turn] of turns.entries()) {
-    paintTurn(turn, opts.working && index === turns.length - 1, kept, inner);
+    paintTurn(turn, opts.working && index === turns.length - 1, kept, inner, opts.onCopyReply);
   }
   stream.append(inner);
   stream.addEventListener("scroll", () => {
