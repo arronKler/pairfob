@@ -24,6 +24,7 @@ import {
   cssCellOf,
   displayGrid,
   FULL_TERM_FONT_FAMILY,
+  hostFitRows,
   hostInnerSize,
   integerizeDomRows,
   measureGlyphHeight,
@@ -171,12 +172,13 @@ function fit(): { cols: number; rows: number; cellWidth: number; cellHeight: num
     const targetRows = paneSize ? clamp(paneSize.rows, TERMINAL_MIN_ROWS, TERMINAL_MAX_ROWS) : null;
     if (targetRows && !remoteGrid) remoteGrid = { cols: targetCols, rows: targetRows };
     const cols = clamp(ptyCols(visibleCols, state.termFit, targetCols), TERMINAL_MIN_COLS, TERMINAL_MAX_COLS);
-    const rows = targetRows ?? clamp(
-      cell ? Math.floor(inner.height / cell.height) : terminal.rows || 24,
+    const hostRows = clamp(
+      cell ? hostFitRows(inner.height, cell.height) : terminal.rows || 24,
       TERMINAL_MIN_ROWS,
       TERMINAL_MAX_ROWS,
     );
-    const display = displayGrid({ cols, rows }, remoteGrid);
+    const rows = targetRows ?? hostRows;
+    const display = displayGrid({ cols, rows: hostRows }, remoteGrid);
     const pitched = pitchLineHeight(font, glyphHeight, dpr, display.rows);
     if (Math.abs(pitched - (terminal.options.lineHeight || 0)) > 0.001) {
       terminal.options.lineHeight = pitched;

@@ -94,6 +94,7 @@ describe("UI accessibility guardrails", () => {
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);
     }
     expect(rule(".text-link")).toMatch(/min-width:\s*44px/);
+    expect(rule(".agent-detail-retry")).toMatch(/min-height:\s*44px/);
   });
 
   test("new-output chip sits on the left so it does not cover the TUI page rail", () => {
@@ -356,6 +357,18 @@ describe("UI accessibility guardrails", () => {
     expect(rule("#app.desk")).not.toMatch(/min-height:\s*100dvh/);
     expect(rule(".main")).toMatch(/min-height:\s*0/);
     expect(rule(".main")).toMatch(/overflow:\s*hidden/);
+  });
+
+  test("complete-terminal compose pad sits below the host instead of overlaying it", () => {
+    expect(rule(".full-terminal-root")).toMatch(/display:\s*flex/);
+    expect(rule(".full-terminal-root")).toMatch(/flex-direction:\s*column/);
+    expect(rule(".full-terminal-root")).toMatch(/min-height:\s*0/);
+    expect(rule(".full-terminal-host")).toMatch(/flex:\s*1 1 0%/);
+    expect(rule(".full-terminal-host")).toMatch(/min-height:\s*0/);
+    expect(rule(".full-terminal-host")).toMatch(/overflow:\s*hidden/);
+    expect(rule(".full-terminal-host")).not.toMatch(/position:\s*absolute/);
+    expect(rule(".full-terminal-pad")).toMatch(/flex:\s*0 0 auto/);
+    expect(rule(".full-terminal-pad")).not.toMatch(/position:\s*(absolute|fixed)/);
   });
 
   test("standalone PWA paints the home-indicator strip with the app canvas", () => {

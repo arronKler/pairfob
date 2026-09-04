@@ -113,7 +113,8 @@ describe("complete-terminal chrome stays a distinct surface", () => {
 
   test("a short remote frame shrinks the display grid then still asks for the phone size", () => {
     const fitFn = fn("function fit(", "function stopCommandPump(");
-    expect(fitFn).toContain("displayGrid({ cols, rows }, remoteGrid)");
+    expect(fitFn).toContain("displayGrid({ cols, rows: hostRows }, remoteGrid)");
+    expect(fitFn).toContain("hostFitRows");
     expect(fitFn).toContain("ptyCols(visibleCols, state.termFit, targetCols)");
     expect(fitFn).toContain("panePtySize");
     expect(fitFn).toContain("sizePanCanvas");

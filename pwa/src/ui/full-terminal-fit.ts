@@ -198,6 +198,12 @@ export function snapCellLineHeight(lineHeight: number, cellHeight: number): numb
   return lineHeight * (snapped / cellHeight);
 }
 
+/** Rows that fit above the compose pad. Do not use the computer pane height here. */
+export function hostFitRows(hostHeight: number, cellHeight: number): number {
+  if (!(hostHeight > 0) || !(cellHeight > 0)) return 0;
+  return Math.floor(hostHeight / cellHeight);
+}
+
 /**
  * Local xterm grid: never larger than the phone host, never larger than the
  * last remote frame. A split pane on the computer often paints 20–24 rows

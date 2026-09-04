@@ -190,10 +190,9 @@ export function herdStatus(): { tone: StatusTone; text: string } {
   return { tone: "live", text: t("chrome.connected") };
 }
 
-export function herdBanners(target: HTMLElement, status: { tone: StatusTone }, verdict: RuntimeLiveness = herdLiveness()): void {
+export function herdBanners(target: HTMLElement, status: { tone: StatusTone }): void {
   if (status.tone === "demo") target.append(bannerNode("demo", t("chrome.demoBanner")));
   else if (status.tone === "off") target.append(bannerNode("off", t("chrome.herdrOffBanner")));
-  else if (verdict === "unverifiable" && state.agents.length > 0) target.append(bannerNode("warn", t("chrome.staleBanner")));
 }
 
 export function backBar(title: string, onBack: () => void): HTMLElement {

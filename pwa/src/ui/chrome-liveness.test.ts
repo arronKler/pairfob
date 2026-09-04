@@ -141,9 +141,7 @@ describe("home list while unverifiable", () => {
     // Last-known done never paints as a fresh fact.
     expect(card?.querySelector(".pill-done")).toBeNull();
     expect(card?.querySelector(".pill-unknown")?.textContent).toBe("未知");
-    expect(app?.querySelector(".banner-warn")?.textContent).toBe(
-      "以下为最后已知的会话状态，Herdr 恢复响应后会自动更新。",
-    );
+    expect(app?.querySelector(".banner-warn")).toBeNull();
   });
 
   test("live home shows fresh statuses and no stale banner", () => {

@@ -14,6 +14,7 @@ const {
   FULL_TERM_TARGET_COLS,
   clearScreenScale,
   displayGrid,
+  hostFitRows,
   hostInnerSize,
   integerizeDomRows,
   lineHeightForIntegerCells,
@@ -133,6 +134,14 @@ describe("complete-terminal display grid follows the remote frame", () => {
 
   test("a larger remote PTY is still clipped to the fitted host", () => {
     expect(displayGrid({ cols: 80, rows: 40 }, { cols: 160, rows: 80 })).toEqual({ cols: 80, rows: 40 });
+  });
+
+  test("a tall computer pane does not keep more rows than the host above the pad", () => {
+    expect(hostFitRows(400, 16)).toBe(25);
+    expect(displayGrid({ cols: 106, rows: hostFitRows(400, 16) }, { cols: 106, rows: 60 })).toEqual({
+      cols: 106,
+      rows: 25,
+    });
   });
 });
 

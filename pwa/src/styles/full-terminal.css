@@ -2,6 +2,10 @@
 
 .full-terminal-root {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   background: #090c10;
 }
 
@@ -119,6 +123,8 @@
   position: relative;
   padding: 4px;
   overflow: hidden;
+  isolation: isolate;
+  contain: paint;
   background: #090c10;
   touch-action: none;
 }
@@ -243,6 +249,7 @@
 
 .full-terminal-pad {
   flex: 0 0 auto;
+  min-width: 0;
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
   background: var(--dock-bg);
   border-top: 1px solid var(--line);
