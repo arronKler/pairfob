@@ -78,7 +78,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	}
 	wantOps := []string{
 		"Ping", "GetConfig", "Snapshot", "PaneRead", "SendText", "SendKeys",
-		"PushSubscribe", "RevokeDevice", "ListDevices", "History", "AgentTrace", "RenamePane",
+		"PushSubscribe", "RevokeDevice", "ListDevices", "History", "AgentTrace", "AgentTraceSummary", "AgentTraceDetail", "RenamePane",
 		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace",
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
 		"WorkspaceOpen", "WorkspaceList", "WorkspaceRead", "GitStatus", "GitDiff", "GitBranches",
@@ -178,6 +178,24 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 			t.Errorf("%s params must reject additional properties", op)
 		}
 	}
+	for _, op := range []string{"AgentTrace", "AgentTraceSummary"} {
+		params := paramsByOp[op]
+		if got, want := sortedPropertyNames(params.Properties), []string{"cursor", "limit", "pane_id", "session"}; !slices.Equal(got, want) || !slices.Equal(params.Required, []string{"pane_id"}) {
+			t.Errorf("%s params fields=%q required=%q", op, got, params.Required)
+		}
+		if params.AdditionalProperties == nil || *params.AdditionalProperties {
+			t.Errorf("%s params must reject additional properties", op)
+		}
+	}
+	detailParams := paramsByOp["AgentTraceDetail"]
+	if got, want := sortedPropertyNames(detailParams.Properties), []string{"detail_ref", "pane_id", "session"}; !slices.Equal(got, want) {
+		t.Errorf("AgentTraceDetail params fields=%q, want %q", got, want)
+	}
+	detailRequired := slices.Clone(detailParams.Required)
+	sort.Strings(detailRequired)
+	if !slices.Equal(detailRequired, []string{"detail_ref", "pane_id"}) || detailParams.AdditionalProperties == nil || *detailParams.AdditionalProperties {
+		t.Errorf("AgentTraceDetail params required=%q additionalProperties=%v", detailRequired, detailParams.AdditionalProperties)
+	}
 	for op, fields := range map[string][]string{
 		"TransportOffer":   {"attempt_id", "sdp"},
 		"TransportCommit":  {"attempt_id", "route_id"},
@@ -225,6 +243,15 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		[]string{"type"},
 	)
 	requireExactObject(t, schema.Defs, "agentTraceResult", []string{"items", "next_cursor", "truncated"})
+	requireExactObjectFields(t, schema.Defs, "agentTraceSummaryItem",
+		[]string{"type", "text", "name", "state", "detail_ref"},
+		[]string{"type"},
+	)
+	requireExactObject(t, schema.Defs, "agentTraceSummaryResult", []string{"items", "next_cursor", "truncated"})
+	requireExactObjectFields(t, schema.Defs, "agentTraceDetailResult",
+		[]string{"detail_ref", "text", "input", "output", "truncated"},
+		[]string{"detail_ref", "truncated"},
+	)
 	requireExactObject(t, schema.Defs, "worktreeItem", []string{
 		"path", "branch", "label", "is_bare", "is_detached", "is_prunable", "is_linked_worktree", "open_workspace_id",
 	})
@@ -322,6 +349,15 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	}
 	if got := schema.Defs["agentTraceResult"].Properties["items"].Items.Ref; got != "#/$defs/agentTraceItem" {
 		t.Errorf("agent trace items ref = %q", got)
+	}
+	if got := schema.Defs["agentTraceSummaryItem"].Properties["type"].Enum; !slices.Equal(got, []string{"user", "thinking", "tool", "assistant"}) {
+		t.Errorf("agent trace summary type enum = %q", got)
+	}
+	if got := schema.Defs["agentTraceSummaryItem"].Properties["state"].Enum; !slices.Equal(got, []string{"running", "done", "error"}) {
+		t.Errorf("agent trace summary state enum = %q", got)
+	}
+	if got := schema.Defs["agentTraceSummaryResult"].Properties["items"].Items.Ref; got != "#/$defs/agentTraceSummaryItem" {
+		t.Errorf("agent trace summary items ref = %q", got)
 	}
 	if got := schema.Defs["listWorktreesResult"].Properties["worktrees"].Items.Ref; got != "#/$defs/worktreeItem" {
 		t.Errorf("worktree items ref = %q", got)

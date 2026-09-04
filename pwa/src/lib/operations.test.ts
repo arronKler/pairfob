@@ -9,6 +9,8 @@ import {
   parseCreateTabResult,
   parseCreateWorktreeResult,
   parseAgentTracePage,
+  parseAgentTraceSummaryPage,
+  parseAgentTraceDetail,
   parseHistoryPage,
   parseOpenWorktreeResult,
   parsePromptAgentResult,
@@ -205,6 +207,35 @@ describe("safe read normalization", () => {
     expectBadMessage(() => parseAgentTracePage({ items: [{ type: "tool" }], next_cursor: null, truncated: false }));
     expectBadMessage(() => parseAgentTracePage({ items: [{ type: "system", text: "no" }], next_cursor: null, truncated: false }));
     expectBadMessage(() => parseAgentTracePage({ items: [{ type: "user", text: "x", extra: true }], next_cursor: null, truncated: false }));
+  });
+
+  test("keeps AgentTraceSummary tool bodies off the wire and binds detail replies", () => {
+    expect(parseAgentTraceSummaryPage({
+      items: [
+        { type: "user", text: "hello" },
+        { type: "tool", name: "Read", state: "done", detail_ref: "detail-1" },
+      ],
+      next_cursor: "older",
+      truncated: false,
+    })).toEqual({
+      items: [
+        { type: "user", text: "hello" },
+        { type: "tool", name: "Read", toolState: "done", detailRef: "detail-1" },
+      ],
+      nextCursor: "older",
+      truncated: false,
+    });
+    expect(parseAgentTraceDetail({
+      detail_ref: "detail-1", input: '{"path":"a.ts"}', output: "ok", truncated: true,
+    }, "detail-1")).toEqual({
+      detailRef: "detail-1", input: '{"path":"a.ts"}', output: "ok", truncated: true,
+    });
+    expectBadMessage(() => parseAgentTraceSummaryPage({
+      items: [{ type: "tool", name: "Read", state: "done", detail_ref: "detail-1", input: "leak" }],
+      next_cursor: null,
+      truncated: false,
+    }));
+    expectBadMessage(() => parseAgentTraceDetail({ detail_ref: "other", truncated: false }, "detail-1"));
   });
 
   test("validates the exact worktree result while keeping display fields", () => {

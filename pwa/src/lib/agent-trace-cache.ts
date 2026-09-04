@@ -1,4 +1,4 @@
-import type { AgentTraceItem } from "./operations";
+import type { AgentTraceDetail, AgentTraceItem } from "./operations";
 
 export type AgentTraceCacheEntry = {
   items: AgentTraceItem[];
@@ -10,7 +10,16 @@ export type AgentTraceCacheEntry = {
 };
 
 const MAX_CACHED_PANES = 6;
+const MAX_DETAILS_PER_PANE = 32;
 const entries = new Map<string, AgentTraceCacheEntry>();
+const details = new Map<string, Map<string, AgentTraceDetailState>>();
+let detailRevision = 0;
+
+export type AgentTraceDetailState = {
+  status: "idle" | "loading" | "ready" | "error";
+  detail?: AgentTraceDetail;
+  message?: string;
+};
 
 function copy(entry: AgentTraceCacheEntry): AgentTraceCacheEntry {
   return { ...entry, items: entry.items.map((item) => ({ ...item })) };
@@ -25,6 +34,7 @@ export function cacheAgentTrace(paneId: string, entry: AgentTraceCacheEntry): vo
     const oldest = entries.keys().next().value;
     if (typeof oldest !== "string") break;
     entries.delete(oldest);
+    if (details.delete(oldest)) detailRevision += 1;
   }
 }
 
@@ -38,8 +48,35 @@ export function cachedAgentTrace(paneId: string): AgentTraceCacheEntry | null {
 
 export function forgetAgentTrace(paneId: string): void {
   entries.delete(paneId);
+  if (details.delete(paneId)) detailRevision += 1;
 }
 
 export function clearAgentTraceCache(): void {
   entries.clear();
+  if (details.size) detailRevision += 1;
+  details.clear();
+}
+
+export function agentTraceDetailRevision(): number {
+  return detailRevision;
+}
+
+export function agentTraceDetailState(paneId: string, detailRef: string): AgentTraceDetailState {
+  return details.get(paneId)?.get(detailRef) ?? { status: "idle" };
+}
+
+export function setAgentTraceDetailState(paneId: string, detailRef: string, value: AgentTraceDetailState): void {
+  let pane = details.get(paneId);
+  if (!pane) {
+    pane = new Map();
+    details.set(paneId, pane);
+  }
+  pane.delete(detailRef);
+  pane.set(detailRef, value);
+  while (pane.size > MAX_DETAILS_PER_PANE) {
+    const oldest = pane.keys().next().value;
+    if (typeof oldest !== "string") break;
+    pane.delete(oldest);
+  }
+  detailRevision += 1;
 }

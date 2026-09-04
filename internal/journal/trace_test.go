@@ -61,6 +61,67 @@ func TestCodexTraceKeepsThinkingAndToolBodies(t *testing.T) {
 	}
 }
 
+func TestTraceSummaryDefersToolBodiesBehindBoundDetailRef(t *testing.T) {
+	root := t.TempDir()
+	id := "session_12345678"
+	path := filepath.Join(root, "sessions", "2026", "08", "28", "rollout-"+id+".jsonl")
+	writeLines(t, path,
+		map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "function_call", "name": "Read", "call_id": "call_1", "arguments": `{"path":"/secret/a.ts"}`,
+		}},
+		map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "function_call_output", "call_id": "call_1", "output": "private body",
+		}},
+	)
+	ref := Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}
+	reader := &Reader{CodexRoot: root}
+	page, err := reader.ReadTraceSummary(ref, nil, 20)
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("summary=%+v err=%v", page, err)
+	}
+	tool := page.Items[0]
+	if tool.Type != "tool" || tool.Name != "Read" || tool.State != "done" || tool.DetailRef == "" || tool.Text != "" {
+		t.Fatalf("tool summary=%+v", tool)
+	}
+	encoded, _ := json.Marshal(page)
+	if strings.Contains(string(encoded), "/secret") || strings.Contains(string(encoded), "private body") {
+		t.Fatalf("summary leaked deferred body: %s", encoded)
+	}
+	detail, err := reader.ReadTraceDetail(ref, tool.DetailRef)
+	if err != nil || !strings.Contains(detail.Input, "/secret/a.ts") || detail.Output != "private body" || detail.DetailRef != tool.DetailRef {
+		t.Fatalf("detail=%+v err=%v", detail, err)
+	}
+	other := Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: "other_12345678"}
+	if _, err := reader.ReadTraceDetail(other, tool.DetailRef); !errors.Is(err, ErrCursorConflict) {
+		t.Fatalf("detail ref crossed transcript binding: %v", err)
+	}
+}
+
+func TestClaudeTraceDetailUsesEventOrdinalWithinOneLine(t *testing.T) {
+	root := t.TempDir()
+	id := "12345678-abcd-4321-abcd-1234567890ab"
+	path := filepath.Join(root, "projects", "-tmp-pairfob", id+".jsonl")
+	writeLines(t, path,
+		map[string]any{"type": "assistant", "message": map[string]any{"role": "assistant", "content": []map[string]any{
+			{"type": "thinking", "thinking": "plan"},
+			{"type": "tool_use", "id": "toolu_1", "name": "Read", "input": map[string]any{"file_path": "/secret"}},
+		}}},
+		map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": []map[string]any{
+			{"type": "tool_result", "tool_use_id": "toolu_1", "content": "private"},
+		}}},
+	)
+	ref := Ref{Source: "herdr:claude", Agent: "claude", Kind: "id", Value: id}
+	reader := &Reader{ClaudeRoot: root}
+	page, err := reader.ReadTraceSummary(ref, nil, 20)
+	if err != nil || len(page.Items) != 2 || page.Items[1].DetailRef == "" {
+		t.Fatalf("summary=%+v err=%v", page, err)
+	}
+	detail, err := reader.ReadTraceDetail(ref, page.Items[1].DetailRef)
+	if err != nil || !strings.Contains(detail.Input, "/secret") || detail.Output != "private" {
+		t.Fatalf("detail=%+v err=%v", detail, err)
+	}
+}
+
 func TestCodexTraceKeepsAdjacentCompleteMessagesSeparate(t *testing.T) {
 	root := t.TempDir()
 	id := "session_12345678"

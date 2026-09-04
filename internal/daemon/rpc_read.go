@@ -201,18 +201,8 @@ func (e *Engine) rpcAgentTrace(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "invalid_argument", "invalid agent trace params")
 		return
 	}
-	pane, err := e.findPane(p.Session, p.PaneID)
-	if err != nil {
-		e.replyRuntimeErr(s, id, err, "pane_not_found")
-		return
-	}
-	if pane == nil {
-		e.replyErr(s, id, "pane_not_found", "pane is no longer available")
-		return
-	}
-	ref := journalRef(pane.AgentSession)
-	if e.Journal == nil || !e.Journal.Supports(ref) {
-		e.replyErr(s, id, "transcript_unavailable", "pane has no supported trusted transcript binding")
+	ref, ok := e.agentTraceRef(s, id, p.Session, p.PaneID)
+	if !ok {
 		return
 	}
 	limit := 50
@@ -221,17 +211,88 @@ func (e *Engine) rpcAgentTrace(s *sess, id string, params json.RawMessage) {
 	}
 	page, err := e.Journal.ReadTrace(ref, p.Cursor, limit)
 	if err != nil {
-		code := "internal"
-		switch {
-		case errors.Is(err, journal.ErrCursorConflict):
-			code = "conflict"
-		case errors.Is(err, journal.ErrCursorInvalid):
-			code = "invalid_argument"
-		case errors.Is(err, journal.ErrUnavailable):
-			code = "transcript_unavailable"
-		}
-		e.replyErr(s, id, code, "agent trace could not be read")
+		e.replyAgentTraceError(s, id, err, "agent trace could not be read")
 		return
 	}
 	e.reply(s, id, map[string]any{"items": page.Items, "next_cursor": page.NextCursor, "truncated": page.Truncated})
+}
+
+func (e *Engine) rpcAgentTraceSummary(s *sess, id string, params json.RawMessage) {
+	var p struct {
+		Session *string `json:"session"`
+		PaneID  string  `json:"pane_id"`
+		Cursor  *string `json:"cursor"`
+		Limit   *int    `json:"limit"`
+	}
+	if badParams(params, &p) || !validID(p.PaneID) || invalidSession(p.Session) || (p.Cursor != nil && utf8.RuneCountInString(*p.Cursor) > 1024) || (p.Limit != nil && (*p.Limit < 1 || *p.Limit > 200)) {
+		e.replyErr(s, id, "invalid_argument", "invalid agent trace summary params")
+		return
+	}
+	ref, ok := e.agentTraceRef(s, id, p.Session, p.PaneID)
+	if !ok {
+		return
+	}
+	limit := 50
+	if p.Limit != nil {
+		limit = *p.Limit
+	}
+	page, err := e.Journal.ReadTraceSummary(ref, p.Cursor, limit)
+	if err != nil {
+		e.replyAgentTraceError(s, id, err, "agent trace summary could not be read")
+		return
+	}
+	e.reply(s, id, map[string]any{"items": page.Items, "next_cursor": page.NextCursor, "truncated": page.Truncated})
+}
+
+func (e *Engine) rpcAgentTraceDetail(s *sess, id string, params json.RawMessage) {
+	var p struct {
+		Session   *string `json:"session"`
+		PaneID    string  `json:"pane_id"`
+		DetailRef string  `json:"detail_ref"`
+	}
+	if badParams(params, &p) || !validID(p.PaneID) || invalidSession(p.Session) || p.DetailRef == "" || utf8.RuneCountInString(p.DetailRef) > 1024 {
+		e.replyErr(s, id, "invalid_argument", "invalid agent trace detail params")
+		return
+	}
+	ref, ok := e.agentTraceRef(s, id, p.Session, p.PaneID)
+	if !ok {
+		return
+	}
+	detail, err := e.Journal.ReadTraceDetail(ref, p.DetailRef)
+	if err != nil {
+		e.replyAgentTraceError(s, id, err, "agent trace detail could not be read")
+		return
+	}
+	e.reply(s, id, detail)
+}
+
+func (e *Engine) agentTraceRef(s *sess, id string, session *string, paneID string) (journal.Ref, bool) {
+	pane, err := e.findPane(session, paneID)
+	if err != nil {
+		e.replyRuntimeErr(s, id, err, "pane_not_found")
+		return journal.Ref{}, false
+	}
+	if pane == nil {
+		e.replyErr(s, id, "pane_not_found", "pane is no longer available")
+		return journal.Ref{}, false
+	}
+	ref := journalRef(pane.AgentSession)
+	if e.Journal == nil || !e.Journal.Supports(ref) {
+		e.replyErr(s, id, "transcript_unavailable", "pane has no supported trusted transcript binding")
+		return journal.Ref{}, false
+	}
+	return ref, true
+}
+
+func (e *Engine) replyAgentTraceError(s *sess, id string, err error, message string) {
+	code := "internal"
+	switch {
+	case errors.Is(err, journal.ErrCursorConflict):
+		code = "conflict"
+	case errors.Is(err, journal.ErrCursorInvalid):
+		code = "invalid_argument"
+	case errors.Is(err, journal.ErrUnavailable):
+		code = "transcript_unavailable"
+	}
+	e.replyErr(s, id, code, message)
 }

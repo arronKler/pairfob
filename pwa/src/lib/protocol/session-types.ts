@@ -1,5 +1,6 @@
 import type {
   AgentTracePage,
+  AgentTraceDetail,
   CreateConversationInput,
   CreateConversationResult,
   CreateTabInput,
@@ -77,6 +78,7 @@ export type LiveSession = {
   promptAgent: (params: PromptAgentInput) => Promise<PromptAgentResult>;
   history: (paneId: string, cursor?: string | null, limit?: number) => Promise<unknown>;
   agentTrace: (paneId: string, cursor?: string | null, limit?: number) => Promise<AgentTracePage>;
+  agentTraceDetail: (paneId: string, detailRef: string) => Promise<AgentTraceDetail>;
   listWorktrees: (params: ListWorktreesInput) => Promise<unknown>;
   workspaceOpen: (paneId: string) => Promise<WorkspaceDescriptor>;
   workspaceList: (paneId: string, path?: string, cursor?: string, limit?: number) => Promise<WorkspaceDirectoryPage>;

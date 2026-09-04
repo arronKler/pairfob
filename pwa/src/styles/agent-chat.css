@@ -395,6 +395,37 @@
   color: var(--muted);
 }
 
+.agent-detail-state {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.agent-detail-state > .spinner {
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
+}
+
+.agent-detail-error {
+  color: var(--danger);
+  flex-wrap: wrap;
+}
+
+.agent-detail-retry {
+  min-height: 44px;
+  margin-left: auto;
+}
+
+.agent-detail-limit {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 .agent-live {
   margin: 4px 0 0;
   font-size: 0.8rem;

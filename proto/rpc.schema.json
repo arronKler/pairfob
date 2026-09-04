@@ -251,6 +251,44 @@
       },
       "additionalProperties": false
     },
+    "agentTraceSummaryItem": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["user", "thinking", "tool", "assistant"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 131072 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "state": { "enum": ["running", "done", "error"] },
+        "detail_ref": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      },
+      "additionalProperties": false
+    },
+    "agentTraceSummaryResult": {
+      "type": "object",
+      "required": ["items", "next_cursor", "truncated"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/agentTraceSummaryItem" }
+        },
+        "next_cursor": { "type": ["string", "null"], "maxLength": 1024 },
+        "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "agentTraceDetailResult": {
+      "type": "object",
+      "required": ["detail_ref", "truncated"],
+      "properties": {
+        "detail_ref": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 131072 },
+        "input": { "type": "string", "minLength": 1, "maxLength": 131072 },
+        "output": { "type": "string", "minLength": 1, "maxLength": 131072 },
+        "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     "worktreeItem": {
       "type": "object",
       "required": [
@@ -559,6 +597,8 @@
             "ListDevices",
             "History",
             "AgentTrace",
+            "AgentTraceSummary",
+            "AgentTraceDetail",
             "RenamePane",
             "RenameTab",
             "RenameWorkspace",
@@ -763,6 +803,41 @@
                   "session": { "$ref": "#/$defs/session" },
                   "cursor": { "type": ["string", "null"], "maxLength": 1024 },
                   "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "AgentTraceSummary" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id"],
+                "properties": {
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "cursor": { "type": ["string", "null"], "maxLength": 1024 },
+                  "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "AgentTraceDetail" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id", "detail_ref"],
+                "properties": {
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "session": { "$ref": "#/$defs/session" },
+                  "detail_ref": { "type": "string", "minLength": 1, "maxLength": 1024 }
                 },
                 "additionalProperties": false
               }

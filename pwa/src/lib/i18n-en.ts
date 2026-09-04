@@ -162,7 +162,6 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chrome.connectedHost": "Connected · {host}",
   "chrome.demoBanner": "This is demo data, not Herdr on your computer.",
   "chrome.herdrOffBanner": "Herdr is not running on the computer. It recovers when you open it.",
-  "chrome.staleBanner": "Showing last-known session states. They update when Herdr answers.",
   "home.settings": "Settings",
   "home.new": "New",
   "home.computers": "Computers",
@@ -572,6 +571,8 @@ export const en: { [K in keyof typeof zh]: string } = {
   "desk.pickSub": "Tap one in the list. This pane shows the terminal on the computer.",
 
   "chat.truncated": "Some long content was omitted",
+  "chat.detailLoading": "Loading details",
+  "chat.detailFailed": "Details are temporarily unavailable",
   "chat.noTrace": "No agent record to read yet. Sent messages land in this chat.",
   "chat.readingProcess": "Reading the run",
   "chat.noChat": "No chat yet",

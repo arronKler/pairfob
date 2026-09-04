@@ -261,6 +261,10 @@ func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
 		e.rpcHistory(s, id, params)
 	case "AgentTrace":
 		e.rpcAgentTrace(s, id, params)
+	case "AgentTraceSummary":
+		e.rpcAgentTraceSummary(s, id, params)
+	case "AgentTraceDetail":
+		e.rpcAgentTraceDetail(s, id, params)
 	case "TerminalOpen":
 		e.rpcTerminalOpen(s, id, params)
 	case "TerminalInput":

@@ -2,7 +2,7 @@ import { canPromptAgent, chromeName, statusLabel } from "../lib/dashboard";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { firstTurnNeedsUser, mergeAgentTraceSegments } from "../lib/agent-trace-view";
-import { cacheAgentTrace, cachedAgentTrace } from "../lib/agent-trace-cache";
+import { agentTraceDetailRevision, cacheAgentTrace, cachedAgentTrace } from "../lib/agent-trace-cache";
 import type { AgentTraceItem, AgentTracePage } from "../lib/operations";
 import { ProtocolError } from "../lib/protocol/errors";
 import { messageOf } from "../lib/notices";
@@ -27,6 +27,7 @@ import { backButton, canInterruptAgent, feedbackNode } from "./chrome";
 import { leaveFullTerminal } from "./full-terminal";
 import { chromeActionCluster, syncChromeStop } from "./session/chrome-actions";
 import { paintAgentStream, readDetailsState, type AgentEmptySpec } from "./agent-chat-stream";
+import { loadToolDetail, toolDetailView } from "./agent-chat-detail";
 
 function fingerprint(items: AgentTraceItem[]): string {
   return JSON.stringify(items);
@@ -50,7 +51,7 @@ const OLDER_FILL_MAX = 4;
 let traceRequest = 0;
 
 function streamSig(items: AgentTraceItem[], working: boolean): string {
-  return `${fingerprint(items)}|${working ? 1 : 0}|${state.agentTraceLoadState}|${state.agentTraceTruncated ? 1 : 0}`;
+  return `${fingerprint(items)}|${working ? 1 : 0}|${state.agentTraceLoadState}|${state.agentTraceTruncated ? 1 : 0}|${agentTraceDetailRevision()}`;
 }
 
 function applyTracePage(page: AgentTracePage, older: boolean): boolean {
@@ -372,6 +373,7 @@ async function copyAgentReply(text: string): Promise<void> {
 }
 
 function paintItems(items: AgentTraceItem[], working: boolean, stream: HTMLElement | null): HTMLElement {
+  const paneId = state.paneId;
   const next = paintAgentStream({
     items,
     working,
@@ -389,6 +391,13 @@ function paintItems(items: AgentTraceItem[], working: boolean, stream: HTMLEleme
       syncAgentJump();
     },
     onCopyReply: copyAgentReply,
+    toolDetail: (item) => paneId && item.detailRef ? toolDetailView(paneId, item.detailRef) : { status: "ready" },
+    onNeedToolDetail: (detailRef) => {
+      if (!paneId) return;
+      loadToolDetail(paneId, detailRef, () => {
+        if (!patchAgentChat()) render();
+      });
+    },
     truncated: state.agentTraceTruncated,
   });
   next.querySelector(".agent-stream-inner")?.prepend(olderButton());

@@ -109,6 +109,7 @@ export type AgentToolState = "running" | "done" | "error";
 
 /** Providers only expose an explicit error sentinel today; do not guess from arbitrary output. */
 export function toolState(item: AgentTraceItem): AgentToolState {
+  if (item.toolState) return item.toolState;
   if (!item.output) return "running";
   if (/^(?:失败|failed|error|errored)$/i.test(item.output.trim())) return "error";
   return "done";

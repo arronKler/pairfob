@@ -50,6 +50,7 @@ function live() {
       nextCursor: null,
       truncated: false,
     }),
+    agentTraceDetail: async (_paneId: string, detailRef: string) => ({ detailRef, input: "{}", output: "ok", truncated: false }),
     promptAgent: async () => ({ operation_id: "op_AAECAwQFBgcICQoL", pane_id: "p1", agent_status: "working", outcome: "applied" }),
     sendKeys: async () => undefined,
     sendText: async () => undefined,
@@ -391,6 +392,77 @@ describe("agent-chat remembers its mode per pane", () => {
       "完成",
       "失败",
     ]);
+  });
+
+  test("loads tool bodies only after expansion and reuses the loaded detail", async () => {
+    bootAgentChat();
+    let reads = 0;
+    let finish: ((detail: { detailRef: string; input: string; output: string; truncated: true }) => void) | undefined;
+    state.agentTraceItems = [
+      { type: "user", text: "inspect" },
+      { type: "tool", name: "Read", toolState: "done", detailRef: "detail-1" },
+    ];
+    state.live = {
+      ...live(),
+      agentTraceDetail: (_paneId: string, _detailRef: string) => {
+        reads += 1;
+        return new Promise((resolve) => { finish = resolve; });
+      },
+    } as typeof state.live;
+    expect(patchAgentChat({ follow: true })).toBe(true);
+    expect(reads).toBe(0);
+    expect(app.textContent).not.toContain("/secret/a.ts");
+
+    const tool = app.querySelector(".agent-tool");
+    if (!(tool instanceof HTMLDetailsElement)) throw new Error("missing lazy tool card");
+    tool.open = true;
+    tool.dispatchEvent(new happy.Event("toggle"));
+    expect(reads).toBe(1);
+    expect(app.textContent).toContain("正在加载详情");
+
+    finish?.({ detailRef: "detail-1", input: '{"path":"/secret/a.ts"}', output: "private body", truncated: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(app.textContent).toContain("/secret/a.ts");
+    expect(app.textContent).toContain("private body");
+    expect(app.querySelector(".agent-tool .agent-detail-limit")?.textContent).toContain("部分较长内容已省略");
+    expect(app.querySelector(".agent-trace-limit")).toBeNull();
+
+    const painted = app.querySelector(".agent-tool");
+    if (!(painted instanceof HTMLDetailsElement)) throw new Error("missing repainted tool card");
+    painted.open = false;
+    painted.dispatchEvent(new happy.Event("toggle"));
+    painted.open = true;
+    painted.dispatchEvent(new happy.Event("toggle"));
+    expect(reads).toBe(1);
+  });
+
+  test("keeps a failed detail read inside the tool card and retries on demand", async () => {
+    bootAgentChat();
+    let reads = 0;
+    state.agentTraceItems = [{ type: "tool", name: "Read", toolState: "done", detailRef: "detail-retry" }];
+    state.live = {
+      ...live(),
+      agentTraceDetail: async (_paneId: string, detailRef: string) => {
+        reads += 1;
+        if (reads === 1) throw new ProtocolError("timeout", "detail timed out");
+        return { detailRef, output: "loaded after retry", truncated: false };
+      },
+    } as typeof state.live;
+    expect(patchAgentChat({ follow: true })).toBe(true);
+    const tool = app.querySelector(".agent-tool");
+    if (!(tool instanceof HTMLDetailsElement)) throw new Error("missing lazy tool card");
+    tool.open = true;
+    tool.dispatchEvent(new happy.Event("toggle"));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(app.querySelector(".agent-detail-error")).toBeTruthy();
+    expect(app.querySelector(".agent-chat-root > [data-app-notice]")).toBeNull();
+    click(".agent-detail-retry");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(reads).toBe(2);
+    expect(app.textContent).toContain("loaded after retry");
   });
 
   test("copies only the completed final reply", async () => {

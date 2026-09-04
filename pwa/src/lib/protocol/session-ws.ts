@@ -7,7 +7,6 @@ import {
   parseCreateTabResult,
   parseCreateWorktreeResult,
   parseOpenWorktreeResult,
-  parseAgentTracePage,
   parsePromptAgentResult,
   parseResizePaneResult,
   parseSplitPaneResult,
@@ -26,6 +25,7 @@ import {
   type OpenWorktreeResult,
   type PromptAgentResult,
   type AgentTracePage,
+  type AgentTraceDetail,
   type PromptAgentInput,
   type OpenWorktreeInput,
   type ResizePaneInput,
@@ -70,6 +70,7 @@ import {
   parseTerminalOpenResult,
   type TerminalOpenResult,
 } from "./terminal.ts";
+import { AgentTraceRPC } from "./agent-trace.ts";
 
 export { validateSessionMessage } from "./session-message.ts";
 export { validateSessionEstablished } from "./session-handshake.ts";
@@ -150,6 +151,7 @@ class ReconnectingSession implements LiveSession {
   private readonly transportSwitch = new TransportSwitchBarrier();
   private deferredDisconnect: ProtocolError | null = null;
   private readonly direct: DirectSessionDriver;
+  private readonly agentTraceRPC = new AgentTraceRPC((op, params) => this.readRPC(op, params));
 
   private constructor(
     private readonly relayWS: string,
@@ -273,7 +275,9 @@ class ReconnectingSession implements LiveSession {
   history = (paneId: string, cursor: string | null = null, limit = 50) =>
     this.readRPC("History", { pane_id: paneId, cursor, limit });
   agentTrace = async (paneId: string, cursor: string | null = null, limit = 50): Promise<AgentTracePage> =>
-    parseAgentTracePage(await this.readRPC("AgentTrace", { pane_id: paneId, cursor, limit }));
+    this.agentTraceRPC.read(paneId, cursor, limit);
+  agentTraceDetail = async (paneId: string, detailRef: string): Promise<AgentTraceDetail> =>
+    this.agentTraceRPC.detail(paneId, detailRef);
   listWorktrees = (params: ListWorktreesInput) => this.readRPC("ListWorktrees", params);
   workspaceOpen = async (paneId: string) => parseWorkspaceDescriptor(await this.readRPC("WorkspaceOpen", { pane_id: paneId }));
   workspaceList = async (paneId: string, path = "", cursor = "", limit = 120) =>

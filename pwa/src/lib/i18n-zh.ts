@@ -160,7 +160,6 @@ export const zh = {
   "chrome.connectedHost": "已连接 · {host}",
   "chrome.demoBanner": "当前显示的是演示数据，不是你电脑上的 Herdr。",
   "chrome.herdrOffBanner": "电脑上的 Herdr 没有运行，打开后会自动恢复。",
-  "chrome.staleBanner": "以下为最后已知的会话状态，Herdr 恢复响应后会自动更新。",
   "home.settings": "设置",
   "home.new": "新建",
   "home.computers": "电脑",
@@ -570,6 +569,8 @@ export const zh = {
   "desk.pickSub": "从左侧的列表点一个，这里会显示电脑上的终端画面。",
 
   "chat.truncated": "部分较长内容已省略",
+  "chat.detailLoading": "正在加载详情",
+  "chat.detailFailed": "详情暂时加载失败",
   "chat.noTrace": "还没有可读取的 Agent 记录。发出去的消息会写进这个对话。",
   "chat.readingProcess": "正在读取执行过程",
   "chat.noChat": "还没有对话",

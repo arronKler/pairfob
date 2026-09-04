@@ -145,10 +145,19 @@ export type AgentTraceItem = {
   name?: string;
   input?: string;
   output?: string;
+  toolState?: "running" | "done" | "error";
+  detailRef?: string;
 };
 export type AgentTracePage = {
   items: AgentTraceItem[];
   nextCursor: string | null;
+  truncated: boolean;
+};
+export type AgentTraceDetail = {
+  detailRef: string;
+  text?: string;
+  input?: string;
+  output?: string;
   truncated: boolean;
 };
 
@@ -420,6 +429,52 @@ export function parseAgentTracePage(value: unknown): AgentTracePage {
   if (cursor !== null && (typeof cursor !== "string" || cursor.length > 1024)) badResult("AgentTrace 响应 next_cursor 非法");
   if (typeof result.truncated !== "boolean") badResult("AgentTrace 响应 truncated 非法");
   return { items: items as AgentTraceItem[], nextCursor: cursor, truncated: result.truncated };
+}
+
+function itemTraceSummary(value: unknown): AgentTraceItem | null {
+  if (!isRecord(value) || typeof value.type !== "string" || !TRACE_TYPES.has(value.type as AgentTraceType)) return null;
+  const type = value.type as AgentTraceType;
+  if (type === "tool") {
+    if (Object.keys(value).some((key) => !["type", "name", "state", "detail_ref"].includes(key))) return null;
+    const name = optionalClipped(value, "name");
+    const detailRef = optionalClipped(value, "detail_ref");
+    const state = value.state;
+    if (!name || !detailRef || detailRef.length > 1024 || (state !== "running" && state !== "done" && state !== "error")) return null;
+    return { type, name, toolState: state, detailRef };
+  }
+  if (Object.keys(value).some((key) => !["type", "text"].includes(key))) return null;
+  const text = optionalClipped(value, "text");
+  return text ? { type, text } : null;
+}
+
+export function parseAgentTraceSummaryPage(value: unknown): AgentTracePage {
+  const result = resultRecord(value, "AgentTraceSummary");
+  exactKeys(result, ["items", "next_cursor", "truncated"]);
+  if (!Array.isArray(result.items) || result.items.length > 200) badResult("AgentTraceSummary 响应 items 非法");
+  const items = result.items.map((item) => itemTraceSummary(item));
+  if (items.some((item) => item === null)) badResult("AgentTraceSummary 响应包含非法记录");
+  const cursor = result.next_cursor;
+  if (cursor !== null && (typeof cursor !== "string" || cursor.length > 1024)) badResult("AgentTraceSummary 响应 next_cursor 非法");
+  if (typeof result.truncated !== "boolean") badResult("AgentTraceSummary 响应 truncated 非法");
+  return { items: items as AgentTraceItem[], nextCursor: cursor, truncated: result.truncated };
+}
+
+export function parseAgentTraceDetail(value: unknown, expectedRef?: string): AgentTraceDetail {
+  const result = resultRecord(value, "AgentTraceDetail");
+  exactKeys(result, ["detail_ref", "truncated"], ["detail_ref", "text", "input", "output", "truncated"]);
+  const detailRef = requiredString(result, "detail_ref", undefined, 1024);
+  if (expectedRef !== undefined && detailRef !== expectedRef) badResult("AgentTraceDetail 响应 detail_ref 不匹配");
+  if (typeof result.truncated !== "boolean") badResult("AgentTraceDetail 响应 truncated 非法");
+  const text = optionalClipped(result, "text");
+  const input = optionalClipped(result, "input");
+  const output = optionalClipped(result, "output");
+  return {
+    detailRef,
+    ...(text ? { text } : {}),
+    ...(input ? { input } : {}),
+    ...(output ? { output } : {}),
+    truncated: result.truncated,
+  };
 }
 
 export function parseWorktrees(value: unknown): WorktreeSummary[] {

@@ -8,24 +8,52 @@ import (
 
 // Event is one step on the agent execution timeline.
 type Event struct {
-	Type   string `json:"type"`
-	Text   string `json:"text,omitempty"`
-	Name   string `json:"name,omitempty"`
-	Input  string `json:"input,omitempty"`
-	Output string `json:"output,omitempty"`
+	Type             string `json:"type"`
+	Text             string `json:"text,omitempty"`
+	Name             string `json:"name,omitempty"`
+	Input            string `json:"input,omitempty"`
+	Output           string `json:"output,omitempty"`
+	DetailRef        string `json:"-"`
+	DetailTruncated  bool   `json:"-"`
+	SummaryTruncated bool   `json:"-"`
 }
 
 type TracePage struct {
-	Items      []Event `json:"items"`
-	NextCursor *string `json:"next_cursor"`
-	Truncated  bool    `json:"truncated"`
+	Items            []Event `json:"items"`
+	NextCursor       *string `json:"next_cursor"`
+	Truncated        bool    `json:"truncated"`
+	SummaryTruncated bool    `json:"-"`
+}
+
+type TraceSummaryItem struct {
+	Type      string `json:"type"`
+	Text      string `json:"text,omitempty"`
+	Name      string `json:"name,omitempty"`
+	State     string `json:"state,omitempty"`
+	DetailRef string `json:"detail_ref,omitempty"`
+}
+
+type TraceSummaryPage struct {
+	Items      []TraceSummaryItem `json:"items"`
+	NextCursor *string            `json:"next_cursor"`
+	Truncated  bool               `json:"truncated"`
+}
+
+type TraceDetail struct {
+	DetailRef string `json:"detail_ref"`
+	Text      string `json:"text,omitempty"`
+	Input     string `json:"input,omitempty"`
+	Output    string `json:"output,omitempty"`
+	Truncated bool   `json:"truncated"`
 }
 
 type parsedEvent struct {
 	Event
-	call       string
-	mergeKey   string
-	outputOnly bool
+	call          string
+	mergeKey      string
+	lineStart     int
+	sourceOrdinal int
+	outputOnly    bool
 }
 
 const (

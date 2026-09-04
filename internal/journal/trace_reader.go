@@ -80,6 +80,24 @@ func (r *Reader) ReadTrace(ref Ref, cursor *string, limit int) (TracePage, error
 	return page, err
 }
 
+func (r *Reader) ReadTraceSummary(ref Ref, cursor *string, limit int) (TraceSummaryPage, error) {
+	page, err := r.ReadTrace(ref, cursor, limit)
+	if err != nil {
+		return TraceSummaryPage{}, err
+	}
+	items := make([]TraceSummaryItem, 0, len(page.Items))
+	for _, item := range page.Items {
+		if item.Type == "tool" {
+			items = append(items, TraceSummaryItem{
+				Type: item.Type, Name: item.Name, State: traceToolState(item), DetailRef: item.DetailRef,
+			})
+			continue
+		}
+		items = append(items, TraceSummaryItem{Type: item.Type, Text: item.Text})
+	}
+	return TraceSummaryPage{Items: items, NextCursor: page.NextCursor, Truncated: page.SummaryTruncated}, nil
+}
+
 func (r *Reader) cachedTracePage(path string, limit int) (TracePage, bool) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -110,7 +128,9 @@ func (r *Reader) cacheTracePage(path string, limit int, stats traceReadStats, pa
 }
 
 func cloneTracePage(page TracePage) TracePage {
-	copyPage := TracePage{Items: append([]Event(nil), page.Items...), Truncated: page.Truncated}
+	copyPage := TracePage{
+		Items: append([]Event(nil), page.Items...), Truncated: page.Truncated, SummaryTruncated: page.SummaryTruncated,
+	}
 	if page.NextCursor != nil {
 		next := *page.NextCursor
 		copyPage.NextCursor = &next
@@ -206,14 +226,17 @@ func parseTraceWindow(data []byte, base, limit int, parse traceParser) (traceWin
 	for scanner.Scan() {
 		lineStart := position
 		position += len(scanner.Bytes()) + 1
-		for _, event := range parse(scanner.Bytes()) {
+		for ordinal, event := range parse(scanner.Bytes()) {
+			event.lineStart = lineStart
+			event.sourceOrdinal = ordinal
 			if event.outputOnly {
 				if item, attached := outputTarget(window.items, event.call, event.Output); attached {
 					if item != nil {
 						window.pageBytes -= eventSize(item.Event)
 						item.Output = event.Output
-						item.Event, window.truncated = clipEvent(item.Event, window.truncated)
-						item.Event, window.truncated = clipEventToLimit(item.Event, maxTraceItemsBytes-window.pageBytes, window.truncated)
+						item.Event, item.DetailTruncated = clipEvent(item.Event, item.DetailTruncated)
+						item.Event, item.DetailTruncated = clipEventToLimit(item.Event, maxTraceItemsBytes-window.pageBytes, item.DetailTruncated)
+						window.truncated = window.truncated || item.DetailTruncated
 						window.pageBytes += eventSize(item.Event)
 					}
 					continue
@@ -226,12 +249,22 @@ func parseTraceWindow(data []byte, base, limit int, parse traceParser) (traceWin
 				last := &window.items[len(window.items)-1]
 				window.pageBytes -= eventSize(last.Event)
 				last.Text += event.Text
-				last.Event, window.truncated = clipEvent(last.Event, window.truncated)
-				last.Event, window.truncated = clipEventToLimit(last.Event, maxTraceItemsBytes-window.pageBytes, window.truncated)
+				var clipped bool
+				last.Event, clipped = clipEvent(last.Event, false)
+				last.Event, clipped = clipEventToLimit(last.Event, maxTraceItemsBytes-window.pageBytes, clipped)
+				last.SummaryTruncated = last.SummaryTruncated || clipped
+				window.truncated = window.truncated || clipped
 				window.pageBytes += eventSize(last.Event)
 				continue
 			}
-			event.Event, window.truncated = clipEvent(event.Event, window.truncated)
+			var clipped bool
+			event.Event, clipped = clipEvent(event.Event, false)
+			if event.Type == "tool" {
+				event.DetailTruncated = clipped
+			} else {
+				event.SummaryTruncated = clipped
+			}
+			window.truncated = window.truncated || clipped
 			size := eventSize(event.Event)
 			for len(window.items) >= limit || (len(window.items) > 0 && window.pageBytes+size > maxTraceItemsBytes) {
 				dropFront()
@@ -262,12 +295,21 @@ func (window *traceWindow) page(ref Ref, scanStart int, limited bool) TracePage 
 			window.starts = window.starts[1:]
 		}
 	}
-	page := TracePage{Items: make([]Event, 0, len(window.items)+1), Truncated: window.truncated || limited}
+	page := TracePage{
+		Items: make([]Event, 0, len(window.items)+1), Truncated: window.truncated || limited, SummaryTruncated: limited,
+	}
 	if window.orphan != nil && len(window.items) < window.limit && (len(window.items) == 0 || window.items[0].Type != "user") && window.pageBytes+eventSize(window.orphan.Event) <= maxTraceItemsBytes {
 		page.Items = append(page.Items, window.orphan.Event)
+		page.SummaryTruncated = page.SummaryTruncated || window.orphan.SummaryTruncated
 	}
 	for _, event := range window.items {
-		page.Items = append(page.Items, event.Event)
+		item := event.Event
+		if item.Type == "tool" {
+			item.DetailRef = encodeTraceDetailRef(ref, event)
+		} else {
+			page.SummaryTruncated = page.SummaryTruncated || item.SummaryTruncated
+		}
+		page.Items = append(page.Items, item)
 	}
 	if scanStart > 0 || window.older {
 		offset := scanStart
