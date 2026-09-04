@@ -28,6 +28,7 @@ describe("compose send button", () => {
 
   test("tapping the buffer focuses the same field the keyboard types into", () => {
     expect(composeSource).toContain("export function focusCompose");
+    expect(composeSource).toContain(".full-terminal-compose-input");
     expect(composeSource).toContain('t("compose.batchPh")');
     expect(composeSource).toContain('enterKeyHint = "enter"');
     expect(composeSource).toContain("field.focus({ preventScroll: true })");

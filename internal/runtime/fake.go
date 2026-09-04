@@ -58,6 +58,7 @@ func NewFake() *Fake {
 				PaneID: "w0:p1", WorkspaceID: "w0", TabID: "w0:t1", Cwd: "/tmp/pairfob",
 				Agent: "claude", AgentStatus: "blocked",
 			}},
+			Layouts: []TabLayout{DefaultTabLayout("w0", "w0:t1", "w0:p1")},
 		},
 		AgentKinds: []AgentKind{{Kind: "claude"}, {Kind: "codex"}, {Kind: "grok"}},
 		next:       2,
@@ -301,6 +302,7 @@ func (f *Fake) snapshotLocked(session SessionRef) Snapshot {
 	}
 	snapshot.Workspaces = append([]Workspace(nil), f.Snap.Workspaces...)
 	snapshot.Tabs = append([]Tab(nil), f.Snap.Tabs...)
+	snapshot.Layouts = cloneLayouts(f.Snap.Layouts)
 	snapshot.Panes = make([]Pane, len(f.Snap.Panes))
 	for i, pane := range f.Snap.Panes {
 		snapshot.Panes[i] = pane
@@ -340,7 +342,9 @@ func (f *Fake) closePaneLocked(operationID, paneID string) (Receipt, error) {
 	delete(f.Panes, paneID)
 	for i := range f.Snap.Panes {
 		if f.Snap.Panes[i].PaneID == paneID {
+			tabID := f.Snap.Panes[i].TabID
 			f.Snap.Panes = append(f.Snap.Panes[:i], f.Snap.Panes[i+1:]...)
+			f.removePaneFromLayout(tabID, paneID)
 			return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Removed: []EntityRef{{Kind: EntityPane, ID: paneID}}}, nil
 		}
 	}
@@ -370,6 +374,7 @@ func (f *Fake) closeTabLocked(operationID, tabID string) (Receipt, error) {
 		panes = append(panes, pane)
 	}
 	f.Snap.Panes = panes
+	f.Snap.Layouts = dropLayouts(f.Snap.Layouts, func(layout TabLayout) bool { return layout.TabID == tabID })
 	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Removed: removed}, nil
 }
 
@@ -405,6 +410,7 @@ func (f *Fake) closeWorkspaceLocked(operationID, workspaceID string) (Receipt, e
 		panes = append(panes, pane)
 	}
 	f.Snap.Panes = panes
+	f.Snap.Layouts = dropLayouts(f.Snap.Layouts, func(layout TabLayout) bool { return layout.WorkspaceID == workspaceID })
 	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Removed: removed}, nil
 }
 
@@ -433,6 +439,7 @@ func (f *Fake) createConversationLocked(operationID string, command CreateConver
 	f.Snap.Tabs = append(f.Snap.Tabs, Tab{TabID: tabID, WorkspaceID: workspaceID, Label: "main"})
 	f.Snap.Panes = append(f.Snap.Panes, Pane{PaneID: paneID, WorkspaceID: workspaceID, TabID: tabID, Cwd: command.CWD, Agent: command.AgentKind, AgentStatus: "idle"})
 	f.Panes[paneID] = &PaneState{}
+	f.Snap.Layouts = upsertLayout(f.Snap.Layouts, DefaultTabLayout(workspaceID, tabID, paneID))
 	created := []EntityRef{
 		{Kind: EntityWorkspace, ID: workspaceID}, {Kind: EntityTab, ID: tabID}, {Kind: EntityPane, ID: paneID},
 	}
@@ -464,6 +471,7 @@ func (f *Fake) createTabLocked(operationID string, command CreateTabCommand) (Re
 	f.Snap.Tabs = append(f.Snap.Tabs, Tab{TabID: tabID, WorkspaceID: command.WorkspaceID, Label: label})
 	f.Snap.Panes = append(f.Snap.Panes, Pane{PaneID: paneID, WorkspaceID: command.WorkspaceID, TabID: tabID, Cwd: command.CWD, AgentStatus: "idle"})
 	f.Panes[paneID] = &PaneState{}
+	f.Snap.Layouts = upsertLayout(f.Snap.Layouts, DefaultTabLayout(command.WorkspaceID, tabID, paneID))
 	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: []EntityRef{{Kind: EntityTab, ID: tabID}, {Kind: EntityPane, ID: paneID}}}, nil
 }
 
@@ -491,6 +499,7 @@ func (f *Fake) splitPaneLocked(operationID string, command SplitPaneCommand) (Re
 	f.next++
 	f.Snap.Panes = append(f.Snap.Panes, Pane{PaneID: paneID, WorkspaceID: target.WorkspaceID, TabID: target.TabID, Cwd: command.CWD, AgentStatus: "idle"})
 	f.Panes[paneID] = &PaneState{}
+	f.splitLayout(target, paneID, command.Direction, command.Ratio)
 	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: []EntityRef{{Kind: EntityPane, ID: paneID}}}, nil
 }
 
@@ -518,10 +527,36 @@ func (f *Fake) openFakeWorktreeLocked(operationID string, index int) (Receipt, e
 	f.Snap.Tabs = append(f.Snap.Tabs, Tab{TabID: tabID, WorkspaceID: workspaceID, Label: "main"})
 	f.Snap.Panes = append(f.Snap.Panes, Pane{PaneID: paneID, WorkspaceID: workspaceID, TabID: tabID, Cwd: worktree.Path, AgentStatus: "idle"})
 	f.Panes[paneID] = &PaneState{}
+	f.Snap.Layouts = upsertLayout(f.Snap.Layouts, DefaultTabLayout(workspaceID, tabID, paneID))
 	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: []EntityRef{
 		{Kind: EntityWorktree, ID: worktree.Path}, {Kind: EntityWorkspace, ID: workspaceID},
 		{Kind: EntityTab, ID: tabID}, {Kind: EntityPane, ID: paneID},
 	}}, nil
+}
+
+func (f *Fake) splitLayout(target Pane, newPaneID string, direction SplitDirection, ratio *float64) {
+	layout, ok := layoutByTab(f.Snap.Layouts, target.TabID)
+	if !ok {
+		layout = DefaultTabLayout(target.WorkspaceID, target.TabID, target.PaneID)
+	}
+	share := 0.5
+	if ratio != nil {
+		share = *ratio
+	}
+	f.Snap.Layouts = upsertLayout(f.Snap.Layouts, SplitLayoutPane(layout, target.PaneID, direction, share, newPaneID))
+}
+
+func (f *Fake) removePaneFromLayout(tabID, paneID string) {
+	layout, ok := layoutByTab(f.Snap.Layouts, tabID)
+	if !ok {
+		return
+	}
+	next := RemoveLayoutPane(layout, paneID)
+	if len(next.Panes) == 0 {
+		f.Snap.Layouts = dropLayouts(f.Snap.Layouts, func(item TabLayout) bool { return item.TabID == tabID })
+		return
+	}
+	f.Snap.Layouts = upsertLayout(f.Snap.Layouts, next)
 }
 
 func (f *Fake) SetVisible(paneID, text string) {

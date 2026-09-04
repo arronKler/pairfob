@@ -42,6 +42,7 @@ import {
   markPaneSubmitted,
   messageOf,
   noticeScopeIsCurrent,
+  leavePaneScreen,
   resetPaneView,
   selectedAgent,
   showError,
@@ -128,12 +129,20 @@ async function runHerdOperation<T>(
   }
 }
 
-async function selectCreatedPane(result: { pane_id?: string }): Promise<void> {
+async function selectCreatedPane(result: { pane_id?: string; workspace_id?: string; tab_id?: string }): Promise<void> {
   const paneId = typeof result.pane_id === "string" && result.pane_id ? result.pane_id : "";
   // Refresh first so the switch below sees the new pane in the snapshot, then
   // reuse the normal open path: it applies the pane's remembered / default
   // view mode and tears down a live full-terminal bridge instead of leaking it.
   await refreshFromSession();
+  if (state.screen === "board") {
+    if (typeof result.workspace_id === "string" && result.workspace_id) state.boardWorkspaceId = result.workspace_id;
+    if (typeof result.tab_id === "string" && result.tab_id) {
+      state.boardTabId = result.tab_id;
+      state.boardFitted = false;
+    }
+    return;
+  }
   if (paneId) await openPane(paneId);
 }
 
@@ -249,8 +258,8 @@ export async function sendDiffNotesToAgent(path: string, layer: GitLayer): Promi
   beginDiffNoteSend(sentIds);
   try {
     await runHerdOperation(
-      t("op.sendingTask"),
-      t("op.sentTask"),
+      t("diffNotes.sending"),
+      t("diffNotes.sent"),
       () => session.promptAgent({ pane_id: selected.paneId, text: composed.text }),
       {
         noticeScope,
@@ -357,7 +366,7 @@ function dropPaneIfCurrent(paneId: string): void {
   dropQueuedKeys();
   state.paneId = "";
   resetPaneView();
-  if (state.screen === "pane") state.screen = "home";
+  if (state.screen === "pane") leavePaneScreen();
 }
 
 export async function renamePane(agent: AgentCard | undefined = selectedAgent()): Promise<void> {

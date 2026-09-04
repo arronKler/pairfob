@@ -5,6 +5,7 @@ import { paneIsPinned, type AgentCard } from "../lib/ranking";
 import { closePane, closeTab, closeWorkspace, createSelectedTab, renamePane, renameTab, renameWorkspace } from "../live-operations";
 import { render } from "../paint";
 import { state, togglePanePin } from "../state";
+import { openBoard } from "./board";
 import { present, sheet, sheetItem } from "./sheet";
 
 function appendPaneFacts(body: HTMLElement, agent: AgentCard): void {
@@ -37,6 +38,9 @@ export function openListPaneMenu(agent: AgentCard): void {
     }),
   );
   if (canCreateTab) parts.body.append(item(t("menu.newTabBeside"), () => createSelectedTab(agent)));
+  if (agent.workspaceId) {
+    parts.body.append(item(t("menu.board"), () => openBoard({ workspaceId: agent.workspaceId, tabId: agent.tabId })));
+  }
   parts.body.append(
     item(t("menu.renamePane"), () => renamePane(agent)),
     item(t("op.closePane"), () => closePane(agent), "danger"),

@@ -137,11 +137,27 @@ func TestRuntimeRPCNewOperationsAndDeduplication(t *testing.T) {
 	if err != nil || decodeResult(t, tabRaw)["pane_id"] == "" {
 		t.Fatalf("CreateTab result=%s err=%v", tabRaw, err)
 	}
+	if _, ok := decodeResult(t, tabRaw)["agent_kind"]; ok {
+		t.Fatalf("terminal CreateTab leaked agent_kind: %s", tabRaw)
+	}
+	if _, err := client.RPC("CreateTab", map[string]any{
+		"operation_id": "op_tabagent00000001", "workspace_id": workspaceID, "cwd": "/tmp/pairfob", "agent_kind": "codex",
+	}); err == nil || err.Error() != "invalid_argument" {
+		t.Fatalf("CreateTab changed the frozen v1 request surface: %v", err)
+	}
 	splitRaw, err := client.RPC("SplitPane", map[string]any{
 		"operation_id": "op_AgECAwQFBgcICQoL", "pane_id": paneID, "direction": "right", "ratio": 0.5,
 	})
 	if err != nil || decodeResult(t, splitRaw)["pane_id"] == "" {
 		t.Fatalf("SplitPane result=%s err=%v", splitRaw, err)
+	}
+	if _, ok := decodeResult(t, splitRaw)["agent_kind"]; ok {
+		t.Fatalf("terminal SplitPane leaked agent_kind: %s", splitRaw)
+	}
+	if _, err := client.RPC("SplitPane", map[string]any{
+		"operation_id": "op_splitagent000001", "pane_id": paneID, "direction": "down", "agent_kind": "claude",
+	}); err == nil || err.Error() != "invalid_argument" {
+		t.Fatalf("SplitPane changed the frozen v1 request surface: %v", err)
 	}
 	if _, err := client.RPC("PromptAgent", map[string]any{
 		"operation_id": "op_AwECAwQFBgcICQoL", "pane_id": paneID, "text": "review the diff",

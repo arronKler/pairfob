@@ -49,8 +49,22 @@ describe("operation form guidance", () => {
     expect(source).toContain('formDialog(t("form.newConversation")');
     expect(source).toContain('t("form.plainTerminal")');
     expect(source).toContain('t("form.noAgentKinds")');
-    expect(source).toContain("...(agentKind ? { agent_kind: agentKind } : {})");
+    expect(source).toContain("...(kind.value ? { agent_kind: kind.value } : {})");
     expect(source).not.toContain("请选择 Agent。");
+  });
+
+  test("new tabs and splits stay on the frozen terminal-only request surface", () => {
+    expect(source).toContain('formDialog(t("form.newTab")');
+    expect(source).toContain('formDialog(t("form.split")');
+    expect(source).toContain('askCreateTab(defaultCwd = "")');
+    expect(source).toContain('askSplitPane(defaultCwd = "")');
+    expect(source.match(/appendAgentKindField\(body, agentKinds\)/g)).toHaveLength(1);
+  });
+
+  test("a submitted conversation agent kind is remembered", () => {
+    expect(source).toContain("LAST_AGENT_KIND_KEY");
+    expect(source).toContain("loadLastAgentKind(agentKinds)");
+    expect(source).toContain("rememberAgentKind(agentKind)");
   });
 
   test("the submit action is primary and cancel is ghost", () => {

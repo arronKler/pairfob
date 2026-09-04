@@ -1,6 +1,6 @@
 import { node } from "../lib/dom";
 import { render } from "../paint";
-import { app, haptic, resetPaneView, selectedAgent, state } from "../state";
+import { app, haptic, leavePaneScreen, resetPaneView, selectedAgent, state } from "../state";
 import { enterWorkspace } from "../workspace";
 import { isDesk } from "../viewport";
 import { openPaneMenu, openPaneSwitcher } from "./pane-menu";
@@ -22,7 +22,7 @@ export function goBackFromPane(): void {
     void leaveFullTerminal({ rememberGuided: false, paint: false }).then(() => {
       if (state.phase !== "live") return;
       dropQueuedKeys();
-      state.screen = "home";
+      leavePaneScreen();
       resetPaneView();
       render();
     });
@@ -31,13 +31,13 @@ export function goBackFromPane(): void {
   if (state.agentChat) {
     leaveAgentChat({ rememberGuided: false, paint: false });
     dropQueuedKeys();
-    state.screen = "home";
+    leavePaneScreen();
     resetPaneView();
     render();
     return;
   }
   dropQueuedKeys();
-  state.screen = "home";
+  leavePaneScreen();
   resetPaneView();
   render();
 }

@@ -135,6 +135,18 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".icon-stop")).not.toMatch(/background:\s*rgba\(255, 178, 36/);
   });
 
+  test("board canvas is a pan surface with compact chips and pane screens", () => {
+    expect(rule(".board-canvas")).toMatch(/overflow:\s*hidden/);
+    expect(rule(".board-canvas")).toMatch(/touch-action:\s*none/);
+    expect(rule(".board-pane")).toMatch(/position:\s*absolute/);
+    expect(rule(".board-pane")).toMatch(/touch-action:\s*none/);
+    expect(css).toMatch(/\.board-chip,\s*\.board-tab,\s*\.board-tab-new\s*\{[^}]*min-height:\s*32px/);
+    expect(css).toMatch(/\.board-rail\.overflow::after\s*\{[^}]*pointer-events:\s*none/);
+    expect(rule(".board-pane-screen")).toMatch(/overflow:\s*hidden/);
+    expect(rule(".board-pane-buffer")).toMatch(/transform-origin:\s*0 0/);
+    expect(css).not.toMatch(/\.topbar-board\s*\{/);
+  });
+
   test("workspace controls use a centered refresh mark and mobile-sized change rows", () => {
     expect(rule(".workspace-refresh::before")).toMatch(/mask:/);
     expect(rule(".workspace-refresh::before")).toMatch(/width:\s*18px/);

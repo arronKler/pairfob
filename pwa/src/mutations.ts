@@ -6,7 +6,7 @@ import { nextTouchedAt } from "./lib/ranking";
 import { reconcileMutationFailure, type ListWorktreesInput } from "./lib/operations";
 import { type LiveSession } from "./lib/protocol/client";
 import { render } from "./paint";
-import { messageOf, replaceAgentsFromSnapshot, savePaneTouched, showError, state } from "./state";
+import { leavePaneScreen, messageOf, replaceAgentsFromSnapshot, savePaneTouched, showError, state } from "./state";
 
 export async function refreshSnapshotOnly(session: LiveSession): Promise<void> {
   if (state.live !== session || !session.isConnected()) return;
@@ -20,7 +20,7 @@ export async function refreshSnapshotOnly(session: LiveSession): Promise<void> {
     state.paneId = "";
     state.paneText = "";
     state.paneHash = "";
-    if (state.screen === "pane") state.screen = "home";
+    if (state.screen === "pane") leavePaneScreen();
   }
   render();
 }

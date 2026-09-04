@@ -20,6 +20,7 @@ import { openPane } from "../live";
 import { render } from "../paint";
 import { TERM_COL_PRESETS, TERM_FONT_MAX, TERM_FONT_MIN, clampTermFont, paneTermMode, saveTermFont, selectedAgent, state } from "../state";
 import { canEnterAgentChat } from "./agent-chat";
+import { openBoard } from "./board";
 import { retryFullTerminal, setFullTerminalComposeLive, setTermFit } from "./full-terminal";
 import { setComposeLive, toggleTermSelect, toggleTermWrap } from "./session-view";
 import { afterClose, present, sheet, sheetItem, sheetSection } from "./sheet";
@@ -179,6 +180,7 @@ export function openPaneMenu(): void {
     ...(state.operationCapabilities.open_worktree ? [item(t("menu.openWorktree"), openSelectedWorktree)] : []),
   ]);
   section(t("menu.layout"), [
+    item(t("menu.board"), () => openBoard(selected ? { workspaceId: selected.workspaceId, tabId: selected.tabId } : undefined)),
     ...(state.operationCapabilities.zoom_pane && fill ? [item(fill.menu, fillSelectedPane)] : []),
     ...(state.operationCapabilities.resize_pane ? [item(t("menu.zoom"), () => layoutSelectedPane("resize"))] : []),
     ...(state.operationCapabilities.swap_pane && split ? [item(t("menu.swap"), () => layoutSelectedPane("swap"))] : []),

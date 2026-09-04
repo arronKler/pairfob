@@ -76,6 +76,7 @@ type Snapshot struct {
 	Workspaces    []Workspace       `json:"workspaces"`
 	Tabs          []Tab             `json:"tabs"`
 	Panes         []Pane            `json:"panes"`
+	Layouts       []TabLayout       `json:"layouts,omitempty"`
 }
 
 type Workspace struct {

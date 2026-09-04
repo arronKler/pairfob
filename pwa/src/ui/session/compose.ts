@@ -39,7 +39,8 @@ const SPECIAL_KEYS: Record<string, string> = {
 };
 
 export function composeField(): HTMLTextAreaElement | null {
-  return app.querySelector(".dock-form textarea");
+  return app.querySelector<HTMLTextAreaElement>(".full-terminal-compose-input")
+    || app.querySelector<HTMLTextAreaElement>(".dock-form textarea");
 }
 
 function focusComposeField(field: HTMLTextAreaElement): void {

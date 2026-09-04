@@ -53,6 +53,8 @@ describe("user-facing documentation", () => {
     expect(app).not.toContain("会话顶栏会直接显示 **历史**");
     expect(app).not.toContain("| 画面 |");
     expect(app).toContain("顶部「新建」");
+    expect(app).toContain("**画板**");
+    expect(app).toContain("看标签页布局");
     expect(app).toContain("**会话操作**");
     expect(docs).not.toContain("＋ 新建会话");
     expect(docs).not.toContain("不展示思维链");
@@ -180,6 +182,8 @@ describe("user-facing documentation", () => {
     const pairEn = await Bun.file(new URL("./pair.md", import.meta.url)).text();
     const faqEn = await Bun.file(new URL("./faq.md", import.meta.url)).text();
     expect(appEn).toContain("**Settings**");
+    expect(appEn).toContain("**Board**");
+    expect(appEn).toContain("**Tab layout**");
     expect(appEn).toContain("**Pin to top**");
     expect(appEn).toContain("**Needs you**");
     expect(appEn).toContain("| **Control** |");

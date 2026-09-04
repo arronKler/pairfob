@@ -97,6 +97,7 @@ mock.module("./full-terminal-loader", () => ({
 
 const { app, paneTermMode, setPaneTermMode, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
+const { openPane } = await import("../live.ts");
 const { renderPane, goBackFromPane } = await import("./pane.ts");
 const {
   disposeFullTerminal,
@@ -209,6 +210,83 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(state.fullTerminal).toBe(true);
     expect(app.querySelector(".full-terminal-root")).toBeTruthy();
     expect(app.querySelector(".dock")).toBeNull();
+  });
+
+  test("reopening the same pane remounts xterm after a paintless leave", async () => {
+    const openedPanes: string[] = [];
+    const session = live();
+    session.terminalOpen = async (paneId, cols, rows) => {
+      openedPanes.push(paneId);
+      return {
+        operationId: "op_AAECAwQFBgcICQoL",
+        terminalId: `term_${String(openedPanes.length).padStart(32, "1")}`,
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      };
+    };
+    bootFullTerminal(session);
+    await waitUntil(() => openedPanes.length === 1, "first same-pane terminal open");
+
+    await openPane("p1");
+    await waitUntil(() => openedPanes.length === 2, "second same-pane terminal open");
+
+    expect(openedPanes).toEqual(["p1", "p1"]);
+    expect(app.querySelector(".full-terminal-root .xterm")).toBeTruthy();
+  });
+
+  test("switching between full-terminal panes mounts the new pane without a paused error", async () => {
+    const openedPanes: string[] = [];
+    let closeCalls = 0;
+    let closeRequested = false;
+    let resolveClose = () => {};
+    const session = live();
+    session.terminalOpen = async (paneId, cols, rows) => {
+      openedPanes.push(paneId);
+      return {
+        operationId: "op_AAECAwQFBgcICQoL",
+        terminalId: `term_${String(openedPanes.length).padStart(32, "1")}`,
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      };
+    };
+    session.terminalClose = () => {
+      closeCalls++;
+      closeRequested = true;
+      if (closeCalls > 1) return Promise.resolve();
+      return new Promise<void>((resolve) => { resolveClose = resolve; });
+    };
+    bootFullTerminal(session);
+    state.agents.push({
+      paneId: "p2",
+      agent: "herdr",
+      hasAgent: true,
+      status: "idle",
+      workspaceLabel: "demo",
+      cwd: "/tmp/demo",
+    });
+    setPaneTermMode("p2", "full");
+    await waitUntil(() => openedPanes.length === 1, "first pane terminal open");
+
+    const switching = openPane("p2");
+    await waitUntil(() => closeRequested, "first pane terminal close");
+    resolveClose();
+    await Promise.resolve();
+    const closingStatus = app.querySelector<HTMLElement>(".full-terminal-state");
+    expect(closingStatus?.dataset.stage).toBe("live");
+    expect(closingStatus?.textContent).not.toContain("终端连接已暂停");
+    await switching;
+    await waitUntil(() => openedPanes.length === 2, "second pane terminal open");
+
+    expect(openedPanes).toEqual(["p1", "p2"]);
+    expect(state.paneId).toBe("p2");
+    expect(app.querySelector<HTMLElement>(".full-terminal-root")?.dataset.paneId).toBe("p2");
+    const status = app.querySelector<HTMLElement>(".full-terminal-state");
+    expect(status?.hidden).toBeTrue();
+    expect(status?.textContent).not.toContain("终端连接已暂停");
   });
 
   test("leaving the terminal mode from the menu returns to guided", async () => {

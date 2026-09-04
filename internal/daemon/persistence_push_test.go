@@ -180,14 +180,14 @@ func TestPersistentIdentityRPCPushAndRevokeLifecycle(t *testing.T) {
 		t.Fatal("push plaintext leaked into encrypted body")
 	}
 	plain := decryptPushForTest(t, []byte(lastBody), userPublic, authSecret, userKey)
-	if strings.Contains(string(plain), "/Users/private") || !strings.Contains(string(plain), `"body":"pairfob · project"`) {
+	if strings.Contains(string(plain), "/Users/private") || !strings.Contains(string(plain), `"body":"claude · pairfob · project"`) {
 		t.Fatalf("privacy-minimized payload mismatch: %s", plain)
 	}
 	var notification map[string]string
 	if err := json.Unmarshal(plain, &notification); err != nil {
 		t.Fatal(err)
 	}
-	if notification["title"] != "claude 等你处理" || notification["url"] != "/pair#d="+eng.DaemonID+"&notify=1&pane=w0%3Ap1" {
+	if notification["title"] != "Pairfob · 等待确认" || notification["url"] != "/pair#d="+eng.DaemonID+"&notify=1&pane=w0%3Ap1" {
 		t.Fatalf("notification target mismatch: %+v", notification)
 	}
 	needsTag := notification["tag"]
@@ -208,7 +208,7 @@ func TestPersistentIdentityRPCPushAndRevokeLifecycle(t *testing.T) {
 	if err := json.Unmarshal(donePlain, &notification); err != nil {
 		t.Fatal(err)
 	}
-	if notification["title"] != "claude 已完成" || notification["tag"] != needsTag {
+	if notification["title"] != "Pairfob · 任务已完成" || notification["tag"] != needsTag {
 		t.Fatalf("completion notification mismatch: %+v", notification)
 	}
 	serverMu.Lock()

@@ -21,8 +21,25 @@ import { sendDiffNotesToAgent } from "../live-operations";
 import { render } from "../paint";
 import { selectedAgent, state } from "../state";
 
+let editorSerial = 0;
+
 export function diffLineHasNote(target: DiffNoteTarget): boolean {
   return diffNoteForPin(target) !== undefined;
+}
+
+export function diffNoteLineLabel(target: Pick<DiffNoteTarget, "line" | "side">): string {
+  const side = target.side === "old" ? t("diffNotes.sideOld") : t("diffNotes.sideNew");
+  return t("diffNotes.promptLine", { line: target.line, side });
+}
+
+function editorTitle(target: DiffNoteTarget, editing: boolean): string {
+  return t(editing ? "diffNotes.editTitle" : "diffNotes.addTitle", { line: target.line });
+}
+
+function clearValidation(textarea: HTMLTextAreaElement, validation: HTMLElement): void {
+  validation.hidden = true;
+  textarea.removeAttribute("aria-invalid");
+  textarea.removeAttribute("aria-describedby");
 }
 
 /** Tap target for an annotated diff line: edit the existing note or add one. */
@@ -30,11 +47,19 @@ export function openDiffNoteEditor(target: DiffNoteTarget): void {
   const existing = diffNoteForPin(target);
   if (existing && diffNoteSending(existing.id)) return;
   for (const stale of document.querySelectorAll("dialog.diff-note-modal")) stale.remove();
+  const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const dialog = node("dialog", "modal operation-modal diff-note-modal");
   const form = node("form");
   form.method = "dialog";
-  form.append(node("h2", "modal-title", existing ? t("diffNotes.editTitle") : t("diffNotes.addTitle")));
+  const titleID = `diff-note-title-${++editorSerial}`;
+  const heading = node("h2", "modal-title", editorTitle(target, Boolean(existing)));
+  heading.id = titleID;
+  dialog.setAttribute("aria-labelledby", titleID);
   const body = node("div", "operation-body");
+  const quote = node("p", "diff-note-quote");
+  quote.append(node("span", "diff-note-quote-line", diffNoteLineLabel(target)));
+  if (target.snippet) quote.append(node("code", "diff-note-quote-text", target.snippet));
+  body.append(quote);
   const field = node("label", "operation-field");
   field.append(document.createTextNode(t("diffNotes.field")));
   const textarea = node("textarea");
@@ -45,15 +70,15 @@ export function openDiffNoteEditor(target: DiffNoteTarget): void {
   textarea.value = existing?.body ?? "";
   field.append(textarea);
   body.append(field);
-  if (target.snippet) body.append(node("p", "operation-hint", `> ${target.snippet}`));
   const validation = node("p", "notice notice-error");
+  validation.id = `diff-note-validation-${editorSerial}`;
   validation.setAttribute("role", "alert");
   validation.hidden = true;
   body.append(validation);
   const actions = node("div", "action-row");
   const save = node("button", "btn btn-small btn-primary", t("diffNotes.save"));
   save.type = "submit";
-  actions.append(save);
+  actions.append(save, button(t("cancel"), "btn btn-small btn-ghost", () => dialog.close("cancel")));
   if (existing) {
     const noteId = existing.id;
     actions.append(button(t("diffNotes.remove"), "btn btn-small btn-danger", () => {
@@ -61,30 +86,48 @@ export function openDiffNoteEditor(target: DiffNoteTarget): void {
       dialog.close("remove");
     }));
   }
-  actions.append(button(t("cancel"), "btn btn-small btn-ghost", () => dialog.close("cancel")));
   body.append(actions);
-  form.append(body);
+  form.append(heading, body);
   dialog.append(form);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!textarea.value.trim()) {
       validation.textContent = t("diffNotes.needBody");
       validation.hidden = false;
+      textarea.setAttribute("aria-invalid", "true");
+      textarea.setAttribute("aria-describedby", validation.id);
       textarea.focus();
       return;
     }
     upsertDiffNote(target, textarea.value);
     dialog.close("save");
   });
-  const openedAt = performance.now();
-  dialog.addEventListener("cancel", (event) => {
+  textarea.addEventListener("input", () => clearValidation(textarea, validation));
+  textarea.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
     event.preventDefault();
+    form.requestSubmit();
+  });
+  const openedAt = performance.now();
+  const dismiss = (): void => {
     if (performance.now() - openedAt < 400) return;
     dialog.close("cancel");
+  };
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    dismiss();
+  });
+  dialog.addEventListener("click", (event) => {
+    if (event.target !== dialog) return;
+    dismiss();
   });
   dialog.addEventListener("close", () => {
+    const changed = dialog.returnValue === "save" || dialog.returnValue === "remove";
     dialog.remove();
-    render();
+    queueMicrotask(() => {
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    });
+    if (changed) render();
   }, { once: true });
   document.body.append(dialog);
   dialog.showModal();
@@ -95,20 +138,29 @@ export function openDiffNoteEditor(target: DiffNoteTarget): void {
 export function diffNoteCards(target: DiffNoteTarget): HTMLElement[] {
   const note = diffNoteForPin(target);
   if (!note) return [];
+  const sending = diffNoteSending(note.id) || diffNoteSendOpen();
   const card = node("div", "workspace-diff-note");
+  const main = node("div", "diff-note-main");
   const mark = node("span", "diff-note-mark", "✎");
   mark.setAttribute("aria-hidden", "true");
+  const body = node("span", "diff-note-body", note.body);
+  main.append(mark, body);
+  main.addEventListener("click", () => {
+    if (!sending) openDiffNoteEditor(target);
+  });
   const actions = node("div", "diff-note-actions");
   const edit = button(t("diffNotes.edit"), "btn btn-small btn-ghost diff-note-action", () => openDiffNoteEditor(target));
-  edit.setAttribute("aria-label", t("diffNotes.editTitle"));
+  edit.setAttribute("aria-label", editorTitle(target, true));
+  edit.disabled = sending;
   const noteId = note.id;
   const remove = button(t("diffNotes.remove"), "btn btn-small btn-ghost diff-note-action", () => {
     removeDiffNote(noteId);
     render();
   });
   remove.setAttribute("aria-label", t("diffNotes.remove"));
+  remove.disabled = sending;
   actions.append(edit, remove);
-  card.append(mark, node("span", "diff-note-body", note.body), actions);
+  card.append(main, actions);
   return [card];
 }
 
@@ -119,11 +171,17 @@ export function diffNoteCards(target: DiffNoteTarget): HTMLElement[] {
 export function diffNotesBar(path: string, layer: GitLayer): HTMLElement | null {
   const count = diffNotesFor(path, layer).length;
   if (!count || !state.operationCapabilities.prompt_agent) return null;
+  const sending = state.operationBusy || diffNoteSendOpen();
+  const canSend = canPromptAgent(selectedAgent());
   const bar = node("div", "workspace-notes-bar");
   bar.append(node("span", "workspace-notes-count", t("diffNotes.count", { count })));
-  if (!canPromptAgent(selectedAgent())) bar.append(node("span", "workspace-notes-hint", t("diffNotes.noAgent")));
-  const send = button(t("diffNotes.send"), "btn btn-primary workspace-notes-send", () => void sendDiffNotesToAgent(path, layer));
-  send.disabled = !canPromptAgent(selectedAgent()) || state.operationBusy || diffNoteSendOpen();
+  if (!canSend) bar.append(node("span", "workspace-notes-hint", t("diffNotes.noAgent")));
+  const send = button(
+    sending ? t("diffNotes.sending") : t("diffNotes.send"),
+    "btn btn-primary workspace-notes-send",
+    () => void sendDiffNotesToAgent(path, layer),
+  );
+  send.disabled = !canSend || sending;
   bar.append(send);
   return bar;
 }

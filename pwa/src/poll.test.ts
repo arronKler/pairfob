@@ -26,6 +26,12 @@ describe("refresh contract constants", () => {
     expect(liveSrc).not.toContain("setInterval(");
     expect(pollingSrc).not.toContain("stablePaneReads");
   });
+
+  test("the board screen polls pane.read into cell previews", () => {
+    const canRead = liveSrc.slice(liveSrc.indexOf("canReadPane:"), liveSrc.indexOf("paneDelayMs:"));
+    expect(canRead).toContain('state.screen === "board"');
+    expect(liveSrc).toContain("refreshBoardPreviews");
+  });
 });
 
 describe("pane polling policy", () => {
@@ -61,7 +67,7 @@ describe("pane changes pull agent status forward", () => {
 
 describe("poke refresh router", () => {
   const rows: Array<{
-    screen: "home" | "pane" | "workspace" | "settings" | "computers";
+    screen: "home" | "pane" | "workspace" | "settings" | "computers" | "board";
     openPaneId: string;
     pokePaneId?: string;
     want: "snapshot" | "paneread" | "ignore";
@@ -71,6 +77,8 @@ describe("poke refresh router", () => {
     { screen: "settings", openPaneId: "p1", pokePaneId: "p1", want: "snapshot" },
     { screen: "workspace", openPaneId: "p1", pokePaneId: "p1", want: "snapshot" },
     { screen: "computers", openPaneId: "p1", pokePaneId: "p1", want: "snapshot" },
+    { screen: "board", openPaneId: "p1", pokePaneId: "p1", want: "snapshot" },
+    { screen: "board", openPaneId: "", pokePaneId: "p2", want: "snapshot" },
     { screen: "pane", openPaneId: "p1", pokePaneId: "p1", want: "paneread" },
     { screen: "pane", openPaneId: "p1", pokePaneId: "p2", want: "ignore" },
     { screen: "pane", openPaneId: "p1", want: "ignore" },

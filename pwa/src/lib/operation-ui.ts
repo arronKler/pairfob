@@ -107,7 +107,12 @@ function field(label: string, name: string, value = "", placeholder = "", requir
   return wrapper;
 }
 
-function selectField(label: string, name: string, choices: Array<{ value: string; label: string }>): HTMLLabelElement {
+function selectField(
+  label: string,
+  name: string,
+  choices: Array<{ value: string; label: string }>,
+  selected?: string,
+): HTMLLabelElement {
   const wrapper = node("label", "operation-field");
   wrapper.append(document.createTextNode(label));
   const select = node("select");
@@ -117,6 +122,7 @@ function selectField(label: string, name: string, choices: Array<{ value: string
     option.value = choice.value;
     select.append(option);
   }
+  if (selected !== undefined && choices.some((choice) => choice.value === selected)) select.value = selected;
   wrapper.append(select);
   return wrapper;
 }
@@ -174,30 +180,62 @@ function formDialog<T>(
     }, { once: true });
     document.body.append(parts.dialog);
     parts.dialog.showModal();
-    (parts.form.querySelector("input, select") as HTMLElement | null)?.focus();
+    (parts.form.querySelector("input, select, textarea") as HTMLElement | null)?.focus();
   });
+}
+
+export const LAST_AGENT_KIND_KEY = "pairfob:lastAgentKind";
+
+function loadLastAgentKind(agentKinds: string[]): string {
+  try {
+    const raw = localStorage.getItem(LAST_AGENT_KIND_KEY);
+    if (!raw) return "";
+    const kind = raw.trim().slice(0, OPERATION_INPUT_LIMITS.agentKind);
+    return agentKinds.includes(kind) ? kind : "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberAgentKind(kind: string): void {
+  try {
+    localStorage.setItem(LAST_AGENT_KIND_KEY, kind.slice(0, OPERATION_INPUT_LIMITS.agentKind));
+  } catch {
+    /* storage blocked; the next form just starts from a terminal again */
+  }
+}
+
+function appendAgentKindField(body: HTMLElement, agentKinds: string[]): void {
+  if (agentKinds.length) {
+    body.append(selectField(t("form.kind"), "agent_kind", [
+      { value: "", label: t("form.plainTerminal") },
+      ...agentKinds.map((kind) => ({ value: kind, label: kind })),
+    ], loadLastAgentKind(agentKinds)));
+    return;
+  }
+  body.append(node("p", "operation-hint", t("form.noAgentKinds")));
+}
+
+function readAgentKind(data: FormData, agentKinds: string[]): FormResult<string | undefined> {
+  const agentKind = String(data.get("agent_kind") || "").trim();
+  if (agentKind && !agentKinds.includes(agentKind)) return rejected(t("form.needKind"), "agent_kind");
+  rememberAgentKind(agentKind);
+  return accepted(agentKind || undefined);
 }
 
 export function askCreateConversation(agentKinds: string[], defaultCwd = ""): Promise<CreateConversationInput | null> {
   return formDialog(t("form.newConversation"), t("form.createOpen"), (body) => {
     body.append(field(t("form.projectDir"), "cwd", defaultCwd, "/path/to/project", true));
-    if (agentKinds.length) {
-      body.append(selectField(t("form.kind"), "agent_kind", [
-        { value: "", label: t("form.plainTerminal") },
-        ...agentKinds.map((kind) => ({ value: kind, label: kind })),
-      ]));
-    } else {
-      body.append(node("p", "operation-hint", t("form.noAgentKinds")));
-    }
+    appendAgentKindField(body, agentKinds);
     body.append(field(t("form.labelOptional"), "label", "", t("form.labelExample")));
     body.append(node("p", "operation-hint", t("form.conversationHint")));
   }, (data) => {
     const cwd = String(data.get("cwd") || "").trim();
-    const agentKind = String(data.get("agent_kind") || "").trim();
     const label = String(data.get("label") || "").trim();
     if (!cwd) return rejected(t("form.needCwd"), "cwd");
-    if (agentKind && !agentKinds.includes(agentKind)) return rejected(t("form.needKind"), "agent_kind");
-    return accepted({ cwd, ...(agentKind ? { agent_kind: agentKind } : {}), ...(label ? { label } : {}) });
+    const kind = readAgentKind(data, agentKinds);
+    if (!kind.ok) return kind;
+    return accepted({ cwd, ...(kind.value ? { agent_kind: kind.value } : {}), ...(label ? { label } : {}) });
   });
 }
 
@@ -228,8 +266,8 @@ export function askSplitPane(defaultCwd = ""): Promise<{ direction: SplitDirecti
   });
 }
 
-export function askAgentPrompt(): Promise<string | null> {
-  return formDialog(t("form.promptAgent"), t("form.send"), (body) => {
+function askPromptText(title: string, hint: string): Promise<string | null> {
+  return formDialog(title, t("form.send"), (body) => {
     const wrapper = node("label", "operation-field");
     wrapper.append(document.createTextNode(t("form.task")));
     const textarea = node("textarea");
@@ -238,13 +276,17 @@ export function askAgentPrompt(): Promise<string | null> {
     textarea.maxLength = OPERATION_INPUT_LIMITS.prompt;
     textarea.rows = 7;
     wrapper.append(textarea);
-    body.append(wrapper, node("p", "operation-hint", t("form.taskHint")));
+    body.append(wrapper, node("p", "operation-hint", hint));
   }, (data) => {
     const text = String(data.get("text") || "").trim();
     if (!text) return rejected(t("form.needTask"), "text");
     if (fitOperationPrompt(text).truncated) return rejected(t("form.taskTooBig"), "text");
     return accepted(text);
   });
+}
+
+export function askAgentPrompt(): Promise<string | null> {
+  return askPromptText(t("form.promptAgent"), t("form.taskHint"));
 }
 
 export function askWorktree(kind: "create", defaults: WorktreeDraft): Promise<CreateWorktreeInput | null>;

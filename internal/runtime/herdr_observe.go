@@ -58,6 +58,7 @@ type herdrSnapWire struct {
 		Workspaces         []herdrWorkspaceWire `json:"workspaces"`
 		Tabs               []herdrTabWire       `json:"tabs"`
 		Panes              []herdrPaneWire      `json:"panes"`
+		Layouts            []herdrLayoutWire    `json:"layouts"`
 	} `json:"snapshot"`
 }
 
@@ -112,6 +113,7 @@ func (h *Herdr) snapshot(ctx context.Context, session SessionRef) (Snapshot, err
 	for _, pane := range s.Panes {
 		out.Panes = append(out.Panes, normalizePane(pane))
 	}
+	out.Layouts = normalizeLayouts(s.Layouts)
 	return out, nil
 }
 

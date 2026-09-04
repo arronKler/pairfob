@@ -1,0 +1,248 @@
+#app.board {
+  position: fixed;
+  top: var(--vv-top, 0px);
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: 100%;
+  height: var(--vv-height, 100%);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.board-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.board-chrome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: calc(52px + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) 8px 0;
+  border-bottom: 1px solid var(--line);
+  background: rgba(10, 12, 16, 0.96);
+  flex: none;
+}
+
+.board-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.board-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.board-sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.board-rail {
+  position: relative;
+  flex: none;
+  min-width: 0;
+}
+
+.board-spaces,
+.board-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px 10px;
+  overflow-x: auto;
+  flex: none;
+  scrollbar-width: none;
+}
+
+.board-spaces::-webkit-scrollbar,
+.board-tabs::-webkit-scrollbar { display: none; }
+
+.board-tabs {
+  border-bottom: 1px solid var(--line);
+  padding-top: 0;
+}
+
+.board-rail.overflow::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 32px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--bg));
+}
+
+.board-chip,
+.board-tab,
+.board-tab-new {
+  flex: none;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.board-chip.on,
+.board-tab.on {
+  background: rgba(110, 168, 254, 0.16);
+  border-color: rgba(110, 168, 254, 0.45);
+  color: var(--accent);
+}
+
+.board-tab-new {
+  color: var(--accent);
+  background: transparent;
+  border-style: dashed;
+}
+
+.board-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(233, 237, 243, 0.06) 1px, transparent 0) 0 0 / 22px 22px,
+    #07090d;
+}
+
+.board-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.board-pane {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+  touch-action: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  text-align: left;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.board-pane.sel {
+  border-color: rgba(110, 168, 254, 0.7);
+  box-shadow: 0 0 0 1px rgba(110, 168, 254, 0.35), 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+.board-pane.status-blocked { border-color: rgba(255, 178, 36, 0.5); }
+.board-pane.status-working { border-color: rgba(110, 168, 254, 0.4); }
+.board-pane.status-done { border-color: rgba(70, 214, 140, 0.4); }
+
+.board-pane-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  background: linear-gradient(to bottom, rgba(7, 9, 13, 0.86), rgba(7, 9, 13, 0.18));
+  pointer-events: none;
+}
+
+.board-pane-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.board-pane-zoom {
+  margin-left: auto;
+  color: var(--warn);
+  font-size: 0.58rem;
+  font-weight: 650;
+}
+
+/* Cell is 8×16. Font size is calibrated in JS so 1ch == BOARD_CELL_W. */
+.board-pane-screen {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: var(--mono);
+  font-size: 13.333px;
+  line-height: 16px;
+  color: var(--term-ink);
+  background: var(--term-bg);
+  font-variant-ligatures: none;
+  font-kerning: none;
+}
+
+.board-pane-buffer {
+  overflow: hidden;
+  transform-origin: 0 0;
+}
+
+.board-pane-line {
+  display: flex;
+  flex-wrap: nowrap;
+  white-space: pre;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  height: 16px;
+  min-height: 16px;
+  line-height: 16px;
+}
+
+.board-pane-line > span {
+  display: block;
+  white-space: pre;
+  line-height: 16px;
+}
+
+.board-shell .statusline { margin: 6px 12px 0; }
+.board-shell .notice,
+.board-shell .banner { margin: 8px 12px 0; }

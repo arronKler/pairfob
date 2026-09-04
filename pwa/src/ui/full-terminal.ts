@@ -2,9 +2,9 @@ import type { FitAddon } from "@xterm/addon-fit";
 import type { Terminal } from "@xterm/xterm";
 
 import { agentTitle } from "../lib/dashboard";
-import { node } from "../lib/dom";
 import { t } from "../lib/i18n";
-import { backButton, canInterruptAgent } from "./chrome";
+import { panePtySize } from "../lib/layout";
+import { canInterruptAgent } from "./chrome";
 import {
   ProtocolError,
   TerminalFrameAssembler,
@@ -47,7 +47,7 @@ import {
   type TerminalKeyboard,
 } from "./full-terminal-input";
 import { setFullTerminalInputMode, submitFullTerminalCompose, syncFullTerminalControls } from "./full-terminal-compose";
-import { bindHostScroll, pageLineCount, scrollRail, type ScrollAt } from "./full-terminal-scroll";
+import { bindHostScroll, pageLineCount, type ScrollAt } from "./full-terminal-scroll";
 import { TerminalCommandPump, type TerminalCommand, type TerminalInputQueueOptions } from "./full-terminal-command";
 import { loadFullTerminalXterm, terminalWebglSupported } from "./full-terminal-loader";
 import { afterNextPaint, observeHostResize } from "./full-terminal-lifecycle";
@@ -55,12 +55,12 @@ import { fullTerminalPerf } from "./full-terminal-perf";
 import { fullTerminalOptions, openWebglTerminal, WEBGL_CONTEXT_LOST, WEBGL_UNAVAILABLE } from "./full-terminal-renderer";
 import {
   FullTerminalStatus,
-  fullTerminalStateLayer,
   setFullTerminalDocumentMode,
 } from "./full-terminal-state";
 import { track } from "../lib/telemetry";
-import { chromeActionCluster, syncChromeStop } from "./session/chrome-actions";
+import { syncChromeStop } from "./session/chrome-actions";
 import { guidedScrollController } from "./session/guided-scroll";
+import { createFullTerminalView, updateFullTerminalTitle } from "./full-terminal-view";
 
 let terminal: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
@@ -83,6 +83,8 @@ let leaveSeq = 0;
 let commandPump: TerminalCommandPump | null = null;
 let lastFrameSequence: bigint | null = null;
 let pendingWriteBytes = 0;
+/** The mounted shell still belongs to this controller, even during a visible load error. */
+let terminalShellActive = false;
 /** Last terminal.frame grid. Display clamps to this so a short PTY can scale-fill. */
 let remoteGrid: { cols: number; rows: number } | null = null;
 /** Size we keep asking Herdr for, even when display is smaller than the PTY. */
@@ -164,8 +166,12 @@ function fit(): { cols: number; rows: number; cellWidth: number; cellHeight: num
       TERMINAL_MIN_COLS,
       TERMINAL_MAX_COLS,
     );
-    const cols = clamp(ptyCols(visibleCols, state.termFit, state.termCols), TERMINAL_MIN_COLS, TERMINAL_MAX_COLS);
-    const rows = clamp(
+    const paneSize = panePtySize(state.paneId, state.layouts, state.agents);
+    const targetCols = paneSize ? clamp(paneSize.cols, TERMINAL_MIN_COLS, TERMINAL_MAX_COLS) : state.termCols;
+    const targetRows = paneSize ? clamp(paneSize.rows, TERMINAL_MIN_ROWS, TERMINAL_MAX_ROWS) : null;
+    if (targetRows && !remoteGrid) remoteGrid = { cols: targetCols, rows: targetRows };
+    const cols = clamp(ptyCols(visibleCols, state.termFit, targetCols), TERMINAL_MIN_COLS, TERMINAL_MAX_COLS);
+    const rows = targetRows ?? clamp(
       cell ? Math.floor(inner.height / cell.height) : terminal.rows || 24,
       TERMINAL_MIN_ROWS,
       TERMINAL_MAX_ROWS,
@@ -494,7 +500,7 @@ async function openBridge(takeover: boolean): Promise<void> {
   }
 }
 
-async function suspendBridge(sendClose: boolean, reason?: string): Promise<void> {
+async function suspendBridge(sendClose: boolean, reason?: string, showFailure = true): Promise<void> {
   const session = state.live;
   const id = bridgeId;
   const renderer = rendererVersion;
@@ -508,7 +514,7 @@ async function suspendBridge(sendClose: boolean, reason?: string): Promise<void>
   remoteGrid = null;
   opening = false;
   if (sendClose && session && id) await session.terminalClose(id).catch(() => undefined);
-  if (version !== bridgeVersion || renderer !== rendererVersion || bridgeId || opening || !state.fullTerminal) return;
+  if (!showFailure || version !== bridgeVersion || renderer !== rendererVersion || bridgeId || opening || !state.fullTerminal) return;
   terminalStatus.fail(reason ?? t("ft.paused"));
 }
 
@@ -577,9 +583,10 @@ export function leaveFullTerminal(opts?: { rememberGuided?: boolean; paint?: boo
   const paint = opts?.paint !== false;
   leaving = (async () => {
     try {
-      await suspendBridge(true);
+      await suspendBridge(true, undefined, false);
       if (seq !== leaveSeq) return;
       disposeRenderer();
+      terminalShellActive = false;
       fullTerminalPerf.publish("leave");
       if (rememberGuided) setPaneTermMode(state.paneId, "guided");
       state.fullTerminal = false;
@@ -596,6 +603,7 @@ export function disposeFullTerminal(): void {
   leaveSeq++;
   leaving = null;
   state.fullTerminal = false;
+  terminalShellActive = false;
   setFullTerminalDocumentMode(false);
   terminalStatus.clearRetry();
   bridgeId = "";
@@ -610,11 +618,11 @@ function interruptFullTerminal(): void {
   sendPadKey("esc");
 }
 
-function syncFullTerminalChrome(): void {
-  const chrome = app.querySelector(".full-terminal-chrome");
+function syncFullTerminalChrome(root: ParentNode = app): void {
+  const chrome = root.querySelector(".full-terminal-chrome");
   if (!(chrome instanceof HTMLElement)) return;
   syncChromeStop(chrome, canInterruptAgent(selectedAgent()?.status ?? ""), interruptFullTerminal);
-  syncStatus();
+  syncStatus(root);
 }
 
 function syncFullTerminalInput(root: HTMLElement, host: HTMLElement): void {
@@ -647,42 +655,37 @@ export function setFullTerminalComposeLive(live: boolean): void {
 
 export function renderFullTerminal(onBack: () => void, onWorkspace: () => void, onMenu: () => void): void {
   setFullTerminalDocumentMode(true);
-  const mounted = app.querySelector(".full-terminal-root");
-  if (mounted) {
-    const title = app.querySelector(".full-terminal-title");
-    if (title) title.textContent = selectedAgent() ? agentTitle(selectedAgent()!) : t("title.terminal");
-    syncStatus();
-    syncFullTerminalChrome();
+  const title = selectedAgent() ? agentTitle(selectedAgent()!) : t("title.terminal");
+  const mounted = app.querySelector<HTMLElement>(".full-terminal-root");
+  if (terminalShellActive && mounted?.dataset.paneId === state.paneId) {
+    updateFullTerminalTitle(mounted, title);
+    syncFullTerminalChrome(mounted);
     const host = mounted.querySelector<HTMLElement>(".full-terminal-host");
-    if (host) syncFullTerminalInput(mounted as HTMLElement, host);
+    if (host) syncFullTerminalInput(mounted, host);
     return;
   }
   disposeRenderer();
+  terminalStatus.reset(t("ft.preparing"));
   fullTerminalPerf.begin();
-  const root = node("div", "pane-root full-terminal-root");
-  const chrome = node("header", "chrome full-terminal-chrome");
-  const back = backButton(onBack, t("chrome.backList"));
-  const titleWrap = node("div", "full-terminal-heading");
-  titleWrap.append(
-    node("strong", "full-terminal-title", selectedAgent() ? agentTitle(selectedAgent()!) : t("title.terminal")),
-    node("span", "full-terminal-status", terminalStatus.detail),
-  );
-  chrome.append(back, titleWrap, chromeActionCluster(onWorkspace, onMenu));
-  syncFullTerminalChrome();
-  const host = node("div", "full-terminal-host");
-  host.setAttribute("aria-label", t("title.terminal"));
-  if (state.termFit === "pan") host.classList.add("is-pan");
-  const pan = node("div", "full-terminal-pan");
-  pan.append(node("div", "full-terminal-canvas"));
-  host.append(fullTerminalStateLayer(retryFullTerminal), scrollRail(
-    (direction, lines, source) => {
-      haptic(4);
-      sendScroll(direction, lines, source);
+  const { root, host } = createFullTerminalView(
+    state.paneId,
+    title,
+    terminalStatus.detail,
+    state.termFit === "pan",
+    {
+      onBack,
+      onWorkspace,
+      onMenu,
+      onRetry: retryFullTerminal,
+      onScroll: (direction, lines, source) => {
+        haptic(4);
+        sendScroll(direction, lines, source);
+      },
+      pageLines: pageScrollLines,
     },
-    pageScrollLines,
-  ), pan);
-  root.append(chrome, host);
-  syncStatus(root);
+  );
+  terminalShellActive = true;
+  syncFullTerminalChrome(root);
   syncFullTerminalInput(root, host);
   app.replaceChildren(root);
   scheduleMount(host);

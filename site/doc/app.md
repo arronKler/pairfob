@@ -36,9 +36,11 @@ The card title is a single identity: the session name if you set one; otherwise 
 
 When Pairfob is connected, an empty list means there are no sessions yet; create one or open a terminal on the computer. Only the explicit **Herdr is not running on the computer** state means Herdr is closed. You can run `pairfob doctor` on the computer to confirm.
 
-**New** appears in the top bar when the computer supports creating a session. The form can start a supported agent, or a **Terminal only (no agent)** pane. With no kinds listed, the dialog still opens and creates that terminal session.
+**New** appears in the top bar when the computer supports creating a session. **New tab** (list long-press or session `···`) and **Split** (session `···`) use the same kind list. Each form can start a supported agent, or a **Terminal only (no agent)** pane. With no kinds listed, the dialog still opens and creates that terminal session.
 
 Tap a card to open it. Long-press (right-click on a computer) to **Pin to top**, open another tab in this workspace, rename, or close that session. Pinned sessions move into a **Pinned** section at the top of the list and leave their workspace or Agent group; long-press again to **Unpin**. **Rename tab** appears only when the tab already has a visible name, or the tab is split; **Close the whole tab** only when split. Grouped by workspace, long-press the group heading to create a tab in that workspace, rename it, or **Close this workspace**; in other groupings workspace rename and close sit at the bottom of the card menu. Create-tab actions appear only when the computer supports them. Split stays in `···` after you open a session.
+
+**Board** in the top bar (also **Tab layout** on a card or in session `···`) opens a zoomable canvas of one tab’s real pane split from the computer. Pinch or scroll to zoom out and see the whole tab. Workspace chips switch the project you are looking at; the tab row under them creates and switches tabs. Tapping a pane opens that session. This does not steal focus on the computer.
 
 ## Inside a session
 

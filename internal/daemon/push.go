@@ -20,8 +20,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -81,6 +79,9 @@ type HerdPush struct {
 	Agent          string
 	WorkspaceLabel string
 	Cwd            string
+	PaneLabel      string
+	TerminalTitle  string
+	TabLabel       string
 	Kind           PushKind
 }
 
@@ -341,24 +342,7 @@ func (e *Engine) NotifyHerd(event HerdPush) error {
 	if event.Kind != PushNeedsYou && event.Kind != PushDone {
 		return errors.New("push kind is required")
 	}
-	agent := strings.TrimSpace(event.Agent)
-	if agent == "" {
-		agent = "Agent"
-	}
-	workspace := strings.TrimSpace(event.WorkspaceLabel)
-	if workspace == "" {
-		workspace = "Workspace"
-	}
-	base := filepath.Base(event.Cwd)
-	if base == "." || base == string(filepath.Separator) || base == "" {
-		base = "terminal"
-	}
-	titleSuffix := " 等你处理"
-	if event.Kind == PushDone {
-		titleSuffix = " 已完成"
-	}
-	title, _ := truncateUTF8(agent+titleSuffix, 96)
-	body, _ := truncateUTF8(workspace+" · "+base, 160)
+	title, body := pushNotificationCopy(event)
 	fragment := url.Values{}
 	fragment.Set("notify", "1")
 	fragment.Set("d", e.DaemonID)
@@ -514,6 +498,10 @@ func (e *Engine) MonitorPush(stop <-chan struct{}, every time.Duration) {
 			for _, workspace := range snapshot.Workspaces {
 				labels[workspace.WorkspaceID] = workspace.Label
 			}
+			tabLabels := map[string]string{}
+			for _, tab := range snapshot.Tabs {
+				tabLabels[tab.TabID] = tab.Label
+			}
 			seen := map[string]string{}
 			for _, pane := range snapshot.Panes {
 				previous, known := statusByPane[pane.PaneID]
@@ -523,7 +511,9 @@ func (e *Engine) MonitorPush(stop <-chan struct{}, every time.Duration) {
 				}
 				if kind, notify := pushKindForTransition(previous, known, pane.AgentStatus); notify && e.PushEnabled {
 					event := HerdPush{
-						HerdID: pane.PaneID, Agent: pane.Agent, WorkspaceLabel: labels[pane.WorkspaceID], Cwd: pane.Cwd, Kind: kind,
+						HerdID: pane.PaneID, Agent: pane.Agent, WorkspaceLabel: labels[pane.WorkspaceID],
+						Cwd: pane.Cwd, PaneLabel: optionalText(pane.Label), TerminalTitle: pane.TerminalTitle,
+						TabLabel: tabLabels[pane.TabID], Kind: kind,
 					}
 					go func(event HerdPush) { _ = e.NotifyHerd(event) }(event)
 				}

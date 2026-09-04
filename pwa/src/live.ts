@@ -36,6 +36,7 @@ import {
   FRIENDLY_ERROR,
   acknowledgePaneCompletion,
   clearNotice,
+  leavePaneScreen,
   loadPaneTouched,
   loadPanePinned,
   loadCompletionSeen,
@@ -56,6 +57,7 @@ import {
   wsURL,
 } from "./state";
 import { isDesk } from "./viewport";
+import { refreshBoardPreviews } from "./ui/board-preview";
 import { composeField, dropQueuedKeys, paneReadLines, patchChromeTitle, patchSessionScreen, preserveCompose } from "./ui/session-view";
 import { canEnterAgentChat, patchAgentChat, refreshAgentTrace, restoreAgentTrace } from "./ui/agent-chat";
 import { disposeFullTerminal, handleFullTerminalEvent, leaveFullTerminal } from "./ui/full-terminal";
@@ -66,10 +68,15 @@ import { track } from "./lib/telemetry";
 
 const livePolling = createLivePolling({
   canRun: () => state.networkOnline && document.visibilityState === "visible" && state.phase === "live" && state.live?.isConnected() === true,
-  canReadPane: () => state.screen === "pane" && Boolean(state.paneId) && !state.fullTerminal,
+  canReadPane: () =>
+    (state.screen === "pane" && Boolean(state.paneId) && !state.fullTerminal) ||
+    state.screen === "board",
   paneDelayMs: () => panePollDelayMs(state.agentChat, selectedAgent()?.status === "working"),
   refreshSnapshot: () => refreshSnapshot(),
-  refreshPane: async () => { await refreshPaneRead(); },
+  refreshPane: async () => {
+    if (state.screen === "board") await refreshBoardPreviews();
+    else await refreshPaneRead();
+  },
 });
 const computerSessions = new ComputerSessions(3);
 const connectComputerSession: SessionConnector = (credential, observeP2PAttempt) =>
@@ -278,7 +285,10 @@ function onSessionEvent(daemonId: string, session: LiveSession, event: SessionEv
   if (event.type === "poke" && document.visibilityState === "visible") {
     const action = pokeRefreshAction(state.screen, state.paneId, event.paneId, event.reason);
     if (action === "runtime") void refreshRuntimeState();
-    else if (action === "snapshot") void refreshSnapshot();
+    else if (action === "snapshot") {
+      void refreshSnapshot();
+      if (state.screen === "board") livePolling.wakePane();
+    }
     else if (action === "paneread") {
       livePolling.wakePane();
       if (state.agentChat && shouldPullStatus(true, Date.now(), state.snapshotAt)) void refreshSnapshot();
@@ -380,7 +390,7 @@ export async function openPane(paneId: string): Promise<void> {
 
 function abandonOpenPane(message: string): void {
   disposeFullTerminal();
-  state.screen = "home";
+  leavePaneScreen();
   resetPaneView();
   showError(message, true);
   render();
@@ -399,12 +409,14 @@ export async function refreshSnapshot(): Promise<void> {
     const snapshot = (await session.snapshot()) as Snapshot;
     if (!liveViewIsCurrent(session, viewVersion)) return;
     state.snapshotAt = Date.now();
+    const previousLayoutSig = state.lastLayoutSig;
     const previous = replaceAgentsFromSnapshot(snapshot);
     state.paneTouched = nextTouchedAt(previous, state.agents, state.paneTouched);
     savePaneTouched();
     const nextSig = herdSignature(state.agents);
     const unchanged = nextSig === state.lastHerdSig;
     state.lastHerdSig = nextSig;
+    const layoutUnchanged = previousLayoutSig === state.lastLayoutSig;
     if (await openPendingNotification(openPane)) return;
     if (state.screen === "pane") {
       state.paneId = choosePane(state.paneId, state.agents);
@@ -438,6 +450,11 @@ export async function refreshSnapshot(): Promise<void> {
       state.paneId = "";
       state.paneText = "";
       state.paneHash = "";
+    }
+    if (state.screen === "board") {
+      if (unchanged && layoutUnchanged) return;
+      render();
+      return;
     }
     if ((state.screen === "home" || state.screen === "workspace" || state.screen === "settings" || state.screen === "computers") && unchanged) return;
     render();
@@ -617,8 +634,16 @@ export async function refreshPaneRead(request: PaneRefreshRequest = {}): Promise
 export async function refreshFromSession(): Promise<void> {
   await Promise.all([
     refreshSnapshot(),
-    state.screen === "pane" && state.paneId && !state.fullTerminal ? refreshPaneRead() : Promise.resolve(),
+    state.screen === "board"
+      ? refreshBoardPreviews()
+      : state.screen === "pane" && state.paneId && !state.fullTerminal
+        ? refreshPaneRead()
+        : Promise.resolve(),
   ]);
+}
+
+export function wakeLiveReads(): void {
+  livePolling.wakePane();
 }
 
 export async function refreshPane(): Promise<void> {

@@ -94,7 +94,7 @@ In order: `pairfob doctor` — is Herdr `on`? **Herdr is not running on the comp
 
 ## Why is there no New / Split / Worktree?
 
-The live Herdr does not support that yet. Upgrade and **restart the running Herdr**, not only install another CLI binary. With no agent kinds listed, **New** still opens a terminal pane.
+The live Herdr does not support that yet. Upgrade and **restart the running Herdr**, not only install another CLI binary. With no agent kinds listed, **New**, **New tab**, and **Split** still open a terminal pane.
 
 ## I tapped and I am not sure the computer did it.
 

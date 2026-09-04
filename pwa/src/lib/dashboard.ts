@@ -7,7 +7,8 @@ export type DashboardAgentCard = AgentCard & {
 };
 
 export type SnapshotWire = {
-  focused?: { pane_id?: string };
+  focused?: { pane_id?: string; tab_id?: string; workspace_id?: string };
+  layouts?: unknown;
   workspaces?: Array<{ workspace_id: string; label?: string; cwd?: string }>;
   tabs?: Array<{ tab_id: string; workspace_id: string; label?: string }>;
   panes?: Array<{

@@ -173,7 +173,7 @@ func TestLaunchDetachedHerdrServerUsesServerModeAndStartupDirectory(t *testing.T
 
 func TestRealHerdrBootstrapWhenRequested(t *testing.T) {
 	if os.Getenv("PAIRFOB_TEST_REAL_HERDR_BOOTSTRAP") != "1" {
-		t.Skip("set PAIRFOB_TEST_REAL_HERDR_BOOTSTRAP=1 for an isolated installed-Herdr smoke")
+		t.Skip("set PAIRFOB_TEST_REAL_HERDR_BOOTSTRAP=1 for the isolated installed-Herdr contract smoke")
 	}
 	binary, err := exec.LookPath("herdr")
 	if err != nil {
@@ -185,22 +185,42 @@ func TestRealHerdrBootstrapWhenRequested(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "api.sock")
-	t.Setenv("HERDR_CONFIG_PATH", filepath.Join(dir, "config.toml"))
+	configPath := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(configPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "xdg-config"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "xdg-state"))
+	t.Setenv("HERDR_CONFIG_PATH", configPath)
 	t.Setenv("HERDR_SOCKET_PATH", socket)
 	t.Setenv("HERDR_CLIENT_SOCKET_PATH", filepath.Join(dir, "client.sock"))
 
+	var serverLaunched atomic.Bool
 	stop := func() {
+		if !serverLaunched.Load() {
+			return
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, binary, "server", "stop")
+		cmd.Dir = dir
 		cmd.Env = herdrServerEnvironment(dir)
-		_, _ = cmd.CombinedOutput()
+		if output, stopErr := cmd.CombinedOutput(); stopErr != nil {
+			t.Errorf("isolated Herdr server stop failed: %v: %s", stopErr, strings.TrimSpace(string(output)))
+		}
 	}
 	t.Cleanup(stop)
 
 	herdr := NewHerdr(socket)
 	herdr.TerminalBinary = binary
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	herdr.launchServer = func(ctx context.Context, binary, _ string, socket string) (<-chan error, error) {
+		exited, launchErr := launchPersistentHerdrServer(ctx, binary, dir, socket)
+		if launchErr == nil {
+			serverLaunched.Store(true)
+		}
+		return exited, launchErr
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	availability, err := herdr.EnsureServer(ctx)
 	if err != nil {
@@ -208,5 +228,85 @@ func TestRealHerdrBootstrapWhenRequested(t *testing.T) {
 	}
 	if !availability.Started || availability.Descriptor.Runtime != "herdr" || availability.Descriptor.Protocol <= 0 {
 		t.Fatalf("availability=%+v", availability)
+	}
+	for _, feature := range []Feature{FeatureCreateConversation, FeatureCreateTab, FeatureSplitPane} {
+		if !availability.Descriptor.Supports(feature) {
+			t.Fatalf("installed Herdr protocol %d does not support %s", availability.Descriptor.Protocol, feature)
+		}
+	}
+
+	conversation, err := herdr.Execute(ctx, DefaultSession(), "contract-create-conversation", CreateConversationCommand{
+		CWD: dir, Label: "pairfob-contract",
+	})
+	if err != nil || conversation.Outcome != OutcomeApplied {
+		t.Fatalf("CreateConversation receipt=%+v err=%v", conversation, err)
+	}
+	workspaceID := receiptEntityID(t, conversation, EntityWorkspace)
+	rootPaneID := receiptEntityID(t, conversation, EntityPane)
+	rejectReceiptEntity(t, conversation, EntityAgent)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = herdr.Execute(cleanupCtx, DefaultSession(), "contract-cleanup-workspace", CloseWorkspaceCommand{WorkspaceID: workspaceID})
+	})
+
+	tab, err := herdr.Execute(ctx, DefaultSession(), "contract-create-tab", CreateTabCommand{
+		WorkspaceID: workspaceID, CWD: dir, Label: "contract-tab",
+	})
+	if err != nil || tab.Outcome != OutcomeApplied {
+		t.Fatalf("CreateTab receipt=%+v err=%v", tab, err)
+	}
+	receiptEntityID(t, tab, EntityTab)
+	receiptEntityID(t, tab, EntityPane)
+	rejectReceiptEntity(t, tab, EntityAgent)
+
+	split, err := herdr.Execute(ctx, DefaultSession(), "contract-split-pane", SplitPaneCommand{
+		WorkspaceID: workspaceID, TargetPaneID: rootPaneID, CWD: dir, Direction: SplitRight,
+	})
+	if err != nil || split.Outcome != OutcomeApplied {
+		t.Fatalf("SplitPane receipt=%+v err=%v", split, err)
+	}
+	receiptEntityID(t, split, EntityPane)
+	rejectReceiptEntity(t, split, EntityAgent)
+
+	if kind := strings.TrimSpace(os.Getenv("PAIRFOB_TEST_REAL_HERDR_AGENT_KIND")); kind != "" {
+		if !containsAgent(availability.Descriptor.AgentKinds, kind) {
+			t.Fatalf("PAIRFOB_TEST_REAL_HERDR_AGENT_KIND=%q is not installed", kind)
+		}
+		agentCtx, agentCancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer agentCancel()
+		agentConversation, agentErr := herdr.Execute(agentCtx, DefaultSession(), "contract-create-agent", CreateConversationCommand{
+			CWD: dir, Label: "pairfob-agent-contract", AgentKind: kind, AgentName: "pf-contract",
+		})
+		if agentErr != nil || agentConversation.Outcome != OutcomeApplied {
+			t.Fatalf("CreateConversation agent receipt=%+v err=%v", agentConversation, agentErr)
+		}
+		agentWorkspaceID := receiptEntityID(t, agentConversation, EntityWorkspace)
+		receiptEntityID(t, agentConversation, EntityAgent)
+		t.Cleanup(func() {
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cleanupCancel()
+			_, _ = herdr.Execute(cleanupCtx, DefaultSession(), "contract-cleanup-agent-workspace", CloseWorkspaceCommand{WorkspaceID: agentWorkspaceID})
+		})
+	}
+}
+
+func receiptEntityID(t *testing.T, receipt Receipt, kind EntityKind) string {
+	t.Helper()
+	for _, entity := range receipt.Created {
+		if entity.Kind == kind && entity.ID != "" {
+			return entity.ID
+		}
+	}
+	t.Fatalf("receipt %+v has no created %s", receipt, kind)
+	return ""
+}
+
+func rejectReceiptEntity(t *testing.T, receipt Receipt, kind EntityKind) {
+	t.Helper()
+	for _, entity := range receipt.Created {
+		if entity.Kind == kind {
+			t.Fatalf("receipt %+v unexpectedly created %s", receipt, kind)
+		}
 	}
 }

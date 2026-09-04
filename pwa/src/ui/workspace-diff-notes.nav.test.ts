@@ -188,6 +188,7 @@ describe("diff notes batch send", () => {
     expect(sent).toHaveLength(1);
     expect(diffNoteSendOpen()).toBeTrue();
     expect(app.querySelector<HTMLButtonElement>(".workspace-notes-send")?.disabled).toBeTrue();
+    expect(app.querySelector(".workspace-notes-send")?.textContent).toBe("正在发送批注…");
 
     await sendDiffNotesToAgent("src/app.ts", "worktree");
     expect(sent).toHaveLength(1);
@@ -232,5 +233,53 @@ describe("diff notes batch send", () => {
     await boot(live, { prompt_agent: true, hasAgent: true });
     await openDiff();
     expect(app.querySelectorAll(".diff-noteable")).toHaveLength(0);
+    expect(app.querySelector(".workspace-diff-hint")).toBeNull();
+    expect(app.querySelector(".workspace-limit")?.textContent).toContain("不能批注");
+  });
+
+  test("shows a tap hint and a comment control on each noteable line", async () => {
+    await boot(liveFixture(), { prompt_agent: true, hasAgent: true });
+    await openDiff();
+    expect(app.querySelector(".workspace-diff-hint")?.textContent).toContain("点一行写批注");
+    expect(app.querySelectorAll(".diff-comment-btn")).toHaveLength(4);
+    expect(app.querySelector(".diff-comment-btn")?.getAttribute("aria-label")).toContain("第");
+    await addNote(rowContaining("false"), "keep this");
+    expect(app.querySelector(".workspace-diff-hint")).toBeNull();
+  });
+
+  test("opens the editor with the line quote above the field", async () => {
+    await boot(liveFixture(), { prompt_agent: true, hasAgent: true });
+    await openDiff();
+    rowContaining("false").click();
+    await settle();
+    const dialog = document.querySelector("dialog.diff-note-modal");
+    expect(dialog?.getAttribute("aria-labelledby")).toBeTruthy();
+    expect(dialog?.querySelector(".modal-title")?.textContent).toContain("第 2 行");
+    const quote = dialog?.querySelector(".diff-note-quote");
+    const field = dialog?.querySelector(".operation-field");
+    expect(quote?.textContent).toContain("第 2 行（旧）");
+    expect(quote?.textContent).toContain("false");
+    expect(quote && field && Boolean(quote.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTrue();
+    dialog?.querySelector("form")?.dispatchEvent(new happy.Event("submit", { bubbles: true, cancelable: true }));
+    await settle();
+    const textarea = document.querySelector<HTMLTextAreaElement>("dialog.diff-note-modal textarea");
+    expect(textarea?.getAttribute("aria-invalid")).toBe("true");
+    expect(document.querySelector("dialog.diff-note-modal .notice-error")?.textContent).toContain("先写一条批注");
+  });
+
+  test("keeps the diff scroller in place after saving a comment", async () => {
+    await boot(liveFixture(), { prompt_agent: true, hasAgent: true });
+    await openDiff();
+    const scroller = app.querySelector<HTMLElement>(".workspace-diff");
+    if (!scroller) throw new Error("missing diff scroller");
+    scroller.scrollTop = 48;
+    scroller.scrollLeft = 12;
+    await addNote(rowContaining("false"), "stay put");
+    const painted = app.querySelector<HTMLElement>(".workspace-diff");
+    expect(painted?.dataset.diffKey).toBe("src/app.ts:worktree");
+    expect(painted?.scrollTop).toBe(48);
+    expect(painted?.scrollLeft).toBe(12);
+    expect(app.querySelector(".diff-note-main")).toBeTruthy();
+    expect(app.querySelector(".diff-note-actions")).toBeTruthy();
   });
 });

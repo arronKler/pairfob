@@ -35,6 +35,7 @@ import { NO_OPERATION_CAPABILITIES, type AgentTraceItem, type OperationCapabilit
 import type { NoticeScope } from "./lib/notice-scope";
 import { SNAPSHOT_FALLBACK_MS, PANE_READ_FALLBACK_MS } from "./poll";
 import { createNoticeLifecycle, type Notice } from "./state-notices";
+import { applyBoardSnapshot, initialBoardViewState, type BoardViewState } from "./state-board";
 import { isDesk } from "./viewport";
 
 export { SNAPSHOT_FALLBACK_MS, PANE_READ_FALLBACK_MS };
@@ -42,7 +43,7 @@ export { STATUS_NOTICE_MS, type Notice } from "./state-notices";
 export { FRIENDLY_ERROR, GENERIC_NOTICE, genericNotice, messageOf, noticeFor, sessionEventNotice } from "./lib/notices";
 
 export type Phase = "boot" | "connect" | "pairing" | "resuming" | "live" | "pick";
-export type Screen = "home" | "pane" | "workspace" | "settings" | "computers";
+export type Screen = "home" | "pane" | "workspace" | "settings" | "computers" | "board";
 export type StatusTone = "live" | "warn" | "off" | "demo";
 export type AgentTraceLoadState = "cold" | "loading" | "ready" | "error";
 
@@ -156,7 +157,7 @@ function loadDefaultTermMode(): TermMode {
   }
 }
 
-export type AppState = {
+export type AppState = BoardViewState & {
   originProtocol: MuxProtocol;
   p2pEnabled: boolean;
   fragment: FragmentPairing | null;
@@ -289,6 +290,7 @@ export const state: AppState = {
   defaultComposeLive: loadDefaultComposeLive(),
   paneComposeLive: {},
   agents: [],
+  ...initialBoardViewState(),
   paneText: "",
   paneHash: "",
   pairAwaitingApproval: false,
@@ -560,6 +562,12 @@ function saveCompletionSeen(): void {
   }
 }
 
+export function leavePaneScreen(): void {
+  const toBoard = state.boardReturn;
+  state.boardReturn = false;
+  state.screen = toBoard ? "board" : "home";
+}
+
 export function replaceAgentsFromSnapshot(snapshot: SnapshotWire): DashboardAgentCard[] {
   const previous = state.agents;
   const projected = projectCompletionAttention(
@@ -572,6 +580,7 @@ export function replaceAgentsFromSnapshot(snapshot: SnapshotWire): DashboardAgen
   state.runtimeAgentStatuses = projected.runtimeStatuses;
   state.completionSeen = projected.seen;
   if (seenChanged) saveCompletionSeen();
+  applyBoardSnapshot(state, snapshot, state.agents);
   prunePaneTermModes();
   prunePaneComposeLive();
   if (state.agents.length) {

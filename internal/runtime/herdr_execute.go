@@ -167,17 +167,9 @@ func (h *Herdr) createConversation(ctx context.Context, session SessionRef, oper
 	if !descriptor.Supports(FeatureCreateConversation) {
 		return notApplied(operationID, unsupported("create_conversation", "operation is unsupported by the live Herdr protocol"))
 	}
-	name := command.AgentName
-	if command.AgentKind != "" {
-		if !containsAgent(descriptor.AgentKinds, command.AgentKind) {
-			return notApplied(operationID, unsupported("create_conversation", "agent kind is not available from the live Herdr manifests"))
-		}
-		if name == "" {
-			name = generatedAgentName(command.AgentKind, operationID)
-		}
-		if !validAgentName.MatchString(name) {
-			return notApplied(operationID, invalidFault("create_conversation", "invalid agent name"))
-		}
+	name, err := agentStartName(descriptor.AgentKinds, "create_conversation", operationID, command.AgentKind, command.AgentName)
+	if err != nil {
+		return failAgentStart(operationID, err)
 	}
 	raw, err := h.call(ctx, session, "workspace.create", map[string]any{
 		"cwd": optionalString(command.CWD), "label": optionalString(command.Label), "focus": false,
@@ -195,61 +187,15 @@ func (h *Herdr) createConversation(ctx context.Context, session SessionRef, oper
 		fault := responseFault("workspace.create", "invalid Herdr workspace create response", err, true)
 		return receiptForError(operationID, fault), fault
 	}
-	createdRefs := []EntityRef{
+	return h.maybeStartAgent(ctx, session, operationID, command.AgentKind, name, created.RootPane.PaneID, []EntityRef{
 		{Kind: EntityWorkspace, ID: created.Workspace.WorkspaceID},
 		{Kind: EntityTab, ID: created.Tab.TabID},
 		{Kind: EntityPane, ID: created.RootPane.PaneID},
-	}
-	if command.AgentKind == "" {
-		return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: createdRefs}, nil
-	}
-	result, startErr := h.callWithTimeout(ctx, session, "agent.start", map[string]any{
-		"name": name, "kind": command.AgentKind, "pane_id": created.RootPane.PaneID, "timeout_ms": 30000,
-	}, true, 35*time.Second)
-	if startErr != nil {
-		return h.compensateConversation(ctx, session, operationID, createdRefs, created.Workspace.WorkspaceID, startErr)
-	}
-	var started struct {
-		Type  string `json:"type"`
-		Agent struct {
-			Name   *string `json:"name"`
-			PaneID string  `json:"pane_id"`
-		} `json:"agent"`
-	}
-	if err := json.Unmarshal(result, &started); err != nil || started.Type != "agent_started" || started.Agent.PaneID != created.RootPane.PaneID || !validResourceID.MatchString(started.Agent.PaneID) || (started.Agent.Name != nil && *started.Agent.Name != "" && !validAgentName.MatchString(*started.Agent.Name)) {
-		fault := responseFault("agent.start", "invalid Herdr agent start response", err, true)
-		receipt := Receipt{OperationID: operationID, Outcome: OutcomeUnknown, Created: createdRefs}
-		return receipt, fault
-	}
-	agentID := name
-	if started.Agent.Name != nil && *started.Agent.Name != "" {
-		agentID = *started.Agent.Name
-	}
-	createdRefs = append(createdRefs, EntityRef{Kind: EntityAgent, ID: agentID})
-	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: createdRefs}, nil
-}
-
-func (h *Herdr) compensateConversation(ctx context.Context, session SessionRef, operationID string, created []EntityRef, workspaceID string, startErr error) (Receipt, error) {
-	fault, ok := AsFault(startErr)
-	if !ok || fault.Outcome == OutcomeUnknown {
-		return Receipt{OperationID: operationID, Outcome: OutcomeUnknown, Created: created}, startErr
-	}
-	closeRaw, closeErr := h.call(ctx, session, "workspace.close", map[string]any{"workspace_id": workspaceID}, true)
-	if closeErr == nil {
-		closeErr = expectResponseType(closeRaw, "workspace.close", "ok")
-	}
-	if closeErr == nil {
-		fault.Outcome = OutcomeNotApplied
-		return Receipt{OperationID: operationID, Outcome: OutcomeNotApplied, Removed: created}, fault
-	}
-	closeFault, closeIsFault := AsFault(closeErr)
-	outcome := OutcomePartial
-	if closeIsFault && closeFault.Outcome == OutcomeUnknown {
-		outcome = OutcomeUnknown
-	}
-	fault.Outcome = outcome
-	fault.SafeMessage = fault.SafeMessage + "; failed to remove the newly created workspace"
-	return Receipt{OperationID: operationID, Outcome: outcome, Created: created}, fault
+	}, createdPaneClose{
+		Method: "workspace.close",
+		Params: map[string]any{"workspace_id": created.Workspace.WorkspaceID},
+		Noun:   "workspace",
+	})
 }
 
 func (h *Herdr) createTab(ctx context.Context, session SessionRef, operationID string, command CreateTabCommand) (Receipt, error) {
@@ -520,6 +466,93 @@ func optionalString(value string) any {
 		return nil
 	}
 	return value
+}
+
+type createdPaneClose struct {
+	Method string
+	Params map[string]any
+	Noun   string
+}
+
+func agentStartName(kinds []AgentKind, operation, operationID, kind, name string) (string, error) {
+	if kind == "" {
+		return "", nil
+	}
+	if !containsAgent(kinds, kind) {
+		return "", unsupported(operation, "agent kind is not available from the live Herdr manifests")
+	}
+	if name == "" {
+		name = generatedAgentName(kind, operationID)
+	}
+	if !validAgentName.MatchString(name) {
+		return "", invalidFault(operation, "invalid agent name")
+	}
+	return name, nil
+}
+
+func failAgentStart(operationID string, err error) (Receipt, error) {
+	if fault, ok := AsFault(err); ok && fault.Outcome == OutcomeNotApplied {
+		return notApplied(operationID, err)
+	}
+	return receiptForError(operationID, err), err
+}
+
+func (h *Herdr) startAgentOnPane(ctx context.Context, session SessionRef, paneID, name, kind string) (string, error) {
+	result, startErr := h.callWithTimeout(ctx, session, "agent.start", map[string]any{
+		"name": name, "kind": kind, "pane_id": paneID, "timeout_ms": 30000,
+	}, true, 35*time.Second)
+	if startErr != nil {
+		return "", startErr
+	}
+	var started struct {
+		Type  string `json:"type"`
+		Agent struct {
+			Name   *string `json:"name"`
+			PaneID string  `json:"pane_id"`
+		} `json:"agent"`
+	}
+	if err := json.Unmarshal(result, &started); err != nil || started.Type != "agent_started" || started.Agent.PaneID != paneID || !validResourceID.MatchString(started.Agent.PaneID) || (started.Agent.Name != nil && *started.Agent.Name != "" && !validAgentName.MatchString(*started.Agent.Name)) {
+		return "", responseFault("agent.start", "invalid Herdr agent start response", err, true)
+	}
+	if started.Agent.Name != nil && *started.Agent.Name != "" {
+		return *started.Agent.Name, nil
+	}
+	return name, nil
+}
+
+func (h *Herdr) maybeStartAgent(ctx context.Context, session SessionRef, operationID, kind, name, paneID string, created []EntityRef, closer createdPaneClose) (Receipt, error) {
+	if kind == "" {
+		return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: created}, nil
+	}
+	startedName, startErr := h.startAgentOnPane(ctx, session, paneID, name, kind)
+	if startErr != nil {
+		return h.compensateCreated(ctx, session, operationID, created, closer, startErr)
+	}
+	created = append(created, EntityRef{Kind: EntityAgent, ID: startedName})
+	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: created}, nil
+}
+
+func (h *Herdr) compensateCreated(ctx context.Context, session SessionRef, operationID string, created []EntityRef, target createdPaneClose, startErr error) (Receipt, error) {
+	fault, ok := AsFault(startErr)
+	if !ok || fault.Outcome == OutcomeUnknown {
+		return Receipt{OperationID: operationID, Outcome: OutcomeUnknown, Created: created}, startErr
+	}
+	closeRaw, closeErr := h.call(ctx, session, target.Method, target.Params, true)
+	if closeErr == nil {
+		closeErr = expectResponseType(closeRaw, target.Method, "ok")
+	}
+	if closeErr == nil {
+		fault.Outcome = OutcomeNotApplied
+		return Receipt{OperationID: operationID, Outcome: OutcomeNotApplied, Removed: created}, fault
+	}
+	closeFault, closeIsFault := AsFault(closeErr)
+	outcome := OutcomePartial
+	if closeIsFault && closeFault.Outcome == OutcomeUnknown {
+		outcome = OutcomeUnknown
+	}
+	fault.Outcome = outcome
+	fault.SafeMessage = fault.SafeMessage + "; failed to remove the newly created " + target.Noun
+	return Receipt{OperationID: operationID, Outcome: outcome, Created: created}, fault
 }
 
 func containsAgent(kinds []AgentKind, wanted string) bool {

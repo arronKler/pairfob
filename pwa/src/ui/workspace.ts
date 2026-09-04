@@ -1,6 +1,6 @@
 import { button, node } from "../lib/dom";
 import { highlightSource } from "../lib/syntax-highlight";
-import { diffNoteTarget } from "../lib/diff-notes";
+import { diffNoteTarget, diffNotesFor } from "../lib/diff-notes";
 import {
   gitChangeKind,
   gitLayers,
@@ -29,7 +29,7 @@ import {
 } from "../workspace";
 import { appendNotice, backButton, chevron, spinnerNode } from "./chrome";
 import { present, sheet, sheetItem, sheetSection } from "./sheet";
-import { diffLineHasNote, diffNoteCards, diffNotesBar, openDiffNoteEditor } from "./workspace-diff-notes";
+import { diffLineHasNote, diffNoteCards, diffNoteLineLabel, diffNotesBar, openDiffNoteEditor } from "./workspace-diff-notes";
 
 const MAX_RENDERED_DIFF_LINES = 800;
 let modifiedDateLocale = "";
@@ -323,26 +323,42 @@ function diffDetail(): HTMLElement {
   else {
     const table = node("div", "workspace-diff");
     table.setAttribute("role", "table");
+    table.dataset.diffKey = `${diff.path}:${workspaceModel.diffLayer}`;
     // Truncated diffs hide lines, so note pins could target the wrong content.
     const noteable = !diff.truncated;
+    if (noteable && !diffNotesFor(diff.path, workspaceModel.diffLayer).length) {
+      detail.append(node("p", "workspace-diff-hint", t("diffNotes.tapHint")));
+    }
     for (const line of parsed.slice(0, MAX_RENDERED_DIFF_LINES)) {
       const row = node("div", `workspace-diff-line diff-${line.kind}`);
       row.setAttribute("role", "row");
+      const target = noteable ? diffNoteTarget(diff.path, workspaceModel.diffLayer, line) : null;
+      if (target) {
+        const noted = diffLineHasNote(target);
+        row.classList.add("diff-noteable");
+        if (noted) row.classList.add("has-note");
+        const label = t(noted ? "diffNotes.editTitle" : "diffNotes.addTitle", { line: target.line });
+        const mark = button("+", "diff-comment-btn", () => {
+          if (state.operationBusy) return;
+          openDiffNoteEditor(target);
+        });
+        mark.setAttribute("aria-label", label);
+        mark.title = diffNoteLineLabel(target);
+        mark.addEventListener("click", (event) => event.stopPropagation());
+        row.append(mark);
+        row.title = label;
+        row.addEventListener("click", () => {
+          if (state.operationBusy) return;
+          const sel = document.getSelection();
+          if (sel && !sel.isCollapsed && row.contains(sel.anchorNode)) return;
+          openDiffNoteEditor(target);
+        });
+      }
       row.append(
         node("span", "diff-line-number", line.oldLine === null ? "" : String(line.oldLine)),
         node("span", "diff-line-number", line.newLine === null ? "" : String(line.newLine)),
         node("code", "diff-line-text", line.text || " "),
       );
-      const target = noteable ? diffNoteTarget(diff.path, workspaceModel.diffLayer, line) : null;
-      if (target) {
-        row.classList.add("diff-noteable");
-        if (diffLineHasNote(target)) row.classList.add("has-note");
-        row.title = t("diffNotes.addTitle");
-        row.addEventListener("click", () => {
-          if (state.operationBusy) return;
-          openDiffNoteEditor(target);
-        });
-      }
       table.append(row);
       if (target) table.append(...diffNoteCards(target));
     }
@@ -351,7 +367,10 @@ function diffDetail(): HTMLElement {
     const notesBar = diffNotesBar(diff.path, workspaceModel.diffLayer);
     if (notesBar) detail.append(notesBar);
   }
-  if (diff.truncated) detail.append(node("p", "workspace-limit", t("workspace.diffTruncated")));
+  if (diff.truncated) {
+    const limit = node("p", "workspace-limit", `${t("workspace.diffTruncated")} ${t("diffNotes.truncated")}`);
+    detail.append(limit);
+  }
   return detail;
 }
 
@@ -415,5 +434,16 @@ function renderWorkspaceRoot(): HTMLElement {
 }
 
 export function renderWorkspace(): void {
+  const prev = app.querySelector<HTMLElement>(".workspace-diff");
+  const prevKey = prev?.dataset.diffKey;
+  const scroll = prev && prevKey ? { key: prevKey, top: prev.scrollTop, left: prev.scrollLeft } : null;
   app.replaceChildren(renderWorkspaceRoot());
+  const next = app.querySelector<HTMLElement>(".workspace-diff");
+  if (!next || !scroll || next.dataset.diffKey !== scroll.key) return;
+  const apply = () => {
+    next.scrollLeft = scroll.left;
+    next.scrollTop = scroll.top;
+  };
+  apply();
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(apply);
 }

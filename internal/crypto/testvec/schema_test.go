@@ -132,6 +132,15 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	if _, ok := createConversation.Properties["agent_kind"]; !ok {
 		t.Error("CreateConversation must still allow optional agent_kind")
 	}
+	for _, op := range []string{"CreateTab", "SplitPane"} {
+		params := paramsByOp[op]
+		if _, ok := params.Properties["agent_kind"]; ok {
+			t.Errorf("%s changed the frozen v1 request surface with agent_kind", op)
+		}
+		if params.AdditionalProperties == nil || *params.AdditionalProperties {
+			t.Errorf("%s params must reject additional properties", op)
+		}
+	}
 	listWorktrees := paramsByOp["ListWorktrees"]
 	if got, want := sortedPropertyNames(listWorktrees.Properties), []string{"cwd", "session", "workspace_id"}; !slices.Equal(got, want) {
 		t.Errorf("ListWorktrees params fields = %q, want %q", got, want)

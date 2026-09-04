@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const source = await Bun.file(new URL("./full-terminal.ts", import.meta.url)).text();
+const shell = await Bun.file(new URL("./full-terminal-view.ts", import.meta.url)).text();
 const stateView = await Bun.file(new URL("./full-terminal-state.ts", import.meta.url)).text();
 const dock = await Bun.file(new URL("./session/dock.ts", import.meta.url)).text();
 const view = await Bun.file(new URL("./session/view.ts", import.meta.url)).text();
@@ -17,16 +18,17 @@ function fn(name: string, next: string): string {
 describe("complete-terminal chrome stays a distinct surface", () => {
   test("chrome matches the other pane modes: stop, workspace, and more", () => {
     const renderFn = fn("export function renderFullTerminal(", "export function handleFullTerminalEvent(");
-    expect(renderFn).toContain("chromeActionCluster(onWorkspace, onMenu)");
-    expect(renderFn).toContain("syncFullTerminalChrome()");
+    expect(renderFn).toContain("createFullTerminalView(");
+    expect(renderFn).toContain("syncFullTerminalChrome(mounted)");
+    expect(shell).toContain("chromeActionCluster(actions.onWorkspace, actions.onMenu)");
     expect(source).toContain("syncChromeStop(chrome, canInterruptAgent(selectedAgent()?.status ?? \"\"), interruptFullTerminal)");
     expect(renderFn).not.toContain('button("退出"');
     expect(renderFn).not.toContain("full-terminal-exit");
     expect(renderFn).not.toContain('button("重连"');
-    expect(renderFn).toContain('backButton(onBack, t("chrome.backList"))');
+    expect(shell).toContain('backButton(actions.onBack, t("chrome.backList"))');
     expect(renderFn).toContain("onBack");
     expect(renderFn).not.toContain("goBackFromPane");
-    expect(renderFn).toContain("scrollRail(");
+    expect(shell).toContain("scrollRail(actions.onScroll, actions.pageLines)");
     expect(renderFn).toContain("syncFullTerminalInput(root, host)");
     expect(renderFn).not.toContain("dockNode");
     expect(renderFn).not.toContain("fillSession");
@@ -43,10 +45,11 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(source).toContain("bindFontPinch");
     expect(source).toContain("document.fonts");
     expect(source).toContain("Math.floor(inner.width / cell.width)");
-    expect(source).toContain("ptyCols(visibleCols, state.termFit, state.termCols)");
+    expect(source).toContain("ptyCols(visibleCols, state.termFit, targetCols)");
+    expect(source).toContain("panePtySize(state.paneId, state.layouts, state.agents)");
     expect(source).toContain("panXScroller");
-    expect(source).toContain("full-terminal-pan");
-    expect(source).toContain("full-terminal-canvas");
+    expect(shell).toContain("full-terminal-pan");
+    expect(shell).toContain("full-terminal-canvas");
     expect(source).toContain("displayGrid");
     expect(source).toContain("remoteGrid");
     expect(source).toContain("pitchLineHeight");
@@ -111,7 +114,8 @@ describe("complete-terminal chrome stays a distinct surface", () => {
   test("a short remote frame shrinks the display grid then still asks for the phone size", () => {
     const fitFn = fn("function fit(", "function stopCommandPump(");
     expect(fitFn).toContain("displayGrid({ cols, rows }, remoteGrid)");
-    expect(fitFn).toContain("ptyCols(visibleCols, state.termFit, state.termCols)");
+    expect(fitFn).toContain("ptyCols(visibleCols, state.termFit, targetCols)");
+    expect(fitFn).toContain("panePtySize");
     expect(fitFn).toContain("sizePanCanvas");
     expect(fitFn).toContain("lockedFont !== null || pan");
     expect(fitFn).toContain("pitchLineHeight");
@@ -176,7 +180,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     const back = pane.slice(pane.indexOf("export function goBackFromPane("), pane.indexOf("export function sessionHandlers("));
     expect(back).toContain("if (state.fullTerminal)");
     expect(back).toContain("rememberGuided: false");
-    expect(back).toContain('state.screen = "home"');
+    expect(back).toContain("leavePaneScreen()");
   });
 
   test("document text autosizing is disabled only while complete-terminal is mounted", () => {

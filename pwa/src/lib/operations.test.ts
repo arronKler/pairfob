@@ -118,6 +118,9 @@ describe("mutation success contracts", () => {
     }));
     expectBadMessage(() => parseCreateTabResult({ operation_id: operationID, workspace_id: "w1", tab_id: "t1", outcome: "applied" }));
     expectBadMessage(() => parseCreateTabResult({ operation_id: operationID, workspace_id: "w1", tab_id: "t1", pane_id: "p1", outcome: "noop" }));
+    const completePane = { operation_id: operationID, workspace_id: "w1", tab_id: "t1", pane_id: "p1", outcome: "applied" };
+    expectBadMessage(() => parseCreateTabResult({ ...completePane, agent_kind: "codex" }));
+    expectBadMessage(() => parseSplitPaneResult({ ...completePane, agent_kind: "claude" }));
     expectBadMessage(() => parseSplitPaneResult({ operation_id: "bad", workspace_id: "w1", tab_id: "t1", pane_id: "p1", outcome: "applied" }));
     expectBadMessage(() => parseSplitPaneResult({ ...{
       operation_id: operationID, workspace_id: "w1", tab_id: "t1", pane_id: "p1", outcome: "applied",

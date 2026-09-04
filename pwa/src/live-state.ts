@@ -1,10 +1,12 @@
 import { NO_OPERATION_CAPABILITIES } from "./lib/operations.ts";
 import { clearAgentTraceCache } from "./lib/agent-trace-cache.ts";
 import { resetPaneView, state } from "./state.ts";
+import { clearBoardPreviews } from "./ui/board-preview.ts";
 
 /** Clear data that belongs to one established daemon session. */
 export function resetLiveConnectionState(): void {
   clearAgentTraceCache();
+  clearBoardPreviews();
   state.live = null;
   state.pushEnabled = null;
   state.pushSubscribed = null;
@@ -28,5 +30,13 @@ export function resetLiveConnectionState(): void {
   state.paneId = "";
   state.deviceList = [];
   state.lastHerdSig = "";
+  state.layouts = [];
+  state.workspaceList = [];
+  state.tabList = [];
+  state.lastLayoutSig = "";
+  state.boardWorkspaceId = "";
+  state.boardTabId = "";
+  state.boardReturn = false;
+  state.boardFitted = false;
   resetPaneView();
 }

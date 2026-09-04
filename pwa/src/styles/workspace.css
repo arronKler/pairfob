@@ -433,6 +433,16 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.workspace-diff-hint {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  flex: none;
+}
+
 .workspace-diff-line {
   display: grid;
   grid-template-columns: 3.2rem 3.2rem minmax(max-content, 1fr);
@@ -440,23 +450,52 @@
   width: max-content;
   min-width: 100%;
 }
+.workspace-diff-line.diff-noteable {
+  grid-template-columns: 1.2rem 2.8rem 2.8rem minmax(max-content, 1fr);
+}
 .diff-line-number { padding: 0 8px; border-right: 1px solid var(--line); color: #647083; text-align: right; user-select: none; }
-.diff-line-text { padding: 0 10px; white-space: pre; }
+.diff-line-text { padding: 0 10px; white-space: pre; user-select: text; }
 .diff-add { background: rgba(70, 214, 140, 0.11); }
 .diff-delete { background: rgba(255, 128, 128, 0.11); }
 .diff-hunk { background: rgba(110, 168, 254, 0.12); color: #9fc3ff; }
 .diff-meta { color: var(--muted); }
 
+.diff-comment-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
 .workspace-diff-line.diff-noteable { cursor: pointer; }
+.workspace-diff-line.diff-noteable:hover { background: rgba(110, 168, 254, 0.1); }
+.workspace-diff-line.diff-noteable:hover .diff-comment-btn,
+.workspace-diff-line.has-note .diff-comment-btn { opacity: 1; }
 .workspace-diff-line.diff-noteable:active { background: rgba(110, 168, 254, 0.2); }
 .workspace-diff-line.has-note { box-shadow: inset 3px 0 0 var(--accent); }
 
 .workspace-diff-note {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  position: sticky;
+  left: 0;
+  z-index: 1;
   box-sizing: border-box;
-  min-width: 100%;
+  width: 100%;
+  max-width: 100%;
   margin: 3px 0 7px;
   padding: 8px 10px;
   border: 1px solid var(--line);
@@ -464,10 +503,19 @@
   border-radius: 8px;
   background: var(--surface);
 }
+.diff-note-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
 .diff-note-mark { flex: none; color: var(--accent); }
 .diff-note-body { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.74rem; line-height: 1.5; }
-.diff-note-actions { display: flex; gap: 4px; flex: none; }
-.diff-note-action { min-width: 44px; min-height: 44px; font-size: 0.7rem; }
+.diff-note-actions { display: flex; gap: 6px; }
+.diff-note-action { flex: 1; min-width: 44px; min-height: 44px; font-size: 0.7rem; }
+
+
 
 .workspace-notes-bar {
   display: flex;
@@ -480,8 +528,29 @@
 }
 .workspace-notes-count { flex: none; color: var(--muted); font-size: 0.74rem; }
 .workspace-notes-hint { flex: 1; min-width: 0; color: var(--warn); font-size: 0.7rem; }
-.workspace-notes-send { flex: none; min-height: 44px; margin-left: auto; }
+.workspace-notes-send { flex: 1; min-width: 0; min-height: 44px; margin-left: auto; }
 .diff-note-modal .operation-field textarea { min-height: 5.5rem; }
+.diff-note-quote {
+  margin: 0 0 4px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: #0e1218;
+  color: var(--muted);
+}
+.diff-note-quote-line {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+.diff-note-quote-text {
+  display: block;
+  overflow-wrap: anywhere;
+  font: 0.74rem/1.45 var(--mono);
+  white-space: pre-wrap;
+}
 
 .workspace-limit {
   margin: 0;
@@ -522,6 +591,13 @@
   .workspace-row { min-height: 44px; }
   .workspace-change { min-height: 50px; }
   .workspace-chrome { padding-right: 16px; padding-left: 16px; }
+  .diff-note-actions { justify-content: flex-end; }
+  .diff-note-action { flex: none; }
+  .workspace-notes-send { flex: none; width: auto; min-width: 11rem; }
+  .diff-comment-btn { opacity: 0; }
+  .workspace-diff-line.diff-noteable:hover .diff-comment-btn,
+  .workspace-diff-line.diff-noteable:focus-within .diff-comment-btn,
+  .workspace-diff-line.has-note .diff-comment-btn { opacity: 1; }
 }
 
 @media (max-width: 430px) {
@@ -529,5 +605,6 @@
   .workspace-branch { max-width: 30vw; }
   .workspace-shell.detail .workspace-branch { display: none; }
   .workspace-diff-line { grid-template-columns: 2.55rem 2.55rem minmax(max-content, 1fr); }
+  .workspace-diff-line.diff-noteable { grid-template-columns: 1.15rem 2.2rem 2.2rem minmax(max-content, 1fr); }
   .diff-line-number { padding: 0 5px; }
 }

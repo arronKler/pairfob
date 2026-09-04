@@ -17,6 +17,7 @@ import { startNewConversation } from "../live-operations";
 import { openSettings } from "../live-settings";
 import { render } from "../paint";
 import { app, state } from "../state";
+import { openBoard } from "./board";
 import {
   appendNotice,
   brandNode,
@@ -129,6 +130,7 @@ function liveActions(): HTMLElement {
     actions.append(create);
   }
   if (state.computers.length > 1) actions.append(button(t("home.computers"), "text-link", openComputers));
+  actions.append(button(t("home.board"), "text-link", () => void openBoard()));
   actions.append(button(t("home.settings"), "text-link", openSettings));
   return actions;
 }
