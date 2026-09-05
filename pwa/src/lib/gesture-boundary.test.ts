@@ -7,6 +7,23 @@ function gesture(window: Window, type: "gesturestart" | "gesturechange"): Event 
 }
 
 describe("legacy iOS gesture boundary", () => {
+  test("a zoomed terminal leaves the whole return-to-1 gesture to the browser", () => {
+    const window = new Window();
+    const document = window.document as unknown as Document;
+    const viewport = { scale: 2 };
+    Object.defineProperty(window, "visualViewport", { value: viewport });
+    const host = document.createElement("section");
+    host.className = "full-terminal-host";
+    document.body.append(host);
+    const dispose = bindLegacyGestureBoundary(document);
+    expect(host.dispatchEvent(gesture(window, "gesturestart"))).toBeTrue();
+    viewport.scale = 1;
+    expect(host.dispatchEvent(gesture(window, "gesturechange"))).toBeTrue();
+    expect(host.dispatchEvent(gesture(window, "gesturestart"))).toBeFalse();
+    expect(host.dispatchEvent(gesture(window, "gesturechange"))).toBeFalse();
+    dispose();
+  });
+
   test("ordinary page content keeps native pinch zoom", () => {
     const window = new Window({ url: "https://pairfob.com/pair" });
     const document = window.document as unknown as Document;

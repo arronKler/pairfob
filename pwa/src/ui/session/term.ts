@@ -1,5 +1,6 @@
 import { lineFillBackground, paintLines, spanCss, type StyledLine } from "../../lib/ansi";
 import { node } from "../../lib/dom";
+import { isPageZoomed } from "../../lib/gesture-boundary";
 import { t } from "../../lib/i18n";
 import { TERMINAL_MAX_COLS, TERMINAL_MAX_ROWS, TERMINAL_MIN_COLS, TERMINAL_MIN_ROWS } from "../../lib/protocol/terminal";
 import { reportMutationError } from "../../mutations";
@@ -157,7 +158,7 @@ function bindTap(term: HTMLElement, onRow: (index: number) => void): void {
   term.addEventListener(
     "pointerdown",
     (event) => {
-      if (!event.isPrimary || state.termSelect) return;
+      if (!event.isPrimary || state.termSelect || isPageZoomed(term.ownerDocument)) return;
       armed = true;
       panned = false;
       startX = event.clientX;
@@ -216,8 +217,8 @@ function bindTap(term: HTMLElement, onRow: (index: number) => void): void {
 }
 
 /**
- * The shell is a fixed-scale PWA, so browser pinch-zoom is off everywhere. Read
- * the two-finger gesture ourselves and move the terminal type scale instead.
+ * Adjust terminal type only at page scale=1; a zoomed page must remain free to
+ * shrink back even when the next gesture starts on a terminal row.
  */
 function bindPinch(term: HTMLElement): void {
   let base = 0;
@@ -229,6 +230,10 @@ function bindPinch(term: HTMLElement): void {
   term.addEventListener(
     "touchstart",
     (event) => {
+      if (isPageZoomed(term.ownerDocument)) {
+        base = 0;
+        return;
+      }
       if (event.touches.length !== 2) return;
       base = spread(event.touches);
       basePx = state.termFontPx;
@@ -238,6 +243,10 @@ function bindPinch(term: HTMLElement): void {
   term.addEventListener(
     "touchmove",
     (event) => {
+      if (isPageZoomed(term.ownerDocument)) {
+        base = 0;
+        return;
+      }
       if (event.touches.length !== 2 || base <= 0) return;
       event.preventDefault();
       const next = clampTermFont(basePx * (spread(event.touches) / base));

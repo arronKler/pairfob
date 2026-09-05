@@ -12,6 +12,7 @@ const {
   FULL_TERM_FONT_MIN,
   FULL_TERM_LINE_HEIGHT,
   FULL_TERM_TARGET_COLS,
+  bindFontPinch,
   clearScreenScale,
   displayGrid,
   frameMatchesGrid,
@@ -34,6 +35,40 @@ const {
 } = await import("./full-terminal-fit.ts");
 
 const cellAt = (fontSize: number) => fontSize * 0.6;
+
+describe("terminal font pinch and page zoom", () => {
+  test("a page-zoom gesture never changes font even on its final scale=1 move", () => {
+    const viewport = { scale: 2 };
+    Object.defineProperty(happy, "visualViewport", { configurable: true, value: viewport });
+    const host = document.createElement("div");
+    let font = 16;
+    const stop = bindFontPinch(host, () => font, (px) => { font = px; });
+    const touch = (type: string, distance: number) => {
+      const event = new happy.Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "touches", { value: [{ clientX: 0, clientY: 0 }, { clientX: distance, clientY: 0 }] });
+      host.dispatchEvent(event as unknown as Event);
+      return event;
+    };
+    try {
+      touch("touchstart", 100);
+      expect(touch("touchmove", 75).defaultPrevented).toBeFalse();
+      viewport.scale = 1;
+      expect(touch("touchmove", 50).defaultPrevented).toBeFalse();
+      expect(font).toBe(16);
+      touch("touchend", 0);
+      touch("touchstart", 100);
+      expect(touch("touchmove", 125).defaultPrevented).toBeTrue();
+      expect(font).toBe(20);
+      touch("touchend", 0);
+      touch("touchstart", 100);
+      touch("touchmove", 80);
+      expect(font).toBe(16);
+    } finally {
+      viewport.scale = 1;
+      stop();
+    }
+  });
+});
 
 describe("complete-terminal fit keeps a web-terminal column count", () => {
   test("a 390px phone stops shrinking at a readable minimum even if 80 columns do not fit", () => {

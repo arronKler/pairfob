@@ -62,6 +62,41 @@ function touchEvent(type: string, touches: Touch[], changedTouches = touches): T
 const source = await Bun.file(new URL("./full-terminal-scroll.ts", import.meta.url)).text();
 
 describe("complete-terminal remote scroll", () => {
+  test("a zoomed page can pan and pinch without remote scroll or terminal clicks", () => {
+    const viewport = { scale: 2 };
+    Object.defineProperty(happy, "visualViewport", { configurable: true, value: viewport });
+    const host = document.createElement("div");
+    const xterm = document.createElement("div");
+    xterm.className = "xterm";
+    host.append(xterm);
+    document.body.append(host);
+    const calls: string[] = [];
+    xterm.addEventListener("mousedown", () => calls.push("click"));
+    const stop = bindHostScroll(host, () => calls.push("scroll"), () => undefined);
+    try {
+      for (const event of [
+        pointer("pointerdown", 80, 240, "touch"),
+        touchEvent("touchstart", [touchPoint(7, 80, 240, host)]),
+        pointer("pointermove", 80, 140, "touch"),
+        touchEvent("touchmove", [touchPoint(7, 80, 140, host)]),
+      ]) {
+        host.dispatchEvent(event);
+        expect(event.defaultPrevented).toBeFalse();
+      }
+      viewport.scale = 1;
+      host.dispatchEvent(pointer("pointerup", 80, 140, "touch"));
+      host.dispatchEvent(touchEvent("touchend", [], [touchPoint(7, 80, 140, host)]));
+      expect(calls).toEqual([]);
+      host.dispatchEvent(touchEvent("touchstart", [touchPoint(8, 80, 240, host)]));
+      host.dispatchEvent(touchEvent("touchmove", [touchPoint(8, 80, 140, host)]));
+      expect(calls).toEqual(["scroll"]);
+    } finally {
+      viewport.scale = 1;
+      stop();
+      host.remove();
+    }
+  });
+
   test("a page is the visible viewport minus one overlap row", () => {
     expect(pageLineCount(24)).toBe(23);
     expect(pageLineCount(1)).toBe(1);

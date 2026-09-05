@@ -24,7 +24,7 @@
   overflow-x: hidden;
   overflow-y: scroll;
   padding: 12px 14px 18px;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   overscroll-behavior: contain;
   overflow-anchor: none;
   -webkit-overflow-scrolling: touch;
@@ -86,7 +86,7 @@
 }
 
 .agent-stream summary {
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 /*

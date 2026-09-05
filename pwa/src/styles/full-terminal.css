@@ -247,6 +247,12 @@
   scrollbar-width: thin;
 }
 
+/* Decide before touchstart: a page zoom must be reversible over the canvas. */
+html.page-zoomed .full-terminal-host,
+html.page-zoomed .full-terminal-host .full-terminal-pan {
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
 .full-terminal-pad {
   flex: 0 0 auto;
   min-width: 0;

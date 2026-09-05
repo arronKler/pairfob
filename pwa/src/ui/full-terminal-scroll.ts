@@ -1,4 +1,5 @@
 import { button, node } from "../lib/dom";
+import { isPageZoomed } from "../lib/gesture-boundary";
 import { t } from "../lib/i18n";
 import { tapAsMouse } from "./full-terminal-input";
 
@@ -120,6 +121,7 @@ export function bindHostScroll(
   };
 
   const onDown = (event: PointerEvent) => {
+    if (event.pointerType !== "mouse" && isPageZoomed(host.ownerDocument)) return;
     if (source !== null || !event.isPrimary || event.button !== 0) return;
     if ((event.target as HTMLElement | null)?.closest?.("button")) return;
     beginGesture(
@@ -132,6 +134,10 @@ export function bindHostScroll(
   };
 
   const onMove = (event: PointerEvent) => {
+    if (event.pointerType !== "mouse" && isPageZoomed(host.ownerDocument)) {
+      resetGesture();
+      return;
+    }
     if (source !== "pointer" || event.pointerId !== pointer) return;
     const wasEngaged = engaged;
     if (!moveGesture(event.clientX, event.clientY)) return;
@@ -148,7 +154,7 @@ export function bindHostScroll(
 
   const onUp = (event: PointerEvent) => {
     if (source !== "pointer" || event.pointerId !== pointer) return;
-    const tap = event.type === "pointerup" && tapAsClick && !engaged
+    const tap = event.type === "pointerup" && tapAsClick && !engaged && !isPageZoomed(host.ownerDocument)
       && (event.pointerType === "touch" || event.pointerType === "pen");
     resetGesture();
     if (tap) tapAsMouse(host, event);
@@ -175,6 +181,10 @@ export function bindHostScroll(
   };
 
   const onTouchStart = (event: TouchEvent) => {
+    if (isPageZoomed(host.ownerDocument)) {
+      resetGesture();
+      return;
+    }
     if (!grabTouch) {
       if (event.touches.length > 1) resetGesture();
       return;
@@ -190,6 +200,10 @@ export function bindHostScroll(
   };
 
   const onTouchMove = (event: TouchEvent) => {
+    if (isPageZoomed(host.ownerDocument)) {
+      resetGesture();
+      return;
+    }
     if (source !== "touch" || touch === null) return;
     if (event.touches.length !== 1) {
       resetGesture();
@@ -205,7 +219,7 @@ export function bindHostScroll(
     if (source !== "touch" || touch === null) return;
     const point = findTouch(event.changedTouches, touch);
     if (!point) return;
-    const tap = tapAsClick && !engaged;
+    const tap = tapAsClick && !engaged && !isPageZoomed(host.ownerDocument);
     resetGesture();
     if (tap) tapAsMouse(host, point);
   };

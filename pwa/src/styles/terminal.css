@@ -84,6 +84,10 @@
   line-height: var(--term-lh);
 }
 
+html.page-zoomed :is(.term, .term-line) {
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
 /*
   Reflow long rows instead of forcing a horizontal drag on a phone.
   Flex items with flex: 0 0 auto size to max-content, so wrap must happen

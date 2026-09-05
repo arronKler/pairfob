@@ -4,6 +4,35 @@ const source = await Bun.file(new URL("./viewport.ts", import.meta.url)).text();
 const { visualViewportFrame } = await import("./viewport.ts");
 
 describe("visualViewportFrame", () => {
+  test("page zoom and pan do not shrink the shell or invent a keyboard", () => {
+    for (const scale of [1.25, 1.7532191276550293, 2, 3]) {
+      expect(visualViewportFrame(844, { height: 844 / scale, offsetTop: 120, scale })).toEqual({
+        top: 0, height: 844, kb: 0,
+      });
+    }
+  });
+
+  test("a keyboard still reduces layout height while the page is zoomed", () => {
+    expect(visualViewportFrame(844, { height: 240, offsetTop: 100, scale: 2 })).toEqual({
+      top: 0, height: 480, kb: 364,
+    });
+    expect(visualViewportFrame(480, { height: 240, offsetTop: 100, scale: 2 })).toEqual({
+      top: 0, height: 480, kb: 0,
+    });
+  });
+
+  test("zoom preserves an existing keyboard pan until the keyboard closes", () => {
+    const keyboard = visualViewportFrame(844, { height: 480, offsetTop: 200, scale: 1 });
+    const zoomed = visualViewportFrame(844, { height: 240, offsetTop: 280, scale: 2 }, keyboard);
+    expect(zoomed).toEqual(keyboard);
+    expect(visualViewportFrame(844, { height: 240, offsetTop: 350, scale: 2 }, zoomed)).toEqual(keyboard);
+    const closed = visualViewportFrame(844, { height: 422, offsetTop: 350, scale: 2 }, zoomed);
+    expect(closed).toEqual({ top: 0, height: 844, kb: 0 });
+    expect(visualViewportFrame(844, { height: 240, offsetTop: 100, scale: 2 }, closed)).toEqual({
+      top: 0, height: 480, kb: 364,
+    });
+  });
+
   test("keyboard overlay with the visual viewport unpanned", () => {
     expect(visualViewportFrame(844, { height: 480, offsetTop: 0 })).toEqual({
       top: 0,

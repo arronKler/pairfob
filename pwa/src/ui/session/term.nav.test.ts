@@ -92,6 +92,34 @@ afterEach(() => {
 });
 
 describe("guided pane no longer overlays earlier output", () => {
+  test("a zoomed Control buffer leaves pinch to the browser and preserves its font", () => {
+    const viewport = { scale: 2 };
+    Object.defineProperty(app.ownerDocument.defaultView!, "visualViewport", { configurable: true, value: viewport });
+    bootGuided();
+    const font = state.termFontPx;
+    const term = app.querySelector<HTMLElement>(".term")!;
+    const touch = (type: string, distance: number) => {
+      const event = new happy.Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "touches", { value: [{ clientX: 0, clientY: 0 }, { clientX: distance, clientY: 0 }] });
+      term.dispatchEvent(event as unknown as Event);
+      return event;
+    };
+    try {
+      touch("touchstart", 100);
+      expect(touch("touchmove", 80).defaultPrevented).toBeFalse();
+      viewport.scale = 1;
+      expect(touch("touchmove", 50).defaultPrevented).toBeFalse();
+      expect(state.termFontPx).toBe(font);
+      touch("touchend", 0);
+      touch("touchstart", 100);
+      expect(touch("touchmove", 140).defaultPrevented).toBeTrue();
+      expect(state.termFontPx).toBeGreaterThan(font);
+    } finally {
+      viewport.scale = 1;
+      state.termFontPx = font;
+    }
+  });
+
   test("the live buffer has no 更早的输出 chip", () => {
     bootGuided();
     expect(app.querySelector(".term-more")).toBeNull();

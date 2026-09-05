@@ -3,6 +3,8 @@
  * usable column count on a phone, and report the on-screen cell size.
  */
 
+import { isPageZoomed } from "../lib/gesture-boundary";
+
 export const FULL_TERM_TARGET_COLS = 80;
 
 export type TermFitMode = "pan" | "fit";
@@ -310,8 +312,8 @@ export function cssCellOf(terminal: object): CellSize | null {
 }
 
 /**
- * Two-finger pinch changes the live type scale. The PWA itself is
- * fixed-scale, so the browser will not do this for us.
+ * Two-finger pinch changes terminal type at page scale=1. A zoomed page keeps
+ * the gesture so it can return to its original size from inside the terminal.
  */
 export function bindFontPinch(
   host: HTMLElement,
@@ -326,11 +328,19 @@ export function bindFontPinch(
     return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
   };
   const onStart = (event: TouchEvent) => {
+    if (isPageZoomed(host.ownerDocument)) {
+      base = 0;
+      return;
+    }
     if (event.touches.length !== 2) return;
     base = spread(event.touches);
     basePx = getFont();
   };
   const onMove = (event: TouchEvent) => {
+    if (isPageZoomed(host.ownerDocument)) {
+      base = 0;
+      return;
+    }
     if (event.touches.length !== 2 || base <= 0) return;
     event.preventDefault();
     const next = clamp(snapFont(basePx * (spread(event.touches) / base)), FULL_TERM_FONT_MIN, FULL_TERM_FONT_MAX);

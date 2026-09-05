@@ -1,15 +1,13 @@
+import { isPageZoomed } from "./lib/gesture-boundary";
+
 export function isDesk(): boolean {
   return window.matchMedia("(min-width: 900px)").matches;
 }
 
 /**
- * Pin fullscreen shells to the visual viewport.
- *
- * iOS overlays the software keyboard instead of shrinking the layout viewport,
- * so `position:fixed; inset:0` stays behind it. `--kb` padding from
- * `innerHeight - vv.height - offsetTop` is 0 when Safari has already shrunk
- * `innerHeight` (or reports a pan) without moving fixed boxes. `offsetTop` and
- * `height` from visualViewport are the visible rectangle.
+ * Fit fullscreen shells above the software keyboard, including iOS focus pan.
+ * Native page zoom changes the visual rectangle too: remove its scale and
+ * preserve the existing focus offset so pinching does not reflow the shell.
  */
 export type ViewportFrame = {
   top: number;
@@ -19,20 +17,36 @@ export type ViewportFrame = {
 
 export function visualViewportFrame(
   innerHeight: number,
-  vv: { height: number; offsetTop: number } | null | undefined,
+  vv: { height: number; offsetTop: number; scale?: number } | null | undefined,
+  previous?: ViewportFrame,
 ): ViewportFrame {
   if (!vv) {
     return { top: 0, height: Math.max(0, Math.round(innerHeight)), kb: 0 };
   }
-  const top = Math.max(0, Math.round(vv.offsetTop));
-  const height = Math.max(0, Math.round(vv.height > 0 ? vv.height : innerHeight));
-  const kb = Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop));
+  // Pinch changes the visible CSS rectangle, not the space available for layout.
+  // Remove its scale and pan before interpreting the remainder as keyboard space.
+  const scale = vv.scale && vv.scale > 0 ? vv.scale : 1;
+  const height = Math.max(0, Math.round(vv.height > 0 ? vv.height * scale : innerHeight));
+  // Keep an existing keyboard focus pan while zooming. Once keyboard space
+  // changes, discard that offset rather than carrying it into the next layout.
+  const zoomTop = previous?.height === height ? previous.top : 0;
+  const top = Math.max(0, Math.round(scale > 1 ? zoomTop : vv.offsetTop));
+  const kb = Math.max(0, Math.round(innerHeight - height - top));
   return { top, height, kb };
 }
 
+let viewportFrame: ViewportFrame | undefined;
+let viewportWidth = 0;
+
 export function applyVisualViewport(): ViewportFrame {
-  if (document.body.classList.contains("lock")) window.scrollTo(0, 0);
-  const frame = visualViewportFrame(window.innerHeight, window.visualViewport);
+  const zoomed = isPageZoomed(document);
+  document.documentElement.classList.toggle("page-zoomed", zoomed);
+  if (!zoomed && document.body.classList.contains("lock")) window.scrollTo(0, 0);
+  const frame = visualViewportFrame(
+    window.innerHeight, window.visualViewport, viewportWidth === window.innerWidth ? viewportFrame : undefined,
+  );
+  viewportFrame = frame;
+  viewportWidth = window.innerWidth;
   const root = document.documentElement.style;
   root.setProperty("--vv-top", `${frame.top}px`);
   root.setProperty("--vv-height", `${frame.height}px`);
@@ -66,9 +80,14 @@ export function scheduleVisualViewport(onResize?: () => void): void {
 }
 
 export function bindVisualViewport(onResize: () => void): void {
+  let height = applyVisualViewport().height;
+  let width = window.innerWidth;
   const resized = (): void => {
-    applyVisualViewport();
-    onResize();
+    const frame = applyVisualViewport();
+    const changed = frame.height !== height || window.innerWidth !== width;
+    height = frame.height;
+    width = window.innerWidth;
+    if (changed) onResize();
   };
   window.visualViewport?.addEventListener("resize", resized);
   window.visualViewport?.addEventListener("scroll", applyVisualViewport);
