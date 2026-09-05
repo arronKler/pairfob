@@ -338,7 +338,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "form.newConversation": "New session",
   "form.createOpen": "Create and open",
   "form.projectDir": "Project directory",
-  "form.kind": "Kind",
+  "form.kind": "Pane type",
   "form.plainTerminal": "Terminal only (no agent)",
   "form.noAgentKinds": "No agent kinds listed. This still creates a terminal session.",
   "form.labelOptional": "Name (optional)",

@@ -266,6 +266,7 @@ type CreateTabCommand struct {
 	WorkspaceID string
 	CWD         string
 	Label       string
+	AgentKind   string `json:",omitempty"`
 }
 
 func (CreateTabCommand) runtimeCommand() {}
@@ -280,7 +281,9 @@ const (
 type SplitPaneCommand struct {
 	WorkspaceID  string
 	TargetPaneID string
+	TargetTabID  string `json:"-"` // Snapshot context, not part of the mutation intent.
 	CWD          string
+	AgentKind    string `json:",omitempty"`
 	Direction    SplitDirection
 	Ratio        *float64
 }

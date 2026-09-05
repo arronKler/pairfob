@@ -455,6 +455,9 @@ func (f *Fake) createConversationLocked(operationID string, command CreateConver
 }
 
 func (f *Fake) createTabLocked(operationID string, command CreateTabCommand) (Receipt, error) {
+	if command.AgentKind != "" && !containsAgent(f.AgentKinds, command.AgentKind) {
+		return notApplied(operationID, unsupported("tab.create", "agent kind is not available"))
+	}
 	if !f.hasWorkspaceLocked(command.WorkspaceID) {
 		return notApplied(operationID, notFoundFault("tab.create", EntityWorkspace, command.WorkspaceID))
 	}
@@ -469,13 +472,20 @@ func (f *Fake) createTabLocked(operationID string, command CreateTabCommand) (Re
 		label = "tab"
 	}
 	f.Snap.Tabs = append(f.Snap.Tabs, Tab{TabID: tabID, WorkspaceID: command.WorkspaceID, Label: label})
-	f.Snap.Panes = append(f.Snap.Panes, Pane{PaneID: paneID, WorkspaceID: command.WorkspaceID, TabID: tabID, Cwd: command.CWD, AgentStatus: "idle"})
+	f.Snap.Panes = append(f.Snap.Panes, Pane{PaneID: paneID, WorkspaceID: command.WorkspaceID, TabID: tabID, Cwd: command.CWD, Agent: command.AgentKind, AgentStatus: "idle"})
 	f.Panes[paneID] = &PaneState{}
 	f.Snap.Layouts = upsertLayout(f.Snap.Layouts, DefaultTabLayout(command.WorkspaceID, tabID, paneID))
-	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: []EntityRef{{Kind: EntityTab, ID: tabID}, {Kind: EntityPane, ID: paneID}}}, nil
+	created := []EntityRef{{Kind: EntityTab, ID: tabID}, {Kind: EntityPane, ID: paneID}}
+	if command.AgentKind != "" {
+		created = append(created, EntityRef{Kind: EntityAgent, ID: generatedAgentName(command.AgentKind, operationID)})
+	}
+	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: created}, nil
 }
 
 func (f *Fake) splitPaneLocked(operationID string, command SplitPaneCommand) (Receipt, error) {
+	if command.AgentKind != "" && !containsAgent(f.AgentKinds, command.AgentKind) {
+		return notApplied(operationID, unsupported("pane.split", "agent kind is not available"))
+	}
 	if f.Panes[command.TargetPaneID] == nil {
 		return notApplied(operationID, notFoundFault("pane.split", EntityPane, command.TargetPaneID))
 	}
@@ -497,10 +507,14 @@ func (f *Fake) splitPaneLocked(operationID string, command SplitPaneCommand) (Re
 	}
 	paneID := fmt.Sprintf("%s:p%d", target.WorkspaceID, f.next)
 	f.next++
-	f.Snap.Panes = append(f.Snap.Panes, Pane{PaneID: paneID, WorkspaceID: target.WorkspaceID, TabID: target.TabID, Cwd: command.CWD, AgentStatus: "idle"})
+	f.Snap.Panes = append(f.Snap.Panes, Pane{PaneID: paneID, WorkspaceID: target.WorkspaceID, TabID: target.TabID, Cwd: command.CWD, Agent: command.AgentKind, AgentStatus: "idle"})
 	f.Panes[paneID] = &PaneState{}
 	f.splitLayout(target, paneID, command.Direction, command.Ratio)
-	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: []EntityRef{{Kind: EntityPane, ID: paneID}}}, nil
+	created := []EntityRef{{Kind: EntityPane, ID: paneID}}
+	if command.AgentKind != "" {
+		created = append(created, EntityRef{Kind: EntityAgent, ID: generatedAgentName(command.AgentKind, operationID)})
+	}
+	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: created}, nil
 }
 
 func (f *Fake) hasWorkspaceLocked(workspaceID string) bool {

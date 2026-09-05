@@ -161,8 +161,8 @@ describe("a created pane opens through the normal pane-open path", () => {
   });
 });
 
-describe("new tabs and splits preserve the frozen terminal-only contract", () => {
-  test("create tab neither renders nor sends agent_kind", async () => {
+describe.each(["", "codex"])("new tabs and splits with pane kind %s", (agentKind) => {
+  test("create tab sends the selected pane kind", async () => {
     boot();
     localStorage.setItem(LAST_AGENT_KIND_KEY, "codex");
     const created: Array<Record<string, unknown>> = [];
@@ -181,14 +181,15 @@ describe("new tabs and splits preserve the frozen terminal-only contract", () =>
       },
     };
     const done = createSelectedTab(state.agents[0]);
-    expect(happy.document.querySelector('select[name="agent_kind"]')).toBeNull();
-    await submitOperationForm();
+    expect(happy.document.querySelector('select[name="agent_kind"]')?.getAttribute("name")).toBe("agent_kind");
+    await submitOperationForm({ agentKind });
     await done;
-    expect(created).toEqual([{ workspace_id: "w1", cwd: "/tmp/demo" }]);
+    expect(created).toEqual([{ workspace_id: "w1", cwd: "/tmp/demo", ...(agentKind ? { agent_kind: agentKind } : {}) }]);
+    expect(localStorage.getItem(LAST_AGENT_KIND_KEY)).toBe(agentKind);
     expect(state.paneId).toBe("p2");
   });
 
-  test("split pane neither renders nor sends agent_kind", async () => {
+  test("split pane sends the selected pane kind", async () => {
     boot();
     localStorage.setItem(LAST_AGENT_KIND_KEY, "codex");
     state.paneId = "p1";
@@ -208,11 +209,71 @@ describe("new tabs and splits preserve the frozen terminal-only contract", () =>
       },
     };
     const done = splitSelectedPane();
-    expect(happy.document.querySelector('select[name="agent_kind"]')).toBeNull();
+    expect(happy.document.querySelector('select[name="agent_kind"]')?.getAttribute("name")).toBe("agent_kind");
+    await submitOperationForm({ agentKind });
+    await done;
+    expect(created).toEqual([{ pane_id: "p1", direction: "right", ratio: 0.5, cwd: "/tmp/demo", ...(agentKind ? { agent_kind: agentKind } : {}) }]);
+    expect(localStorage.getItem(LAST_AGENT_KIND_KEY)).toBe(agentKind);
+    expect(state.paneId).toBe("p2");
+  });
+});
+
+describe.each(["tab", "split"])("%s pane type form", (operation) => {
+  function open(): Promise<void> {
+    state.paneId = "p1";
+    return operation === "tab" ? createSelectedTab() : splitSelectedPane();
+  }
+
+  function kindField(): InstanceType<typeof happy.HTMLSelectElement> {
+    const field = happy.document.querySelector('select[name="agent_kind"]');
+    if (!(field instanceof happy.HTMLSelectElement)) throw new Error("missing pane type");
+    return field;
+  }
+
+  function cancel(): void {
+    const dialog = happy.document.querySelector("dialog.operation-modal");
+    if (!(dialog instanceof happy.HTMLDialogElement)) throw new Error("missing dialog");
+    dialog.close("cancel");
+  }
+
+  test("offers every advertised kind and remembers the last supported choice", async () => {
+    boot();
+    state.agentKinds = ["codex", "claude"];
+    localStorage.setItem(LAST_AGENT_KIND_KEY, "claude");
+    const done = open();
+    expect([...kindField().options].map((option) => option.value)).toEqual(["", "codex", "claude"]);
+    expect(kindField().value).toBe("claude");
+    kindField().value = "codex";
+    cancel();
+    await done;
+    expect(localStorage.getItem(LAST_AGENT_KIND_KEY)).toBe("claude");
+    expect(state.paneId).toBe("p1");
+  });
+
+  test("keeps the terminal type visible when no agents are available", async () => {
+    boot();
+    state.agentKinds = [];
+    localStorage.setItem(LAST_AGENT_KIND_KEY, "codex");
+    const done = open();
+    expect([...kindField().options].map((option) => option.value)).toEqual([""]);
+    expect(kindField().value).toBe("");
     await submitOperationForm();
     await done;
-    expect(created).toEqual([{ pane_id: "p1", direction: "right", ratio: 0.5, cwd: "/tmp/demo" }]);
     expect(state.paneId).toBe("p2");
+  });
+
+  test("rejects an unadvertised kind before creating anything", async () => {
+    boot();
+    const done = open();
+    const option = happy.document.createElement("option");
+    option.value = "unavailable";
+    kindField().append(option);
+    await submitOperationForm({ agentKind: "unavailable" });
+    expect(kindField().getAttribute("aria-invalid")).toBe("true");
+    expect(state.paneId).toBe("p1");
+    expect(localStorage.getItem(LAST_AGENT_KIND_KEY)).toBeNull();
+    cancel();
+    await done;
   });
 });
 

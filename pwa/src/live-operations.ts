@@ -187,7 +187,7 @@ export async function startNewConversation(): Promise<void> {
 export async function createSelectedTab(agent: AgentCard | undefined = selectedAgent()): Promise<void> {
   const session = state.live;
   if (!session || !agent?.workspaceId || !state.operationCapabilities.create_tab) return;
-  const input = await askCreateTab(agent.cwd);
+  const input = await askCreateTab(state.agentKinds, agent.cwd);
   if (!input || state.live !== session) return;
   const workspaceId = agent.workspaceId;
   await runHerdOperation(
@@ -202,7 +202,7 @@ export async function splitSelectedPane(): Promise<void> {
   const session = state.live;
   const selected = selectedAgent();
   if (!session || !selected || !state.operationCapabilities.split_pane) return;
-  const input = await askSplitPane(selected.cwd);
+  const input = await askSplitPane(state.agentKinds, selected.cwd);
   if (!input || state.live !== session) return;
   await runHerdOperation(
     t("op.creatingSplit"),

@@ -980,6 +980,7 @@
                   "session": { "$ref": "#/$defs/session" },
                   "workspace_id": { "$ref": "#/$defs/workspaceId" },
                   "cwd": { "$ref": "#/$defs/path" },
+                  "agent_kind": { "$ref": "#/$defs/agentKind" },
                   "label": { "type": "string", "minLength": 1, "maxLength": 256 }
                 },
                 "additionalProperties": false
@@ -1000,6 +1001,7 @@
                   "pane_id": { "$ref": "#/$defs/paneId" },
                   "direction": { "$ref": "#/$defs/splitDirection" },
                   "cwd": { "$ref": "#/$defs/path" },
+                  "agent_kind": { "$ref": "#/$defs/agentKind" },
                   "ratio": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 }
                 },
                 "additionalProperties": false

@@ -94,3 +94,45 @@ func TestRestoredPendingOperationIsNeverReplayed(t *testing.T) {
 		t.Fatalf("pending receipt=%+v fault=%+v runs=%d err=%v", receipt, fault, runs, err)
 	}
 }
+
+func TestPaneCreationPreservesTerminalOperationFingerprints(t *testing.T) {
+	ratio := 0.5
+	for _, fixture := range []struct {
+		command     runtime.Command
+		withAgent   runtime.Command
+		fingerprint string
+	}{
+		{
+			runtime.CreateTabCommand{WorkspaceID: "w1", CWD: "/repo", Label: "test"},
+			runtime.CreateTabCommand{WorkspaceID: "w1", CWD: "/repo", Label: "test", AgentKind: "codex"},
+			"fed7195292bdac28bd4bf64601a1a6d4ff7244ac4e78d8a0e5a5d2cd1c4d9145",
+		},
+		{
+			runtime.SplitPaneCommand{WorkspaceID: "w1", TargetPaneID: "w1:p1", TargetTabID: "w1:t1", CWD: "/repo", Direction: runtime.SplitRight, Ratio: &ratio},
+			runtime.SplitPaneCommand{WorkspaceID: "w1", TargetPaneID: "w1:p1", TargetTabID: "w1:t1", CWD: "/repo", Direction: runtime.SplitRight, Ratio: &ratio, AgentKind: "codex"},
+			"faff6da2a59ca580df61f6b1e6ccc59e9fe59a9260497c7251b4e7f05ba36a39",
+		},
+	} {
+		// These hashes use the command JSON shape before pane type selection.
+		got, err := operationFingerprint(runtime.DefaultSession(), fixture.command)
+		if err != nil || got != fixture.fingerprint {
+			t.Fatalf("%T changed historical terminal fingerprint: got=%s err=%v", fixture.command, got, err)
+		}
+		changed, err := operationFingerprint(runtime.DefaultSession(), fixture.withAgent)
+		if err != nil || changed == got {
+			t.Fatalf("%T agent kind must be part of the intent: %s err=%v", fixture.withAgent, changed, err)
+		}
+		engine := NewEngine(nil, nil, runtime.NewFake())
+		row := state.Operation{DeviceID: "dev_12345678", OperationID: "op_legacycreate0001", Fingerprint: fixture.fingerprint, Status: "pending", CreatedAt: time.Now().Unix()}
+		if err := engine.restoreOperations([]state.Operation{row}); err != nil {
+			t.Fatal(err)
+		}
+		_, err = engine.executeTrackedMutation(context.Background(), row.DeviceID, runtime.DefaultSession(), row.OperationID, fixture.command, func() (runtime.Receipt, error) {
+			t.Fatal("a restored terminal operation must never run again")
+			return runtime.Receipt{}, nil
+		})
+		if fault, ok := runtime.AsFault(err); !ok || fault.Outcome != runtime.OutcomeUnknown {
+			t.Fatalf("historical operation must remain unknown, not conflict: %v", err)
+		}
+	}
+}

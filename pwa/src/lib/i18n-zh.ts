@@ -336,7 +336,7 @@ export const zh = {
   "form.newConversation": "新建会话",
   "form.createOpen": "新建并打开",
   "form.projectDir": "项目目录",
-  "form.kind": "类型",
+  "form.kind": "Pane 类型",
   "form.plainTerminal": "纯终端（不启动 Agent）",
   "form.noAgentKinds": "电脑没有可用的 Agent 类型，将创建纯终端会话。",
   "form.labelOptional": "名称（可选）",

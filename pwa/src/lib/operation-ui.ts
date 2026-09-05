@@ -6,10 +6,12 @@ import {
   fitOperationPrompt,
   parseWorktrees,
   type CreateConversationInput,
+  type CreateTabInput,
   type CreateWorktreeInput,
   type LayoutDirection,
   type OpenWorktreeInput,
   type SplitDirection,
+  type SplitPaneInput,
   type WorktreeSummary,
   type WorktreeDraft,
 } from "./operations.ts";
@@ -206,14 +208,11 @@ function rememberAgentKind(kind: string): void {
 }
 
 function appendAgentKindField(body: HTMLElement, agentKinds: string[]): void {
-  if (agentKinds.length) {
-    body.append(selectField(t("form.kind"), "agent_kind", [
-      { value: "", label: t("form.plainTerminal") },
-      ...agentKinds.map((kind) => ({ value: kind, label: kind })),
-    ], loadLastAgentKind(agentKinds)));
-    return;
-  }
-  body.append(node("p", "operation-hint", t("form.noAgentKinds")));
+  body.append(selectField(t("form.kind"), "agent_kind", [
+    { value: "", label: t("form.plainTerminal") },
+    ...agentKinds.map((kind) => ({ value: kind, label: kind })),
+  ], loadLastAgentKind(agentKinds)));
+  if (!agentKinds.length) body.append(node("p", "operation-hint", t("form.noAgentKinds")));
 }
 
 function readAgentKind(data: FormData, agentKinds: string[]): FormResult<string | undefined> {
@@ -239,30 +238,36 @@ export function askCreateConversation(agentKinds: string[], defaultCwd = ""): Pr
   });
 }
 
-export function askCreateTab(defaultCwd = ""): Promise<{ cwd?: string; label?: string } | null> {
+export function askCreateTab(agentKinds: string[], defaultCwd = ""): Promise<Omit<CreateTabInput, "workspace_id"> | null> {
   return formDialog(t("form.newTab"), t("form.create"), (body) => {
     body.append(field(t("form.cwdOptional"), "cwd", defaultCwd));
+    appendAgentKindField(body, agentKinds);
     body.append(field(t("form.tabLabelOptional"), "label"));
   }, (data) => {
     const cwd = String(data.get("cwd") || "").trim();
     const label = String(data.get("label") || "").trim();
-    return accepted({ ...(cwd ? { cwd } : {}), ...(label ? { label } : {}) });
+    const kind = readAgentKind(data, agentKinds);
+    if (!kind.ok) return kind;
+    return accepted({ ...(cwd ? { cwd } : {}), ...(label ? { label } : {}), ...(kind.value ? { agent_kind: kind.value } : {}) });
   });
 }
 
-export function askSplitPane(defaultCwd = ""): Promise<{ direction: SplitDirection; cwd?: string; ratio?: number } | null> {
+export function askSplitPane(agentKinds: string[], defaultCwd = ""): Promise<Omit<SplitPaneInput, "pane_id"> | null> {
   return formDialog(t("form.split"), t("form.splitAction"), (body) => {
     body.append(selectField(t("form.place"), "direction", [
       { value: "right", label: t("form.splitRight") },
       { value: "down", label: t("form.splitDown") },
     ]));
     body.append(field(t("form.cwdOptional"), "cwd", defaultCwd));
+    appendAgentKindField(body, agentKinds);
     body.append(node("p", "operation-hint", t("form.splitHint")));
   }, (data) => {
     const direction = String(data.get("direction")) as SplitDirection;
     const cwd = String(data.get("cwd") || "").trim();
     if (!(["right", "down"] as string[]).includes(direction)) return rejected(t("form.needSplit"), "direction");
-    return accepted({ direction, ratio: 0.5, ...(cwd ? { cwd } : {}) });
+    const kind = readAgentKind(data, agentKinds);
+    if (!kind.ok) return kind;
+    return accepted({ direction, ratio: 0.5, ...(cwd ? { cwd } : {}), ...(kind.value ? { agent_kind: kind.value } : {}) });
   });
 }
 

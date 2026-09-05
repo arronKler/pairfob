@@ -134,8 +134,8 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	}
 	for _, op := range []string{"CreateTab", "SplitPane"} {
 		params := paramsByOp[op]
-		if _, ok := params.Properties["agent_kind"]; ok {
-			t.Errorf("%s changed the frozen v1 request surface with agent_kind", op)
+		if _, ok := params.Properties["agent_kind"]; !ok || slices.Contains(params.Required, "agent_kind") {
+			t.Errorf("%s must allow optional agent_kind", op)
 		}
 		if params.AdditionalProperties == nil || *params.AdditionalProperties {
 			t.Errorf("%s params must reject additional properties", op)

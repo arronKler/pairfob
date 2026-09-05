@@ -68,10 +68,10 @@ export type CreateConversationResult = {
   outcome: "applied";
 };
 
-export type CreateTabInput = { workspace_id: string; cwd?: string; label?: string };
+export type CreateTabInput = { workspace_id: string; cwd?: string; label?: string; agent_kind?: string };
 export type SplitDirection = "right" | "down";
 export type LayoutDirection = "left" | "right" | "up" | "down";
-export type SplitPaneInput = { pane_id: string; direction: SplitDirection; cwd?: string; ratio?: number };
+export type SplitPaneInput = { pane_id: string; direction: SplitDirection; cwd?: string; ratio?: number; agent_kind?: string };
 export type PromptAgentInput = { pane_id: string; text: string };
 export type WorktreeScope =
   | { workspace_id: string; cwd?: never }

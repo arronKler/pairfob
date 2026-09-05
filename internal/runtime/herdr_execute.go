@@ -202,6 +202,10 @@ func (h *Herdr) createTab(ctx context.Context, session SessionRef, operationID s
 	if !validResourceID.MatchString(command.WorkspaceID) || (command.CWD != "" && !filepath.IsAbs(command.CWD)) {
 		return notApplied(operationID, invalidFault("tab.create", "workspace id and an absolute cwd are required"))
 	}
+	name, err := h.newPaneAgentName(ctx, session, "tab.create", operationID, command.AgentKind)
+	if err != nil {
+		return failAgentStart(operationID, err)
+	}
 	raw, err := h.call(ctx, session, "tab.create", map[string]any{
 		"workspace_id": command.WorkspaceID, "cwd": optionalString(command.CWD),
 		"label": optionalString(command.Label), "focus": false,
@@ -214,13 +218,14 @@ func (h *Herdr) createTab(ctx context.Context, session SessionRef, operationID s
 		Tab      herdrTabWire  `json:"tab"`
 		RootPane herdrPaneWire `json:"root_pane"`
 	}
-	if err := json.Unmarshal(raw, &created); err != nil || created.Type != "tab_created" || !validResourceID.MatchString(created.Tab.TabID) || !validResourceID.MatchString(created.RootPane.PaneID) {
+	if err := json.Unmarshal(raw, &created); err != nil || created.Type != "tab_created" || !validResourceID.MatchString(created.Tab.TabID) || !validResourceID.MatchString(created.RootPane.PaneID) ||
+		created.Tab.WorkspaceID != command.WorkspaceID || created.RootPane.WorkspaceID != command.WorkspaceID || created.RootPane.TabID != created.Tab.TabID {
 		fault := responseFault("tab.create", "invalid Herdr tab create response", err, true)
 		return receiptForError(operationID, fault), fault
 	}
-	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: []EntityRef{
+	return h.maybeStartAgent(ctx, session, operationID, command.AgentKind, name, created.RootPane.PaneID, []EntityRef{
 		{Kind: EntityTab, ID: created.Tab.TabID}, {Kind: EntityPane, ID: created.RootPane.PaneID},
-	}}, nil
+	}, createdPaneClose{Method: "tab.close", Params: map[string]any{"tab_id": created.Tab.TabID}, Noun: "tab"})
 }
 
 func (h *Herdr) splitPane(ctx context.Context, session SessionRef, operationID string, command SplitPaneCommand) (Receipt, error) {
@@ -229,6 +234,10 @@ func (h *Herdr) splitPane(ctx context.Context, session SessionRef, operationID s
 	}
 	if command.Ratio != nil && (*command.Ratio <= 0 || *command.Ratio >= 1) {
 		return notApplied(operationID, invalidFault("pane.split", "ratio must be between zero and one"))
+	}
+	name, err := h.newPaneAgentName(ctx, session, "pane.split", operationID, command.AgentKind)
+	if err != nil {
+		return failAgentStart(operationID, err)
 	}
 	raw, err := h.call(ctx, session, "pane.split", map[string]any{
 		"workspace_id": optionalString(command.WorkspaceID), "target_pane_id": command.TargetPaneID,
@@ -242,11 +251,14 @@ func (h *Herdr) splitPane(ctx context.Context, session SessionRef, operationID s
 		Type string        `json:"type"`
 		Pane herdrPaneWire `json:"pane"`
 	}
-	if err := json.Unmarshal(raw, &created); err != nil || created.Type != "pane_info" || !validResourceID.MatchString(created.Pane.PaneID) {
+	if err := json.Unmarshal(raw, &created); err != nil || created.Type != "pane_info" || !validResourceID.MatchString(created.Pane.PaneID) || created.Pane.PaneID == command.TargetPaneID ||
+		(command.WorkspaceID != "" && created.Pane.WorkspaceID != command.WorkspaceID) || (command.TargetTabID != "" && created.Pane.TabID != command.TargetTabID) {
 		fault := responseFault("pane.split", "invalid Herdr pane split response", err, true)
 		return receiptForError(operationID, fault), fault
 	}
-	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: []EntityRef{{Kind: EntityPane, ID: created.Pane.PaneID}}}, nil
+	return h.maybeStartAgent(ctx, session, operationID, command.AgentKind, name, created.Pane.PaneID,
+		[]EntityRef{{Kind: EntityPane, ID: created.Pane.PaneID}},
+		createdPaneClose{Method: "pane.close", Params: map[string]any{"pane_id": created.Pane.PaneID}, Noun: "pane"})
 }
 
 func (h *Herdr) promptAgent(ctx context.Context, session SessionRef, operationID string, command PromptAgentCommand) (Receipt, error) {
@@ -472,6 +484,17 @@ type createdPaneClose struct {
 	Method string
 	Params map[string]any
 	Noun   string
+}
+
+func (h *Herdr) newPaneAgentName(ctx context.Context, session SessionRef, operation, operationID, kind string) (string, error) {
+	if kind == "" {
+		return "", nil
+	}
+	kinds, err := h.agentKinds(ctx, session)
+	if err != nil {
+		return "", err
+	}
+	return agentStartName(kinds, operation, operationID, kind, "")
 }
 
 func agentStartName(kinds []AgentKind, operation, operationID, kind, name string) (string, error) {

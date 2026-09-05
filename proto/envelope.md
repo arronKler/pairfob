@@ -29,6 +29,15 @@ Terminal frames are bounded to 4 MiB and split into ordered 96 KiB plaintext
 parts. Terminal writes carry a fresh `operation_id` and a controller-local
 monotonic sequence; uncertain writes are never automatically replayed.
 
+Pane creation adds optional `agent_kind` to `CreateTab` and `SplitPane`, using
+the same kind values advertised by `GetConfig.agent_kinds` as `CreateConversation`.
+Omitting it creates a plain terminal. A supplied kind is validated before
+creation and started on the new pane before success is returned. Definite start
+failure removes only the new tab or pane; an uncertain outcome is never replayed
+or automatically removed. Success responses retain `createdPaneResult`.
+This extension requires an updated daemon: older daemons reject the new field,
+and clients must not retry without it or silently create a different pane type.
+
 Canonical bytes, the 8-character pairing-code work example `7K3M9H2P`, Argon2id, SPAKE2+, and DeviceHello are frozen in `pairfob-vectors.json` and the Go/TS implementations that emit it.
 
 Golden vectors in `pairfob-vectors.json` are produced by `go run ./cmd/genvectors` from shipped Go crypto (not a second oracle). Tests in Go (`internal/crypto/spake2plus`, `internal/crypto/hkdfk`, `internal/crypto/aead`, `internal/crypto/sessionkeys`, `internal/crypto/canon`) and TS (`pwa/src/lib/protocol/vectors.test.ts`) must call those shipped functions and compare bit-identical output. Fields cover `pair_ref_hex`, 8-character `normalized_s`, Argon2id `w0`/`w1`/`L`, RFC 9383 SPAKE shares + `k_shared`, HKDF info `pairfob-v1/sas|pair-*|sess-*`, FWD AEAD (`aead_ping`, `max_plain=262116`), and DeviceHello transcripts/proofs/Ed25519.

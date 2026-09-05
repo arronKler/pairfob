@@ -162,13 +162,26 @@ func (e *Engine) rpcCreateConversation(s *sess, id string, params json.RawMessag
 	e.reply(s, id, result)
 }
 
+// An omitted kind creates a terminal; a supplied kind must be a valid string.
+type optionalAgentKind string
+
+func (kind *optionalAgentKind) UnmarshalJSON(raw []byte) error {
+	var value string
+	if json.Unmarshal(raw, &value) != nil || !agentKind.MatchString(value) {
+		return errors.New("invalid agent_kind")
+	}
+	*kind = optionalAgentKind(value)
+	return nil
+}
+
 func (e *Engine) rpcCreateTab(s *sess, id string, params json.RawMessage) {
 	var p struct {
-		Session     *string `json:"session"`
-		OperationID string  `json:"operation_id"`
-		WorkspaceID string  `json:"workspace_id"`
-		CWD         string  `json:"cwd"`
-		Label       string  `json:"label"`
+		Session     *string           `json:"session"`
+		OperationID string            `json:"operation_id"`
+		WorkspaceID string            `json:"workspace_id"`
+		CWD         string            `json:"cwd"`
+		Label       string            `json:"label"`
+		AgentKind   optionalAgentKind `json:"agent_kind"`
 	}
 	if badParams(params, &p) || invalidSession(p.Session) || !validID(p.WorkspaceID) || !validMaybePath(p.CWD) || !validOptionalText(p.Label, maxLabelBytes) {
 		e.replyErr(s, id, "invalid_argument", "invalid create tab params")
@@ -181,7 +194,7 @@ func (e *Engine) rpcCreateTab(s *sess, id string, params json.RawMessage) {
 		}
 		p.CWD, _ = resolvedPath(p.CWD)
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.CreateTabCommand{WorkspaceID: p.WorkspaceID, CWD: p.CWD, Label: p.Label}, "workspace_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.CreateTabCommand{WorkspaceID: p.WorkspaceID, CWD: p.CWD, Label: p.Label, AgentKind: string(p.AgentKind)}, "workspace_not_found")
 	if !ok {
 		return
 	}
@@ -199,6 +212,7 @@ func (e *Engine) rpcSplitPane(s *sess, id string, params json.RawMessage) {
 		Direction   runtime.SplitDirection `json:"direction"`
 		CWD         string                 `json:"cwd"`
 		Ratio       *float64               `json:"ratio"`
+		AgentKind   optionalAgentKind      `json:"agent_kind"`
 	}
 	if badParams(params, &p) || invalidSession(p.Session) || !validID(p.PaneID) || (p.Direction != runtime.SplitRight && p.Direction != runtime.SplitDown) || !validMaybePath(p.CWD) || (p.Ratio != nil && (*p.Ratio <= 0 || *p.Ratio >= 1)) {
 		e.replyErr(s, id, "invalid_argument", "invalid split pane params")
@@ -220,7 +234,7 @@ func (e *Engine) rpcSplitPane(s *sess, id string, params json.RawMessage) {
 		}
 		p.CWD, _ = resolvedPath(p.CWD)
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.SplitPaneCommand{WorkspaceID: pane.WorkspaceID, TargetPaneID: p.PaneID, CWD: p.CWD, Direction: p.Direction, Ratio: p.Ratio}, "pane_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.SplitPaneCommand{WorkspaceID: pane.WorkspaceID, TargetPaneID: p.PaneID, TargetTabID: pane.TabID, CWD: p.CWD, Direction: p.Direction, Ratio: p.Ratio, AgentKind: string(p.AgentKind)}, "pane_not_found")
 	if !ok {
 		return
 	}
