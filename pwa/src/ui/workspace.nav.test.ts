@@ -1,5 +1,5 @@
 import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 
 const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
 const globals = globalThis as unknown as Record<string, unknown>;
@@ -22,8 +22,10 @@ happy.document.body.innerHTML = '<main id="app"></main>';
 const { app, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderWorkspace } = await import("./workspace.ts");
-const { enterWorkspace, loadGitDiff, loadWorkspaceFile, workspaceModel, WORKSPACE_PENDING_DELAY_MS, clearWorkspacePendingReveal } = await import("../workspace.ts");
+const { enterWorkspace, leaveWorkspace, loadDirectory, loadGitDiff, loadWorkspaceFile, refreshWorkspace, workspaceModel, WORKSPACE_PENDING_DELAY_MS, clearWorkspacePendingReveal } = await import("../workspace.ts");
 const { ProtocolError } = await import("../lib/protocol/errors.ts");
+const { diffNoteScope, upsertDiffNote, diffNotes, clearAllDiffNotes } = await import("../lib/diff-notes.ts");
+const { WORKSPACE_CACHE_TTL_MS } = await import("../lib/workspace-cache.ts");
 
 const revision = "a".repeat(64);
 
@@ -81,6 +83,16 @@ function liveFixture() {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function addSibling(): void {
+  state.agents.push({ ...state.agents[0]!, paneId: "p2" });
+}
+
 function buttonNamed(label: string): HTMLButtonElement {
   const found = [...app.querySelectorAll("button")].find((item) => item.getAttribute("aria-label") === label || item.textContent?.trim().includes(label));
   if (!found) throw new Error(`missing button ${label}: ${app.innerHTML.slice(0, 500)}`);
@@ -124,6 +136,7 @@ async function boot(live = liveFixture()): Promise<void> {
 
 afterEach(() => {
   clearWorkspacePendingReveal();
+  clearAllDiffNotes();
   for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
   state.live = null;
   state.screen = "home";
@@ -133,6 +146,171 @@ afterEach(() => {
 });
 
 describe("mobile workspace navigation", () => {
+  test("shares directory data across panes while navigation and diff notes remain independent", async () => {
+    const live = liveFixture();
+    const open = spyOn(live, "workspaceOpen");
+    const list = spyOn(live, "workspaceList");
+    const status = spyOn(live, "gitStatus");
+    const read = spyOn(live, "workspaceRead");
+    const diff = spyOn(live, "gitDiff");
+    await boot(live);
+    addSibling();
+    await loadDirectory("src");
+    await loadWorkspaceFile("src/app.ts");
+    await loadGitDiff("src/app.ts", "worktree");
+    upsertDiffNote({ path: "src/app.ts", layer: "worktree", side: "new", line: 1, snippet: "true" }, "p1 comment");
+    expect(diffNotes()).toHaveLength(1);
+
+    await enterWorkspace("p2");
+    expect(workspaceModel.directory).toBe("");
+    expect(workspaceModel.view).toBe("browser");
+    await loadDirectory("src");
+    await loadWorkspaceFile("src/app.ts");
+    await loadGitDiff("src/app.ts", "worktree");
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(status).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(diff).toHaveBeenCalledTimes(1);
+    expect(diffNoteScope()?.paneId).toBe("p2");
+    expect(diffNotes()).toHaveLength(0);
+    leaveWorkspace();
+    expect(state.paneId).toBe("p2");
+    await enterWorkspace("p1");
+    expect(workspaceModel.directory).toBe("src");
+    expect(workspaceModel.view).toBe("diff");
+    expect(diffNoteScope()?.paneId).toBe("p1");
+    expect(diffNotes()[0]?.body).toBe("p1 comment");
+    expect(diff).toHaveBeenCalledTimes(1);
+  });
+
+  test("joins an in-flight file read after switching to another pane in the same root", async () => {
+    const live = liveFixture();
+    const pending = deferred<Awaited<ReturnType<typeof live.workspaceRead>>>();
+    const file = await live.workspaceRead();
+    const read = spyOn(live, "workspaceRead").mockImplementation(() => pending.promise);
+    await boot(live);
+    addSibling();
+    const first = loadWorkspaceFile("src/app.ts");
+    await enterWorkspace("p2");
+    const second = loadWorkspaceFile("src/app.ts");
+    await settle();
+    expect(read).toHaveBeenCalledTimes(1);
+    pending.resolve(file);
+    await Promise.all([first, second]);
+    expect(workspaceModel.paneId).toBe("p2");
+    expect(workspaceModel.file?.content).toContain("ready = true");
+  });
+
+  test("revalidates expired diff content while keeping the cached preview visible", async () => {
+    const live = liveFixture();
+    const diff = await live.gitDiff("p1", "src/app.ts", "worktree");
+    const now = Date.now();
+    const clock = spyOn(Date, "now").mockReturnValue(now);
+    try {
+      await boot(live);
+      addSibling();
+      await loadGitDiff("src/app.ts", "worktree");
+      clock.mockReturnValue(now + WORKSPACE_CACHE_TTL_MS);
+      const pending = deferred<typeof diff>();
+      const read = spyOn(live, "gitDiff").mockImplementation(() => pending.promise);
+      await enterWorkspace("p2");
+      const loading = loadGitDiff("src/app.ts", "worktree");
+      expect(workspaceModel.diff?.revision).toBe(revision);
+      expect(app.querySelector(".workspace-diff-line")).toBeTruthy();
+      expect(app.querySelector(".workspace-diff-pending")).toBeNull();
+      expect(diffNoteScope()?.paneId).toBe("p2");
+      pending.resolve({ ...diff, revision: "b".repeat(64), patch: "@@ -1 +1 @@\n-old\n+new\n" });
+      await loading;
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(app.querySelector(".diff-add")?.textContent).toContain("new");
+      expect(diffNoteScope()?.revision).toBe("b".repeat(64));
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("refreshing one pane invalidates data reused by its sibling", async () => {
+    const live = liveFixture();
+    const read = spyOn(live, "workspaceRead");
+    await boot(live);
+    addSibling();
+    await loadWorkspaceFile("src/app.ts");
+    await enterWorkspace("p2");
+    const updated = { ...await liveFixture().workspaceRead(), content: "updated" };
+    read.mockImplementation(async () => updated);
+    await refreshWorkspace();
+    await enterWorkspace("p1");
+    expect(workspaceModel.file?.content).toBe("updated");
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  test("a pane moving directories does not restore its previous root's preview", async () => {
+    const live = liveFixture();
+    await boot(live);
+    await loadWorkspaceFile("src/app.ts");
+    state.agents[0]!.cwd = "/other";
+    const descriptor = await live.workspaceOpen();
+    live.workspaceOpen = async () => ({ ...descriptor, root: "/other" });
+    await enterWorkspace("p1");
+    expect(workspaceModel.descriptor?.root).toBe("/other");
+    expect(workspaceModel.view).toBe("browser");
+    expect(workspaceModel.file).toBeNull();
+  });
+
+  test("restores cached directory pages once and stops restoration after navigation", async () => {
+    const live = liveFixture();
+    const firstPage = { ...await live.workspaceList("p1"), next_cursor: "120" as string | null };
+    const secondPage = { ...await live.workspaceList("p1", "src"), path: "" };
+    const list = spyOn(live, "workspaceList").mockImplementation(async (_pane, path = "", ...rest: unknown[]) => {
+      if (path) return { ...secondPage, path };
+      return rest[0] ? secondPage : firstPage;
+    });
+    await boot(live);
+    await loadDirectory("", true);
+    leaveWorkspace();
+    await enterWorkspace("p1");
+    expect(workspaceModel.entries.map((entry) => entry.path)).toEqual(["src", "src/app.ts"]);
+    expect(list).toHaveBeenCalledTimes(2);
+
+    const now = Date.now();
+    const clock = spyOn(Date, "now").mockReturnValue(now + WORKSPACE_CACHE_TTL_MS);
+    try {
+      const pending = deferred<typeof firstPage>();
+      list.mockImplementation(async (_pane, path = "") => path ? { ...secondPage, path } : pending.promise);
+      const opening = enterWorkspace("p1");
+      await settle();
+      await loadDirectory("src");
+      pending.resolve(firstPage);
+      await opening;
+      expect(workspaceModel.directory).toBe("src");
+      expect(workspaceModel.entries.map((entry) => entry.path)).toEqual(["src/app.ts"]);
+      expect(list).toHaveBeenCalledTimes(4);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("finishing the initial status load does not clear a newer file's pending state", async () => {
+    const live = liveFixture();
+    const status = await live.gitStatus();
+    const file = await live.workspaceRead();
+    const pendingStatus = deferred<typeof status>();
+    const pendingFile = deferred<typeof file>();
+    live.gitStatus = () => pendingStatus.promise;
+    live.workspaceRead = () => pendingFile.promise;
+    prepare(live);
+    const opening = enterWorkspace("p1");
+    await settle();
+    const reading = loadWorkspaceFile("src/app.ts");
+    pendingStatus.resolve(status);
+    await opening;
+    expect(workspaceModel.loading).toBeTrue();
+    pendingFile.resolve(file);
+    await reading;
+    expect(workspaceModel.loading).toBeFalse();
+  });
+
   test("drills into a directory and opens a file as a page", async () => {
     await boot();
     expect(state.screen).toBe("workspace");
@@ -154,10 +332,7 @@ describe("mobile workspace navigation", () => {
     type FileResult = Awaited<ReturnType<ReturnType<typeof liveFixture>["workspaceRead"]>>;
     let release!: (value: FileResult) => void;
     const held = new Promise<FileResult>((resolve) => { release = resolve; });
-    state.live = {
-      ...liveFixture(),
-      workspaceRead: async () => held,
-    } as unknown as typeof state.live;
+    state.live!.workspaceRead = async () => held;
 
     const load = loadWorkspaceFile("src/app.ts");
     expect(app.querySelector(".workspace-file-pending")).toBeNull();
@@ -199,10 +374,7 @@ describe("mobile workspace navigation", () => {
     let resolveFast!: (value: FileResult) => void;
     const slow = new Promise<FileResult>((resolve) => { resolveSlow = resolve; });
     const fast = new Promise<FileResult>((resolve) => { resolveFast = resolve; });
-    state.live = {
-      ...liveFixture(),
-      workspaceRead: async (_paneId: string, path: string) => path === "slow.ts" ? slow : fast,
-    } as unknown as typeof state.live;
+    state.live!.workspaceRead = async (_paneId: string, path: string) => path === "slow.ts" ? slow : fast;
 
     const slowLoad = loadWorkspaceFile("slow.ts");
     const fastLoad = loadWorkspaceFile("fast.ts");
@@ -333,7 +505,7 @@ describe("mobile workspace navigation", () => {
 
     buttonNamed("刷新工作区").click();
     await settle();
-    expect(calls).toEqual({ open: 1, list: 2, read: 2, status: 2 });
+    expect(calls).toEqual({ open: 2, list: 3, read: 2, status: 2 });
   });
 
   test("a cold file list uses row skeletons instead of empty copy", async () => {
@@ -386,10 +558,7 @@ describe("mobile workspace navigation", () => {
     type DiffResult = Awaited<ReturnType<ReturnType<typeof liveFixture>["gitDiff"]>>;
     let release!: (value: DiffResult) => void;
     const held = new Promise<DiffResult>((resolve) => { release = resolve; });
-    state.live = {
-      ...liveFixture(),
-      gitDiff: async () => held,
-    } as unknown as typeof state.live;
+    state.live!.gitDiff = async () => held;
 
     const load = loadGitDiff("src/app.ts", "worktree");
     await waitForPending();

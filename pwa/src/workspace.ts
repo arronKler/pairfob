@@ -5,9 +5,11 @@ import type {
   GitLayer,
   GitStatus,
   WorkspaceDescriptor,
+  WorkspaceDirectoryPage,
   WorkspaceEntry,
   WorkspaceFile,
 } from "./lib/workspace";
+import { WorkspaceReadCache, type WorkspaceScope } from "./lib/workspace-cache";
 import { render } from "./paint";
 import { clearNotice, messageOf, state } from "./state";
 import { ProtocolError } from "./lib/protocol/errors";
@@ -69,9 +71,12 @@ export const WORKSPACE_PENDING_DELAY_MS = 180;
 
 let requestVersion = 0;
 let contentVersion = 0;
+let directoryVersion = 0;
 let statusVersion = 0;
 let branchesVersion = 0;
 let workspaceSession: NonNullable<typeof state.live> | null = null;
+let workspaceScope: WorkspaceScope | null = null;
+let directoryPageCount = 1;
 let pendingRevealToken = 0;
 let pendingRevealTimer: ReturnType<typeof setTimeout> | null = null;
 let workspacePendingReveal = false;
@@ -79,8 +84,23 @@ let workspacePendingReveal = false;
 export function isWorkspacePendingReveal(): boolean {
   return workspacePendingReveal;
 }
-const workspaceCache = new WeakMap<NonNullable<typeof state.live>, Map<string, WorkspaceModel>>();
+type WorkspaceNavigation = {
+  root: string;
+  directoryPageCount: number;
+  navigation: Pick<WorkspaceModel, "tab" | "view" | "directory" | "detailPath" | "diffLayer" | "changeLimit" | "changeGroupsExpanded">;
+};
+const workspaceCache = new WeakMap<NonNullable<typeof state.live>, Map<string, WorkspaceNavigation>>();
+const readCaches = new WeakMap<NonNullable<typeof state.live>, WorkspaceReadCache>();
 const MAX_CACHED_WORKSPACES = 6;
+
+function readCache(session: NonNullable<typeof state.live>): WorkspaceReadCache {
+  let cache = readCaches.get(session);
+  if (!cache) {
+    cache = new WorkspaceReadCache(session, (paneId) => state.live === session ? state.agents.find((pane) => pane.paneId === paneId)?.cwd : undefined);
+    readCaches.set(session, cache);
+  }
+  return cache;
+}
 
 function workspaceError(error: unknown): string {
   if (error instanceof ProtocolError && error.code === "unknown_op") return t("workspace.unsupported");
@@ -91,7 +111,7 @@ function current(version: number, session: typeof state.live, paneId = workspace
   return version === requestVersion && session !== null && state.live === session && workspaceModel.paneId === paneId;
 }
 
-function cachedModel(session: NonNullable<typeof state.live>, paneId: string): WorkspaceModel | null {
+function cachedModel(session: NonNullable<typeof state.live>, paneId: string): WorkspaceNavigation | null {
   const cache = workspaceCache.get(session);
   const cached = cache?.get(paneId);
   if (!cache || !cached) return null;
@@ -101,7 +121,7 @@ function cachedModel(session: NonNullable<typeof state.live>, paneId: string): W
 }
 
 function cacheCurrentModel(): void {
-  if (!workspaceSession || !workspaceModel.paneId || workspaceModel.loading) return;
+  if (!workspaceSession || !workspaceModel.paneId || !workspaceModel.descriptor) return;
   let cache = workspaceCache.get(workspaceSession);
   if (!cache) {
     cache = new Map();
@@ -109,29 +129,23 @@ function cacheCurrentModel(): void {
   }
   cache.delete(workspaceModel.paneId);
   cache.set(workspaceModel.paneId, {
-    ...workspaceModel,
-    loading: false,
-    loadingMore: false,
-    loadingBranches: false,
+    root: workspaceModel.descriptor.root,
+    navigation: {
+      tab: workspaceModel.tab,
+      view: workspaceModel.view,
+      directory: workspaceModel.directory,
+      detailPath: workspaceModel.detailPath,
+      diffLayer: workspaceModel.diffLayer,
+      changeLimit: workspaceModel.changeLimit,
+      changeGroupsExpanded: { ...workspaceModel.changeGroupsExpanded },
+    },
+    directoryPageCount,
   });
   while (cache.size > MAX_CACHED_WORKSPACES) {
     const oldest = cache.keys().next().value;
     if (oldest === undefined) break;
     cache.delete(oldest);
   }
-}
-
-function restoreCachedModel(session: NonNullable<typeof state.live>, paneId: string, returnView: WorkspaceReturnView): boolean {
-  const cached = cachedModel(session, paneId);
-  if (!cached) return false;
-  requestVersion++;
-  contentVersion++;
-  statusVersion++;
-  branchesVersion++;
-  workspaceSession = session;
-  Object.assign(workspaceModel, cached, { returnView });
-  bindDiffNotes(session, paneId, cached.diff);
-  return true;
 }
 
 export function clearWorkspacePendingReveal(): void {
@@ -163,9 +177,12 @@ function finishWorkspaceLoad(): void {
 function reset(paneId: string, returnView: WorkspaceReturnView): void {
   requestVersion++;
   contentVersion++;
+  directoryVersion++;
   statusVersion++;
   branchesVersion++;
   clearWorkspacePendingReveal();
+  workspaceScope = null;
+  directoryPageCount = 1;
   Object.assign(workspaceModel, {
     paneId,
     returnView,
@@ -196,28 +213,36 @@ function reset(paneId: string, returnView: WorkspaceReturnView): void {
 export async function enterWorkspace(
   paneId = state.paneId,
   returnView: WorkspaceReturnView = state.fullTerminal ? "full" : state.agentChat ? "agent" : "guided",
+  force = false,
 ): Promise<void> {
   const session = state.live;
   if (!session || !paneId) return;
   cacheCurrentModel();
-  if (restoreCachedModel(session, paneId, returnView)) {
-    clearWorkspacePendingReveal();
-    clearNotice();
-    state.screen = "workspace";
-    render();
-    return;
-  }
+  const cached = cachedModel(session, paneId);
   workspaceSession = session;
   reset(paneId, returnView);
   clearNotice();
   state.screen = "workspace";
   render();
   const version = requestVersion;
+  let initialContentRequest = contentVersion;
   try {
-    const descriptor = await session.workspaceOpen(paneId);
+    const scope = await readCache(session).open(paneId, force);
     if (!current(version, session, paneId)) return;
+    workspaceScope = scope;
+    const descriptor = scope.descriptor;
     workspaceModel.descriptor = descriptor;
-    const tasks: Promise<void>[] = [loadDirectory("", false, version)];
+    let pages = 1;
+    if (cached?.root === descriptor.root) {
+      Object.assign(workspaceModel, cached.navigation);
+      if (!force) pages = cached.directoryPageCount;
+    }
+    const detail = workspaceModel.view !== "browser";
+    const tasks: Promise<void>[] = [];
+    if (workspaceModel.view === "file") tasks.push(loadWorkspaceFile(workspaceModel.detailPath));
+    else if (workspaceModel.view === "diff") tasks.push(loadGitDiff(workspaceModel.detailPath, workspaceModel.diffLayer));
+    tasks.push(restoreDirectory(workspaceModel.directory, pages, version, detail));
+    initialContentRequest = contentVersion;
     if (descriptor.features.git_status) tasks.push(loadStatus(version));
     await Promise.all(tasks);
   } catch (error) {
@@ -225,9 +250,20 @@ export async function enterWorkspace(
     workspaceModel.error = workspaceError(error);
   } finally {
     if (current(version, session, paneId)) {
-      finishWorkspaceLoad();
+      if (initialContentRequest === contentVersion) finishWorkspaceLoad();
       render();
     }
+  }
+}
+
+async function restoreDirectory(path: string, pages: number, version: number, preserveDetail: boolean): Promise<void> {
+  for (let page = 0; page < pages; page++) {
+    const loading = loadDirectory(path, page > 0, version, preserveDetail);
+    const directoryRequest = directoryVersion;
+    const contentRequest = contentVersion;
+    await loading;
+    if (version !== requestVersion || directoryRequest !== directoryVersion || contentRequest !== contentVersion
+      || workspaceModel.directory !== path || !workspaceModel.nextCursor || workspaceModel.error) return;
   }
 }
 
@@ -240,6 +276,7 @@ export function leaveWorkspace(): void {
   const session = state.live;
   requestVersion++;
   contentVersion++;
+  directoryVersion++;
   statusVersion++;
   branchesVersion++;
   clearWorkspacePendingReveal();
@@ -263,18 +300,22 @@ export function leaveWorkspace(): void {
   render();
 }
 
-export async function loadDirectory(path: string, append = false, version = requestVersion): Promise<void> {
+export async function loadDirectory(path: string, append = false, version = requestVersion, preserveDetail = false): Promise<void> {
   const session = state.live;
   const paneId = workspaceModel.paneId;
-  if (!session || !paneId) return;
+  const scope = workspaceScope;
+  if (!session || !paneId || !scope) return;
   const cursor = append ? workspaceModel.nextCursor ?? "" : "";
   if (append && !cursor) return;
-  const contentRequest = ++contentVersion;
+  const contentRequest = preserveDetail ? contentVersion : ++contentVersion;
+  const directoryRequest = ++directoryVersion;
+  const active = () => current(version, session, paneId) && directoryRequest === directoryVersion && (preserveDetail || contentRequest === contentVersion);
   const previousDirectory = workspaceModel.directory;
+  const previousEntries = workspaceModel.entries;
   const jumped = !append && path !== workspaceModel.directory;
   workspaceModel.error = "";
   workspaceModel.loadingMore = append;
-  if (!append) workspaceModel.loading = true;
+  if (!append && !preserveDetail) workspaceModel.loading = true;
   if (jumped) {
     workspaceModel.directory = path;
     workspaceModel.entries = [];
@@ -283,28 +324,36 @@ export async function loadDirectory(path: string, append = false, version = requ
   } else if (!append && !workspaceModel.entries.length) {
     armPendingReveal();
   }
-  render();
-  try {
-    const page = await session.workspaceList(paneId, path, cursor, 120);
-    if (!current(version, session, paneId) || contentRequest !== contentVersion) return;
+  const apply = (page: WorkspaceDirectoryPage) => {
     workspaceModel.directory = page.path;
-    workspaceModel.entries = append ? [...workspaceModel.entries, ...page.entries] : page.entries;
+    workspaceModel.entries = append ? [...previousEntries, ...page.entries] : page.entries;
     workspaceModel.nextCursor = page.next_cursor;
     workspaceModel.directoryTruncated = page.truncated;
-    if (!append) {
+    if (!append && !preserveDetail) {
       workspaceModel.file = null;
       workspaceModel.diff = null;
       workspaceModel.detailPath = "";
       workspaceModel.view = "browser";
+      adoptDiffNoteScope(null);
     }
+  };
+  const read = scope.directory(path, cursor);
+  if (read.cached) apply(read.cached);
+  render();
+  try {
+    const page = await read.value;
+    if (!active()) return;
+    apply(page);
+    directoryPageCount = append ? directoryPageCount + 1 : 1;
   } catch (error) {
-    if (current(version, session, paneId) && contentRequest === contentVersion) {
+    if (active()) {
       workspaceModel.error = workspaceError(error);
       if (jumped) workspaceModel.directory = previousDirectory;
     }
   } finally {
-    if (current(version, session, paneId) && contentRequest === contentVersion) {
-      finishWorkspaceLoad();
+    if (active()) {
+      if (!preserveDetail) finishWorkspaceLoad();
+      workspaceModel.loadingMore = false;
       render();
     }
   }
@@ -313,7 +362,8 @@ export async function loadDirectory(path: string, append = false, version = requ
 export async function loadWorkspaceFile(path: string): Promise<void> {
   const session = state.live;
   const paneId = workspaceModel.paneId;
-  if (!session || !paneId) return;
+  const scope = workspaceScope;
+  if (!session || !paneId || !scope) return;
   const version = requestVersion;
   const contentRequest = ++contentVersion;
   const keep = workspaceModel.file?.path === path;
@@ -325,9 +375,12 @@ export async function loadWorkspaceFile(path: string): Promise<void> {
     workspaceModel.file = null;
     armPendingReveal();
   }
+  const read = scope.file(path);
+  if (read.cached) workspaceModel.file = read.cached;
+  adoptDiffNoteScope(null);
   render();
   try {
-    const file = await session.workspaceRead(paneId, path);
+    const file = await read.value;
     if (current(version, session, paneId) && contentRequest === contentVersion) workspaceModel.file = file;
   } catch (error) {
     if (current(version, session, paneId) && contentRequest === contentVersion) workspaceModel.error = workspaceError(error);
@@ -342,10 +395,13 @@ export async function loadWorkspaceFile(path: string): Promise<void> {
 export async function loadStatus(version = requestVersion): Promise<void> {
   const session = state.live;
   const paneId = workspaceModel.paneId;
-  if (!session || !paneId || workspaceModel.descriptor?.features.git_status === false) return;
+  const scope = workspaceScope;
+  if (!session || !paneId || !scope || workspaceModel.descriptor?.features.git_status === false) return;
   const statusRequest = ++statusVersion;
+  const read = scope.status();
+  if (read.cached) workspaceModel.status = read.cached;
   try {
-    const status = await session.gitStatus(paneId);
+    const status = await read.value;
     if (current(version, session, paneId) && statusRequest === statusVersion) workspaceModel.status = status;
   } catch (error) {
     if (current(version, session, paneId) && statusRequest === statusVersion) workspaceModel.error = workspaceError(error);
@@ -355,27 +411,14 @@ export async function loadStatus(version = requestVersion): Promise<void> {
 }
 
 export async function refreshWorkspace(): Promise<void> {
-  const version = requestVersion;
-  branchesVersion++;
-  workspaceModel.branches = null;
-  workspaceModel.loadingBranches = false;
-  workspaceModel.error = "";
-  const status = workspaceModel.descriptor?.features.git_status ? loadStatus(version) : Promise.resolve();
-  if (workspaceModel.view === "file" && workspaceModel.detailPath) {
-    await Promise.all([loadWorkspaceFile(workspaceModel.detailPath), status]);
-    return;
-  }
-  if (workspaceModel.view === "diff" && workspaceModel.detailPath) {
-    await Promise.all([loadGitDiff(workspaceModel.detailPath, workspaceModel.diffLayer), status]);
-    return;
-  }
-  await Promise.all([loadDirectory(workspaceModel.directory, false, version), status]);
+  await enterWorkspace(workspaceModel.paneId, workspaceModel.returnView, true);
 }
 
 export async function loadGitDiff(path: string, layer: GitLayer): Promise<void> {
   const session = state.live;
   const paneId = workspaceModel.paneId;
-  if (!session || !paneId) return;
+  const scope = workspaceScope;
+  if (!session || !paneId || !scope) return;
   const version = requestVersion;
   const contentRequest = ++contentVersion;
   const keep = Boolean(workspaceModel.diff && workspaceModel.diff.path === path && workspaceModel.diffLayer === layer);
@@ -389,9 +432,14 @@ export async function loadGitDiff(path: string, layer: GitLayer): Promise<void> 
     adoptDiffNoteScope(null);
     armPendingReveal();
   }
+  const read = scope.diff(path, layer);
+  if (read.cached) {
+    workspaceModel.diff = read.cached;
+    bindDiffNotes(session, paneId, read.cached);
+  }
   render();
   try {
-    const diff = await session.gitDiff(paneId, path, layer);
+    const diff = await read.value;
     if (current(version, session, paneId) && contentRequest === contentVersion) {
       workspaceModel.diff = diff;
       bindDiffNotes(session, paneId, diff);
@@ -441,16 +489,18 @@ export function toggleWorkspaceChangeGroup(layer: GitLayer): void {
 }
 
 export async function ensureBranches(): Promise<GitBranches | null> {
-  if (workspaceModel.branches) return workspaceModel.branches;
   const session = state.live;
   const paneId = workspaceModel.paneId;
-  if (!session || !paneId) return null;
+  const scope = workspaceScope;
+  if (!session || !paneId || !scope) return null;
   const version = requestVersion;
   const branchesRequest = ++branchesVersion;
   workspaceModel.loadingBranches = true;
+  const read = scope.branches();
+  if (read.cached) workspaceModel.branches = read.cached;
   render();
   try {
-    const branches = await session.gitBranches(paneId);
+    const branches = await read.value;
     if (!current(version, session, paneId) || branchesRequest !== branchesVersion) return null;
     workspaceModel.branches = branches;
     return branches;
