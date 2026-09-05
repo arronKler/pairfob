@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const source = await Bun.file(new URL("./full-terminal.ts", import.meta.url)).text();
+const fitController = await Bun.file(new URL("./full-terminal-fit-controller.ts", import.meta.url)).text();
 const shell = await Bun.file(new URL("./full-terminal-view.ts", import.meta.url)).text();
 const stateView = await Bun.file(new URL("./full-terminal-state.ts", import.meta.url)).text();
 const dock = await Bun.file(new URL("./session/dock.ts", import.meta.url)).text();
@@ -41,23 +42,23 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(source).toContain("bindHostScroll(");
     expect(source).toContain("sendScroll");
     expect(source).toContain("syncFullTerminalControls");
-    expect(source).toContain("pickFontSize");
+    expect(fitController).toContain("pickFontSize");
     expect(source).toContain("bindFontPinch");
     expect(source).toContain("document.fonts");
-    expect(source).toContain("Math.floor(inner.width / cell.width)");
-    expect(source).toContain("ptyCols(visibleCols, state.termFit, targetCols)");
-    expect(source).toContain("panePtySize(state.paneId, state.layouts, state.agents)");
+    expect(fitController).toContain("Math.floor(inner.width / cell.width)");
+    expect(fitController).toContain("ptyCols(visibleCols, state.termFit, targetCols)");
+    expect(fitController).toContain("panePtySize(state.paneId, state.layouts, state.agents)");
     expect(source).toContain("panXScroller");
     expect(shell).toContain("full-terminal-pan");
     expect(shell).toContain("full-terminal-canvas");
-    expect(source).toContain("displayGrid");
-    expect(source).toContain("remoteGrid");
-    expect(source).toContain("pitchLineHeight");
-    expect(source).toContain("measureGlyphHeight");
-    expect(source).toContain("paintedFontSize");
-    expect(source).toContain("snapCellLineHeight");
-    expect(source).toContain("integerizeDomRows");
-    expect(source).toContain("clearScreenScale");
+    expect(fitController).toContain("displayGrid");
+    expect(fitController).toContain("remoteGrid");
+    expect(fitController).toContain("pitchLineHeight");
+    expect(fitController).toContain("measureGlyphHeight");
+    expect(fitController).toContain("paintedFontSize");
+    expect(fitController).toContain("snapCellLineHeight");
+    expect(fitController).toContain("integerizeDomRows");
+    expect(fitController).toContain("clearScreenScale");
     expect(source).toContain("openWebglTerminal");
     expect(source).toContain("WEBGL_CONTEXT_LOST");
     expect(source).not.toContain("fillLineHeight");
@@ -111,9 +112,9 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(enter).toContain('setPaneTermMode(state.paneId, "full")');
   });
 
-  test("a short remote frame shrinks the display grid then still asks for the phone size", () => {
-    const fitFn = fn("function fit(", "function stopCommandPump(");
-    expect(fitFn).toContain("displayGrid({ cols, rows: hostRows }, remoteGrid)");
+  test("the requested PTY rows never exceed the local renderer above the pad", () => {
+    const fitFn = fitController;
+    expect(fitFn).toContain("displayGrid({ cols, rows }, remoteGrid)");
     expect(fitFn).toContain("hostFitRows");
     expect(fitFn).toContain("ptyCols(visibleCols, state.termFit, targetCols)");
     expect(fitFn).toContain("panePtySize");
@@ -123,7 +124,8 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(fitFn).toContain("clearScreenScale(host)");
     expect(fitFn).not.toContain("fillLineHeight");
     expect(fitFn).not.toContain("planScale");
-    expect(fitFn).toContain("fittedSize =");
+    expect(fitFn).toContain("const size =");
+    expect(source).toContain("fittedSize = result.size");
     expect(fitFn).toContain("measured?.width");
     expect(fitFn).toContain("measured?.height");
     const eventFn = fn("export function handleFullTerminalEvent(", "export function handleFullTerminalVisibility(");
@@ -131,6 +133,9 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(eventFn).toContain("frame.height");
     expect(eventFn).toContain("remoteGrid = nextRemote");
     expect(eventFn).toContain("enqueueResize");
+    expect(eventFn).toContain("frameGate.settle(sequence, frame.full");
+    expect(eventFn.indexOf("frameGate.settle(sequence, frame.full")).toBeLessThan(eventFn.indexOf("writer?.reset()"));
+    expect(eventFn.indexOf("frameGate.settle(sequence, frame.full")).toBeLessThan(eventFn.indexOf("writer.write(frame.data"));
     const bindFn = fn("function bindInput(", "async function mount(");
     expect(bindFn).toContain("fittedSize.cols");
     expect(bindFn).toContain("fittedSize.rows");
@@ -143,7 +148,9 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     const open = fn("async function openBridge(", "async function suspendBridge(");
     expect(resume).toContain("scheduleMount(host)");
     expect(resume).toContain("openBridge(false)");
-    expect(resume).toContain('document.visibilityState === "hidden"');
+    expect(resume).toContain("await openTracker.pending()");
+    expect(resume).toContain("leaving");
+    expect(resume).toContain("terminalDocumentHidden()");
     expect(resume).toContain("bridgeVersion++");
     expect(retry).toContain("resumeFullTerminal()");
     expect(retry).not.toContain("terminalStatus.start");
@@ -153,9 +160,8 @@ describe("complete-terminal chrome stays a distinct surface", () => {
 
   test("drops stale frames before treating a forward sequence jump as a gap", () => {
     const eventFn = fn("export function handleFullTerminalEvent(", "export function handleFullTerminalVisibility(");
-    expect(eventFn.indexOf("sequence <= lastFrameSequence")).toBeLessThan(
-      eventFn.indexOf("sequence !== lastFrameSequence + 1n"),
-    );
+    expect(eventFn).toContain("frameGate.preflight(sequence, frame.full)");
+    expect(eventFn.indexOf('admission === "stale"')).toBeLessThan(eventFn.indexOf('admission === "gap"'));
   });
 
   test("paints the loading shell before mounting xterm and skips the observer's initial duplicate fit", () => {

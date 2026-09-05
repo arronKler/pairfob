@@ -1,6 +1,7 @@
 /** Browser scheduling around the expensive xterm/WebGL mount lifecycle. */
 
 const HEIGHT_RESIZE_SETTLE_MS = 120;
+const pendingMinimumHeights = new WeakMap<HTMLElement, { frame: number; value: string }>();
 
 /** Let the lightweight terminal shell paint before constructing WebGL. */
 export function afterNextPaint(run: () => void): () => void {
@@ -20,6 +21,26 @@ export function afterNextPaint(run: () => void): () => void {
     if (frame) window.cancelAnimationFrame(frame);
     if (timer) window.clearTimeout(timer);
   };
+}
+
+/** Apply a fit-derived minimum outside the current ResizeObserver delivery. */
+export function deferHostMinimumHeight(root: HTMLElement | null, height: number): void {
+  if (!root || !(height > 0)) return;
+  const value = `${Math.ceil(height)}px`;
+  const pending = pendingMinimumHeights.get(root);
+  if (pending?.value === value) return;
+  if (pending) {
+    window.cancelAnimationFrame(pending.frame);
+    pendingMinimumHeights.delete(root);
+  }
+  if (root.style.getPropertyValue("--full-terminal-min-host-height") === value) return;
+  const update = { frame: 0, value };
+  update.frame = window.requestAnimationFrame(() => {
+    if (pendingMinimumHeights.get(root) !== update) return;
+    pendingMinimumHeights.delete(root);
+    if (root.isConnected) root.style.setProperty("--full-terminal-min-host-height", value);
+  });
+  pendingMinimumHeights.set(root, update);
 }
 
 /**

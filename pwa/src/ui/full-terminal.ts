@@ -3,15 +3,11 @@ import type { Terminal } from "@xterm/xterm";
 
 import { agentTitle } from "../lib/dashboard";
 import { t } from "../lib/i18n";
-import { panePtySize } from "../lib/layout";
 import { canInterruptAgent } from "./chrome";
 import {
   ProtocolError,
   TerminalFrameAssembler,
-  TERMINAL_MAX_COLS,
   TERMINAL_MAX_ROWS,
-  TERMINAL_MIN_COLS,
-  TERMINAL_MIN_ROWS,
   type SessionEvent,
 } from "../lib/protocol/client";
 import { render } from "../paint";
@@ -20,25 +16,14 @@ import { isDesk } from "../viewport";
 import {
   bindFontPinch,
   clamp,
-  clearScreenScale,
-  cssCellOf,
-  displayGrid,
+  frameMatchesGrid,
   FULL_TERM_FONT_FAMILY,
-  hostFitRows,
-  hostInnerSize,
-  integerizeDomRows,
   measureGlyphHeight,
-  paintedFontSize,
-  panCanvas,
-  pickFontSize,
   pitchLineHeight,
-  probePanCanvas,
-  ptyCols,
-  sizePanCanvas,
-  snapCellLineHeight,
+  terminalGridSize,
   terminalMount,
-  visualCells,
 } from "./full-terminal-fit";
+import { fitFullTerminal, type FullTerminalFittedSize } from "./full-terminal-fit-controller";
 import {
   bindXtermKeyboard,
   encodeTerminalKey,
@@ -53,6 +38,8 @@ import { TerminalCommandPump, type TerminalCommand, type TerminalInputQueueOptio
 import { loadFullTerminalXterm, terminalWebglSupported } from "./full-terminal-loader";
 import { afterNextPaint, observeHostResize } from "./full-terminal-lifecycle";
 import { fullTerminalPerf } from "./full-terminal-perf";
+import { FullTerminalFrameGate } from "./full-terminal-frame-gate";
+import { FullTerminalOpenTracker } from "./full-terminal-open-tracker";
 import { fullTerminalOptions, openWebglTerminal, WEBGL_CONTEXT_LOST, WEBGL_UNAVAILABLE } from "./full-terminal-renderer";
 import {
   FullTerminalStatus,
@@ -82,14 +69,15 @@ let opening = false;
 let leaving: Promise<void> | null = null;
 let leaveSeq = 0;
 let commandPump: TerminalCommandPump | null = null;
-let lastFrameSequence: bigint | null = null;
+const frameGate = new FullTerminalFrameGate();
+const openTracker = new FullTerminalOpenTracker();
 let pendingWriteBytes = 0;
 /** The mounted shell still belongs to this controller, even during a visible load error. */
 let terminalShellActive = false;
 /** Last terminal.frame grid. Display clamps to this so a short PTY can scale-fill. */
 let remoteGrid: { cols: number; rows: number } | null = null;
-/** Size we keep asking Herdr for, even when display is smaller than the PTY. */
-let fittedSize: { cols: number; rows: number; cellWidth: number; cellHeight: number } | null = null;
+/** Latest phone-sized PTY request and cell metrics. */
+let fittedSize: FullTerminalFittedSize | null = null;
 const assembler = new TerminalFrameAssembler();
 const MAX_RENDER_QUEUE_BYTES = 8 * 1024 * 1024;
 const terminalStatus = new FullTerminalStatus(() => syncStatus());
@@ -97,114 +85,20 @@ function syncStatus(root: ParentNode = app): void {
   terminalStatus.sync(root, { active: state.fullTerminal, busy: opening, hasBridge: Boolean(bridgeId) });
 }
 
-function measureCellWidth(fontSize: number): number {
-  if (!terminal) return fontSize * 0.6;
-  if (terminal.options.fontSize !== fontSize) terminal.options.fontSize = fontSize;
-  return cssCellOf(terminal)?.width || fontSize * 0.6;
-}
-
-function liveSize(cols: number, rows: number): { cols: number; rows: number; cellWidth: number; cellHeight: number } {
-  const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
-  const visual = host ? visualCells(host, cols, rows) : { width: 0, height: 0 };
-  const measured = terminal ? cssCellOf(terminal) : null;
-  return {
-    cols,
-    rows,
-    cellWidth: visual.width || Math.round(measured?.width || 0),
-    cellHeight: visual.height || Math.round(measured?.height || 0),
-  };
-}
+function terminalDocumentHidden(): boolean { return document.visibilityState === "hidden"; }
 
 function fit(): { cols: number; rows: number; cellWidth: number; cellHeight: number } {
   const fallback = { cols: 80, rows: 24, cellWidth: 0, cellHeight: 0 };
   const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
   if (!terminal || !fitAddon || !host) return fallback;
-  if (fitting) return fittedSize ?? liveSize(terminal.cols || 80, terminal.rows || 24);
+  if (fitting) return fittedSize ?? terminalGridSize(app, terminal, terminal.cols || 80, terminal.rows || 24);
   fitting = true;
   try {
-    const inner = hostInnerSize(host);
-    if (inner.width < 8 || inner.height < 8) return fallback;
-    const canvas = panCanvas(host);
-    const pan = state.termFit === "pan";
-    host.classList.toggle("is-pan", pan);
-    probePanCanvas(canvas, inner.width);
-    let font = pickFontSize({
-      hostWidth: inner.width,
-      cellWidthAt: measureCellWidth,
-      preferred: lockedFont ?? state.termFontPx,
-      locked: lockedFont !== null || pan,
-    });
-    terminal.options.fontSize = font;
-    try {
-      fitAddon.fit();
-    } catch {
-      /* probe paint size */
-    }
-    const painted = paintedFontSize(host, font);
-    if (painted > font) {
-      font = painted;
-      terminal.options.fontSize = font;
-    }
-    const dpr = window.devicePixelRatio || 1;
-    const glyphHeight = measureGlyphHeight(FULL_TERM_FONT_FAMILY, font);
-    const rowsGuess = clamp(
-      Math.floor(inner.height / Math.max(1, font * 1.5)),
-      TERMINAL_MIN_ROWS,
-      TERMINAL_MAX_ROWS,
-    );
-    terminal.options.fontSize = font;
-    terminal.options.lineHeight = pitchLineHeight(font, glyphHeight, dpr, rowsGuess);
-    terminal.options.letterSpacing = 0;
-    try {
-      fitAddon.fit();
-    } catch {
-      // A hidden page can briefly report a zero-sized host. The next observer
-      // callback or pageshow will fit again.
-    }
-    const cell = cssCellOf(terminal);
-    const visibleCols = clamp(
-      cell ? Math.floor(inner.width / cell.width) : terminal.cols || 80,
-      TERMINAL_MIN_COLS,
-      TERMINAL_MAX_COLS,
-    );
-    const paneSize = panePtySize(state.paneId, state.layouts, state.agents);
-    const targetCols = paneSize ? clamp(paneSize.cols, TERMINAL_MIN_COLS, TERMINAL_MAX_COLS) : state.termCols;
-    const targetRows = paneSize ? clamp(paneSize.rows, TERMINAL_MIN_ROWS, TERMINAL_MAX_ROWS) : null;
-    if (targetRows && !remoteGrid) remoteGrid = { cols: targetCols, rows: targetRows };
-    const cols = clamp(ptyCols(visibleCols, state.termFit, targetCols), TERMINAL_MIN_COLS, TERMINAL_MAX_COLS);
-    const hostRows = clamp(
-      cell ? hostFitRows(inner.height, cell.height) : terminal.rows || 24,
-      TERMINAL_MIN_ROWS,
-      TERMINAL_MAX_ROWS,
-    );
-    const rows = targetRows ?? hostRows;
-    const display = displayGrid({ cols, rows: hostRows }, remoteGrid);
-    const pitched = pitchLineHeight(font, glyphHeight, dpr, display.rows);
-    if (Math.abs(pitched - (terminal.options.lineHeight || 0)) > 0.001) {
-      terminal.options.lineHeight = pitched;
-    }
-    const used = cssCellOf(terminal);
-    if (used) {
-      const snapped = snapCellLineHeight(terminal.options.lineHeight || pitched, used.height);
-      if (Math.abs(snapped - (terminal.options.lineHeight || 0)) > 0.001) {
-        terminal.options.lineHeight = snapped;
-      }
-    }
-    if (terminal.cols !== display.cols || terminal.rows !== display.rows) {
-      terminal.resize(display.cols, display.rows);
-    }
-    clearScreenScale(host);
-    const measured = cssCellOf(terminal) || cell;
-    const visual = liveSize(display.cols, display.rows);
-    fittedSize = {
-      cols,
-      rows,
-      cellWidth: Math.max(1, Math.round(measured?.width || visual.cellWidth)),
-      cellHeight: Math.max(1, Math.round(measured?.height || visual.cellHeight)),
-    };
-    sizePanCanvas(canvas, pan, display.cols, measured?.width || fittedSize.cellWidth, inner.width);
-    integerizeDomRows(host, fittedSize.cellHeight);
-    return fittedSize;
+    const result = fitFullTerminal({ root: app, host, terminal, fitAddon, lockedFont, remoteGrid });
+    if (!result) return fallback;
+    remoteGrid = result.remoteGrid;
+    fittedSize = result.size;
+    return result.size;
   } finally {
     fitting = false;
   }
@@ -333,7 +227,7 @@ function bindInput(host: HTMLElement): void {
       window.clearTimeout(pinchResizeTimer);
       pinchResizeTimer = window.setTimeout(() => {
         if (!bridgeId || opening || !terminal || !commandPump) return;
-        const size = liveSize(terminal.cols || 80, terminal.rows || 24);
+        const size = terminalGridSize(app, terminal, terminal.cols || 80, terminal.rows || 24);
         commandPump.enqueueResize({
           cols: size.cols,
           rows: size.rows,
@@ -426,7 +320,7 @@ async function mount(host: HTMLElement): Promise<void> {
     }, { settleHeight: !isDesk() });
     if (state.composeLive && isDesk()) terminal?.focus();
     else closeTerminalKeyboard();
-    void openBridge(false);
+    void openTracker.run(() => openBridge(false));
   };
   void start();
 }
@@ -453,7 +347,7 @@ function disposeRenderer(): void {
   terminal = null;
   fitAddon = null;
   assembler.reset();
-  lastFrameSequence = null;
+  frameGate.reset();
   pendingWriteBytes = 0;
 }
 
@@ -481,7 +375,7 @@ async function openBridge(takeover: boolean): Promise<void> {
     startCommandPump(session, opened.terminalId, version);
     fullTerminalPerf.bridgeOpened();
     assembler.reset();
-    lastFrameSequence = null;
+    frameGate.reset();
     terminalStatus.start(t("ft.live"), "live");
     if (isDesk() || keyboard?.isOpen()) terminal?.focus();
     else closeTerminalKeyboard();
@@ -506,22 +400,26 @@ async function suspendBridge(sendClose: boolean, reason?: string, showFailure = 
   const session = state.live;
   const id = bridgeId;
   const renderer = rendererVersion;
+  const pendingOpen = openTracker.pending();
   stopCommandPump();
   const version = ++bridgeVersion;
   bridgeId = "";
   bridgePane = "";
   assembler.reset();
-  lastFrameSequence = null;
+  frameGate.reset();
   pendingWriteBytes = 0;
   remoteGrid = null;
   opening = false;
+  await pendingOpen;
   if (sendClose && session && id) await session.terminalClose(id).catch(() => undefined);
   if (!showFailure || version !== bridgeVersion || renderer !== rendererVersion || bridgeId || opening || !state.fullTerminal) return;
   terminalStatus.fail(reason ?? t("ft.paused"));
 }
 
-function resumeFullTerminal(): void {
-  if (opening || bridgeId || document.visibilityState === "hidden") return;
+async function resumeFullTerminal(): Promise<void> {
+  if (opening || bridgeId || leaving || terminalDocumentHidden()) return;
+  await openTracker.pending();
+  if (opening || bridgeId || leaving || !state.fullTerminal || terminalDocumentHidden()) return;
   const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
   if (!terminal) {
     if (!mounting && host?.isConnected) {
@@ -531,13 +429,13 @@ function resumeFullTerminal(): void {
     return;
   }
   fit();
-  void openBridge(false);
+  void openTracker.run(() => openBridge(false));
 }
 
 export function retryFullTerminal(): void {
   if (opening || bridgeId) return;
   haptic(8);
-  resumeFullTerminal();
+  void resumeFullTerminal();
 }
 
 export function setTermFit(next: TermFit, cols: TermCols = state.termCols): void {
@@ -705,8 +603,9 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
       if (!frame) return true;
       const commandMarker = fullTerminalPerf.frameAssembled(performance.now() - assembledAt);
       const sequence = BigInt(frame.sequence);
-      if (lastFrameSequence !== null && sequence <= lastFrameSequence) return true;
-      if (!frame.full && lastFrameSequence !== null && sequence !== lastFrameSequence + 1n) {
+      const admission = frameGate.preflight(sequence, frame.full);
+      if (admission === "stale") return true;
+      if (admission === "gap") {
         void suspendBridge(true, t("ft.gap"));
         return true;
       }
@@ -714,7 +613,6 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
         void suspendBridge(true, t("ft.tooFast"));
         return true;
       }
-      if (frame.full) terminal?.reset();
       const nextRemote = { cols: frame.width, rows: frame.height };
       const remoteChanged = !remoteGrid || remoteGrid.cols !== nextRemote.cols || remoteGrid.rows !== nextRemote.rows;
       remoteGrid = nextRemote;
@@ -730,6 +628,8 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
         }
       }
       const writer = terminal;
+      if (frameGate.settle(sequence, frame.full, Boolean(writer && frameMatchesGrid(frame, writer))) === "wait") return true;
+      if (frame.full) writer?.reset();
       if (writer) {
         const writeVersion = bridgeVersion;
         const writeStartedAt = performance.now();
@@ -742,7 +642,6 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
           }
         });
       }
-      lastFrameSequence = sequence;
       terminalStatus.set(t("ft.live"), "live");
     } catch (error) {
       void suspendBridge(true, messageOf(error));
@@ -757,7 +656,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
     bridgeVersion++;
     opening = false;
     assembler.reset();
-    lastFrameSequence = null;
+    frameGate.reset();
     pendingWriteBytes = 0;
     remoteGrid = null;
     fullTerminalPerf.publish("terminal_closed");
@@ -771,7 +670,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
     bridgeVersion++;
     opening = false;
     assembler.reset();
-    lastFrameSequence = null;
+    frameGate.reset();
     pendingWriteBytes = 0;
     remoteGrid = null;
     fullTerminalPerf.publish(event.type);
@@ -780,7 +679,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
   }
   if (event.type === "connected" && !bridgeId) {
     terminalStatus.set(t("ft.restored"), "opening");
-    resumeFullTerminal();
+    void resumeFullTerminal();
   }
   return false;
 }
@@ -788,5 +687,5 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
 export function handleFullTerminalVisibility(hidden: boolean): void {
   if (!state.fullTerminal) return;
   if (hidden) void suspendBridge(true);
-  else resumeFullTerminal();
+  else void resumeFullTerminal();
 }

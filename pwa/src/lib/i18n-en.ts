@@ -608,6 +608,8 @@ export const en: { [K in keyof typeof zh]: string } = {
   "workspace.directoryTruncated": "This directory is very large. Only the first 20,000 items are available.",
   "workspace.root": "Root",
   "workspace.file": "File preview",
+  "workspace.readingFile": "Reading file…",
+  "workspace.readingDiff": "Reading diff…",
   "workspace.binary": "This binary file cannot be previewed.",
   "workspace.previewTruncated": "This file is large. Only the first 128 KiB is shown.",
   "workspace.diff": "Git Diff",

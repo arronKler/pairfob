@@ -30,6 +30,7 @@ import { node } from "./lib/dom";
 import { handleFullTerminalVisibility } from "./ui/full-terminal";
 import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
 import { track } from "./lib/telemetry";
+import { bindLegacyGestureBoundary } from "./lib/gesture-boundary";
 
 initI18n();
 window.addEventListener("languagechange", () => {
@@ -160,12 +161,9 @@ bindVisualViewport(() => {
   }
 });
 
-// Older iOS standalone WebKit can ignore viewport scale limits for its legacy
-// gesture events. Keep the application shell fixed while preserving ordinary
-// one-finger scrolling inside pages and the terminal.
-for (const type of ["gesturestart", "gesturechange"] as const) {
-  document.addEventListener(type, (event) => event.preventDefault(), { passive: false });
-}
+// Older iOS standalone WebKit still emits legacy gesture events. Only the
+// surfaces with application-owned pinch handling suppress native page zoom.
+bindLegacyGestureBoundary(document);
 
 document.addEventListener("keydown", (event) => {
   if (state.phase !== "live" || state.screen !== "pane" || state.termSelect || state.fullTerminal || state.agentChat) return;

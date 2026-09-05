@@ -14,10 +14,12 @@ const {
   FULL_TERM_TARGET_COLS,
   clearScreenScale,
   displayGrid,
+  frameMatchesGrid,
   hostFitRows,
   hostInnerSize,
   integerizeDomRows,
   lineHeightForIntegerCells,
+  minimumHostHeight,
   paintedFontSize,
   pickFontSize,
   pitchLineHeight,
@@ -25,7 +27,9 @@ const {
   ptyCols,
   sizePanCanvas,
   snapCellLineHeight,
+  terminalGridSize,
   visualCells,
+  terminalViewportSize,
   xtermCssCellHeight,
 } = await import("./full-terminal-fit.ts");
 
@@ -143,6 +147,17 @@ describe("complete-terminal display grid follows the remote frame", () => {
       rows: 25,
     });
   });
+
+  test("a 60-row frame cannot paint into the fitted 27-row xterm", () => {
+    expect(frameMatchesGrid({ width: 80, height: 60 }, { cols: 80, rows: 27 })).toBeFalse();
+    expect(frameMatchesGrid({ width: 80, height: 27 }, { cols: 80, rows: 27 })).toBeTrue();
+    expect(frameMatchesGrid({ width: 106, height: 27 }, { cols: 80, rows: 27 })).toBeFalse();
+  });
+
+  test("the host reserves enough height for the protocol minimum grid", () => {
+    expect(minimumHostHeight(24, 5, 8)).toBe(128);
+    expect(hostFitRows(128 - 8, 24)).toBe(5);
+  });
 });
 
 describe("complete-terminal host metrics", () => {
@@ -159,14 +174,34 @@ describe("complete-terminal host metrics", () => {
     host.remove();
   });
 
+  test("short-landscape fitting measures the terminal row instead of its sibling control rail", () => {
+    const host = document.createElement("div");
+    const pan = document.createElement("div");
+    pan.className = "full-terminal-pan";
+    host.append(pan);
+    Object.defineProperty(host, "clientWidth", { value: 844 });
+    Object.defineProperty(host, "clientHeight", { value: 182 });
+    Object.defineProperty(pan, "clientWidth", { value: 836 });
+    Object.defineProperty(pan, "clientHeight", { value: 120 });
+    expect(terminalViewportSize(host, { width: 836, height: 174 })).toEqual({ width: 836, height: 120 });
+    expect(hostFitRows(terminalViewportSize(host).height, 24)).toBe(5);
+  });
+
   test("visual cells read the screen box, not the padded host", () => {
     const host = document.createElement("div");
+    host.className = "full-terminal-host";
     const screen = document.createElement("div");
     screen.className = "xterm-screen";
     host.append(screen);
     document.body.append(host);
     screen.getBoundingClientRect = () => ({ width: 384, height: 496, top: 0, left: 0, bottom: 496, right: 384, x: 0, y: 0, toJSON: () => ({}) });
     expect(visualCells(host, 80, 31)).toEqual({ width: 5, height: 16 });
+    expect(terminalGridSize(document.body, null, 80, 31)).toEqual({
+      cols: 80,
+      rows: 31,
+      cellWidth: 5,
+      cellHeight: 16,
+    });
     host.remove();
   });
 

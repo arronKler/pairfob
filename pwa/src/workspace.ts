@@ -65,11 +65,20 @@ export const workspaceModel: WorkspaceModel = {
   error: "",
 };
 
+export const WORKSPACE_PENDING_DELAY_MS = 180;
+
 let requestVersion = 0;
 let contentVersion = 0;
 let statusVersion = 0;
 let branchesVersion = 0;
 let workspaceSession: NonNullable<typeof state.live> | null = null;
+let pendingRevealToken = 0;
+let pendingRevealTimer: ReturnType<typeof setTimeout> | null = null;
+let workspacePendingReveal = false;
+
+export function isWorkspacePendingReveal(): boolean {
+  return workspacePendingReveal;
+}
 const workspaceCache = new WeakMap<NonNullable<typeof state.live>, Map<string, WorkspaceModel>>();
 const MAX_CACHED_WORKSPACES = 6;
 
@@ -125,11 +134,38 @@ function restoreCachedModel(session: NonNullable<typeof state.live>, paneId: str
   return true;
 }
 
+export function clearWorkspacePendingReveal(): void {
+  pendingRevealToken++;
+  if (pendingRevealTimer !== null) {
+    clearTimeout(pendingRevealTimer);
+    pendingRevealTimer = null;
+  }
+  workspacePendingReveal = false;
+}
+
+function armPendingReveal(): void {
+  if (workspacePendingReveal || pendingRevealTimer !== null) return;
+  const token = pendingRevealToken;
+  pendingRevealTimer = setTimeout(() => {
+    if (token !== pendingRevealToken) return;
+    workspacePendingReveal = true;
+    pendingRevealTimer = null;
+    if (workspaceModel.loading) render();
+  }, WORKSPACE_PENDING_DELAY_MS);
+}
+
+function finishWorkspaceLoad(): void {
+  clearWorkspacePendingReveal();
+  workspaceModel.loading = false;
+  workspaceModel.loadingMore = false;
+}
+
 function reset(paneId: string, returnView: WorkspaceReturnView): void {
   requestVersion++;
   contentVersion++;
   statusVersion++;
   branchesVersion++;
+  clearWorkspacePendingReveal();
   Object.assign(workspaceModel, {
     paneId,
     returnView,
@@ -154,6 +190,7 @@ function reset(paneId: string, returnView: WorkspaceReturnView): void {
     error: "",
   } satisfies WorkspaceModel);
   adoptDiffNoteScope(null);
+  armPendingReveal();
 }
 
 export async function enterWorkspace(
@@ -164,6 +201,7 @@ export async function enterWorkspace(
   if (!session || !paneId) return;
   cacheCurrentModel();
   if (restoreCachedModel(session, paneId, returnView)) {
+    clearWorkspacePendingReveal();
     clearNotice();
     state.screen = "workspace";
     render();
@@ -187,7 +225,7 @@ export async function enterWorkspace(
     workspaceModel.error = workspaceError(error);
   } finally {
     if (current(version, session, paneId)) {
-      workspaceModel.loading = false;
+      finishWorkspaceLoad();
       render();
     }
   }
@@ -204,6 +242,7 @@ export function leaveWorkspace(): void {
   contentVersion++;
   statusVersion++;
   branchesVersion++;
+  clearWorkspacePendingReveal();
   cacheCurrentModel();
   adoptDiffNoteScope(null);
   clearNotice();
@@ -231,9 +270,19 @@ export async function loadDirectory(path: string, append = false, version = requ
   const cursor = append ? workspaceModel.nextCursor ?? "" : "";
   if (append && !cursor) return;
   const contentRequest = ++contentVersion;
+  const previousDirectory = workspaceModel.directory;
+  const jumped = !append && path !== workspaceModel.directory;
   workspaceModel.error = "";
   workspaceModel.loadingMore = append;
   if (!append) workspaceModel.loading = true;
+  if (jumped) {
+    workspaceModel.directory = path;
+    workspaceModel.entries = [];
+    workspaceModel.nextCursor = null;
+    armPendingReveal();
+  } else if (!append && !workspaceModel.entries.length) {
+    armPendingReveal();
+  }
   render();
   try {
     const page = await session.workspaceList(paneId, path, cursor, 120);
@@ -249,11 +298,13 @@ export async function loadDirectory(path: string, append = false, version = requ
       workspaceModel.view = "browser";
     }
   } catch (error) {
-    if (current(version, session, paneId) && contentRequest === contentVersion) workspaceModel.error = workspaceError(error);
+    if (current(version, session, paneId) && contentRequest === contentVersion) {
+      workspaceModel.error = workspaceError(error);
+      if (jumped) workspaceModel.directory = previousDirectory;
+    }
   } finally {
     if (current(version, session, paneId) && contentRequest === contentVersion) {
-      workspaceModel.loading = false;
-      workspaceModel.loadingMore = false;
+      finishWorkspaceLoad();
       render();
     }
   }
@@ -265,11 +316,15 @@ export async function loadWorkspaceFile(path: string): Promise<void> {
   if (!session || !paneId) return;
   const version = requestVersion;
   const contentRequest = ++contentVersion;
+  const keep = workspaceModel.file?.path === path;
   workspaceModel.loading = true;
   workspaceModel.error = "";
   workspaceModel.view = "file";
   workspaceModel.detailPath = path;
-  workspaceModel.file = null;
+  if (!keep) {
+    workspaceModel.file = null;
+    armPendingReveal();
+  }
   render();
   try {
     const file = await session.workspaceRead(paneId, path);
@@ -278,7 +333,7 @@ export async function loadWorkspaceFile(path: string): Promise<void> {
     if (current(version, session, paneId) && contentRequest === contentVersion) workspaceModel.error = workspaceError(error);
   } finally {
     if (current(version, session, paneId) && contentRequest === contentVersion) {
-      workspaceModel.loading = false;
+      finishWorkspaceLoad();
       render();
     }
   }
@@ -323,13 +378,17 @@ export async function loadGitDiff(path: string, layer: GitLayer): Promise<void> 
   if (!session || !paneId) return;
   const version = requestVersion;
   const contentRequest = ++contentVersion;
+  const keep = Boolean(workspaceModel.diff && workspaceModel.diff.path === path && workspaceModel.diffLayer === layer);
   workspaceModel.loading = true;
   workspaceModel.error = "";
   workspaceModel.view = "diff";
   workspaceModel.detailPath = path;
   workspaceModel.diffLayer = layer;
-  workspaceModel.diff = null;
-  adoptDiffNoteScope(null);
+  if (!keep) {
+    workspaceModel.diff = null;
+    adoptDiffNoteScope(null);
+    armPendingReveal();
+  }
   render();
   try {
     const diff = await session.gitDiff(paneId, path, layer);
@@ -341,7 +400,7 @@ export async function loadGitDiff(path: string, layer: GitLayer): Promise<void> 
     if (current(version, session, paneId) && contentRequest === contentVersion) workspaceModel.error = workspaceError(error);
   } finally {
     if (current(version, session, paneId) && contentRequest === contentVersion) {
-      workspaceModel.loading = false;
+      finishWorkspaceLoad();
       render();
     }
   }
@@ -351,8 +410,7 @@ export function showWorkspaceTab(tab: WorkspaceTab): void {
   contentVersion++;
   workspaceModel.tab = tab;
   workspaceModel.view = "browser";
-  workspaceModel.loading = false;
-  workspaceModel.loadingMore = false;
+  finishWorkspaceLoad();
   workspaceModel.error = "";
   render();
   if (tab === "changes") void loadStatus();
@@ -361,8 +419,7 @@ export function showWorkspaceTab(tab: WorkspaceTab): void {
 export function closeWorkspaceDetail(): void {
   contentVersion++;
   workspaceModel.view = "browser";
-  workspaceModel.loading = false;
-  workspaceModel.loadingMore = false;
+  finishWorkspaceLoad();
   workspaceModel.file = null;
   workspaceModel.diff = null;
   workspaceModel.detailPath = "";

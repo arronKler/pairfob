@@ -12,7 +12,7 @@ const nativeTimeout = happy.setTimeout.bind(happy);
 const nativeClearTimeout = happy.clearTimeout.bind(happy);
 const nativeResizeObserver = globalThis.ResizeObserver;
 
-const { afterNextPaint, observeHostResize } = await import("./full-terminal-lifecycle.ts");
+const { afterNextPaint, deferHostMinimumHeight, observeHostResize } = await import("./full-terminal-lifecycle.ts");
 
 afterEach(() => {
   happy.requestAnimationFrame = nativeFrame;
@@ -23,6 +23,36 @@ afterEach(() => {
 });
 
 describe("full-terminal mount lifecycle", () => {
+  test("defers and coalesces fit-derived minimum height writes", () => {
+    const root = happy.document.createElement("div");
+    happy.document.body.append(root);
+    const frames = new Map<number, FrameRequestCallback>();
+    const cancelled: number[] = [];
+    let nextFrame = 50;
+    happy.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      frames.set(++nextFrame, callback);
+      return nextFrame;
+    }) as typeof happy.requestAnimationFrame;
+    happy.cancelAnimationFrame = ((frame: number) => { cancelled.push(frame); }) as typeof happy.cancelAnimationFrame;
+
+    deferHostMinimumHeight(root, 111.2);
+    deferHostMinimumHeight(root, 127.4);
+    expect(root.style.getPropertyValue("--full-terminal-min-host-height")).toBe("");
+    expect(cancelled).toEqual([51]);
+    frames.get(52)?.(0);
+    expect(root.style.getPropertyValue("--full-terminal-min-host-height")).toBe("128px");
+
+    deferHostMinimumHeight(root, 127.4);
+    expect(frames.size).toBe(2);
+
+    deferHostMinimumHeight(root, 140);
+    deferHostMinimumHeight(root, 128);
+    expect(cancelled).toEqual([51, 53]);
+    frames.get(53)?.(0);
+    expect(root.style.getPropertyValue("--full-terminal-min-host-height")).toBe("128px");
+    root.remove();
+  });
+
   test("runs expensive mounting only after a frame and a following task", () => {
     let frame: FrameRequestCallback | undefined;
     let task: TimerHandler | undefined;

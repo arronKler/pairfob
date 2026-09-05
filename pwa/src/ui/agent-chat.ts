@@ -176,6 +176,7 @@ function jumpToLatest(): void {
 function sizeChatCompose(field: HTMLTextAreaElement): void {
   field.style.height = "auto";
   field.style.height = `${Math.min(Math.max(field.scrollHeight, COMPOSE_MIN_PX), COMPOSE_MAX_PX)}px`;
+  stickAgentStream();
 }
 
 const agentPromptLimitNotice = () => t("chat.limit");
@@ -696,9 +697,12 @@ export function fillAgentChat(
   wrap.append(stream, jump);
   container.append(chatChrome(onBack, includeBack, onWorkspace, onMenu, onSwitch, selected), wrap, dock);
   paintChatNotice(container);
-  sizeChatCompose(input);
   if (!state.agentTraceBusy && state.agentTraceLoadState === "cold") void refreshAgentTrace();
-  if (state.agentTraceFollow) requestAnimationFrame(stickAgentStream);
+  // A detached textarea has no width or scrollHeight. Measure the restored
+  // draft after mounting, then keep the latest reply above the resized dock.
+  requestAnimationFrame(() => {
+    if (input.isConnected) sizeChatCompose(input);
+  });
   return input;
 }
 

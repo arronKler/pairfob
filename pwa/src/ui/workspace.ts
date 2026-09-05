@@ -26,8 +26,9 @@ import {
   showMoreWorkspaceChanges,
   toggleWorkspaceChangeGroup,
   workspaceModel,
+  isWorkspacePendingReveal,
 } from "../workspace";
-import { appendNotice, backButton, chevron, spinnerNode } from "./chrome";
+import { appendNotice, backButton, chevron } from "./chrome";
 import { present, sheet, sheetItem, sheetSection } from "./sheet";
 import { diffLineHasNote, diffNoteCards, diffNoteLineLabel, diffNotesBar, openDiffNoteEditor } from "./workspace-diff-notes";
 
@@ -139,7 +140,7 @@ function fileList(): HTMLElement {
     else row.disabled = true;
     list.append(row);
   }
-  if (!workspaceModel.loading && !workspaceModel.entries.length) list.append(node("p", "workspace-empty", t("workspace.empty")));
+  if (!workspaceModel.loading && !workspaceModel.error && !workspaceModel.entries.length) list.append(node("p", "workspace-empty", t("workspace.empty")));
   panel.append(list);
   if (workspaceModel.nextCursor) {
     const more = button(workspaceModel.loadingMore ? t("workspace.loading") : t("workspace.loadMore"), "workspace-more", () => loadDirectory(workspaceModel.directory, true));
@@ -242,7 +243,7 @@ function changeList(): HTMLElement {
   const worktree = visible.filter((change) => gitLayers(change).includes("worktree"));
   if (staged.length) groups.append(changeGroup("staged", staged));
   if (worktree.length) groups.append(changeGroup("worktree", worktree));
-  if (!workspaceModel.loading && !changes.length) groups.append(node("p", "workspace-empty", t("workspace.noChanges")));
+  if (!workspaceModel.loading && !workspaceModel.error && !changes.length) groups.append(node("p", "workspace-empty", t("workspace.noChanges")));
   panel.append(groups);
   if (changes.length > workspaceModel.changeLimit) {
     panel.append(button(t("workspace.showMoreChanges", { count: changes.length - workspaceModel.changeLimit }), "workspace-more", showMoreWorkspaceChanges));
@@ -256,20 +257,102 @@ function retryCurrent(): void {
   else void refreshWorkspace();
 }
 
-function feedback(): HTMLElement | null {
-  if (workspaceModel.error) {
-    const error = node("div", "workspace-feedback workspace-error");
-    error.setAttribute("role", "alert");
-    error.append(node("p", "", workspaceModel.error), button(t("ft.retry"), "btn btn-small", retryCurrent));
-    return error;
+function feedback(variant: "inline" | "pane" = "inline"): HTMLElement | null {
+  if (!workspaceModel.error) return null;
+  const pane = variant === "pane" ? " workspace-feedback-pane" : "";
+  const error = node("div", `workspace-feedback workspace-error${pane}`);
+  error.setAttribute("role", "alert");
+  error.append(node("p", "", workspaceModel.error), button(t("ft.retry"), "btn btn-small", retryCurrent));
+  return error;
+}
+
+function reservedStat(className: string, text: string | null): HTMLElement {
+  const item = node("span", className, text ?? "");
+  if (!text) {
+    item.classList.add("is-pending");
+    item.setAttribute("aria-hidden", "true");
   }
-  if (workspaceModel.loading) {
-    const loading = node("div", "workspace-feedback");
-    loading.setAttribute("role", "status");
-    loading.append(spinnerNode(), node("p", "", t("workspace.loading")));
-    return loading;
+  return item;
+}
+
+function markPending(host: HTMLElement, label: string): void {
+  host.setAttribute("role", "status");
+  host.setAttribute("aria-live", "polite");
+  host.setAttribute("aria-busy", "true");
+  host.setAttribute("aria-label", label);
+}
+
+const FILE_SKELETON_LINES = 48;
+const LIST_SKELETON_ROWS = 10;
+const CHANGE_SKELETON_ROWS = 6;
+const DIFF_SKELETON_LINES = 28;
+const DIFF_SKELETON_KINDS = ["meta", "meta", "hunk", "delete", "delete", "add", "add", "context", "context", "hunk", "delete", "add", "context", "context"] as const;
+
+function filePending(): HTMLElement {
+  const pending = node("div", "workspace-file-pending");
+  markPending(pending, t("workspace.readingFile"));
+  const skeleton = node("div", "workspace-file-skeleton");
+  skeleton.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < FILE_SKELETON_LINES; i++) skeleton.append(node("div", "workspace-file-skeleton-line"));
+  pending.append(skeleton);
+  return pending;
+}
+
+function listPending(): HTMLElement {
+  const panel = node("section", "workspace-panel workspace-list-pending");
+  markPending(panel, t("workspace.loading"));
+  const list = node("div", "workspace-list-skeleton");
+  list.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < LIST_SKELETON_ROWS; i++) {
+    const row = node("div", "workspace-list-skeleton-row");
+    const body = node("span", "workspace-list-skeleton-body");
+    body.append(node("span", "workspace-list-skeleton-name"), node("span", "workspace-list-skeleton-meta"));
+    row.append(node("span", "workspace-list-skeleton-icon"), body);
+    list.append(row);
   }
-  return null;
+  panel.append(list);
+  return panel;
+}
+
+function changePending(): HTMLElement {
+  const panel = node("section", "workspace-panel workspace-change-pending");
+  markPending(panel, t("workspace.loading"));
+  const skeleton = node("div", "workspace-change-skeleton");
+  skeleton.setAttribute("aria-hidden", "true");
+  skeleton.append(node("div", "workspace-change-skeleton-title"));
+  for (let i = 0; i < CHANGE_SKELETON_ROWS; i++) {
+    const row = node("div", "workspace-change-skeleton-row");
+    const body = node("span", "workspace-change-skeleton-body");
+    body.append(node("span", "workspace-list-skeleton-name"), node("span", "workspace-list-skeleton-meta"));
+    row.append(body, node("span", "workspace-change-skeleton-mark"));
+    skeleton.append(row);
+  }
+  panel.append(skeleton);
+  return panel;
+}
+
+function diffPending(): HTMLElement {
+  const pending = node("div", "workspace-diff-pending");
+  markPending(pending, t("workspace.readingDiff"));
+  const skeleton = node("div", "workspace-diff-skeleton");
+  skeleton.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < DIFF_SKELETON_LINES; i++) {
+    const kind = DIFF_SKELETON_KINDS[i % DIFF_SKELETON_KINDS.length];
+    const row = node("div", `workspace-diff-skeleton-line diff-${kind}`);
+    row.append(
+      node("span", "workspace-diff-skeleton-gutter"),
+      node("span", "workspace-diff-skeleton-gutter"),
+      node("span", "workspace-diff-skeleton-text"),
+    );
+    skeleton.append(row);
+  }
+  pending.append(skeleton);
+  return pending;
+}
+
+function navHasContent(): boolean {
+  if (workspaceModel.tab === "files") return workspaceModel.entries.length > 0;
+  return workspaceModel.status !== null;
 }
 
 function fileDetail(): HTMLElement {
@@ -279,10 +362,17 @@ function fileDetail(): HTMLElement {
   const bar = node("div", "workspace-detail-head");
   bar.append(node("strong", "workspace-detail-name", file?.path || workspaceModel.detailPath));
   if (file) bar.append(node("span", "workspace-row-meta", `${formatBytes(file.size)} · ${formatModified(file.modified_ms)}`));
+  else if (workspaceModel.loading) bar.append(reservedStat("workspace-row-meta", null));
   detail.append(bar);
-  const notice = feedback();
-  if (notice) detail.append(notice);
-  if (!file) return detail;
+  if (workspaceModel.error) {
+    const notice = feedback("pane");
+    if (notice) detail.append(notice);
+    return detail;
+  }
+  if (!file) {
+    if (workspaceModel.loading && isWorkspacePendingReveal()) detail.append(filePending());
+    return detail;
+  }
   if (file.kind === "binary") detail.append(node("p", "workspace-empty", t("workspace.binary")));
   else {
     const pre = node("pre", "workspace-code");
@@ -312,11 +402,19 @@ function diffDetail(): HTMLElement {
       node("span", "workspace-additions", t("workspace.additions", { count: diff.additions })),
       node("span", "workspace-deletions", t("workspace.deletions", { count: diff.deletions })),
     );
+  } else if (workspaceModel.loading) {
+    bar.append(reservedStat("workspace-additions", null), reservedStat("workspace-deletions", null));
   }
   detail.append(bar);
-  const notice = feedback();
-  if (notice) detail.append(notice);
-  if (!diff) return detail;
+  if (workspaceModel.error) {
+    const notice = feedback("pane");
+    if (notice) detail.append(notice);
+    return detail;
+  }
+  if (!diff) {
+    if (workspaceModel.loading && isWorkspacePendingReveal()) detail.append(diffPending());
+    return detail;
+  }
   const parsed = parseDiffLines(diff.patch);
   if (!parsed.length || (!diff.patch && !diff.binary)) detail.append(node("p", "workspace-empty", t("workspace.diffEmpty")));
   else if (diff.binary) detail.append(node("p", "workspace-empty", t("workspace.binary")));
@@ -420,9 +518,12 @@ function renderWorkspaceRoot(): HTMLElement {
   const body = node("div", "workspace-body");
   const nav = node("aside", "workspace-nav");
   nav.append(tabs());
-  const rootFeedback = workspaceModel.view === "browser" ? feedback() : null;
-  if (rootFeedback) nav.append(rootFeedback);
-  if (workspaceModel.tab === "files") nav.append(fileList());
+  if (workspaceModel.view === "browser" && workspaceModel.error) {
+    const notice = feedback("pane");
+    if (notice) nav.append(notice);
+  } else if (workspaceModel.view === "browser" && workspaceModel.loading && isWorkspacePendingReveal() && !navHasContent()) {
+    nav.append(workspaceModel.tab === "files" ? listPending() : changePending());
+  } else if (workspaceModel.tab === "files") nav.append(fileList());
   else nav.append(changeList());
   const main = node("main", "workspace-main");
   if (workspaceModel.view === "file") main.append(fileDetail());

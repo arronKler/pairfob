@@ -18,7 +18,7 @@ html, body {
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  touch-action: pan-x pan-y;
+  touch-action: pan-x pan-y pinch-zoom;
   overscroll-behavior: none;
   text-rendering: optimizeLegibility;
 }

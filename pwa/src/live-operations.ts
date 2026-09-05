@@ -49,7 +49,7 @@ import {
   showStatus,
   state,
 } from "./state";
-import { disposeFullTerminal } from "./ui/full-terminal";
+import { disposeFullTerminal, leaveFullTerminal } from "./ui/full-terminal";
 import { dropQueuedKeys } from "./ui/session-view";
 
 export async function revokeSelf(): Promise<void> {
@@ -430,7 +430,12 @@ export async function closePane(agent: AgentCard | undefined = selectedAgent()):
   if (!session || !agent?.paneId) return;
   if (!(await askConfirm(t("op.closePaneAsk", { title: agentTitle(agent) }), t("op.closePane")))) return;
   const paneId = agent.paneId;
-  await runHerdOperation(t("op.closingPane"), t("op.closedPane"), () => session.closePane(paneId), {
+  await runHerdOperation(t("op.closingPane"), t("op.closedPane"), async () => {
+    if (state.live === session && state.paneId === paneId && state.fullTerminal) {
+      await leaveFullTerminal({ rememberGuided: false, paint: false });
+    }
+    return session.closePane(paneId);
+  }, {
     after: async () => {
       forgetAgentTrace(paneId);
       dropPaneIfCurrent(paneId);

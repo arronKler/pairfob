@@ -8,7 +8,23 @@
   border-top: 1px solid var(--line);
 }
 
-.keys-wrap { position: relative; }
+/* Keep some output visible in short viewports; the expanded keys scroll
+   independently so a multiline composer can remain at the bottom. */
+.dock:not(.agent-dock) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100% - 53px - env(safe-area-inset-top, 0px) - min(96px, 20%));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.keys-wrap {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
 
 /*
   A grid, not a scroll strip: on a 390px phone the strip pushed Backspace and
@@ -77,6 +93,7 @@
 }
 
 .dock-form {
+  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   align-items: flex-end;
@@ -144,5 +161,4 @@
   color: var(--muted);
   cursor: default;
 }
-
 

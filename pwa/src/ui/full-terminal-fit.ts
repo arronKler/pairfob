@@ -43,6 +43,8 @@ export type CellSize = { width: number; height: number };
 
 export type HostInner = { width: number; height: number };
 
+export type TerminalGridSize = { cols: number; rows: number; cellWidth: number; cellHeight: number };
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -68,6 +70,13 @@ export function hostInnerSize(host: HTMLElement): HostInner {
     width: Math.max(0, host.clientWidth - padX),
     height: Math.max(0, host.clientHeight - padY),
   };
+}
+
+/** Visible xterm box; short landscape reserves a sibling grid row for controls. */
+export function terminalViewportSize(host: HTMLElement, fallback = hostInnerSize(host)): HostInner {
+  const viewport = host.querySelector<HTMLElement>(".full-terminal-pan");
+  if (!viewport || !(viewport.clientWidth > 0) || !(viewport.clientHeight > 0)) return fallback;
+  return { width: viewport.clientWidth, height: viewport.clientHeight };
 }
 
 /**
@@ -204,6 +213,12 @@ export function hostFitRows(hostHeight: number, cellHeight: number): number {
   return Math.floor(hostHeight / cellHeight);
 }
 
+/** Height needed for the protocol's minimum renderer grid plus host padding. */
+export function minimumHostHeight(cellHeight: number, rows: number, padding = 0): number {
+  if (!(cellHeight > 0) || !(rows > 0)) return 0;
+  return Math.ceil(cellHeight * rows + Math.max(0, padding));
+}
+
 /**
  * Local xterm grid: never larger than the phone host, never larger than the
  * last remote frame. A split pane on the computer often paints 20–24 rows
@@ -218,6 +233,14 @@ export function displayGrid(
     cols: Math.min(fitted.cols, remote.cols),
     rows: Math.min(fitted.rows, remote.rows),
   };
+}
+
+/** ANSI cursor addressing is only safe when the frame and xterm grids agree. */
+export function frameMatchesGrid(
+  frame: { width: number; height: number },
+  grid: { cols: number; rows: number },
+): boolean {
+  return frame.width === grid.cols && frame.height === grid.rows;
 }
 
 /**
@@ -257,6 +280,23 @@ export function visualCells(host: HTMLElement, cols: number, rows: number): Cell
   return {
     width: cols > 0 && rect.width > 0 ? Math.max(1, Math.round(rect.width / cols)) : 0,
     height: rows > 0 && rect.height > 0 ? Math.max(1, Math.round(rect.height / rows)) : 0,
+  };
+}
+
+export function terminalGridSize(
+  root: ParentNode,
+  terminal: object | null,
+  cols: number,
+  rows: number,
+): TerminalGridSize {
+  const host = root.querySelector(".full-terminal-host") as HTMLElement | null;
+  const visual = host ? visualCells(host, cols, rows) : { width: 0, height: 0 };
+  const measured = terminal ? cssCellOf(terminal) : null;
+  return {
+    cols,
+    rows,
+    cellWidth: visual.width || Math.round(measured?.width || 0),
+    cellHeight: visual.height || Math.round(measured?.height || 0),
   };
 }
 

@@ -15,4 +15,5 @@
 @import "./styles/computers.css";
 @import "./styles/settings.css";
 @import "./styles/workspace.css";
+@import "./styles/workspace-pending.css";
 @import "./styles/board.css";

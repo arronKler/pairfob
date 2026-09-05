@@ -41,6 +41,21 @@ function rule(selector: string): string {
   return css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] || "";
 }
 
+function atRuleBody(header: string): string {
+  const start = css.indexOf(header);
+  if (start < 0) return "";
+  const open = css.indexOf("{", start + header.length);
+  if (open < 0) return "";
+  let depth = 1;
+  for (let index = open + 1; index < css.length; index++) {
+    if (css[index] === "{") depth++;
+    if (css[index] !== "}") continue;
+    depth--;
+    if (depth === 0) return css.slice(open + 1, index);
+  }
+  return "";
+}
+
 describe("UI accessibility guardrails", () => {
   test("status and error text meet WCAG AA contrast on every surface", () => {
     expect(contrast(color("error"), color("bg"))).toBeGreaterThanOrEqual(4.5);
@@ -156,6 +171,14 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".workspace-change")).toMatch(/min-height:\s*50px/);
     expect(rule(".workspace-layer-label")).not.toMatch(/border|border-radius|min-height/);
     expect(rule(".workspace-detail-name")).toMatch(/flex:\s*1/);
+    expect(css).toMatch(/\.workspace-list-pending,\s*\.workspace-change-pending,\s*\.workspace-file-pending,\s*\.workspace-diff-pending\s*\{[^}]*flex:\s*1/);
+    expect(css).toMatch(/\.workspace-list-skeleton,\s*\.workspace-change-skeleton,\s*\.workspace-file-skeleton,\s*\.workspace-diff-skeleton\s*\{[^}]*flex:\s*1/);
+    expect(rule(".workspace-file-skeleton-line")).toMatch(/height:\s*0\.62em/);
+    expect(rule(".workspace-diff-skeleton-line")).toMatch(/grid-template-columns:\s*3\.2rem 3\.2rem/);
+    expect(rule(".workspace-feedback-pane")).toMatch(/flex:\s*1/);
+    expect(rule(".workspace-feedback-pane")).toMatch(/flex-direction:\s*column/);
+    expect(css).not.toMatch(/\.workspace-file-pending-status\s*\{/);
+    expect(css).toMatch(/\.workspace-main \{[^}]*flex-direction:\s*column/);
   });
 
   test("session sheets keep a close control on screen when the list is long", () => {
@@ -222,9 +245,11 @@ describe("UI accessibility guardrails", () => {
     expect(html).toContain('<main id="app"></main>');
   });
 
-  test("mobile install runs as a fixed-scale standalone PWA", () => {
-    expect(html).toContain("maximum-scale=1");
-    expect(html).toContain("user-scalable=no");
+  test("mobile install allows page zoom while application gesture surfaces stay isolated", () => {
+    expect(html).not.toContain("maximum-scale");
+    expect(html).not.toContain("user-scalable");
+    expect(html).toContain("viewport-fit=cover");
+    expect(html).toContain("interactive-widget=resizes-content");
     expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"');
     expect(html).toContain('rel="apple-touch-icon" href="/apple-touch-icon.png"');
     expect(html).toContain('rel="mask-icon" href="/mask-icon.svg"');
@@ -234,8 +259,8 @@ describe("UI accessibility guardrails", () => {
     expect(manifest.icons.some((icon: { sizes?: string }) => icon.sizes === "192x192")).toBe(true);
     expect(manifest.icons.some((icon: { sizes?: string }) => icon.sizes === "512x512")).toBe(true);
     expect(manifest.icons.some((icon: { purpose?: string }) => icon.purpose === "maskable")).toBe(true);
-    expect(rule("html, body")).toMatch(/touch-action:\s*pan-x pan-y/);
-    expect(main).toContain('["gesturestart", "gesturechange"]');
+    expect(rule("html, body")).toMatch(/touch-action:\s*pan-x pan-y pinch-zoom/);
+    expect(main).toContain("bindLegacyGestureBoundary(document)");
   });
 
   test("mobile form controls do not trigger iOS focus zoom", () => {
@@ -364,11 +389,61 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".full-terminal-root")).toMatch(/flex-direction:\s*column/);
     expect(rule(".full-terminal-root")).toMatch(/min-height:\s*0/);
     expect(rule(".full-terminal-host")).toMatch(/flex:\s*1 1 0%/);
-    expect(rule(".full-terminal-host")).toMatch(/min-height:\s*0/);
+    expect(rule(".full-terminal-host")).toMatch(/min-height:\s*var\(--full-terminal-min-host-height, 128px\)/);
     expect(rule(".full-terminal-host")).toMatch(/overflow:\s*hidden/);
     expect(rule(".full-terminal-host")).not.toMatch(/position:\s*absolute/);
     expect(rule(".full-terminal-pad")).toMatch(/flex:\s*0 0 auto/);
+    expect(rule(".full-terminal-pad")).toMatch(/min-height:\s*0/);
+    expect(rule(".full-terminal-pad")).toMatch(/max-height:\s*calc\(var\(--vv-height, 100dvh\) - 53px - env\(safe-area-inset-top, 0px\) - var\(--full-terminal-min-host-height, 128px\)\)/);
+    expect(rule(".full-terminal-pad")).toMatch(/overflow-y:\s*auto/);
     expect(rule(".full-terminal-pad")).not.toMatch(/position:\s*(absolute|fixed)/);
+  });
+
+  test("short-landscape CSS contract reserves non-overlapping rows at 844x390", () => {
+    const shortLandscape = atRuleBody("@media (max-height: 500px) and (orientation: landscape)");
+    expect(shortLandscape).toMatch(/\.full-terminal-host\s*\{[^}]*display:\s*grid/);
+    expect(shortLandscape).toMatch(/\.full-terminal-host\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) 54px/);
+    expect(shortLandscape).toMatch(/\.full-terminal-host\s*\{[^}]*min-height:\s*calc\(var\(--full-terminal-min-host-height, 128px\) \+ 54px\)/);
+    expect(shortLandscape).toMatch(/\.full-terminal-pan\s*\{[^}]*grid-row:\s*1/);
+    expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*flex-direction:\s*row/);
+    expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*position:\s*static/);
+    expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*z-index:\s*auto/);
+    expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*grid-row:\s*2/);
+    expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*max-width:\s*calc\(100% - 8px\)/);
+    expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*overflow-x:\s*auto/);
+    expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*overflow-y:\s*hidden/);
+    expect(shortLandscape).toMatch(/\.full-terminal-pad\s*\{[^}]*max-height:\s*calc\([^}]* - 54px\)/);
+    expect(rule(".full-terminal-scroll-btn")).toMatch(/min-width:\s*44px/);
+    expect(rule(".full-terminal-scroll-btn")).toMatch(/min-height:\s*44px/);
+
+    // Contract arithmetic only. Ego/Chromium owns the real getBoundingClientRect acceptance check.
+    const chrome = { top: 0, bottom: 53 };
+    const host = { top: chrome.bottom, bottom: chrome.bottom + 128 + 54 };
+    const canvas = { top: host.top + 4, bottom: host.bottom - 4 - 54 };
+    const rail = { top: canvas.bottom + 5, bottom: canvas.bottom + 5 + 44 };
+    const pad = { top: host.bottom, bottom: host.bottom + (390 - 53 - 128 - 54) };
+    expect(canvas).toEqual({ top: 57, bottom: 177 });
+    expect(rail).toEqual({ top: 182, bottom: 226 });
+    expect(pad).toEqual({ top: 235, bottom: 390 });
+    expect(chrome.bottom).toBeLessThanOrEqual(canvas.top);
+    expect(canvas.bottom).toBeLessThanOrEqual(rail.top);
+    expect(rail.bottom).toBeLessThanOrEqual(host.bottom);
+    expect(host.bottom).toBeLessThanOrEqual(pad.top);
+  });
+
+  test("portrait and desktop retain the vertical in-host rail baseline", () => {
+    expect(rule(".full-terminal-scroll")).toMatch(/position:\s*absolute/);
+    expect(rule(".full-terminal-scroll")).toMatch(/flex-direction:\s*column/);
+    expect(rule(".full-terminal-scroll")).toMatch(/bottom:\s*10px/);
+    expect(css).toContain("@media (min-width: 900px)");
+  });
+
+  test("complete-terminal keys keep 44px targets and wrap instead of cramming at 320px", () => {
+    expect(rule(".full-terminal-pad :is(.keys)")).toMatch(/grid-auto-columns:\s*minmax\(44px, 1fr\)/);
+    expect(rule(".full-terminal-pad :is(.keys)")).toMatch(/overflow-x:\s*auto/);
+    expect(rule(".full-terminal-pad :is(.key)")).toMatch(/min-width:\s*44px/);
+    expect(css).toMatch(/@media \(max-width: 363\.98px\)[\s\S]*?grid-template-columns:\s*repeat\(6, minmax\(44px, 1fr\)\)/);
+    expect(css).toMatch(/@media \(max-width: 363\.98px\)[\s\S]*?\.full-terminal-pad :is\(\.key-more\)[\s\S]*?grid-column:\s*1 \/ -1/);
   });
 
   test("standalone PWA paints the home-indicator strip with the app canvas", () => {

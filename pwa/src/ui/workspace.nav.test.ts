@@ -22,7 +22,8 @@ happy.document.body.innerHTML = '<main id="app"></main>';
 const { app, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderWorkspace } = await import("./workspace.ts");
-const { enterWorkspace, loadWorkspaceFile, workspaceModel } = await import("../workspace.ts");
+const { enterWorkspace, loadGitDiff, loadWorkspaceFile, workspaceModel, WORKSPACE_PENDING_DELAY_MS, clearWorkspacePendingReveal } = await import("../workspace.ts");
+const { ProtocolError } = await import("../lib/protocol/errors.ts");
 
 const revision = "a".repeat(64);
 
@@ -90,7 +91,11 @@ async function settle(): Promise<void> {
   await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 }
 
-async function boot(live = liveFixture()): Promise<void> {
+async function waitForPending(): Promise<void> {
+  await new Promise<void>((resolve) => window.setTimeout(resolve, WORKSPACE_PENDING_DELAY_MS + 20));
+}
+
+function prepare(live = liveFixture()): void {
   state.phase = "live";
   state.screen = "pane";
   state.paneId = "p1";
@@ -110,10 +115,15 @@ async function boot(live = liveFixture()): Promise<void> {
   };
   state.live = live as unknown as typeof state.live;
   setRenderer(renderWorkspace);
+}
+
+async function boot(live = liveFixture()): Promise<void> {
+  prepare(live);
   await enterWorkspace("p1");
 }
 
 afterEach(() => {
+  clearWorkspacePendingReveal();
   for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
   state.live = null;
   state.screen = "home";
@@ -137,6 +147,37 @@ describe("mobile workspace navigation", () => {
     buttonNamed("返回列表").click();
     expect(workspaceModel.view).toBe("browser");
     expect(app.querySelector(".workspace-nav")).toBeTruthy();
+  });
+
+  test("file preview occupies the code pane while the read is in flight", async () => {
+    await boot();
+    type FileResult = Awaited<ReturnType<ReturnType<typeof liveFixture>["workspaceRead"]>>;
+    let release!: (value: FileResult) => void;
+    const held = new Promise<FileResult>((resolve) => { release = resolve; });
+    state.live = {
+      ...liveFixture(),
+      workspaceRead: async () => held,
+    } as unknown as typeof state.live;
+
+    const load = loadWorkspaceFile("src/app.ts");
+    expect(app.querySelector(".workspace-file-pending")).toBeNull();
+    await waitForPending();
+    const pending = app.querySelector(".workspace-file-pending");
+    expect(pending).toBeTruthy();
+    expect(pending?.getAttribute("role")).toBe("status");
+    expect(pending?.getAttribute("aria-label")).toContain("正在读取文件");
+    expect(pending?.querySelector(".spinner")).toBeNull();
+    expect(pending?.textContent?.trim()).toBe("");
+    expect(app.querySelector(".workspace-detail-name")?.textContent).toBe("src/app.ts");
+    expect(app.querySelector(".workspace-detail-head .workspace-row-meta")?.classList.contains("is-pending")).toBeTrue();
+    expect(app.querySelectorAll(".workspace-file-skeleton-line").length).toBe(48);
+    expect(app.querySelector(".workspace-code")).toBeNull();
+    expect(app.querySelector(".workspace-feedback")).toBeNull();
+
+    release({ path: "src/app.ts", kind: "text", size: 4, modified_ms: 1, content: "ok\n", truncated: false, revision });
+    await load;
+    expect(app.querySelector(".workspace-file-pending")).toBeNull();
+    expect(app.querySelector(".workspace-code")?.textContent).toBe("ok\n");
   });
 
   test("refreshes a file in place instead of dropping back to the tree", async () => {
@@ -293,5 +334,81 @@ describe("mobile workspace navigation", () => {
     buttonNamed("刷新工作区").click();
     await settle();
     expect(calls).toEqual({ open: 1, list: 2, read: 2, status: 2 });
+  });
+
+  test("a cold file list uses row skeletons instead of empty copy", async () => {
+    type ListResult = Awaited<ReturnType<ReturnType<typeof liveFixture>["workspaceList"]>>;
+    let release!: (value: ListResult) => void;
+    const held = new Promise<ListResult>((resolve) => { release = resolve; });
+    const base = liveFixture();
+    prepare({
+      ...base,
+      workspaceList: async () => held,
+    });
+    const opening = enterWorkspace("p1");
+    await waitForPending();
+    const pending = app.querySelector(".workspace-list-pending");
+    expect(pending?.getAttribute("aria-label")).toContain("正在读取工作区");
+    expect(app.querySelectorAll(".workspace-list-skeleton-row").length).toBe(10);
+    expect(app.querySelector(".workspace-empty")).toBeNull();
+    expect(app.querySelector(".workspace-feedback")).toBeNull();
+    expect(app.querySelector(".workspace-breadcrumbs")).toBeNull();
+    expect(app.querySelector(".spinner")).toBeNull();
+
+    release({
+      path: "",
+      entries: [{ name: "src", path: "src", kind: "directory", size: 0, modified_ms: 1, hidden: false }],
+      next_cursor: null,
+      truncated: false,
+      revision,
+    });
+    await opening;
+    expect(app.querySelector(".workspace-list-pending")).toBeNull();
+    expect(app.querySelector(".workspace-row-name")?.textContent).toBe("src");
+  });
+
+  test("a missing workspace error fills the pane without claiming the directory is empty", async () => {
+    prepare({
+      ...liveFixture(),
+      workspaceOpen: async () => {
+        throw new ProtocolError("workspace_not_found", "gone");
+      },
+    });
+    await enterWorkspace("p1");
+    expect(app.querySelector(".workspace-feedback-pane.workspace-error")?.textContent).toContain("已经不在了");
+    expect(app.querySelector(".workspace-empty")).toBeNull();
+    expect(app.querySelector(".workspace-breadcrumbs")).toBeNull();
+    expect(app.querySelector(".workspace-list")).toBeNull();
+  });
+
+  test("diff preview uses a diff-shaped skeleton instead of workspace copy", async () => {
+    await boot();
+    type DiffResult = Awaited<ReturnType<ReturnType<typeof liveFixture>["gitDiff"]>>;
+    let release!: (value: DiffResult) => void;
+    const held = new Promise<DiffResult>((resolve) => { release = resolve; });
+    state.live = {
+      ...liveFixture(),
+      gitDiff: async () => held,
+    } as unknown as typeof state.live;
+
+    const load = loadGitDiff("src/app.ts", "worktree");
+    await waitForPending();
+    const pending = app.querySelector(".workspace-diff-pending");
+    expect(pending?.getAttribute("aria-label")).toContain("正在读取差异");
+    expect(app.querySelectorAll(".workspace-diff-skeleton-line").length).toBe(28);
+    expect(app.querySelector(".workspace-diff-skeleton-line.diff-add")).toBeTruthy();
+    expect(app.querySelector(".workspace-diff-skeleton-line.diff-delete")).toBeTruthy();
+    expect(app.querySelector(".workspace-diff-skeleton-line.diff-hunk")).toBeTruthy();
+    expect(app.querySelector(".workspace-feedback")).toBeNull();
+    expect(app.textContent).not.toContain("正在读取工作区");
+    expect(app.querySelector(".workspace-detail-head .workspace-additions")?.classList.contains("is-pending")).toBeTrue();
+
+    release({
+      path: "src/app.ts", layer: "worktree", patch: "@@ -1 +1 @@\n-false\n+true\n",
+      additions: 1, deletions: 1, binary: false, truncated: false, revision,
+    });
+    await load;
+    expect(app.querySelector(".workspace-diff-pending")).toBeNull();
+    expect(app.querySelector(".workspace-diff-line")).toBeTruthy();
   });
 });

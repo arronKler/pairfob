@@ -108,6 +108,42 @@ beforeAll(() => {
   setRenderer(() => renderPane());
 });
 
+test("a restored multiline draft is measured after its chat field is mounted", async () => {
+  bootAgentChat();
+  state.composeDraft = "first line\nsecond line\nthird line";
+  const prototype = happy.HTMLTextAreaElement.prototype;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, "scrollHeight");
+  Object.defineProperty(prototype, "scrollHeight", {
+    configurable: true,
+    get() { return this.isConnected ? 96 : 0; },
+  });
+  try {
+    renderPane();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const field = app.querySelector<HTMLTextAreaElement>(".agent-dock textarea")!;
+    expect(field.value).toBe(state.composeDraft);
+    expect(field.style.height).toBe("96px");
+  } finally {
+    if (descriptor) Object.defineProperty(prototype, "scrollHeight", descriptor);
+    else delete (prototype as unknown as Record<string, unknown>).scrollHeight;
+  }
+});
+
+test.each([true, false])("growing the chat composer preserves follow=%s", async (following) => {
+  bootAgentChat();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const stream = app.querySelector<HTMLElement>(".agent-stream")!;
+  const field = app.querySelector<HTMLTextAreaElement>(".agent-dock textarea")!;
+  Object.defineProperty(stream, "scrollHeight", { configurable: true, value: 1000 });
+  Object.defineProperty(field, "scrollHeight", { configurable: true, value: 96 });
+  stream.scrollTop = 80;
+  state.agentTraceFollow = following;
+  field.value = "first line\nsecond line\nthird line";
+  field.dispatchEvent(new happy.Event("input", { bubbles: true }));
+  expect(field.style.height).toBe("96px");
+  expect(stream.scrollTop).toBe(following ? 1000 : 80);
+});
+
 afterEach(() => {
   leaveAgentChat({ rememberGuided: false, paint: false });
   state.screen = "pane";

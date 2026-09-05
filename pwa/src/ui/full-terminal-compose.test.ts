@@ -48,6 +48,17 @@ function render(sendCompose: (text: string, enter: boolean) => boolean) {
   return root;
 }
 
+function dispatchKey(
+  input: HTMLTextAreaElement,
+  type: "keydown" | "keyup",
+  init: KeyboardEventInit,
+  keyCode?: number,
+): void {
+  const event = new KeyboardEvent(type, { bubbles: true, ...init });
+  if (keyCode !== undefined) Object.defineProperty(event, "keyCode", { value: keyCode });
+  input.dispatchEvent(event);
+}
+
 beforeAll(() => {
   state.paneId = "p1";
 });
@@ -102,7 +113,7 @@ describe("complete-terminal compose input", () => {
     expect(input.value).toBe("");
   });
 
-  test("does not submit an unfinished composition or Shift+Enter", () => {
+  test("does not submit unfinished composition or Shift+Enter", () => {
     const sent: string[] = [];
     const root = render((text) => {
       sent.push(text);
@@ -111,13 +122,86 @@ describe("complete-terminal compose input", () => {
     const input = root.querySelector("textarea") as HTMLTextAreaElement;
     input.value = "拼音";
     input.dispatchEvent(new Event("compositionstart"));
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    dispatchKey(input, "keydown", { key: "Enter", shiftKey: true });
     expect(sent).toEqual([]);
     input.dispatchEvent(new Event("compositionend"));
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+    dispatchKey(input, "keydown", { key: "Enter", shiftKey: true });
     expect(sent).toEqual([]);
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    dispatchKey(input, "keydown", { key: "Enter" });
     expect(sent).toEqual(["拼音"]);
+  });
+
+  test("submits Chromium-style composing Enter exactly once after compositionend", async () => {
+    const sent: Array<[string, boolean]> = [];
+    const root = render((text, enter) => {
+      sent.push([text, enter]);
+      return true;
+    });
+    const form = root.querySelector("form") as HTMLFormElement;
+    const input = root.querySelector("textarea") as HTMLTextAreaElement;
+    input.dispatchEvent(new Event("compositionstart"));
+    input.value = "中文";
+    input.dispatchEvent(new Event("input"));
+    dispatchKey(input, "keydown", { key: "Enter", isComposing: true }, 229);
+    expect(sent).toEqual([]);
+    input.dispatchEvent(new Event("compositionend"));
+    // Firefox can publish the committed value in an input event after
+    // compositionend. The queued submit must observe that value as well.
+    input.value = "中文完成";
+    input.dispatchEvent(new Event("input"));
+    dispatchKey(input, "keydown", { key: "Enter", repeat: true });
+    form.requestSubmit();
+    dispatchKey(input, "keyup", { key: "Enter" });
+    await Promise.resolve();
+    expect(sent).toEqual([["中文完成", true]]);
+    expect(input.value).toBe("");
+    expect(state.composeDraft).toBe("");
+  });
+
+  test("submits WebKit-style Enter when compositionend precedes keydown", () => {
+    const sent: Array<[string, boolean]> = [];
+    const root = render((text, enter) => {
+      sent.push([text, enter]);
+      return true;
+    });
+    const form = root.querySelector("form") as HTMLFormElement;
+    const input = root.querySelector("textarea") as HTMLTextAreaElement;
+    input.dispatchEvent(new Event("compositionstart"));
+    input.value = "候选词";
+    input.dispatchEvent(new Event("input"));
+    input.dispatchEvent(new Event("compositionend"));
+    dispatchKey(input, "keydown", { key: "Enter" }, 229);
+    dispatchKey(input, "keydown", { key: "Enter", repeat: true }, 229);
+    form.requestSubmit();
+    dispatchKey(input, "keyup", { key: "Enter" });
+    expect(sent).toEqual([["候选词", true]]);
+  });
+
+  test("preserves an IME draft when delivery is not ready and retries only on a new Enter", async () => {
+    const attempts: Array<[string, boolean]> = [];
+    const root = render((text, enter) => {
+      attempts.push([text, enter]);
+      return attempts.length > 1;
+    });
+    const input = root.querySelector("textarea") as HTMLTextAreaElement;
+    input.dispatchEvent(new Event("compositionstart"));
+    input.value = "暂存中文";
+    input.dispatchEvent(new Event("input"));
+    dispatchKey(input, "keydown", { key: "Enter", isComposing: true }, 229);
+    input.dispatchEvent(new Event("compositionend"));
+    dispatchKey(input, "keyup", { key: "Enter" });
+    await Promise.resolve();
+    expect(attempts).toEqual([["暂存中文", true]]);
+    expect(input.value).toBe("暂存中文");
+    expect(state.composeDraft).toBe("暂存中文");
+
+    dispatchKey(input, "keydown", { key: "Enter" });
+    dispatchKey(input, "keyup", { key: "Enter" });
+    expect(attempts).toEqual([
+      ["暂存中文", true],
+      ["暂存中文", true],
+    ]);
+    expect(input.value).toBe("");
   });
 
   test("expanded pad Enter submits the draft in compose mode", () => {
@@ -130,6 +214,28 @@ describe("complete-terminal compose input", () => {
     });
     (root.querySelector('[aria-label="Enter"]') as HTMLButtonElement).click();
     expect(sent).toEqual([["confirm", true]]);
+  });
+
+  test("expanded pad Enter completes an IME even when blur emits no compositionend", async () => {
+    state.keysExpanded = true;
+    const sent: Array<[string, boolean]> = [];
+    const root = render((text, enter) => {
+      sent.push([text, enter]);
+      return true;
+    });
+    const input = root.querySelector("textarea") as HTMLTextAreaElement;
+    input.focus();
+    input.dispatchEvent(new Event("compositionstart"));
+    input.value = "屏幕回车";
+    input.dispatchEvent(new Event("input"));
+
+    (root.querySelector('[aria-label="Enter"]') as HTMLButtonElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sent).toEqual([["屏幕回车", true]]);
+    expect(input.value).toBe("");
+    expect(state.composeIME).toBeFalse();
   });
 
   test("expanded command chips fill compose mode and stream in live mode", () => {

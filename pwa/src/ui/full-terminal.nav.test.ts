@@ -327,6 +327,33 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(localStorage.getItem("pairfob:termCols")).toBe("120");
   });
 
+  test("the shell keeps scroll controls owned by the host while the pad expands below it", () => {
+    state.keysExpanded = false;
+    bootFullTerminal();
+    const root = app.querySelector<HTMLElement>(".full-terminal-root")!;
+    const chrome = root.querySelector<HTMLElement>(".full-terminal-chrome")!;
+    const host = root.querySelector<HTMLElement>(".full-terminal-host")!;
+    const rail = root.querySelector<HTMLElement>(".full-terminal-scroll")!;
+    const pad = root.querySelector<HTMLElement>(".full-terminal-pad")!;
+    expect([...root.children]).toEqual([chrome, host, pad]);
+    expect(host.contains(rail)).toBeTrue();
+    expect(pad.contains(rail)).toBeFalse();
+    expect(rail.querySelectorAll(".full-terminal-scroll-btn")).toHaveLength(4);
+
+    click('.full-terminal-pad [aria-label="更多按键"]');
+    const expandedPad = root.querySelector<HTMLElement>(".full-terminal-pad")!;
+    expect(state.keysExpanded).toBeTrue();
+    expect([...root.children]).toEqual([chrome, host, expandedPad]);
+    expect(host.contains(rail)).toBeTrue();
+    expect(expandedPad.querySelectorAll(".keys")).toHaveLength(3);
+
+    click('.full-terminal-pad [aria-label="更多按键"]');
+    const collapsedPad = root.querySelector<HTMLElement>(".full-terminal-pad")!;
+    expect(state.keysExpanded).toBeFalse();
+    expect([...root.children]).toEqual([chrome, host, collapsedPad]);
+    expect(collapsedPad.querySelectorAll(".keys")).toHaveLength(1);
+  });
+
   test("compose and live input switch in place without losing an unsent draft", () => {
     bootFullTerminal();
     expect(app.querySelector(".full-terminal-compose-input")).toBeTruthy();
@@ -427,6 +454,68 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(app.querySelector(".xterm")).toBeNull();
     await waitUntil(() => opens === 1, "renderer-backed terminal open");
     expect(app.querySelector(".xterm")).toBeTruthy();
+  });
+
+  test("connected queues a replacement after a pending open becomes stale", async () => {
+    let opens = 0;
+    let finishFirst = () => {};
+    const closed: string[] = [];
+    const session = live();
+    session.terminalOpen = (paneId, cols, rows) => {
+      const terminalId = `term_${String(++opens).padStart(32, "1")}`;
+      const opened = {
+        operationId: "op_AAECAwQFBgcICQoL",
+        terminalId,
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      };
+      if (opens > 1) return Promise.resolve(opened);
+      return new Promise((resolve) => { finishFirst = () => resolve(opened); });
+    };
+    session.terminalClose = async (terminalId) => { closed.push(terminalId); };
+    bootFullTerminal(session);
+    await waitUntil(() => opens === 1, "pending reconnect open");
+
+    handleFullTerminalEvent({ type: "reconnecting" });
+    handleFullTerminalEvent({ type: "connected" });
+    finishFirst();
+    await waitUntil(() => opens === 2, "replacement reconnect open");
+
+    expect(closed).toEqual(["term_11111111111111111111111111111111"]);
+  });
+
+  test("visible queues a replacement after a hidden pending open becomes stale", async () => {
+    let opens = 0;
+    let finishFirst = () => {};
+    const closed: string[] = [];
+    const session = live();
+    session.terminalOpen = (paneId, cols, rows) => {
+      const terminalId = `term_${String(++opens).padStart(32, "1")}`;
+      const opened = {
+        operationId: "op_AAECAwQFBgcICQoL",
+        terminalId,
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      };
+      if (opens > 1) return Promise.resolve(opened);
+      return new Promise((resolve) => { finishFirst = () => resolve(opened); });
+    };
+    session.terminalClose = async (terminalId) => { closed.push(terminalId); };
+    bootFullTerminal(session);
+    await waitUntil(() => opens === 1, "pending hidden open");
+
+    visibility = "hidden";
+    handleFullTerminalVisibility(true);
+    visibility = "visible";
+    handleFullTerminalVisibility(false);
+    finishFirst();
+    await waitUntil(() => opens === 2, "replacement visible open");
+
+    expect(closed).toEqual(["term_11111111111111111111111111111111"]);
   });
 
   test("a full frame can resync while stale frames are ignored and a forward delta gap closes", async () => {

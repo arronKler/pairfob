@@ -606,6 +606,8 @@ export const zh = {
   "workspace.directoryTruncated": "这个目录非常大，仅显示前 20,000 项。",
   "workspace.root": "根目录",
   "workspace.file": "文件预览",
+  "workspace.readingFile": "正在读取文件…",
+  "workspace.readingDiff": "正在读取差异…",
   "workspace.binary": "这是二进制文件，无法预览。",
   "workspace.previewTruncated": "文件较大，这里只显示前 128 KiB。",
   "workspace.diff": "Git Diff",

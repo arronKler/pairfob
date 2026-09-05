@@ -119,7 +119,7 @@
 .full-terminal-host {
   flex: 1 1 0%;
   min-width: 0;
-  min-height: 0;
+  min-height: var(--full-terminal-min-host-height, 128px);
   position: relative;
   padding: 4px;
   overflow: hidden;
@@ -250,9 +250,75 @@
 .full-terminal-pad {
   flex: 0 0 auto;
   min-width: 0;
+  min-height: 0;
+  max-height: calc(var(--vv-height, 100dvh) - 53px - env(safe-area-inset-top, 0px) - var(--full-terminal-min-host-height, 128px));
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   background: var(--dock-bg);
   border-top: 1px solid var(--line);
+}
+
+.full-terminal-pad :is(.keys) {
+  grid-auto-columns: minmax(44px, 1fr);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.full-terminal-pad :is(.key) {
+  min-width: 44px;
+}
+
+@media (max-width: 363.98px) {
+  .full-terminal-pad :is(.keys) {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(6, minmax(44px, 1fr));
+    overflow-x: visible;
+  }
+
+  .full-terminal-pad :is(.key-more) {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+  Four 44px controls plus gaps are taller than the five-row host retained in
+  short landscape. Add a real grid row for the horizontal rail: it must not
+  float over either the session chrome or the terminal canvas.
+*/
+@media (max-height: 500px) and (orientation: landscape) {
+  .full-terminal-host {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 54px;
+    min-height: calc(var(--full-terminal-min-host-height, 128px) + 54px);
+  }
+
+  .full-terminal-pan {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+  }
+
+  .full-terminal-scroll {
+    position: static;
+    z-index: auto;
+    grid-column: 1;
+    grid-row: 2;
+    align-self: center;
+    justify-self: end;
+    max-width: calc(100% - 8px);
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .full-terminal-pad {
+    max-height: calc(var(--vv-height, 100dvh) - 53px - env(safe-area-inset-top, 0px) - var(--full-terminal-min-host-height, 128px) - 54px);
+  }
 }
 
 .full-terminal-kb {
