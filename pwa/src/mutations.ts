@@ -17,13 +17,15 @@ export async function refreshSnapshotOnly(session: LiveSession, shouldPaint: () 
   state.paneTouched = nextTouchedAt(previous, state.agents, state.paneTouched);
   savePaneTouched();
   state.lastHerdSig = herdSignature(state.agents);
-  if (state.paneId && !state.agents.some((agent) => agent.paneId === state.paneId)) {
+  const paneGone = Boolean(state.paneId && !state.agents.some((agent) => agent.paneId === state.paneId));
+  if (paneGone) {
     state.paneId = "";
     state.paneText = "";
     state.paneHash = "";
     if (state.screen === "pane") leavePaneScreen();
   }
-  if (shouldPaint()) render();
+  // A removed pane has no live composer to preserve; paint the resulting navigation.
+  if (paneGone || shouldPaint()) render();
 }
 
 export async function reconcileAmbiguousMutation(

@@ -215,6 +215,32 @@ describe("navigation keeps unsent drafts", () => {
 });
 
 describe("async prompt results stay on the originating request", () => {
+  test("stale reconciliation paints navigation when the current pane disappears", async () => {
+    boot();
+    let fail!: () => void;
+    const session = live();
+    state.live = {
+      ...session,
+      promptAgent: () => new Promise((_, reject) => {
+        fail = () => reject(new ProtocolError("unknown_outcome", "uncertain old request"));
+      }),
+      snapshot: async () => {
+        const snapshot = await session.snapshot();
+        return { ...snapshot, panes: snapshot.panes.filter((pane) => pane.pane_id !== "p2") };
+      },
+    } as typeof state.live;
+    typeDraft("A request");
+    clickSend();
+    await openPane("p2");
+    let paintedScreen = "";
+    setRenderer(() => { paintedScreen = state.screen; paintLive(); });
+    fail();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(state.paneId).toBe("");
+    expect(state.screen).toBe("home");
+    expect(paintedScreen).toBe("home");
+  });
+
   for (const mode of ["agent", "guided"] as const) {
     for (const outcome of ["success", "conflict", "unknown_outcome"] as const) {
       test(`stale ${outcome} preserves the other pane's ${mode} composer`, async () => {
