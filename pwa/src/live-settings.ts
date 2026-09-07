@@ -4,6 +4,7 @@ import { parseRuntimeOperationsConfig } from "./lib/operations";
 import { directFailureDiagnostic } from "./lib/protocol/client";
 import { reportMutationError } from "./mutations";
 import { render } from "./paint";
+import { adoptScreen } from "./compose-drafts";
 import { clearNotice, haptic, setNetworkMode, showError, showStatus, state } from "./state";
 import { track } from "./lib/telemetry";
 import { syncInactiveTransportMode } from "./live";
@@ -36,7 +37,7 @@ function p2pFailureMessage(error: unknown): string {
 }
 
 export function openSettings(): void {
-  state.screen = "settings";
+  adoptScreen("settings");
   track("pwa_settings");
   void refreshSettings();
 }

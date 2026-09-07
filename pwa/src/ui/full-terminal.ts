@@ -485,7 +485,6 @@ export function leaveFullTerminal(opts?: { rememberGuided?: boolean; paint?: boo
   const rememberGuided = opts?.rememberGuided !== false;
   const paint = opts?.paint !== false;
   captureComposeDraft();
-  bumpViewIncarnation();
   leaving = (async () => {
     try {
       await suspendBridge(true, undefined, false);
@@ -496,6 +495,7 @@ export function leaveFullTerminal(opts?: { rememberGuided?: boolean; paint?: boo
       if (rememberGuided) setPaneTermMode(state.paneId, "guided");
       state.fullTerminal = false;
       setFullTerminalDocumentMode(false);
+      bumpViewIncarnation();
       applyComposeDraft();
       if (paint) render();
     } finally {

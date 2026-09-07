@@ -14,6 +14,7 @@ const { messageOf, state } = await import("./state.ts");
 const { readStoredDraft } = await import("./state-drafts.ts");
 const {
   acquirePromptLock,
+  adoptScreen,
   applyComposeDraft,
   bumpViewIncarnation,
   captureComposeDraft,
@@ -126,6 +127,17 @@ describe("compose drafts stay on their pane and mode", () => {
     state.composeDraft = "secret prompt never persisted";
     captureComposeDraft();
     expect(localStorage.length).toBe(0);
+  });
+
+  test("leaving the pane screen still captures through the last composer scope", () => {
+    boot();
+    state.composeDraft = "typed on pane";
+    adoptScreen("settings");
+    expect(state.screen).toBe("settings");
+    expect(currentComposeDraftScope()).toBeNull();
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("typed on pane");
+    captureComposeDraft();
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("typed on pane");
   });
 });
 

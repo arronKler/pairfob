@@ -13,6 +13,7 @@ import {
   stopPolling,
 } from "./live";
 import { render } from "./paint";
+import { adoptScreen } from "./compose-drafts";
 import { clearNotice, showStatus, state } from "./state";
 import { track } from "./lib/telemetry";
 
@@ -32,7 +33,7 @@ export async function resumeComputer(pair: PairResult): Promise<void> {
 export function openComputers(): void {
   if (state.screen === "settings") state.computersFrom = "settings";
   else if (state.screen !== "computers") state.computersFrom = "home";
-  state.screen = "computers";
+  adoptScreen("computers");
   render();
 }
 
@@ -77,7 +78,7 @@ export async function switchComputer(daemonId: string): Promise<void> {
   const pair = state.computers.find((item) => item.daemonId === daemonId);
   if (!pair) return;
   if (state.phase === "live" && state.credential?.daemonId === daemonId) {
-    state.screen = "home";
+    adoptScreen("home");
     render();
     return;
   }

@@ -3,6 +3,7 @@ import { computerTitle } from "../lib/computer-catalog";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { formatDeviceAge } from "../lib/ui-model";
+import { adoptScreen } from "../compose-drafts";
 import { render } from "../paint";
 import { app, state } from "../state";
 import { isDesk } from "../viewport";
@@ -47,7 +48,7 @@ export function fillComputers(container: HTMLElement | DocumentFragment, withBac
   if (withBack) {
     container.append(
       backBar(t("computers.title"), () => {
-        state.screen = state.computersFrom === "settings" ? "settings" : isDesk() && state.paneId ? "pane" : "home";
+        adoptScreen(state.computersFrom === "settings" ? "settings" : isDesk() && state.paneId ? "pane" : "home");
         render();
       }),
     );

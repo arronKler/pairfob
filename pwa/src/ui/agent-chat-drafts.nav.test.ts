@@ -26,20 +26,43 @@ for (const key of [
 g.location = happy.location;
 g.history = happy.history;
 g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
 g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
 g.cancelAnimationFrame = happy.cancelAnimationFrame.bind(happy);
 g.visualViewport = happy.visualViewport;
+let deskLayout = false;
+const realMatchMedia = happy.matchMedia.bind(happy);
+const matchMedia = (query: string) => {
+  if (String(query).includes("min-width: 900px")) {
+    return {
+      matches: deskLayout,
+      media: query,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent() { return false; },
+      onchange: null,
+    };
+  }
+  return realMatchMedia(query);
+};
+g.matchMedia = matchMedia;
+(happy as unknown as { matchMedia: typeof matchMedia }).matchMedia = matchMedia;
+(g.window as { matchMedia: typeof matchMedia }).matchMedia = matchMedia;
 happy.document.body.innerHTML = '<main id="app"></main>';
 
 const { app, messageOf, setPaneTermMode, state, visibleNotice } = await import("../state.ts");
-const { bumpViewIncarnation, resetComposeDrafts } = await import("../compose-drafts.ts");
+const { bumpViewIncarnation, currentViewIncarnation, promptRequestIsLive, resetComposeDrafts } = await import("../compose-drafts.ts");
 const { readStoredDraft } = await import("../state-drafts.ts");
 const { clearAgentTraceCache } = await import("../lib/agent-trace-cache.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderPane } = await import("./pane.ts");
+const { renderSettings } = await import("./settings.ts");
+const { renderComputers } = await import("./computers.ts");
 const { enterAgentChat, leaveAgentChat } = await import("./agent-chat.ts");
 const { clearLiveConnection, closeComputerSession, establish, openPane } = await import("../live.ts");
+const { openSettings } = await import("../live-settings.ts");
+const { openComputers } = await import("../computers.ts");
 
 function agent(paneId: string) {
   return {
@@ -79,6 +102,7 @@ function live(promptAgent?: () => Promise<unknown>) {
       ],
     }),
     getConfig: async () => ({}),
+    listDevices: async () => ({ devices: [] }),
     setNetworkAvailable: () => undefined,
     switchTransport: async () => undefined,
     isConnected: () => true,
@@ -109,8 +133,14 @@ function boot(): void {
   state.agentTraceFollow = true;
   setPaneTermMode("p1", "agent");
   setPaneTermMode("p2", "agent");
-  setRenderer(() => renderPane());
-  renderPane();
+  setRenderer(paintLive);
+  paintLive();
+}
+
+function paintLive(): void {
+  if (state.screen === "settings") renderSettings();
+  else if (state.screen === "computers") renderComputers();
+  else renderPane();
 }
 
 function field(): HTMLTextAreaElement {
@@ -132,10 +162,11 @@ function clickSend(): void {
 }
 
 beforeAll(() => {
-  setRenderer(() => renderPane());
+  setRenderer(paintLive);
 });
 
 afterEach(() => {
+  deskLayout = false;
   closeComputerSession("draft-nav-a");
   closeComputerSession("draft-nav-b");
   leaveAgentChat({ rememberGuided: false, paint: false });
@@ -478,5 +509,62 @@ describe("async prompt results stay on the originating request", () => {
     clearLiveConnection();
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "full" }).text).toBe("full draft stays with full");
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "guided" }).text).toBe("");
+  });
+
+  test("openSettings then openComputers still parks the pane draft for establish", async () => {
+    boot();
+    typeDraft("keep through settings");
+    openSettings();
+    await Promise.resolve();
+    expect(state.screen).toBe("settings");
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("keep through settings");
+    openComputers();
+    expect(state.screen).toBe("computers");
+    const connect = async () => live() as never;
+    await establish(credential("draft-nav-b") as never, connect);
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("keep through settings");
+    expect(readStoredDraft({ daemonId: "draft-nav-b", paneId: "p1", mode: "agent" }).text).toBe("");
+  });
+
+  test("returning from settings does not give a pending send DOM ownership", async () => {
+    boot();
+    deskLayout = true;
+    let reject!: (error: Error) => void;
+    state.live = {
+      ...live(),
+      promptAgent: async () =>
+        await new Promise((_, fail) => {
+          reject = fail;
+        }),
+    } as typeof state.live;
+    typeDraft("pending through settings");
+    clickSend();
+    await Promise.resolve();
+    const incarnation = currentViewIncarnation();
+    openSettings();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(state.screen).toBe("settings");
+    expect(state.operationBusy).toBe(false);
+    const back = app.querySelector(".back");
+    if (!(back instanceof HTMLButtonElement)) throw new Error("missing settings back");
+    back.click();
+    expect(state.screen).toBe("pane");
+    expect(currentViewIncarnation()).toBeGreaterThan(incarnation);
+    const failed = new ProtocolError("timeout", "stale after settings");
+    reject(failed);
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(visibleNotice()).toBeNull();
+    expect(promptRequestIsLive({
+      session: state.live!,
+      viewIncarnation: incarnation,
+      lockId: 0,
+      revision: 0,
+      noticeScope: { phase: "live", screen: "pane", daemonId: "daemon-a", paneId: "p1" },
+      draftScope: { daemonId: "daemon-a", paneId: "p1", mode: "agent" },
+      text: "pending through settings",
+    })).toBe(false);
   });
 });

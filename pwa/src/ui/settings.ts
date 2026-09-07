@@ -8,6 +8,7 @@ import { openComputers } from "../computers";
 import { computerTitle } from "../lib/computer-catalog";
 import { revokeDevice, revokeSelf } from "../live-operations";
 import { enablePush, refreshSettings, selectNetworkMode } from "../live-settings";
+import { adoptScreen } from "../compose-drafts";
 import { render } from "../paint";
 import { app, setDefaultTermMode, state } from "../state";
 import { isDesk } from "../viewport";
@@ -141,7 +142,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   if (withBack) {
     container.append(
       backBar(t("settings.title"), () => {
-        state.screen = isDesk() && state.paneId ? "pane" : "home";
+        adoptScreen(isDesk() && state.paneId ? "pane" : "home");
         render();
       }),
     );

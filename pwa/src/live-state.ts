@@ -1,12 +1,13 @@
 import { NO_OPERATION_CAPABILITIES } from "./lib/operations.ts";
 import { clearAgentTraceCache } from "./lib/agent-trace-cache.ts";
-import { bumpViewIncarnation } from "./compose-drafts.ts";
+import { bumpViewIncarnation, forgetComposeSurface } from "./compose-drafts.ts";
 import { resetPaneView, state } from "./state.ts";
 import { clearBoardPreviews } from "./ui/board-preview.ts";
 
 /** Clear data that belongs to one established daemon session. Callers park drafts first. */
 export function resetLiveConnectionState(): void {
   bumpViewIncarnation();
+  forgetComposeSurface();
   clearAgentTraceCache();
   clearBoardPreviews();
   state.live = null;
