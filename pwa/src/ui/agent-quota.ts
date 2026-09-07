@@ -6,7 +6,7 @@ import type { LiveSession } from "../lib/protocol/session-types";
 import { adoptScreen } from "../compose-drafts";
 import { app, state } from "../state";
 import { render } from "../paint";
-import { backBar, setHeading } from "./chrome";
+import { backBar } from "./chrome";
 
 type QuotaView = { loading: boolean; items: AgentQuota[] | null; error: string };
 export const providerNames = { codex: "Codex", claude: "Claude Code", antigravity: "Antigravity", copilot: "GitHub Copilot", cursor: "Cursor", grok: "Grok Build" };
@@ -36,11 +36,7 @@ export async function refreshAgentQuota(): Promise<void> {
 
 export function quotaPanel(): HTMLElement {
   const section = node("section", "quota-panel");
-  section.append(setHeading(t("quota.title"), [t("quota.note")]));
   const view = state.live ? views.get(state.live) : undefined;
-  const refresh = button(t(view?.loading ? "quota.loading" : "quota.refresh"), "btn btn-small btn-ghost", () => void refreshAgentQuota());
-  refresh.disabled = !!view?.loading || !state.live?.isConnected();
-  section.append(refresh);
   section.setAttribute("aria-busy", String(!!view?.loading));
   if (view?.error) section.append(node("p", "set-note", view.error));
   if (!state.live?.isConnected()) section.append(node("p", "set-note", t("quota.offline")));
@@ -95,10 +91,25 @@ export function openQuota(): void {
   void refreshAgentQuota();
 }
 export function fillQuota(container: HTMLElement): void {
-  container.append(backBar(t("quota.title"), () => { adoptScreen("settings"); render(); }), node("p", "set-note", t("quota.summaryNote")), quotaPanel());
+  const view = state.live ? views.get(state.live) : undefined;
+  const bar = backBar(t("quota.title"), () => {
+    adoptScreen("settings");
+    render();
+  });
+  const actions = node("div", "topbar-actions");
+  const refresh = button(
+    t(view?.loading ? "quota.loading" : "quota.refresh"),
+    "topbar-create quota-refresh",
+    () => void refreshAgentQuota(),
+  );
+  refresh.disabled = !!view?.loading || !state.live?.isConnected();
+  refresh.setAttribute("aria-busy", String(!!view?.loading));
+  actions.append(refresh);
+  bar.append(actions);
+  container.append(bar, quotaPanel());
 }
 export function renderQuota(): void {
-  const root = node("div", "page quota-page");
+  const root = node("div", "page settings-page quota-page");
   fillQuota(root);
   app.replaceChildren(root);
 }

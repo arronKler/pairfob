@@ -79,6 +79,8 @@ describe("UI accessibility guardrails", () => {
     expect(css).toMatch(/\.chev,\s*\.group-chev,\s*\.pill-toggle::after\s*\{[^}]*clip-path:\s*polygon\(/);
     expect(rule(".pin-mark")).toMatch(/clip-path:\s*polygon\(/);
     expect(css).toMatch(/\.key-more::after,\s*\.icon-more::after\s*\{[^}]*box-shadow:/);
+    expect(rule(".icon-workspace::before")).toMatch(/mask:/);
+    expect(rule(".icon-workspace::before")).not.toMatch(/linear-gradient/);
     expect(css).toMatch(/\.key-more\[aria-expanded="true"\]::after\s*\{[^}]*clip-path:\s*polygon\(/);
     expect(css).not.toMatch(/content:\s*"▾"|content:\s*"⌄"|content:\s*"›"|content:\s*"\+"/);
     expect(rule(".set-help::before")).toMatch(/content:\s*""/);
@@ -103,7 +105,7 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("interactive touch controls keep a 44px target", () => {
-    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".computer-add", ".set-nav", ".device-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-state-retry", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".agent-reply-copy", ".slash-cmd"]) {
+    for (const selector of [".manual-pair summary", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".quota-details", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".computer-add", ".set-nav", ".device-forget", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-state-retry", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".agent-reply-copy", ".slash-cmd"]) {
       const match = rule(selector).match(/min-height:\s*(\d+)px/);
       expect(match, selector).not.toBeNull();
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);
@@ -131,6 +133,12 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".topbar-create")).not.toMatch(/background:\s*var\(--accent\)/);
     expect(rule(".topbar-create")).toMatch(/min-width:\s*44px/);
     expect(css).toMatch(/\.topbar-create::before\s*\{[^}]*linear-gradient\(currentColor/);
+  });
+
+  test("quota details refresh is a topbar chip and summary headings keep settings type", () => {
+    expect(rule(".topbar-create.quota-refresh::before")).toMatch(/mask:/);
+    expect(css).not.toMatch(/\.quota-summary-heading h2\s*\{/);
+    expect(rule(".quota-details")).toMatch(/color:\s*var\(--accent\)/);
   });
 
   test("settings back sits on the title row without the session-chrome glyph nudge", () => {

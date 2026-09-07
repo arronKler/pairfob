@@ -69,15 +69,11 @@
 
 .icon-workspace::before {
   content: "";
-  box-sizing: border-box;
-  width: 17px;
-  height: 16px;
-  border: 1.5px solid currentColor;
-  border-radius: 2px;
-  background:
-    linear-gradient(currentColor, currentColor) 3px 4px / 9px 1.5px no-repeat,
-    linear-gradient(currentColor, currentColor) 3px 8px / 7px 1.5px no-repeat,
-    linear-gradient(currentColor, currentColor) 3px 12px / 10px 1.5px no-repeat;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.75 4.5h4.15L7.2 6.15H14.25v7.35H1.75z' fill='none' stroke='%23000' stroke-width='1.4' stroke-linejoin='round'/%3E%3Cpath d='M1.75 6.15h12.5' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.75 4.5h4.15L7.2 6.15H14.25v7.35H1.75z' fill='none' stroke='%23000' stroke-width='1.4' stroke-linejoin='round'/%3E%3Cpath d='M1.75 6.15h12.5' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 .key-more[aria-expanded="true"]::after {

@@ -8,13 +8,18 @@ for (const key of ["window", "document", "navigator", "HTMLElement", "Node", "lo
 g.location = happy.location;
 g.matchMedia = happy.matchMedia.bind(happy);
 happy.document.body.innerHTML = '<main id="app"></main>';
-const { state } = await import("../state");
-const { quotaPanel, refreshAgentQuota } = await import("./agent-quota");
+const { app, state } = await import("../state");
+const { quotaPanel, refreshAgentQuota, views } = await import("./agent-quota");
 const { ProtocolError } = await import("../lib/protocol/errors");
 const { setRenderer } = await import("../paint");
 const sample = (): AgentQuota => ({ provider: "codex", plan: "pro", status: "ok", source: "app_server", observed_at: Math.floor(Date.now() / 1000), windows: [{ name: "codex", used_percent: 25, window_minutes: 300, resets_at: Math.floor(Date.now() / 1000) + 3600 }] });
 const session = (read: () => Promise<AgentQuota[]>) => ({ isConnected: () => true, agentQuota: read }) as LiveSession;
-afterEach(() => { state.live = null; state.screen = "home"; setRenderer(() => {}); });
+afterEach(() => {
+  state.live = null;
+  state.screen = "home";
+  setRenderer(() => {});
+  app.replaceChildren();
+});
 test("renders remaining quota and expired snapshots without a progress bar", async () => {
   state.live = session(async () => [sample()]);
   await refreshAgentQuota();
@@ -65,7 +70,7 @@ test("Grok shows shared subscription allowance", async () => {
 
 test("settings summary is compact and navigates to a separate details page", async () => {
   const { quotaSummary, quotaOverview } = await import("./agent-quota-summary");
-  const { fillQuota } = await import("./agent-quota");
+  const { renderQuota } = await import("./agent-quota");
   const q = sample();
   state.live = session(async () => [q]);
   state.screen = "settings";
@@ -79,12 +84,22 @@ test("settings summary is compact and navigates to a separate details page", asy
   expect(quotaOverview({ ...q, observed_at: 1 })).toBeNull();
   expect(quotaOverview({ ...q, provider: "copilot", windows: [{ ...q.windows[0]!, name: "chat" }] })).toBeNull();
   expect(quotaOverview({ ...q, provider: "copilot", windows: [{ ...q.windows[0]!, name: "premium interactions" }] })).toBe(75);
+  expect(summary.querySelector(".set-heading")?.classList.contains("quota-summary-heading")).toBe(true);
+  expect(summary.querySelector(".quota-details")).not.toBeNull();
+  expect(summary.querySelector(".set-help")).not.toBeNull();
   (summary.querySelector(".quota-mini") as HTMLButtonElement).click();
   expect(state.screen).toBe("quota");
-  const detail = document.createElement("div");
-  fillQuota(detail);
-  expect(detail.querySelector(".quota-card")).not.toBeNull();
-  (detail.querySelector("button") as HTMLButtonElement).click();
+  while (state.live && views.get(state.live)?.loading) await Promise.resolve();
+  renderQuota();
+  expect(app.querySelector(".settings-page.quota-page")).not.toBeNull();
+  expect(app.querySelector(".topbar-title")?.textContent).toBe("订阅余量");
+  expect(app.querySelector(".set-title")).toBeNull();
+  const refresh = app.querySelector(".topbar .quota-refresh") as HTMLButtonElement | null;
+  expect(refresh?.textContent).toBe("刷新余量");
+  expect(refresh?.classList.contains("topbar-create")).toBe(true);
+  expect(app.textContent).not.toContain("概览环");
+  expect(app.querySelector(".quota-card")).not.toBeNull();
+  (app.querySelector(".back") as HTMLButtonElement).click();
   expect(state.screen).toBe("settings");
 });
 

@@ -16,8 +16,10 @@ export function quotaOverview(q: AgentQuota | undefined): number | "unlimited" |
 
 export function quotaSummary(): HTMLElement {
   const section = node("section", "quota-summary");
-  const heading = node("div", "quota-summary-heading");
-  heading.append(setHeading(t("quota.title")), button(`${t("quota.details")} ›`, "btn btn-small btn-ghost", openQuota));
+  const heading = setHeading(t("quota.title"), [t("quota.note"), t("quota.summaryNote")]);
+  heading.classList.add("quota-summary-heading");
+  const details = button(`${t("quota.details")} ›`, "quota-details", openQuota);
+  heading.insertBefore(details, heading.querySelector(".set-help"));
   const strip = node("div", "quota-strip");
   const view = state.live ? views.get(state.live) : undefined;
   section.setAttribute("aria-busy", String(!!view?.loading));
