@@ -11,7 +11,7 @@ import {
   type SessionEvent,
 } from "../lib/protocol/client";
 import { render } from "../paint";
-import { applyComposeDraft, captureComposeDraft, switchComposeView } from "../compose-drafts";
+import { applyComposeDraft, bumpViewIncarnation, captureComposeDraft, switchComposeView } from "../compose-drafts";
 import { app, haptic, messageOf, saveTermCols, saveTermFit, selectedAgent, setPaneTermMode, showStatus, state, type TermCols, type TermFit } from "../state";
 import { isDesk } from "../viewport";
 import {
@@ -485,6 +485,7 @@ export function leaveFullTerminal(opts?: { rememberGuided?: boolean; paint?: boo
   const rememberGuided = opts?.rememberGuided !== false;
   const paint = opts?.paint !== false;
   captureComposeDraft();
+  bumpViewIncarnation();
   leaving = (async () => {
     try {
       await suspendBridge(true, undefined, false);

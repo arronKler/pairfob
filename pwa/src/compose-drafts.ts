@@ -9,22 +9,25 @@ import { fitOperationPrompt } from "./lib/operations";
 import { ProtocolError } from "./lib/protocol/errors";
 import { messageOf } from "./lib/notices";
 import {
-  bumpViewGeneration as bumpStoredViewGeneration,
+  bumpDraftRevision,
+  bumpViewIncarnation as bumpStoredViewIncarnation,
   clearDraftStore,
-  currentViewGeneration as storedViewGeneration,
+  currentViewIncarnation as storedViewIncarnation,
   dropPromptLocks,
   holdPromptLock,
   nextPromptLockId,
   readStoredDraft,
   releasePromptLock as releaseStoredLock,
+  unstickPromptBusy,
   writeStoredDraft,
 } from "./state-drafts";
 import { captureNoticeScope, noticeScopeIsCurrent, state } from "./state";
 
 export type PromptRequestOwner = {
   session: object;
-  viewGeneration: number;
+  viewIncarnation: number;
   lockId: number;
+  revision: number;
   noticeScope: NoticeScope;
   draftScope: ComposeDraftScope;
   text: string;
@@ -50,13 +53,16 @@ export function currentComposeDraftScope(): ComposeDraftScope | null {
 export function captureComposeDraft(): void {
   const scope = currentComposeDraftScope();
   if (!scope) return;
-  writeStoredDraft(scope, { text: state.composeDraft });
-}
-
-export function clearCurrentComposeDraft(): void {
-  state.composeDraft = "";
-  const scope = currentComposeDraftScope();
-  if (scope) writeStoredDraft(scope, { text: "", error: "" });
+  const stored = readStoredDraft(scope);
+  if (state.composeDraft === stored.text) {
+    writeStoredDraft(scope, { text: state.composeDraft });
+    return;
+  }
+  writeStoredDraft(scope, {
+    text: state.composeDraft,
+    error: "",
+    revision: stored.revision + 1,
+  });
 }
 
 export function applyComposeDraft(): void {
@@ -70,46 +76,49 @@ export function applyComposeDraft(): void {
   if (scope.mode === "agent" && entry.error) state.agentTraceNote = entry.error;
 }
 
+export function currentViewIncarnation(): number {
+  return storedViewIncarnation();
+}
+
+export function bumpViewIncarnation(): number {
+  if (unstickPromptBusy()) state.operationBusy = false;
+  return bumpStoredViewIncarnation();
+}
+
+/** Park the visible draft, then advance the view so in-flight UI is no longer live. */
+export function parkComposeView(): void {
+  captureComposeDraft();
+  bumpViewIncarnation();
+}
+
 export function switchComposeView(mutate: () => void): void {
   captureComposeDraft();
+  bumpViewIncarnation();
   mutate();
   applyComposeDraft();
 }
 
-/**
- * Put failed prompt text back on the originating scope only. Visible or stored
- * edits on that scope win; the original text is otherwise kept for later restore.
- */
-export function recoverComposeDraft(scope: ComposeDraftScope, text: string): boolean {
+function beginPromptAttempt(scope: ComposeDraftScope): number {
+  const revision = bumpDraftRevision(scope);
+  writeStoredDraft(scope, { text: "", error: "", revision });
+  return revision;
+}
+
+export function recoverComposeDraft(scope: ComposeDraftScope, text: string, revision: number): boolean {
   const fitted = fitOperationPrompt(text).text;
   if (!fitted) return false;
+  const stored = readStoredDraft(scope);
+  if (stored.revision !== revision) return false;
   const current = currentComposeDraftScope();
   if (current && sameComposeDraftScope(current, scope)) {
     if (state.composeDraft.trim()) return false;
     state.composeDraft = fitted;
-    writeStoredDraft(scope, { text: fitted });
+    writeStoredDraft(scope, { text: fitted, revision });
     return true;
   }
-  if (readStoredDraft(scope).text.trim()) return false;
-  writeStoredDraft(scope, { text: fitted });
+  if (stored.text.trim()) return false;
+  writeStoredDraft(scope, { text: fitted, revision });
   return true;
-}
-
-export function rememberPromptError(scope: ComposeDraftScope, message: string): void {
-  writeStoredDraft(scope, { error: message });
-}
-
-export function clearPromptError(scope: ComposeDraftScope): void {
-  writeStoredDraft(scope, { error: "" });
-}
-
-export function currentViewGeneration(): number {
-  return storedViewGeneration();
-}
-
-export function bumpViewGeneration(): number {
-  dropPromptLocks();
-  return bumpStoredViewGeneration();
 }
 
 export function acquirePromptLock(): number | null {
@@ -121,8 +130,9 @@ export function acquirePromptLock(): number | null {
 }
 
 export function releasePromptLock(id: number): boolean {
-  if (!releaseStoredLock(id)) return false;
-  state.operationBusy = false;
+  const result = releaseStoredLock(id);
+  if (!result.owned) return false;
+  if (result.clearedBusy) state.operationBusy = false;
   return true;
 }
 
@@ -131,12 +141,15 @@ export function capturePromptRequest(session: object, paneId: string, text: stri
   if (lockId === null) return null;
   const noticeScope = captureNoticeScope();
   const mode = currentComposeInputMode() ?? "agent";
+  const draftScope = composeDraftScopeFromNotice({ ...noticeScope, paneId }, mode);
+  const revision = beginPromptAttempt(draftScope);
   return {
     session,
-    viewGeneration: storedViewGeneration(),
+    viewIncarnation: storedViewIncarnation(),
     lockId,
+    revision,
     noticeScope: { ...noticeScope, paneId },
-    draftScope: composeDraftScopeFromNotice({ ...noticeScope, paneId }, mode),
+    draftScope,
     text,
   };
 }
@@ -145,29 +158,41 @@ export function promptRequestIsLive(owner: PromptRequestOwner): boolean {
   const scope = currentComposeDraftScope();
   return (
     state.live === owner.session &&
-    storedViewGeneration() === owner.viewGeneration &&
+    storedViewIncarnation() === owner.viewIncarnation &&
     noticeScopeIsCurrent(owner.noticeScope) &&
     Boolean(scope && sameComposeDraftScope(scope, owner.draftScope))
   );
 }
 
+export function promptRequestOwnsComputer(owner: PromptRequestOwner): boolean {
+  return state.live === owner.session && (state.credential?.daemonId ?? null) === owner.draftScope.daemonId;
+}
+
+function ownsStoredAttempt(owner: PromptRequestOwner): boolean {
+  return readStoredDraft(owner.draftScope).revision === owner.revision;
+}
+
+function captureNewerVisibleDraft(owner: PromptRequestOwner): void {
+  const current = currentComposeDraftScope();
+  if (!current || !sameComposeDraftScope(current, owner.draftScope)) return;
+  if (!state.composeDraft.trim() || state.composeDraft === owner.text) return;
+  captureComposeDraft();
+}
+
 export function settlePromptFailure(owner: PromptRequestOwner, error: unknown): { unknownOutcome: boolean; message: string } {
   const unknownOutcome = error instanceof ProtocolError && error.code === "unknown_outcome";
   const message = messageOf(error);
-  rememberPromptError(owner.draftScope, message);
-  if (!unknownOutcome) recoverComposeDraft(owner.draftScope, owner.text);
+  captureNewerVisibleDraft(owner);
+  if (!ownsStoredAttempt(owner)) return { unknownOutcome, message };
+  writeStoredDraft(owner.draftScope, { error: message, revision: owner.revision });
+  if (!unknownOutcome) recoverComposeDraft(owner.draftScope, owner.text, owner.revision);
   return { unknownOutcome, message };
 }
 
 export function settlePromptSuccess(owner: PromptRequestOwner): void {
-  clearPromptError(owner.draftScope);
-  const current = currentComposeDraftScope();
-  if (current && sameComposeDraftScope(current, owner.draftScope)) {
-    writeStoredDraft(owner.draftScope, { text: state.composeDraft });
-    return;
-  }
-  const stored = readStoredDraft(owner.draftScope).text;
-  if (!stored.trim() || stored === owner.text) writeStoredDraft(owner.draftScope, { text: "" });
+  captureNewerVisibleDraft(owner);
+  if (!ownsStoredAttempt(owner)) return;
+  writeStoredDraft(owner.draftScope, { text: "", error: "", revision: owner.revision + 1 });
 }
 
 export function resetComposeDrafts(): void {

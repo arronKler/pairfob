@@ -10,7 +10,7 @@ import type {
   WorkspaceFile,
 } from "./lib/workspace";
 import { WorkspaceReadCache, type WorkspaceScope } from "./lib/workspace-cache";
-import { applyComposeDraft, captureComposeDraft } from "./compose-drafts";
+import { applyComposeDraft, bumpViewIncarnation, captureComposeDraft } from "./compose-drafts";
 import { render } from "./paint";
 import { clearNotice, messageOf, state } from "./state";
 import { ProtocolError } from "./lib/protocol/errors";
@@ -219,6 +219,7 @@ export async function enterWorkspace(
   const session = state.live;
   if (!session || !paneId) return;
   captureComposeDraft();
+  bumpViewIncarnation();
   cacheCurrentModel();
   const cached = cachedModel(session, paneId);
   workspaceSession = session;

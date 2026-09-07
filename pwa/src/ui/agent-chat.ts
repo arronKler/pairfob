@@ -12,8 +12,8 @@ import { render } from "../paint";
 import { reconcileAmbiguousMutation } from "../mutations";
 import {
   capturePromptRequest,
-  clearCurrentComposeDraft,
   promptRequestIsLive,
+  promptRequestOwnsComputer,
   releasePromptLock,
   settlePromptFailure,
   settlePromptSuccess,
@@ -639,7 +639,7 @@ async function submitAgentPrompt(): Promise<void> {
   if (!session || !selected || !text || !canSend(selected) || state.operationBusy) return;
   const owner = capturePromptRequest(session, selected.paneId, text);
   if (!owner) return;
-  clearCurrentComposeDraft();
+  state.composeDraft = "";
   state.agentTracePendingBase = state.agentTraceItems.map((item) => ({ ...item }));
   state.agentTracePending = text;
   state.agentTraceFollow = true;
@@ -647,22 +647,22 @@ async function submitAgentPrompt(): Promise<void> {
   paintPromptOwner();
   try {
     await session.promptAgent({ pane_id: owner.draftScope.paneId, text: owner.text });
-    markPaneSubmitted(owner.draftScope.paneId);
-    haptic(8);
+    if (promptRequestOwnsComputer(owner)) markPaneSubmitted(owner.draftScope.paneId);
     settlePromptSuccess(owner);
     clearNoticeForScope(owner.noticeScope);
     if (promptRequestIsLive(owner)) {
+      haptic(8);
       paintPromptOwner();
       await refreshAgentTrace();
     }
   } catch (error) {
     const { unknownOutcome, message } = settlePromptFailure(owner, error);
-    showError(message, owner.noticeScope, true);
     if (promptRequestIsLive(owner)) {
       state.agentTracePending = "";
       state.agentTracePendingBase = [];
       state.agentTraceNote = message;
       restoreOwnerComposeField();
+      showError(message, owner.noticeScope, true);
       paintPromptOwner();
       if (unknownOutcome) {
         await reconcileAmbiguousMutation(session, error);
@@ -670,6 +670,8 @@ async function submitAgentPrompt(): Promise<void> {
       }
     } else if (unknownOutcome) {
       await reconcileAmbiguousMutation(session, error);
+    } else {
+      restoreOwnerComposeField();
     }
   } finally {
     releasePromptOwner(owner, promptRequestIsLive(owner));

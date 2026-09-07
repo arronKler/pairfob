@@ -6,14 +6,16 @@ const MAX_DRAFTS = 32;
 export type StoredComposeDraft = {
   text: string;
   error: string;
+  revision: number;
 };
 
-const emptyDraft = (): StoredComposeDraft => ({ text: "", error: "" });
+const emptyDraft = (): StoredComposeDraft => ({ text: "", error: "", revision: 0 });
 
 const drafts = new Map<string, StoredComposeDraft>();
-let viewGeneration = 0;
+let viewIncarnation = 0;
 let lockSerial = 0;
 let heldLock = 0;
+let busyOwner = 0;
 
 function touch(key: string, entry: StoredComposeDraft): void {
   drafts.delete(key);
@@ -25,15 +27,14 @@ function touch(key: string, entry: StoredComposeDraft): void {
   }
 }
 
-export function currentViewGeneration(): number {
-  return viewGeneration;
+export function currentViewIncarnation(): number {
+  return viewIncarnation;
 }
 
-/** Session/computer identity for async results. Pane switches keep this value. */
-export function bumpViewGeneration(): number {
-  heldLock = 0;
-  viewGeneration += 1;
-  return viewGeneration;
+/** Pane, mode, and session identity for async UI. Does not drop an in-flight lock. */
+export function bumpViewIncarnation(): number {
+  viewIncarnation += 1;
+  return viewIncarnation;
 }
 
 export function nextPromptLockId(): number {
@@ -43,12 +44,21 @@ export function nextPromptLockId(): number {
 
 export function holdPromptLock(id: number): void {
   heldLock = id;
+  busyOwner = id;
 }
 
-export function releasePromptLock(id: number): boolean {
-  if (heldLock !== id) return false;
-  heldLock = 0;
+export function unstickPromptBusy(): boolean {
+  if (!heldLock || busyOwner !== heldLock) return false;
+  busyOwner = 0;
   return true;
+}
+
+export function releasePromptLock(id: number): { owned: boolean; clearedBusy: boolean } {
+  if (heldLock !== id) return { owned: false, clearedBusy: false };
+  heldLock = 0;
+  const clearedBusy = busyOwner === id;
+  if (clearedBusy) busyOwner = 0;
+  return { owned: true, clearedBusy };
 }
 
 export function promptLockHeld(id: number): boolean {
@@ -57,6 +67,7 @@ export function promptLockHeld(id: number): boolean {
 
 export function dropPromptLocks(): void {
   heldLock = 0;
+  busyOwner = 0;
 }
 
 export function readStoredDraft(scope: ComposeDraftScope): StoredComposeDraft {
@@ -67,7 +78,7 @@ export function readStoredDraft(scope: ComposeDraftScope): StoredComposeDraft {
 export function writeStoredDraft(scope: ComposeDraftScope, patch: Partial<StoredComposeDraft>): StoredComposeDraft {
   const key = composeDraftKey(scope);
   const next = { ...readStoredDraft(scope), ...patch };
-  if (!next.text && !next.error) {
+  if (!next.text && !next.error && next.revision <= 0) {
     drafts.delete(key);
     return emptyDraft();
   }
@@ -75,19 +86,18 @@ export function writeStoredDraft(scope: ComposeDraftScope, patch: Partial<Stored
   return { ...next };
 }
 
+export function bumpDraftRevision(scope: ComposeDraftScope): number {
+  const revision = readStoredDraft(scope).revision + 1;
+  writeStoredDraft(scope, { revision });
+  return revision;
+}
+
 export function clearDraftStore(): void {
   drafts.clear();
   heldLock = 0;
+  busyOwner = 0;
 }
 
 export function draftStoreSize(): number {
   return drafts.size;
-}
-
-export function draftStoreUsesLocalStorage(storage: Storage): boolean {
-  for (let i = 0; i < storage.length; i++) {
-    const key = storage.key(i);
-    if (key?.includes("composeDraft") || key?.includes("promptDraft")) return true;
-  }
-  return false;
 }

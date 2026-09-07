@@ -60,7 +60,7 @@ import {
 import { isDesk } from "./viewport";
 import { refreshBoardPreviews } from "./ui/board-preview";
 import { composeField, dropQueuedKeys, paneReadLines, patchChromeTitle, patchSessionScreen, preserveCompose } from "./ui/session-view";
-import { applyComposeDraft, captureComposeDraft } from "./compose-drafts";
+import { applyComposeDraft, captureComposeDraft, parkComposeView } from "./compose-drafts";
 import { canEnterAgentChat, patchAgentChat, refreshAgentTrace, restoreAgentTrace } from "./ui/agent-chat";
 import { disposeFullTerminal, handleFullTerminalEvent, leaveFullTerminal } from "./ui/full-terminal";
 import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
@@ -144,6 +144,7 @@ function invalidateLiveView(): void {
 export function clearLiveConnection(): void {
   const session = state.live;
   const daemonId = state.credential?.daemonId;
+  captureComposeDraft();
   stopPolling();
   dropQueuedKeys();
   guidedScrollController.dispose();
@@ -206,15 +207,16 @@ export async function landAfterDisconnect(opts: {
 }
 
 export async function establish(pair: PairResult, connect: SessionConnector = connectComputerSession): Promise<void> {
+  captureComposeDraft();
   stopPolling();
   dropQueuedKeys();
   guidedScrollController.dispose();
+  if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
+  else disposeFullTerminal();
   state.phase = "resuming";
   state.credential = pair;
   state.addingComputer = false;
   render();
-  if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
-  else disposeFullTerminal();
   invalidateLiveView();
   resetLiveConnectionState();
   state.phase = "resuming";
@@ -371,7 +373,7 @@ export async function refreshHerdConfig(): Promise<boolean> {
 }
 
 export async function openPane(paneId: string): Promise<void> {
-  captureComposeDraft();
+  parkComposeView();
   dropQueuedKeys();
   guidedScrollController.dispose();
   if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
@@ -393,7 +395,7 @@ export async function openPane(paneId: string): Promise<void> {
 }
 
 function abandonOpenPane(message: string): void {
-  captureComposeDraft();
+  parkComposeView();
   disposeFullTerminal();
   leavePaneScreen();
   resetPaneView();

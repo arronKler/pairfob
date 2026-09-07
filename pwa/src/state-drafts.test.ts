@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
-  bumpViewGeneration,
+  bumpViewIncarnation,
   clearDraftStore,
-  currentViewGeneration,
+  currentViewIncarnation,
   draftStoreSize,
   dropPromptLocks,
   holdPromptLock,
@@ -10,6 +10,7 @@ import {
   promptLockHeld,
   readStoredDraft,
   releasePromptLock,
+  unstickPromptBusy,
   writeStoredDraft,
 } from "./state-drafts";
 
@@ -29,12 +30,19 @@ describe("in-memory compose drafts", () => {
     expect(readStoredDraft(scope("p31")).text).toBe("draft-31");
   });
 
-  test("empty text and error forget the entry", () => {
+  test("empty text and error with no revision forget the entry", () => {
     clearDraftStore();
     writeStoredDraft(scope("p1"), { text: "secret", error: "failed" });
     writeStoredDraft(scope("p1"), { text: "", error: "" });
     expect(draftStoreSize()).toBe(0);
-    expect(readStoredDraft(scope("p1"))).toEqual({ text: "", error: "" });
+    expect(readStoredDraft(scope("p1"))).toEqual({ text: "", error: "", revision: 0 });
+  });
+
+  test("an in-flight revision keeps the slot after text is cleared", () => {
+    clearDraftStore();
+    writeStoredDraft(scope("p1"), { text: "", error: "", revision: 4 });
+    expect(draftStoreSize()).toBe(1);
+    expect(readStoredDraft(scope("p1")).revision).toBe(4);
   });
 
   test("same pane id on another computer is a different slot", () => {
@@ -45,15 +53,17 @@ describe("in-memory compose drafts", () => {
     expect(readStoredDraft(scope("p1", "daemon-b")).text).toBe("beta");
   });
 
-  test("view generation advances and drops the held lock", () => {
+  test("view incarnation advances without dropping the held lock", () => {
     clearDraftStore();
-    const first = currentViewGeneration();
+    const first = currentViewIncarnation();
     const lock = nextPromptLockId();
     holdPromptLock(lock);
     expect(promptLockHeld(lock)).toBe(true);
-    expect(bumpViewGeneration()).toBe(first + 1);
-    expect(promptLockHeld(lock)).toBe(false);
-    expect(releasePromptLock(lock)).toBe(false);
+    expect(unstickPromptBusy()).toBe(true);
+    expect(bumpViewIncarnation()).toBe(first + 1);
+    expect(promptLockHeld(lock)).toBe(true);
+    expect(unstickPromptBusy()).toBe(false);
+    expect(releasePromptLock(lock)).toEqual({ owned: true, clearedBusy: false });
   });
 
   test("releasing one lock does not drop a later lock", () => {
@@ -63,9 +73,9 @@ describe("in-memory compose drafts", () => {
     const second = nextPromptLockId();
     holdPromptLock(first);
     holdPromptLock(second);
-    expect(releasePromptLock(first)).toBe(false);
+    expect(releasePromptLock(first)).toEqual({ owned: false, clearedBusy: false });
     expect(promptLockHeld(second)).toBe(true);
-    expect(releasePromptLock(second)).toBe(true);
+    expect(releasePromptLock(second)).toEqual({ owned: true, clearedBusy: true });
     expect(promptLockHeld(second)).toBe(false);
   });
 });

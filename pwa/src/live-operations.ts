@@ -33,7 +33,7 @@ import {
 import { ProtocolError, type DeviceSummary, type LiveSession } from "./lib/protocol/client";
 import { type AgentCard } from "./lib/ranking";
 import { startWorktreeJob, type WorktreeJobDriver } from "./lib/worktree-jobs";
-import { applyComposeDraft, captureComposeDraft } from "./compose-drafts";
+import { applyComposeDraft, parkComposeView } from "./compose-drafts";
 import { landAfterDisconnect, openPane, refreshFromSession, refreshPane } from "./live";
 import { reconcileAmbiguousMutation, reportMutationError } from "./mutations";
 import { render } from "./paint";
@@ -363,7 +363,7 @@ export async function layoutSelectedPane(kind: "resize" | "swap" | "zoom"): Prom
 
 function dropPaneIfCurrent(paneId: string): void {
   if (!paneId || state.paneId !== paneId) return;
-  captureComposeDraft();
+  parkComposeView();
   disposeFullTerminal();
   dropQueuedKeys();
   state.paneId = "";

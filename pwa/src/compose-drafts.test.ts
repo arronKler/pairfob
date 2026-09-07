@@ -15,13 +15,13 @@ const { readStoredDraft } = await import("./state-drafts.ts");
 const {
   acquirePromptLock,
   applyComposeDraft,
-  bumpViewGeneration,
+  bumpViewIncarnation,
   captureComposeDraft,
   capturePromptRequest,
-  clearCurrentComposeDraft,
   currentComposeDraftScope,
-  currentViewGeneration,
+  currentViewIncarnation,
   promptRequestIsLive,
+  promptRequestOwnsComputer,
   recoverComposeDraft,
   releasePromptLock,
   resetComposeDrafts,
@@ -126,9 +126,6 @@ describe("compose drafts stay on their pane and mode", () => {
     state.composeDraft = "secret prompt never persisted";
     captureComposeDraft();
     expect(localStorage.length).toBe(0);
-    for (let i = 0; i < localStorage.length; i++) {
-      expect(localStorage.key(i)).not.toContain("draft");
-    }
   });
 });
 
@@ -137,7 +134,7 @@ describe("prompt request ownership", () => {
     boot();
     state.composeDraft = "send me";
     const owner = capturePromptRequest(sessionA, "p1", "send me")!;
-    clearCurrentComposeDraft();
+    state.composeDraft = "";
     expect(promptRequestIsLive(owner)).toBe(true);
     const timeout = new ProtocolError("timeout", "A timed out");
     settlePromptFailure(owner, timeout);
@@ -145,7 +142,7 @@ describe("prompt request ownership", () => {
     expect(readStoredDraft(owner.draftScope).error).toBe(messageOf(timeout));
 
     state.composeDraft = "newer edit";
-    const skipped = recoverComposeDraft(owner.draftScope, "send me");
+    const skipped = recoverComposeDraft(owner.draftScope, "send me", owner.revision);
     expect(skipped).toBe(false);
     expect(state.composeDraft).toBe("newer edit");
   });
@@ -153,7 +150,7 @@ describe("prompt request ownership", () => {
   test("unknown_outcome records the error and does not put the prompt back", () => {
     boot();
     const owner = capturePromptRequest(sessionA, "p1", "maybe sent")!;
-    clearCurrentComposeDraft();
+    state.composeDraft = "";
     const unknown = new ProtocolError("unknown_outcome", "refresh first");
     const result = settlePromptFailure(owner, unknown);
     expect(result.unknownOutcome).toBe(true);
@@ -162,7 +159,7 @@ describe("prompt request ownership", () => {
     expect(readStoredDraft(owner.draftScope).error).toBe(messageOf(unknown));
   });
 
-  test("leaving the pane, switching computers, or a new generation is not live", () => {
+  test("leaving the pane, switching computers, or a new incarnation is not live", () => {
     boot();
     const owner = capturePromptRequest(sessionA, "p1", "owned")!;
     state.paneId = "p2";
@@ -179,31 +176,34 @@ describe("prompt request ownership", () => {
     state.credential = credential("daemon-b");
     state.live = sessionB as typeof state.live;
     expect(promptRequestIsLive(owner)).toBe(false);
+    expect(promptRequestOwnsComputer(owner)).toBe(false);
 
     boot();
-    bumpViewGeneration();
+    bumpViewIncarnation();
     expect(promptRequestIsLive(owner)).toBe(false);
-    expect(currentViewGeneration()).toBeGreaterThan(owner.viewGeneration);
+    expect(currentViewIncarnation()).toBeGreaterThan(owner.viewIncarnation);
   });
 
-  test("a later lock survives the original request finishing", () => {
+  test("changing view unsticks busy without dropping the in-flight lock", () => {
     boot();
     const first = capturePromptRequest(sessionA, "p1", "first")!;
-    bumpViewGeneration();
-    state.operationBusy = false;
+    expect(state.operationBusy).toBe(true);
+    bumpViewIncarnation();
+    expect(state.operationBusy).toBe(false);
     const second = acquirePromptLock();
     expect(second).not.toBeNull();
+    expect(state.operationBusy).toBe(true);
     expect(releasePromptLock(first.lockId)).toBe(false);
     expect(state.operationBusy).toBe(true);
     expect(releasePromptLock(second!)).toBe(true);
     expect(state.operationBusy).toBe(false);
   });
 
-  test("success on a stale view does not clobber a newer draft for that scope", () => {
+  test("success of an older revision does not erase a newer saved draft", () => {
     boot();
     const owner = capturePromptRequest(sessionA, "p1", "first send")!;
-    clearCurrentComposeDraft();
-    bumpViewGeneration();
+    state.composeDraft = "";
+    bumpViewIncarnation();
     state.live = sessionB as typeof state.live;
     boot({ session: sessionB });
     state.composeDraft = "typed after reconnect";
@@ -216,7 +216,7 @@ describe("prompt request ownership", () => {
   test("apply restores a parked failure note only on agent chat", () => {
     boot();
     const owner = capturePromptRequest(sessionA, "p1", "failed send")!;
-    clearCurrentComposeDraft();
+    state.composeDraft = "";
     state.paneId = "p2";
     const failed = new ProtocolError("timeout", "A failed");
     settlePromptFailure(owner, failed);

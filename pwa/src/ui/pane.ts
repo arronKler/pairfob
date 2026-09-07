@@ -1,6 +1,6 @@
 import { node } from "../lib/dom";
 import { render } from "../paint";
-import { applyComposeDraft, captureComposeDraft } from "../compose-drafts";
+import { applyComposeDraft, parkComposeView } from "../compose-drafts";
 import { app, haptic, leavePaneScreen, resetPaneView, selectedAgent, state } from "../state";
 import { enterWorkspace } from "../workspace";
 import { isDesk } from "../viewport";
@@ -12,7 +12,7 @@ import { leaveFullTerminal, renderFullTerminal } from "./full-terminal";
 export { openPaneMenu, openPaneSwitcher };
 
 export async function openSelectedWorkspace(): Promise<void> {
-  captureComposeDraft();
+  parkComposeView();
   const returnView = state.fullTerminal ? "full" : state.agentChat ? "agent" : "guided";
   if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
   if (state.agentChat) leaveAgentChat({ rememberGuided: false, paint: false });
@@ -20,7 +20,7 @@ export async function openSelectedWorkspace(): Promise<void> {
 }
 
 export function goBackFromPane(): void {
-  captureComposeDraft();
+  parkComposeView();
   if (state.fullTerminal) {
     void leaveFullTerminal({ rememberGuided: false, paint: false }).then(() => {
       if (state.phase !== "live") return;

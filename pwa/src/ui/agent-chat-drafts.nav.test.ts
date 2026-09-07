@@ -33,13 +33,13 @@ g.visualViewport = happy.visualViewport;
 happy.document.body.innerHTML = '<main id="app"></main>';
 
 const { app, messageOf, setPaneTermMode, state, visibleNotice } = await import("../state.ts");
-const { bumpViewGeneration, resetComposeDrafts } = await import("../compose-drafts.ts");
+const { bumpViewIncarnation, resetComposeDrafts } = await import("../compose-drafts.ts");
 const { readStoredDraft } = await import("../state-drafts.ts");
 const { clearAgentTraceCache } = await import("../lib/agent-trace-cache.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderPane } = await import("./pane.ts");
 const { enterAgentChat, leaveAgentChat } = await import("./agent-chat.ts");
-const { openPane } = await import("../live.ts");
+const { clearLiveConnection, closeComputerSession, establish, openPane } = await import("../live.ts");
 
 function agent(paneId: string) {
   return {
@@ -78,6 +78,9 @@ function live(promptAgent?: () => Promise<unknown>) {
         { pane_id: "p2", workspace_id: "w1", agent: "codex", agent_status: "working", cwd: "/tmp/demo", history_available: true },
       ],
     }),
+    getConfig: async () => ({}),
+    setNetworkAvailable: () => undefined,
+    switchTransport: async () => undefined,
     isConnected: () => true,
     onEvent: () => () => undefined,
     reconnectNow: () => undefined,
@@ -133,6 +136,8 @@ beforeAll(() => {
 });
 
 afterEach(() => {
+  closeComputerSession("draft-nav-a");
+  closeComputerSession("draft-nav-b");
   leaveAgentChat({ rememberGuided: false, paint: false });
   resetComposeDrafts();
   state.operationBusy = false;
@@ -199,6 +204,7 @@ describe("async prompt results stay on the originating request", () => {
     expect(postedPane).toBe("p1");
 
     await openPane("p2");
+    expect(state.operationBusy).toBe(false);
     state.composeDraft = "Draft belonging to pane B";
     renderPane();
     const focusedBefore = document.activeElement;
@@ -223,7 +229,8 @@ describe("async prompt results stay on the originating request", () => {
     await openPane("p1");
     expect(state.composeDraft).toBe("Prompt intended for pane A");
     expect(field().value).toBe("Prompt intended for pane A");
-    expect(visibleNotice()?.text).toBe(messageOf(failed));
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).error).toBe(messageOf(failed));
+    expect(visibleNotice()).toBeNull();
   });
 
   test("a delayed success after A→B does not paint or focus B", async () => {
@@ -243,6 +250,7 @@ describe("async prompt results stay on the originating request", () => {
     clickSend();
     await Promise.resolve();
     await openPane("p2");
+    expect(state.operationBusy).toBe(false);
     state.composeDraft = "B draft";
     renderPane();
     resolvePrompt();
@@ -289,7 +297,8 @@ describe("async prompt results stay on the originating request", () => {
     await openPane("p1");
     expect(state.composeDraft).toBe("");
     expect(field().value).toBe("");
-    expect(visibleNotice()?.text).toBe(messageOf(unknown));
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).error).toBe(messageOf(unknown));
+    expect(visibleNotice()).toBeNull();
   });
 
   test("A→B→A while the request is in flight still owns the original pane", async () => {
@@ -306,9 +315,10 @@ describe("async prompt results stay on the originating request", () => {
     clickSend();
     await Promise.resolve();
     await openPane("p2");
+    expect(state.operationBusy).toBe(false);
     await openPane("p1");
     expect(state.composeDraft).toBe("");
-    expect(state.operationBusy).toBe(true);
+    expect(state.operationBusy).toBe(false);
     reject(new ProtocolError("timeout", "late A failure"));
     await Promise.resolve();
     await Promise.resolve();
@@ -316,6 +326,7 @@ describe("async prompt results stay on the originating request", () => {
     expect(state.paneId).toBe("p1");
     expect(state.composeDraft).toBe("still A's prompt");
     expect(field().value).toBe("still A's prompt");
+    expect(visibleNotice()).toBeNull();
     expect(state.operationBusy).toBe(false);
   });
 
@@ -334,7 +345,7 @@ describe("async prompt results stay on the originating request", () => {
     clickSend();
     await Promise.resolve();
 
-    bumpViewGeneration();
+    bumpViewIncarnation();
     state.operationBusy = false;
     state.credential = credential("daemon-b");
     state.live = { ...live(), promptAgent: async () => ({ outcome: "applied" }) } as typeof state.live;
@@ -351,5 +362,121 @@ describe("async prompt results stay on the originating request", () => {
     expect(state.agentTraceNote).not.toContain("computer A failed");
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("computer A prompt");
     expect(sessionA).not.toBe(state.live);
+  });
+
+  test("agent→guided→agent while pending does not treat the new chat as live", async () => {
+    boot();
+    let reject!: (error: Error) => void;
+    state.live = {
+      ...live(),
+      promptAgent: async () =>
+        await new Promise((_, fail) => {
+          reject = fail;
+        }),
+    } as typeof state.live;
+    typeDraft("mode switch prompt");
+    clickSend();
+    await Promise.resolve();
+    leaveAgentChat();
+    expect(state.agentChat).toBe(false);
+    expect(state.operationBusy).toBe(false);
+    enterAgentChat();
+    expect(state.agentChat).toBe(true);
+    const failed = new ProtocolError("timeout", "stale mode failure");
+    reject(failed);
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(visibleNotice()).toBeNull();
+    expect(field().value).toBe("mode switch prompt");
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).error).toBe(messageOf(failed));
+  });
+
+  test("an older success does not erase a newer draft typed after A→B→A", async () => {
+    boot();
+    let resolvePrompt!: () => void;
+    state.live = {
+      ...live(),
+      promptAgent: async () => {
+        await new Promise<void>((resolve) => {
+          resolvePrompt = resolve;
+        });
+        return { outcome: "applied" };
+      },
+    } as typeof state.live;
+    typeDraft("first send");
+    clickSend();
+    await Promise.resolve();
+    await openPane("p2");
+    await openPane("p1");
+    typeDraft("newer attempt");
+    resolvePrompt();
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(field().value).toBe("newer attempt");
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("newer attempt");
+  });
+
+  test("success after switching computers does not mark the new computer's same pane id", async () => {
+    boot();
+    state.agents = [
+      { ...agent("p1"), status: "idle" },
+      { ...agent("p2"), status: "idle" },
+    ];
+    state.runtimeAgentStatuses = { p1: "idle", p2: "idle" };
+    state.completionSeen = { p1: true };
+    let resolvePrompt!: () => void;
+    const sessionA = {
+      ...live(),
+      promptAgent: async () => {
+        await new Promise<void>((resolve) => {
+          resolvePrompt = resolve;
+        });
+        return { outcome: "applied" };
+      },
+    };
+    state.live = sessionA as typeof state.live;
+    typeDraft("submit on A");
+    clickSend();
+    await Promise.resolve();
+
+    state.credential = credential("daemon-b");
+    state.live = live() as typeof state.live;
+    state.agents = [
+      { ...agent("p1"), status: "idle" },
+      { ...agent("p2"), status: "idle" },
+    ];
+    state.runtimeAgentStatuses = { p1: "idle", p2: "idle" };
+    state.completionSeen = { p1: true };
+    bumpViewIncarnation();
+
+    resolvePrompt();
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(state.agents[0]?.status).toBe("idle");
+    expect(state.completionSeen).toEqual({ p1: true });
+  });
+
+  test("establish parks the original computer's draft before changing identity", async () => {
+    boot();
+    state.credential = credential("draft-nav-a");
+    typeDraft("keep on computer A");
+    const connect = async () => live() as never;
+    await establish(credential("draft-nav-b") as never, connect);
+    expect(readStoredDraft({ daemonId: "draft-nav-a", paneId: "p1", mode: "agent" }).text).toBe("keep on computer A");
+    expect(readStoredDraft({ daemonId: "draft-nav-b", paneId: "p1", mode: "agent" }).text).toBe("");
+  });
+
+  test("clearLiveConnection parks a full-terminal draft before disposing the mode", () => {
+    boot();
+    state.agentChat = false;
+    state.fullTerminal = true;
+    state.composeDraft = "full draft stays with full";
+    clearLiveConnection();
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "full" }).text).toBe("full draft stays with full");
+    expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "guided" }).text).toBe("");
   });
 });
