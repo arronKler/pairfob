@@ -55,6 +55,16 @@ func main() {
 }
 
 func runDaemon(store *state.Store, sock string) error {
+	ln, err := admin.Listen(sock)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+	defer os.Remove(sock)
+	completeUpdateBoot, err := beginUpdateBoot(store.Dir)
+	if err != nil {
+		return fmt.Errorf("update recovery: %w", err)
+	}
 	logger, err := audit.Open(store.AuditPath())
 	if err != nil {
 		return fmt.Errorf("audit: %w", err)
@@ -107,6 +117,8 @@ func runDaemon(store *state.Store, sock string) error {
 	if err != nil {
 		return fmt.Errorf("engine: %w", err)
 	}
+	eng.Build = version
+	eng.Updater = newRemoteUpdater(store.Dir)
 	if getenv("PAIRFOB_P2P", "1") != "0" {
 		eng.Direct = newWebRTCAcceptor()
 	}
@@ -153,8 +165,11 @@ func runDaemon(store *state.Store, sock string) error {
 		return err
 	}
 
+	if err := completeUpdateBoot(); err != nil {
+		return fmt.Errorf("complete update: %w", err)
+	}
 	log.Printf("pairfob admin %s daemon_id %s", sock, target.DaemonID)
-	return admin.ListenAndServe(sock, liveAdmin{eng: eng, store: store, origin: plan.Origin})
+	return admin.Serve(ln, liveAdmin{eng: eng, store: store, origin: plan.Origin})
 }
 
 func prepareRuntimeAvailability(rt runtime.Runtime, source string, autostart bool) {

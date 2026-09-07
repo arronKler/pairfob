@@ -42,8 +42,8 @@ func TestUpdateExecutableReplacesAndVerifies(t *testing.T) {
 	fresh := []byte("new-binary-contents")
 	server := httptest.NewServer(updateFixture(name, "0.9.0", fresh))
 	t.Cleanup(server.Close)
-	if err := updateExecutable(dest, server.URL); err != nil {
-		t.Fatal(err)
+	if err := updateExecutable(dest, server.URL); err == nil || !strings.Contains(err.Error(), "could not restart") {
+		t.Fatalf("must distinguish installed bytes from running service: %v", err)
 	}
 	got, err := os.ReadFile(dest)
 	if err != nil {
@@ -85,13 +85,14 @@ func TestArtifactDownloadHasASeparateRetryBudget(t *testing.T) {
 func TestDownloadRetriesATimedOutResponseBody(t *testing.T) {
 	var requests atomic.Int32
 	payload := []byte("complete-binary")
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if requests.Add(1) == 1 {
 			w.WriteHeader(http.StatusOK)
 			if flusher, ok := w.(http.Flusher); ok {
 				flusher.Flush()
 			}
-			time.Sleep(100 * time.Millisecond)
+			// Hold the body until the client deadline, independently of scheduling.
+			<-r.Context().Done()
 			return
 		}
 		_, _ = w.Write(payload)
@@ -99,7 +100,7 @@ func TestDownloadRetriesATimedOutResponseBody(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	got, err := fetchDownloadBytes(server.URL, 1024, downloadPolicy{
-		timeout:  20 * time.Millisecond,
+		timeout:  time.Second,
 		attempts: 2,
 	})
 	if err != nil {

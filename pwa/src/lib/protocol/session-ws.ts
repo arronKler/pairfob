@@ -231,6 +231,8 @@ class ReconnectingSession implements LiveSession {
   };
   ping = (t: number) => this.readRPC("Ping", { t_ms: t });
   agentQuota = async () => parseAgentQuota(await this.readRPC("AgentQuota", {}, 12_000));
+  daemonUpdateStatus = () => this.readRPC("DaemonUpdateStatus", {});
+  daemonUpdate = (target: string) => this.trackedMutation("DaemonUpdate", { target });
   getConfig = () => this.readRPC("GetConfig", {}) as Promise<Record<string, unknown>>;
   snapshot = () => this.readRPC("Snapshot", { session: null }) as Promise<Record<string, unknown>>;
   paneRead = (paneId: string, lines = 80, format: "ansi" | "text" = "ansi") =>

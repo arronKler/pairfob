@@ -1,3 +1,4 @@
+import { appendDaemonUpdate } from "./daemon-update";
 import { quotaSummary } from "./agent-quota-summary";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
@@ -149,6 +150,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
     );
   }
   appendNotice(container);
+  appendDaemonUpdate(container as HTMLElement, true);
   const status = herdStatus();
   container.append(setHeading(t("settings.connection"), [networkHelpCopy()]));
   const conn = node("div", "set-card");

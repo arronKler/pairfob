@@ -76,6 +76,8 @@ self.addEventListener("fetch", (event) => {
   // Homepage Docs links to /doc/. Falling back to the cached marketing shell
   // makes that click look like it never left the landing page.
   if (url.pathname === "/doc" || url.pathname.startsWith("/doc/")) return;
+  // Release checks must report network failure instead of a cached release.
+  if (url.pathname === "/dl/VERSION") return;
   if (request.mode === "navigate") {
     const fallback = url.pathname.startsWith("/pair") ? "/pair" : "/";
     event.respondWith(shellNetworkFirst(event, request, fallback));

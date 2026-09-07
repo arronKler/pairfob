@@ -77,7 +77,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantOps := []string{
-		"Ping", "GetConfig", "AgentQuota", "Snapshot", "PaneRead", "SendText", "SendKeys",
+		"Ping", "GetConfig", "DaemonUpdateStatus", "DaemonUpdate", "AgentQuota", "Snapshot", "PaneRead", "SendText", "SendKeys",
 		"PushSubscribe", "RevokeDevice", "ListDevices", "History", "AgentTrace", "AgentTraceSummary", "AgentTraceDetail", "RenamePane",
 		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace",
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",

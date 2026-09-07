@@ -55,7 +55,7 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 	}
 	runtimeKind := liveRuntimeKind(e.RuntimeKind(), descriptor, describeErr)
 	e.reply(s, id, map[string]any{
-		"protocol": 1, "build": "0.1.0", "daemon_id": e.DaemonID, "hostname": e.hostname(),
+		"protocol": 1, "build": e.runningBuild(), "daemon_id": e.DaemonID, "hostname": e.hostname(),
 		"runtime": runtimeKind, "submit_keys": []string{"Enter"}, "vapid_public": e.VAPIDPublic,
 		"push_delivery": "webpush",
 		"push_enabled":  e.PushEnabled,
@@ -295,4 +295,11 @@ func (e *Engine) replyAgentTraceError(s *sess, id string, err error, message str
 		code = "transcript_unavailable"
 	}
 	e.replyErr(s, id, code, message)
+}
+
+func (e *Engine) runningBuild() string {
+	if e.Build == "" {
+		return "dev"
+	}
+	return e.Build
 }

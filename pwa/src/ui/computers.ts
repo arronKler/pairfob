@@ -1,3 +1,4 @@
+import { appendManualUpdateHelp } from "./daemon-update";
 import { beginAddComputer, forgetComputer, switchComputer } from "../computers";
 import { computerTitle } from "../lib/computer-catalog";
 import { button, node } from "../lib/dom";
@@ -67,6 +68,7 @@ export function fillComputers(container: HTMLElement | DocumentFragment, withBac
   const list = node("div", "computer-list");
   state.computers.forEach((pair) => list.append(computerRow(pair)));
   container.append(list, addComputerRow());
+  if (!withBack && state.computers.length) appendManualUpdateHelp(container);
 }
 
 export function renderComputers(): void {

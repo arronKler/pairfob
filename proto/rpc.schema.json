@@ -122,6 +122,17 @@
       },
       "additionalProperties": false
     },
+    "daemonUpdateResult": {
+      "type": "object",
+      "required": ["available", "phase", "target", "operation_id"],
+      "properties": {
+        "available": {"type": "boolean"},
+        "phase": {"enum": ["idle", "downloading", "restarting", "verifying", "complete", "failed", "rolled_back"]},
+        "target": {"type": "string", "maxLength": 64},
+        "operation_id": {"type": "string", "maxLength": 131}
+      },
+      "additionalProperties": false
+    },
     "getConfigResult": {
       "type": "object",
       "required": [
@@ -702,6 +713,8 @@
           "enum": [
             "Ping",
             "GetConfig",
+            "DaemonUpdateStatus",
+            "DaemonUpdate",
             "AgentQuota",
             "Snapshot",
             "PaneRead",
@@ -749,6 +762,8 @@
         "params": { "type": "object" }
       },
       "allOf": [
+        {"if": {"properties": {"op": {"const": "DaemonUpdateStatus"}}}, "then": {"properties": {"params": {"type": "object", "additionalProperties": false}}}},
+        {"if": {"properties": {"op": {"const": "DaemonUpdate"}}}, "then": {"properties": {"params": {"type": "object", "required": ["operation_id", "target"], "properties": {"operation_id": {"$ref": "#/$defs/operationId"}, "target": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^v?[0-9]+([.-][0-9]+){1,3}$"}}, "additionalProperties": false}}}},
         {"if": {"properties": {"op": {"const": "AgentQuota"}}}, "then": {"properties": {"params": {"type": "object", "additionalProperties": false}}}},
         {
           "if": { "properties": { "op": { "const": "Ping" } } },

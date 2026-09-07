@@ -1,3 +1,4 @@
+import { appendDaemonUpdate } from "./daemon-update";
 import { agentMeta, agentTitle, statusLabel } from "../lib/dashboard";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
@@ -69,6 +70,7 @@ export function agentCard(agent: AgentCard): HTMLElement {
 }
 
 export function fillHerdList(root: HTMLElement): void {
+  appendDaemonUpdate(root);
   const jobCards = worktreeProgressList();
   if (jobCards) root.append(jobCards);
   root.append(listGroupControl());

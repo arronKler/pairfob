@@ -51,6 +51,14 @@ func updateCommand(args []string) error {
 	if err != nil {
 		return err
 	}
+	unlock, err := lockUpdate(dest)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if _, err := os.Stat(dest + ".update-pending"); !os.IsNotExist(err) {
+		return errors.New("a daemon update is awaiting startup verification; try again after it completes")
+	}
 	return updateExecutable(dest, base)
 }
 
@@ -87,8 +95,7 @@ func updateExecutable(dest, base string) error {
 		return err
 	}
 	if err := restartInstalledServiceFor(dest); err != nil {
-		fmt.Printf("Updated to %s.\nStart Pairfob again to use it.\n", remoteVersion)
-		return nil
+		return fmt.Errorf("installed %s, but could not restart Pairfob: %w; start Pairfob again to use it", remoteVersion, err)
 	}
 	fmt.Printf("Updated to %s.\n", remoteVersion)
 	return nil

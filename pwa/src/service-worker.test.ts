@@ -104,3 +104,12 @@ describe("notification service worker", () => {
     expect(sanitize("/pair#d=d_0123456789abcdefabcd&notify=1&pane=/private/path")).toBe("/pair");
   });
 });
+
+test("release metadata bypasses offline cache fallback", () => {
+  let handler: ((event: unknown) => void) | undefined;
+  const scope = {location:{origin:"https://pairfob.com"},addEventListener:(name:string,fn:(event:unknown)=>void)=>{if(name==="fetch")handler=fn}};
+  new Function("self", worker)(scope);
+  let intercepted=false;
+  handler!({request:new Request("https://pairfob.com/dl/VERSION"),respondWith:()=>{intercepted=true}});
+  expect(intercepted).toBeFalse();
+});

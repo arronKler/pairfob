@@ -136,6 +136,8 @@ func (e *Engine) sendSessionFrame(s *sess, frame envelope.Frame) error {
 }
 
 type Engine struct {
+	Updater   Updater
+	Build     string // Immutable running binary version, set before serving sessions.
 	Hub       *mux.Hub
 	Conn      mux.Conn
 	RT        runtimeapi.Runtime

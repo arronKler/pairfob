@@ -56,6 +56,8 @@ export interface DeviceSummary {
 export type LiveSession = {
   ping: (t: number) => Promise<unknown>;
   agentQuota: () => Promise<AgentQuota[]>;
+  daemonUpdateStatus?: () => Promise<unknown>;
+  daemonUpdate?: (target: string) => Promise<unknown>;
   getConfig: () => Promise<Record<string, unknown>>;
   snapshot: () => Promise<Record<string, unknown>>;
   paneRead: (paneId: string, lines?: number, format?: "ansi" | "text") => Promise<{ text: string; truncated?: boolean; hash?: string }>;

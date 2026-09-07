@@ -1,3 +1,4 @@
+import { acceptDaemonVersion, markDaemonConfigIncompatible } from "./daemon-update";
 import {
   choosePane,
   herdSignature,
@@ -344,8 +345,11 @@ export async function refreshHerdConfig(): Promise<boolean> {
   if (!session) return false;
   try {
     const config = await session.getConfig();
-    const operations = parseRuntimeOperationsConfig(config);
     if (request !== herdConfigRequest || state.live !== session) return false;
+    acceptDaemonVersion(config);
+    let operations;
+    try { operations = parseRuntimeOperationsConfig(config); }
+    catch (error) { markDaemonConfigIncompatible(); throw error; }
     const hostname = typeof config.hostname === "string" ? config.hostname : "";
     state.herdHost = hostname;
     state.runtimeKind = typeof config.runtime === "string" ? config.runtime : "";

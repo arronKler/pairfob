@@ -1,3 +1,4 @@
+import { acceptDaemonVersion, checkDaemonRelease, markDaemonConfigIncompatible } from "./daemon-update";
 import { refreshAgentQuota } from "./ui/agent-quota";
 import { t } from "./lib/i18n";
 import { type NetworkMode } from "./lib/network-mode";
@@ -55,6 +56,7 @@ async function hasLocalPushSubscription(): Promise<boolean> {
 }
 
 export async function refreshSettings(): Promise<void> {
+  void checkDaemonRelease();
   void refreshAgentQuota();
   const session = state.live;
   const request = ++state.settingsRequest;
@@ -78,10 +80,12 @@ export async function refreshSettings(): Promise<void> {
     state.devicesError = t("err.devicesLoad");
   }
   if (config.status === "fulfilled") {
+    acceptDaemonVersion(config.value);
     try {
       parseRuntimeOperationsConfig(config.value);
       state.pushEnabled = config.value.push_enabled === true;
     } catch {
+      markDaemonConfigIncompatible();
       state.pushEnabled = null;
       state.pushConfigError = t("err.pushConfigBad");
     }
