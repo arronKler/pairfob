@@ -375,6 +375,87 @@ func TestTransportRestartAllowsOneNegotiation(t *testing.T) {
 	}
 }
 
+func TestTransportCommitSendFailureDoesNotMoveKeys(t *testing.T) {
+	failLink := newFailNthConn(1)
+	directLink, _ := mux.NewPipePair(16)
+	eng := NewEngine(nil, failLink, runtime.NewFake())
+	oldRoute, newRoute := [16]byte{3}, [16]byte{4}
+	deviceID := "dev_direct"
+	oldKey, newC2S, newS2C := randomTestBytes(t, 32), randomTestBytes(t, 32), randomTestBytes(t, 32)
+	parent := &sess{
+		routeID: oldRoute, deviceID: deviceID, state: "established", transport: "relay", link: failLink,
+		c2s: &aead.Direction{Key: randomTestBytes(t, 32), Dir: aead.DirClient},
+		s2c: &aead.Direction{Key: append([]byte(nil), oldKey...), Dir: aead.DirServer},
+	}
+	attempt := "p2p_0123456789abcdef"
+	candidate := &sess{
+		routeID: newRoute, deviceID: deviceID, state: "upgrade_ready", transport: "p2p", link: directLink,
+		upgradeFrom: oldRoute, attemptID: attempt,
+		c2s:     &aead.Direction{Key: append([]byte(nil), newC2S...), Dir: aead.DirClient},
+		s2c:     &aead.Direction{Key: append([]byte(nil), newS2C...), Dir: aead.DirServer},
+		rpcStop: make(chan struct{}), rpcQueue: make(chan rpcRequest, 1),
+	}
+	eng.mu.Lock()
+	eng.sessions[oldRoute] = parent
+	eng.sessions[newRoute] = candidate
+	eng.byDevice[deviceID] = oldRoute
+	eng.mu.Unlock()
+	params, _ := json.Marshal(transportCommitParams{AttemptID: attempt, RouteID: hex.EncodeToString(newRoute[:])})
+	eng.rpcTransportCommit(parent, "req_commit", params)
+	if !parent.epochFailed.Load() {
+		t.Fatal("commit send failure did not mark the parent epoch")
+	}
+	if parent.transport != "relay" || parent.link != failLink || string(parent.s2c.Key) != string(oldKey) {
+		t.Fatal("failed commit consumed or moved the parent key epoch")
+	}
+	if candidate.state != "upgrade_ready" || candidate.link != directLink || string(candidate.s2c.Key) != string(newS2C) {
+		t.Fatal("failed commit consumed candidate keys")
+	}
+	if eng.Session(newRoute) == parent || eng.Session(newRoute) != candidate {
+		t.Fatal("failed commit installed the parent on the direct route")
+	}
+}
+
+func TestTransportCommitRejectsFailedEpochsBeforeSeal(t *testing.T) {
+	relayLink, _ := mux.NewPipePair(16)
+	directLink, _ := mux.NewPipePair(16)
+	eng := NewEngine(nil, relayLink, runtime.NewFake())
+	oldRoute, newRoute := [16]byte{8}, [16]byte{9}
+	deviceID := "dev_direct"
+	oldKey := randomTestBytes(t, 32)
+	parent := &sess{
+		routeID: oldRoute, deviceID: deviceID, state: "established", transport: "relay", link: relayLink,
+		s2c: &aead.Direction{Key: append([]byte(nil), oldKey...), Dir: aead.DirServer},
+	}
+	attempt := "p2p_0123456789abcdef"
+	candidate := &sess{
+		routeID: newRoute, deviceID: deviceID, state: "upgrade_ready", transport: "p2p", link: directLink,
+		upgradeFrom: oldRoute, attemptID: attempt,
+		c2s:     &aead.Direction{Key: randomTestBytes(t, 32), Dir: aead.DirClient},
+		s2c:     &aead.Direction{Key: randomTestBytes(t, 32), Dir: aead.DirServer},
+		rpcStop: make(chan struct{}), rpcQueue: make(chan rpcRequest, 1),
+	}
+	eng.mu.Lock()
+	eng.sessions[oldRoute] = parent
+	eng.sessions[newRoute] = candidate
+	eng.byDevice[deviceID] = oldRoute
+	eng.mu.Unlock()
+	params, _ := json.Marshal(transportCommitParams{AttemptID: attempt, RouteID: hex.EncodeToString(newRoute[:])})
+
+	parent.epochFailed.Store(true)
+	eng.rpcTransportCommit(parent, "req_parent", params)
+	if parent.s2c.Seq != 0 || parent.transport != "relay" || eng.Session(newRoute) != candidate {
+		t.Fatal("failed parent epoch was sealed or committed")
+	}
+
+	parent.epochFailed.Store(false)
+	candidate.epochFailed.Store(true)
+	eng.rpcTransportCommit(parent, "req_candidate", params)
+	if parent.transport != "relay" || string(parent.s2c.Key) != string(oldKey) || eng.Session(newRoute) != candidate {
+		t.Fatal("failed candidate epoch still consumed parent or candidate keys")
+	}
+}
+
 func randomTestBytes(t *testing.T, size int) []byte {
 	t.Helper()
 	value := make([]byte, size)

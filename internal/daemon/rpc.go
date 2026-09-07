@@ -34,6 +34,9 @@ func (e *Engine) reply(s *sess, id string, result any) bool {
 	}
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
+	if !s.sendEpochLive() {
+		return false
+	}
 	e.mu.Lock()
 	active := s.state == "established" && e.sessions[s.routeID] == s && s.s2c != nil
 	e.mu.Unlock()
@@ -60,6 +63,9 @@ func (e *Engine) replyErr(s *sess, id, code, message string) {
 	}
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
+	if !s.sendEpochLive() {
+		return
+	}
 	e.mu.Lock()
 	active := s.state == "established" && e.sessions[s.routeID] == s && s.s2c != nil
 	e.mu.Unlock()

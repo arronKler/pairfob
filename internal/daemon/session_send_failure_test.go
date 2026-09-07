@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	goruntime "runtime"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,29 @@ import (
 	"pairfob/internal/mux"
 	"pairfob/internal/runtime"
 )
+
+type queueFullOnceConn struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (c *queueFullOnceConn) Send(envelope.Frame) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls++
+	if c.calls == 1 {
+		return errors.New("queue full")
+	}
+	return nil
+}
+
+func (*queueFullOnceConn) Close() {}
+
+func (c *queueFullOnceConn) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls
+}
 
 type failNthConn struct {
 	mu      sync.Mutex
@@ -175,6 +199,78 @@ func TestTerminalPartialSendFailureDoesNotNotifyOnDeadLink(t *testing.T) {
 	nAfter, _, closed := link.snapshot()
 	if nAfter != 1 || !closed {
 		t.Fatalf("after drain frames=%d closed=%v", nAfter, closed)
+	}
+}
+
+func TestFailedEpochCannotSendAgainBeforeCleanupRuns(t *testing.T) {
+	old := goruntime.GOMAXPROCS(1)
+	defer goruntime.GOMAXPROCS(old)
+	link := &queueFullOnceConn{}
+	engine := NewEngine(nil, link, runtime.NewFake())
+	route := [16]byte{1}
+	session := &sess{
+		routeID: route, deviceID: "dev_review", state: "established", transport: "p2p",
+		link: link, s2c: &aead.Direction{Key: make([]byte, 32), Dir: aead.DirServer},
+	}
+	engine.sessions[route] = session
+	engine.byDevice[session.deviceID] = route
+	first := engine.reply(session, "first", map[string]any{"ok": true})
+	second := engine.reply(session, "second", map[string]any{"ok": true})
+	if first || second || link.count() != 1 {
+		t.Fatalf("after failed epoch: first=%v second=%v wire attempts=%d", first, second, link.count())
+	}
+}
+
+func TestFailedEpochCleanupDoesNotCloseReplacementAtSameRoute(t *testing.T) {
+	old := goruntime.GOMAXPROCS(1)
+	defer goruntime.GOMAXPROCS(old)
+	oldLink := newFailNthConn(1)
+	engine, failed, _ := establishedSendSession(t, oldLink)
+	route := failed.routeID
+	if engine.reply(failed, "req_old", map[string]any{"ok": true}) {
+		t.Fatal("failed epoch reply succeeded")
+	}
+	replacementLink := newFailNthConn(0)
+	replacement := &sess{
+		routeID: route, deviceID: "dev_replacement", state: "established", transport: "p2p",
+		link:     replacementLink,
+		s2c:      &aead.Direction{Key: randomTestBytes(t, 32), Dir: aead.DirServer},
+		rpcQueue: make(chan rpcRequest, sessionRPCQueueSize), rpcStop: make(chan struct{}),
+	}
+	engine.mu.Lock()
+	engine.sessions[route] = replacement
+	engine.byDevice[replacement.deviceID] = route
+	engine.mu.Unlock()
+	t.Cleanup(func() { stopSessionRPC(replacement) })
+	select {
+	case <-oldLink.closeCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("failed epoch did not finish pointer cleanup")
+	}
+	if engine.Session(route) != replacement {
+		t.Fatal("cleanup removed or replaced the new session at the same route")
+	}
+	if !engine.reply(replacement, "req_new", map[string]any{"ok": true}) {
+		t.Fatal("replacement epoch could not send")
+	}
+	n, _, closed := replacementLink.snapshot()
+	if n != 1 || closed {
+		t.Fatalf("replacement frames=%d closed=%v", n, closed)
+	}
+}
+
+func TestSendPokeSkipsFailedEpochBeforeSeal(t *testing.T) {
+	link := newFailNthConn(0)
+	engine, session, _ := establishedSendSession(t, link)
+	session.epochFailed.Store(true)
+	seq := session.s2c.Seq
+	engine.sendPoke("agent_status", "w0:p1")
+	if session.s2c.Seq != seq {
+		t.Fatalf("sendPoke sealed on a failed epoch: seq=%d", session.s2c.Seq)
+	}
+	n, _, _ := link.snapshot()
+	if n != 0 {
+		t.Fatalf("sendPoke wrote %d frames on a failed epoch", n)
 	}
 }
 

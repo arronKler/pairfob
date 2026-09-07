@@ -416,6 +416,10 @@ func (e *Engine) sendPoke(reason, paneID string) {
 	e.mu.Unlock()
 	for _, s := range sessions {
 		s.sendMu.Lock()
+		if !s.sendEpochLive() {
+			s.sendMu.Unlock()
+			continue
+		}
 		e.mu.Lock()
 		active := s.state == "established" && e.sessions[s.routeID] == s && s.s2c != nil
 		e.mu.Unlock()

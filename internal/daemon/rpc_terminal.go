@@ -319,7 +319,7 @@ func (e *Engine) sendTerminalFrame(s *sess, slot *terminalSlot, frame runtime.Te
 			return false, false
 		}
 		e.mu.Lock()
-		active := s.state == "established" && e.sessions[s.routeID] == s && s.s2c != nil
+		active := s.sendEpochLive() && s.state == "established" && e.sessions[s.routeID] == s && s.s2c != nil
 		e.mu.Unlock()
 		if !active {
 			return false, false
@@ -363,6 +363,9 @@ func (e *Engine) sendTerminalClosed(s *sess, terminalID, reason string) {
 	}
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
+	if !s.sendEpochLive() {
+		return
+	}
 	e.mu.Lock()
 	active := s.state == "established" && e.sessions[s.routeID] == s && s.s2c != nil
 	e.mu.Unlock()

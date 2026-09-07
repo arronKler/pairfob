@@ -253,10 +253,11 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 	candidate.sendMu.Lock()
 
 	e.mu.Lock()
-	valid := parent.state == "established" && parent.transport == "relay" &&
+	valid := parent.sendEpochLive() && candidate.sendEpochLive() &&
+		parent.state == "established" && parent.transport == "relay" &&
 		e.sessions[parent.routeID] == parent && candidate.state == "upgrade_ready" &&
 		candidate.upgradeFrom == parent.routeID && candidate.deviceID == parent.deviceID &&
-		candidate.attemptID == input.AttemptID && candidate.link != nil
+		candidate.attemptID == input.AttemptID && candidate.link != nil && parent.s2c != nil
 	if !valid {
 		e.mu.Unlock()
 		candidate.sendMu.Unlock()
@@ -265,7 +266,6 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 		return
 	}
 	oldRoute := parent.routeID
-	oldLink := parent.link
 	body, marshalErr := json.Marshal(map[string]any{
 		"v": 1, "id": id, "ok": true,
 		"result": map[string]any{"attempt_id": input.AttemptID, "route_id": input.RouteID, "transport": "webrtc"},
@@ -284,7 +284,7 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 		return
 	}
 	e.mu.Unlock()
-	if oldLink.Send(envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: oldRoute, Payload: payload}) != nil {
+	if e.sendSessionFrame(parent, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: oldRoute, Payload: payload}) != nil {
 		candidate.sendMu.Unlock()
 		parent.sendMu.Unlock()
 		return

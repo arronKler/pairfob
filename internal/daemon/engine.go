@@ -12,6 +12,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"pairfob/internal/audit"
@@ -95,21 +96,41 @@ type sess struct {
 	rpcStopOnce  sync.Once
 	terminalMu   sync.Mutex
 	terminal     *terminalSlot
+	// epochFailed is set on post-seal send failure so this pointer cannot send
+	// again before lock-taking cleanup runs.
+	epochFailed atomic.Bool
+}
+
+var errEpochFailed = errors.New("session transport epoch failed")
+
+func (s *sess) sendEpochLive() bool {
+	return s != nil && !s.epochFailed.Load()
 }
 
 func (e *Engine) sendSessionFrame(s *sess, frame envelope.Frame) error {
+	if s == nil {
+		if e.Conn != nil {
+			return e.Conn.Send(frame)
+		}
+		return errors.New("session transport is not attached")
+	}
+	if !s.sendEpochLive() {
+		return errEpochFailed
+	}
 	var err error
-	if s != nil && s.link != nil {
+	if s.link != nil {
 		err = s.link.Send(frame)
 	} else if e.Conn != nil {
 		err = e.Conn.Send(frame)
 	} else {
 		err = errors.New("session transport is not attached")
 	}
-	if err != nil && s != nil {
-		// Callers including reply/sendTerminalFrame hold s.sendMu. Tear the
-		// epoch down after that lock is released so closeSession cannot invert.
-		go e.failTransportEpoch(s)
+	if err != nil {
+		// Callers including reply/sendTerminalFrame hold s.sendMu. Mark this
+		// pointer unusable before returning; take sendMu/e.mu in cleanup.
+		if s.epochFailed.CompareAndSwap(false, true) {
+			go e.failTransportEpoch(s)
+		}
 	}
 	return err
 }

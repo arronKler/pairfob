@@ -28,7 +28,7 @@ func (e *Engine) runSessionRPC(s *sess) {
 		select {
 		case request := <-s.rpcQueue:
 			e.mu.Lock()
-			active := s.state == "established" && e.sessions[s.routeID] == s
+			active := s.sendEpochLive() && s.state == "established" && e.sessions[s.routeID] == s
 			e.mu.Unlock()
 			if active {
 				e.dispatch(s, request.id, request.op, request.params)
@@ -84,6 +84,9 @@ func (e *Engine) handleSessionBound(f envelope.Frame) {
 }
 
 func (e *Engine) handleSessFWD(f envelope.Frame, s *sess) {
+	if s.epochFailed.Load() {
+		return
+	}
 	e.mu.Lock()
 	stateNow := s.state
 	e.mu.Unlock()
@@ -385,22 +388,33 @@ func (e *Engine) wipeSession(s *sess) {
 	s.nonce = nil
 }
 
-// failTransportEpoch ends a session after a post-seal send failure. The AEAD
-// sequence is not rolled back and no ERROR frame is written on the jammed
-// link. closeSession is idempotent if the P2P adapter also reports onClose.
+// failTransportEpoch finishes a post-seal send failure on this exact session
+// pointer. The AEAD sequence is not rolled back and no ERROR frame is written
+// on the jammed link. The map entry is removed only if it still points at s,
+// so a replacement at the same route is left alone.
 func (e *Engine) failTransportEpoch(s *sess) {
 	if s == nil {
 		return
 	}
 	e.mu.Lock()
-	active := e.sessions[s.routeID] == s && s.state != "closed"
+	if e.sessions[s.routeID] == s {
+		delete(e.sessions, s.routeID)
+		if rid, ok := e.byDevice[s.deviceID]; ok && rid == s.routeID {
+			delete(e.byDevice, s.deviceID)
+		}
+	}
+	s.state = "closed"
 	deviceID, transport := s.deviceID, s.transport
 	e.mu.Unlock()
-	if !active {
-		return
-	}
 	e.audit("session_send_failed", map[string]any{"device_id": deviceID, "transport": transport})
-	e.closeSession(s.routeID, "", false)
+	stopSessionRPC(s)
+	closeSessionTerminal(s)
+	s.sendMu.Lock()
+	e.wipeSession(s)
+	s.sendMu.Unlock()
+	if s.transport == "p2p" && s.link != nil {
+		s.link.Close()
+	}
 }
 
 func (e *Engine) closeSession(rid [16]byte, code string, notify bool) {
