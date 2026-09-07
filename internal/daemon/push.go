@@ -276,19 +276,21 @@ func (e *Engine) deliverPush(ctx context.Context, deviceID string, payload []byt
 	subs := append([]state.PushSubscription(nil), dev.PushSubscriptions...)
 	e.mu.Unlock()
 	var failures []error
+	var failuresMu sync.Mutex
 	live := subs[:0]
 	nowMS := time.Now().UnixMilli()
 	for _, sub := range subs {
 		if sub.ExpirationTime != nil && *sub.ExpirationTime <= nowMS {
 			if _, err := e.RemovePushSubscription(deviceID, sub.Endpoint); err != nil {
+				failuresMu.Lock()
 				failures = append(failures, err)
+				failuresMu.Unlock()
 			}
 			continue
 		}
 		live = append(live, sub)
 	}
 	subs = live
-	var failuresMu sync.Mutex
 	var wg sync.WaitGroup
 	for _, sub := range subs {
 		sub := sub
@@ -297,7 +299,9 @@ func (e *Engine) deliverPush(ctx context.Context, deviceID string, payload []byt
 		case e.pushSem <- struct{}{}:
 			acquired = true
 		case <-ctx.Done():
+			failuresMu.Lock()
 			failures = append(failures, ctx.Err())
+			failuresMu.Unlock()
 		}
 		if !acquired {
 			continue
