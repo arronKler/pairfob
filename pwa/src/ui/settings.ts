@@ -150,7 +150,6 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
     );
   }
   appendNotice(container);
-  appendDaemonUpdate(container as HTMLElement, true);
   const status = herdStatus();
   container.append(setHeading(t("settings.connection"), [networkHelpCopy()]));
   const conn = node("div", "set-card");
@@ -248,6 +247,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   if (state.devicesError || state.pushConfigError) {
     container.append(button(t("retry"), "btn btn-small btn-ghost retry", refreshSettings));
   }
+  appendDaemonUpdate(container, true);
 }
 
 export function renderSettings(): void {

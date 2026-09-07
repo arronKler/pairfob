@@ -83,7 +83,7 @@ test("manual check bypasses release cache and updates a mounted sidebar without 
   app.replaceChildren();appendDaemonUpdate(app,true);
   let reads=0;
   globalThis.fetch=(async()=>{reads++;return new Response("1.3.0")}) as typeof fetch;
-  const check=[...app.querySelectorAll("button")].find(b=>b.textContent==="检查新版本")!;
+  const check=[...app.querySelectorAll("button")].find(b=>b.textContent==="检查更新")!;
   check.click();await checkDaemonRelease();
   expect(reads).toBe(1);expect(daemonVersion()?.latest).toBe("1.3.0");
 });
@@ -147,4 +147,37 @@ test("entering settings reads a very old config independently of push capability
   expect(daemonVersion()?.incompatible).toBeTrue();
   expect(state.pushEnabled).toBeNull();
   appendDaemonUpdate(app,true);expect(app.textContent).toContain("pairfob update");
+});
+
+test("release check has a visible busy state and explicit success or failure feedback", async () => {
+  connect({daemonUpdateStatus:async()=>idle},"1.1.0");
+  await checkDaemonRelease(true);appendDaemonUpdate(app,true);
+  let finish!:(r:Response)=>void;
+  globalThis.fetch=(()=>new Promise(r=>{finish=r})) as typeof fetch;
+  app.querySelector<HTMLButtonElement>(".daemon-update-check")!.click();
+  const pending=checkDaemonRelease();
+  const busy=app.querySelector<HTMLButtonElement>(".daemon-update-check")!;
+  expect(busy.disabled).toBeTrue();expect(busy.textContent).toContain("正在检查");
+  expect(busy.classList.contains("btn-ghost")).toBeFalse();
+  expect(app.querySelector('[role="status"]')?.textContent).toContain("正在查询");
+  finish(new Response("1.1.0"));await pending;
+  expect(app.querySelector<HTMLButtonElement>(".daemon-update-check")?.disabled).toBeFalse();
+  expect(app.querySelector('[data-tone="ok"]')?.textContent).toContain("已是最新版本");
+  globalThis.fetch=(async()=>{throw new Error("offline")}) as typeof fetch;
+  await checkDaemonRelease(true);
+  expect(app.querySelector('[data-tone="error"]')?.textContent).toContain("检查失败");
+  expect(app.querySelector('[data-tone="ok"]')).toBeNull();
+  app.replaceChildren();appendDaemonUpdate(app,true);
+  expect(app.querySelector('[data-tone="error"]')?.textContent).toContain("检查失败");
+});
+
+
+test("routine settings version stays compact even when background checks fail", async () => {
+  connect({daemonUpdateStatus:async()=>idle},"ad27e83");
+  globalThis.fetch=(async()=>{throw new Error("offline")}) as typeof fetch;
+  await checkDaemonRelease(true);appendDaemonUpdate(app,true);
+  expect(app.querySelector(".daemon-update-version-row")?.textContent).toContain("ad27e83");
+  expect(app.querySelector(".daemon-update-check")?.textContent).toBe("检查更新");
+  expect(app.querySelector(".daemon-update-feedback")).toBeNull();
+  expect(app.querySelector(".set-card")).toBeNull();
 });

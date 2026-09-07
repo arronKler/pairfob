@@ -595,3 +595,54 @@ dialog.modal.sheet > form {
   .worktree-icon { width: 28px; height: 28px; }
   .worktree-opened { padding-right: 6px; padding-left: 6px; }
 }
+
+
+/* Computer update controls need a clear touch target and persistent feedback. */
+.daemon-update .daemon-update-check {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 650;
+  align-self: flex-start;
+}
+.daemon-update .daemon-update-check:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface));
+}
+.daemon-update-feedback {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.daemon-update-feedback[data-tone="warn"] { border-left-color: var(--warn); }
+.daemon-update-feedback[data-tone="error"] { border-left-color: var(--error); }
+.daemon-update-feedback[data-tone="ok"] { border-left-color: var(--ok); }
+
+.daemon-update-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-strong);
+}
+.daemon-update-content { display: flex; flex-direction: column; gap: 10px; }
+.daemon-update-version-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.daemon-update-version { min-width: 0; color: var(--muted); font-size: 0.84rem; }
+.daemon-update-version code { margin-left: 8px; color: var(--ink); overflow-wrap: anywhere; }
+.daemon-update-footer .daemon-update-check { width: auto; flex-shrink: 0; margin: 0; padding: 8px 12px; }
+.daemon-update-footer .daemon-update-feedback {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.84rem;
+}
+.daemon-update-footer .daemon-update-feedback[data-tone="error"] { color: var(--error); }
+.daemon-update-footer .daemon-update-feedback[data-tone="warn"] { color: var(--warn); }

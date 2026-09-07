@@ -4,7 +4,7 @@ import type { LiveSession } from "./lib/protocol/session-types";
 import { newerRelease, legacyBuild, releaseParts } from "./lib/daemon-version";
 import { state } from "./state";
 import { render } from "./paint";
-export type DaemonVersion = { build: string; latest: string; error: boolean; incompatible?: boolean; status?: UpdateStatus; uncertain?: boolean; requesting?: boolean; rejected?: boolean };
+export type DaemonVersion = { build: string; latest: string; error: boolean; checkedManually?: boolean; incompatible?: boolean; status?: UpdateStatus; uncertain?: boolean; requesting?: boolean; rejected?: boolean };
 const views = new Map<string, DaemonVersion>();
 let nextCheckAt = 0;
 let releaseTimer: ReturnType<typeof setTimeout> | null = null;
@@ -40,6 +40,8 @@ export function markDaemonConfigIncompatible(): void {
   if (view) view.incompatible = true;
   repaint();
 }
+let releaseState: "idle" | "checking" | "success" | "error" = "idle";
+export function daemonReleaseCheckState(): typeof releaseState { return releaseState; }
 let latest = "";
 let flight: Promise<void> | null = null;
 export function daemonVersion(): DaemonVersion | undefined { return views.get(state.credential?.daemonId || ""); }
@@ -67,6 +69,7 @@ export async function checkDaemonRelease(force = false): Promise<void> {
   if (flight) return flight;
   observeDaemonUpdates();
   if (!force && Date.now() < nextCheckAt) { scheduleReleaseCheck(); return; }
+  releaseState = "checking";
   flight = (async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
@@ -75,10 +78,12 @@ export async function checkDaemonRelease(force = false): Promise<void> {
       if (!response.ok) throw new Error("release unavailable");
       const value = (await response.text()).trim();
       if (!releaseParts(value)) throw new Error("invalid release version");
+      releaseState = "success";
       latest = value;
       nextCheckAt = Date.now() + 6 * 60 * 60 * 1000;
       for (const view of views.values()) { view.latest = value; view.error = false; }
     } catch {
+      releaseState = "error";
       nextCheckAt = Date.now() + 60 * 1000;
       for (const view of views.values()) view.error = true;
     }
@@ -88,6 +93,7 @@ export async function checkDaemonRelease(force = false): Promise<void> {
       repaint();
     }
   })();
+  repaint();
   return flight;
 }
 
