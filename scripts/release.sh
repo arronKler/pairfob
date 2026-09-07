@@ -9,9 +9,13 @@ cd "$ROOT"
 . "$ROOT/scripts/ship-guard.sh"
 pairfob_require_clean_tree "$ROOT"
 
-VERSION="${VERSION:-dev}"
-if [[ "$VERSION" == "dev" ]] && command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  VERSION="$(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo dev)"
+VERSION="${VERSION:-}"
+if [[ -z "$VERSION" ]] && command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  VERSION="$(git -C "$ROOT" describe --tags --exact-match 2>/dev/null || true)"
+fi
+if [[ -z "$VERSION" ]]; then
+  echo "pairfob /dl requires semver: git tag vX.Y.Z on this commit, or set VERSION=X.Y.Z" >&2
+  exit 1
 fi
 COMMIT="${COMMIT:-}"
 if [[ -z "$COMMIT" ]] && command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then

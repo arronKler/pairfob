@@ -23,18 +23,24 @@ pairfob_require_clean_tree() {
   return 0
 }
 
+# Hosted pairfob binaries are SemVer: vMAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH.
+# Origin BUILD stays YYYY-MM-DD.N and is not a binary version.
+pairfob_semver_ok() {
+  [[ "${1:-}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
 pairfob_require_shipable_version() {
   local v="${1:-}"
   local label="${2:-VERSION}"
   if [[ "${PAIRFOB_ALLOW_DIRTY:-}" == "1" ]]; then
     return 0
   fi
-  if [[ -z "$v" || "$v" == "dev" || "$v" == *-dirty ]]; then
-    echo "$label: '$v' is not shippable (empty, dev, or *-dirty)" >&2
-    echo "rebuild from a clean git tree, or set PAIRFOB_ALLOW_DIRTY=1 for a local artifact" >&2
-    return 1
+  if pairfob_semver_ok "$v"; then
+    return 0
   fi
-  return 0
+  echo "$label: '$v' is not shippable semver (need vX.Y.Z or X.Y.Z)" >&2
+  echo "tag this commit, set VERSION, or set PAIRFOB_ALLOW_DIRTY=1 for a local artifact" >&2
+  return 1
 }
 
 pairfob_require_shipable_version_file() {

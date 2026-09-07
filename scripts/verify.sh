@@ -28,6 +28,7 @@ go test -race ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 bun test scripts/load-mux.test.ts
 bun test scripts/dev-acme.test.ts
+bun test scripts/ship-guard.test.ts
 bun test plugin/herdr/plugin.test.ts
 (cd "$ROOT/site/doc" && bun test)
 

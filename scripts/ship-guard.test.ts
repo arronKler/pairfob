@@ -27,7 +27,7 @@ function releaseFixture(): string {
     writeFileSync(join(dir, name), `fixture ${name}\n`);
     chmodSync(join(dir, name), 0o755);
   }
-  writeFileSync(join(dir, "VERSION"), "2026-08-31.1\n");
+  writeFileSync(join(dir, "VERSION"), "1.0.0\n");
   const manifest = [...releaseFiles, "VERSION"]
     .map((name) => `${createHash("sha256").update(readFileSync(join(dir, name))).digest("hex")}  ${name}`)
     .join("\n");
@@ -36,13 +36,13 @@ function releaseFixture(): string {
 }
 
 describe("ship-guard version", () => {
-  test("accepts a dated stamp and a clean git describe", () => {
-    expect(run(`pairfob_require_shipable_version "2026-08-29.3"`).exit).toBe(0);
-    expect(run(`pairfob_require_shipable_version "578a90b"`).exit).toBe(0);
+  test("accepts SemVer with or without a v prefix", () => {
+    expect(run(`pairfob_require_shipable_version "1.0.0"`).exit).toBe(0);
+    expect(run(`pairfob_require_shipable_version "v1.2.3"`).exit).toBe(0);
   });
 
-  test("refuses empty, dev, and dirty labels", () => {
-    for (const v of ["", "dev", "578a90b-dirty"]) {
+  test("refuses hashes, date stamps, empty, dev, and dirty labels", () => {
+    for (const v of ["", "dev", "578a90b", "578a90b-dirty", "2026-08-29.3", "v1.0.0-1-g578a90b"]) {
       const got = run(`pairfob_require_shipable_version "${v}" "VERSION"`);
       expect(got.exit, v).not.toBe(0);
       expect(got.stderr).toContain("not shippable");
@@ -58,7 +58,9 @@ describe("ship-guard version", () => {
     expect(run(`pairfob_require_shipable_version_file "${dir}/VERSION"`).exit).not.toBe(0);
     writeFileSync(join(dir, "VERSION"), "dev\n");
     expect(run(`pairfob_require_shipable_version_file "${dir}/VERSION"`).exit).not.toBe(0);
-    writeFileSync(join(dir, "VERSION"), "2026-08-29.3\n");
+    writeFileSync(join(dir, "VERSION"), "ad27e83\n");
+    expect(run(`pairfob_require_shipable_version_file "${dir}/VERSION"`).exit).not.toBe(0);
+    writeFileSync(join(dir, "VERSION"), "1.0.0\n");
     expect(run(`pairfob_require_shipable_version_file "${dir}/VERSION"`).exit).toBe(0);
   });
 });
@@ -127,6 +129,8 @@ describe("release and pack call the guard", () => {
     expect(release).toContain("pairfob_require_clean_tree");
     expect(release).toContain("pairfob_require_shipable_version");
     expect(release).toContain("pairfob_require_release_dir");
+    expect(release).toContain("describe --tags --exact-match");
+    expect(release).toContain("requires semver");
   });
 
   test("pack with PAIRFOB_PACK_DL=1 requires a complete release directory", () => {

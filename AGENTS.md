@@ -82,7 +82,7 @@ from the original module so imports do not churn.
 | `proto/` | frozen envelope, RPC schema, vectors, PGP words |
 | `scripts/verify.sh` | format, vet, Go tests (including race), PWA tests, Worker origin tests, typecheck, production build |
 | `scripts/install.sh` | one-line install of pairfob (checksum, enroll, user-level service) |
-| `scripts/release.sh` | cross-compile `dist/dl/pairfob-{os}-{arch}` + SHA256SUMS |
+| `scripts/release.sh` | cross-compile SemVer `dist/dl/pairfob-{os}-{arch}` + SHA256SUMS (`git tag vX.Y.Z`) |
 
 Put new code in an existing module. Add `internal/<name>` only when no current
 package can express that duty.

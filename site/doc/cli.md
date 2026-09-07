@@ -79,7 +79,7 @@ Push environment variables are not written into the service file automatically. 
 pairfob update
 ```
 
-Replaces the binary and restarts an installed user service. Do not rerun `install.sh` to update.
+Replaces the binary and restarts an installed user service. Do not rerun `install.sh` to update. Hosted binaries use SemVer (`pairfob version`); the site build stamp is separate.
 
 The phone checks for new computer versions and shows an update reminder. In Settings, supported service-managed installations offer **Update computer**. Confirming briefly disconnects the phone while the verified binary starts; completion is shown only after the running version is confirmed. Failed startup can restore the previous binary. Older daemons require one manual `pairfob update` to enable this flow. Updates are never installed automatically.
 

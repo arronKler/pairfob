@@ -1,5 +1,5 @@
-// Official releases use numeric semver or date-based versions. Unknown builds
-// are never ordered or advertised as an available downgrade.
+// Hosted pairfob releases are SemVer. Date-stamped values still compare if both
+// sides use that older form. Unknown builds are never ordered as an upgrade.
 export function releaseParts(value: unknown): number[] | null {
   if (typeof value !== "string" || value.length > 64 || !/^v?\d+(?:[.-]\d+){1,3}$/.test(value)) return null;
   const parts = value.replace(/^v/, "").split(/[.-]/).map(Number);
