@@ -5,7 +5,9 @@ import {
   currentViewIncarnation,
   draftStoreSize,
   dropPromptLocks,
+  bumpDraftRevision,
   holdPromptLock,
+  nextDraftRevision,
   nextPromptLockId,
   promptLockHeld,
   readStoredDraft,
@@ -64,6 +66,19 @@ describe("in-memory compose drafts", () => {
     expect(promptLockHeld(lock)).toBe(true);
     expect(unstickPromptBusy()).toBe(false);
     expect(releasePromptLock(lock)).toEqual({ owned: true, clearedBusy: false });
+  });
+
+  test("revisions stay monotonic after LRU eviction of the same scope", () => {
+    clearDraftStore();
+    const first = bumpDraftRevision(scope("p1"));
+    writeStoredDraft(scope("p1"), { text: "old attempt", revision: first });
+    for (let i = 0; i < 32; i++) writeStoredDraft(scope(`evict-${i}`), { text: `x${i}` });
+    expect(readStoredDraft(scope("p1")).revision).toBe(0);
+    clearDraftStore();
+    const second = bumpDraftRevision(scope("p1"));
+    expect(second).toBeGreaterThan(first);
+    expect(second).not.toBe(first);
+    expect(nextDraftRevision()).toBeGreaterThan(second);
   });
 
   test("releasing one lock does not drop a later lock", () => {

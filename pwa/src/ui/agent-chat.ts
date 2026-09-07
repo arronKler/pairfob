@@ -612,6 +612,7 @@ function paintPromptOwner(): void {
 }
 
 function restoreOwnerComposeField(): void {
+  if (state.composeIME) return;
   const restore = composeEl();
   if (!restore) return;
   restore.value = state.composeDraft;
@@ -656,12 +657,12 @@ async function submitAgentPrompt(): Promise<void> {
       await refreshAgentTrace();
     }
   } catch (error) {
-    const { unknownOutcome, message } = settlePromptFailure(owner, error);
+    const { unknownOutcome, message, restoredVisible } = settlePromptFailure(owner, error);
     if (promptRequestIsLive(owner)) {
       state.agentTracePending = "";
       state.agentTracePendingBase = [];
       state.agentTraceNote = message;
-      restoreOwnerComposeField();
+      if (restoredVisible) restoreOwnerComposeField();
       showError(message, owner.noticeScope, true);
       paintPromptOwner();
       if (unknownOutcome) {
@@ -670,7 +671,7 @@ async function submitAgentPrompt(): Promise<void> {
       }
     } else if (unknownOutcome) {
       await reconcileAmbiguousMutation(session, error);
-    } else {
+    } else if (restoredVisible) {
       restoreOwnerComposeField();
     }
   } finally {

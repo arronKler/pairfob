@@ -173,6 +173,7 @@ afterEach(() => {
   resetComposeDrafts();
   state.operationBusy = false;
   state.composeDraft = "";
+  state.composeIME = false;
   state.agentTraceNote = "";
   state.notice = null;
   state.live = null;
@@ -262,6 +263,43 @@ describe("async prompt results stay on the originating request", () => {
     expect(field().value).toBe("Prompt intended for pane A");
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).error).toBe(messageOf(failed));
     expect(visibleNotice()).toBeNull();
+  });
+
+  test("A pending then B IME input is not overwritten when A fails", async () => {
+    boot();
+    let reject!: (error: Error) => void;
+    state.live = {
+      ...live(),
+      promptAgent: async () =>
+        await new Promise((_, fail) => {
+          reject = fail;
+        }),
+    } as typeof state.live;
+    typeDraft("Prompt intended for pane A");
+    clickSend();
+    await Promise.resolve();
+    await openPane("p2");
+    const input = field();
+    input.focus();
+    input.dispatchEvent(new happy.Event("compositionstart", { bubbles: true }));
+    expect(state.composeIME).toBe(true);
+    input.value = "composed-on-B";
+    input.setSelectionRange(4, 9);
+    input.dispatchEvent(new happy.Event("input", { bubbles: true }));
+    expect(state.composeDraft).not.toBe("composed-on-B");
+    const beforeValue = input.value;
+    const beforeStart = input.selectionStart;
+    const beforeEnd = input.selectionEnd;
+    reject(new ProtocolError("timeout", "A failed during B composition"));
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(state.paneId).toBe("p2");
+    expect(field()).toBe(input);
+    expect(input.value).toBe(beforeValue);
+    expect(input.selectionStart).toBe(beforeStart);
+    expect(input.selectionEnd).toBe(beforeEnd);
+    expect(state.composeIME).toBe(true);
   });
 
   test("a delayed success after A→B does not paint or focus B", async () => {

@@ -11,7 +11,7 @@ g.location = happy.location;
 happy.document.body.innerHTML = '<main id="app"></main>';
 
 const { messageOf, state } = await import("./state.ts");
-const { readStoredDraft } = await import("./state-drafts.ts");
+const { readStoredDraft, writeStoredDraft } = await import("./state-drafts.ts");
 const {
   acquirePromptLock,
   adoptScreen,
@@ -66,6 +66,7 @@ afterEach(() => {
   resetComposeDrafts();
   state.operationBusy = false;
   state.composeDraft = "";
+  state.composeIME = false;
   state.agentTraceNote = "";
   state.live = null;
   state.credential = null;
@@ -239,5 +240,46 @@ describe("prompt request ownership", () => {
     });
     expect(state.composeDraft).toBe("failed send");
     expect(state.agentTraceNote).toBe(messageOf(failed));
+  });
+
+  test("an evicted attempt revision cannot settle a later attempt on the same scope", () => {
+    boot();
+    const first = capturePromptRequest(sessionA, "p1", "first send")!;
+    bumpViewIncarnation();
+    state.operationBusy = false;
+    for (let i = 0; i < 32; i++) {
+      writeStoredDraft({ daemonId: "daemon-a", paneId: `evict-${i}`, mode: "agent" }, { text: `filler-${i}` });
+    }
+    expect(readStoredDraft(first.draftScope).revision).toBe(0);
+    boot();
+    const second = capturePromptRequest(sessionA, "p1", "second send")!;
+    expect(second.revision).toBeGreaterThan(first.revision);
+    settlePromptFailure(first, new ProtocolError("timeout", "stale after eviction"));
+    expect(readStoredDraft(second.draftScope).revision).toBe(second.revision);
+    expect(readStoredDraft(second.draftScope).text).toBe("");
+    expect(readStoredDraft(second.draftScope).error).toBe("");
+    settlePromptSuccess(first);
+    expect(readStoredDraft(second.draftScope).revision).toBe(second.revision);
+  });
+
+  test("failure restore is visible only for the current non-composing scope", () => {
+    boot();
+    const owner = capturePromptRequest(sessionA, "p1", "send me")!;
+    state.composeDraft = "";
+    switchComposeView(() => {
+      state.paneId = "p2";
+    });
+    const otherPane = settlePromptFailure(owner, new ProtocolError("timeout", "A failed"));
+    expect(otherPane.restoredVisible).toBe(false);
+    expect(state.composeDraft).toBe("");
+    expect(readStoredDraft(owner.draftScope).text).toBe("send me");
+
+    boot();
+    const composing = capturePromptRequest(sessionA, "p1", "typed")!;
+    state.composeDraft = "";
+    state.composeIME = true;
+    const duringIme = settlePromptFailure(composing, new ProtocolError("timeout", "A failed"));
+    expect(duringIme.restoredVisible).toBe(false);
+    expect(state.composeDraft).toBe("");
   });
 });

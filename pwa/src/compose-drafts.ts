@@ -15,6 +15,7 @@ import {
   currentViewIncarnation as storedViewIncarnation,
   dropPromptLocks,
   holdPromptLock,
+  nextDraftRevision,
   nextPromptLockId,
   readStoredDraft,
   releasePromptLock as releaseStoredLock,
@@ -69,7 +70,7 @@ export function captureComposeDraft(): void {
   writeStoredDraft(scope, {
     text: state.composeDraft,
     error: "",
-    revision: stored.revision + 1,
+    revision: nextDraftRevision(),
   });
 }
 
@@ -132,14 +133,14 @@ export function recoverComposeDraft(scope: ComposeDraftScope, text: string, revi
   if (stored.revision !== revision) return false;
   const current = currentComposeDraftScope();
   if (current && sameComposeDraftScope(current, scope)) {
-    if (state.composeDraft.trim()) return false;
+    if (state.composeIME || state.composeDraft.trim()) return false;
     state.composeDraft = fitted;
     writeStoredDraft(scope, { text: fitted, revision });
     return true;
   }
   if (stored.text.trim()) return false;
   writeStoredDraft(scope, { text: fitted, revision });
-  return true;
+  return false;
 }
 
 export function acquirePromptLock(): number | null {
@@ -200,20 +201,24 @@ function captureNewerVisibleDraft(owner: PromptRequestOwner): void {
   captureComposeDraft();
 }
 
-export function settlePromptFailure(owner: PromptRequestOwner, error: unknown): { unknownOutcome: boolean; message: string } {
+export function settlePromptFailure(owner: PromptRequestOwner, error: unknown): {
+  unknownOutcome: boolean;
+  message: string;
+  restoredVisible: boolean;
+} {
   const unknownOutcome = error instanceof ProtocolError && error.code === "unknown_outcome";
   const message = messageOf(error);
   captureNewerVisibleDraft(owner);
-  if (!ownsStoredAttempt(owner)) return { unknownOutcome, message };
+  if (!ownsStoredAttempt(owner)) return { unknownOutcome, message, restoredVisible: false };
   writeStoredDraft(owner.draftScope, { error: message, revision: owner.revision });
-  if (!unknownOutcome) recoverComposeDraft(owner.draftScope, owner.text, owner.revision);
-  return { unknownOutcome, message };
+  const restoredVisible = !unknownOutcome && recoverComposeDraft(owner.draftScope, owner.text, owner.revision);
+  return { unknownOutcome, message, restoredVisible };
 }
 
 export function settlePromptSuccess(owner: PromptRequestOwner): void {
   captureNewerVisibleDraft(owner);
   if (!ownsStoredAttempt(owner)) return;
-  writeStoredDraft(owner.draftScope, { text: "", error: "", revision: owner.revision + 1 });
+  writeStoredDraft(owner.draftScope, { text: "", error: "", revision: nextDraftRevision() });
 }
 
 export function resetComposeDrafts(): void {

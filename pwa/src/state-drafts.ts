@@ -14,6 +14,8 @@ const emptyDraft = (): StoredComposeDraft => ({ text: "", error: "", revision: 0
 const drafts = new Map<string, StoredComposeDraft>();
 let viewIncarnation = 0;
 let lockSerial = 0;
+/** Global attempt token. Must not rewind on LRU eviction or store clear. */
+let revisionSerial = 0;
 let heldLock = 0;
 let busyOwner = 0;
 
@@ -86,8 +88,13 @@ export function writeStoredDraft(scope: ComposeDraftScope, patch: Partial<Stored
   return { ...next };
 }
 
+export function nextDraftRevision(): number {
+  revisionSerial += 1;
+  return revisionSerial;
+}
+
 export function bumpDraftRevision(scope: ComposeDraftScope): number {
-  const revision = readStoredDraft(scope).revision + 1;
+  const revision = nextDraftRevision();
   writeStoredDraft(scope, { revision });
   return revision;
 }
