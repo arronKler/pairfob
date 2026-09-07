@@ -9,10 +9,21 @@ import { messageOf } from "../lib/notices";
 import { track } from "../lib/telemetry";
 import { fitOperationPrompt, OPERATION_INPUT_LIMITS } from "../lib/operations";
 import { render } from "../paint";
+import { reconcileAmbiguousMutation } from "../mutations";
+import {
+  capturePromptRequest,
+  clearCurrentComposeDraft,
+  promptRequestIsLive,
+  releasePromptLock,
+  settlePromptFailure,
+  settlePromptSuccess,
+  switchComposeView,
+} from "../compose-drafts";
 import {
   COMPOSE_MAX_PX,
   COMPOSE_MIN_PX,
   app,
+  clearNoticeForScope,
   haptic,
   markPaneSubmitted,
   selectedAgent,
@@ -331,11 +342,13 @@ export function enterAgentChat(): void {
   if (!state.live || !state.paneId || state.agentChat) return;
   const start = () => {
     haptic(8);
-    setPaneTermMode(state.paneId, "agent");
-    state.fullTerminal = false;
-    state.agentChat = true;
-    state.agentTraceFollow = true;
-    state.agentTraceUnread = false;
+    switchComposeView(() => {
+      setPaneTermMode(state.paneId, "agent");
+      state.fullTerminal = false;
+      state.agentChat = true;
+      state.agentTraceFollow = true;
+      state.agentTraceUnread = false;
+    });
     render();
     void refreshAgentTrace();
     queueMicrotask(() => composeEl()?.focus({ preventScroll: true }));
@@ -352,12 +365,14 @@ export function enterAgentChat(): void {
 
 export function leaveAgentChat(opts?: { rememberGuided?: boolean; paint?: boolean }): void {
   if (!state.agentChat) return;
-  if (opts?.rememberGuided !== false) setPaneTermMode(state.paneId, "guided");
-  state.agentChat = false;
-  traceRequest++;
-  state.agentTraceBusy = false;
-  state.agentTracePending = "";
-  state.agentTracePendingBase = [];
+  switchComposeView(() => {
+    if (opts?.rememberGuided !== false) setPaneTermMode(state.paneId, "guided");
+    state.agentChat = false;
+    traceRequest++;
+    state.agentTraceBusy = false;
+    state.agentTracePending = "";
+    state.agentTracePendingBase = [];
+  });
   if (opts?.paint !== false) render();
 }
 
@@ -591,45 +606,73 @@ function chatCompose(selectedHasAgent: boolean): { dock: HTMLElement; input: HTM
   return { dock, input };
 }
 
+function paintPromptOwner(): void {
+  syncChatDock();
+  if (!patchAgentChat({ follow: true })) render();
+}
+
+function restoreOwnerComposeField(): void {
+  const restore = composeEl();
+  if (!restore) return;
+  restore.value = state.composeDraft;
+  sizeChatCompose(restore);
+}
+
+function releasePromptOwner(owner: { lockId: number }, live: boolean): void {
+  const released = releasePromptLock(owner.lockId);
+  if (!released) return;
+  app.setAttribute("aria-busy", state.operationBusy ? "true" : "false");
+  if (live) {
+    syncChatDock();
+    stickAgentStream();
+    if (!state.composeFocused) composeEl()?.focus({ preventScroll: true });
+    return;
+  }
+  if (state.agentChat) syncChatDock();
+  else render();
+}
+
 async function submitAgentPrompt(): Promise<void> {
   const session = state.live;
   const selected = selectedAgent();
   const text = state.composeDraft.trim();
   if (!session || !selected || !text || !canSend(selected) || state.operationBusy) return;
-  state.operationBusy = true;
-  state.composeDraft = "";
+  const owner = capturePromptRequest(session, selected.paneId, text);
+  if (!owner) return;
+  clearCurrentComposeDraft();
   state.agentTracePendingBase = state.agentTraceItems.map((item) => ({ ...item }));
   state.agentTracePending = text;
   state.agentTraceFollow = true;
-  const field = composeEl();
-  if (field) {
-    field.value = "";
-    sizeChatCompose(field);
-  }
-  syncChatDock(selected);
-  if (!patchAgentChat({ follow: true })) render();
+  restoreOwnerComposeField();
+  paintPromptOwner();
   try {
-    await session.promptAgent({ pane_id: selected.paneId, text });
-    markPaneSubmitted(selected.paneId);
+    await session.promptAgent({ pane_id: owner.draftScope.paneId, text: owner.text });
+    markPaneSubmitted(owner.draftScope.paneId);
     haptic(8);
-    if (!patchAgentChat({ follow: true })) render();
-    await refreshAgentTrace();
-  } catch (error) {
-    state.composeDraft = text;
-    state.agentTracePending = "";
-    state.agentTracePendingBase = [];
-    state.agentTraceNote = messageOf(error);
-    const restore = composeEl();
-    if (restore) {
-      restore.value = text;
-      sizeChatCompose(restore);
+    settlePromptSuccess(owner);
+    clearNoticeForScope(owner.noticeScope);
+    if (promptRequestIsLive(owner)) {
+      paintPromptOwner();
+      await refreshAgentTrace();
     }
-    if (!patchAgentChat({ follow: true })) render();
+  } catch (error) {
+    const { unknownOutcome, message } = settlePromptFailure(owner, error);
+    showError(message, owner.noticeScope, true);
+    if (promptRequestIsLive(owner)) {
+      state.agentTracePending = "";
+      state.agentTracePendingBase = [];
+      state.agentTraceNote = message;
+      restoreOwnerComposeField();
+      paintPromptOwner();
+      if (unknownOutcome) {
+        await reconcileAmbiguousMutation(session, error);
+        if (promptRequestIsLive(owner)) await refreshAgentTrace();
+      }
+    } else if (unknownOutcome) {
+      await reconcileAmbiguousMutation(session, error);
+    }
   } finally {
-    state.operationBusy = false;
-    syncChatDock();
-    stickAgentStream();
-    composeEl()?.focus({ preventScroll: true });
+    releasePromptOwner(owner, promptRequestIsLive(owner));
   }
 }
 

@@ -37,6 +37,7 @@ const { clearAgentTraceCache } = await import("../lib/agent-trace-cache.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderPane, goBackFromPane } = await import("./pane.ts");
 const { leaveAgentChat, patchAgentChat, refreshAgentTrace, restoreAgentTrace } = await import("./agent-chat.ts");
+const { resetComposeDrafts } = await import("../compose-drafts.ts");
 
 function live() {
   return {
@@ -146,6 +147,7 @@ test.each([true, false])("growing the chat composer preserves follow=%s", async 
 
 afterEach(() => {
   leaveAgentChat({ rememberGuided: false, paint: false });
+  resetComposeDrafts();
   state.screen = "pane";
   state.composeDraft = "";
   state.paneTermModes = {};

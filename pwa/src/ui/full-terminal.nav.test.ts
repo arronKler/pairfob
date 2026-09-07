@@ -101,12 +101,14 @@ const { openPane } = await import("../live.ts");
 const { renderPane, goBackFromPane } = await import("./pane.ts");
 const {
   disposeFullTerminal,
+  enterFullTerminal,
   handleFullTerminalEvent,
   handleFullTerminalVisibility,
   leaveFullTerminal,
   setFullTerminalComposeLive,
   setTermFit,
 } = await import("./full-terminal.ts");
+const { resetComposeDrafts } = await import("../compose-drafts.ts");
 
 const DRAFT = "keep-draft";
 
@@ -171,6 +173,7 @@ afterEach(async () => {
   visibility = "visible";
   await leaveFullTerminal({ rememberGuided: false, paint: false });
   disposeFullTerminal();
+  resetComposeDrafts();
   state.screen = "pane";
   state.composeDraft = "";
   state.composeLive = false;
@@ -297,9 +300,12 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(state.fullTerminal).toBe(false);
     expect(state.screen).toBe("pane");
     expect(paneTermMode("p1")).toBe("guided");
-    expect(state.composeDraft).toBe(DRAFT);
+    expect(state.composeDraft).toBe("");
     expect(app.querySelector(".dock")).toBeTruthy();
     expect(app.querySelector('button[aria-label="会话操作"]')).toBeTruthy();
+    enterFullTerminal();
+    expect(state.fullTerminal).toBe(true);
+    expect(state.composeDraft).toBe(DRAFT);
   });
 
   test("swipe-back from complete-terminal returns to the list", async () => {

@@ -11,6 +11,7 @@ import {
   type SessionEvent,
 } from "../lib/protocol/client";
 import { render } from "../paint";
+import { applyComposeDraft, captureComposeDraft, switchComposeView } from "../compose-drafts";
 import { app, haptic, messageOf, saveTermCols, saveTermFit, selectedAgent, setPaneTermMode, showStatus, state, type TermCols, type TermFit } from "../state";
 import { isDesk } from "../viewport";
 import {
@@ -468,9 +469,11 @@ export function enterFullTerminal(): void {
   guidedScrollController.dispose();
   haptic(8);
   track("pwa_terminal");
-  setPaneTermMode(state.paneId, "full");
-  state.agentChat = false;
-  state.fullTerminal = true;
+  switchComposeView(() => {
+    setPaneTermMode(state.paneId, "full");
+    state.agentChat = false;
+    state.fullTerminal = true;
+  });
   terminalStatus.reset(t("ft.preparing"));
   render();
 }
@@ -481,6 +484,7 @@ export function leaveFullTerminal(opts?: { rememberGuided?: boolean; paint?: boo
   const seq = ++leaveSeq;
   const rememberGuided = opts?.rememberGuided !== false;
   const paint = opts?.paint !== false;
+  captureComposeDraft();
   leaving = (async () => {
     try {
       await suspendBridge(true, undefined, false);
@@ -491,6 +495,7 @@ export function leaveFullTerminal(opts?: { rememberGuided?: boolean; paint?: boo
       if (rememberGuided) setPaneTermMode(state.paneId, "guided");
       state.fullTerminal = false;
       setFullTerminalDocumentMode(false);
+      applyComposeDraft();
       if (paint) render();
     } finally {
       if (seq === leaveSeq) leaving = null;

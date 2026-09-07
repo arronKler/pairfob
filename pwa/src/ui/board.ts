@@ -5,6 +5,7 @@ import { tabsInWorkspace, workspaceChipLabel } from "../lib/layout";
 import { wakeLiveReads } from "../live";
 import { createSelectedTab } from "../live-operations";
 import { render } from "../paint";
+import { captureComposeDraft } from "../compose-drafts";
 import { app, selectedAgent, state } from "../state";
 import { refreshBoardPreviews } from "./board-preview";
 import { leaveAgentChat } from "./agent-chat";
@@ -14,6 +15,7 @@ import { leaveFullTerminal } from "./full-terminal";
 import { dropQueuedKeys } from "./session-view";
 
 export async function openBoard(from?: { workspaceId?: string; tabId?: string }): Promise<void> {
+  captureComposeDraft();
   if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
   if (state.agentChat) leaveAgentChat({ rememberGuided: false, paint: false });
   dropQueuedKeys();

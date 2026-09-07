@@ -1,5 +1,6 @@
 import { node } from "../lib/dom";
 import { render } from "../paint";
+import { applyComposeDraft, captureComposeDraft } from "../compose-drafts";
 import { app, haptic, leavePaneScreen, resetPaneView, selectedAgent, state } from "../state";
 import { enterWorkspace } from "../workspace";
 import { isDesk } from "../viewport";
@@ -11,6 +12,7 @@ import { leaveFullTerminal, renderFullTerminal } from "./full-terminal";
 export { openPaneMenu, openPaneSwitcher };
 
 export async function openSelectedWorkspace(): Promise<void> {
+  captureComposeDraft();
   const returnView = state.fullTerminal ? "full" : state.agentChat ? "agent" : "guided";
   if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
   if (state.agentChat) leaveAgentChat({ rememberGuided: false, paint: false });
@@ -18,12 +20,14 @@ export async function openSelectedWorkspace(): Promise<void> {
 }
 
 export function goBackFromPane(): void {
+  captureComposeDraft();
   if (state.fullTerminal) {
     void leaveFullTerminal({ rememberGuided: false, paint: false }).then(() => {
       if (state.phase !== "live") return;
       dropQueuedKeys();
       leavePaneScreen();
       resetPaneView();
+      applyComposeDraft();
       render();
     });
     return;
@@ -33,12 +37,14 @@ export function goBackFromPane(): void {
     dropQueuedKeys();
     leavePaneScreen();
     resetPaneView();
+    applyComposeDraft();
     render();
     return;
   }
   dropQueuedKeys();
   leavePaneScreen();
   resetPaneView();
+  applyComposeDraft();
   render();
 }
 

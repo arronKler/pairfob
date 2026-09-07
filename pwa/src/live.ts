@@ -36,6 +36,7 @@ import {
   FRIENDLY_ERROR,
   acknowledgePaneCompletion,
   clearNotice,
+  noticeScopeIsCurrent,
   leavePaneScreen,
   loadPaneTouched,
   loadPanePinned,
@@ -59,6 +60,7 @@ import {
 import { isDesk } from "./viewport";
 import { refreshBoardPreviews } from "./ui/board-preview";
 import { composeField, dropQueuedKeys, paneReadLines, patchChromeTitle, patchSessionScreen, preserveCompose } from "./ui/session-view";
+import { applyComposeDraft, captureComposeDraft } from "./compose-drafts";
 import { canEnterAgentChat, patchAgentChat, refreshAgentTrace, restoreAgentTrace } from "./ui/agent-chat";
 import { disposeFullTerminal, handleFullTerminalEvent, leaveFullTerminal } from "./ui/full-terminal";
 import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
@@ -369,6 +371,7 @@ export async function refreshHerdConfig(): Promise<boolean> {
 }
 
 export async function openPane(paneId: string): Promise<void> {
+  captureComposeDraft();
   dropQueuedKeys();
   guidedScrollController.dispose();
   if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
@@ -377,21 +380,24 @@ export async function openPane(paneId: string): Promise<void> {
   resetPaneView();
   state.composeLive = paneComposeLive(paneId);
   restoreAgentTrace(paneId);
-  clearNotice();
   state.screen = "pane";
   const mode = resolvedPaneTermMode(paneTermMode(paneId));
   const agent = state.agents.find((item) => item.paneId === paneId);
   state.fullTerminal = mode === "full";
   state.agentChat = mode === "agent" && canEnterAgentChat(agent);
+  applyComposeDraft();
+  if (!state.notice?.scope || !noticeScopeIsCurrent(state.notice.scope)) clearNotice();
   acknowledgePaneCompletion(paneId);
   render();
   await refreshPane();
 }
 
 function abandonOpenPane(message: string): void {
+  captureComposeDraft();
   disposeFullTerminal();
   leavePaneScreen();
   resetPaneView();
+  applyComposeDraft();
   showError(message, true);
   render();
 }
