@@ -177,7 +177,7 @@ func TestRunRelayStopsDuringBackoffWait(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("backoff wait did not start")
 	}
-	close(stop)
+	stopRelay(stop, link)
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -202,15 +202,17 @@ func newRelayHarness(stop <-chan struct{}) *relayHarness {
 	}
 	h.retry = relayRetry{
 		now: func() time.Time {
-			n := h.nowN.Add(1)
 			h.clockMu.Lock()
-			now := h.clock
+			sampled := h.clock
+			// Publish the count only after the sample so waitNow cannot
+			// advance the clock before connectedAt is captured.
+			n := h.nowN.Add(1)
 			h.clockMu.Unlock()
 			select {
 			case h.nowCh <- n:
 			default:
 			}
-			return now
+			return sampled
 		},
 		jitter: func(d time.Duration) time.Duration { return d },
 		wait: func(d time.Duration, waitStop <-chan struct{}) bool {
@@ -279,6 +281,20 @@ func (h *relayHarness) waitNow(t *testing.T, n int64) {
 	}
 }
 
+func stopRelay(stop chan struct{}, link *relayLink) {
+	select {
+	case <-stop:
+	default:
+		close(stop)
+	}
+	if link == nil {
+		return
+	}
+	if conn := link.get(); conn != nil {
+		conn.Close()
+	}
+}
+
 func startTestRelay(t *testing.T, url string, stop chan struct{}, retry relayRetry) {
 	t.Helper()
 	eng, link := testRelayEngine(t)
@@ -289,11 +305,7 @@ func startTestRelay(t *testing.T, url string, stop chan struct{}, retry relayRet
 		runRelayWith(link, eng, url, "", ready, stop, retry)
 	}()
 	t.Cleanup(func() {
-		select {
-		case <-stop:
-		default:
-			close(stop)
-		}
+		stopRelay(stop, link)
 		select {
 		case <-done:
 		case <-time.After(2 * time.Second):
@@ -329,6 +341,7 @@ func startRegisterRelay(t *testing.T, hold func(seq int) <-chan struct{}) (strin
 	var mu sync.Mutex
 	seq := 0
 	registered := make(chan int, 32)
+	released := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upgrader := wsnet.UpgraderFor(wsnet.SubprotocolV2)
 		ws, err := upgrader.Upgrade(w, r, nil)
@@ -353,11 +366,15 @@ func startRegisterRelay(t *testing.T, hold func(seq int) <-chan struct{}) (strin
 		registered <- n
 		if hold != nil {
 			if wait := hold(n); wait != nil {
-				<-wait
+				select {
+				case <-wait:
+				case <-released:
+				}
 			}
 		}
 	}))
 	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(released) })
 	return "ws" + strings.TrimPrefix(server.URL, "http"), registered
 }
 
