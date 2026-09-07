@@ -1,3 +1,4 @@
+import { quotaSummary } from "./agent-quota-summary";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { type DeviceSummary } from "../lib/protocol/client";
@@ -169,6 +170,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   const self = state.deviceList.find((device) => device.self && !device.revoked_at);
   if (self) conn.append(setRow(t("settings.thisPhone"), self.label || t("settings.pairedPhone")));
   container.append(conn);
+  container.append(quotaSummary());
 
   container.append(setHeading(t("settings.language"), [t("settings.languageNote")]));
   const langCard = node("div", "set-card");

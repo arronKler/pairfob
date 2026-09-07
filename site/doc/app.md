@@ -1,6 +1,6 @@
 ---
 title: Using the app
-description: List, open a session, system keyboard, tappable dialogs. Controls appear only when the computer supports them.
+description: List, open a session, use the system keyboard, and respond when an agent needs you. Controls appear only when the computer supports them.
 ---
 
 # Using the app
@@ -58,21 +58,23 @@ The four choices are under `···` → **Mode**. A switch inside a session is r
 | Mode | What it is |
 | --- | --- |
 | **Auto** | Chooses when the session opens: Terminal on P2P with WebGL2 unless Save-Data is on, otherwise Control |
-| **Control** | Phone UI for this session: tappable choices, system keyboard |
+| **Control** | View the terminal and operate the session with the system keyboard and keypad |
 | **Terminal** | A real terminal. Use for vim or a full-screen TUI. On a phone the default is an 80-column view you pan sideways; **Fit screen** resizes the computer to the phone width. Vertical pan still scrolls remotely |
 | **Chat** | Message the Agent (this is where you send a task; it is not a `···` menu item). The run collapses after the reply |
 
 In **Control**:
 
 - The compose box uses the **system keyboard**, including dictation and autocorrect. **Compose / Live** switches sit above the field
-- Choices become tappable buttons; empty Enter cannot stand in for tapping them
+- Confirmation choices stay in the terminal view. Follow the prompt: use the keypad's ↑/↓ to select, then Enter to confirm. Type a letter or text when the prompt asks for it
 - The trailing control is **Enter**: with no draft it is a terminal Return; with a draft it types then confirms
 - Tapping a row can copy the line, copy a path, quote into compose, or start text selection
 - Swipe or **Page up** pages the live view; it does not dump history
 - Font size is remembered
 - Long lines can wrap or not
 
-A dialog confirmed on the computer is already confirmed on the phone, and the reverse. There is no phone-side draft and no “pending sync” queue.
+When **Chat** shows **Needs you**, tap **Go confirm** to switch to **Control** and read the terminal prompt. Check the operation and current selection before confirming. You can also switch to **Terminal** through `···` → **Mode** when needed.
+
+The computer and phone operate the same terminal dialog. Once either confirms it, the other sees the updated state. If the prompt is missing on the phone, handle it on the computer and report the phone's mode, Agent / extension versions, and a redacted recording.
 
 ## Actions that may appear on this view
 
@@ -100,7 +102,7 @@ From the top-right of the list (**Settings**).
 - **Language:** **Browser default**, or pin **中文** / **English**. This only changes Pairfob on this device. Docs have their own language menu in the top bar; both remember `pairfob_lang`
 - **Session list:** grouping (**All** / **By workspace** / **By agent**)
 - **Mode:** defaults to **Auto**, or can be pinned to **Control** / **Terminal** / **Chat**. A later switch is remembered per session
-- **Input:** send after composing, or type live into the terminal. The trailing button only submits composed text; use the system keyboard or keypad for a deliberate bare Enter
+- **Input:** send after composing, or type live into the terminal. The **Enter** button beside the field also sends a terminal Return when the draft is empty. The switches above the session's compose field control the same preference
 - **Notifications:** see [Notifications](/push). Once enabled, this phone is notified when an Agent needs you or finishes; if the computer has not enabled push, it shows **Off on the computer**
 - **Paired devices:** label, online or offline, last used, and notification state. The current row is marked **This phone**. Other rows have **Unpair**; already unpaired rows are omitted
 - **Danger zone:** **Unpair this phone**. Pairing is required to connect again

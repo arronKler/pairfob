@@ -1,14 +1,12 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"pairfob/internal/admin"
 	"pairfob/internal/runtime"
@@ -67,16 +65,11 @@ func gatherHealth(sock string) (health, error) {
 		}
 	}
 	rt, _, rtErr := runtime.Open(false, getenv("PAIRFOB_MULTI_SESSION", "") == "1")
+	h.HerdrNote = "unavailable — check the configured Herdr socket"
 	if rtErr == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, rtErr = rt.Describe(ctx, runtime.DefaultSession())
-		cancel()
-	}
-	if rtErr == nil {
-		h.HerdrOK = true
-		h.HerdrNote = "on"
-	} else {
-		h.HerdrNote = "off — open Herdr on this computer"
+		check := checkHerdrInstallation(rt.(*runtime.Herdr))
+		h.HerdrOK = check.State == "ready"
+		h.HerdrNote = herdrInstallationNote(check)
 	}
 	stored, relayErr := store.LoadRelay()
 	if relayErr != nil {
@@ -163,7 +156,7 @@ func writeLiveSnapshot(w io.Writer, sock string) error {
 	if h.HerdrOK {
 		fmt.Fprintln(w, "Herdr is on.")
 	} else {
-		fmt.Fprintln(w, "Herdr is off. Open it on this computer.")
+		fmt.Fprintln(w, "Herdr: "+h.HerdrNote)
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "  pairfob pair     pair a device")

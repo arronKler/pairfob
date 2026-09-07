@@ -8,7 +8,7 @@ g.HTMLElement = happy.HTMLElement;
 g.HTMLButtonElement = happy.HTMLButtonElement;
 g.Node = happy.Node;
 
-const { TERTIARY_KEYS, clearModifiers, pressModifier, releaseModifier, withModifiers } = await import("./keypad.ts");
+const { TERTIARY_KEYS, bindModifier, clearModifiers, pressModifier, releaseModifier, withModifiers } = await import("./keypad.ts");
 
 afterEach(() => clearModifiers());
 
@@ -52,6 +52,38 @@ describe("pad modifiers", () => {
     pressModifier("ctrl");
     releaseModifier("ctrl");
     expect(withModifiers("c")).toEqual(["ctrl+c"]);
+    expect(withModifiers("c")).toEqual(["c"]);
+  });
+
+  test("pointerup followed by lost capture latches once; cancelling never latches", () => {
+    const button = happy.document.createElement("button");
+    happy.document.body.append(button);
+    bindModifier(button as unknown as HTMLElement, "ctrl");
+    const pointer = (type: string) => button.dispatchEvent(new happy.PointerEvent(type, {
+      pointerId: 1, button: 0, bubbles: true, cancelable: true,
+    }));
+    pointer("pointerdown");
+    pointer("pointerup");
+    pointer("lostpointercapture");
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(withModifiers("c")).toEqual(["ctrl+c"]);
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    pointer("pointerdown");
+    pointer("pointercancel");
+    pointer("lostpointercapture");
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    expect(withModifiers("c")).toEqual(["c"]);
+    button.click();
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    button.click();
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    button.remove();
+  });
+
+  test("clearing modifiers during a hold prevents a late release from relatching", () => {
+    pressModifier("ctrl");
+    clearModifiers();
+    releaseModifier("ctrl");
     expect(withModifiers("c")).toEqual(["c"]);
   });
 });

@@ -12,7 +12,7 @@ import (
 
 // The race detector substantially amplifies the Argon2 work performed by the
 // phone handshake. This bounds the test without constraining production code.
-const pairingTestTimeout = 30 * time.Second
+const pairingTestTimeout = 90 * time.Second
 
 func TestPairingApprovalBeforeOrAfterSPAKEPersistsDevice(t *testing.T) {
 	for _, approveBefore := range []bool{false, true} {

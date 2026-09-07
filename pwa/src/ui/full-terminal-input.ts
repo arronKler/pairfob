@@ -4,10 +4,8 @@ import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { saveKeysExpanded, state } from "../state";
 import { PRIMARY_KEYS, SECONDARY_KEYS, TERTIARY_KEYS, bindModifier, clearModifiers, paintKey, withModifiers, type KeySpec } from "./keypad";
+import { bindPadPress } from "./key-press";
 import { padModeBar, slashPad } from "./session/slash-pad";
-
-const REPEAT_DELAY_MS = 380;
-const REPEAT_EVERY_MS = 90;
 
 /** CSI / application-cursor bytes a TUI expects from a hardware key. */
 export function encodeTerminalKey(key: string, applicationCursor = false): string {
@@ -140,49 +138,15 @@ export function tapAsMouse(
   fire("mouseup", 0);
 }
 
-function bindHold(element: HTMLElement, fire: () => void, repeatable: boolean): void {
-  let hold: number | null = null;
-  let tick: number | null = null;
-  const stop = () => {
-    if (hold !== null) window.clearTimeout(hold);
-    if (tick !== null) window.clearInterval(tick);
-    hold = null;
-    tick = null;
-  };
-  element.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    fire();
-    if (!repeatable) return;
-    stop();
-    hold = window.setTimeout(() => {
-      if (!element.isConnected) return;
-      tick = window.setInterval(() => {
-        // A detached button never receives pointerup; see session/keys.ts.
-        if (!element.isConnected) {
-          stop();
-          return;
-        }
-        fire();
-      }, REPEAT_EVERY_MS);
-    }, REPEAT_DELAY_MS);
-  });
-  for (const type of ["pointerup", "pointercancel", "pointerleave", "lostpointercapture"] as const) {
-    element.addEventListener(type, stop);
-  }
-  element.addEventListener("click", (event) => {
-    if (event.detail === 0) fire();
-  });
-}
-
 function keyButton(spec: KeySpec, send: (key: string) => void): HTMLButtonElement {
   const el = paintKey(spec);
   if (spec.modifier) {
     bindModifier(el, spec.modifier);
     return el;
   }
-  bindHold(el, () => {
+  bindPadPress(el, () => {
     for (const key of withModifiers(spec.key)) send(key);
-  }, spec.repeat === true);
+  }, { repeat: spec.repeat === true });
   return el;
 }
 
@@ -282,9 +246,7 @@ export function fullTerminalPad(
       kb.type = "button";
       controls.append(kb);
       syncKeyboardButton(controls, keyboard.isOpen());
-      kb.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
+      bindPadPress(kb, () => {
         keyboard.toggle();
         syncKeyboardButton(pad, keyboard.isOpen());
       });
@@ -293,6 +255,7 @@ export function fullTerminalPad(
     const more = button("", "key key-more");
     more.setAttribute("aria-label", t("keys.morePad"));
     more.setAttribute("aria-expanded", state.keysExpanded ? "true" : "false");
+    more.addEventListener("pointerdown", (event) => event.preventDefault());
     more.addEventListener("click", () => {
       clearModifiers();
       state.keysExpanded = !state.keysExpanded;

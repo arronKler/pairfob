@@ -43,7 +43,7 @@ export { STATUS_NOTICE_MS, type Notice } from "./state-notices";
 export { FRIENDLY_ERROR, GENERIC_NOTICE, genericNotice, messageOf, noticeFor, sessionEventNotice } from "./lib/notices";
 
 export type Phase = "boot" | "connect" | "pairing" | "resuming" | "live" | "pick";
-export type Screen = "home" | "pane" | "workspace" | "settings" | "computers" | "board";
+export type Screen = "home" | "pane" | "workspace" | "settings" | "quota" | "computers" | "board";
 export type StatusTone = "live" | "warn" | "off" | "demo";
 export type AgentTraceLoadState = "cold" | "loading" | "ready" | "error";
 

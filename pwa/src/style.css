@@ -1,3 +1,4 @@
+@import "./styles/agent-quota.css";
 /* Pairfob styles — split by screen/control family; imported by main.ts. */
 @import "./styles/tokens.css";
 @import "./styles/base.css";

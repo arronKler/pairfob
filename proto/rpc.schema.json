@@ -578,6 +578,120 @@
       },
       "additionalProperties": false
     },
+    "agentQuotaWindow": {
+      "type": "object",
+      "required": [
+        "name",
+        "used_percent",
+        "window_minutes",
+        "resets_at"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "used_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "window_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 525600
+        },
+        "resets_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4102444800
+        },
+        "unlimited": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "agentQuotaItem": {
+      "type": "object",
+      "required": [
+        "provider",
+        "plan",
+        "status",
+        "source",
+        "observed_at",
+        "windows"
+      ],
+      "properties": {
+        "provider": {
+          "enum": [
+            "codex",
+            "claude",
+            "antigravity",
+            "copilot",
+            "cursor",
+            "grok"
+          ]
+        },
+        "plan": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "stale",
+            "not_installed",
+            "not_logged_in",
+            "unsupported",
+            "unavailable",
+            "setup_required",
+            "auth_required",
+            "not_running"
+          ]
+        },
+        "source": {
+          "enum": [
+            "app_server",
+            "statusline",
+            "oauth",
+            "local_api",
+            "github_api",
+            "web_api"
+          ]
+        },
+        "observed_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4102444800
+        },
+        "windows": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/agentQuotaWindow"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "agentQuotaResult": {
+      "type": "object",
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/agentQuotaItem"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "request": {
       "type": "object",
       "required": ["v", "id", "op", "params"],
@@ -588,6 +702,7 @@
           "enum": [
             "Ping",
             "GetConfig",
+            "AgentQuota",
             "Snapshot",
             "PaneRead",
             "SendText",
@@ -634,6 +749,7 @@
         "params": { "type": "object" }
       },
       "allOf": [
+        {"if": {"properties": {"op": {"const": "AgentQuota"}}}, "then": {"properties": {"params": {"type": "object", "additionalProperties": false}}}},
         {
           "if": { "properties": { "op": { "const": "Ping" } } },
           "then": {

@@ -58,7 +58,7 @@ describe("UI model", () => {
     });
     expect(emptySessionCopy("offline", true, false)).toEqual({
       title: "还没有读到会话",
-      detail: "电脑上的 Herdr 没有运行，打开后会自动恢复。",
+      detail: "电脑上的 Herdr 不可用。请在电脑运行 pairfob doctor 检查。",
     });
     expect(emptySessionCopy("herdr", false, true).title).toBe("正在重新连接");
   });

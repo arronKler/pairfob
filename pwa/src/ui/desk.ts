@@ -7,6 +7,7 @@ import { renderRail } from "./home";
 import { sessionHandlers } from "./pane";
 import { fillSession, finishSessionPaint, sessionScroll } from "./session-view";
 import { fillComputers } from "./computers";
+import { fillQuota } from "./agent-quota";
 import { fillSettings } from "./settings";
 
 export function renderDesk(): void {
@@ -18,6 +19,9 @@ export function renderDesk(): void {
   if (state.screen === "settings") {
     main.classList.add("main-settings");
     fillSettings(main, true);
+  } else if (state.screen === "quota") {
+    main.classList.add("main-settings");
+    fillQuota(main);
   } else if (state.screen === "computers") {
     main.classList.add("main-settings");
     fillComputers(main, true);

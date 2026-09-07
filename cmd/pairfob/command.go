@@ -16,6 +16,8 @@ const commandUsage = `Pairfob — this computer, on another device.
   pairfob forget N          Unpair
   pairfob update            Install the latest version
   pairfob doctor            Check this computer
+  pairfob setup             Check, install if requested, and start Herdr
+  pairfob quota-setup-claude Enable Claude subscription quota collection
   pairfob version
 
 After install, Pairfob runs in the background.
@@ -29,6 +31,10 @@ func runCommand(args []string, sock string) error {
 	case "help", "-h", "--help":
 		fmt.Println(commandUsage)
 		return nil
+	case "quota-statusline":
+		return quotaStatusline(args[1:], os.Stdin, os.Stdout)
+	case "quota-setup-claude":
+		return setupClaudeQuota(args[1:])
 	case "version", "-v", "--version":
 		return versionCommand()
 	case "enroll":
@@ -46,6 +52,8 @@ func runCommand(args []string, sock string) error {
 		return phonesCommand(args[1:], sock)
 	case "device", "devices":
 		return deviceCommand(args[1:], sock)
+	case "setup":
+		return setupCommand(args[1:])
 	case "doctor":
 		return doctorCommand(sock)
 	case "relay":

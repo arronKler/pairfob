@@ -4,11 +4,15 @@ set -eu
 
 usage() {
   cat <<'EOF'
-usage: install.sh [--origin URL] [--prefix DIR] [--no-service] [--no-enroll]
+usage: install.sh [--origin URL] [--prefix DIR] [--no-service] [--no-enroll] [--install-herdr] [--non-interactive] [--skip-herdr-check]
 
 Downloads the pairfob binary for this machine, verifies SHA-256, enrolls
 against pairfob.com (or --origin), and installs a user-level service that
 starts at login.
+
+  --install-herdr     Install pinned Herdr if missing (no prompt)
+  --non-interactive   Never prompt; missing Herdr fails unless --install-herdr
+  --skip-herdr-check  Install Pairfob only; does not claim session readiness
 
   curl -fsSL https://pairfob.com/install.sh | sh
 EOF
@@ -18,6 +22,9 @@ ORIGIN=""
 PREFIX="${PAIRFOB_INSTALL_PREFIX:-}"
 NO_SERVICE=0
 NO_ENROLL=0
+INSTALL_HERDR=0
+NON_INTERACTIVE=0
+SKIP_HERDR_CHECK=0
 BASE="${PAIRFOB_DOWNLOAD_BASE:-https://pairfob.com/dl}"
 BASE="${BASE%/}"
 
@@ -45,6 +52,9 @@ while [ "$#" -gt 0 ]; do
       PREFIX="${1#--prefix=}"
       shift
       ;;
+    --install-herdr) INSTALL_HERDR=1; shift ;;
+    --non-interactive) NON_INTERACTIVE=1; shift ;;
+    --skip-herdr-check) SKIP_HERDR_CHECK=1; shift ;;
     --no-service)
       NO_SERVICE=1
       shift
@@ -84,6 +94,13 @@ case "$arch" in
     ;;
 esac
 name="pairfob-${os}-${arch}"
+
+# Match the login service's startup directory, while preserving relative prefixes.
+case "$PREFIX" in
+  "" | /*) ;;
+  *) PREFIX="$(pwd)/$PREFIX" ;;
+esac
+cd "$HOME"
 
 if [ -z "$PREFIX" ]; then
   if [ "$(id -u)" -eq 0 ]; then
@@ -134,6 +151,17 @@ if [ "$want" != "$got" ]; then
 fi
 chmod 0755 "${workdir}/${name}"
 
+# Check with the verified new CLI before replacing binaries or services.
+if [ "$SKIP_HERDR_CHECK" -eq 0 ]; then
+  set --
+  if [ "$INSTALL_HERDR" -eq 1 ]; then set -- "$@" --install-herdr; fi
+  if [ "$NON_INTERACTIVE" -eq 1 ]; then set -- "$@" --non-interactive; fi
+  "${workdir}/${name}" setup "$@" || {
+    echo "Setup incomplete: Herdr is not ready. Existing Pairfob installation was preserved." >&2
+    exit 1
+  }
+fi
+
 mkdir -p "$PREFIX"
 dest="${PREFIX}/pairfob"
 legacy="${PREFIX}/pairfobd"
@@ -176,9 +204,15 @@ if [ "$NO_SERVICE" -eq 0 ]; then
     sleep 0.25
   done
   if [ "$ok" -eq 1 ]; then
-    echo "Pairfob is running."
+    if [ "$SKIP_HERDR_CHECK" -eq 0 ]; then
+      "$dest" doctor || { echo "Setup incomplete: run pairfob doctor." >&2; exit 1; }
+      echo "Pairfob and Herdr are ready."
+    else
+      echo "Pairfob is running; Herdr readiness was not checked."
+    fi
   else
     echo "Installed, but not answering yet. Check ~/.config/pairfob/pairfob.log" >&2
+    exit 1
   fi
 fi
 
@@ -188,6 +222,11 @@ case ":${PATH}:" in
     echo "Add ${PREFIX} to PATH, then:"
     ;;
 esac
+
+if [ "$SKIP_HERDR_CHECK" -eq 1 ] || [ "$NO_SERVICE" -eq 1 ]; then
+  echo "Installation complete; session setup is not verified. Run pairfob setup, start Pairfob, then run pairfob doctor before pairing."
+  exit 0
+fi
 
 echo "On this computer:     pairfob pair"
 echo "On the other device:  https://pairfob.com/pair"

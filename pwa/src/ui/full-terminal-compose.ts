@@ -133,7 +133,7 @@ function setComposeText(root: ParentNode, text: string): void {
   sizeField(input);
   const send = root.querySelector<HTMLButtonElement>(".full-terminal-compose-send");
   send?.setAttribute("aria-label", next.trim() ? t("compose.sendEnterAria") : t("compose.enterAria"));
-  input.focus();
+  input.focus({ preventScroll: true });
   input.setSelectionRange(next.length, next.length);
   haptic(4);
 }
@@ -161,6 +161,10 @@ function composeForm(send: FullTerminalControlsOptions["sendCompose"]): HTMLForm
   input.value = state.composeDraft;
   sizeField(input);
   sendButton.type = "submit";
+  sendButton.addEventListener("pointerdown", (event) => {
+    // An active IME still needs the native blur/commit sequence on submission.
+    if (!state.composeIME) event.preventDefault();
+  });
   sendButton.setAttribute(
     "aria-label",
     state.composeDraft.trim() ? t("compose.sendEnterAria") : t("compose.enterAria"),
@@ -219,7 +223,7 @@ function composeForm(send: FullTerminalControlsOptions["sendCompose"]): HTMLForm
   };
   padComposeSubmitters.set(form, () => {
     explicitPadEnter = true;
-    input.blur();
+    if (enterPolicy.composing) input.blur();
     form.requestSubmit();
     if (!enterPolicy.composing) {
       explicitPadEnter = false;

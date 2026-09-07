@@ -1,6 +1,5 @@
 import { node } from "../../lib/dom";
 import { t } from "../../lib/i18n";
-import { render } from "../../paint";
 import { saveKeysExpanded, state } from "../../state";
 import { PRIMARY_KEYS, SECONDARY_KEYS, TERTIARY_KEYS, bindModifier, clearModifiers, paintKey, type KeySpec } from "../keypad";
 import { composeForm, insertNewline } from "./compose";
@@ -29,34 +28,39 @@ function keyRow(specs: KeySpec[], label: string): HTMLElement {
 
 export function keyPad(): HTMLElement {
   const wrap = node("div", "keys-wrap");
-  const primary = keyRow(PRIMARY_KEYS, t("keys.primary"));
-  const more = node("button", "key key-more");
-  more.type = "button";
-  more.setAttribute("aria-label", t("keys.morePad"));
-  more.setAttribute("aria-expanded", state.keysExpanded ? "true" : "false");
-  more.addEventListener("click", () => {
-    clearModifiers();
-    state.keysExpanded = !state.keysExpanded;
-    saveKeysExpanded();
-    render();
-  });
-  primary.append(more);
-  wrap.append(primary);
-  if (state.keysExpanded) {
-    wrap.append(padModeBar());
-    if (state.padKind === "slash") {
-      wrap.append(slashPad());
-      return wrap;
+  const paint = () => {
+    wrap.replaceChildren();
+    const primary = keyRow(PRIMARY_KEYS, t("keys.primary"));
+    const more = node("button", "key key-more");
+    more.type = "button";
+    more.setAttribute("aria-label", t("keys.morePad"));
+    more.setAttribute("aria-expanded", state.keysExpanded ? "true" : "false");
+    more.addEventListener("pointerdown", (event) => event.preventDefault());
+    more.addEventListener("click", () => {
+      clearModifiers();
+      state.keysExpanded = !state.keysExpanded;
+      saveKeysExpanded();
+      paint();
+    });
+    primary.append(more);
+    wrap.append(primary);
+    if (state.keysExpanded) {
+      wrap.append(padModeBar(paint));
+      if (state.padKind === "slash") {
+        wrap.append(slashPad());
+        return;
+      }
+      const secondary = keyRow(SECONDARY_KEYS, t("keys.more"));
+      const newline = node("button", "key", t("keys.newline"));
+      newline.type = "button";
+      newline.setAttribute("aria-label", t("keys.newlineAria"));
+      newline.addEventListener("pointerdown", (event) => event.preventDefault());
+      newline.addEventListener("click", insertNewline);
+      secondary.append(newline);
+      wrap.append(secondary, keyRow(TERTIARY_KEYS, t("keys.mods")));
     }
-    const secondary = keyRow(SECONDARY_KEYS, t("keys.more"));
-    const newline = node("button", "key", t("keys.newline"));
-    newline.type = "button";
-    newline.setAttribute("aria-label", t("keys.newlineAria"));
-    newline.addEventListener("pointerdown", (event) => event.preventDefault());
-    newline.addEventListener("click", insertNewline);
-    secondary.append(newline);
-    wrap.append(secondary, keyRow(TERTIARY_KEYS, t("keys.mods")));
-  }
+  };
+  paint();
   return wrap;
 }
 

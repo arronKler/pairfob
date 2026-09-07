@@ -33,6 +33,11 @@ pairfob help
 
 `forget` 也可以写设备名；重名时必须用序号。`unpair` 是 `forget` 的别名。
 
+
+## setup
+
+`pairfob setup` 检查并按需启动 Herdr；未安装时询问是否安装固定版本。`pairfob setup --install-herdr --non-interactive` 明确允许补齐依赖且不询问。已安装的 Herdr 不会被自动升级或替换。`doctor` 保持只读。
+
 ## doctor
 
 ```
@@ -40,7 +45,7 @@ Pairfob <version>
 
   Running     yes
   Paired      1
-  Herdr       on
+  Herdr       ready (0.8.2, protocol 20)
   Origin      pairfob.com
 ```
 
@@ -48,7 +53,7 @@ Pairfob <version>
 | --- | --- | --- |
 | Running | yes | 登录服务没起来，看 `pairfob service status` |
 | Paired | ≥ 1 | 还没配对，跑 `pairfob pair` |
-| Herdr | on | `off — open Herdr on this computer` |
+| Herdr | `ready` | `not installed` / `installed but not running` / `incompatible server` / `unavailable` |
 | Origin | `pairfob.com` | 还没登记 |
 
 `doctor` 在 Running 或 Herdr 不正常时会以失败退出，方便脚本检测。

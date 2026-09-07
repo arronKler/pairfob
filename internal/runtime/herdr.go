@@ -21,6 +21,7 @@ type Herdr struct {
 	Multi          bool
 	TerminalBinary string
 	launchServer   herdrServerLauncher
+	lookupBinary   func(string) (string, error)
 	bootstrapPoll  time.Duration
 }
 

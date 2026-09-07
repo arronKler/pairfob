@@ -23,7 +23,7 @@ func TestInstallScriptDownloadsVerifiesAndInstalls(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	prefix := t.TempDir()
-	cmd := exec.Command("sh", script, "--no-service", "--no-enroll", "--prefix", prefix)
+	cmd := exec.Command("sh", script, "--skip-herdr-check", "--no-service", "--no-enroll", "--prefix", prefix)
 	cmd.Env = append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -73,7 +73,7 @@ func TestInstallScriptEnrollsWithoutOptionalArgs(t *testing.T) {
 	server := httptest.NewServer(updateFixture(name, "test", payload))
 	t.Cleanup(server.Close)
 
-	cmd := exec.Command("sh", script, "--no-service", "--prefix", t.TempDir())
+	cmd := exec.Command("sh", script, "--skip-herdr-check", "--no-service", "--prefix", t.TempDir())
 	cmd.Env = append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -94,7 +94,7 @@ func TestInstallScriptRejectsBadChecksum(t *testing.T) {
 	mux.HandleFunc("/"+name, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("nope")) })
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
-	cmd := exec.Command("sh", script, "--no-service", "--no-enroll", "--prefix", t.TempDir())
+	cmd := exec.Command("sh", script, "--skip-herdr-check", "--no-service", "--no-enroll", "--prefix", t.TempDir())
 	cmd.Env = append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL)
 	out, err := cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "SHA-256") {
@@ -116,7 +116,7 @@ func TestInstallScriptReinstallMigratesLegacyServiceWithDownloadedBinary(t *test
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command("sh", script, "--no-service", "--no-enroll", "--prefix", prefix)
+	cmd := exec.Command("sh", script, "--skip-herdr-check", "--no-service", "--no-enroll", "--prefix", prefix)
 	cmd.Env = append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL, "PAIRFOB_TEST_SERVICE_LOG="+serviceLog)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -151,7 +151,7 @@ func TestInstallScriptReinstallRemovesCurrentAndLegacyServices(t *testing.T) {
 		}
 	}
 
-	cmd := exec.Command("sh", script, "--no-service", "--no-enroll", "--prefix", prefix)
+	cmd := exec.Command("sh", script, "--skip-herdr-check", "--no-service", "--no-enroll", "--prefix", prefix)
 	cmd.Env = append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL, "PAIRFOB_TEST_SERVICE_LOG="+serviceLog)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -180,7 +180,7 @@ func TestInstallScriptKeepsLegacyBinaryWhenMigrationFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command("sh", script, "--no-service", "--no-enroll", "--prefix", prefix)
+	cmd := exec.Command("sh", script, "--skip-herdr-check", "--no-service", "--no-enroll", "--prefix", prefix)
 	cmd.Env = append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL)
 	if out, err := cmd.CombinedOutput(); err == nil {
 		t.Fatalf("install.sh succeeded unexpectedly: %s", out)

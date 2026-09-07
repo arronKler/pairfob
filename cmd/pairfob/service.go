@@ -126,7 +126,7 @@ func launchdPlist(execPath, logPath, home string) string {
     <string>` + xmlEscape(home) + `</string>
     <key>PATH</key>
     <string>` + xmlEscape(userServicePATH(home)) + `</string>
-  </dict>
+` + launchdRuntimeEnvironment() + `  </dict>
 </dict>
 </plist>
 `
@@ -147,7 +147,7 @@ StandardOutput=append:` + systemdQuote(logPath) + `
 StandardError=append:` + systemdQuote(logPath) + `
 Environment=HOME=` + systemdQuote(home) + `
 Environment=PATH=` + systemdQuote(userServicePATH(home)) + `
-
+` + systemdRuntimeEnvironment() + `
 [Install]
 WantedBy=default.target
 `

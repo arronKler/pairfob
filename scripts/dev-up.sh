@@ -194,26 +194,42 @@ if [[ ! -f "$VARS" ]]; then
   cp "$ORIGIN_DIR/.dev.vars.example" "$VARS"
 fi
 
+echo "applying local database migrations…"
+if ! (
+  cd "$ORIGIN_DIR"
+  bunx wrangler d1 migrations apply pairfob --local --persist-to "$PERSIST" --config wrangler.local.jsonc
+) >"$DEV/origin.log" 2>&1; then
+  echo "local database migrations failed; last log:" >&2
+  tail -n 40 "$DEV/origin.log" >&2
+  exit 1
+fi
+
 echo "starting Worker origin on ${LISTEN}…"
 (
   cd "$ORIGIN_DIR"
-  bunx wrangler d1 migrations apply pairfob --local --persist-to "$PERSIST" --config wrangler.local.jsonc >/dev/null
   bunx wrangler dev --config wrangler.local.jsonc --persist-to "$PERSIST" --ip "$HOST" --port "$PORT" "${HTTPS_ARGS[@]}"
-) >"$DEV/origin.log" 2>&1 &
-echo $! >"$DEV/origin.pid"
+) >>"$DEV/origin.log" 2>&1 &
+origin_pid=$!
+echo "$origin_pid" >"$DEV/origin.pid"
 
 HEALTH_URL="${ORIGIN_URL}/v2/health"
 if [[ "$TLS_MODE" == "local-ca" ]]; then
   HEALTH_URL="https://127.0.0.1:${PORT}/v2/health"
 fi
-for i in $(seq 1 80); do
-  if curl "${CURL_ARGS[@]}" "$HEALTH_URL" >/dev/null; then break; fi
-  if [[ "$i" -eq 80 ]]; then
-    echo "origin did not become healthy; last log:" >&2
+origin_deadline=$((SECONDS + 60))
+while true; do
+  if ! kill -0 "$origin_pid" 2>/dev/null; then
+    echo "origin exited before becoming healthy; last log:" >&2
     tail -n 40 "$DEV/origin.log" >&2
     exit 1
   fi
-  sleep 0.15
+  if curl "${CURL_ARGS[@]}" --connect-timeout 1 --max-time 2 "$HEALTH_URL" >/dev/null; then break; fi
+  if (( SECONDS >= origin_deadline )); then
+    echo "origin did not become healthy within 60 seconds; run scripts/dev-down.sh before retrying; last log:" >&2
+    tail -n 40 "$DEV/origin.log" >&2
+    exit 1
+  fi
+  sleep 0.25
 done
 
 export PAIRFOB_ORIGIN="$ORIGIN_URL"

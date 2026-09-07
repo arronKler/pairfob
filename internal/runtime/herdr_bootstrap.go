@@ -46,7 +46,7 @@ func (h *Herdr) EnsureServer(ctx context.Context) (HerdrServerAvailability, erro
 		return HerdrServerAvailability{}, fmt.Errorf("Herdr socket is listening but its API is not usable: %w", err)
 	}
 
-	binary, err := resolveHerdrBinary(h.TerminalBinary)
+	binary, err := h.resolveBinary()
 	if err != nil {
 		return HerdrServerAvailability{}, fmt.Errorf("resolve Herdr CLI: %w", err)
 	}

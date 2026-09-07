@@ -54,7 +54,7 @@ describe("herdStatus verdict copy", () => {
     expect(status.tone).toBe("warn");
     expect(status.text).toBe("连接中断，正在自动重连");
     expect(status.text).not.toContain("已连接");
-    expect(status.text).not.toContain("Herdr 没有运行");
+    expect(status.text).not.toContain("Herdr 不可用");
     expect(herdLiveness()).toBe("unverifiable");
   });
 
@@ -81,7 +81,7 @@ describe("herdStatus verdict copy", () => {
     state.runtimeKind = "offline";
     const status = herdStatus();
     expect(status.tone).toBe("off");
-    expect(status.text).toBe("电脑上的 Herdr 没有运行");
+    expect(status.text).toBe("电脑上的 Herdr 不可用");
     expect(herdLiveness()).toBe("exited");
     // A transport blip with a last-known offline kind must not claim exit.
     setSession(false);
@@ -131,7 +131,7 @@ describe("home list while unverifiable", () => {
     const statusline = app.querySelector(".statusline-text");
     expect(statusline?.textContent).toBe("连接中断，正在自动重连");
     expect(statusline?.textContent).not.toContain("已连接");
-    expect(statusline?.textContent).not.toContain("Herdr 没有运行");
+    expect(statusline?.textContent).not.toContain("Herdr 不可用");
     // Cards survive the drop; they are dimmed, not wiped.
     const card = app?.querySelector(".card");
     expect(card).not.toBeNull();

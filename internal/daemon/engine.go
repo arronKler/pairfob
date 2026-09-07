@@ -184,7 +184,9 @@ type Engine struct {
 	operations   map[string]*operationRecord
 	operationSeq uint64
 
-	reads observeGroup
+	reads       observeGroup
+	quotas      quotaCache
+	QuotaReader func(context.Context) []runtimeapi.AgentQuota
 }
 
 const PairingTTLDefault = 180 * time.Second

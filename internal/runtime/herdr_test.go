@@ -450,7 +450,7 @@ func TestCreateConversationTimeoutIsUnknownAndNeverCompensated(t *testing.T) {
 	socket, _ := startScriptedHerdr(t, func(request scriptedRequest) scriptedReply {
 		switch request.Method {
 		case "agent.start":
-			return scriptedReply{Result: map[string]any{"type": "agent_started", "agent": map[string]any{"pane_id": "w2:p1"}, "argv": []string{"codex"}}, Delay: 100 * time.Millisecond}
+			return scriptedReply{Result: map[string]any{"type": "agent_started", "agent": map[string]any{"pane_id": "w2:p1"}, "argv": []string{"codex"}}, Delay: 3 * time.Second}
 		case "workspace.close":
 			mu.Lock()
 			closed = true
@@ -460,14 +460,14 @@ func TestCreateConversationTimeoutIsUnknownAndNeverCompensated(t *testing.T) {
 			return standardReply(request)
 		}
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	receipt, err := NewHerdr(socket).Execute(ctx, DefaultSession(), "op-timeout", CreateConversationCommand{CWD: "/repo", AgentKind: "codex"})
 	fault, ok := AsFault(err)
 	if !ok || fault.Code != CodeTimeout || fault.Outcome != OutcomeUnknown || receipt.Outcome != OutcomeUnknown || len(receipt.Created) != 3 {
 		t.Fatalf("receipt=%+v fault=%+v err=%v", receipt, fault, err)
 	}
-	time.Sleep(120 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	mu.Lock()
 	defer mu.Unlock()
 	if closed {

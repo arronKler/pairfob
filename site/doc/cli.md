@@ -33,6 +33,11 @@ pairfob help
 
 `forget` also accepts a device name; collisions require the index. `unpair` is an alias of `forget`.
 
+
+## setup
+
+`pairfob setup` checks and starts Herdr when needed, asking before installing a missing dependency. `pairfob setup --install-herdr --non-interactive` explicitly permits installation without prompting. Existing Herdr installations are not upgraded or replaced. `doctor` remains read-only.
+
 ## doctor
 
 ```
@@ -40,7 +45,7 @@ Pairfob <version>
 
   Running     yes
   Paired      1
-  Herdr       on
+  Herdr       ready (0.8.2, protocol 20)
   Origin      pairfob.com
 ```
 
@@ -48,7 +53,7 @@ Pairfob <version>
 | --- | --- | --- |
 | Running | yes | Login service did not start. See `pairfob service status` |
 | Paired | ≥ 1 | Nothing paired yet. Run `pairfob pair` |
-| Herdr | on | `off — open Herdr on this computer` |
+| Herdr | `ready` | `not installed` / `installed but not running` / `incompatible server` / `unavailable` |
 | Origin | `pairfob.com` | Not enrolled |
 
 `doctor` exits non-zero when Running or Herdr is unhealthy, so scripts can branch on it.

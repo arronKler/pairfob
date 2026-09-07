@@ -1,5 +1,6 @@
 import { node } from "../lib/dom";
 import { t, type CopyKey } from "../lib/i18n";
+import { bindPadPress } from "./key-press";
 
 export type Modifier = "ctrl" | "alt" | "shift" | "cmd";
 
@@ -84,7 +85,7 @@ export function pressModifier(mod: Modifier): void {
 }
 
 export function releaseModifier(mod: Modifier): void {
-  down.delete(mod);
+  if (!down.delete(mod)) return;
   if (!used.has(mod)) {
     if (sticky.has(mod)) sticky.delete(mod);
     else sticky.add(mod);
@@ -124,14 +125,17 @@ export function bindModifier(element: HTMLElement, mod: Modifier): void {
   buttons.push({ el: element, mod });
   element.classList.add("key-mod");
   element.setAttribute("aria-pressed", "false");
-  element.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    pressModifier(mod);
+  bindPadPress(element, () => pressModifier(mod), {
+    release(cancelled) {
+      if (!cancelled) {
+        releaseModifier(mod);
+        return;
+      }
+      down.delete(mod);
+      used.delete(mod);
+      paintAllModifiers();
+    },
   });
-  const end = () => releaseModifier(mod);
-  for (const type of ["pointerup", "pointercancel", "lostpointercapture"] as const) {
-    element.addEventListener(type, end);
-  }
 }
 
 const KEY_ARIA: Partial<Record<string, CopyKey>> = {

@@ -13,12 +13,28 @@ curl -fsSL https://pairfob.com/install.sh | sh
 
 The same command on a second computer. Then pair it from the phone: **Settings â†’ Add another computer**. Do not set `PAIRFOB_JOIN_TOKEN`.
 
+
+## Herdr checks and installation
+
+Before replacing Pairfob, enrolling, or installing its service, the installer checks Herdr. It reuses a ready server, starts an installed server when needed, and waits for its API. If Herdr is missing, it asks in the terminal before installing pinned version 0.8.2 into `~/.local/bin/herdr`, with SHA-256 verification and without replacing an existing Herdr.
+
+For unattended installation, explicitly allow the missing dependency:
+
+```sh
+curl -fsSL https://pairfob.com/install.sh | sh -s -- --install-herdr --non-interactive
+```
+
+`--non-interactive` never prompts and fails when Herdr is missing unless `--install-herdr` is also set. `--skip-herdr-check` installs Pairfob without claiming session readiness. `--no-service` still checks Herdr; for offline preparation use `--no-service --no-enroll --skip-herdr-check`.
+
+Later, run `pairfob setup` to check and start Herdr, or `pairfob setup --install-herdr` to install a missing dependency. `pairfob doctor` only diagnoses; it never installs or starts anything. Incompatible protocols, startup failures, and invalid `HERDR_BIN` or socket settings must be resolved before continuing. Existing Herdr sessions are never automatically upgraded or restarted. With `PAIRFOB_HERDR_AUTOSTART=0` or multi-session mode, start the configured Herdr server yourself.
+
 ## What the script does
 
 1. Downloads the `pairfob` binary for this OS
 2. Verifies the checksum and refuses to overwrite on mismatch
-3. Enrolls
-4. Unless `--no-service`, installs a **user-level** login service
+3. Checks Herdr, optionally installs it with consent, starts it if needed, and verifies its API
+4. Enrolls
+5. Unless `--no-service`, installs a **user-level** login service
 
 ## Flags
 
@@ -26,7 +42,10 @@ The same command on a second computer. Then pair it from the phone: **Settings â
 | --- | --- |
 | `--prefix DIR` | Install directory. A writable `/usr/local/bin` uses that; otherwise `~/.local/bin` |
 | `--no-service` | Binary and enroll only; no login service |
-| `--no-enroll` | Binary only. Tests and air-gapped copies |
+| `--no-enroll` | Skip enrollment; service and Herdr checks still apply |
+| `--install-herdr` | Install pinned Herdr if missing, without prompting |
+| `--non-interactive` | Never prompt; missing dependencies fail unless installation is allowed |
+| `--skip-herdr-check` | Skip Herdr checks without claiming session readiness |
 
 Also valid:
 
@@ -35,6 +54,10 @@ curl -fsSL https://pairfob.com/install.sh | sh -s -- --prefix "$HOME/bin"
 ```
 
 Machines that already enrolled: rerunning the installer refreshes the binary and leaves existing pairings alone.
+
+The service retains the checked Herdr executable, socket, configuration paths, and startup options so a different login PATH does not break the connection.
+
+The installer checks and starts Herdr from the home directory, matching the login service. Relative Herdr configuration paths are also interpreted from home.
 
 ## Where it lands
 

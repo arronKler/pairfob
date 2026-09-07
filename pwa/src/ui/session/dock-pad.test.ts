@@ -9,10 +9,51 @@ for (const key of ["window", "document", "HTMLElement", "HTMLButtonElement", "No
 happy.document.body.innerHTML = '<main id="app"></main>';
 
 const { state } = await import("../../state.ts");
-const { keyPad } = await import("./dock.ts");
+const { keyPad, dockNode } = await import("./dock.ts");
+const { setRenderer } = await import("../../paint.ts");
 const { SLASH_COMMANDS } = await import("../../lib/slash-commands.ts");
 
 describe("session pad morphs", () => {
+  test("expanding and switching pad modes preserves the same focused IME field and selection", () => {
+    state.keysExpanded = false;
+    state.padKind = "keys";
+    const { dock, input } = dockNode(true);
+    document.body.append(dock);
+    let repaints = 0;
+    setRenderer(() => { repaints++; });
+    try {
+      input.value = "正在编辑的文字";
+      input.focus();
+      input.setSelectionRange(1, 4);
+      input.dispatchEvent(new happy.Event("compositionstart"));
+      const tap = (button: HTMLButtonElement) => {
+        const down = new happy.PointerEvent("pointerdown", { button: 0, cancelable: true });
+        button.dispatchEvent(down);
+        expect(down.defaultPrevented).toBe(true);
+        button.click();
+        expect(dock.querySelector("textarea")).toBe(input);
+        expect(document.activeElement).toBe(input);
+        expect([input.selectionStart, input.selectionEnd]).toEqual([1, 4]);
+        expect(input.value).toBe("正在编辑的文字");
+        expect(state.composeIME).toBe(true);
+      };
+      tap(dock.querySelector(".key-more")!);
+      expect(state.keysExpanded).toBe(true);
+      tap(dock.querySelectorAll<HTMLButtonElement>(".pad-mode button")[1]);
+      expect(dock.querySelector(".slash-pad")).toBeTruthy();
+      tap(dock.querySelectorAll<HTMLButtonElement>(".pad-mode button")[0]);
+      expect(dock.querySelector(".key-mod")).toBeTruthy();
+      tap(dock.querySelector(".key-more")!);
+      expect(state.keysExpanded).toBe(false);
+      expect(repaints).toBe(0);
+    } finally {
+      dock.remove();
+      state.composeIME = false;
+      state.composeFocused = false;
+      setRenderer(() => undefined);
+    }
+  });
+
   test("collapsed pad keeps only the TUI survival row", () => {
     state.keysExpanded = false;
     const pad = keyPad();

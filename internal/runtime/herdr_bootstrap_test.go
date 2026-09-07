@@ -32,7 +32,7 @@ func TestEnsureHerdrServerLeavesLiveServerAlone(t *testing.T) {
 func TestEnsureHerdrServerStartsAndWaitsForLiveAPI(t *testing.T) {
 	socket := shortTestSocket(t)
 	herdr := NewHerdr(socket)
-	herdr.TerminalBinary = "/opt/herdr/bin/herdr"
+	herdr.TerminalBinary = writeTerminalFixture(t, "exit 0\n")
 	herdr.bootstrapPoll = time.Millisecond
 	var launches atomic.Int32
 	herdr.launchServer = func(_ context.Context, binary, startupDir, requestedSocket string) (<-chan error, error) {
@@ -94,7 +94,7 @@ func TestEnsureHerdrServerDoesNotReplaceListeningInvalidAPI(t *testing.T) {
 
 func TestEnsureHerdrServerTimesOutWithoutClaimingSuccess(t *testing.T) {
 	herdr := NewHerdr(shortTestSocket(t))
-	herdr.TerminalBinary = "/opt/herdr/bin/herdr"
+	herdr.TerminalBinary = writeTerminalFixture(t, "exit 0\n")
 	herdr.bootstrapPoll = time.Millisecond
 	herdr.launchServer = func(context.Context, string, string, string) (<-chan error, error) {
 		return make(chan error), nil

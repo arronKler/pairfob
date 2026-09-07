@@ -66,6 +66,7 @@ describe("settings help copy", () => {
       help: row.querySelector(".set-help") !== null,
     }))).toEqual([
       { title: "连接", help: true },
+      { title: "订阅余量", help: false },
       { title: "语言", help: true },
       { title: "会话列表", help: true },
       { title: "会话默认", help: true },

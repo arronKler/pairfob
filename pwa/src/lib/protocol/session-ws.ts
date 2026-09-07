@@ -1,3 +1,4 @@
+import { parseAgentQuota } from "../agent-quota";
 import { validDaemonId, validDeviceId } from "../identifiers.ts";
 import { jsonFrame, Typ } from "./envelope.ts";
 import { fingerprint16 } from "./hello.ts";
@@ -229,6 +230,7 @@ class ReconnectingSession implements LiveSession {
     return () => this.listeners.delete(listener);
   };
   ping = (t: number) => this.readRPC("Ping", { t_ms: t });
+  agentQuota = async () => parseAgentQuota(await this.readRPC("AgentQuota", {}, 12_000));
   getConfig = () => this.readRPC("GetConfig", {}) as Promise<Record<string, unknown>>;
   snapshot = () => this.readRPC("Snapshot", { session: null }) as Promise<Record<string, unknown>>;
   paneRead = (paneId: string, lines = 80, format: "ansi" | "text" = "ansi") =>
@@ -339,10 +341,10 @@ class ReconnectingSession implements LiveSession {
     this.transport = null;
   };
 
-  private async readRPC(op: string, params: unknown): Promise<unknown> {
+  private async readRPC(op: string, params: unknown, timeoutMs?: number): Promise<unknown> {
     const transport = await this.captureTransport();
     if (!transport) return Promise.reject(new ProtocolError("reconnecting", "连接正在恢复"));
-    return transport.rpc(op, params);
+    return transport.rpc(op, params, timeoutMs);
   }
 
   /** Capture one transport; mutation RPCs are never replayed on another socket. */

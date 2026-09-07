@@ -77,7 +77,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantOps := []string{
-		"Ping", "GetConfig", "Snapshot", "PaneRead", "SendText", "SendKeys",
+		"Ping", "GetConfig", "AgentQuota", "Snapshot", "PaneRead", "SendText", "SendKeys",
 		"PushSubscribe", "RevokeDevice", "ListDevices", "History", "AgentTrace", "AgentTraceSummary", "AgentTraceDetail", "RenamePane",
 		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace",
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
@@ -216,6 +216,14 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 			t.Errorf("%s params must reject additional properties", op)
 		}
 	}
+
+	quotaParams := paramsByOp["AgentQuota"]
+	if len(quotaParams.Properties) != 0 || quotaParams.AdditionalProperties == nil || *quotaParams.AdditionalProperties {
+		t.Error("AgentQuota must reject all parameters")
+	}
+	requireExactObject(t, schema.Defs, "agentQuotaResult", []string{"items"})
+	requireExactObject(t, schema.Defs, "agentQuotaItem", []string{"provider", "plan", "status", "source", "observed_at", "windows"})
+	requireExactObjectFields(t, schema.Defs, "agentQuotaWindow", []string{"name", "used_percent", "window_minutes", "resets_at", "unlimited"}, []string{"name", "used_percent", "window_minutes", "resets_at"})
 
 	capabilities := []string{
 		"create_conversation", "create_tab", "split_pane", "prompt_agent", "history",

@@ -1,3 +1,4 @@
+import type { AgentQuota } from "../agent-quota";
 import type {
   AgentTracePage,
   AgentTraceDetail,
@@ -54,6 +55,7 @@ export interface DeviceSummary {
 
 export type LiveSession = {
   ping: (t: number) => Promise<unknown>;
+  agentQuota: () => Promise<AgentQuota[]>;
   getConfig: () => Promise<Record<string, unknown>>;
   snapshot: () => Promise<Record<string, unknown>>;
   paneRead: (paneId: string, lines?: number, format?: "ansi" | "text") => Promise<{ text: string; truncated?: boolean; hash?: string }>;

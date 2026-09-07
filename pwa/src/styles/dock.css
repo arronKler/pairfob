@@ -58,7 +58,8 @@
   transition: transform 0.1s ease, background 0.12s ease;
 }
 
-.key:active {
+.key:active,
+.key.is-pressed {
   transform: scale(0.94);
   background: #232c38;
   border-color: var(--line-strong);

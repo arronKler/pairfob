@@ -601,6 +601,9 @@ export function composeForm(includeBack: boolean): { form: HTMLFormElement; inpu
   bindTermField(input);
   const send = node("button", "send-btn", "Enter");
   send.type = "submit";
+  send.addEventListener("pointerdown", (event) => {
+    if (!state.composeIME) event.preventDefault();
+  });
   syncSendButton(send);
   form.append(inputLabel, liveStatus, input, send);
   applyLiveInputFeedback(form, input, liveStatus, liveInputText());

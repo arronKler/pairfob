@@ -4,12 +4,12 @@ import { publishPanePagePerf } from "../../pane-page-perf";
 import { requestPaneRefresh } from "../../pane-refresh-request";
 import { app, clearNotice, haptic, markPaneSubmitted, state } from "../../state";
 import { withModifiers } from "../keypad";
+import { bindPadPress } from "../key-press";
+export { REPEAT_DELAY_MS, REPEAT_EVERY_MS } from "../key-press";
 
 /** rpc.schema.json caps SendKeys.keys at 32 entries. */
 const MAX_BATCH = 32;
 const BATCH_MS = 55;
-export const REPEAT_DELAY_MS = 380;
-export const REPEAT_EVERY_MS = 90;
 
 let pending: string[] = [];
 let pendingPane = "";
@@ -233,41 +233,7 @@ export async function sendPage(direction: "up" | "down"): Promise<void> {
   }
 }
 
-type RepeatHandle = { stop: () => void };
-
 /** Press-and-hold auto-repeat, mirroring a physical key. */
-export function bindKeyPress(element: HTMLElement, key: string, repeatable: boolean): RepeatHandle {
-  let hold: number | null = null;
-  let tick: number | null = null;
-  const stop = () => {
-    if (hold !== null) clearTimeout(hold);
-    if (tick !== null) clearInterval(tick);
-    hold = null;
-    tick = null;
-  };
-  element.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    queueKey(key);
-    if (!repeatable) return;
-    stop();
-    hold = window.setTimeout(() => {
-      if (!element.isConnected) return;
-      tick = window.setInterval(() => {
-        // A background render can replace the pad mid-hold. The detached
-        // button never receives pointerup, so the repeat must stop itself.
-        if (!element.isConnected) {
-          stop();
-          return;
-        }
-        queueKey(key);
-      }, REPEAT_EVERY_MS);
-    }, REPEAT_DELAY_MS);
-  });
-  for (const type of ["pointerup", "pointercancel", "pointerleave", "lostpointercapture"] as const) {
-    element.addEventListener(type, stop);
-  }
-  element.addEventListener("click", (event) => {
-    if (event.detail === 0) queueKey(key);
-  });
-  return { stop };
+export function bindKeyPress(element: HTMLElement, key: string, repeatable: boolean): { stop: () => void } {
+  return bindPadPress(element, () => queueKey(key), { repeat: repeatable });
 }

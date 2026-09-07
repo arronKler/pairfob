@@ -81,6 +81,9 @@
   padding: 22px 26px 40px;
 }
 
+/* Settings scroll as a page; cards must retain their full content height. */
+.main-settings > * { flex-shrink: 0; }
+
 .main-settings .set-card,
 .main-settings .notice,
 .main-settings .retry { max-width: 40rem; }

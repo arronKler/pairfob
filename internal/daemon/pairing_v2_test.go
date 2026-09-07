@@ -16,6 +16,10 @@ import (
 	"pairfob/internal/runtime"
 )
 
+// OpenPairing derives the SPAKE record before it writes PAIR_OPEN. The race
+// detector stretches that Argon2 work far past a short RecvTimeout.
+const pairOpenRecvWait = 60 * time.Second
+
 func TestOpenPairingV2WaitsForAckLoc(t *testing.T) {
 	a, peer := mux.NewPipePair(16)
 	eng := NewEngine(nil, a, runtime.NewFake())
@@ -33,7 +37,7 @@ func TestOpenPairingV2WaitsForAckLoc(t *testing.T) {
 		done <- result{st, err}
 	}()
 
-	frame, ok := peer.RecvTimeout(20 * time.Second)
+	frame, ok := peer.RecvTimeout(pairOpenRecvWait)
 	if !ok || frame.Typ != envelope.TypPAIR_OPEN {
 		t.Fatalf("PAIR_OPEN frame=%v ok=%t", frame, ok)
 	}
@@ -94,7 +98,7 @@ func TestOpenPairingV2IndexUnavailableFailsOpen(t *testing.T) {
 		_, err := eng.OpenPairing("ABCDEFGH")
 		done <- err
 	}()
-	opened, ok := peer.RecvTimeout(20 * time.Second)
+	opened, ok := peer.RecvTimeout(pairOpenRecvWait)
 	if !ok {
 		t.Fatal("missing PAIR_OPEN")
 	}
@@ -132,7 +136,7 @@ func TestOpenPairingV2SerializesRequestsAndIgnoresStaleFailure(t *testing.T) {
 		st, err := eng.OpenPairing("ABCDEFGH")
 		firstDone <- result{st: st, err: err}
 	}()
-	firstOpen, ok := peer.RecvTimeout(20 * time.Second)
+	firstOpen, ok := peer.RecvTimeout(pairOpenRecvWait)
 	if !ok || firstOpen.Typ != envelope.TypPAIR_OPEN {
 		t.Fatalf("first PAIR_OPEN frame=%v ok=%t", firstOpen, ok)
 	}
@@ -160,7 +164,7 @@ func TestOpenPairingV2SerializesRequestsAndIgnoresStaleFailure(t *testing.T) {
 
 	secondRef := ""
 	for i := 0; i < 3 && secondRef == ""; i++ {
-		frame, ok := peer.RecvTimeout(20 * time.Second)
+		frame, ok := peer.RecvTimeout(pairOpenRecvWait)
 		if !ok {
 			t.Fatal("missing serialized second PAIR_OPEN")
 		}
@@ -232,7 +236,7 @@ func TestMuxV2PairAttachedAndCloseUseV2(t *testing.T) {
 		done <- result{st: st, err: err}
 	}()
 
-	opened, ok := peer.RecvTimeout(20 * time.Second)
+	opened, ok := peer.RecvTimeout(pairOpenRecvWait)
 	if !ok || opened.Typ != envelope.TypPAIR_OPEN {
 		t.Fatalf("PAIR_OPEN frame=%v ok=%t", opened, ok)
 	}

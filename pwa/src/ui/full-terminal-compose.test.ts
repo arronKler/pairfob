@@ -75,6 +75,36 @@ afterEach(() => {
 });
 
 describe("complete-terminal compose input", () => {
+  test("expanding the pad and submitting settled text preserve the focused textarea", () => {
+    state.keysExpanded = false;
+    state.composeDraft = "draft";
+    const sent: string[] = [];
+    const root = render((text) => { sent.push(text); return true; });
+    document.body.append(root);
+    try {
+      const input = root.querySelector("textarea")!;
+      input.focus();
+      input.setSelectionRange(1, 3);
+      const more = root.querySelector<HTMLButtonElement>(".key-more")!;
+      const down = new happy.PointerEvent("pointerdown", { button: 0, cancelable: true });
+      more.dispatchEvent(down);
+      expect(down.defaultPrevented).toBe(true);
+      more.click();
+      expect(document.activeElement).toBe(input);
+      expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
+      const enter = root.querySelector<HTMLButtonElement>('[aria-label="Enter"]')!;
+      enter.click();
+      expect(sent).toEqual(["draft"]);
+      expect(document.activeElement).toBe(input);
+      const send = root.querySelector<HTMLButtonElement>(".full-terminal-compose-send")!;
+      const sendDown = new happy.PointerEvent("pointerdown", { button: 0, cancelable: true });
+      send.dispatchEvent(sendDown);
+      expect(sendDown.defaultPrevented).toBe(true);
+    } finally {
+      root.remove();
+    }
+  });
+
   test("sends composed text before a distinct Enter command", () => {
     const sent: Array<{ text: string; isolate: boolean | undefined }> = [];
     const send = (data: Uint8Array, options?: { isolate?: boolean }): void => {

@@ -7,10 +7,10 @@ const compose = await Bun.file(new URL("./compose.ts", import.meta.url)).text();
 describe("expanded pad modes", () => {
   test("the switcher only appears once the pad is expanded", () => {
     expect(dock).toContain("if (state.keysExpanded)");
-    expect(dock).toContain("padModeBar()");
+    expect(dock).toContain("padModeBar(paint)");
     expect(dock).toContain('state.padKind === "slash"');
     expect(dock).toContain("slashPad()");
-    expect(dock.indexOf("padModeBar()")).toBeGreaterThan(dock.indexOf("if (state.keysExpanded)"));
+    expect(dock.indexOf("padModeBar(paint)")).toBeGreaterThan(dock.indexOf("if (state.keysExpanded)"));
   });
 
   test("slash chips fill compose instead of sending keys", () => {

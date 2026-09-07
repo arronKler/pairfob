@@ -7,9 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,7 +40,7 @@ func (h *Herdr) OpenTerminal(ctx context.Context, open TerminalOpen) (TerminalCo
 	if !validResourceID.MatchString(open.PaneID) || !ValidTerminalSize(open.Cols, open.Rows) {
 		return nil, invalidFault("terminal.open", "invalid terminal target or size")
 	}
-	binary, err := resolveHerdrBinary(h.TerminalBinary)
+	binary, err := h.resolveBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -224,35 +222,6 @@ func (t *herdrTerminal) read(stdout io.Reader, first chan<- TerminalEvent, stder
 		first <- event
 	} else {
 		t.events <- event
-	}
-}
-
-func resolveHerdrBinary(explicit string) (string, error) {
-	if explicit != "" {
-		return explicit, nil
-	}
-	if env := os.Getenv("HERDR_BIN"); env != "" {
-		if info, err := os.Stat(env); err == nil && !info.IsDir() {
-			return env, nil
-		}
-	}
-	if found, err := exec.LookPath("herdr"); err == nil {
-		return found, nil
-	}
-	var candidates []string
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, filepath.Join(home, ".local", "bin", "herdr"))
-	}
-	candidates = append(candidates, "/usr/local/bin/herdr", "/opt/homebrew/bin/herdr")
-	for _, path := range candidates {
-		info, err := os.Stat(path)
-		if err == nil && !info.IsDir() {
-			return path, nil
-		}
-	}
-	return "", &Fault{
-		Code: CodeUnsupported, Operation: "terminal.open", Outcome: OutcomeNotApplied, Retry: RetryNever,
-		SafeMessage: "Herdr CLI was not found; install Herdr on this computer",
 	}
 }
 

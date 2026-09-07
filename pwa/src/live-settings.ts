@@ -1,3 +1,4 @@
+import { refreshAgentQuota } from "./ui/agent-quota";
 import { t } from "./lib/i18n";
 import { type NetworkMode } from "./lib/network-mode";
 import { parseRuntimeOperationsConfig } from "./lib/operations";
@@ -54,6 +55,7 @@ async function hasLocalPushSubscription(): Promise<boolean> {
 }
 
 export async function refreshSettings(): Promise<void> {
+  void refreshAgentQuota();
   const session = state.live;
   const request = ++state.settingsRequest;
   state.settingsLoading = true;

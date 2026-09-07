@@ -21,6 +21,7 @@ import { renderConnect } from "./ui/connect";
 import { renderDesk } from "./ui/desk";
 import { renderHome } from "./ui/home";
 import { initSwipeBack, renderPane } from "./ui/pane";
+import { renderQuota } from "./ui/agent-quota";
 import { renderSettings } from "./ui/settings";
 import { renderBoard } from "./ui/board";
 import { renderWorkspace } from "./ui/workspace";
@@ -60,6 +61,7 @@ function renderLive(): void {
     return;
   }
   if (state.screen === "settings") renderSettings();
+  else if (state.screen === "quota") renderQuota();
   else if (state.screen === "computers") renderComputers();
   else if (state.screen === "pane") renderPane();
   else renderHome();
