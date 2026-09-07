@@ -98,10 +98,20 @@ type sess struct {
 }
 
 func (e *Engine) sendSessionFrame(s *sess, frame envelope.Frame) error {
+	var err error
 	if s != nil && s.link != nil {
-		return s.link.Send(frame)
+		err = s.link.Send(frame)
+	} else if e.Conn != nil {
+		err = e.Conn.Send(frame)
+	} else {
+		err = errors.New("session transport is not attached")
 	}
-	return e.Conn.Send(frame)
+	if err != nil && s != nil {
+		// Callers including reply/sendTerminalFrame hold s.sendMu. Tear the
+		// epoch down after that lock is released so closeSession cannot invert.
+		go e.failTransportEpoch(s)
+	}
+	return err
 }
 
 type Engine struct {

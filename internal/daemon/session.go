@@ -385,6 +385,24 @@ func (e *Engine) wipeSession(s *sess) {
 	s.nonce = nil
 }
 
+// failTransportEpoch ends a session after a post-seal send failure. The AEAD
+// sequence is not rolled back and no ERROR frame is written on the jammed
+// link. closeSession is idempotent if the P2P adapter also reports onClose.
+func (e *Engine) failTransportEpoch(s *sess) {
+	if s == nil {
+		return
+	}
+	e.mu.Lock()
+	active := e.sessions[s.routeID] == s && s.state != "closed"
+	deviceID, transport := s.deviceID, s.transport
+	e.mu.Unlock()
+	if !active {
+		return
+	}
+	e.audit("session_send_failed", map[string]any{"device_id": deviceID, "transport": transport})
+	e.closeSession(s.routeID, "", false)
+}
+
 func (e *Engine) closeSession(rid [16]byte, code string, notify bool) {
 	e.mu.Lock()
 	s := e.sessions[rid]

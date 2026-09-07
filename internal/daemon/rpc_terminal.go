@@ -266,8 +266,13 @@ func (e *Engine) runTerminalCommand(s *sess, id, operationID, terminalID string,
 func (e *Engine) forwardTerminal(s *sess, slot *terminalSlot) {
 	for event := range slot.controller.Events() {
 		if event.Frame != nil {
-			if len(event.Frame.Data) > maxTerminalFrameBytes || !e.sendTerminalFrame(s, slot, *event.Frame) {
+			if len(event.Frame.Data) > maxTerminalFrameBytes {
 				e.closeTerminalSlot(s, slot, "terminal frame could not be delivered", true)
+				return
+			}
+			delivered, transportFailed := e.sendTerminalFrame(s, slot, *event.Frame)
+			if !delivered {
+				e.closeTerminalSlot(s, slot, "terminal frame could not be delivered", !transportFailed)
 				return
 			}
 			continue
@@ -284,9 +289,9 @@ func (e *Engine) forwardTerminal(s *sess, slot *terminalSlot) {
 	e.closeTerminalSlot(s, slot, "terminal bridge closed", true)
 }
 
-func (e *Engine) sendTerminalFrame(s *sess, slot *terminalSlot, frame runtime.TerminalFrame) bool {
+func (e *Engine) sendTerminalFrame(s *sess, slot *terminalSlot, frame runtime.TerminalFrame) (delivered, transportFailed bool) {
 	if frame.Sequence == 0 || !runtime.ValidTerminalSize(frame.Width, frame.Height) {
-		return false
+		return false, false
 	}
 	parts := 1
 	if len(frame.Data) > 0 {
@@ -295,7 +300,7 @@ func (e *Engine) sendTerminalFrame(s *sess, slot *terminalSlot, frame runtime.Te
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
 	if !e.terminalSlotActive(s, slot) {
-		return false
+		return false, false
 	}
 	for index := 0; index < parts; index++ {
 		start := index * terminalFrameChunk
@@ -311,20 +316,23 @@ func (e *Engine) sendTerminalFrame(s *sess, slot *terminalSlot, frame runtime.Te
 			},
 		})
 		if err != nil || len(body) > aead.MaxPlaintext {
-			return false
+			return false, false
 		}
 		e.mu.Lock()
 		active := s.state == "established" && e.sessions[s.routeID] == s && s.s2c != nil
 		e.mu.Unlock()
 		if !active {
-			return false
+			return false, false
 		}
 		payload, err := aead.Seal(s.s2c, s.routeID, body)
-		if err != nil || e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload}) != nil {
-			return false
+		if err != nil {
+			return false, false
+		}
+		if e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload}) != nil {
+			return false, true
 		}
 	}
-	return true
+	return true, false
 }
 
 func (e *Engine) closeTerminalSlot(s *sess, slot *terminalSlot, reason string, notify bool) {

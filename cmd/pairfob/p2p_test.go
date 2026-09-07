@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -160,3 +161,124 @@ func TestWebRTCAcceptorCarriesPairfobFramesBothWays(t *testing.T) {
 }
 
 func boolPointer(value bool) *bool { return &value }
+
+type p2pTestPair struct {
+	link        *webRTCConn
+	closed      chan struct{}
+	onCloseHook func()
+	cleanup     func()
+}
+
+func openP2PTestPair(t *testing.T) *p2pTestPair {
+	t.Helper()
+	caller, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	protocol := p2pDataChannelProtocol
+	channel, err := caller.CreateDataChannel(p2pDataChannelLabel, &webrtc.DataChannelInit{
+		Ordered:  boolPointer(true),
+		Protocol: &protocol,
+	})
+	if err != nil {
+		caller.Close()
+		t.Fatal(err)
+	}
+	opened := make(chan struct{})
+	channel.OnOpen(func() { close(opened) })
+	offer, err := caller.CreateOffer(nil)
+	if err != nil {
+		caller.Close()
+		t.Fatal(err)
+	}
+	gathered := webrtc.GatheringCompletePromise(caller)
+	if err := caller.SetLocalDescription(offer); err != nil {
+		caller.Close()
+		t.Fatal(err)
+	}
+	select {
+	case <-gathered:
+	case <-time.After(5 * time.Second):
+		caller.Close()
+		t.Fatal("caller ICE gathering timed out")
+	}
+	pair := &p2pTestPair{closed: make(chan struct{}, 1)}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	acceptor := &webRTCAcceptor{configuration: webrtc.Configuration{}}
+	answer, link, err := acceptor.Accept(ctx, caller.LocalDescription().SDP, func(mux.Conn, envelope.Frame) {}, func(mux.Conn) {
+		if pair.onCloseHook != nil {
+			pair.onCloseHook()
+		}
+		select {
+		case pair.closed <- struct{}{}:
+		default:
+		}
+	})
+	if err != nil {
+		cancel()
+		caller.Close()
+		t.Fatal(err)
+	}
+	rtc, ok := link.(*webRTCConn)
+	if !ok {
+		cancel()
+		link.Close()
+		caller.Close()
+		t.Fatal("Accept did not return webRTCConn")
+	}
+	pair.link = rtc
+	if err := caller.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
+		cancel()
+		link.Close()
+		caller.Close()
+		t.Fatal(err)
+	}
+	select {
+	case <-opened:
+	case <-ctx.Done():
+		cancel()
+		link.Close()
+		caller.Close()
+		t.Fatal("data channel did not open")
+	}
+	pair.cleanup = func() {
+		link.Close()
+		caller.Close()
+		cancel()
+	}
+	return pair
+}
+
+func TestWebRTCQueueFullClosesEpochAndDoesNotDeadlock(t *testing.T) {
+	pair := openP2PTestPair(t)
+	defer pair.cleanup()
+	pair.link.maxBuffered = 1
+	frame := envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: [16]byte{1}, Payload: []byte{1, 2, 3}}
+
+	var sendMu sync.Mutex
+	pair.onCloseHook = func() {
+		sendMu.Lock()
+		sendMu.Unlock()
+	}
+	sendMu.Lock()
+	done := make(chan error, 1)
+	go func() { done <- pair.link.Send(frame) }()
+	select {
+	case err := <-done:
+		if err == nil || err.Error() != "P2P send queue is full" {
+			t.Fatalf("queue-full Send = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Send deadlocked while the caller held sendMu")
+	}
+	sendMu.Unlock()
+
+	select {
+	case <-pair.closed:
+	case <-time.After(time.Second):
+		t.Fatal("queue-full did not close the P2P epoch")
+	}
+	if err := pair.link.Send(frame); err == nil {
+		t.Fatal("Send succeeded on the closed epoch after a simulated buffer drain")
+	}
+}

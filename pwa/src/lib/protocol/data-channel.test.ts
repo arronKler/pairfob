@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DataFrameChannel } from "./data-channel.ts";
+import { jsonFrame, Typ } from "./envelope.ts";
 import { ProtocolError } from "./errors.ts";
 
 class FakeTarget {
@@ -24,7 +25,12 @@ class FakeChannel extends FakeTarget {
   binaryType = "arraybuffer";
   readyState: RTCDataChannelState = "open";
   bufferedAmount = 0;
-  send(): void {}
+  sent = 0;
+  failAfter = 0;
+  send(): void {
+    this.sent += 1;
+    if (this.failAfter > 0 && this.sent >= this.failAfter) throw new Error("send failed");
+  }
   close(): void {
     this.readyState = "closed";
     this.emit("close");
@@ -85,5 +91,42 @@ describe("P2P ICE health on the DataChannel", () => {
     peer.setIce("failed");
     const error = await closed;
     expect(error.code).toBe("disconnected");
+  });
+});
+
+describe("P2P send queue backpressure", () => {
+  test("a full buffer rejects send and closes so a later drain cannot reuse the channel", () => {
+    const peer = new FakePeer();
+    const channel = new FakeChannel();
+    const link = new DataFrameChannel(channel as unknown as RTCDataChannel, peer as unknown as RTCPeerConnection);
+    const closed: string[] = [];
+    link.onClose((error) => closed.push(error.code));
+    channel.bufferedAmount = 2 * 1024 * 1024;
+    const frame = jsonFrame(Typ.PING, new Uint8Array(16), {});
+    try {
+      link.send(frame);
+      throw new Error("send should have rejected");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ProtocolError);
+      expect((error as ProtocolError).code).toBe("backpressure");
+    }
+    expect(closed).toEqual(["disconnected"]);
+    expect(channel.readyState).toBe("closed");
+    channel.bufferedAmount = 0;
+    expect(() => link.send(frame)).toThrow(ProtocolError);
+    expect(channel.sent).toBe(0);
+  });
+
+  test("a partial chunk send closes the channel", () => {
+    const peer = new FakePeer();
+    const channel = new FakeChannel();
+    channel.failAfter = 2;
+    const link = new DataFrameChannel(channel as unknown as RTCDataChannel, peer as unknown as RTCPeerConnection);
+    const closed: string[] = [];
+    link.onClose((error) => closed.push(error.code));
+    const frame = jsonFrame(Typ.FWD, new Uint8Array(16), { pad: "x".repeat(20_000) });
+    expect(() => link.send(frame)).toThrow("send failed");
+    expect(closed).toEqual(["disconnected"]);
+    expect(channel.readyState).toBe("closed");
   });
 });

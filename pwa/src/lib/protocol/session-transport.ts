@@ -86,13 +86,13 @@ export class SessionTransport {
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       try {
-        const payload = this.c2s.seal(this.routeId, plaintext);
-        this.channel.send({ version: 1, typ: Typ.FWD, flags: 0, routeId: this.routeId, payload });
+        this.sendSealed(plaintext);
         onSent?.();
       } catch (error) {
         clearTimeout(timer);
         this.pending.delete(id);
-        reject(error instanceof Error ? error : new Error(String(error)));
+        reject(error instanceof ProtocolError ? error : new ProtocolError("disconnected", String(error)));
+        this.failEpoch(new ProtocolError("disconnected", "加密帧发送失败，正在恢复连接"));
       }
     });
   }
@@ -124,7 +124,11 @@ export class SessionTransport {
     try {
       if (frame.typ === Typ.PING) {
         requireHeartbeatPayload(frame.payload);
-        this.channel.send({ ...frame, typ: Typ.PONG });
+        try {
+          this.channel.send({ ...frame, typ: Typ.PONG });
+        } catch {
+          this.failEpoch(new ProtocolError("disconnected", "心跳发送失败"));
+        }
         return;
       }
       if (frame.typ === Typ.PONG) {
@@ -177,10 +181,18 @@ export class SessionTransport {
     }
   }
 
-  private sendResponse(id: string, ok: boolean, result?: unknown, error?: { code: string; message: string }): void {
-    const plaintext = new TextEncoder().encode(JSON.stringify({ v: 1, id, ok, ...(ok ? { result } : { error }) }));
+  private sendSealed(plaintext: Uint8Array): void {
     const payload = this.c2s.seal(this.routeId, plaintext);
     this.channel.send({ version: 1, typ: Typ.FWD, flags: 0, routeId: this.routeId, payload });
+  }
+
+  private sendResponse(id: string, ok: boolean, result?: unknown, error?: { code: string; message: string }): void {
+    const plaintext = new TextEncoder().encode(JSON.stringify({ v: 1, id, ok, ...(ok ? { result } : { error }) }));
+    try {
+      this.sendSealed(plaintext);
+    } catch {
+      this.failEpoch(new ProtocolError("disconnected", "加密帧发送失败，正在恢复连接"));
+    }
   }
 
   private rejectPending(error: ProtocolError): void {
@@ -189,6 +201,15 @@ export class SessionTransport {
       pending.reject(error);
     }
     this.pending.clear();
+  }
+
+  private failEpoch(error: ProtocolError): void {
+    this.disconnect(error);
+    try {
+      this.channel.close(1011, "send failed");
+    } catch {
+      /* already closed */
+    }
   }
 
   private disconnect(error: ProtocolError): void {

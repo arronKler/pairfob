@@ -108,6 +108,8 @@ type webRTCConn struct {
 	closed    bool
 	closeOnce sync.Once
 	assembler p2pFrameAssembler
+	// maxBuffered is 0 for the product 2 MiB cap; tests may lower it.
+	maxBuffered uint64
 }
 
 func (c *webRTCConn) Restart(ctx context.Context, offer string) (string, error) {
@@ -155,6 +157,13 @@ func (c *webRTCConn) attach(channel *webrtc.DataChannel) bool {
 	return true
 }
 
+func (c *webRTCConn) maxBufferedAmount() uint64 {
+	if c.maxBuffered > 0 {
+		return c.maxBuffered
+	}
+	return p2pMaxBufferedBytes
+}
+
 func (c *webRTCConn) Send(frame envelope.Frame) error {
 	encoded, err := envelope.EncodeChecked(frame)
 	if err != nil {
@@ -169,12 +178,13 @@ func (c *webRTCConn) Send(frame envelope.Frame) error {
 		c.mu.Unlock()
 		return errors.New("P2P data channel is not open")
 	}
-	bufferedBytes := uint64(0)
+	incoming := uint64(0)
 	for _, chunk := range chunks {
-		bufferedBytes += uint64(len(chunk))
+		incoming += uint64(len(chunk))
 	}
-	if c.channel.BufferedAmount()+bufferedBytes > p2pMaxBufferedBytes {
+	if c.channel.BufferedAmount()+incoming > c.maxBufferedAmount() {
 		c.mu.Unlock()
+		c.Close()
 		return errors.New("P2P send queue is full")
 	}
 	for _, chunk := range chunks {
@@ -205,5 +215,10 @@ func (c *webRTCConn) Close() {
 }
 
 func (c *webRTCConn) notifyClosed() {
-	c.closeOnce.Do(func() { c.onClose(c) })
+	c.closeOnce.Do(func() {
+		// Close can run while a daemon sender still holds sess.sendMu.
+		// Deliver onClose asynchronously so handleDirectClose/closeSession
+		// never lock-inverts with that sender.
+		go c.onClose(c)
+	})
 }
