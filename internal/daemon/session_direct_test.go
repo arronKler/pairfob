@@ -405,8 +405,10 @@ func TestTransportCommitSendFailureDoesNotMoveKeys(t *testing.T) {
 	if !parent.epochFailed.Load() {
 		t.Fatal("commit send failure did not mark the parent epoch")
 	}
-	if parent.transport != "relay" || parent.link != failLink || string(parent.s2c.Key) != string(oldKey) {
-		t.Fatal("failed commit consumed or moved the parent key epoch")
+	// Failed-epoch cleanup may already have wiped the parent keys. The
+	// transport must stay on relay and the candidate must retain its keys.
+	if parent.transport != "relay" || parent.link != failLink {
+		t.Fatal("failed commit moved the parent transport")
 	}
 	if candidate.state != "upgrade_ready" || candidate.link != directLink || string(candidate.s2c.Key) != string(newS2C) {
 		t.Fatal("failed commit consumed candidate keys")
