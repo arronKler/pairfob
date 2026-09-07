@@ -81,15 +81,30 @@ function expectSingleDelay(entries: Array<[number, TimerEntry]>, delay: number):
   expect(entries[0][1].delay).toBe(delay);
 }
 
+type FlightKind = { calls: number; active: number; maxActive: number; flight: Deferred };
+
+function trackFlight(kind: FlightKind): () => Promise<void> {
+  return async () => {
+    kind.calls += 1;
+    kind.active += 1;
+    kind.maxActive = Math.max(kind.maxActive, kind.active);
+    try {
+      await kind.flight.promise;
+    } finally {
+      kind.active -= 1;
+    }
+  };
+}
+
 function createFlights() {
-  const pane = { calls: 0, flight: deferred() };
-  const snapshot = { calls: 0, flight: deferred() };
-  const settle = (kind: { flight: Deferred }): void => {
+  const pane: FlightKind = { calls: 0, active: 0, maxActive: 0, flight: deferred() };
+  const snapshot: FlightKind = { calls: 0, active: 0, maxActive: 0, flight: deferred() };
+  const settle = (kind: FlightKind): void => {
     const current = kind.flight;
     kind.flight = deferred();
     current.resolve();
   };
-  const fail = (kind: { flight: Deferred }, reason: unknown): void => {
+  const fail = (kind: FlightKind, reason: unknown): void => {
     const current = kind.flight;
     kind.flight = deferred();
     current.reject(reason);
@@ -106,14 +121,8 @@ function createFlights() {
         canRun: gates?.canRun ?? (() => true),
         canReadPane: gates?.canReadPane ?? (() => true),
         paneDelayMs: gates?.paneDelayMs ?? (() => PANE_FALLBACK_MS),
-        refreshSnapshot: async () => {
-          snapshot.calls += 1;
-          await snapshot.flight.promise;
-        },
-        refreshPane: async () => {
-          pane.calls += 1;
-          await pane.flight.promise;
-        },
+        refreshSnapshot: trackFlight(snapshot),
+        refreshPane: trackFlight(pane),
       };
     },
   };
@@ -249,6 +258,7 @@ describe("pane scheduler ownership", () => {
       flights.settlePane();
       await stale;
       expect(flights.pane.calls).toBe(1);
+      expect(flights.pane.maxActive).toBe(1);
       expect(clock.pane().map(([id]) => id)).toEqual([nextPaneId]);
       expect(clock.pane()[0][1].delay).toBe(PANE_FALLBACK_MS);
 
@@ -257,6 +267,42 @@ describe("pane scheduler ownership", () => {
       flights.settlePane();
       await next;
       expectSingleDelay(clock.pane(), PANE_FALLBACK_MS);
+      polling.stop();
+    } finally {
+      clock.restore();
+    }
+  });
+
+  test("a restarted pane timer that fires before the old read completes waits instead of overlapping", async () => {
+    const clock = installTimers();
+    const flights = createFlights();
+    try {
+      const polling = createLivePolling(flights.callbacks());
+      polling.start();
+      const stale = beginPaneTick(clock);
+      polling.stop();
+      polling.start();
+      const restarted = beginPaneTick(clock);
+      expect(flights.pane.calls).toBe(1);
+      expect(flights.pane.active).toBe(1);
+      expect(clock.pane()).toHaveLength(0);
+
+      polling.wakePane();
+      polling.deferPane();
+      polling.wakePane();
+      expect(clock.pane()).toHaveLength(0);
+      expect(flights.pane.calls).toBe(1);
+
+      flights.settlePane();
+      await stale;
+      expect(flights.pane.calls).toBe(2);
+      expect(flights.pane.maxActive).toBe(1);
+      expect(clock.pane()).toHaveLength(0);
+
+      flights.settlePane();
+      await restarted;
+      expectSingleDelay(clock.pane(), 0);
+      expect(flights.pane.maxActive).toBe(1);
       polling.stop();
     } finally {
       clock.restore();
@@ -339,6 +385,7 @@ describe("snapshot scheduler ownership", () => {
       flights.settleSnapshot();
       await stale;
       expect(flights.snapshot.calls).toBe(1);
+      expect(flights.snapshot.maxActive).toBe(1);
       expect(clock.snapshot().map(([id]) => id)).toEqual([nextSnapshotId]);
 
       const next = beginSnapshotTick(clock);
@@ -346,6 +393,35 @@ describe("snapshot scheduler ownership", () => {
       flights.settleSnapshot();
       await next;
       expectSingleDelay(clock.snapshot(), SNAPSHOT_FALLBACK_MS);
+      polling.stop();
+    } finally {
+      clock.restore();
+    }
+  });
+
+  test("a restarted snapshot timer that fires before the old read completes waits instead of overlapping", async () => {
+    const clock = installTimers();
+    const flights = createFlights();
+    try {
+      const polling = createLivePolling(flights.callbacks());
+      polling.start();
+      const stale = beginSnapshotTick(clock);
+      polling.stop();
+      polling.start();
+      const restarted = beginSnapshotTick(clock);
+      expect(flights.snapshot.calls).toBe(1);
+      expect(flights.snapshot.active).toBe(1);
+      expect(clock.snapshot()).toHaveLength(0);
+
+      flights.settleSnapshot();
+      await stale;
+      expect(flights.snapshot.calls).toBe(2);
+      expect(flights.snapshot.maxActive).toBe(1);
+
+      flights.settleSnapshot();
+      await restarted;
+      expectSingleDelay(clock.snapshot(), SNAPSHOT_FALLBACK_MS);
+      expect(flights.snapshot.maxActive).toBe(1);
       polling.stop();
     } finally {
       clock.restore();

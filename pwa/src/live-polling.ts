@@ -16,6 +16,8 @@ type LoopIntent = "none" | "wake" | "defer";
 /**
  * Owns at most one timer and one in-flight read. Wake/defer coalesce into the
  * current flight; a bumped generation cannot be restarted by an older callback.
+ * An outstanding read Promise outlives stop(); the next generation waits for it
+ * instead of overlapping, and that generation's timer is the surviving schedule.
  */
 function createOwnedLoop(options: {
   delayMs: () => number;
@@ -27,6 +29,7 @@ function createOwnedLoop(options: {
   let timer: number | null = null;
   let inFlight = false;
   let intent: LoopIntent = "none";
+  let flight: Promise<void> | null = null;
 
   const clearTimer = (): void => {
     if (timer === null) return;
@@ -48,7 +51,20 @@ function createOwnedLoop(options: {
     if (gen !== generation || !active || inFlight) return;
     inFlight = true;
     try {
-      if (options.shouldRead()) await options.read();
+      if (flight) await flight;
+      if (gen !== generation || !active) return;
+      if (options.shouldRead()) {
+        let started: Promise<unknown>;
+        try {
+          started = Promise.resolve(options.read());
+        } catch {
+          started = Promise.resolve();
+        }
+        const mine = started.then(() => undefined, () => undefined);
+        flight = mine;
+        await mine;
+        if (flight === mine) flight = null;
+      }
     } catch {
       // Failed reads must not stop fallback or surface as unhandled rejection.
     } finally {
@@ -63,6 +79,8 @@ function createOwnedLoop(options: {
   const stop = (): void => {
     generation += 1;
     active = false;
+    // Clear occupancy so a later start can enter run() and wait on `flight`.
+    // Do not drop `flight`: overlapping a second read is the restart bug.
     inFlight = false;
     intent = "none";
     clearTimer();
