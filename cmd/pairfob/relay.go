@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"os"
 	"sync"
 	"time"
@@ -18,7 +19,19 @@ import (
 const (
 	relayHeartbeatInterval = 25 * time.Second
 	relayStableConnection  = 10 * time.Second
+	relayInitialBackoff    = time.Second
+	relayMaxBackoff        = 30 * time.Second
 )
+
+type relayRetry struct {
+	now    func() time.Time
+	jitter func(time.Duration) time.Duration
+	wait   func(time.Duration, <-chan struct{}) bool
+}
+
+func liveRelayRetry() relayRetry {
+	return relayRetry{now: time.Now, jitter: jitterBackoff, wait: waitRelayBackoff}
+}
 
 type relayHeartbeatConn interface {
 	Send(envelope.Frame) error
@@ -97,14 +110,33 @@ func (l *relayLink) sendLoop() {
 }
 
 func runRelay(link *relayLink, eng *daemon.Engine, relayURL, join string, first chan<- error) {
-	backoff := time.Second
+	runRelayWith(link, eng, relayURL, join, first, nil, liveRelayRetry())
+}
+
+func runRelayWith(link *relayLink, eng *daemon.Engine, relayURL, join string, first chan<- error, stop <-chan struct{}, retry relayRetry) {
+	if retry.now == nil {
+		retry.now = time.Now
+	}
+	if retry.jitter == nil {
+		retry.jitter = jitterBackoff
+	}
+	if retry.wait == nil {
+		retry.wait = waitRelayBackoff
+	}
+	backoff := relayInitialBackoff
 	firstDone := false
 	needNewPair := false
 	for {
+		select {
+		case <-stop:
+			return
+		default:
+		}
 		conn, err := wsnet.DialProtocol(relayURL, wsnet.SubprotocolV2)
 		if err != nil {
-			log.Printf("relay dial failed; retry in %s: %v", backoff, err)
-			time.Sleep(backoff)
+			if !retryAfter(retry, "relay dial failed", backoff, err, stop) {
+				return
+			}
 			backoff = nextBackoff(backoff)
 			continue
 		}
@@ -115,8 +147,9 @@ func runRelay(link *relayLink, eng *daemon.Engine, relayURL, join string, first 
 			return conn.Recv()
 		}); err != nil {
 			conn.Close()
-			log.Printf("relay registration failed; retry in %s: %v", backoff, err)
-			time.Sleep(backoff)
+			if !retryAfter(retry, "relay registration failed", backoff, err, stop) {
+				return
+			}
 			backoff = nextBackoff(backoff)
 			continue
 		}
@@ -125,7 +158,6 @@ func runRelay(link *relayLink, eng *daemon.Engine, relayURL, join string, first 
 			first <- nil
 			firstDone = true
 		}
-		backoff = time.Second
 		if needNewPair {
 			offer, err := eng.OpenPairing("")
 			if err != nil {
@@ -139,7 +171,7 @@ func runRelay(link *relayLink, eng *daemon.Engine, relayURL, join string, first 
 		} else {
 			eng.RefreshPairing()
 		}
-		connectedAt := time.Now()
+		connectedAt := retry.now()
 		heartbeatStop := make(chan struct{})
 		heartbeatDone := make(chan struct{})
 		go func() {
@@ -155,6 +187,10 @@ func runRelay(link *relayLink, eng *daemon.Engine, relayURL, join string, first 
 			}
 			daemon.TraceFrame("recv", frame)
 			if err := link.pipe.Send(frame); err != nil {
+				close(heartbeatStop)
+				<-heartbeatDone
+				link.clear(conn)
+				conn.Close()
 				return
 			}
 		}
@@ -165,28 +201,96 @@ func runRelay(link *relayLink, eng *daemon.Engine, relayURL, join string, first 
 		if eng.ResetTransport() {
 			needNewPair = true
 		}
-		delay, next := relayReconnectBackoff(time.Since(connectedAt), backoff)
-		log.Printf("relay disconnected; retry in %s: %v", delay, recvErr)
-		if delay > 0 {
-			time.Sleep(delay)
+		delay, next := relayReconnectBackoff(retry.now().Sub(connectedAt), backoff)
+		if !retryAfter(retry, "relay disconnected", delay, recvErr, stop) {
+			return
 		}
 		backoff = next
 	}
 }
 
+func retryAfter(retry relayRetry, label string, delay time.Duration, err error, stop <-chan struct{}) bool {
+	delay = retry.jitter(delay)
+	log.Printf("%s; retry in %s: %v", label, delay, err)
+	return retry.wait(delay, stop)
+}
+
 // A link that was healthy gets one immediate reconnect attempt. A connection
 // that never became stable keeps the exponential backoff to avoid a hot loop.
+// Registration success does not reset delay: only a stable live link does.
 func relayReconnectBackoff(connectedFor, current time.Duration) (time.Duration, time.Duration) {
 	if connectedFor >= relayStableConnection {
-		return 0, current
+		return 0, relayInitialBackoff
+	}
+	if current < relayInitialBackoff {
+		current = relayInitialBackoff
 	}
 	return current, nextBackoff(current)
 }
 
 func nextBackoff(current time.Duration) time.Duration {
 	current *= 2
-	if current > 30*time.Second {
-		return 30 * time.Second
+	if current > relayMaxBackoff {
+		return relayMaxBackoff
 	}
 	return current
+}
+
+func jitterBackoff(d time.Duration) time.Duration {
+	return jitterBackoffN(d, rand.Int64N)
+}
+
+func jitterBackoffN(d time.Duration, intN func(int64) int64) time.Duration {
+	if d <= 0 {
+		return 0
+	}
+	if d > relayMaxBackoff {
+		d = relayMaxBackoff
+	}
+	half := d / 2
+	span := int64(d-half) + 1
+	if span <= 1 {
+		return clampRelayDelay(d)
+	}
+	extra := intN(span)
+	if extra < 0 {
+		extra = 0
+	}
+	if extra >= span {
+		extra = span - 1
+	}
+	return clampRelayDelay(half + time.Duration(extra))
+}
+
+func clampRelayDelay(d time.Duration) time.Duration {
+	if d < 0 {
+		return 0
+	}
+	if d > relayMaxBackoff {
+		return relayMaxBackoff
+	}
+	return d
+}
+
+func waitRelayBackoff(d time.Duration, stop <-chan struct{}) bool {
+	if d <= 0 {
+		select {
+		case <-stop:
+			return false
+		default:
+			return true
+		}
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	if stop == nil {
+		<-timer.C
+		return true
+	}
+	select {
+	case <-stop:
+		return false
+	case <-timer.C:
+		return true
+	}
 }
