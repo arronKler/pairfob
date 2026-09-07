@@ -21,6 +21,7 @@ describe("mobile network lifecycle wiring", () => {
 
   test("the reconnect state machine aborts offline dials without retrying mutations", () => {
     expect(session).toContain("this.connectAbort?.abort()");
+    expect(session).toContain("if (this.reconnecting || this.connectAbort) return");
     expect(session).toContain("!this.networkAvailable");
     expect(session).toContain("Capture one transport; mutation RPCs are never replayed");
     expect(session).toContain('transport.rpc("Ping", { t_ms: Date.now() }, 8_000)');
@@ -35,5 +36,7 @@ describe("mobile network lifecycle wiring", () => {
     expect(session).toContain("this.resetBackoff()");
     expect(session).toContain("DIRECT_HEALTH_PING_MS");
     expect(session).toContain("TransportRestart");
+    expect(session).toContain("this.direct.setPageHidden(hidden)");
+    expect(session).toContain('if (!hidden) this.reconnectNow("probe")');
   });
 });

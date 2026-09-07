@@ -26,7 +26,7 @@ export class DataFrameChannel implements FrameChannel {
   private closeHandlers = new Set<(error: ProtocolError) => void>();
   private iceUnhealthy: (() => void) | null = null;
   private ended = false;
-  private icePaused = false;
+  private icePauses = new Set<"restart" | "page">();
   private iceGrace: ReturnType<typeof setTimeout> | null = null;
   private readonly iceGraceMs: number;
   private assembler = new DirectFrameAssembler();
@@ -88,13 +88,13 @@ export class DataFrameChannel implements FrameChannel {
     return ice === "new" || ice === "checking";
   }
 
-  pauseIceWatch(): void {
-    this.icePaused = true;
+  pauseIceWatch(reason: "restart" | "page" = "restart"): void {
+    this.icePauses.add(reason);
     this.clearIceGrace();
   }
 
-  resumeIceWatch(): void {
-    this.icePaused = false;
+  resumeIceWatch(reason: "restart" | "page" = "restart"): void {
+    this.icePauses.delete(reason);
     this.handleICE();
   }
 
@@ -155,7 +155,7 @@ export class DataFrameChannel implements FrameChannel {
   }
 
   private handleICE(): void {
-    if (this.ended || this.icePaused) return;
+    if (this.ended || this.icePauses.size > 0) return;
     const ice = this.peer.iceConnectionState;
     const connection = this.peer.connectionState;
     if (ice === "failed" || ice === "closed" || connection === "failed" || connection === "closed") {
@@ -172,7 +172,7 @@ export class DataFrameChannel implements FrameChannel {
     if (this.iceGrace !== null) return;
     this.iceGrace = globalThis.setTimeout(() => {
       this.iceGrace = null;
-      if (this.ended || this.icePaused || this.iceHealthy()) return;
+      if (this.ended || this.icePauses.size > 0 || this.iceHealthy()) return;
       if (this.iceUnhealthy) this.iceUnhealthy();
       else {
         this.fail(new ProtocolError("disconnected", "P2P ICE 已断开"));

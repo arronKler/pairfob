@@ -130,3 +130,22 @@ describe("P2P send queue backpressure", () => {
     expect(channel.readyState).toBe("closed");
   });
 });
+
+
+describe("independent ICE pause owners", () => {
+  for (const first of ["page", "restart"] as const) {
+    test(`resuming ${first} does not release the other pause`, () => {
+      const peer = new FakePeer();
+      const channel = new FakeChannel();
+      const link = new DataFrameChannel(channel as unknown as RTCDataChannel, peer as unknown as RTCPeerConnection);
+      const other = first === "page" ? "restart" : "page";
+      link.pauseIceWatch(first);
+      link.pauseIceWatch(other);
+      peer.setIce("failed");
+      link.resumeIceWatch(first);
+      expect(channel.readyState).toBe("open");
+      link.resumeIceWatch(other);
+      expect(channel.readyState).toBe("closed");
+    });
+  }
+});

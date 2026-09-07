@@ -8,6 +8,9 @@ import { ProtocolError } from "./errors.ts";
 import { validateSessionMessage } from "./session-message.ts";
 import type { SessionEvent } from "./session-types.ts";
 
+import { pageHidden, watchPageVisibility } from "./page-activity.ts";
+import { DIRECT_RESUME_GRACE_MS } from "./direct-retry-policy.ts";
+
 const MAX_IN_FLIGHT = 32;
 /** Snapshot/Ping/History and other reads. */
 export const READ_RPC_TIMEOUT_MS = 8_000;
@@ -26,11 +29,15 @@ export function validateEstablishedFWD(frame: Frame, routeId: Uint8Array): void 
 /** RPC and push semantics shared by relay and P2P frame adapters. */
 export class SessionTransport {
   private pending = new Map<string, Pending>();
-  private heartbeat: ReturnType<typeof setInterval>;
+  private heartbeat: ReturnType<typeof setInterval> | undefined;
   private heartbeatCounter = 0n;
   private expectedPong: Uint8Array | null = null;
   private expectedPongAt = 0;
   private stopped = false;
+  private hidden = pageHidden();
+  private resumeUntil = 0;
+  private resumeTimer: ReturnType<typeof setTimeout> | null = null;
+  private unwatchVisibility: () => void = () => undefined;
   private stopError: ProtocolError | null = null;
   private disconnectHandlers = new Set<(error: ProtocolError) => void>();
 
@@ -43,7 +50,9 @@ export class SessionTransport {
   ) {
     channel.use((frame) => this.receive(frame));
     channel.onClose((error) => this.disconnect(error));
+    if (this.stopped) return;
     const beat = () => {
+      if (this.stopped || pageHidden() || this.hidden || performance.now() < this.resumeUntil) return;
       try {
         if (this.expectedPong) {
           this.disconnect(new ProtocolError("heartbeat_timeout", "连接未及时响应心跳"));
@@ -59,8 +68,37 @@ export class SessionTransport {
         this.channel.close(1011, "heartbeat send failed");
       }
     };
+    this.unwatchVisibility = watchPageVisibility((hidden) => this.setPageHidden(hidden));
+    this.setPageHidden(this.hidden);
     this.heartbeat = globalThis.setInterval(beat, HEARTBEAT_MS);
     beat();
+  }
+
+  private setPageHidden(hidden: boolean): void {
+    if (this.stopped) return;
+    const wasHidden = this.hidden;
+    if (!hidden && !wasHidden) return;
+    this.hidden = hidden;
+    if (this.resumeTimer !== null) clearTimeout(this.resumeTimer);
+    this.resumeTimer = null;
+    if (hidden) {
+      this.directChannel()?.pauseIceWatch("page");
+    } else if (wasHidden) {
+      // Preserve the outstanding PING so a queued PONG is still validated.
+      // Background time must not spend the foreground recovery budget.
+      this.resumeUntil = performance.now() + DIRECT_RESUME_GRACE_MS;
+      this.resumeTimer = globalThis.setTimeout(() => {
+        this.resumeTimer = null;
+        if (!this.stopped && !pageHidden()) this.directChannel()?.resumeIceWatch("page");
+      }, DIRECT_RESUME_GRACE_MS);
+    }
+  }
+
+  private stopLifecycle(): void {
+    clearInterval(this.heartbeat);
+    this.unwatchVisibility();
+    if (this.resumeTimer !== null) clearTimeout(this.resumeTimer);
+    this.resumeTimer = null;
   }
 
   get kind(): FrameChannelKind { return this.channel.kind; }
@@ -109,7 +147,7 @@ export class SessionTransport {
   close(): void {
     if (this.stopped) return;
     this.stopped = true;
-    clearInterval(this.heartbeat);
+    this.stopLifecycle();
     this.rejectPending(new ProtocolError("closed", "会话已关闭"));
     this.channel.close(1000, "client close");
   }
@@ -216,7 +254,7 @@ export class SessionTransport {
     if (this.stopped) return;
     this.stopped = true;
     this.stopError = error;
-    clearInterval(this.heartbeat);
+    this.stopLifecycle();
     this.rejectPending(error);
     for (const handler of this.disconnectHandlers) handler(error);
   }

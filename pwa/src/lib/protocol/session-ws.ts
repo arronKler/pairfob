@@ -1,3 +1,4 @@
+import { pageHidden, watchPageVisibility } from "./page-activity.ts";
 import { parseAgentQuota } from "../agent-quota";
 import { validDaemonId, validDeviceId } from "../identifiers.ts";
 import { jsonFrame, Typ } from "./envelope.ts";
@@ -152,6 +153,7 @@ class ReconnectingSession implements LiveSession {
   private readonly transportSwitch = new TransportSwitchBarrier();
   private deferredDisconnect: ProtocolError | null = null;
   private readonly direct: DirectSessionDriver;
+  private unwatchVisibility: () => void = () => undefined;
   private readonly agentTraceRPC = new AgentTraceRPC((op, params) => this.readRPC(op, params));
 
   private constructor(
@@ -184,12 +186,25 @@ class ReconnectingSession implements LiveSession {
       },
       peekDeferredDisconnect: () => session.deferredDisconnect,
     });
+    this.unwatchVisibility = watchPageVisibility((hidden) => {
+      this.direct.setPageHidden(hidden);
+      if (hidden && this.reconnectTimer !== null) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      if (!hidden) this.reconnectNow("probe");
+    });
   }
 
   static async create(relayWS: string, pair: PairResult, options: SessionOptions): Promise<ReconnectingSession> {
     const session = new ReconnectingSession(relayWS, pair, options);
-    await session.connect();
-    return session;
+    try {
+      await session.connect();
+      return session;
+    } catch (error) {
+      session.close();
+      throw error;
+    }
   }
 
   isConnected = (): boolean => this.transport !== null;
@@ -204,7 +219,7 @@ class ReconnectingSession implements LiveSession {
       this.direct.probe(this.transport, reason);
       return;
     }
-    if (this.reconnecting) return;
+    if (this.reconnecting || this.connectAbort) return;
     if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.scheduleReconnect(true);
@@ -333,6 +348,7 @@ class ReconnectingSession implements LiveSession {
   };
 
   close = (): void => {
+    this.unwatchVisibility();
     this.stopped = true;
     this.connectAbort?.abort();
     this.connectAbort = null;
@@ -442,6 +458,7 @@ class ReconnectingSession implements LiveSession {
     this.direct.dispose();
     if (TERMINAL_CODES.has(error.code) || error.code === "kicked") {
       this.stopped = true;
+      this.unwatchVisibility();
       this.emit({ type: "terminal", code: error.code, message: error.message });
       return;
     }
@@ -462,11 +479,12 @@ class ReconnectingSession implements LiveSession {
   }
 
   private scheduleReconnect(immediate = false): void {
-    if (this.stopped || !this.networkAvailable || this.reconnecting || this.reconnectTimer !== null) return;
+    if (this.stopped || !this.networkAvailable || pageHidden() || this.reconnecting || this.reconnectTimer !== null) return;
     const delay = immediate ? 0 : reconnectDelay(this.attempt++);
     this.emit({ type: "reconnecting", message: immediate ? "正在重新连接" : `${Math.ceil(delay / 1000)} 秒后重连` });
     this.reconnectTimer = globalThis.setTimeout(async () => {
       this.reconnectTimer = null;
+      if (pageHidden()) return;
       this.reconnecting = true;
       try {
         await this.connect();
@@ -475,6 +493,7 @@ class ReconnectingSession implements LiveSession {
         const protocolError = error instanceof ProtocolError ? error : new ProtocolError("disconnected", String(error));
         if (TERMINAL_CODES.has(protocolError.code)) {
           this.stopped = true;
+          this.unwatchVisibility();
           this.emit({ type: "terminal", code: protocolError.code, message: protocolError.message });
         } else this.emit({ type: "disconnected", code: protocolError.code, message: protocolError.message });
       } finally {

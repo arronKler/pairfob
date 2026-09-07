@@ -1,3 +1,5 @@
+/** Foreground validation budget after the browser has suspended a page. */
+export const DIRECT_RESUME_GRACE_MS = 8_000;
 export const DIRECT_RETRY_STEPS_MS = [30_000, 2 * 60_000, 5 * 60_000, 10 * 60_000] as const;
 export const DIRECT_RETRY_MAX_MS = DIRECT_RETRY_STEPS_MS[DIRECT_RETRY_STEPS_MS.length - 1];
 /** ICE `disconnected` can flap during a candidate-pair switch. */
