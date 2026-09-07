@@ -130,7 +130,7 @@ describe("compose drafts stay on their pane and mode", () => {
     expect(localStorage.length).toBe(0);
   });
 
-  test("leaving the pane screen still captures through the last composer scope", () => {
+  test("leaving the pane screen parks the draft before losing its scope", () => {
     boot();
     state.composeDraft = "typed on pane";
     adoptScreen("settings");
@@ -139,6 +139,16 @@ describe("compose drafts stay on their pane and mode", () => {
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("typed on pane");
     captureComposeDraft();
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("typed on pane");
+  });
+
+  test("clearing the home view cannot overwrite a parked guided draft", () => {
+    boot({ mode: "guided" });
+    state.composeDraft = "guided home roundtrip";
+    adoptScreen("home");
+    state.composeDraft = "";
+    captureComposeDraft();
+    adoptScreen("pane");
+    expect(state.composeDraft).toBe("guided home roundtrip");
   });
 });
 

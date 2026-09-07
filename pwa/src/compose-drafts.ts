@@ -24,8 +24,6 @@ import {
 } from "./state-drafts";
 import { captureNoticeScope, noticeScopeIsCurrent, state, type Screen } from "./state";
 
-let lastComposeScope: ComposeDraftScope | null = null;
-
 export type PromptRequestOwner = {
   session: object;
   viewIncarnation: number;
@@ -46,21 +44,15 @@ export function currentComposeInputMode(): ComposeInputMode | null {
 export function currentComposeDraftScope(): ComposeDraftScope | null {
   const mode = currentComposeInputMode();
   if (!mode) return null;
-  const scope = {
+  return {
     daemonId: state.credential?.daemonId ?? null,
     paneId: state.paneId,
     mode,
   };
-  lastComposeScope = scope;
-  return scope;
-}
-
-function captureScope(): ComposeDraftScope | null {
-  return currentComposeDraftScope() ?? lastComposeScope;
 }
 
 export function captureComposeDraft(): void {
-  const scope = captureScope();
+  const scope = currentComposeDraftScope();
   if (!scope) return;
   const stored = readStoredDraft(scope);
   if (state.composeDraft === stored.text) {
@@ -114,10 +106,6 @@ export function adoptScreen(next: Screen): void {
   else if (next === "pane") bumpViewIncarnation();
   state.screen = next;
   if (next === "pane") applyComposeDraft();
-}
-
-export function forgetComposeSurface(): void {
-  lastComposeScope = null;
 }
 
 function beginPromptAttempt(scope: ComposeDraftScope): number {
@@ -224,5 +212,4 @@ export function settlePromptSuccess(owner: PromptRequestOwner): void {
 export function resetComposeDrafts(): void {
   clearDraftStore();
   dropPromptLocks();
-  forgetComposeSurface();
 }

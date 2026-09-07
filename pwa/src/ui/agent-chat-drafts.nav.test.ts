@@ -215,6 +215,53 @@ describe("navigation keeps unsent drafts", () => {
 });
 
 describe("async prompt results stay on the originating request", () => {
+  for (const mode of ["agent", "guided"] as const) {
+    for (const outcome of ["success", "conflict", "unknown_outcome"] as const) {
+      test(`stale ${outcome} preserves the other pane's ${mode} composer`, async () => {
+        boot();
+        let finish!: () => void;
+        let snapshots = 0;
+        let sends = 0;
+        const session = live();
+        state.live = {
+          ...session,
+          snapshot: async () => { snapshots++; return session.snapshot(); },
+          promptAgent: () => {
+            sends++;
+            return new Promise((resolve, reject) => {
+              finish = () => outcome === "success"
+                ? resolve({ outcome: "applied" })
+                : reject(new ProtocolError(outcome, "delayed owner result"));
+            });
+          },
+        } as typeof state.live;
+        typeDraft("A request");
+        clickSend();
+        await openPane("p2");
+        if (mode === "guided") leaveAgentChat();
+        const input = app.querySelector("textarea");
+        if (!(input instanceof HTMLTextAreaElement)) throw new Error("missing destination compose");
+        input.focus();
+        input.dispatchEvent(new happy.Event("compositionstart", { bubbles: true }));
+        input.value = "B 中文输入中";
+        input.setSelectionRange(2, 5);
+        input.dispatchEvent(new happy.Event("input", { bubbles: true }));
+        const priorReads = snapshots;
+        finish();
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        expect(app.querySelector("textarea") === input).toBe(true);
+        expect(input.value).toBe("B 中文输入中");
+        expect([input.selectionStart, input.selectionEnd]).toEqual([2, 5]);
+        expect(input.ownerDocument.activeElement === input).toBe(true);
+        expect(state.paneId).toBe("p2");
+        expect(state.operationBusy).toBe(false);
+        expect(state.composeIME).toBe(true);
+        expect(sends).toBe(1);
+        expect(snapshots - priorReads).toBe(outcome === "unknown_outcome" ? 1 : 0);
+      });
+    }
+  }
+
   test("a delayed failure after A→B does not inject A's text or error into B", async () => {
     boot();
     let reject!: (error: Error) => void;

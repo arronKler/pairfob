@@ -621,16 +621,11 @@ function restoreOwnerComposeField(): void {
 
 function releasePromptOwner(owner: { lockId: number }, live: boolean): void {
   const released = releasePromptLock(owner.lockId);
-  if (!released) return;
+  if (!released || !live) return;
   app.setAttribute("aria-busy", state.operationBusy ? "true" : "false");
-  if (live) {
-    syncChatDock();
-    stickAgentStream();
-    if (!state.composeFocused) composeEl()?.focus({ preventScroll: true });
-    return;
-  }
-  if (state.agentChat) syncChatDock();
-  else render();
+  syncChatDock();
+  stickAgentStream();
+  if (!state.composeFocused) composeEl()?.focus({ preventScroll: true });
 }
 
 async function submitAgentPrompt(): Promise<void> {
@@ -666,11 +661,11 @@ async function submitAgentPrompt(): Promise<void> {
       showError(message, owner.noticeScope, true);
       paintPromptOwner();
       if (unknownOutcome) {
-        await reconcileAmbiguousMutation(session, error);
+        await reconcileAmbiguousMutation(session, error, undefined, () => promptRequestIsLive(owner) && !state.composeIME);
         if (promptRequestIsLive(owner)) await refreshAgentTrace();
       }
     } else if (unknownOutcome) {
-      await reconcileAmbiguousMutation(session, error);
+      await reconcileAmbiguousMutation(session, error, undefined, () => promptRequestIsLive(owner) && !state.composeIME);
     } else if (restoredVisible) {
       restoreOwnerComposeField();
     }

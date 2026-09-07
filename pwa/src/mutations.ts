@@ -8,7 +8,8 @@ import { type LiveSession } from "./lib/protocol/client";
 import { render } from "./paint";
 import { leavePaneScreen, messageOf, replaceAgentsFromSnapshot, savePaneTouched, showError, state } from "./state";
 
-export async function refreshSnapshotOnly(session: LiveSession): Promise<void> {
+/** Refresh data even when the initiating view no longer owns a repaint. */
+export async function refreshSnapshotOnly(session: LiveSession, shouldPaint: () => boolean = () => true): Promise<void> {
   if (state.live !== session || !session.isConnected()) return;
   const snapshot = (await session.snapshot()) as Snapshot;
   if (state.live !== session) return;
@@ -22,16 +23,17 @@ export async function refreshSnapshotOnly(session: LiveSession): Promise<void> {
     state.paneHash = "";
     if (state.screen === "pane") leavePaneScreen();
   }
-  render();
+  if (shouldPaint()) render();
 }
 
 export async function reconcileAmbiguousMutation(
   session: LiveSession,
   error: unknown,
   worktrees?: ListWorktreesInput,
+  shouldPaint?: () => boolean,
 ): Promise<void> {
   await reconcileMutationFailure(error, {
-    snapshot: () => refreshSnapshotOnly(session),
+    snapshot: () => refreshSnapshotOnly(session, shouldPaint),
     ...(worktrees ? { listWorktrees: () => session.listWorktrees(worktrees) } : {}),
   });
 }
