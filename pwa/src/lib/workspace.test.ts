@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { gitChangeKind, gitLayers, parseDiffLines, parseGitStatus, parseWorkspaceDescriptor, workspaceBreadcrumbs } from "./workspace";
+import { parseWorkspaceMutation, gitChangeKind, gitLayers, parseDiffLines, parseGitStatus, parseWorkspaceDescriptor, workspaceBreadcrumbs } from "./workspace";
 
 const revision = "a".repeat(64);
 
@@ -61,4 +61,12 @@ describe("workspace view helpers", () => {
       { label: "session", path: "src/ui/session" },
     ]);
   });
+});
+
+test("file mutation success must match operation and confirmed outcome", () => {
+  const id = "op_1234567890123456";
+  expect(parseWorkspaceMutation({ operation_id: id, outcome: "applied" }, id).outcome).toBe("applied");
+  for (const value of [{}, { operation_id: "other", outcome: "applied" }, { operation_id: id, outcome: "unknown" }, { operation_id: id }]) {
+    expect(() => parseWorkspaceMutation(value, id)).toThrow();
+  }
 });

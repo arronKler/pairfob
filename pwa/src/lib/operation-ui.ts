@@ -1,6 +1,7 @@
 import { button, node } from "./dom.ts";
 import { t } from "./i18n.ts";
 import { messageOf } from "./notices.ts";
+import { bindSheetDrag, sheetGrabber } from "./sheet-drag.ts";
 import {
   OPERATION_INPUT_LIMITS,
   fitOperationPrompt,
@@ -62,9 +63,11 @@ function makeDialog(title: string): DialogParts {
   heading.id = titleID;
   dialog.setAttribute("aria-labelledby", titleID);
   const body = node("div", "operation-body");
-  form.append(heading, body);
+  form.append(sheetGrabber(), heading, body);
   dialog.append(form);
   const close = (result = "cancel") => dialog.close(result);
+  // Same put-it-away gesture as every other bottom sheet; a drag cancels.
+  bindSheetDrag({ dialog, form, scroller: dialog, close: () => close() });
   const openedAt = performance.now();
   dialog.addEventListener("cancel", (event) => {
     event.preventDefault();

@@ -73,6 +73,13 @@ describe("runtime operation config", () => {
 		expect(() => parseRuntimeOperationsConfig({ ...config(NO_OPERATION_CAPABILITIES), extra: true })).toThrow();
 	});
 
+  test("old daemon omits file capabilities, malformed extensions fail closed", () => {
+    const { rename_file, delete_file, ...legacy } = NO_OPERATION_CAPABILITIES;
+    expect(parseRuntimeOperationsConfig(config(legacy)).capabilities).toEqual(NO_OPERATION_CAPABILITIES);
+    expect(() => parseRuntimeOperationsConfig(config({ ...legacy, rename_file: "true" }))).toThrow();
+    expect(() => parseRuntimeOperationsConfig(config({ ...legacy, file_actions: true }))).toThrow();
+  });
+
   test("recognizes every advertised capability", () => {
     const all = Object.fromEntries(Object.keys(NO_OPERATION_CAPABILITIES).map((key) => [key, true]));
 		expect(parseRuntimeOperationsConfig(config(all))).toEqual({

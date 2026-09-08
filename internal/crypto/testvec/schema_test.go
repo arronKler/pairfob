@@ -81,7 +81,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"PushSubscribe", "RevokeDevice", "ListDevices", "History", "AgentTrace", "AgentTraceSummary", "AgentTraceDetail", "RenamePane",
 		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace",
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
-		"WorkspaceOpen", "WorkspaceList", "WorkspaceRead", "GitStatus", "GitDiff", "GitBranches",
+		"WorkspaceOpen", "WorkspaceList", "WorkspaceRead", "WorkspaceRename", "WorkspaceDelete", "GitStatus", "GitDiff", "GitBranches",
 		"CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
 		"TransportOffer", "TransportCommit", "TransportRestart",
@@ -116,7 +116,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	for _, op := range []string{
 		"SendText", "SendKeys", "PushSubscribe", "RevokeDevice", "RenamePane", "RenameTab",
 		"RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace", "CreateConversation", "CreateTab", "SplitPane",
-		"PromptAgent", "CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
+		"PromptAgent", "CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane", "WorkspaceRename", "WorkspaceDelete",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
 	} {
 		if !slices.Contains(paramsByOp[op].Required, "operation_id") {
@@ -163,9 +163,11 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		}
 	}
 	for op, required := range map[string][]string{
-		"WorkspaceList": {"pane_id"},
-		"WorkspaceRead": {"pane_id", "path"},
-		"GitDiff":       {"pane_id", "path", "layer"},
+		"WorkspaceList":   {"pane_id"},
+		"WorkspaceRead":   {"pane_id", "path"},
+		"WorkspaceRename": {"operation_id", "pane_id", "root", "path", "new_name", "size", "modified_ms", "revision"},
+		"WorkspaceDelete": {"operation_id", "pane_id", "root", "path", "size", "modified_ms", "revision"},
+		"GitDiff":         {"pane_id", "path", "layer"},
 	} {
 		params := paramsByOp[op]
 		gotRequired := slices.Clone(params.Required)
@@ -229,7 +231,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"create_conversation", "create_tab", "split_pane", "prompt_agent", "history",
 		"list_worktrees", "create_worktree", "open_worktree", "resize_pane", "swap_pane", "zoom_pane",
 	}
-	requireExactObject(t, schema.Defs, "capabilities", capabilities)
+	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "rename_file", "delete_file"), capabilities)
 	requireExactObject(t, schema.Defs, "getConfigResult", []string{
 		"protocol", "build", "daemon_id", "hostname", "runtime", "vapid_public", "submit_keys",
 		"idle_pause_ms", "push_delivery", "push_enabled", "agent_kinds", "capabilities",
@@ -267,8 +269,9 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	requireExactObject(t, schema.Defs, "workspaceFeatures", []string{"files", "git_status", "git_diff", "git_branches"})
 	requireExactObject(t, schema.Defs, "workspaceRepository", []string{"name", "branch", "head", "detached"})
 	requireExactObject(t, schema.Defs, "workspaceOpenResult", []string{"name", "root", "features", "git"})
-	requireExactObject(t, schema.Defs, "workspaceEntry", []string{"name", "path", "kind", "size", "modified_ms", "hidden"})
+	requireExactObjectFields(t, schema.Defs, "workspaceEntry", []string{"name", "path", "kind", "size", "modified_ms", "hidden", "revision"}, []string{"name", "path", "kind", "size", "modified_ms", "hidden"})
 	requireExactObject(t, schema.Defs, "workspaceListResult", []string{"path", "entries", "next_cursor", "truncated", "revision"})
+	requireExactObject(t, schema.Defs, "workspaceMutationResult", []string{"operation_id", "outcome"})
 	requireExactObject(t, schema.Defs, "workspaceReadResult", []string{"path", "kind", "size", "modified_ms", "content", "truncated", "revision"})
 	requireExactObject(t, schema.Defs, "gitChange", []string{"path", "original_path", "index", "worktree"})
 	requireExactObject(t, schema.Defs, "gitStatusResult", []string{"branch", "head", "upstream", "ahead", "behind", "changes", "truncated", "revision"})

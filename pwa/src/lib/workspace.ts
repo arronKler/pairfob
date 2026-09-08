@@ -20,6 +20,7 @@ export type WorkspaceDescriptor = {
 };
 
 export type WorkspaceEntry = {
+  revision?: string;
   name: string;
   path: string;
   kind: "directory" | "file" | "symlink" | "other";
@@ -172,11 +173,13 @@ export function parseWorkspaceDescriptor(value: unknown): WorkspaceDescriptor {
 
 function parseEntry(value: unknown): WorkspaceEntry {
   const item = record(value, "WorkspaceList entry");
-  exact(item, ["name", "path", "kind", "size", "modified_ms", "hidden"], "WorkspaceList entry");
+  exact(item, ["name", "path", "kind", "size", "modified_ms", "hidden", ...("revision" in item ? ["revision"] : [])], "WorkspaceList entry");
+  if ("revision" in item && (typeof item.revision !== "string" || !/^[a-f0-9]{64}$/u.test(item.revision))) invalid("WorkspaceList.revision");
   const kind = text(item.kind, "WorkspaceList.kind", 16, false);
   if (kind !== "directory" && kind !== "file" && kind !== "symlink" && kind !== "other") invalid("WorkspaceList.kind");
   return {
     name: safeText(item.name, "WorkspaceList.name", 4096, false),
+    ...("revision" in item ? { revision: item.revision as string } : {}),
     path: relative(item.path, "WorkspaceList.path"),
     kind,
     size: integer(item.size, "WorkspaceList.size"),
@@ -332,4 +335,11 @@ export function workspaceBreadcrumbs(path: string): Array<{ label: string; path:
     result.push({ label: part, path: current });
   }
   return result;
+}
+
+export function parseWorkspaceMutation(value: unknown, operationID: string): { operation_id: string; outcome: "applied" } {
+  const result = record(value, "Workspace mutation");
+  exact(result, ["operation_id", "outcome"], "Workspace mutation");
+  if (result.operation_id !== operationID || result.outcome !== "applied") invalid("Workspace mutation");
+  return { operation_id: operationID, outcome: "applied" };
 }

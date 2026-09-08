@@ -253,6 +253,8 @@ func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
 		e.rpcListWorktrees(s, id, params)
 	case "WorkspaceOpen", "WorkspaceList", "WorkspaceRead", "GitStatus", "GitDiff", "GitBranches":
 		go e.dispatchWorkspaceRead(s, id, op, params)
+	case "WorkspaceRename", "WorkspaceDelete":
+		go e.rpcWorkspaceMutation(s, id, op, params)
 	case "CreateWorktree":
 		e.dispatchWorktreeMutation(s, id, params, false)
 	case "OpenWorktree":

@@ -85,7 +85,7 @@ func TestRuntimeRPCNewOperationsAndDeduplication(t *testing.T) {
 		t.Fatalf("unexpected config: %s", configRaw)
 	}
 	capabilities, ok := config["capabilities"].(map[string]any)
-	if !ok || len(capabilities) != 11 || capabilities["create_conversation"] != true || capabilities["zoom_pane"] != true || capabilities["worktrees"] != nil || capabilities["layout"] != nil {
+	if !ok || len(capabilities) != 13 || capabilities["create_conversation"] != true || capabilities["zoom_pane"] != true || capabilities["worktrees"] != nil || capabilities["layout"] != nil {
 		t.Fatalf("unexpected capability contract: %s", configRaw)
 	}
 
@@ -231,7 +231,7 @@ func TestGetConfigTracksRecoveringRuntimeAvailability(t *testing.T) {
 	}
 	offline := decodeResult(t, offlineRaw)
 	offlineCapabilities := offline["capabilities"].(map[string]any)
-	if offline["runtime"] != "offline" || len(offlineCapabilities) != 11 {
+	if offline["runtime"] != "offline" || len(offlineCapabilities) != 13 {
 		t.Fatalf("offline config did not fail closed: %s", offlineRaw)
 	}
 	for capability, available := range offlineCapabilities {

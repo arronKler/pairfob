@@ -92,6 +92,15 @@
     "appliedOrNoopOutcome": {
       "enum": ["applied", "noop"]
     },
+    "workspaceMutationResult": {
+      "type": "object",
+      "required": ["operation_id", "outcome"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/operationId" },
+        "outcome": { "const": "applied" }
+      },
+      "additionalProperties": false
+    },
     "capabilities": {
       "type": "object",
       "required": [
@@ -118,7 +127,9 @@
         "open_worktree": { "type": "boolean" },
         "resize_pane": { "type": "boolean" },
         "swap_pane": { "type": "boolean" },
-        "zoom_pane": { "type": "boolean" }
+        "zoom_pane": { "type": "boolean" },
+        "rename_file": { "type": "boolean" },
+        "delete_file": { "type": "boolean" }
       },
       "additionalProperties": false
     },
@@ -388,7 +399,8 @@
         "kind": { "enum": ["directory", "file", "symlink", "other"] },
         "size": { "type": "integer", "minimum": 0 },
         "modified_ms": { "type": "integer" },
-        "hidden": { "type": "boolean" }
+        "hidden": { "type": "boolean" },
+        "revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       },
       "additionalProperties": false
     },
@@ -741,6 +753,8 @@
             "WorkspaceOpen",
             "WorkspaceList",
             "WorkspaceRead",
+            "WorkspaceRename",
+            "WorkspaceDelete",
             "GitStatus",
             "GitDiff",
             "GitBranches",
@@ -1256,6 +1270,128 @@
                   "session": { "$ref": "#/$defs/session" },
                   "pane_id": { "$ref": "#/$defs/paneId" },
                   "path": { "type": "string", "minLength": 1, "maxLength": 4096 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "WorkspaceRename"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": [
+                  "operation_id",
+                  "pane_id",
+                  "root",
+                  "path",
+                  "size",
+                  "modified_ms",
+                  "new_name",
+                  "revision"
+                ],
+                "properties": {
+                  "session": {
+                    "$ref": "#/$defs/session"
+                  },
+                  "operation_id": {
+                    "$ref": "#/$defs/operationId"
+                  },
+                  "pane_id": {
+                    "$ref": "#/$defs/paneId"
+                  },
+                  "root": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "modified_ms": {
+                    "type": "integer"
+                  },
+                  "new_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "revision": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "WorkspaceDelete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": [
+                  "operation_id",
+                  "pane_id",
+                  "root",
+                  "path",
+                  "size",
+                  "modified_ms",
+                  "revision"
+                ],
+                "properties": {
+                  "session": {
+                    "$ref": "#/$defs/session"
+                  },
+                  "operation_id": {
+                    "$ref": "#/$defs/operationId"
+                  },
+                  "pane_id": {
+                    "$ref": "#/$defs/paneId"
+                  },
+                  "root": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "modified_ms": {
+                    "type": "integer"
+                  },
+                  "revision": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
                 },
                 "additionalProperties": false
               }

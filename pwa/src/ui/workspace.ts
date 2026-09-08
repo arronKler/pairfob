@@ -1,3 +1,4 @@
+import { bindWorkspaceFileActions } from "./workspace-file-actions";
 import { button, node } from "../lib/dom";
 import { highlightSource } from "../lib/syntax-highlight";
 import { diffNoteTarget, diffNotesFor } from "../lib/diff-notes";
@@ -138,6 +139,7 @@ function fileList(): HTMLElement {
     if (entry.kind === "directory") row.addEventListener("click", () => void loadDirectory(entry.path));
     else if (entry.kind === "file") row.addEventListener("click", () => void loadWorkspaceFile(entry.path));
     else row.disabled = true;
+    bindWorkspaceFileActions(row, entry);
     list.append(row);
   }
   if (!workspaceModel.loading && !workspaceModel.error && !workspaceModel.entries.length) list.append(node("p", "workspace-empty", t("workspace.empty")));
@@ -282,6 +284,23 @@ function markPending(host: HTMLElement, label: string): void {
   host.setAttribute("aria-label", label);
 }
 
+/**
+ * Which slots are currently showing a skeleton. The content that replaces one
+ * is a different element, so it has to fade itself in; a poll repaint of content
+ * that was never pending must not fade at all.
+ */
+const skeletonSlots = new Set<string>();
+
+function pendingSlot(slot: string, host: HTMLElement): HTMLElement {
+  skeletonSlots.add(slot);
+  return host;
+}
+
+function revealSlot(slot: string, host: HTMLElement): HTMLElement {
+  if (skeletonSlots.delete(slot)) host.classList.add("workspace-reveal");
+  return host;
+}
+
 const FILE_SKELETON_LINES = 48;
 const LIST_SKELETON_ROWS = 10;
 const CHANGE_SKELETON_ROWS = 6;
@@ -370,7 +389,7 @@ function fileDetail(): HTMLElement {
     return detail;
   }
   if (!file) {
-    if (workspaceModel.loading && isWorkspacePendingReveal()) detail.append(filePending());
+    if (workspaceModel.loading && isWorkspacePendingReveal()) detail.append(pendingSlot("file", filePending()));
     return detail;
   }
   if (file.kind === "binary") detail.append(node("p", "workspace-empty", t("workspace.binary")));
@@ -382,7 +401,7 @@ function fileDetail(): HTMLElement {
       else code.append(document.createTextNode(token.text));
     }
     pre.append(code);
-    detail.append(pre);
+    detail.append(revealSlot("file", pre));
   }
   if (file.truncated) detail.append(node("p", "workspace-limit", t("workspace.previewTruncated")));
   return detail;
@@ -412,7 +431,7 @@ function diffDetail(): HTMLElement {
     return detail;
   }
   if (!diff) {
-    if (workspaceModel.loading && isWorkspacePendingReveal()) detail.append(diffPending());
+    if (workspaceModel.loading && isWorkspacePendingReveal()) detail.append(pendingSlot("diff", diffPending()));
     return detail;
   }
   const parsed = parseDiffLines(diff.patch);
@@ -522,9 +541,9 @@ function renderWorkspaceRoot(): HTMLElement {
     const notice = feedback("pane");
     if (notice) nav.append(notice);
   } else if (workspaceModel.view === "browser" && workspaceModel.loading && isWorkspacePendingReveal() && !navHasContent()) {
-    nav.append(workspaceModel.tab === "files" ? listPending() : changePending());
-  } else if (workspaceModel.tab === "files") nav.append(fileList());
-  else nav.append(changeList());
+    nav.append(pendingSlot("nav", workspaceModel.tab === "files" ? listPending() : changePending()));
+  } else if (workspaceModel.tab === "files") nav.append(revealSlot("nav", fileList()));
+  else nav.append(revealSlot("nav", changeList()));
   const main = node("main", "workspace-main");
   if (workspaceModel.view === "file") main.append(fileDetail());
   else if (workspaceModel.view === "diff") main.append(diffDetail());

@@ -113,7 +113,7 @@ func (i *Inspector) List(root, relative, cursor string, limit int) (DirectoryPag
 			continue
 		}
 		entries = append(entries, Entry{
-			Name: item.Name(), Path: normalized, Kind: kind, Size: entryInfo.Size(),
+			Name: item.Name(), Path: normalized, Kind: kind, Size: entryInfo.Size(), Revision: FileRevision(entryInfo),
 			ModifiedMS: entryInfo.ModTime().UnixMilli(), Hidden: strings.HasPrefix(item.Name(), "."),
 		})
 	}
@@ -131,7 +131,7 @@ func (i *Inspector) List(root, relative, cursor string, limit int) (DirectoryPag
 	})
 	hash := sha256.New()
 	for _, entry := range entries {
-		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%d\x00%d\n", entry.Path, entry.Kind, entry.Size, entry.ModifiedMS)
+		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%d\x00%d\x00%s\n", entry.Path, entry.Kind, entry.Size, entry.ModifiedMS, entry.Revision)
 	}
 	if start > len(entries) {
 		return DirectoryPage{}, ErrInvalidPath

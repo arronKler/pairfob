@@ -518,3 +518,7 @@ export async function ensureBranches(): Promise<GitBranches | null> {
     }
   }
 }
+
+export function invalidateWorkspaceFiles(session: NonNullable<typeof state.live>, root: string): void {
+  readCaches.get(session)?.invalidate(root);
+}

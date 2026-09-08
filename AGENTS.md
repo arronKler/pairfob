@@ -98,8 +98,9 @@ package can express that duty.
   do not expose the Herdr HTTP/Unix socket to the relay.
 - Mutations carry a fresh `operation_id` and are not retried automatically;
   `unknown_outcome` only refreshes, never replays.
-- The eleven `GetConfig.capabilities` keys are the authority for showing and
-  allowing operations; do not invent aggregate aliases.
+- The `GetConfig.capabilities` keys are the authority for showing and
+  allowing operations; do not invent aggregate aliases. `rename_file` and
+  `delete_file` advertise workspace file mutations; absence on older daemons means false.
 - Paths and cwd must land in a live snapshot root or `PAIRFOB_ALLOWED_ROOTS`;
   failures fail closed.
 - The product loop is not a terminal emulator: read the rendered pane, send

@@ -46,6 +46,8 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 		"resize_pane":         descriptor.Supports(runtime.FeatureLayoutResize),
 		"swap_pane":           descriptor.Supports(runtime.FeatureLayoutSwap),
 		"zoom_pane":           descriptor.Supports(runtime.FeatureLayoutZoom),
+		"rename_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		"delete_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
 	}
 	agentKinds := make([]string, 0, len(descriptor.AgentKinds))
 	for _, kind := range descriptor.AgentKinds {

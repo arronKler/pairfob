@@ -1,4 +1,4 @@
-// Package workspace exposes bounded, read-only views of a trusted live workspace.
+// Package workspace exposes bounded views and file operations in a trusted live workspace.
 package workspace
 
 import "errors"
@@ -42,6 +42,7 @@ type Descriptor struct {
 }
 
 type Entry struct {
+	Revision   string `json:"revision,omitempty"`
 	Name       string `json:"name"`
 	Path       string `json:"path"`
 	Kind       string `json:"kind"`
