@@ -21,6 +21,14 @@ html, body {
   touch-action: pan-x pan-y pinch-zoom;
   overscroll-behavior: none;
   text-rendering: optimizeLegibility;
+  /*
+    No screen pans the page itself sideways: the terminal, the board and every
+    chip rail own their horizontal scroller. Without this, one decoration that
+    reaches past the right edge turns the whole list into a page you can drag
+    into a strip of empty background. `clip` rather than `hidden`, which would
+    make the document a scroll container and take vertical scrolling with it.
+  */
+  overflow-x: clip;
 }
 
 html.lock, body.lock {
@@ -88,12 +96,31 @@ select:focus-visible {
 
 /* --- Motion sensitivity ------------------------------------------------------------------------- */
 
+/*
+  Reduce means "stop moving me", not "stop telling me things". Travel and scale
+  drop out; opacity, color and elevation keep a short transition, because the
+  old blanket 0.01ms also erased every status change the color was carrying.
+  Ambient loops and per-screen entrances are switched off next to their own
+  keyframes, so an override always sits with the animation it modifies.
+*/
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-property: opacity, color, background-color, border-color, box-shadow, fill, stroke !important;
+    transition-duration: var(--dur-1) !important;
+  }
+
+  /* A pulsing dot reports nothing its color does not already say. */
+  .dot-live,
+  .statusline .dot-live,
+  .statusline .dot-warn {
+    animation: none !important;
+  }
+
+  /* Entrances keep the fade and lose the travel. */
+  @keyframes sheet-up {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 }

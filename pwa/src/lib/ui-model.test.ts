@@ -70,10 +70,14 @@ describe("UI model", () => {
     expect(emptySessionCopy("herdr", true, true)).toEqual({
       title: "还没有会话",
       detail: "可以新建一个会话，或在电脑上打开终端。",
+      action: "create",
     });
+    // Without create_conversation the empty state has nothing to offer.
+    expect(emptySessionCopy("herdr", true, false).action).toBeUndefined();
     expect(emptySessionCopy("offline", true, false)).toEqual({
       title: "还没有读到会话",
       detail: "电脑上的 Herdr 不可用。请在电脑运行 pairfob doctor 检查。",
+      action: "retry",
     });
     expect(emptySessionCopy("herdr", false, true).title).toBe("正在重新连接");
   });
@@ -82,12 +86,14 @@ describe("UI model", () => {
     expect(emptySessionCopy("herdr", false, true)).toEqual({
       title: "正在重新连接",
       detail: "连接恢复后会自动更新会话列表。",
+      action: "retry",
     });
     expect(emptySessionCopy("herdr", true, true, false).title).toBe("正在重新连接");
     expect(emptySessionCopy("offline", false, true).title).toBe("正在重新连接");
     expect(emptySessionCopy("", true, true)).toEqual({
       title: "无法确认会话",
       detail: "Herdr 暂未响应，恢复后会自动更新列表。",
+      action: "settings",
     });
     expect(emptySessionCopy("something-new", true, false).title).toBe("无法确认会话");
   });

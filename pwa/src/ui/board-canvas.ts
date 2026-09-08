@@ -1,6 +1,8 @@
 import { agentTitle, statusLabel } from "../lib/dashboard";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
+import { emptyNode } from "./chrome";
+import { morphingPane, nextTransition, queuedKind, shareOpening } from "./transition";
 import {
   BOARD_CELL_H,
   BOARD_CELL_W,
@@ -17,13 +19,7 @@ import { TERMINAL_MAX_COLS, TERMINAL_MAX_ROWS, TERMINAL_MIN_COLS, TERMINAL_MIN_R
 import { openPane } from "../live";
 import { state } from "../state";
 import { focusCompose } from "./session-view";
-import {
-  BOARD_DOUBLE_TAP_MS,
-  BOARD_GESTURE_SLOP_PX,
-  boardDoubleTap,
-  boardDragMode,
-  boardScrollLines,
-} from "./board-gesture";
+import { BOARD_GESTURE_SLOP_PX, boardDragMode, boardScrollLines } from "./board-gesture";
 import { boardPreviewText, fillAnsiPreview, fitBoardPreviews, refreshBoardPanePreview } from "./board-preview";
 import { guidedScrollController } from "./session/guided-scroll";
 
@@ -68,21 +64,13 @@ function zoomAt(viewport: HTMLElement, stage: HTMLElement, clientX: number, clie
   applyTransform(stage);
 }
 
-let pendingOpenTimer = 0;
-let pendingOpenPane = "";
-let pendingOpenAt = 0;
-
-function clearPendingBoardOpen(): void {
-  if (pendingOpenTimer) window.clearTimeout(pendingOpenTimer);
-  pendingOpenTimer = 0;
-  pendingOpenPane = "";
-  pendingOpenAt = 0;
-}
-
-function openBoardPane(paneId: string): void {
-  clearPendingBoardOpen();
+function openBoardPane(paneId: string, tile?: HTMLElement): void {
   if (!paneId) return;
   state.boardReturn = true;
+  // The tile is the same object as the pane about to fill the screen, so it
+  // expands into it instead of the screen sliding in from the side.
+  shareOpening(tile);
+  nextTransition("expand", paneId);
   void openPane(paneId).then(() => {
     focusCompose();
     if (!document.querySelector(".full-terminal-compose-input, .dock-form textarea")) {
@@ -91,26 +79,12 @@ function openBoardPane(paneId: string): void {
   });
 }
 
-function scheduleBoardPaneOpen(paneId: string): void {
-  if (!paneId) return;
-  const now = Date.now();
-  if (boardDoubleTap(pendingOpenPane, pendingOpenAt, paneId, now)) {
-    openBoardPane(paneId);
-    return;
-  }
-  clearPendingBoardOpen();
-  pendingOpenPane = paneId;
-  pendingOpenAt = now;
-  pendingOpenTimer = window.setTimeout(() => {
-    pendingOpenTimer = 0;
-    const id = pendingOpenPane;
-    pendingOpenPane = "";
-    pendingOpenAt = 0;
-    if (id) openBoardPane(id);
-  }, BOARD_DOUBLE_TAP_MS);
-}
-
-function paneTile(box: PaneBox, layout: TabLayout, titles: Record<string, string>): HTMLElement {
+function paneTile(
+  box: PaneBox,
+  layout: TabLayout,
+  titles: Record<string, string>,
+  zoomToPane: (box: PaneBox, tile: HTMLElement) => void,
+): HTMLElement {
   const agent = state.agents.find((item) => item.paneId === box.paneId);
   const selected = box.paneId === state.paneId;
   const title = titles[box.paneId] || box.paneId;
@@ -135,14 +109,19 @@ function paneTile(box: PaneBox, layout: TabLayout, titles: Record<string, string
   const pane = layout.panes.find((item) => item.paneId === box.paneId);
   fillAnsiPreview(screen, boardPreviewText(box.paneId), Math.round(pane?.rect.width || 0), Math.round(pane?.rect.height || 0));
   tile.append(head, screen);
+  // A tap opens the pane at once. Waiting out a double-tap window made every
+  // open feel broken to buy a shortcut nobody could discover; the second tap
+  // now means "fill the canvas with this pane", which does not race the first.
   tile.addEventListener("click", (event) => {
     event.preventDefault();
-    scheduleBoardPaneOpen(box.paneId);
+    openBoardPane(box.paneId, tile);
   });
   tile.addEventListener("dblclick", (event) => {
     event.preventDefault();
-    openBoardPane(box.paneId);
+    zoomToPane(box, tile);
   });
+  // Coming back out of the pane, this tile is where it collapses to.
+  if (queuedKind() === "expand" && morphingPane() === box.paneId) shareOpening(tile);
   return tile;
 }
 
@@ -152,7 +131,7 @@ export function fillBoardCanvas(host: HTMLElement): void {
   viewport.setAttribute("aria-label", t("board.canvasAria"));
   const layout = layoutForTab(state.boardTabId, state.layouts, state.agents);
   if (!layout) {
-    viewport.append(node("p", "empty-sub", t("board.empty")));
+    viewport.append(emptyNode({ figure: "grid", title: t("board.emptyTitle"), sub: t("board.empty") }));
     host.append(viewport);
     return;
   }
@@ -171,7 +150,14 @@ export function fillBoardCanvas(host: HTMLElement): void {
       };
     }),
   );
-  for (const box of boxes) stage.append(paneTile(box, layout, titles));
+  // Second tap: bring this pane up to fill the canvas, keeping it under the finger.
+  const zoomToPane = (box: PaneBox, tile: HTMLElement) => {
+    const frame = viewport.getBoundingClientRect();
+    const spot = tile.getBoundingClientRect();
+    const fill = Math.min(frame.width / Math.max(1, box.width), frame.height / Math.max(1, box.height));
+    zoomAt(viewport, stage, spot.left + spot.width / 2, spot.top + spot.height / 2, fill);
+  };
+  for (const box of boxes) stage.append(paneTile(box, layout, titles, zoomToPane));
   viewport.append(stage);
   bindCanvas(viewport, stage, layout);
   host.append(viewport);
@@ -221,7 +207,6 @@ export function releaseBoardScroll(): void {
   if (previewTimer !== null) window.clearTimeout(previewTimer);
   previewTimer = null;
   previewPane = "";
-  clearPendingBoardOpen();
   guidedScrollController.dispose();
 }
 

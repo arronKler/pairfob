@@ -25,6 +25,7 @@ import {
   terminalMount,
 } from "./full-terminal-fit";
 import { fitFullTerminal, type FullTerminalFittedSize } from "./full-terminal-fit-controller";
+import { flyKeyToCursor } from "./key-flight";
 import {
   bindXtermKeyboard,
   encodeTerminalKey,
@@ -189,11 +190,27 @@ function pageScrollLines(): number {
   return clamp(pageLineCount(terminal?.rows || fittedSize?.rows || 24), 1, TERMINAL_MAX_ROWS);
 }
 
-function sendPadKey(key: string): void {
+/** The caret in viewport coordinates. xterm draws it on canvas, so read the buffer. */
+function caretPoint(): { x: number; y: number } | null {
+  const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
+  if (!terminal || !host) return null;
+  const screen = host.querySelector(".xterm-screen") as HTMLElement | null;
+  const rect = (screen ?? host).getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  const cell = { w: rect.width / (terminal.cols || 80), h: rect.height / (terminal.rows || 24) };
+  const buffer = terminal.buffer.active;
+  return {
+    x: rect.left + (buffer.cursorX + 0.5) * cell.w,
+    y: rect.top + (buffer.cursorY + 0.5) * cell.h,
+  };
+}
+
+function sendPadKey(key: string, source?: HTMLElement | null): void {
   if (!terminal || !bridgeId || opening) return;
   const bytes = encodeTerminalKey(key, terminal.modes.applicationCursorKeysMode);
   if (!bytes) return;
-  haptic(4);
+  haptic(4, source);
+  flyKeyToCursor(source, app.querySelector<HTMLElement>(".full-terminal-host"), key, caretPoint());
   terminal.input(bytes);
 }
 

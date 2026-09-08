@@ -24,7 +24,7 @@
 .group-chev {
   opacity: 0.75;
   transform-origin: center;
-  transition: transform 0.18s var(--ease);
+  transition: transform var(--dur-2) var(--ease);
 }
 
 .group-title[aria-expanded="true"] .group-chev {
@@ -34,7 +34,7 @@
 .pill-toggle::after {
   content: "";
   opacity: 0.7;
-  transition: transform 0.18s var(--ease);
+  transition: transform var(--dur-2) var(--ease);
 }
 
 .pill-toggle[aria-expanded="true"]::after {
@@ -50,7 +50,7 @@
   clip-path: polygon(0 0, 100% 0, 50% 100%);
   opacity: 0.7;
   transform-origin: center;
-  transition: transform 0.16s var(--ease);
+  transition: transform var(--dur-1) var(--ease);
 }
 
 .manual-pair[open] summary::after {
@@ -163,6 +163,106 @@
   background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.4' fill='none' stroke='%23000' stroke-width='1.35'/%3E%3Cpath d='M6.05 6.15c0-1.1.88-1.9 1.95-1.9 1.08 0 1.95.76 1.95 1.85 0 .95-.55 1.38-1.22 1.75-.5.28-.78.58-.78 1.15' fill='none' stroke='%23000' stroke-width='1.35' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='12.05' r='.85' fill='%23000'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.4' fill='none' stroke='%23000' stroke-width='1.35'/%3E%3Cpath d='M6.05 6.15c0-1.1.88-1.9 1.95-1.9 1.08 0 1.95.76 1.95 1.85 0 .95-.55 1.38-1.22 1.75-.5.28-.78.58-.78 1.15' fill='none' stroke='%23000' stroke-width='1.35' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='12.05' r='.85' fill='%23000'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* --- Empty-state figures -------------------------------------------------------
+   Pure geometry, same no-glyph-dependency decision as the marks above. Each
+   figure assembles block by block so the screen reads as "nothing here yet"
+   rather than "something went wrong".
+   ------------------------------------------------------------------------------ */
+
+.empty-figure {
+  position: relative;
+  width: 56px;
+  height: 44px;
+  margin: 0 auto var(--space-3);
+}
+
+.empty-figure span {
+  position: absolute;
+  animation: figure-in 200ms var(--ease) backwards;
+}
+
+.empty-figure span:nth-child(1) { animation-delay: 0ms; }
+.empty-figure span:nth-child(2) { animation-delay: 60ms; }
+.empty-figure span:nth-child(3) { animation-delay: 120ms; }
+.empty-figure span:nth-child(4) { animation-delay: 180ms; }
+
+@keyframes figure-in {
+  from { opacity: 0; transform: scale(0.86); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Stacked panes: a herd with nothing in it. */
+.figure-panes span {
+  width: 34px;
+  height: 22px;
+  border: 1.5px solid var(--muted);
+  border-radius: 4px;
+}
+
+.figure-panes span:nth-child(1) { top: 0; left: 0; opacity: 0.45; }
+.figure-panes span:nth-child(2) { top: 8px; left: 8px; opacity: 0.7; }
+.figure-panes span:nth-child(3) { top: 16px; left: 16px; border-color: var(--accent); }
+
+/* Empty grid: a board with no layout. */
+.figure-grid span {
+  width: 22px;
+  height: 18px;
+  border: 1.5px dashed var(--muted);
+  border-radius: 4px;
+}
+
+.figure-grid span:nth-child(1) { top: 2px; left: 4px; }
+.figure-grid span:nth-child(2) { top: 2px; left: 30px; }
+.figure-grid span:nth-child(3) { top: 24px; left: 4px; }
+.figure-grid span:nth-child(4) { top: 24px; left: 30px; }
+
+/* Broken link: no other session was read. */
+.figure-link span:nth-child(1),
+.figure-link span:nth-child(3) {
+  top: 15px;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+}
+
+.figure-link span:nth-child(1) { left: 2px; }
+.figure-link span:nth-child(3) { left: 40px; }
+
+.figure-link span:nth-child(2) {
+  top: 21px;
+  left: 19px;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--muted), var(--muted)) left / 6px 2px no-repeat,
+    linear-gradient(var(--muted), var(--muted)) right / 6px 2px no-repeat;
+}
+
+/* One device outline: no other phone is enrolled. */
+.figure-device span:nth-child(1) {
+  top: 2px;
+  left: 18px;
+  width: 20px;
+  height: 32px;
+  border: 1.5px solid var(--muted);
+  border-radius: 5px;
+}
+
+.figure-device span:nth-child(2) {
+  top: 38px;
+  left: 22px;
+  width: 12px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-figure span { animation: none; }
 }
 
 .btn-scan::before {

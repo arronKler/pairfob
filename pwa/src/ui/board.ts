@@ -13,6 +13,7 @@ import { fillBoardCanvas, fitCurrentBoard, nudgeBoardZoom, releaseBoardScroll } 
 import { appendNotice, backButton, herdBanners, herdStatus, statusLineNode } from "./chrome";
 import { leaveFullTerminal } from "./full-terminal";
 import { dropQueuedKeys } from "./session-view";
+import { nextTransition, transitionFor } from "./transition";
 
 export async function openBoard(from?: { workspaceId?: string; tabId?: string }): Promise<void> {
   parkComposeView();
@@ -24,6 +25,7 @@ export async function openBoard(from?: { workspaceId?: string; tabId?: string })
   state.boardWorkspaceId = from?.workspaceId || selected?.workspaceId || state.boardWorkspaceId;
   state.boardTabId = from?.tabId || (from?.workspaceId ? "" : selected?.tabId) || state.boardTabId;
   state.boardFitted = false;
+  nextTransition(transitionFor(state.screen, "board"));
   state.screen = "board";
   render();
   void refreshBoardPreviews();
@@ -33,6 +35,7 @@ export async function openBoard(from?: { workspaceId?: string; tabId?: string })
 export function closeBoard(): void {
   releaseBoardScroll();
   state.boardReturn = false;
+  nextTransition(transitionFor(state.screen, "home"));
   state.screen = "home";
   render();
 }
@@ -88,6 +91,16 @@ function newTabInBoard(): void {
   void createSelectedTab(agent);
 }
 
+/**
+ * A rail chip is 44px of hit area around 32px of ink: the pill lives on an inner
+ * span so growing the target does not grow the rail.
+ */
+function railChip(label: string, cls: string, run: () => void): HTMLButtonElement {
+  const chip = button("", cls, run);
+  chip.append(node("span", "", label));
+  return chip;
+}
+
 export function renderBoard(): void {
   const status = herdStatus();
   const root = node("div", "board-shell");
@@ -117,7 +130,7 @@ export function renderBoard(): void {
   spaces.setAttribute("aria-label", t("board.workspaceAria"));
   for (const space of state.workspaceList) {
     const on = space.id === state.boardWorkspaceId;
-    const chip = button(workspaceLabel(space.id, space.label), `board-chip${on ? " on" : ""}`, () => selectWorkspace(space.id));
+    const chip = railChip(workspaceLabel(space.id, space.label), `board-chip${on ? " on" : ""}`, () => selectWorkspace(space.id));
     chip.setAttribute("role", "tab");
     chip.setAttribute("aria-selected", String(on));
     spaces.append(chip);
@@ -132,13 +145,13 @@ export function renderBoard(): void {
   tabs.setAttribute("aria-label", t("board.tabAria"));
   for (const [index, tab] of tabsInWorkspace(state.tabList, state.boardWorkspaceId).entries()) {
     const on = tab.id === state.boardTabId;
-    const item = button(tabLabel(tab, index), `board-tab${on ? " on" : ""}`, () => selectTab(tab.id));
+    const item = railChip(tabLabel(tab, index), `board-tab${on ? " on" : ""}`, () => selectTab(tab.id));
     item.setAttribute("role", "tab");
     item.setAttribute("aria-selected", String(on));
     tabs.append(item);
   }
   if (state.operationCapabilities.create_tab) {
-    const create = button(state.operationBusy ? t("home.creating") : t("board.newTab"), "board-tab-new", newTabInBoard);
+    const create = railChip(state.operationBusy ? t("home.creating") : t("board.newTab"), "board-tab-new", newTabInBoard);
     create.disabled = state.operationBusy || !state.live?.isConnected() || !state.boardWorkspaceId;
     tabs.append(create);
   }

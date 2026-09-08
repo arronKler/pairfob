@@ -7,6 +7,7 @@ const stateView = await Bun.file(new URL("./full-terminal-state.ts", import.meta
 const dock = await Bun.file(new URL("./session/dock.ts", import.meta.url)).text();
 const view = await Bun.file(new URL("./session/view.ts", import.meta.url)).text();
 const pane = await Bun.file(new URL("./pane.ts", import.meta.url)).text();
+const swipe = await Bun.file(new URL("./pane-swipe.ts", import.meta.url)).text();
 
 function fn(name: string, next: string): string {
   const start = source.indexOf(name);
@@ -201,6 +202,6 @@ describe("complete-terminal chrome stays a distinct surface", () => {
   });
 
   test("edge swipe-back does not steal an 80-column terminal pan", () => {
-    expect(pane).toContain('closest?.(".full-terminal-pan")');
+    expect(swipe).toContain('closest?.(".full-terminal-pan")');
   });
 });

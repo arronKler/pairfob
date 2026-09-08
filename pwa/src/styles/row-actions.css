@@ -9,7 +9,7 @@
   padding: 10px 12px;
   background: var(--surface);
   border-top: 1px solid var(--line-strong);
-  animation: sheet-up 0.18s var(--ease);
+  animation: sheet-up var(--dur-2) var(--ease);
 }
 
 .row-quote {
@@ -43,7 +43,7 @@
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--ink);
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   font-weight: 560;
   white-space: nowrap;
   overflow: hidden;
@@ -70,7 +70,7 @@
 .select-hint {
   flex: 1 1 12rem;
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-secondary);
   line-height: 1.45;
   color: var(--muted);
 }

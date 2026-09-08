@@ -1,7 +1,7 @@
 import { agentMeta, agentTitle, paneFillCopy, statusLabel, tabIsSplit } from "../lib/dashboard";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
-import { chevron } from "./chrome";
+import { chevron, emptyNode } from "./chrome";
 import { groupAgents, paneIsPinned } from "../lib/ranking";
 import { TERM_MODE_OPTIONS } from "../lib/terminal-mode";
 import { TERM_MODE_LABEL, TERM_MODE_MENU } from "../lib/ui-model";
@@ -58,7 +58,9 @@ export function openPaneSwitcher(): void {
       list.append(item);
     }
   }
-  if (!list.children.length) list.append(node("p", "empty-sub", t("home.switcherEmpty")));
+  if (!list.children.length) {
+    list.append(emptyNode({ figure: "link", title: t("home.switcherEmptyTitle"), sub: t("home.switcherEmpty") }));
+  }
   parts.body.append(list, button(t("cancel"), "menu-item", parts.close));
   present(parts);
 }

@@ -138,19 +138,19 @@ export function tapAsMouse(
   fire("mouseup", 0);
 }
 
-function keyButton(spec: KeySpec, send: (key: string) => void): HTMLButtonElement {
+function keyButton(spec: KeySpec, send: PadSend): HTMLButtonElement {
   const el = paintKey(spec);
   if (spec.modifier) {
     bindModifier(el, spec.modifier);
     return el;
   }
   bindPadPress(el, () => {
-    for (const key of withModifiers(spec.key)) send(key);
+    for (const key of withModifiers(spec.key)) send(key, el);
   }, { repeat: spec.repeat === true });
   return el;
 }
 
-function keyRow(specs: KeySpec[], label: string, send: (key: string) => void): HTMLElement {
+function keyRow(specs: KeySpec[], label: string, send: PadSend): HTMLElement {
   const row = node("div", "keys");
   row.setAttribute("role", "group");
   row.setAttribute("aria-label", label);
@@ -230,9 +230,12 @@ export function syncKeyboardButton(root: ParentNode, open: boolean): void {
   el.setAttribute("aria-label", open ? t("ft.kbHide") : t("ft.kbOpen"));
 }
 
+/** The pressed keycap travels with the key so a phone without vibration can still acknowledge it. */
+type PadSend = (key: string, source?: HTMLElement | null) => void;
+
 /** On-screen keys the phone keyboard cannot emit, typed into the live PTY. */
 export function fullTerminalPad(
-  send: (key: string) => void,
+  send: PadSend,
   keyboard?: { toggle: () => void; isOpen: () => boolean },
   selectCommand: (text: string) => void = () => undefined,
 ): HTMLElement {

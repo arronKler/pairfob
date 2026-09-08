@@ -24,6 +24,7 @@ import {
   showStatus,
   state,
 } from "../../state";
+import { predictText } from "./echo";
 import { flushKeys, queueKey } from "./keys";
 import { LiveInputPump, type LiveInputPumpState } from "./live-input";
 
@@ -196,6 +197,7 @@ function typeLive(text: string): boolean {
   const accepted = next.startsWith(queued) ? next.slice(queued.length) : "";
   if (!accepted || !pump.enqueue(accepted)) return false;
   haptic(4);
+  predictText(state.paneId, accepted, state.paneHash);
   return true;
 }
 

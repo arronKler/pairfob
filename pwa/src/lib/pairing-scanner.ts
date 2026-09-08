@@ -1,8 +1,20 @@
 import QrScanner from "qr-scanner";
 import { t } from "./i18n.ts";
+import { haptic, prefersReducedMotion } from "./dom.ts";
 import { parsePairingURL, type FragmentPairing } from "./pairing-input.ts";
 
 export class PairingScanError extends Error {}
+
+/** Long enough for the frame to confirm the read, short enough not to be felt. */
+const HIT_MS = 180;
+
+/** A denied permission and a missing camera need different instructions. */
+function cameraMessage(cause: unknown): string {
+  const name = cause instanceof Error ? cause.name : "";
+  if (name === "NotAllowedError" || name === "SecurityError") return t("scan.cameraDenied");
+  if (name === "NotFoundError" || name === "OverconstrainedError") return t("scan.noCamera");
+  return t("scan.cameraFail");
+}
 
 export async function scanPairingCode(expectedOrigin: string): Promise<FragmentPairing | null> {
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -25,6 +37,12 @@ export async function scanPairingCode(expectedOrigin: string): Promise<FragmentP
   const guide = document.createElement("div");
   guide.className = "scanner-guide";
   guide.setAttribute("aria-hidden", "true");
+  // Four corner brackets; the dimming mask itself stays on the guide.
+  for (const corner of ["tl", "tr", "bl", "br"]) {
+    const piece = document.createElement("span");
+    piece.className = `scanner-corner scanner-corner-${corner}`;
+    guide.append(piece);
+  }
   viewport.append(video, guide);
   const error = document.createElement("p");
   error.className = "scanner-error";
@@ -69,10 +87,16 @@ export async function scanPairingCode(expectedOrigin: string): Promise<FragmentP
           error.textContent = t("scan.wrongSite");
           return;
         }
-        finish(pairing);
+        if (settled) return;
+        // Confirm the hit on the frame that produced it: stop scanning, light the
+        // frame green, buzz once. Pairing is not made to wait on that frame.
+        scanner?.stop();
+        guide.classList.add("is-hit");
+        haptic(12);
+        setTimeout(() => finish(pairing), prefersReducedMotion() ? 0 : HIT_MS);
       },
       { preferredCamera: "environment", returnDetailedScanResult: true, maxScansPerSecond: 8 },
     );
-    scanner.start().catch(() => finish(null, new PairingScanError(t("scan.cameraFail"))));
+    scanner.start().catch((cause) => finish(null, new PairingScanError(cameraMessage(cause))));
   });
 }

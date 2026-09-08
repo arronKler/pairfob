@@ -135,7 +135,16 @@ if [[ "$origin_scheme" == "https" ]]; then
     elif [[ -n "$origin_host" ]]; then
       san="DNS:${origin_host},${san}"
     fi
-    cat >"$TLS_DIR/ca.cnf" <<'EOF'
+    # A phone trusts this CA through an installed profile, so minting a new one on
+    # every start silently cuts off an already-paired phone: the origin's
+    # certificate is then signed by a CA the phone has never seen. Keep the CA
+    # while it is still valid and only re-sign the leaf, whose SAN follows the
+    # current LAN address.
+    ca_reuse=1
+    [[ -s "$TLS_DIR/ca.crt" && -s "$TLS_DIR/ca.key" ]] || ca_reuse=0
+    openssl x509 -in "$TLS_DIR/ca.crt" -noout -checkend 172800 >/dev/null 2>&1 || ca_reuse=0
+    if [[ "$ca_reuse" != "1" ]]; then
+      cat >"$TLS_DIR/ca.cnf" <<'EOF'
 [req]
 distinguished_name = dn
 x509_extensions = v3_ca
@@ -147,6 +156,11 @@ basicConstraints = critical,CA:TRUE
 keyUsage = critical,keyCertSign,cRLSign
 subjectKeyIdentifier = hash
 EOF
+      openssl req -x509 -newkey rsa:2048 -sha256 -days 30 -nodes \
+        -keyout "$TLS_DIR/ca.key" -out "$TLS_DIR/ca.crt" \
+        -config "$TLS_DIR/ca.cnf" >/dev/null 2>&1
+      echo "minted a new local CA; install the profile on the phone again"
+    fi
     cat >"$TLS_DIR/server.cnf" <<EOF
 [req]
 distinguished_name = dn
@@ -159,9 +173,6 @@ keyUsage = digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth
 subjectAltName = ${san}
 EOF
-    openssl req -x509 -newkey rsa:2048 -sha256 -days 30 -nodes \
-      -keyout "$TLS_DIR/ca.key" -out "$TLS_DIR/ca.crt" \
-      -config "$TLS_DIR/ca.cnf" >/dev/null 2>&1
     openssl req -newkey rsa:2048 -sha256 -nodes \
       -keyout "$TLS_DIR/server.key" -out "$TLS_DIR/server.csr" \
       -config "$TLS_DIR/server.cnf" >/dev/null 2>&1

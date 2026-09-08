@@ -68,6 +68,7 @@ import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
 import { resolvedPaneTermMode } from "./ui/terminal-mode";
 import { guidedScrollController } from "./ui/session/guided-scroll";
 import { track } from "./lib/telemetry";
+import { nextTransition, queuedKind, transitionFor } from "./ui/transition";
 
 const livePolling = createLivePolling({
   canRun: () => state.networkOnline && document.visibilityState === "visible" && state.phase === "live" && state.live?.isConnected() === true,
@@ -386,6 +387,9 @@ export async function openPane(paneId: string): Promise<void> {
   resetPaneView();
   state.composeLive = paneComposeLive(paneId);
   restoreAgentTrace(paneId);
+  // A caller that already declared its own transition (the board expands a tile
+  // into the pane) keeps it; anything else gets the plain by-depth direction.
+  if (queuedKind() === "none") nextTransition(transitionFor(state.screen, "pane"), paneId);
   state.screen = "pane";
   const mode = resolvedPaneTermMode(paneTermMode(paneId));
   const agent = state.agents.find((item) => item.paneId === paneId);

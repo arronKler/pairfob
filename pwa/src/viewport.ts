@@ -54,6 +54,39 @@ export function applyVisualViewport(): ViewportFrame {
   return frame;
 }
 
+/**
+ * Below this a shrunken viewport is a browser toolbar, not a keyboard. The
+ * shortest software keyboards on a phone are around 200px.
+ */
+const KEYBOARD_MIN_PX = 120;
+/** iOS reports the keyboard inset over several frames; wait for it to stop moving. */
+const KEYBOARD_SETTLE_MS = 90;
+
+let keyboardOpen = false;
+let settleTimer = 0;
+let keyboardListener: ((open: boolean) => void) | undefined;
+
+export function keyboardIsOpen(): boolean {
+  return keyboardOpen;
+}
+
+/**
+ * Publish keyboard state only once the inset stops changing. The shell height
+ * itself keeps tracking every frame — an input must never end up behind the
+ * keys — but a flag that flapped mid-slide would restart every animation that
+ * reads it.
+ */
+function trackKeyboard(frame: ViewportFrame, onSettle?: (open: boolean) => void): void {
+  const open = frame.kb >= KEYBOARD_MIN_PX;
+  window.clearTimeout(settleTimer);
+  settleTimer = window.setTimeout(() => {
+    if (open === keyboardOpen) return;
+    keyboardOpen = open;
+    document.documentElement.dataset.kb = open ? "open" : "closed";
+    onSettle?.(open);
+  }, KEYBOARD_SETTLE_MS);
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
@@ -68,7 +101,7 @@ function clearSyncTimers(): void {
 /** iOS often applies the keyboard inset after focus, not on the first resize. */
 export function scheduleVisualViewport(onResize?: () => void): void {
   const run = (): void => {
-    applyVisualViewport();
+    trackKeyboard(applyVisualViewport(), keyboardListener);
     onResize?.();
   };
   run();
@@ -79,7 +112,8 @@ export function scheduleVisualViewport(onResize?: () => void): void {
   }
 }
 
-export function bindVisualViewport(onResize: () => void): void {
+export function bindVisualViewport(onResize: () => void, onKeyboard?: (open: boolean) => void): void {
+  keyboardListener = onKeyboard;
   let height = applyVisualViewport().height;
   let width = window.innerWidth;
   const resized = (): void => {
@@ -87,6 +121,7 @@ export function bindVisualViewport(onResize: () => void): void {
     const changed = frame.height !== height || window.innerWidth !== width;
     height = frame.height;
     width = window.innerWidth;
+    trackKeyboard(frame, keyboardListener);
     if (changed) onResize();
   };
   window.visualViewport?.addEventListener("resize", resized);

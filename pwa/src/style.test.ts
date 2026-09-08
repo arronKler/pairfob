@@ -67,6 +67,24 @@ describe("UI accessibility guardrails", () => {
     expect(contrast("#ffffff", color("danger"))).toBeGreaterThanOrEqual(4.5);
   });
 
+  test("motion, elevation and type read off the token scale instead of ad-hoc literals", () => {
+    const root = rule(":root");
+    for (const token of ["--dur-1: 120ms", "--dur-2: 180ms", "--dur-3: 240ms", "--dur-4: 320ms"]) {
+      expect(root, token).toContain(token);
+    }
+    for (const token of ["--ease-out", "--ease-in-out", "--ease-spring", "--shadow-1", "--shadow-2", "--shadow-3", "--focus-ring"]) {
+      expect(root, token).toContain(`${token}:`);
+    }
+
+    // Transitions state their duration in tokens. Looping animations keep raw
+    // seconds because a pulse rhythm is not a response time.
+    const strays = (css.match(/transition:[^;}]*/g) ?? []).filter((decl) => /[\d.]+m?s(?![\w-])/.test(decl));
+    expect(strays).toEqual([]);
+
+    expect(css).not.toMatch(/box-shadow:\s*0 0 0 3px rgba\(110, 168, 254/);
+    expect(css).not.toMatch(/font-size:\s*(?:0\.(?:7|72|74|75|76|78|79|8|82|83|84|85|86|87|88|9|92|93|94|95|98)|1\.(?:02|05|08|45))rem/);
+  });
+
   test("manual pair disclosure draws a geometric chevron instead of a font glyph", () => {
     const chevron = rule(".manual-pair summary::after");
     expect(chevron).toMatch(/clip-path:\s*polygon\(/);
@@ -164,7 +182,9 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".board-canvas")).toMatch(/touch-action:\s*none/);
     expect(rule(".board-pane")).toMatch(/position:\s*absolute/);
     expect(rule(".board-pane")).toMatch(/touch-action:\s*none/);
-    expect(css).toMatch(/\.board-chip,\s*\.board-tab,\s*\.board-tab-new\s*\{[^}]*min-height:\s*32px/);
+    // 44px of hit area around a 32px pill: the target grew, the rail did not.
+    expect(css).toMatch(/\.board-chip,\s*\.board-tab,\s*\.board-tab-new\s*\{[^}]*min-height:\s*44px/);
+    expect(css).toMatch(/\.board-chip > span,\s*\.board-tab > span,\s*\.board-tab-new > span\s*\{[^}]*min-height:\s*32px/);
     expect(css).toMatch(/\.board-rail\.overflow::after\s*\{[^}]*pointer-events:\s*none/);
     expect(rule(".board-pane-screen")).toMatch(/overflow:\s*hidden/);
     expect(rule(".board-pane-buffer")).toMatch(/transform-origin:\s*0 0/);
@@ -234,6 +254,33 @@ describe("UI accessibility guardrails", () => {
   test("mobile sheets animate the form, not the dialog box", () => {
     expect(css).toMatch(/dialog\.modal\s*>\s*form\s*\{[^}]*animation:\s*sheet-up/);
     expect(css).not.toMatch(/@media \(max-width: 899\.98px\)\s*\{\s*dialog\.modal\s*\{[^}]*animation:/);
+  });
+
+  test("a dragged sheet carries its own frame instead of sliding out from under it", () => {
+    const phone = css.slice(css.indexOf("@media (max-width: 899.98px) {", css.indexOf("dialog.modal {")));
+    const dialog = phone.match(/dialog\.modal\s*\{([^}]*)\}/)?.[1] ?? "";
+    const form = phone.match(/dialog\.modal\s*>\s*form\s*\{([^}]*)\}/)?.[1] ?? "";
+    // The card is on the moving element.
+    expect(form).toMatch(/border:\s*1px solid var\(--line-strong\)/);
+    expect(form).toMatch(/border-radius:\s*var\(--r-xl\) var\(--r-xl\) 0 0/);
+    expect(form).toMatch(/background:\s*var\(--surface\)/);
+    expect(form).toMatch(/box-shadow:\s*var\(--shadow-3\)/);
+    // The dialog keeps no visible surface, and never clips the travel.
+    expect(dialog).toMatch(/border:\s*0/);
+    expect(dialog).toMatch(/background:\s*transparent/);
+    expect(dialog).toMatch(/box-shadow:\s*none/);
+    expect(dialog).toMatch(/overflow:\s*visible/);
+    expect(phone).toMatch(/dialog\.modal\.sheet\s*\{[^}]*overflow:\s*visible/);
+    // Whatever scrolls has to move with the card too.
+    expect(phone).toMatch(/dialog\.modal:not\(\.sheet\)\s*>\s*form\s*\{[^}]*overflow-y:\s*auto/);
+  });
+
+  test("board rail pills are spaced by the gap, not by padding on their hit area", () => {
+    // Horizontal padding on the 44px target adds to the gap on both sides, which
+    // is what spread the rail out.
+    expect(rule(".board-chip,\n.board-tab,\n.board-tab-new")).toMatch(/padding:\s*6px 0/);
+    expect(rule(".board-spaces,\n.board-tabs")).toMatch(/gap:\s*8px/);
+    expect(rule(".board-chip > span,\n.board-tab > span,\n.board-tab-new > span")).toMatch(/min-height:\s*32px/);
   });
 
   test("compose is a growing textarea, not a single-line input", () => {

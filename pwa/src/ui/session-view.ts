@@ -5,7 +5,7 @@
 export { composeField, composeLiveControl, focusCompose, handlePaneKey, preserveCompose, setComposeLive } from "./session/compose";
 export { dropQueuedKeys } from "./session/keys";
 export { paneReadLines } from "./session/model";
-export { stickBottom, toggleTermSelect, toggleTermWrap } from "./session/term";
+export { revealCaretRow, stickBottom, toggleTermSelect, toggleTermWrap } from "./session/term";
 export {
   fillSession,
   finishSessionPaint,

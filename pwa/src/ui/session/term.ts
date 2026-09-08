@@ -1,5 +1,5 @@
 import { lineFillBackground, paintLines, spanCss, type StyledLine } from "../../lib/ansi";
-import { node } from "../../lib/dom";
+import { node, prefersReducedMotion } from "../../lib/dom";
 import { isPageZoomed } from "../../lib/gesture-boundary";
 import { t } from "../../lib/i18n";
 import { TERMINAL_MAX_COLS, TERMINAL_MAX_ROWS, TERMINAL_MIN_COLS, TERMINAL_MIN_ROWS } from "../../lib/protocol/terminal";
@@ -9,12 +9,16 @@ import { app, clampTermFont, haptic, saveTermFont, saveTermWrap, state, termLine
 import { bindHostScroll, pageLineCount, scrollRail } from "../full-terminal-scroll";
 import { focusCompose } from "./compose";
 import { guidedScrollController } from "./guided-scroll";
+import { echoGhost, setEchoObserver } from "./echo";
 import { sendPage, syncPagePending } from "./keys";
-import { type PaneModel } from "./model";
+import { paneModel, type PaneModel } from "./model";
+import { markCaughtUp, unreadBars, unreadCount } from "./unread";
 
 const BOTTOM_SLACK = 32;
 const TAP_SLOP_PX = 8;
 const HOLD_MS = 420;
+/** Long enough for the chip to leave, short enough not to outlast the scroll. */
+const JUMP_OUT_MS = 220;
 
 export function termElement(): HTMLElement | null {
   return app.querySelector(".term");
@@ -30,13 +34,80 @@ export function stickBottom(): void {
   term.scrollTop = term.scrollHeight;
   state.paneFollow = true;
   state.paneUnread = false;
+  markCaughtUp(state.paneId ?? "", paneModel().texts);
   syncJump();
 }
 
 /** Show or hide the new-output affordance without repainting the buffer. */
 export function syncJump(): void {
   const jump = app.querySelector(".term-jump") as HTMLElement | null;
-  if (jump) jump.hidden = state.paneFollow || !state.paneUnread;
+  if (!jump) return;
+  jump.hidden = state.paneFollow || !state.paneUnread;
+  if (!jump.hidden) fillJump(jump);
+}
+
+/** How much arrived and roughly what shape it is, so a jump is worth deciding on. */
+function fillJump(jump: HTMLElement): void {
+  const count = unreadCount();
+  const label = count > 0 ? t("term.jumpLines", { n: count }) : t("term.newOutput");
+  const parts: HTMLElement[] = [node("span", "term-jump-text", label)];
+  const bars = unreadBars();
+  if (bars.length) {
+    const preview = node("span", "term-jump-preview");
+    preview.setAttribute("aria-hidden", "true");
+    for (const fill of bars) {
+      const bar = node("span", "term-jump-bar");
+      bar.style.width = `${Math.max(12, Math.round(fill * 100))}%`;
+      preview.append(bar);
+    }
+    parts.push(preview);
+  }
+  jump.replaceChildren(...parts);
+  jump.setAttribute("aria-label", label);
+}
+
+/**
+ * Keep the row being typed into visible when the keyboard takes the bottom half
+ * of the screen. Only on the way in: once the keys are up the reader owns the
+ * scroll position again, so closing them must not yank the view back.
+ */
+export function revealCaretRow(): void {
+  const term = termElement();
+  if (!term) return;
+  if (state.paneFollow) {
+    stickBottom();
+    return;
+  }
+  const rows = [...term.querySelectorAll<HTMLElement>(".term-line")];
+  const caret = [...rows].reverse().find((row) => row.textContent?.trim());
+  if (!caret) return;
+  const row = Math.max(1, termLineHeightPx(state.termFontPx));
+  // Two rows of air below the caret, so the next line of output is visible too.
+  const wanted = caret.offsetTop + caret.offsetHeight + row * 2 - term.clientHeight;
+  if (wanted <= term.scrollTop) return;
+  term.scrollTo({ top: Math.min(wanted, term.scrollHeight), behavior: prefersReducedMotion() ? "auto" : "smooth" });
+}
+
+/**
+ * Travel to the newest output instead of teleporting: seeing the lines go by is
+ * what tells the reader they are now at the bottom of the same buffer.
+ */
+function jumpToBottom(jump: HTMLElement): void {
+  const term = termElement();
+  if (!term) return;
+  if (prefersReducedMotion()) {
+    stickBottom();
+    return;
+  }
+  state.paneFollow = true;
+  state.paneUnread = false;
+  markCaughtUp(state.paneId ?? "", paneModel().texts);
+  jump.classList.add("term-jump-out");
+  term.scrollTo({ top: term.scrollHeight, behavior: "smooth" });
+  window.setTimeout(() => {
+    jump.classList.remove("term-jump-out");
+    syncJump();
+  }, JUMP_OUT_MS);
 }
 
 function sendGuidedTuiScroll(direction: "up" | "down", lines = 1, source: "wheel" | "page_key" = "wheel"): void {
@@ -113,6 +184,27 @@ export function fillTerm(term: HTMLElement, model: PaneModel): void {
     frag.append(row);
   });
   termInner(term).replaceChildren(frag);
+  syncGhost(term);
+}
+
+/**
+ * Draw the characters that have been typed but not yet seen in a snapshot at the
+ * end of the caret row. Dimmed, because they are a prediction: the next read
+ * replaces them with whatever the runtime actually did.
+ */
+export function syncGhost(term: HTMLElement | null = termElement()): void {
+  if (!term) return;
+  const inner = term.querySelector(".term-inner");
+  if (!(inner instanceof HTMLElement)) return;
+  inner.querySelector(".term-ghost")?.remove();
+  const { text, rollback } = echoGhost(state.paneId ?? "");
+  if (!text) return;
+  const rows = [...inner.querySelectorAll<HTMLElement>(".term-line")];
+  const caret = [...rows].reverse().find((row) => row.textContent?.trim()) ?? rows[rows.length - 1];
+  if (!caret) return;
+  const ghost = node("span", rollback ? "term-ghost is-rollback" : "term-ghost", text);
+  ghost.setAttribute("aria-hidden", "true");
+  caret.append(ghost);
 }
 
 export function renderTerm(model: PaneModel): HTMLElement {
@@ -270,6 +362,8 @@ function bindPinch(term: HTMLElement): void {
 export function termView(model: PaneModel, onRow: (index: number) => void): HTMLElement {
   const wrap = node("div", "term-wrap");
   const term = renderTerm(model);
+  // A prediction changing does not need a repaint of the buffer, only of itself.
+  setEchoObserver(() => syncGhost());
   term.addEventListener(
     "scroll",
     () => {
@@ -295,12 +389,13 @@ export function termView(model: PaneModel, onRow: (index: number) => void): HTML
   const rail = scrollRail((direction, lines, source) => sendGuidedTuiScroll(direction, lines, source), pageScrollLines);
   wrap.append(rail);
   syncPagePending(rail);
-  const jump = node("button", "term-jump", t("term.newOutput"));
+  const jump = node("button", "term-jump");
   jump.type = "button";
   jump.hidden = state.paneFollow || !state.paneUnread;
+  fillJump(jump);
   jump.addEventListener("click", () => {
     haptic(6);
-    stickBottom();
+    jumpToBottom(jump);
   });
   wrap.append(jump);
   return wrap;

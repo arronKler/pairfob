@@ -412,6 +412,35 @@ describe("complete-terminal remote scroll", () => {
     host.remove();
   });
 
+  /*
+    A local band that moved the rows under the finger read as a shake next to the
+    snapshot that lands a frame later, so a drag paints nothing of its own: the
+    pane only moves when the runtime answers.
+  */
+  test("a drag moves nothing locally; only the remote answer moves the rows", () => {
+    const host = document.createElement("div");
+    const surface = document.createElement("div");
+    host.append(surface);
+    document.body.append(host);
+    const calls: Call[] = [];
+    const stop = bindHostScroll(host, (direction, lines, source) => {
+      calls.push({ direction, lines, source });
+    }, () => undefined, {});
+
+    host.dispatchEvent(pointer("pointerdown", 80, 240));
+    host.dispatchEvent(pointer("pointermove", 80, 240 - 20));
+    expect(calls).toEqual([]);
+    expect(surface.style.transform).toBe("");
+
+    host.scrollTop = 41;
+    host.dispatchEvent(pointer("pointerup", 80, 220));
+    expect(surface.style.transform).toBe("");
+    // The scroller is left where the reader put it, not re-aimed on release.
+    expect(host.scrollTop).toBe(41);
+    stop();
+    host.remove();
+  });
+
   test("the on-screen rail offers wheel and page-key scrolling", () => {
     const calls: Call[] = [];
     let pageLines = 23;

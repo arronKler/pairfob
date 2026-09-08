@@ -11,19 +11,22 @@ import {
   type AgentCard,
   type AgentGroup,
 } from "../lib/ranking";
-import { emptySessionCopy } from "../lib/ui-model";
+import { openHerdPaint, type HerdPaint } from "../lib/herd-attention";
+import { emptySessionCopy, type EmptySessionAction } from "../lib/ui-model";
 import { openComputers } from "../computers";
-import { openPane } from "../live";
+import { openPane, reconnectLiveSessions } from "../live";
 import { startNewConversation } from "../live-operations";
 import { openSettings } from "../live-settings";
 import { render } from "../paint";
-import { app, state } from "../state";
+import { app, haptic, state, type StatusTone } from "../state";
 import { openBoard } from "./board";
 import {
   appendNotice,
   brandNode,
   chevron,
+  completionCountNode,
   emptyNode,
+  type EmptySpec,
   groupToggle,
   herdBanners,
   herdLiveness,
@@ -35,16 +38,29 @@ import {
 import { openListPaneMenu, openListWorkspaceMenu } from "./list-menu";
 import { bindObjectPress } from "./press-menu";
 import { worktreeProgressList } from "./worktree-progress";
+import { morphingPane, shareTitle } from "./transition";
 
-export function agentCard(agent: AgentCard): HTMLElement {
+export function agentCard(agent: AgentCard, paint?: HerdPaint, index = 0): HTMLElement {
   const selected = agent.paneId === state.paneId;
   const pinned = paneIsPinned(state.panePinned, agent.paneId);
   const title = agentTitle(agent, state.listGroup);
   // Unverifiable snapshots keep their cards but never paint last-known
   // done/idle as a fresh fact.
   const stale = herdLiveness() === "unverifiable";
-  const card = node("article", `card status-${agent.status}${stale ? " unverifiable" : ""}${selected ? " sel" : ""}${pinned ? " pinned" : ""}`);
-  const main = button("", "card-main", () => void openPane(agent.paneId));
+  const mark = paint?.markOf(agent.paneId) ?? "";
+  const attention = [
+    mark === "" ? "" : mark === "done" ? " ac-changed ac-done" : " ac-changed",
+    paint?.isDismissing(agent.paneId) ? " attn-out" : "",
+  ].join("");
+  const card = node("article", `card status-${agent.status}${stale ? " unverifiable" : ""}${selected ? " sel" : ""}${pinned ? " pinned" : ""}${attention}`);
+  // Drives both the entrance delay and the breathing phase, so several waiting
+  // completions do not blink in unison.
+  card.style.setProperty("--i", String(index));
+  const main = button("", "card-main", () => {
+    // Tag before navigating: the outgoing snapshot is this DOM as it stands.
+    shareTitle(titleRow);
+    void openPane(agent.paneId);
+  });
   main.setAttribute("aria-pressed", selected ? "true" : "false");
   main.setAttribute("aria-haspopup", "menu");
   const copy = node("div", "card-copy");
@@ -55,6 +71,8 @@ export function agentCard(agent: AgentCard): HTMLElement {
     titleRow.append(mark, node("span", "sr-only", t("home.pinned")));
   }
   titleRow.append(node("span", "card-name", title));
+  // Coming back out of a pane, this card is the other half of the morph.
+  if (morphingPane() === agent.paneId) shareTitle(titleRow);
   const pill = stale ? t("status.unverifiable") : statusLabel(agent.status);
   if (pill) titleRow.append(node("span", `pill pill-${stale ? "unknown" : agent.status}`, pill));
   copy.append(titleRow);
@@ -69,6 +87,20 @@ export function agentCard(agent: AgentCard): HTMLElement {
   return card;
 }
 
+/** The empty state names what to do; wiring it up stays out of lib/ui-model. */
+function emptyAction(kind: EmptySessionAction | undefined): EmptySpec["action"] {
+  if (kind === "create") {
+    return {
+      label: t("empty.actionCreate"),
+      run: startNewConversation,
+      disabled: state.operationBusy || !state.live?.isConnected(),
+    };
+  }
+  if (kind === "retry") return { label: t("empty.actionRetry"), run: () => reconnectLiveSessions("probe") };
+  if (kind === "settings") return { label: t("empty.actionSettings"), run: openSettings };
+  return undefined;
+}
+
 export function fillHerdList(root: HTMLElement): void {
   appendDaemonUpdate(root);
   const jobCards = worktreeProgressList();
@@ -81,24 +113,41 @@ export function fillHerdList(root: HTMLElement): void {
       state.operationCapabilities.create_conversation,
       state.networkOnline,
     );
-    root.append(emptyNode(copy.title, copy.detail));
+    root.append(emptyNode({ title: copy.title, sub: copy.detail, figure: "panes", action: emptyAction(copy.action) }));
     return;
   }
+  const paint = openHerdPaint(state.agents, state.listGroup);
+  // One acknowledgement for the batch: a herd that finishes three panes at once
+  // should not buzz three times.
+  if (paint.completed.length && document.visibilityState === "visible") haptic(14);
   const groups = groupAgents(state.agents, state.listGroup, state.paneTouched, state.panePinned);
-  const list = node("div", "herd-list");
+  const list = node("div", `herd-list${paint.stagger ? " enter" : ""}`);
+  // One running index down the whole list, so the entrance reads as a single
+  // top-down sweep whether or not the herd is grouped.
+  let position = 0;
+  const step = (element: HTMLElement) => {
+    element.style.setProperty("--i", String(position++));
+    return element;
+  };
   if (state.listGroup === "flat") {
     for (const group of groups) {
-      list.append(sectionTitle(group.title, group.items.length));
-      group.items.forEach((agent) => list.append(agentCard(agent)));
+      list.append(step(sectionTitle(group.title, group.items.length)));
+      group.items.forEach((agent) => list.append(agentCard(agent, paint, position++)));
     }
   } else {
     state.listGroupCollapsed = syncGroupCollapsed(groups, state.listGroupCollapsed);
-    for (const group of groups) list.append(herdGroup(group, groups));
+    for (const group of groups) list.append(herdGroup(group, groups, paint, step, () => position++));
   }
   root.append(list);
 }
 
-function herdGroup(group: AgentGroup, groups: AgentGroup[]): HTMLElement {
+function herdGroup(
+  group: AgentGroup,
+  groups: AgentGroup[],
+  paint: HerdPaint,
+  step: (element: HTMLElement) => HTMLElement,
+  next: () => number,
+): HTMLElement {
   const collapsed = state.listGroupCollapsed[group.id] === true;
   const section = node("section", "herd-group");
   const heading = groupToggle(group.title, group.items.length, !collapsed, () => {
@@ -115,10 +164,10 @@ function herdGroup(group: AgentGroup, groups: AgentGroup[]): HTMLElement {
       });
     }
   }
-  section.append(heading);
+  section.append(step(heading));
   const body = node("div", "herd-group-body");
   body.hidden = collapsed;
-  group.items.forEach((item) => body.append(agentCard(item)));
+  group.items.forEach((item) => body.append(agentCard(item, paint, next())));
   section.append(body);
   return section;
 }
@@ -137,16 +186,33 @@ function liveActions(): HTMLElement {
   return actions;
 }
 
-export function renderHome(): void {
+/** Displayed status stays "done" only while the completion is unacknowledged. */
+function unreadCompletions(): number {
+  return state.agents.filter((agent) => agent.status === "done").length;
+}
+
+function statusLine(status: { tone: StatusTone; text: string }): HTMLElement {
+  const line = statusLineNode(status);
+  const count = completionCountNode(unreadCompletions());
+  if (count) line.append(count);
+  return line;
+}
+
+/** The home screen as a detached tree, so a gesture can show it under the pane. */
+export function homePage(): HTMLElement {
   const status = herdStatus();
   const root = node("div", "page");
   const top = node("div", "topbar");
   top.append(brandNode(status.tone, true), liveActions());
-  root.append(top, statusLineNode(status));
+  root.append(top, statusLine(status));
   herdBanners(root, status);
   appendNotice(root);
   fillHerdList(root);
-  app.replaceChildren(root);
+  return root;
+}
+
+export function renderHome(): void {
+  app.replaceChildren(homePage());
 }
 
 export function renderRail(): HTMLElement {
@@ -154,7 +220,7 @@ export function renderRail(): HTMLElement {
   const rail = node("aside", "rail");
   const top = node("div", "topbar");
   top.append(brandNode(status.tone, true), liveActions());
-  rail.append(top, statusLineNode(status));
+  rail.append(top, statusLine(status));
   herdBanners(rail, status);
   fillHerdList(rail);
   return rail;

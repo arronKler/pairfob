@@ -50,7 +50,7 @@
 
 .set-title {
   margin: 26px 0 0;
-  font-size: 0.74rem;
+  font-size: var(--text-caption);
   font-weight: 640;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -74,7 +74,7 @@
   gap: 14px;
   padding: 13px 15px;
   border-top: 1px solid var(--line);
-  font-size: 0.92rem;
+  font-size: var(--text-lead);
 }
 
 .set-row:first-child { border-top: 0; }
@@ -118,13 +118,13 @@
 .set-field { gap: 8px; }
 
 .set-field .set-key {
-  font-size: 0.82rem;
+  font-size: var(--text-body);
   font-weight: 560;
 }
 
 .network-mode-row { flex-wrap: wrap; }
 
-.set-note { margin: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.55; }
+.set-note { margin: 0; color: var(--muted); font-size: var(--text-body); line-height: 1.55; }
 
 .network-p2p-fail {
   width: 100%;
@@ -158,13 +158,13 @@
   margin: -4px -6px -4px 0;
   padding: 0 10px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--text-secondary);
   font-weight: 550;
 }
 
 .device-forget:active { color: var(--danger-bright); }
 
-.device-name { font-size: 0.92rem; font-weight: 640; }
+.device-name { font-size: var(--text-lead); font-weight: 640; }
 
 .device-id {
   display: inline-block;
@@ -173,7 +173,7 @@
   font: 500 0.74rem var(--mono);
 }
 
-.device-meta { margin: 4px 0 0; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+.device-meta { margin: 4px 0 0; color: var(--muted); font-size: var(--text-secondary); line-height: 1.5; }
 
 .retry { margin-top: 12px; }
 
@@ -189,12 +189,19 @@ dialog.modal {
   padding: 18px;
   background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-3);
 }
 
 @keyframes help-in {
   from { transform: scale(0.97); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes help-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 }
 
 dialog.modal.help {
@@ -204,7 +211,7 @@ dialog.modal.help {
   padding: 16px 16px 18px;
 }
 
-dialog.modal.help > form { animation: help-in 0.18s var(--ease); }
+dialog.modal.help > form { animation: help-in var(--dur-2) var(--ease); }
 
 .help-head {
   display: flex;
@@ -227,7 +234,7 @@ dialog.modal.help > form { animation: help-in 0.18s var(--ease); }
 .help-copy {
   margin: 10px 0 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-lead);
   line-height: 1.55;
 }
 
@@ -257,7 +264,7 @@ dialog.modal .btn { display: flex; width: 100%; margin: 8px 0 0; }
 
 .modal-title {
   margin: 0;
-  font-size: 1.02rem;
+  font-size: var(--text-title);
   font-weight: 680;
   letter-spacing: -0.01em;
 }
@@ -280,6 +287,21 @@ dialog.modal.sheet > form {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+/* --- Drag to dismiss ----------------------------------------------------------
+   The handle is only meaningful where the modal is a bottom sheet, so above the
+   desk breakpoint it is not drawn at all.
+   ------------------------------------------------------------------------------ */
+
+.sheet-grab { display: none; }
+
+.sheet-grab-bar {
+  display: block;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
 }
 
 .sheet-head {
@@ -323,7 +345,7 @@ dialog.modal.sheet > form {
 
 .sheet-fact-key {
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--text-caption);
   font-weight: 620;
   line-height: 1.45;
 }
@@ -331,7 +353,7 @@ dialog.modal.sheet > form {
 .sheet-fact-val {
   min-width: 0;
   color: var(--ink);
-  font-size: 0.86rem;
+  font-size: var(--text-body);
   font-weight: 560;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -339,7 +361,7 @@ dialog.modal.sheet > form {
 
 .sheet-fact-path {
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: var(--text-secondary);
   font-weight: 500;
   color: var(--muted);
   word-break: break-all;
@@ -356,6 +378,7 @@ dialog.modal.sheet > form {
   font-size: 1.35rem;
   font-weight: 400;
   line-height: 1;
+  border-radius: var(--r-sm);
 }
 
 .menu-item {
@@ -369,10 +392,10 @@ dialog.modal.sheet > form {
   background: var(--surface-2);
   border: 1px solid transparent;
   color: var(--ink);
-  font-size: 0.92rem;
+  font-size: var(--text-lead);
   font-weight: 560;
   text-align: left;
-  transition: background 0.12s ease;
+  transition: background var(--dur-1) var(--ease);
 }
 
 .menu-item:active { background: #232c38; }
@@ -386,31 +409,113 @@ dialog.modal.sheet > form {
 }
 
 @media (max-width: 899.98px) {
+  /*
+    The finger moves the form, because a transform on <dialog> knocks it out of
+    the centered top layer. So the card itself — border, corners, fill, shadow,
+    padding and the scroll — has to live on the form too, or the sheet slides out
+    from under its own frame. The dialog is reduced to a bottom-anchored,
+    non-clipping box.
+  */
   dialog.modal {
     margin: auto auto 0;
     width: calc(100vw - 14px);
     max-height: calc(100dvh - 24px);
-    border-radius: var(--r-xl) var(--r-xl) 0 0;
-    border-bottom: 0;
-    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
   }
 
-  /* Transform on <dialog> itself knocks it out of the centered top layer. */
   dialog.modal > form {
-    animation: sheet-up 0.24s var(--ease);
+    border: 1px solid var(--line-strong);
+    border-bottom: 0;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    background: var(--surface);
+    box-shadow: var(--shadow-3);
+    animation: sheet-up var(--dur-3) var(--ease);
+    transition: transform var(--dur-3) var(--ease-spring);
+    touch-action: pan-y;
   }
 
+  /* Sheets already scroll inside .sheet-body; every other modal scrolls itself,
+     and that scroller has to move with the card. */
+  dialog.modal:not(.sheet) > form {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  dialog.modal.operation-modal:not(.sheet) > form { max-height: min(34rem, calc(100dvh - 48px)); }
+
+  /* The base rule clips the dialog so a long list cannot escape the rounded
+     head; on a phone that clip belongs to the form, which is what travels. */
+  dialog.modal.sheet {
+    overflow: visible;
+    display: flex;
+  }
+
+  .sheet-grab {
+    flex: none;
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 2px;
+  }
+
+  dialog.modal.operation-modal .sheet-grab { margin: -8px 0 4px; }
+
+  /* A finger-tracked sheet must not fight a transition, and a released one
+     springs back or continues off-screen. */
+  dialog.modal > form.is-sheet-dragging { transition: none; }
+
+  dialog.modal > form.is-sheet-closing {
+    transform: translateY(100%);
+    transition: transform var(--dur-3) var(--ease);
+  }
+
+  /* The page behind steps back for as long as a sheet is up, and comes forward
+     again in step with the finger that is putting the sheet away. */
+  body.sheet-open #app {
+    transform: scale(calc(1 - 0.015 * var(--sheet-lift, 1)));
+    border-radius: calc(14px * var(--sheet-lift, 1));
+    overflow: hidden;
+    transition: transform var(--dur-3) var(--ease), border-radius var(--dur-3) var(--ease);
+  }
+
+  body.sheet-open.sheet-dragging #app { transition: none; }
+
+  /* Help is centered and never dragged, so it keeps the card on the dialog. */
   dialog.modal.help {
     margin: auto;
     width: min(22rem, calc(100vw - 40px));
+    border: 1px solid var(--line-strong);
     border-radius: var(--r-xl);
-    border-bottom: 1px solid var(--line-strong);
-    padding-bottom: 18px;
+    padding: 16px 16px 18px;
+    background: var(--surface);
+    box-shadow: var(--shadow-3);
+    overflow: auto;
   }
 
+  /* Nothing moves here, so the form stays a plain container. */
   dialog.modal.help > form {
-    animation: help-in 0.18s var(--ease);
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    max-height: none;
+    overflow: visible;
+    background: transparent;
+    box-shadow: none;
+    animation: help-in var(--dur-2) var(--ease);
+    transition: none;
   }
+
+  dialog.modal.help .sheet-grab { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.sheet-open #app { transform: none; }
 }
 /* --- Operation dialogs (create / prompt / worktree) ------------------ */
 
@@ -422,7 +527,7 @@ dialog.modal.sheet > form {
   display: block;
   margin: 12px 0 0;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: var(--text-body);
   font-weight: 550;
 }
 
@@ -488,7 +593,7 @@ dialog.modal.sheet > form {
 .operation-field textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.22);
+  box-shadow: var(--focus-ring);
 }
 
 .operation-field input::placeholder,
@@ -499,7 +604,7 @@ dialog.modal.sheet > form {
 .operation-hint {
   margin: 10px 0 0;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--text-secondary);
   line-height: 1.55;
 }
 
@@ -559,7 +664,7 @@ dialog.modal.sheet > form {
 .worktree-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
 
 .worktree-title {
-  font-size: 0.88rem;
+  font-size: var(--text-lead);
   font-weight: 620;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -604,12 +709,18 @@ dialog.modal.sheet > form {
   border: 1px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, var(--surface));
   color: var(--ink);
-  font-size: 0.9rem;
+  font-size: var(--text-lead);
   font-weight: 650;
   align-self: flex-start;
 }
-.daemon-update .daemon-update-check:hover:not(:disabled) {
+.daemon-update .daemon-update-check:active:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 28%, var(--surface));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .daemon-update .daemon-update-check:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 28%, var(--surface));
+  }
 }
 .daemon-update-feedback {
   margin: 0;
@@ -619,7 +730,7 @@ dialog.modal.sheet > form {
   border-radius: var(--r-sm);
   background: var(--surface-2);
   color: var(--ink);
-  font-size: 0.9rem;
+  font-size: var(--text-lead);
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -634,7 +745,7 @@ dialog.modal.sheet > form {
 }
 .daemon-update-content { display: flex; flex-direction: column; gap: 10px; }
 .daemon-update-version-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.daemon-update-version { min-width: 0; color: var(--muted); font-size: 0.84rem; }
+.daemon-update-version { min-width: 0; color: var(--muted); font-size: var(--text-body); }
 .daemon-update-version code { margin-left: 8px; color: var(--ink); overflow-wrap: anywhere; }
 .daemon-update-footer .daemon-update-check { width: auto; flex-shrink: 0; margin: 0; padding: 8px 12px; }
 .daemon-update-footer .daemon-update-feedback {
@@ -642,7 +753,7 @@ dialog.modal.sheet > form {
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-size: 0.84rem;
+  font-size: var(--text-body);
 }
 .daemon-update-footer .daemon-update-feedback[data-tone="error"] { color: var(--error); }
 .daemon-update-footer .daemon-update-feedback[data-tone="warn"] { color: var(--warn); }

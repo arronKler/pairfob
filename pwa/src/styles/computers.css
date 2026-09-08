@@ -30,7 +30,7 @@
   padding: 0 10px;
   border-radius: var(--r-md);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--text-secondary);
   font-weight: 550;
 }
 

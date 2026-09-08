@@ -1,5 +1,6 @@
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
+import { bindSheetDrag, sheetGrabber } from "../lib/sheet-drag";
 
 export type Sheet = { dialog: HTMLDialogElement; form: HTMLFormElement; body: HTMLElement; close: () => void };
 
@@ -26,8 +27,9 @@ export function sheet(title: string): Sheet {
   const head = node("div", "sheet-head");
   head.append(heading, dismiss);
   const body = node("div", "sheet-body");
-  form.append(head, body);
+  form.append(sheetGrabber(), head, body);
   dialog.append(form);
+  bindSheetDrag({ dialog, form, scroller: body, close });
   const openedAt = performance.now();
   dialog.addEventListener("click", (event) => {
     if (event.target !== dialog) return;

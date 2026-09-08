@@ -42,14 +42,14 @@
 }
 
 .board-name {
-  font-size: 0.95rem;
+  font-size: var(--text-subhead);
   font-weight: 700;
 }
 
 .board-sub {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: var(--text-caption);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -71,7 +71,7 @@
 .board-spaces,
 .board-tabs {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   padding: 4px 10px;
   overflow-x: auto;
   flex: none;
@@ -97,30 +97,56 @@
   background: linear-gradient(90deg, transparent, var(--bg));
 }
 
+/*
+  44px of hit area, 32px of ink. The chip stays visually compact by keeping its
+  border on an inner box, so a rail of them does not turn into a wall of pills.
+  The padding is vertical only — that is where the 44px comes from. Horizontal
+  padding here would add to the flex gap and push the pills far apart, so the gap
+  alone decides how close they read.
+*/
 .board-chip,
 .board-tab,
 .board-tab-new {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.board-chip > span,
+.board-tab > span,
+.board-tab-new > span {
+  display: flex;
+  align-items: center;
   min-height: 32px;
   padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  color: var(--ink);
-  font-size: 0.72rem;
-  font-weight: 600;
-  white-space: nowrap;
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
 }
 
-.board-chip.on,
-.board-tab.on {
+.board-chip:active > span,
+.board-tab:active > span,
+.board-tab-new:active > span { background: var(--surface-2); }
+
+.board-chip.on > span,
+.board-tab.on > span {
   background: rgba(110, 168, 254, 0.16);
   border-color: rgba(110, 168, 254, 0.45);
   color: var(--accent);
 }
 
-.board-tab-new {
-  color: var(--accent);
+.board-tab-new { color: var(--accent); }
+
+.board-tab-new > span {
   background: transparent;
   border-style: dashed;
 }
@@ -161,12 +187,23 @@
   background: var(--term-bg);
   color: var(--term-ink);
   text-align: left;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-1);
+}
+
+/* A tap must be felt before the pane finishes opening. */
+.board-pane {
+  transition: transform var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+
+.board-pane:active { transform: scale(0.985); }
+
+@media (prefers-reduced-motion: reduce) {
+  .board-pane:active { transform: none; }
 }
 
 .board-pane.sel {
   border-color: rgba(110, 168, 254, 0.7);
-  box-shadow: 0 0 0 1px rgba(110, 168, 254, 0.35), 0 10px 28px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0 0 1px rgba(110, 168, 254, 0.35), var(--shadow-1);
 }
 
 .board-pane.status-blocked { border-color: rgba(255, 178, 36, 0.5); }

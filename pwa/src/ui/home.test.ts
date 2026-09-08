@@ -26,7 +26,7 @@ describe("home chrome", () => {
   });
 
   test("app notices sit above the session cards", () => {
-    const home = source.slice(source.indexOf("export function renderHome"));
+    const home = source.slice(source.indexOf("export function homePage"));
     const noticeAt = home.indexOf("appendNotice(root)");
     const listAt = home.indexOf("fillHerdList(root)");
     expect(noticeAt).toBeGreaterThan(-1);

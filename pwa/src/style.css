@@ -4,6 +4,7 @@
 @import "./styles/base.css";
 @import "./styles/icons.css";
 @import "./styles/chrome.css";
+@import "./styles/card.css";
 @import "./styles/connect.css";
 @import "./styles/session-shell.css";
 @import "./styles/terminal.css";
@@ -18,3 +19,4 @@
 @import "./styles/workspace.css";
 @import "./styles/workspace-pending.css";
 @import "./styles/board.css";
+@import "./styles/motion.css";

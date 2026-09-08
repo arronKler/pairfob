@@ -52,7 +52,7 @@
 
 .agent-empty-title {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--text-subhead);
   font-weight: 650;
   color: var(--ink);
   line-height: 1.4;
@@ -61,7 +61,7 @@
 .agent-empty-sub {
   margin: 0;
   max-width: 16rem;
-  font-size: 0.83rem;
+  font-size: var(--text-body);
   color: var(--muted);
   line-height: 1.5;
 }
@@ -80,7 +80,7 @@
 .agent-confirm-copy {
   flex: 1 1 auto;
   margin: 0;
-  font-size: 0.84rem;
+  font-size: var(--text-body);
   color: var(--accent);
   line-height: 1.4;
 }
@@ -102,6 +102,7 @@
   margin: 0;
   background: transparent;
   color: var(--muted);
+  border-radius: var(--r-sm);
 }
 
 .agent-older[hidden] { display: none; }
@@ -112,7 +113,7 @@
   margin: 0;
   padding: 2px 8px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--text-secondary);
   line-height: 1.4;
   opacity: 0.72;
 }
@@ -157,9 +158,9 @@
 }
 
 .agent-md h1 { font-size: 1.15rem; }
-.agent-md h2 { font-size: 1.05rem; }
+.agent-md h2 { font-size: var(--text-title); }
 .agent-md h3,
-.agent-md h4 { font-size: 0.98rem; }
+.agent-md h4 { font-size: var(--text-subhead); }
 
 .agent-md p,
 .agent-md ul,
@@ -197,7 +198,7 @@
 .agent-md pre code {
   background: none;
   padding: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-secondary);
   line-height: 1.45;
   white-space: pre;
 }
@@ -251,7 +252,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 0.8rem;
+  font-size: var(--text-secondary);
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
@@ -271,7 +272,7 @@
   height: 10px;
   background: currentColor;
   clip-path: polygon(0 0, 100% 50%, 0 100%, 30% 50%);
-  transition: transform 150ms ease;
+  transition: transform var(--dur-1) var(--ease);
 }
 
 .agent-reply-fold[open] > .agent-reply-fold-summary::before {
@@ -311,7 +312,7 @@
 
 .agent-reply-fold-body > .agent-assistant-intermediate .agent-md {
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: var(--text-body);
 }
 
 .agent-step {
@@ -325,7 +326,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.8rem;
+  font-size: var(--text-secondary);
   font-weight: 550;
   color: var(--muted);
   cursor: pointer;
@@ -380,7 +381,7 @@
 
 .agent-step-label {
   margin: 4px 0;
-  font-size: 0.7rem;
+  font-size: var(--text-caption);
   font-weight: 650;
   color: var(--muted);
 }
@@ -401,7 +402,7 @@
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--text-secondary);
 }
 
 .agent-detail-state > .spinner {
@@ -423,12 +424,12 @@
 .agent-detail-limit {
   margin: 0 0 8px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--text-caption);
 }
 
 .agent-live {
   margin: 4px 0 0;
-  font-size: 0.8rem;
+  font-size: var(--text-secondary);
   color: var(--accent);
 }
 
@@ -438,7 +439,7 @@
   align-items: center;
   gap: 9px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--text-secondary);
 }
 
 .agent-reply-actions {
@@ -457,15 +458,19 @@
   cursor: pointer;
 }
 
-.agent-reply-copy:hover,
-.agent-reply-copy:focus-visible {
+.agent-reply-copy:focus-visible,
+.agent-reply-copy:active {
   color: var(--ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .agent-reply-copy:hover { color: var(--ink); }
 }
 
 .agent-compose-hint {
   margin: 6px 2px 0;
   color: var(--warn);
-  font-size: 0.78rem;
+  font-size: var(--text-secondary);
   line-height: 1.35;
 }
 

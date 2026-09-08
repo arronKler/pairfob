@@ -31,7 +31,7 @@
 .switch-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
 
 .switch-name {
-  font-size: 0.93rem;
+  font-size: var(--text-subhead);
   font-weight: 620;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -39,7 +39,7 @@
 }
 
 .switch-meta {
-  font-size: 0.76rem;
+  font-size: var(--text-secondary);
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;

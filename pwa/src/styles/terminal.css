@@ -108,6 +108,25 @@ html.page-zoomed :is(.term, .term-line) {
   word-break: break-word;
 }
 
+/*
+  Characters typed but not yet confirmed by a snapshot. Inline in the caret row
+  and in the same metrics as the glyphs around it, so the pixel grid and the row
+  height are untouched; dimmed because this is a prediction, not output.
+*/
+.term-ghost {
+  opacity: 0.55;
+  white-space: pre;
+}
+
+.term-ghost.is-rollback {
+  animation: term-ghost-out 120ms var(--ease) forwards;
+}
+
+@keyframes term-ghost-out {
+  from { opacity: 0.55; }
+  to { opacity: 0; }
+}
+
 .term.wrapped .term-line > span {
   display: inline;
   white-space: pre-wrap;
@@ -133,10 +152,10 @@ html.page-zoomed :is(.term, .term-line) {
   border-radius: 99px;
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 0.84rem;
+  font-size: var(--text-body);
   font-weight: 640;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
-  animation: sheet-up 0.18s var(--ease);
+  box-shadow: var(--shadow-2);
+  animation: sheet-up var(--dur-2) var(--ease);
   z-index: 2;
 }
 
@@ -145,3 +164,42 @@ html.page-zoomed :is(.term, .term-line) {
 
 .term-jump:active,
 .agent-jump:active { background: var(--accent-deep); }
+
+/* Bars stand for the newest rows: a wall of output reads differently from a
+   one-line prompt before anyone decides to jump. */
+.term-jump-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 22px;
+}
+
+.term-jump-bar {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent-ink);
+  opacity: 0.55;
+}
+
+/* Leaving with the scroll, so the chip is not still sitting there once the
+   reader has arrived at the bottom. */
+.term-jump.term-jump-out,
+.agent-jump.term-jump-out {
+  animation: term-jump-out var(--dur-2) var(--ease) forwards;
+  pointer-events: none;
+}
+
+@keyframes term-jump-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-jump,
+  .agent-jump { animation: none; }
+
+  .term-jump.term-jump-out,
+  .agent-jump.term-jump-out { animation: none; }
+}

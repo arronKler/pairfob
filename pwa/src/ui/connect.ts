@@ -10,9 +10,10 @@ import { t } from "../lib/i18n";
 import { cancelAddComputer } from "../computers";
 import { beginPairing, cancelPairing, onPairSubmit } from "../pairing";
 import { render } from "../paint";
-import { app, clearNotice, showError, showStatus, state } from "../state";
+import { app, clearNotice, showError, showStatus, state, visibleNotice } from "../state";
+import { pairProgress } from "../lib/ui-model";
 import { isDesk } from "../viewport";
-import { backBar, brandNode, languageSelect, noteNode, spinnerNode } from "./chrome";
+import { backBar, brandNode, languageSelect, noteNode } from "./chrome";
 
 function pairField(opts: {
   id: string;
@@ -115,6 +116,31 @@ function bindPairError(input: HTMLInputElement, field: HTMLLabelElement, feedbac
   field.append(feedback);
 }
 
+/**
+ * The three-step rail. It shows while pairing and stays after a failure so the
+ * error sits on the step that failed; a fresh, never-attempted form has no rail.
+ */
+function pairRail(failure: string | null): HTMLElement {
+  const rail = node("ol", "pair-rail");
+  rail.setAttribute("aria-label", t("pair.step.railAria"));
+  for (const step of pairProgress({
+    pairing: state.phase === "pairing",
+    awaitingApproval: state.pairAwaitingApproval,
+    failedStep: state.pairFailedStep,
+  })) {
+    const item = node("li", `pair-step is-${step.state}`);
+    if (step.state === "active") item.setAttribute("aria-current", "step");
+    item.append(
+      node("span", "pair-dot"),
+      node("span", "pair-step-label", t(`pair.step.${step.key}`)),
+      node("span", "sr-only", t(`pair.state.${step.state}`)),
+    );
+    if (step.state === "failed" && failure) item.append(node("p", "pair-step-note", failure));
+    rail.append(item);
+  }
+  return rail;
+}
+
 function connectLang(): HTMLElement {
   const lang = node("div", "connect-lang");
   lang.append(languageSelect());
@@ -160,18 +186,23 @@ export function renderConnect(): void {
   form.noValidate = true;
   form.setAttribute("aria-busy", busy ? "true" : "false");
   const feedback = noteNode();
+  // A failure past the code step belongs on the rail, not in a second copy of
+  // the same sentence at the bottom of the form.
+  const railFailure = state.pairFailedStep && state.pairFailedStep !== "code" ? visibleNotice() : null;
+  const railNote = railFailure?.tone === "error" ? railFailure.text : null;
   if (busy) {
     const waiting = node("div", "pair-wait");
     waiting.append(
-      spinnerNode(),
       node("p", "pair-wait-title", state.pairAwaitingApproval ? t("connect.waitEnter") : t("connect.waitTitle")),
       node("p", "pair-wait-copy", state.pairAwaitingApproval ? t("connect.waitEnterCopy") : t("connect.waitCopy")),
+      pairRail(null),
     );
     form.append(waiting);
     const cancel = button(t("cancel"), "btn btn-ghost", cancelPairing);
     cancel.type = "button";
     form.append(cancel);
   } else {
+    if (state.pairFailedStep) form.append(pairRail(railNote));
     const scan = button(t("connect.scan"), "btn-scan", async () => {
       try {
         const result = await scanPairingCode(location.origin);
@@ -222,7 +253,7 @@ export function renderConnect(): void {
     form.addEventListener("submit", onPairSubmit);
   }
   wrap.append(form);
-  if (!state.pairErrorTarget && feedback) wrap.insertBefore(feedback, form);
+  if (!state.pairErrorTarget && !railNote && feedback) wrap.insertBefore(feedback, form);
   wrap.append(node("p", "trust", t("connect.trust")));
   if (!adding) wrap.append(connectLang());
   app.replaceChildren(wrap);

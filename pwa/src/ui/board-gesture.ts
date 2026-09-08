@@ -2,13 +2,6 @@
 export const BOARD_GESTURE_SLOP_PX = 12;
 /** Screen pixels of vertical travel that map to one remote TUI line. */
 export const BOARD_SCROLL_LINE_PX = 20;
-/** Two taps this close on the same pane are a double-tap into the session. */
-export const BOARD_DOUBLE_TAP_MS = 280;
-
-export function boardDoubleTap(prevPane: string, prevAt: number, pane: string, now: number): boolean {
-  return Boolean(pane) && pane === prevPane && now - prevAt > 0 && now - prevAt <= BOARD_DOUBLE_TAP_MS;
-}
-
 /**
  * Resolve a one-finger drag that already passed the slop.
  * On a pane, any mostly-vertical move scrolls that pane on the computer.

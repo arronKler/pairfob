@@ -26,6 +26,7 @@
 }
 
 .pane-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 0%;
@@ -34,13 +35,72 @@
   max-width: 100%;
   overflow: hidden;
   background: var(--term-bg);
-  transition: transform 0.24s var(--ease), border-radius 0.24s var(--ease);
+  transition: transform var(--dur-3) var(--ease), border-radius var(--dur-3) var(--ease);
 }
 
 .pane-root.dragging {
   transition: none;
   border-radius: 0 22px 22px 0;
   box-shadow: -18px 0 44px rgba(0, 0, 0, 0.42);
+}
+
+/* Released mid-gesture: spring to whichever end the finger chose. */
+.pane-root.settling {
+  transition: transform var(--dur-4) var(--ease-spring);
+}
+
+/* --- Edge back hint -----------------------------------------------------------
+   A gesture nobody can see is a gesture nobody uses. This line is the only
+   affordance for swipe-back, so it is always present and brightens under the
+   finger; the one-time animation runs on a phone's first pane.
+   ------------------------------------------------------------------------------ */
+
+.pane-root::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  width: 4px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  opacity: 0.12;
+  pointer-events: none;
+  transition: opacity var(--dur-1) var(--ease);
+}
+
+.pane-root.edge-armed::before { opacity: 0.5; }
+
+.pane-root.hint-edge::before { animation: edge-hint 1.2s var(--ease-in-out) 1; }
+
+@keyframes edge-hint {
+  0% { opacity: 0.12; width: 4px; }
+  35% { opacity: 0.6; width: 7px; }
+  70% { opacity: 0.5; width: 5px; }
+  100% { opacity: 0.12; width: 4px; }
+}
+
+/* The screen the pane came from, held behind it for the length of the drag. */
+.pane-under {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  transform-origin: 50% 50%;
+  pointer-events: none;
+}
+
+.pane-under.settling { transition: transform var(--dur-4) var(--ease-spring); }
+
+.pane-under > .page { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-root::before { transition: none; }
+  .pane-root.hint-edge::before { animation: none; }
+  .pane-root.settling { transition: transform var(--dur-2) linear; }
 }
 
 /* Prompt panel and row action bar share this slot below the buffer. */
@@ -92,7 +152,7 @@
 
 .chrome-name {
   min-width: 0;
-  font-size: 0.94rem;
+  font-size: var(--text-subhead);
   font-weight: 640;
   letter-spacing: -0.01em;
   color: var(--term-ink);
@@ -106,7 +166,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  font-size: 0.7rem;
+  font-size: var(--text-caption);
   line-height: 1.2;
   color: var(--muted);
 }
@@ -160,6 +220,7 @@
   min-height: 44px;
   font-size: 1.6rem;
   font-weight: 500;
+  border-radius: var(--r-sm);
 }
 
 /* Session chrome: the ‹ glyph sits high in the em box; nudge it onto the title. */

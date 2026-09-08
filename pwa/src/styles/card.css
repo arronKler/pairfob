@@ -1,0 +1,284 @@
+/* --- Herd cards -----------------------------------------------------------------
+   The agent card and everything that reports its state: the status pill, the
+   entrance sequence, the change sweep and the unacknowledged-completion
+   hairline. Split out of chrome.css so the page shell and the card family each
+   read on their own.
+   ------------------------------------------------------------------------------ */
+
+/* --- Agent cards --------------------------------------------------------------- */
+
+.card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  text-align: left;
+  transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.card-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 14px 14px 14px 16px;
+  border-radius: inherit;
+  cursor: pointer;
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: inherit;
+}
+
+.card-main:active { transform: scale(0.985); }
+
+.card-copy { flex: 1 1 auto; min-width: 0; }
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.card-name {
+  font-size: var(--text-subhead);
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-meta {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-secondary);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card .chev {
+  color: var(--muted);
+}
+
+.card.status-blocked { border-color: rgba(255, 178, 36, 0.42); }
+.card.status-blocked::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 13px;
+  bottom: 13px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--warn);
+}
+.card.sel { border-color: rgba(110, 168, 254, 0.55); background: rgba(110, 168, 254, 0.08); }
+
+/* --- Card motion -------------------------------------------------------------- */
+
+/*
+  Entrance runs only when the list structure changed — first paint, a regroup, a
+  card added or removed. A poll repaint must never replay it or the herd strobes.
+  --i is one running index down the whole list, so grouped and flat both read as
+  a single top-down sweep.
+*/
+.herd-list.enter .section-title,
+.herd-list.enter .group-title,
+.herd-list.enter .card {
+  animation: card-in var(--dur-2) var(--ease) backwards;
+  animation-delay: calc(min(var(--i, 0), 6) * 40ms);
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/*
+  A status change and a poll repaint are otherwise identical on screen, which
+  left the reader diffing cards by hand. One sweep marks the card that moved.
+*/
+/*
+  The highlight moves as a background, not a transform: the card does not clip,
+  so a translated overlay would hang a card-width off the right edge and the list
+  page could be panned sideways into empty background.
+*/
+.card.ac-changed::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 22%, rgba(110, 168, 254, 0.16) 50%, transparent 78%);
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  animation: card-sweep 420ms var(--ease) forwards;
+}
+
+.card.ac-changed.ac-done::after {
+  background-image: linear-gradient(100deg, transparent 22%, rgba(70, 214, 140, 0.2) 50%, transparent 78%);
+}
+
+@keyframes card-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+/* The label is a new element every paint, so it fades in rather than transitions. */
+.card.ac-changed .pill { animation: pill-swap var(--dur-3) var(--ease); }
+
+@keyframes pill-swap {
+  from { opacity: 0.2; }
+  to { opacity: 1; }
+}
+
+/*
+  An unacknowledged completion is the one thing this app exists to report, and a
+  Done pill carried the same visual weight as every other pill. A hairline is
+  visible in peripheral vision without competing for it; it sweeps out once the
+  reader has opened the pane, so acknowledgement stops happening silently.
+*/
+.card.status-done::before,
+.card.attn-out::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: 12px;
+  left: 12px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ok);
+  pointer-events: none;
+}
+
+.card.status-done::before {
+  animation: attn-breathe 2.6s var(--ease-in-out) infinite;
+  /* Negative delay desyncs several waiting cards instead of one screen-wide blink. */
+  animation-delay: calc(var(--i, 0) * -0.42s);
+}
+
+@keyframes attn-breathe {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.card.attn-out::before {
+  transform-origin: right center;
+  animation: attn-dismiss var(--dur-4) var(--ease) forwards;
+}
+
+@keyframes attn-dismiss {
+  from { transform: scaleX(1); opacity: 1; }
+  to { transform: scaleX(0); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes card-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Travel-only effects; the pill fade still reports the change. */
+  .card.ac-changed::after,
+  .card.attn-out::before { display: none; }
+  .card.status-done::before { animation: none; opacity: 1; }
+}
+
+/* Unverifiable snapshot: keep the card, dim it so last-known state reads as stale. */
+.card.unverifiable { opacity: 0.66; }
+.card.unverifiable .card-name,
+.card.unverifiable .card-meta { color: var(--muted); }
+
+/* --- Worktree job cards ------------------------------------------------------- */
+
+.worktree-job {
+  padding: var(--space-3) 14px;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.worktree-job-body { flex: 1 1 auto; min-width: 0; }
+
+.worktree-job-spinner { width: 16px; height: 16px; border-width: 2px; }
+
+.worktree-job-error { color: var(--error); }
+
+.worktree-job-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+
+.worktree-job-actions .btn {
+  width: auto;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-secondary);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  font-size: var(--text-caption);
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  padding: 2.5px 9px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.pill-blocked { background: rgba(255, 178, 36, 0.16); color: var(--warn); border-color: rgba(255, 178, 36, 0.4); }
+.pill-working { background: rgba(110, 168, 254, 0.13); color: var(--accent); border-color: rgba(110, 168, 254, 0.32); }
+.pill-done { background: rgba(70, 214, 140, 0.12); color: var(--ok); border-color: rgba(70, 214, 140, 0.32); }
+.pill-idle { background: transparent; color: var(--muted); border-color: var(--line-strong); }
+.pill-unknown { background: transparent; color: var(--muted); border-color: var(--line-strong); }
+.pill-live { background: rgba(70, 214, 140, 0.12); color: var(--ok); border-color: rgba(70, 214, 140, 0.32); }
+.pill-off { background: rgba(214, 59, 49, 0.14); color: var(--error); border-color: rgba(214, 59, 49, 0.38); }
+
+.pill-toggle {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 2px;
+  padding: 0 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-body);
+  font-weight: 560;
+}
+
+.pill-toggle:active { background: var(--surface); }
+
+/* --- Agent status dot (session chrome + switcher) ----------------------------- */
+
+.agent-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.agent-blocked { background: var(--warn); }
+.agent-working { background: var(--accent); }
+.agent-done { background: var(--ok); }
+.agent-idle { background: var(--line-strong); }
+.agent-unknown { background: var(--line-strong); }

@@ -20,7 +20,7 @@ import {
   type PinnedAt,
   type TouchedAt,
 } from "./lib/ranking";
-import { type PairErrorField } from "./lib/ui-model";
+import { type PairErrorField, type PairStepKey } from "./lib/ui-model";
 import { parseNotificationTarget, type NotificationTarget } from "./lib/notification-target";
 import {
   type DeviceSummary,
@@ -37,6 +37,8 @@ import { SNAPSHOT_FALLBACK_MS, PANE_READ_FALLBACK_MS } from "./poll";
 import { createNoticeLifecycle, type Notice } from "./state-notices";
 import { applyBoardSnapshot, initialBoardViewState, type BoardViewState } from "./state-board";
 import { isDesk } from "./viewport";
+export { haptic } from "./lib/dom";
+import { noteCompletionAcknowledged } from "./lib/herd-attention";
 
 export { SNAPSHOT_FALLBACK_MS, PANE_READ_FALLBACK_MS };
 export { STATUS_NOTICE_MS, type Notice } from "./state-notices";
@@ -168,6 +170,8 @@ export type AppState = BoardViewState & {
   pairCodeDraft: string;
   pairManualOpen: boolean;
   pairErrorTarget: PairErrorField;
+  /** Which of the three pairing steps the last attempt died on, for the rail. */
+  pairFailedStep: PairStepKey | null;
   live: LiveSession | null;
   credential: PairResult | null;
   computers: PairResult[];
@@ -280,6 +284,7 @@ export const state: AppState = {
   pairCodeDraft: "",
   pairManualOpen: false,
   pairErrorTarget: null,
+  pairFailedStep: null,
   live: null,
   credential: null,
   computers: [],
@@ -606,6 +611,7 @@ export function replaceAgentsFromSnapshot(snapshot: SnapshotWire): DashboardAgen
 export function acknowledgePaneCompletion(paneId: string): boolean {
   const seen = markCompletionSeen(state.completionSeen, state.runtimeAgentStatuses, paneId);
   if (seen === state.completionSeen) return false;
+  noteCompletionAcknowledged(paneId);
   state.completionSeen = seen;
   state.agents = applySeenCompletions(state.agents, seen);
   state.lastHerdSig = herdSignature(state.agents);
@@ -729,14 +735,11 @@ export function resetPaneView(): void {
   // modes. Collapsing on every switch put Ctrl+C and 换行 two taps away.
 }
 
-export function haptic(ms = 10): void {
-  try {
-    navigator.vibrate?.(ms);
-  } catch {
-    /* unsupported */
-  }
-}
-
+/**
+ * iOS Safari ships no navigator.vibrate, so on what is likely the majority of
+ * this app's phones the pad had no acknowledgement channel at all. Pass the
+ * element that was pressed and it gets a brightness pulse instead.
+ */
 export function wsURL(query?: { daemonId?: string; pairTicket?: string }): string {
   return clientWsURL(state.originProtocol, location, query);
 }

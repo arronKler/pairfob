@@ -23,6 +23,7 @@ import {
   writeStoredDraft,
 } from "./state-drafts";
 import { captureNoticeScope, noticeScopeIsCurrent, state, type Screen } from "./state";
+import { nextTransition, transitionFor } from "./ui/transition";
 
 export type PromptRequestOwner = {
   session: object;
@@ -102,6 +103,7 @@ export function switchComposeView(mutate: () => void): void {
 /** Park a pane composer when leaving it, and invalidate ownership when returning. */
 export function adoptScreen(next: Screen): void {
   if (state.screen === next) return;
+  nextTransition(transitionFor(state.screen, next));
   if (state.screen === "pane") parkComposeView();
   else if (next === "pane") bumpViewIncarnation();
   state.screen = next;

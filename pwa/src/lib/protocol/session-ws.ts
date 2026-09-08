@@ -62,6 +62,7 @@ import {
   parseWorkspaceDescriptor,
   parseWorkspaceDirectory,
   parseWorkspaceFile,
+  parseWorkspaceMutation,
   type GitLayer,
 } from "../workspace.ts";
 import { TransportSwitchBarrier, type TransportSwitchLease } from "./transport-switch.ts";
@@ -298,6 +299,10 @@ class ReconnectingSession implements LiveSession {
   agentTraceDetail = async (paneId: string, detailRef: string): Promise<AgentTraceDetail> =>
     this.agentTraceRPC.detail(paneId, detailRef);
   listWorktrees = (params: ListWorktreesInput) => this.readRPC("ListWorktrees", params);
+  workspaceRename = (paneId: string, root: string, path: string, newName: string, size: number, modifiedMS: number, revision: string) =>
+    this.parsedMutation("WorkspaceRename", { pane_id: paneId, root, path, new_name: newName, size, modified_ms: modifiedMS, revision }, parseWorkspaceMutation);
+  workspaceDelete = (paneId: string, root: string, path: string, size: number, modifiedMS: number, revision: string) =>
+    this.parsedMutation("WorkspaceDelete", { pane_id: paneId, root, path, size, modified_ms: modifiedMS, revision }, parseWorkspaceMutation);
   workspaceOpen = async (paneId: string) => parseWorkspaceDescriptor(await this.readRPC("WorkspaceOpen", { pane_id: paneId }));
   workspaceList = async (paneId: string, path = "", cursor = "", limit = 120) =>
     parseWorkspaceDirectory(await this.readRPC("WorkspaceList", { pane_id: paneId, path, cursor, limit }));

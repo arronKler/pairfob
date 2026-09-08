@@ -15,7 +15,7 @@ import { render } from "../paint";
 import { app, setDefaultTermMode, state } from "../state";
 import { isDesk } from "../viewport";
 import { composeLiveControl } from "./session-view";
-import { appendNotice, backBar, feedbackNode, herdStatus, languageControl, listGroupControl, setHeading, setNavRow, setRow } from "./chrome";
+import { appendNotice, backBar, emptyNode, feedbackNode, herdStatus, languageControl, listGroupControl, setHeading, setNavRow, setRow } from "./chrome";
 
 const NETWORK_MODE_COPY: Record<NetworkMode, "settings.networkAuto" | "settings.networkP2P" | "settings.networkRelay"> = {
   auto: "settings.networkAuto",
@@ -233,7 +233,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
     devices.forEach((device) => list.append(deviceRow(device)));
     container.append(list);
   } else {
-    container.append(node("p", "empty-sub", t("settings.noOtherDevices")));
+    container.append(emptyNode({ figure: "device", title: t("settings.noOtherDevicesTitle"), sub: t("settings.noOtherDevices") }));
   }
 
   container.append(setHeading(t("settings.danger")));

@@ -36,8 +36,34 @@ export const TERM_MODE_MENU = {
   },
 };
 
-export type EmptySessionCopy = { title: string; detail: string };
+/**
+ * `action` names the one thing worth doing from this empty state; the caller
+ * owns the handler so this stays free of DOM and live-session imports. `create`
+ * is only ever offered when GetConfig reported create_conversation.
+ */
+export type EmptySessionAction = "create" | "retry" | "settings";
+export type EmptySessionCopy = { title: string; detail: string; action?: EmptySessionAction };
 export type NotificationAction = { label: string; disabled: boolean };
+
+/**
+ * Pairing is three real protocol steps, so the wait screen shows three. The
+ * states are derived from the pairing state machine only: there is no synthetic
+ * progress, and a step is never marked done before its step actually finished.
+ */
+export const PAIR_STEPS = ["code", "channel", "verify"] as const;
+export type PairStepKey = (typeof PAIR_STEPS)[number];
+export type PairStepState = "todo" | "active" | "done" | "failed";
+export type PairStep = { key: PairStepKey; state: PairStepState };
+
+export function pairProgress(opts: { pairing: boolean; awaitingApproval: boolean; failedStep: PairStepKey | null }): PairStep[] {
+  // A failure freezes the rail on the step that failed, so the error has a place
+  // to land instead of only appearing as a notice at the bottom of the form.
+  const at = opts.pairing
+    ? PAIR_STEPS.indexOf(opts.awaitingApproval ? "verify" : "channel")
+    : PAIR_STEPS.indexOf(opts.failedStep ?? "code");
+  const here: PairStepState = opts.pairing ? "active" : "failed";
+  return PAIR_STEPS.map((key, index) => ({ key, state: index < at ? "done" : index === at ? here : "todo" }));
+}
 
 export function pairErrorField(code: string): PairErrorField {
   if (["locator_required", "invalid_pair_code", "bad_pair_code", "unpaired"].includes(code)) return "code";
@@ -52,16 +78,17 @@ export function emptySessionCopy(runtimeKind: string, connected: boolean, canCre
   const verdict = runtimeLiveness({ connected, networkOnline, runtimeKind });
   if (verdict === "unverifiable") {
     if (!connected || !networkOnline) {
-      return { title: t("empty.reconnectingTitle"), detail: t("empty.reconnectingDetail") };
+      return { title: t("empty.reconnectingTitle"), detail: t("empty.reconnectingDetail"), action: "retry" };
     }
-    return { title: t("empty.unverifiableTitle"), detail: t("empty.unverifiableDetail") };
+    return { title: t("empty.unverifiableTitle"), detail: t("empty.unverifiableDetail"), action: "settings" };
   }
   if (verdict === "exited") {
-    return { title: t("empty.offlineTitle"), detail: t("empty.offlineDetail") };
+    return { title: t("empty.offlineTitle"), detail: t("empty.offlineDetail"), action: "retry" };
   }
   return {
     title: t("empty.noneTitle"),
     detail: canCreate ? t("empty.noneCreate") : t("empty.noneOpen"),
+    action: canCreate ? "create" : undefined,
   };
 }
 

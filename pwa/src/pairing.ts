@@ -5,7 +5,7 @@ import { requestPairIntent } from "./lib/pair-intent";
 import { pairOverWS, ProtocolError, type PairInput } from "./lib/protocol/client";
 import { cancelAddComputer, resumeComputer } from "./computers";
 import { saveCredential } from "./lib/credentials";
-import { friendlyDeviceLabel, pairErrorField, shouldForgetPairFragment, type PairErrorField } from "./lib/ui-model";
+import { friendlyDeviceLabel, pairErrorField, shouldForgetPairFragment, type PairErrorField, type PairStepKey } from "./lib/ui-model";
 import { render } from "./paint";
 import { FRIENDLY_ERROR, app, clearNotice, messageOf, showError, showStatus, state, wsURL } from "./state";
 import { track } from "./lib/telemetry";
@@ -14,6 +14,7 @@ function rejectLocal(target: PairErrorField, text: string): void {
   state.phase = "connect";
   state.pairManualOpen = true;
   state.pairErrorTarget = target;
+  state.pairFailedStep = "code";
   showError(text, true);
   render();
   queueMicrotask(() => (app.querySelector(`[name="${target}"]`) as HTMLInputElement | null)?.focus());
@@ -57,10 +58,14 @@ export async function beginPairing(rawCode: string): Promise<void> {
   state.pairAbort = new AbortController();
   const abort = state.pairAbort;
   state.pairAwaitingApproval = false;
+  state.pairFailedStep = null;
   state.phase = "pairing";
   clearNotice();
   track("pwa_pairing_start", { extra: scanned ? "qr" : "manual" });
   render();
+  // How far the attempt actually got, so a failure lands on the real step
+  // rather than on a step guessed from the error code.
+  let reached: PairStepKey = "channel";
   try {
     let relay = wsURL();
     let attach: PairInput = scanned ? { pair_ref: scanned.pairRef } : {};
@@ -79,6 +84,7 @@ export async function beginPairing(rawCode: string): Promise<void> {
       expectedFingerprint: scanned?.fingerprint,
       label: friendlyDeviceLabel(navigator.userAgent),
       onAwaitApproval: () => {
+        reached = "verify";
         state.pairAwaitingApproval = true;
         showStatus(t("pair.verified"), true);
         render();
@@ -109,6 +115,8 @@ export async function beginPairing(rawCode: string): Promise<void> {
       return;
     }
     state.pairErrorTarget = pairErrorField(code);
+    // A rejected code is the code's fault wherever SPAKE2+ noticed it.
+    state.pairFailedStep = code === "pairing_cancelled" ? null : state.pairErrorTarget === "code" ? "code" : reached;
     state.pairManualOpen = code === "pairing_cancelled" ? !scanned : true;
     state.phase = "connect";
     if (code === "pairing_cancelled") showStatus(messageOf(error));

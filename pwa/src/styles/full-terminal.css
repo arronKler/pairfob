@@ -34,13 +34,13 @@
 
 .full-terminal-title {
   color: var(--term-ink);
-  font-size: 0.94rem;
+  font-size: var(--text-subhead);
   font-weight: 650;
 }
 
 .full-terminal-status {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: var(--text-caption);
 }
 
 .full-terminal-action {
@@ -51,7 +51,7 @@
   border-radius: 12px;
   color: var(--term-ink);
   background: var(--surface-2);
-  font-size: 0.8rem;
+  font-size: var(--text-secondary);
   font-weight: 640;
   white-space: nowrap;
   appearance: none;
@@ -74,9 +74,12 @@
   opacity: 0.45;
 }
 
-.full-terminal-scroll:focus-within,
-.full-terminal-scroll:hover {
+.full-terminal-scroll:focus-within {
   opacity: 0.92;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .full-terminal-scroll:hover { opacity: 0.92; }
 }
 
 .full-terminal-scroll-btn {
@@ -184,14 +187,14 @@
 }
 
 .full-terminal-state-title {
-  font-size: 1.05rem;
+  font-size: var(--text-title);
   font-weight: 680;
 }
 
 .full-terminal-state-detail {
   margin: 0;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: var(--text-body);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -204,7 +207,7 @@
   border-radius: 12px;
   color: var(--accent);
   background: rgba(110, 168, 254, 0.1);
-  font-size: 0.9rem;
+  font-size: var(--text-lead);
   font-weight: 660;
 }
 
@@ -339,7 +342,7 @@ html.page-zoomed .full-terminal-host .full-terminal-pan {
   color: var(--muted);
   background: #0a0d12;
   border: 1px solid var(--line-strong);
-  font-size: 0.88rem;
+  font-size: var(--text-lead);
   font-weight: 560;
 }
 
@@ -381,7 +384,7 @@ html.page-zoomed .full-terminal-host .full-terminal-pan {
 .full-terminal-compose-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.2);
+  box-shadow: var(--focus-ring);
 }
 
 .full-terminal-compose-send {
@@ -391,9 +394,9 @@ html.page-zoomed .full-terminal-host .full-terminal-pan {
   border-radius: 13px;
   color: var(--accent-ink);
   background: var(--accent);
-  font-size: 0.92rem;
+  font-size: var(--text-lead);
   font-weight: 660;
-  transition: transform 0.12s ease, background 0.15s ease;
+  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
 
 .full-terminal-compose-send:active {

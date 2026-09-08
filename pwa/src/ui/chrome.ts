@@ -1,4 +1,4 @@
-import { button, node, showHelp, type HelpBlock } from "../lib/dom";
+import { button, node, prefersReducedMotion, showHelp, type HelpBlock } from "../lib/dom";
 import { type LangPref, langPref, setLangPref, t } from "../lib/i18n";
 import { runtimeLiveness, type RuntimeLiveness } from "../lib/runtime-liveness";
 import { type ListGroup } from "../lib/ranking";
@@ -48,6 +48,21 @@ export function statusLineNode(status: { tone: StatusTone; text: string }): HTML
   const element = node("p", "statusline");
   element.append(statusDotNode(status.tone), node("span", "statusline-text", status.text));
   return element;
+}
+
+/**
+ * The count of finished-but-unread panes, next to the liveness the reader is
+ * already looking at. Tapping it jumps to the first one so a long herd does not
+ * have to be scanned for a hairline.
+ */
+export function completionCountNode(count: number): HTMLElement | null {
+  if (count <= 0) return null;
+  const chip = button(t("home.doneCount", { count: String(count) }), "text-link done-count", () => {
+    const first = document.querySelector(".card.status-done");
+    first?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" });
+  });
+  chip.setAttribute("aria-label", t("home.doneCountAria", { count: String(count) }));
+  return chip;
 }
 
 export function sectionTitle(text: string, count?: number): HTMLHeadingElement {
@@ -157,9 +172,37 @@ export function bannerNode(kind: "warn" | "off" | "demo", text: string): HTMLEle
   return node("p", `banner banner-${kind}`, text);
 }
 
-export function emptyNode(title: string, sub: string): HTMLElement {
+/** Block counts match the figure geometry in icons.css. */
+const EMPTY_FIGURE_BLOCKS: Record<EmptyFigure, number> = { panes: 3, grid: 4, link: 3, device: 2 };
+
+export type EmptyFigure = "panes" | "grid" | "link" | "device";
+
+export type EmptySpec = {
+  title: string;
+  sub: string;
+  figure?: EmptyFigure;
+  action?: { label: string; run: () => void; disabled?: boolean };
+};
+
+/**
+ * An empty state is the first screen a new pairing lands on, and a lone grey
+ * line reads as a failure rather than "nothing here yet". A figure says which
+ * kind of nothing it is, and the action says what to do about it.
+ */
+export function emptyNode(spec: EmptySpec): HTMLElement {
   const empty = node("div", "empty");
-  empty.append(node("p", "empty-title", title), node("p", "empty-sub", sub));
+  if (spec.figure) {
+    const figure = node("div", `empty-figure figure-${spec.figure}`);
+    figure.setAttribute("aria-hidden", "true");
+    for (let block = 0; block < EMPTY_FIGURE_BLOCKS[spec.figure]; block++) figure.append(node("span"));
+    empty.append(figure);
+  }
+  empty.append(node("p", "empty-title", spec.title), node("p", "empty-sub", spec.sub));
+  if (spec.action) {
+    const action = button(spec.action.label, "btn btn-small btn-primary empty-action", spec.action.run);
+    action.disabled = spec.action.disabled === true;
+    empty.append(action);
+  }
   return empty;
 }
 

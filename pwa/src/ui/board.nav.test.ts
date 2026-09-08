@@ -31,7 +31,6 @@ const { setRenderer } = await import("../paint.ts");
 const { renderBoard } = await import("./board.ts");
 const { releaseBoardScroll } = await import("./board-canvas.ts");
 const { clearBoardPreviews } = await import("./board-preview.ts");
-const { BOARD_DOUBLE_TAP_MS } = await import("./board-gesture.ts");
 const { NO_OPERATION_CAPABILITIES } = await import("../lib/operations.ts");
 
 function boot(): void {
@@ -141,26 +140,26 @@ describe("board screen", () => {
     expect(app.textContent).toContain("beta-one");
   });
 
-  test("tapping a pane opens the session, not a dialog", async () => {
+  /** One tap opens: no double-tap window to wait out, so the board never feels stuck. */
+  test("tapping a pane opens the session, not a dialog", () => {
     boot();
     const pane = app.querySelector(".board-pane") as HTMLButtonElement;
     pane.click();
     expect(document.querySelector("dialog")).toBeNull();
-    expect(state.screen).toBe("board");
-    await new Promise((resolve) => setTimeout(resolve, BOARD_DOUBLE_TAP_MS + 30));
     expect(state.screen).toBe("pane");
     expect(state.boardReturn).toBe(true);
     expect(state.paneId).toBe("w1:p1");
   });
 
-  test("double-clicking a pane opens the session immediately", () => {
+  /** The second tap is a camera move, so it no longer competes with opening. */
+  test("double-clicking a pane zooms the canvas instead of opening again", () => {
     boot();
+    const before = state.boardScale;
     const pane = app.querySelector(".board-pane") as HTMLButtonElement;
     pane.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     expect(document.querySelector("dialog")).toBeNull();
-    expect(state.screen).toBe("pane");
-    expect(state.boardReturn).toBe(true);
-    expect(state.paneId).toBe("w1:p1");
+    expect(state.screen).toBe("board");
+    expect(state.boardScale).not.toBe(before);
   });
 
   test("back from a pane opened on the board returns to the board", () => {

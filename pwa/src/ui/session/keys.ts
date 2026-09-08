@@ -4,8 +4,15 @@ import { publishPanePagePerf } from "../../pane-page-perf";
 import { requestPaneRefresh } from "../../pane-refresh-request";
 import { app, clearNotice, haptic, markPaneSubmitted, state } from "../../state";
 import { withModifiers } from "../keypad";
+import { discard, predictKeys } from "./echo";
+import { flyKeyToCursor } from "../key-flight";
 import { bindPadPress } from "../key-press";
 export { REPEAT_DELAY_MS, REPEAT_EVERY_MS } from "../key-press";
+
+/** Guided pane and complete terminal each host the caret in their own surface. */
+function keyFlightTarget(): HTMLElement | null {
+  return app.querySelector<HTMLElement>(".term") ?? app.querySelector<HTMLElement>(".full-terminal-host");
+}
 
 /** rpc.schema.json caps SendKeys.keys at 32 entries. */
 const MAX_BATCH = 32;
@@ -59,7 +66,7 @@ function beginPagePending(paneId: string, direction: "up" | "down"): () => void 
  * order the thumb produced. The queue is bound to the pane it was typed for so
  * a pane switch mid-batch can never deliver keys to the wrong terminal.
  */
-export function queueKey(key: string): void {
+export function queueKey(key: string, source?: HTMLElement | null): void {
   if (!state.live || !state.paneId) return;
   const mapped = withModifiers(key);
   if (!mapped.length) return;
@@ -67,7 +74,11 @@ export function queueKey(key: string): void {
   const wasEmpty = pending.length === 0;
   pendingPane = state.paneId;
   pending.push(...mapped);
-  haptic(4);
+  haptic(4, source);
+  // Fired here rather than on pointerdown: the spark should only promise a key
+  // that is actually on its way to the PTY.
+  flyKeyToCursor(source, keyFlightTarget(), mapped[mapped.length - 1]);
+  predictKeys(state.paneId, mapped, state.paneHash);
   if (pending.length >= MAX_BATCH) {
     void flushKeys();
     return;
@@ -119,6 +130,8 @@ export async function flushKeys(): Promise<void> {
 export function dropQueuedKeys(): void {
   pending = [];
   pendingPane = "";
+  // Keys that were never sent must not keep showing as if they had been.
+  discard();
   if (batchTimer !== null) {
     clearTimeout(batchTimer);
     batchTimer = null;
@@ -126,7 +139,7 @@ export function dropQueuedKeys(): void {
 }
 
 /** Repeat a pad key without one haptic per repeat. Caps at the SendKeys batch. */
-export function queueRepeats(key: string, count: number): void {
+export function queueRepeats(key: string, count: number, source?: HTMLElement | null): void {
   const mapped = withModifiers(key);
   if (!mapped.length) return;
   const n = Math.min(Math.max(count, 1), MAX_BATCH);
@@ -135,7 +148,10 @@ export function queueRepeats(key: string, count: number): void {
     if (pendingPane && pendingPane !== state.paneId) dropQueuedKeys();
     pendingPane = state.paneId;
     pending.push(...mapped);
-    if (i === 0) haptic(4);
+    if (i === 0) {
+      haptic(4, source);
+      flyKeyToCursor(source, keyFlightTarget(), mapped[mapped.length - 1]);
+    }
     if (pending.length >= MAX_BATCH) void flushKeys();
     else if (batchTimer === null) batchTimer = window.setTimeout(() => void flushKeys(), BATCH_MS);
   }
@@ -235,5 +251,5 @@ export async function sendPage(direction: "up" | "down"): Promise<void> {
 
 /** Press-and-hold auto-repeat, mirroring a physical key. */
 export function bindKeyPress(element: HTMLElement, key: string, repeatable: boolean): { stop: () => void } {
-  return bindPadPress(element, () => queueKey(key), { repeat: repeatable });
+  return bindPadPress(element, () => queueKey(key, element), { repeat: repeatable });
 }

@@ -10,7 +10,7 @@
 
 .wordmark {
   margin: 0;
-  font-size: 1.45rem;
+  font-size: var(--text-display);
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -71,7 +71,7 @@
 .boot-text {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-lead);
   line-height: 1.45;
 }
 
@@ -107,7 +107,7 @@
   color: var(--ink);
   font-size: 1rem;
   font-weight: 640;
-  transition: transform 0.12s ease, background 0.15s ease, opacity 0.15s ease;
+  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease), opacity var(--dur-1) var(--ease);
 }
 
 .btn:active:not(:disabled) { transform: scale(0.98); }
@@ -131,7 +131,7 @@
   width: auto;
   min-height: 44px;
   padding: 0 14px;
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   border-radius: 10px;
 }
 
@@ -139,9 +139,9 @@
 /* --- Notices / banners ------------------------------------------------------- */
 
 .notice {
-  font-size: 0.87rem;
+  font-size: var(--text-lead);
   line-height: 1.5;
-  margin: 12px 0 0;
+  margin: var(--space-3) 0 0;
   padding: 11px 13px;
   border-radius: var(--r-md);
 }
@@ -159,10 +159,10 @@
 }
 
 .banner {
-  margin: 12px 0 0;
+  margin: var(--space-3) 0 0;
   padding: 11px 14px;
   border-radius: var(--r-md);
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   line-height: 1.5;
 }
 
@@ -191,7 +191,7 @@
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-height: 44px;
 }
 
@@ -213,9 +213,9 @@
   min-height: 44px;
   display: inline-flex;
   align-items: center;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: var(--text-lead);
   font-weight: 550;
   border-radius: 8px;
 }
@@ -229,13 +229,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 44px;
   min-height: 44px;
   padding: 0 11px 0 9px;
   background: transparent;
   color: var(--accent);
-  font-size: 0.88rem;
+  font-size: var(--text-lead);
   font-weight: 620;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -258,10 +258,10 @@
 .statusline {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 6px 0 4px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--text-body);
 }
 
 .statusline .dot-live { box-shadow: 0 0 0 3px rgba(70, 214, 140, 0.16); animation: pulse 2.6s var(--ease) infinite; }
@@ -280,30 +280,68 @@
 }
 
 .seg {
+  --seg-pad: var(--space-1);
+  --seg-gap: var(--space-1);
+  --seg-count: 1;
+  --seg-on: 0;
+  position: relative;
   display: flex;
-  gap: 4px;
-  margin: 12px 0 6px;
-  padding: 4px;
+  gap: var(--seg-gap);
+  margin: var(--space-3) 0 6px;
+  padding: var(--seg-pad);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
 }
 
+/*
+  One indicator that slides, instead of a background jumping between siblings.
+  Items are flex: 1 1 0, so an index and a count are enough geometry; both are
+  read off the DOM with :has() so all eight bars in the app get this for free.
+  Bars run two to four items today; five is headroom.
+*/
+.seg:has(> .seg-item:nth-child(2):last-child) { --seg-count: 2; }
+.seg:has(> .seg-item:nth-child(3):last-child) { --seg-count: 3; }
+.seg:has(> .seg-item:nth-child(4):last-child) { --seg-count: 4; }
+.seg:has(> .seg-item:nth-child(5):last-child) { --seg-count: 5; }
+.seg:has(> .seg-item:nth-child(2).on) { --seg-on: 1; }
+.seg:has(> .seg-item:nth-child(3).on) { --seg-on: 2; }
+.seg:has(> .seg-item:nth-child(4).on) { --seg-on: 3; }
+.seg:has(> .seg-item:nth-child(5).on) { --seg-on: 4; }
+
+.seg::before {
+  content: "";
+  position: absolute;
+  top: var(--seg-pad);
+  bottom: var(--seg-pad);
+  left: var(--seg-pad);
+  width: calc((100% - 2 * var(--seg-pad) - (var(--seg-count) - 1) * var(--seg-gap)) / var(--seg-count));
+  border-radius: 10px;
+  background: var(--bg);
+  /* Percentages resolve against this box, so one item plus one gap is the pitch. */
+  transform: translateX(calc(var(--seg-on) * (100% + var(--seg-gap))));
+  transition: transform var(--dur-2) var(--ease);
+  pointer-events: none;
+}
+
+.seg:not(:has(> .seg-item.on))::before { opacity: 0; }
+
 .seg-item {
+  position: relative;
   flex: 1 1 0;
   min-height: 44px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   border-radius: 10px;
-  font-size: 0.82rem;
+  font-size: var(--text-body);
   font-weight: 620;
   color: var(--muted);
   background: transparent;
 }
 
-.seg-item.on {
-  background: var(--bg);
-  color: var(--ink);
-}
+.seg-item.on { color: var(--ink); }
+
+/* A bar wider than the indicator rules cover still needs to show its choice. */
+.seg:not(:has(> .seg-item:nth-child(-n+5):last-child)) > .seg-item.on { background: var(--bg); }
 
 .seg-item:disabled { opacity: 0.45; }
 
@@ -316,9 +354,9 @@
 .group-title {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 24px 2px 10px;
-  font-size: 0.76rem;
+  font-size: var(--text-secondary);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -328,7 +366,7 @@
 .group-title {
   width: 100%;
   min-height: 44px;
-  margin: 8px 0 2px;
+  margin: var(--space-2) 0 2px;
   padding: 0 2px;
   align-items: center;
   -webkit-touch-callout: none;
@@ -336,7 +374,7 @@
   text-align: left;
   text-transform: none;
   letter-spacing: 0.02em;
-  font-size: 0.82rem;
+  font-size: var(--text-body);
 }
 
 .group-name {
@@ -347,7 +385,7 @@
 }
 
 .section-count {
-  font: 600 0.72rem var(--mono);
+  font: 600 var(--text-caption) var(--mono);
   color: var(--warn);
   background: rgba(255, 178, 36, 0.14);
   border-radius: 99px;
@@ -355,184 +393,18 @@
 }
 
 .empty {
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
   padding: 26px 18px;
   border: 1px dashed var(--line-strong);
   border-radius: var(--r-lg);
   text-align: center;
 }
 
-.empty-title { margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--ink); }
+.empty-title { margin: 0; font-size: var(--text-subhead); font-weight: 600; color: var(--ink); }
 
-.empty-sub { margin: 6px 0 0; font-size: 0.83rem; color: var(--muted); line-height: 1.55; }
+.empty-sub { margin: 6px 0 0; font-size: var(--text-body); color: var(--muted); line-height: 1.55; }
 
-/* --- Agent cards --------------------------------------------------------------- */
-
-.card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  margin: 8px 0 0;
-  padding: 0;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease;
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-
-.card-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 14px 14px 16px;
-  border-radius: inherit;
-  cursor: pointer;
-  text-align: left;
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  color: inherit;
-}
-
-.card-main:active { transform: scale(0.985); }
-
-.card-copy { flex: 1 1 auto; min-width: 0; }
-
-.card-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.card-name {
-  font-size: 0.98rem;
-  font-weight: 640;
-  letter-spacing: -0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-meta {
-  margin: 4px 0 0;
-  font-size: 0.79rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card .chev {
-  color: var(--muted);
-}
-
-.card.status-blocked { border-color: rgba(255, 178, 36, 0.42); }
-.card.status-blocked::before {
-  content: "";
-  position: absolute;
-  left: -1px;
-  top: 13px;
-  bottom: 13px;
-  width: 3px;
-  border-radius: 3px;
-  background: var(--warn);
-}
-.card.sel { border-color: rgba(110, 168, 254, 0.55); background: rgba(110, 168, 254, 0.08); }
-
-/* Unverifiable snapshot: keep the card, dim it so last-known state reads as stale. */
-.card.unverifiable { opacity: 0.66; }
-.card.unverifiable .card-name,
-.card.unverifiable .card-meta { color: var(--muted); }
-
-/* --- Worktree job cards ------------------------------------------------------- */
-
-.worktree-job {
-  padding: 12px 14px;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.worktree-job-body { flex: 1 1 auto; min-width: 0; }
-
-.worktree-job-spinner { width: 16px; height: 16px; border-width: 2px; }
-
-.worktree-job-error { color: var(--error); }
-
-.worktree-job-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: none;
-}
-
-.worktree-job-actions .btn {
-  width: auto;
-  min-height: 32px;
-  padding: 0 12px;
-  font-size: 0.8rem;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  font-size: 0.7rem;
-  font-weight: 620;
-  letter-spacing: 0.04em;
-  padding: 2.5px 9px;
-  border-radius: 99px;
-  border: 1px solid transparent;
-  white-space: nowrap;
-}
-
-.pill-blocked { background: rgba(255, 178, 36, 0.16); color: var(--warn); border-color: rgba(255, 178, 36, 0.4); }
-.pill-working { background: rgba(110, 168, 254, 0.13); color: var(--accent); border-color: rgba(110, 168, 254, 0.32); }
-.pill-done { background: rgba(70, 214, 140, 0.12); color: var(--ok); border-color: rgba(70, 214, 140, 0.32); }
-.pill-idle { background: transparent; color: var(--muted); border-color: var(--line-strong); }
-.pill-unknown { background: transparent; color: var(--muted); border-color: var(--line-strong); }
-.pill-live { background: rgba(70, 214, 140, 0.12); color: var(--ok); border-color: rgba(70, 214, 140, 0.32); }
-.pill-off { background: rgba(214, 59, 49, 0.14); color: var(--error); border-color: rgba(214, 59, 49, 0.38); }
-
-.pill-toggle {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin: 14px 0 2px;
-  padding: 0 15px;
-  border: 1px solid var(--line-strong);
-  border-radius: 99px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 560;
-}
-
-.pill-toggle:active { background: var(--surface); }
-
-/* --- Agent status dot (session chrome + switcher) ----------------------------- */
-
-.agent-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.agent-blocked { background: var(--warn); }
-.agent-working { background: var(--accent); }
-.agent-done { background: var(--ok); }
-.agent-idle { background: var(--line-strong); }
-.agent-unknown { background: var(--line-strong); }
+.empty-action { margin: var(--space-4) auto 0; }
 
 
 /* --- Menu sections + create controls ---------------------------------------- */
@@ -546,12 +418,22 @@
   color: var(--muted);
 }
 
-.menu-section-title:not(:first-of-type) { border-top: 1px solid var(--line); padding-top: 12px; }
+.menu-section-title:not(:first-of-type) { border-top: 1px solid var(--line); padding-top: var(--space-3); }
 
 /* --- Status line long-host ellipsis ------------------------------------------ */
 
 .statusline-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.done-count {
+  flex: none;
+  margin-left: auto;
+  padding: 0 var(--space-2);
+  color: var(--ok);
+  font-weight: 620;
   white-space: nowrap;
 }

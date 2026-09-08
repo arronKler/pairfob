@@ -91,6 +91,31 @@ describe("the buffer is a live PTY surface, not a fitted screenshot", () => {
   });
 });
 
+describe("the new-output chip says how much arrived", () => {
+  test("the chip carries a line count and a shape preview, not just an arrow", () => {
+    const fill = body("fillJump");
+    expect(fill).toContain('t("term.jumpLines", { n: count })');
+    expect(fill).toContain("unreadBars()");
+    expect(fill).toContain("term-jump-preview");
+    expect(fill).toContain('setAttribute("aria-label", label)');
+  });
+
+  test("the chip travels to the newest output and only snaps under reduced motion", () => {
+    const jump = body("jumpToBottom");
+    expect(jump).toContain('behavior: "smooth"');
+    expect(jump).toContain("prefersReducedMotion()");
+    expect(jump).toContain("stickBottom()");
+    expect(jump).toContain("term-jump-out");
+  });
+
+  test("a repaint that changed nothing does not raise the chip", async () => {
+    const view = await Bun.file(new URL("./view.ts", import.meta.url)).text();
+    expect(view).toContain("noteSnapshot(state.paneId ?? \"\", model.texts, following)");
+    expect(view).toContain("state.paneUnread = unreadCount() > 0");
+    expect(view).not.toContain("state.paneUnread = true");
+  });
+});
+
 describe("terminal scroll restoration", () => {
   test("applies scroll after replaceChildren and again on the next frame", () => {
     expect(termSource).toContain("export function restoreTermScroll");

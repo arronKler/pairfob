@@ -19,7 +19,10 @@ describe("action sheet", () => {
     expect(sheet).toContain('t("close")');
     expect(sheet).toContain("sheet-head");
     expect(sheet).toContain("sheet-body");
-    expect(sheet).toContain("form.append(head, body)");
+    // Head and body stay siblings of the form, with the drag handle above them.
+    expect(sheet).toContain("form.append(sheetGrabber(), head, body)");
+    // Transform for the drag rides the form, never the dialog in the top layer.
+    expect(sheet).toContain("bindSheetDrag({ dialog, form, scroller: body, close })");
     expect(source).toContain("button:not(:disabled):not(.sheet-close)");
     expect(source).toContain("parts.body.append");
     expect(source).not.toContain("parts.form.append(list");

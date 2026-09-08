@@ -176,11 +176,11 @@ describe("session list object controls", () => {
     const opened = state.paneId;
     const card = cardNamed("two");
     card.dispatchEvent(
-      new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", button: 0, clientX: 20, clientY: 20 }),
+      new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", isPrimary: true, button: 0, clientX: 20, clientY: 20 }),
     );
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(document.querySelector("dialog.sheet")?.querySelector(".modal-title")?.textContent).toBe("two");
-    card.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", button: 0, clientX: 20, clientY: 20 }));
+    card.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", isPrimary: true, button: 0, clientX: 20, clientY: 20 }));
     card.click();
     expect(state.paneId).toBe(opened);
     expect(state.screen).toBe("home");

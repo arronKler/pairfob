@@ -14,7 +14,7 @@
   min-height: 44px;
   padding: 0 6px;
   color: var(--accent);
-  font-size: 0.82rem;
+  font-size: var(--text-body);
   font-weight: 620;
   white-space: nowrap;
 }

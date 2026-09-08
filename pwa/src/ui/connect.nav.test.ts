@@ -20,7 +20,7 @@ g.location = happy.location;
 g.matchMedia = happy.matchMedia.bind(happy);
 happy.document.body.innerHTML = '<main id="app"></main>';
 
-const { app, state } = await import("../state.ts");
+const { app, clearNotice, showError, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderConnect } = await import("./connect.ts");
 const { setLang } = await import("../lib/i18n.ts");
@@ -35,6 +35,7 @@ function paintAdd(busy = false): void {
   state.fragment = null;
   state.pairManualOpen = false;
   state.pairAwaitingApproval = false;
+  state.pairFailedStep = null;
   renderConnect();
 }
 
@@ -45,6 +46,8 @@ afterEach(() => {
   state.fragment = null;
   state.pairManualOpen = false;
   state.pairAwaitingApproval = false;
+  state.pairFailedStep = null;
+  clearNotice();
   setLang("zh");
   try {
     localStorage.removeItem("pairfob_lang");
@@ -82,6 +85,29 @@ describe("add-computer pairing chrome", () => {
     expect(app.querySelector(".settings-page")).toBeTruthy();
     expect(app.querySelector(".topbar-title")?.textContent).toBe("添加另一台电脑");
     expect(app.querySelector(".pair-wait-title")?.textContent).toBe("正在验证配对码");
+  });
+
+  test("the rail marks the step pairing is really on, and the step it died on", () => {
+    paintAdd(true);
+    const states = () => [...app.querySelectorAll(".pair-step")].map((step) => step.className);
+    expect(states()).toEqual(["pair-step is-done", "pair-step is-active", "pair-step is-todo"]);
+
+    state.pairAwaitingApproval = true;
+    renderConnect();
+    expect(states()).toEqual(["pair-step is-done", "pair-step is-done", "pair-step is-active"]);
+
+    // A failure freezes the rail so the error has a step to sit on.
+    state.phase = "connect";
+    state.pairAwaitingApproval = false;
+    state.pairFailedStep = "verify";
+    showError("电脑上没有确认。", true);
+    state.pairErrorTarget = null;
+    renderConnect();
+    expect(states()).toEqual(["pair-step is-done", "pair-step is-done", "pair-step is-failed"]);
+    expect(app.querySelector(".pair-step-note")?.textContent).toBe("电脑上没有确认。");
+    // The same sentence must not also appear as a standalone notice.
+    expect(app.querySelector(".notice-error")).toBeNull();
+    state.pairFailedStep = null;
   });
 
   test("the pairing page can switch to English", () => {

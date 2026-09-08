@@ -8,10 +8,13 @@ import { appendNotice, backButton, canInterruptAgent, herdLiveness } from "../ch
 import { chromeActionCluster, syncChromeStop } from "./chrome-actions";
 import { composeField, sizeCompose, syncSendButton } from "./compose";
 import { dockNode } from "./dock";
+import { settleEcho } from "./echo";
 import { queueKey } from "./keys";
 import { paneModel, type PaneModel } from "./model";
+import { morphingPane, shareTitle } from "../transition";
 import { openRow, rowBar } from "./rowbar";
 import { atBottom, fillTerm, restoreTermScroll, sessionScroll, stickBottom, syncJump, termElement, termView, toggleTermSelect } from "./term";
+import { markCaughtUp, noteSnapshot, unreadCount } from "./unread";
 
 export type SessionHandlers = {
   onBack: () => void;
@@ -67,6 +70,8 @@ function chromeNode(selected: AgentCard | undefined, includeBack: boolean, handl
   }
   const title = node("button", "chrome-title");
   title.type = "button";
+  // The other half of the card-title morph, when this pane is the one arriving.
+  if (selected && morphingPane() === selected.paneId) shareTitle(title);
   title.addEventListener("click", handlers.onSwitch);
   title.append(...(selected ? titleBody(selected) : [node("span", "chrome-name", t("title.session"))]));
   chrome.append(title);
@@ -121,7 +126,10 @@ export function finishSessionPaint(scroll: { top: number; left: number; bottom: 
   if (term) {
     restoreTermScroll(term, scroll);
     state.paneFollow = scroll.bottom;
-    if (state.paneFollow) state.paneUnread = false;
+    if (state.paneFollow) {
+      state.paneUnread = false;
+      markCaughtUp(state.paneId ?? "", paneModel().texts);
+    }
     syncJump();
   }
   const field = input ?? composeField();
@@ -155,18 +163,17 @@ export function patchSessionScreen(): boolean {
   const left = term.scrollLeft;
   const top = term.scrollTop;
   const model = paneModel();
+  // The snapshot is the truth: resolve the prediction before drawing it.
+  settleEcho(state.paneId ?? "", model.texts, state.paneHash);
   fillTerm(term, model);
   fillExtras(extras, model);
   syncSendButton();
   patchChromeTitle();
   restoreTermScroll(term, { left, top, bottom: following });
-  if (following) {
-    state.paneFollow = true;
-    state.paneUnread = false;
-  } else {
-    state.paneFollow = false;
-    state.paneUnread = true;
-  }
+  state.paneFollow = following;
+  // A repaint that changed nothing is not new output, so the chip stays away.
+  noteSnapshot(state.paneId ?? "", model.texts, following);
+  state.paneUnread = unreadCount() > 0;
   syncJump();
   return true;
 }

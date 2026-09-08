@@ -26,12 +26,13 @@ import { renderSettings } from "./ui/settings";
 import { renderBoard } from "./ui/board";
 import { renderWorkspace } from "./ui/workspace";
 import { stickAgentStream } from "./ui/agent-chat";
-import { handlePaneKey, stickBottom } from "./ui/session-view";
-import { node } from "./lib/dom";
+import { handlePaneKey, revealCaretRow, stickBottom } from "./ui/session-view";
+import { bindRippleSurface, node } from "./lib/dom";
 import { handleFullTerminalVisibility } from "./ui/full-terminal";
 import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
 import { track } from "./lib/telemetry";
 import { bindLegacyGestureBoundary } from "./lib/gesture-boundary";
+import { takeTransition, withTransition } from "./ui/transition";
 
 initI18n();
 window.addEventListener("languagechange", () => {
@@ -102,7 +103,8 @@ function render(): void {
   else renderLive();
 }
 
-setRenderer(render);
+// Only a declared navigation animates; a poll repaint goes straight to paint.
+setRenderer(() => withTransition(takeTransition(), render));
 
 function applyNetworkAvailability(available: boolean): void {
   const changed = state.networkOnline !== available;
@@ -161,11 +163,18 @@ bindVisualViewport(() => {
       if (state.paneFollow) stickBottom();
     });
   }
+}, (open) => {
+  // The keyboard just took the bottom of the screen; make sure the row being
+  // typed into is not one of the rows it covered.
+  if (!open || state.phase !== "live" || state.screen !== "pane" || state.fullTerminal || state.agentChat) return;
+  requestAnimationFrame(revealCaretRow);
 });
 
 // Older iOS standalone WebKit still emits legacy gesture events. Only the
 // surfaces with application-owned pinch handling suppress native page zoom.
 bindLegacyGestureBoundary(document);
+
+bindRippleSurface(document);
 
 document.addEventListener("keydown", (event) => {
   if (state.phase !== "live" || state.screen !== "pane" || state.termSelect || state.fullTerminal || state.agentChat) return;

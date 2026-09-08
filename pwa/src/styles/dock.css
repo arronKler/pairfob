@@ -3,9 +3,35 @@
 .dock {
   position: relative;
   flex: 0 0 auto;
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: var(--space-2) 10px calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
   background: var(--dock-bg);
   border-top: 1px solid var(--line);
+}
+
+/*
+  A short settle when the keyboard finishes arriving. The shell height itself is
+  never animated — the composer has to be reachable on the frame it moves — so
+  this rides on the settled state that viewport.ts publishes, and cannot be
+  restarted by the intermediate insets iOS reports mid-slide.
+*/
+html[data-kb="open"] .dock { animation: dock-settle var(--dur-3) var(--ease-spring); }
+
+@keyframes dock-settle {
+  from { transform: translateY(6px); }
+  to { transform: none; }
+}
+
+/* A visual grab bar: this strip is the collapsible input area, not chrome. */
+.dock:not(.agent-dock)::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 36px;
+  height: 2px;
+  margin-left: -18px;
+  border-radius: 1px;
+  background: var(--line-strong);
 }
 
 /* Keep some output visible in short viewports; the expanded keys scroll
@@ -24,6 +50,22 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+}
+
+/*
+  More swaps the pad body outright, so there is no height to transition. The rows
+  it adds arrive on the same curve as the dock settle instead, which is what the
+  eye reads as the pad opening.
+*/
+.keys-wrap .pad-mode,
+.keys-wrap .keys + .keys,
+.keys-wrap .slash-pad {
+  animation: pad-open var(--dur-3) var(--ease);
+}
+
+@keyframes pad-open {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
 }
 
 /*
@@ -52,10 +94,10 @@
   border: 1px solid var(--line);
   border-radius: 11px;
   color: var(--ink);
-  font: 560 0.78rem var(--mono);
+  font: 560 var(--text-secondary) var(--mono);
   user-select: none;
   -webkit-user-select: none;
-  transition: transform 0.1s ease, background 0.12s ease;
+  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
 
 .key:active,
@@ -76,8 +118,9 @@
 }
 
 .pad-mode {
+  --seg-pad: 3px;
   margin: 6px 0 2px;
-  padding: 3px;
+  padding: var(--seg-pad);
 }
 
 .slash-pad {
@@ -89,16 +132,16 @@
 
 .slash-cmd {
   min-height: 44px;
-  padding: 0 4px;
-  font: 560 0.72rem var(--mono);
+  padding: 0 var(--space-1);
+  font: 560 var(--text-caption) var(--mono);
 }
 
 .dock-form {
   flex: 0 0 auto;
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: flex-end;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .dock-form textarea {
@@ -130,7 +173,7 @@
 .dock-form textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.2);
+  box-shadow: var(--focus-ring);
 }
 
 .dock-form.live textarea {
@@ -149,9 +192,9 @@
   background: var(--accent);
   color: var(--accent-ink);
   border-radius: 13px;
-  font-size: 0.92rem;
+  font-size: var(--text-lead);
   font-weight: 660;
-  transition: transform 0.12s ease, background 0.15s ease;
+  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
 
 .send-btn:active:not(:disabled) { transform: scale(0.95); background: var(--accent-deep); }
@@ -161,5 +204,17 @@
   background: var(--surface-2);
   color: var(--muted);
   cursor: default;
+}
+
+/* Last so it wins over the entrances above. The grab bar stays: it is a shape,
+   not a motion. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-kb="open"] .dock { animation: none; }
+
+  .keys-wrap .pad-mode,
+  .keys-wrap .keys + .keys,
+  .keys-wrap .slash-pad {
+    animation: none;
+  }
 }
 
