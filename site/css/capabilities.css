@@ -80,7 +80,7 @@
 /* ---------- capability grid ----------
    Hairline cells rather than floating cards, matching the signal strip and the
    step list. Every cell carries a small mockup so the row reads as a spec
-   sheet instead of six paragraphs. */
+   sheet instead of a stack of paragraphs. */
 
 .bento {
   --cell-pad: clamp(20px, 2.6vw, 34px);
@@ -151,9 +151,9 @@
   text-wrap: pretty;
 }
 
-/* ---------- the six mockups ----------
+/* ---------- tile mockups ----------
    Each one fills the shared band rather than sizing to its own content, so the
-   row reads as one strip of specimens instead of six staggered boxes. */
+   row reads as one strip of specimens instead of staggered boxes. */
 
 .rows p,
 .wt p {
@@ -192,12 +192,21 @@
 }
 
 .tile-demo.ask {
-  justify-content: space-between;
-  padding: 14px;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #0b0e13;
 }
 
 .tile-demo.ask .ask-q {
-  margin: 0;
+  margin: 0 0 6px;
+}
+
+.tile-demo.ask .ask-keys {
+  margin-top: auto;
+  align-self: flex-end;
 }
 
 /* A composer rather than a bare input bar: what you typed holds the top, Send
@@ -316,6 +325,46 @@
 }
 
 .hosts p.on span {
+  color: var(--accent);
+}
+
+.files,
+.quota {
+  gap: 8px;
+}
+
+.files p,
+.quota p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 1;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #0b0e13;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.files p.on,
+.quota p:first-child {
+  border-color: rgba(110, 168, 254, 0.42);
+  background: rgba(110, 168, 254, 0.09);
+}
+
+.files em,
+.quota span {
+  color: var(--faint);
+  font: 400 0.7rem/1 var(--mono);
+  font-style: normal;
+  font-weight: 500;
+}
+
+.files p.on em,
+.quota p:first-child span {
   color: var(--accent);
 }
 

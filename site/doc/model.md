@@ -14,7 +14,7 @@ Agents still run on your computer. `pairfob.com` only carries messages. It does 
 1. An agent is running on the computer
 2. It stops and needs you (optional: a push)
 3. You open **that** session, not a new one
-4. Dialogs are tappable; Enter is not fired for you
+4. The prompt stays in the terminal; choose with the keypad, then Enter. Chat has **Go confirm**
 5. The system keyboard keeps talking
 6. You sit down at the computer on the same step
 

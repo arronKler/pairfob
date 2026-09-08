@@ -200,32 +200,31 @@
 }
 
 .ask-q {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font: 400 0.88rem/1.4 var(--mono);
   color: var(--ink);
 }
 
-.ask-row {
-  display: flex;
-  gap: 8px;
-}
-
-.ask-yes,
-.ask-no {
-  padding: 7px 14px;
-  border-radius: 10px;
-  font-size: 0.78rem;
-}
-
-.ask-yes {
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 650;
-}
-
-.ask-no {
-  border: 1px solid var(--line-strong);
+.ask-opt {
+  margin: 0;
   color: var(--muted);
+  font: 600 0.82rem/1.45 var(--mono);
+}
+
+.ask-opt.on {
+  color: var(--ink);
+}
+
+.ask-opt.on::before {
+  content: "› ";
+  color: var(--accent);
+}
+
+.ask-keys {
+  margin: 8px 0 0;
+  color: var(--faint);
+  font: 500 0.7rem/1 var(--mono);
+  letter-spacing: 0.08em;
 }
 
 .dock {

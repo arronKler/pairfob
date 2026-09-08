@@ -56,8 +56,15 @@ describe("user-facing documentation", () => {
     expect(app).toContain("**画板**");
     expect(app).toContain("看标签页布局");
     expect(app).toContain("**会话操作**");
+    expect(app).toContain("查看文件与更改");
+    expect(app).toContain("订阅余量");
+    expect(app).toContain("更新电脑端");
+    expect(app).toContain("发给 Agent");
     expect(docs).not.toContain("＋ 新建会话");
     expect(docs).not.toContain("不展示思维链");
+    expect(docs).not.toContain("两个按钮");
+    expect(docs).not.toContain("选项会抬成可点的按钮");
+    expect(docs).not.toContain("对话框可点");
   });
 
   test("describes empty sessions without claiming Herdr is offline", () => {
@@ -188,6 +195,12 @@ describe("user-facing documentation", () => {
     expect(appEn).toContain("**Needs you**");
     expect(appEn).toContain("| **Control** |");
     expect(appEn).toContain("**Network path**");
+    expect(appEn).toContain("**Browse files and changes**");
+    expect(appEn).toContain("**Subscription quota:**");
+    expect(appEn).toContain("**Update computer**");
+    expect(appEn).toContain("**Send to agent**");
+    expect(appEn).not.toContain("tappable buttons");
+    expect(appEn).not.toContain("Dialogs are tappable");
     expect(appEn).not.toContain("The app chrome is currently Chinese");
     expect(pairEn).toContain("**Connect your computer**");
     expect(pairEn).toContain("**Scan to connect**");

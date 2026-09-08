@@ -23,13 +23,13 @@ The Herdr window on the computer is already the primary. The phone is another pa
 4. Open Pairfob (browser or Home Screen icon)
 5. Open the session you were in
 
-Confirms, typing, and worktrees go back to the machine. If [notifications](/push) are on, needs-you and completion pushes open that session on the correct computer, not only the home list.
+Confirms in the terminal, typing, and worktrees go back to the machine. If [notifications](/push) are on, needs-you and completion pushes open that session on the correct computer, not only the home list.
 
 The lock screen is not the problem. Sleep is. Closing the lid in a bag is not a Pairfob scenario: the phone cannot attach, and Pairfob cannot power the machine back on. When the computer wakes, it reconnects without a new pairing. Lock versus lid: [FAQ](/faq).
 
 ## Sitting down again
 
-Dialogs you just tapped, layout you just changed, and text you just typed are already on the computer. You do not:
+The confirm you just sent, layout you just changed, and text you just typed are already on the computer. You do not:
 
 - Tap “sync to desktop”
 - Tear down a remote session

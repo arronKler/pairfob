@@ -75,7 +75,7 @@ A bit more: [The same screen](/model).
 
 You already run coding agents in Herdr 0.7 or newer on a computer, and you want to:
 
-- Keep typing, confirm dialogs, and open worktrees from the phone after you leave the desk
+- Keep typing, confirm in the terminal, read diffs, and open worktrees from the phone after you leave the desk
 - Sit back down with nothing to merge
 - Skip port forwarding and extra overlay networks just for this
 

@@ -10,7 +10,7 @@ description: Herdr、pane、pairfob、定位码这些词在 Pairfob 里指什么
 | Herdr | 电脑上跑 coding agent 的本机程序。Pairfob 不替代它。需要 0.7 或更高 |
 | pane | 已经打开的那一块会话画面 |
 | 自动 | 点开会话时的默认模式：P2P 直连、浏览器支持 WebGL2 且未开省流时用终端，否则用控制 |
-| 控制 | 手机上操作这个会话：选项可点，系统键盘 |
+| 控制 | 手机上操作这个会话：终端画面、按键垫、系统键盘 |
 | 终端 | 真终端。vim、全屏 TUI 才需要 |
 | 对话 | 和 Agent 发消息。执行过程可展开 |
 | pairfob | 这台电脑上的 Pairfob 后台进程，只往外连，只和本机 Herdr 说话 |
@@ -23,3 +23,5 @@ description: Herdr、pane、pairfob、定位码这些词在 Pairfob 里指什么
 | PWA | 浏览器里的 Pairfob 页面，可以加到主屏幕。路径是 `/pair` |
 | `PAIRFOB_STATE_DIR` | 默认 `~/.config/pairfob`，凭据和设备名单 |
 | worktree | Git worktree。列出 / 创建 / 打开以电脑当时为准 |
+| 工作区查看 | 会话顶栏文件夹：文件、未提交更改、diff 批注 |
+| 订阅余量 | 设置里这台电脑已登录账号的额度，不是当前会话的用量 |

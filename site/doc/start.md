@@ -61,7 +61,7 @@ Details and errors: [Pairing](/pair).
 
 Herdr sessions appear in the Pairfob list. Tapping a card opens that session on the computer, not a copy.
 
-When the status is **Needs you**, choices become tappable buttons. Pairfob **does not blindly send Enter**. The compose box uses the system keyboard, including dictation and autocorrect. What you send lands in that session on the computer.
+When the status is **Needs you**, the prompt stays in the terminal. Pairfob **does not blindly send Enter**. Use the keypad's ↑/↓ to choose, then Enter. In **Chat**, tap **Go confirm** to switch to Control. The compose box uses the system keyboard, including dictation and autocorrect. What you send lands in that session on the computer.
 
 UI: [Using the app](/app). Leaving and sitting down: [Leave and return](/continue).
 
@@ -88,7 +88,7 @@ The credential lives in **this browser profile on this device**. Another browser
 | On the computer | On the phone |
 | --- | --- |
 | `pairfob doctor` shows Running / Herdr / Origin healthy | Opening Pairfob shows the same session list |
-| `pairfob list` includes this device | Opening a **Needs you** card, the dialog is tappable |
+| `pairfob list` includes this device | Opening a **Needs you** card, the prompt is on screen; confirm with the keypad then Enter |
 | The Herdr window is still there | Typed text appears in that computer session |
 
 Next: [Multiple devices](/devices), [Notifications](/push), or skim the [FAQ](/faq).

@@ -47,9 +47,9 @@
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
     />
     <link rel="stylesheet" href="/css/base.css?v=65" />
-    <link rel="stylesheet" href="/css/device.css?v=65" />
+    <link rel="stylesheet" href="/css/device.css?v=66" />
     <link rel="stylesheet" href="/css/hero.css?v=65" />
-    <link rel="stylesheet" href="/css/capabilities.css?v=65" />
+    <link rel="stylesheet" href="/css/capabilities.css?v=66" />
     <link rel="stylesheet" href="/css/start.css?v=65" />
     <link rel="stylesheet" href="/css/faq.css?v=65" />
     <script src="/lang.js?v=49"></script>
@@ -327,13 +327,12 @@
                 <p class="dim">12 tests · 11 passed · 1 failed — TestSessionExpiry:214</p>
                 <div class="ask">
                   <p class="ask-q" data-i18n="ask.worktree">Create worktree at ../feat?</p>
-                  <div class="ask-row">
-                    <span class="ask-yes" data-i18n="confirm">Confirm</span>
-                    <span class="ask-no" data-i18n="cancel">Cancel</span>
-                  </div>
+                  <p class="ask-opt on" data-i18n="ask.yes">Yes</p>
+                  <p class="ask-opt" data-i18n="ask.no">No</p>
+                  <p class="ask-keys" data-i18n="ask.keys">↑ ↓ Enter</p>
                 </div>
                 <p class="waiting">
-                  <span class="dot dot-warn"></span><span data-i18n="wait.note">Either side can tap; the other side is already there</span>
+                  <span class="dot dot-warn"></span><span data-i18n="wait.note">Either side can confirm; the other side is already there</span>
                 </p>
               </div>
             </div>
@@ -357,10 +356,9 @@
                   </div>
                   <div class="ask">
                     <p class="ask-q" data-i18n="ask.worktree">Create worktree at ../feat?</p>
-                    <div class="ask-row">
-                      <span class="ask-yes" data-i18n="confirm">Confirm</span>
-                      <span class="ask-no" data-i18n="cancel">Cancel</span>
-                    </div>
+                    <p class="ask-opt on" data-i18n="ask.yes">Yes</p>
+                    <p class="ask-opt" data-i18n="ask.no">No</p>
+                    <p class="ask-keys" data-i18n="ask.keys">↑ ↓ Enter</p>
                   </div>
                   <div class="dock">
                     <span class="dock-field" data-i18n="dock.field">Tap the screen or type here</span>
@@ -398,14 +396,13 @@
             </div>
           </li>
           <li class="tile">
-            <h3 data-i18n="tile2.h">Dialogs become two buttons</h3>
-            <p data-i18n="tile2.p">When the agent asks Yes / No, the phone shows two buttons. It will not fire Enter for you.</p>
+            <h3 data-i18n="tile2.h">Confirm in the terminal, not by surprise</h3>
+            <p data-i18n="tile2.p">When the agent needs you, the prompt stays on screen. Use the keypad to choose, then Enter. In Chat, tap Go confirm.</p>
             <div class="tile-demo ask">
               <p class="ask-q" data-i18n="ask.patch">Apply patch to session.go?</p>
-              <div class="ask-row">
-                <span class="ask-yes" data-i18n="confirm">Confirm</span>
-                <span class="ask-no" data-i18n="cancel">Cancel</span>
-              </div>
+              <p class="ask-opt on" data-i18n="ask.yes">Yes</p>
+              <p class="ask-opt" data-i18n="ask.no">No</p>
+              <p class="ask-keys" data-i18n="ask.keys">↑ ↓ Enter</p>
             </div>
           </li>
           <li class="tile">
@@ -441,6 +438,23 @@
               <p class="hosts-dev" data-i18n="tile6.dev">This device</p>
               <p><b data-i18n="tile6.host1">Studio</b><span data-i18n="mock.status">Connected</span></p>
               <p class="on"><b data-i18n="tile6.host2">Laptop</b><span data-i18n="pill.work">Working</span></p>
+            </div>
+          </li>
+          <li class="tile">
+            <h3 data-i18n="tile7.h">Files, diffs, comments</h3>
+            <p data-i18n="tile7.p">Open this session's workspace. Browse the tree, read uncommitted diffs, tap a line, and send comments to the agent.</p>
+            <div class="tile-demo files" aria-hidden="true">
+              <p><b>session.go</b><em>+12 −3</em></p>
+              <p class="on"><b>rpc.md</b><em>M</em></p>
+            </div>
+          </li>
+          <li class="tile">
+            <h3 data-i18n="tile8.h">Subscription quota</h3>
+            <p data-i18n="tile8.p">Settings shows allowance for Codex, Claude, Copilot, Cursor, Grok, and Antigravity on this computer. Missing data is never shown as zero.</p>
+            <div class="tile-demo quota" aria-hidden="true">
+              <p><b>Codex</b><span>75%</span></p>
+              <p><b>Claude</b><span>∞</span></p>
+              <p><b>Grok</b><span>—</span></p>
             </div>
           </li>
         </ul>

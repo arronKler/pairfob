@@ -75,7 +75,7 @@ pageClass: pf-intro
 
 电脑上已经在用 Herdr 0.7 或更高版本跑 coding agent，又希望：
 
-- 离开工位时用手机接着写、确认对话框、开 worktree
+- 离开工位时用手机接着写、在终端里确认、看 diff、开 worktree
 - 坐回来什么都不用同步
 - 家里路由器不用做端口转发，也不想为这个去绑远程网络
 

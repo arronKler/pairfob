@@ -36,7 +36,7 @@ The card title is a single identity: the session name if you set one; otherwise 
 
 When Pairfob is connected, an empty list means there are no sessions yet; create one or open a terminal on the computer. Only the explicit **Herdr is not running on the computer** state means Herdr is closed. You can run `pairfob doctor` on the computer to confirm.
 
-**New** appears in the top bar when the computer supports creating a session. **New tab** (list long-press or session `···`) and **Split** (session `···`) use the same kind list. Each form can start a supported agent, or a **Terminal only (no agent)** pane. With no kinds listed, the dialog still opens and creates that terminal session.
+**New** appears in the top bar when the computer supports creating a session. **New tab** (list long-press or session `···`) and **Split** (session `···`) use the same kind list. Each form can start a supported agent, or a **Terminal only (no agent)** pane. With no kinds listed, the dialog still opens and creates that terminal session. An in-flight worktree shows a progress card above the list until it finishes.
 
 Tap a card to open it. Long-press (right-click on a computer) to **Pin to top**, open another tab in this workspace, rename, or close that session. Pinned sessions move into a **Pinned** section at the top of the list and leave their workspace or Agent group; long-press again to **Unpin**. **Rename tab** appears only when the tab already has a visible name, or the tab is split; **Close the whole tab** only when split. Grouped by workspace, long-press the group heading to create a tab in that workspace, rename it, or **Close this workspace**; in other groupings workspace rename and close sit at the bottom of the card menu. Create-tab actions appear only when the computer supports them. Split stays in `···` after you open a session.
 
@@ -51,7 +51,7 @@ Chrome:
 - Left: back to the list (phone)
 - Center: name and status; tap to switch sessions
 - While working, an interrupt control is the same as Esc
-- Right: `···` **Session actions** (how this view looks and types, this pane's name, close this pane)
+- Right: **Browse files and changes**, then `···` **Session actions** (how this view looks and types, this pane's name, close this pane)
 
 The four choices are under `···` → **Mode**. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **Settings**.
 
@@ -71,10 +71,22 @@ In **Control**:
 - Swipe or **Page up** pages the live view; it does not dump history
 - Font size is remembered
 - Long lines can wrap or not
+- The keypad starts with Esc and arrows. **More keys** adds Tab, Ctrl+C, and a **Commands** pad with tokens such as `/clear` and `/goal` (typed into the terminal; Pairfob does not interpret them)
 
 When **Chat** shows **Needs you**, tap **Go confirm** to switch to **Control** and read the terminal prompt. Check the operation and current selection before confirming. You can also switch to **Terminal** through `···` → **Mode** when needed.
 
 The computer and phone operate the same terminal dialog. Once either confirms it, the other sees the updated state. If the prompt is missing on the phone, handle it on the computer and report the phone's mode, Agent / extension versions, and a redacted recording.
+
+## Files and changes
+
+The folder control in the session chrome is not the Worktree menu. It opens this pane's workspace:
+
+- **Files** — directory listing and a text preview
+- **Changes** — uncommitted git status; tap a file for the diff
+- Tap a diff line to comment, then **Send to agent**
+- The branch list is read-only. Switch work with worktree actions
+
+If the computer daemon cannot inspect the workspace, the page says so.
 
 ## Actions that may appear on this view
 
@@ -90,7 +102,7 @@ Tap the session chrome `···`. Missing items are not drawn. **Rename tab**, **
 | Layout | Make this pane larger, Swap with the facing pane |
 | (ungrouped) | Rename session, Close this session |
 
-**Chat** groups thinking and tools into a collapsible run that closes once the reply is in. Expand the run to see arguments and results.
+**Chat** groups thinking and tools into a collapsible run that closes once the reply is in. Expand the run to see arguments and results. **Copy reply** sits on a finished answer. **Load earlier** pulls older turns when the thread is long.
 
 The web surface does not offer arbitrary shell, deleting worktrees, or yanking the computer window to the front.
 
@@ -99,12 +111,14 @@ The web surface does not offer arbitrary shell, deleting worktrees, or yanking t
 From the top-right of the list (**Settings**).
 
 - **Connection:** computer name, online state, this phone’s label (for example iPhone), and **Network path** as **Auto** / **P2P** / **Relay**. Auto prefers a direct path; P2P tries one now; Relay stays on the relay. The current path and round-trip sit on the same card. The choice is remembered in this browser. **Add another computer** starts another pairing without replacing the current one. With more than one credential, **Switch computer** appears here and **Computers** appears in the top bar
+- **Subscription quota:** allowance for accounts signed in on this computer (Codex, Claude Code, GitHub Copilot, Cursor, Grok, Antigravity). Overview rings; **Usage details** for each window. **Refresh quota** on that page. Missing or stale data is not shown as zero
 - **Language:** **Browser default**, or pin **中文** / **English**. This only changes Pairfob on this device. Docs have their own language menu in the top bar; both remember `pairfob_lang`
 - **Session list:** grouping (**All** / **By workspace** / **By agent**)
 - **Mode:** defaults to **Auto**, or can be pinned to **Control** / **Terminal** / **Chat**. A later switch is remembered per session
 - **Input:** send after composing, or type live into the terminal. The **Enter** button beside the field also sends a terminal Return when the draft is empty. The switches above the session's compose field control the same preference
 - **Notifications:** see [Notifications](/push). Once enabled, this phone is notified when an Agent needs you or finishes; if the computer has not enabled push, it shows **Off on the computer**
 - **Paired devices:** label, online or offline, last used, and notification state. The current row is marked **This phone**. Other rows have **Unpair**; already unpaired rows are omitted
+- **Computer update:** a reminder on the list, and **Check for updates** / **Update computer** at the bottom of Settings when the user service can do it. Confirming briefly disconnects, then reconnects. Never automatic. Command-line: [CLI](/cli)
 - **Danger zone:** **Unpair this phone**. Pairing is required to connect again
 
 A lost phone that can still open Pairfob can also unpair other devices from Settings. `pairfob forget` that phone on the computer immediately — [Multiple devices](/devices).
