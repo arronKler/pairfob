@@ -188,7 +188,7 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     session.terminalClose = async (id) => { calls.push(`terminal:${id}`); };
     session.closePane = async (paneId) => { calls.push(`pane:${paneId}`); };
     bootFullTerminal(session);
-    await waitUntil(() => app.querySelector(".xterm") !== null, "active terminal renderer");
+    await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
     const closing = closePane(state.agents[0]);
     await confirmDanger();
@@ -253,7 +253,7 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     bootFullTerminal(session);
     const other = { ...state.agents[0], paneId: "p2", paneLabel: "other" };
     state.agents.push(other);
-    await waitUntil(() => app.querySelector(".xterm") !== null, "active terminal renderer");
+    await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
     const closing = closePane(other);
     await confirmDanger();
@@ -281,7 +281,7 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     };
     session.closePane = async (paneId) => { calls.push(`pane:${paneId}`); };
     bootFullTerminal(session);
-    await waitUntil(() => app.querySelector(".xterm") !== null, "active terminal renderer");
+    await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
     const closing = closePane(state.agents[0]);
     await confirmDanger();
@@ -314,7 +314,7 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
       return { panes: [{ pane_id: "p1", workspace_id: "w1", tab_id: "t1", agent: "herdr" }] };
     };
     bootFullTerminal(session);
-    await waitUntil(() => app.querySelector(".xterm") !== null, "active terminal renderer");
+    await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
     const closing = closePane(state.agents[0]);
     await confirmDanger();
@@ -356,7 +356,7 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     bootFullTerminal(session);
     state.agents.push({ ...state.agents[0], paneId: "p2", paneLabel: "next" });
     setPaneTermMode("p2", "full");
-    await waitUntil(() => app.querySelector(".xterm") !== null, "active terminal renderer");
+    await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
     const first = closePane(state.agents[0]);
     const second = closePane(state.agents[0]);

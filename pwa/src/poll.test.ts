@@ -102,3 +102,9 @@ describe("poke refresh router", () => {
       .toBeLessThan(recovery.indexOf("await refreshFromSession()"));
   });
 });
+
+
+test("explicit agent status hints refresh the snapshot even for a different pane", () => {
+  expect(pokeRefreshAction("pane", "p1", "p1", "agent_status")).toBe("snapshot");
+  expect(pokeRefreshAction("pane", "p1", "p2", "agent_status")).toBe("snapshot");
+});

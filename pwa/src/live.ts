@@ -63,7 +63,7 @@ import { refreshBoardPreviews } from "./ui/board-preview";
 import { composeField, dropQueuedKeys, paneReadLines, patchChromeTitle, patchSessionScreen, preserveCompose } from "./ui/session-view";
 import { applyComposeDraft, captureComposeDraft, parkComposeView } from "./compose-drafts";
 import { canEnterAgentChat, patchAgentChat, refreshAgentTrace, restoreAgentTrace } from "./ui/agent-chat";
-import { disposeFullTerminal, handleFullTerminalEvent, leaveFullTerminal } from "./ui/full-terminal";
+import { disposeFullTerminal, handleFullTerminalEvent, leaveFullTerminal, syncFullTerminalChrome } from "./ui/full-terminal";
 import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
 import { resolvedPaneTermMode } from "./ui/terminal-mode";
 import { guidedScrollController } from "./ui/session/guided-scroll";
@@ -292,7 +292,7 @@ function onSessionEvent(daemonId: string, session: LiveSession, event: SessionEv
     if (action === "runtime") void refreshRuntimeState();
     else if (action === "snapshot") {
       void refreshSnapshot();
-      if (state.screen === "board") livePolling.wakePane();
+      if (state.screen === "board" || (state.screen === "pane" && !state.fullTerminal && event.paneId === state.paneId)) livePolling.wakePane();
     }
     else if (action === "paneread") {
       livePolling.wakePane();
@@ -436,6 +436,7 @@ export async function refreshSnapshot(): Promise<void> {
         abandonOpenPane(t("err.paneGone"));
         return;
       }
+      if (state.fullTerminal) syncFullTerminalChrome();
       if (state.agentChat) {
         if (!patchAgentChat()) render();
         return;

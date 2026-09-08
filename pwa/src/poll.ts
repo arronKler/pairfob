@@ -25,7 +25,8 @@ export type PokeRefreshKind = "runtime" | "snapshot" | "paneread" | "ignore";
 /**
  * Visible-screen poke routing. Hidden callers must not invoke this for work —
  * they stop both fallback loops instead. Open-pane cards still use the 15s Snapshot
- * fallback; a mismatched pane poke never triggers Snapshot.
+ * fallback. Explicit agent-status hints always refresh Snapshot, including
+ * other panes whose cards remain visible in the desktop sidebar.
  */
 export function pokeRefreshAction(
   screen: "home" | "pane" | "workspace" | "settings" | "quota" | "computers" | "board",
@@ -34,6 +35,7 @@ export function pokeRefreshAction(
   reason?: string,
 ): PokeRefreshKind {
   if (reason === "herdr_offline" || reason === "herdr_online") return "runtime";
+  if (reason === "agent_status") return "snapshot";
   if (screen === "pane" && openPaneId) {
     return pokePaneId === openPaneId ? "paneread" : "ignore";
   }
