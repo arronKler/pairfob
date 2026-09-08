@@ -143,9 +143,13 @@ func TestListenRejectsALiveDaemonAndReplacesAStaleSocket(t *testing.T) {
 		t.Fatalf("live socket: %v", err)
 	}
 	stale := testSocket(t)
-	if err := os.WriteFile(stale, []byte("stale"), 0600); err != nil {
+	old, err := net.ListenUnix("unix", &net.UnixAddr{Name: stale, Net: "unix"})
+	if err != nil {
 		t.Fatal(err)
 	}
+	old.SetUnlinkOnClose(false)
+	os.Chmod(stale, 0600)
+	old.Close()
 	ln, err := Listen(stale)
 	if err != nil {
 		t.Fatal(err)

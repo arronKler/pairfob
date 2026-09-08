@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"time"
 
@@ -55,12 +56,15 @@ func main() {
 }
 
 func runDaemon(store *state.Store, sock string) error {
+	process, err := newProcessInfo(store.Dir)
+	if err != nil {
+		return fmt.Errorf("running executable: %w", err)
+	}
 	ln, err := admin.Listen(sock)
 	if err != nil {
 		return err
 	}
 	defer ln.Close()
-	defer os.Remove(sock)
 	completeUpdateBoot, err := beginUpdateBoot(store.Dir)
 	if err != nil {
 		return fmt.Errorf("update recovery: %w", err)
@@ -169,7 +173,11 @@ func runDaemon(store *state.Store, sock string) error {
 		return fmt.Errorf("complete update: %w", err)
 	}
 	log.Printf("pairfob admin %s daemon_id %s", sock, target.DaemonID)
-	return admin.Serve(ln, liveAdmin{eng: eng, store: store, origin: plan.Origin})
+	err = admin.Serve(ln, liveAdmin{eng: eng, store: store, origin: plan.Origin, process: process, stop: func() { _ = ln.Close() }})
+	if errors.Is(err, net.ErrClosed) {
+		return nil
+	}
+	return err
 }
 
 func prepareRuntimeAvailability(rt runtime.Runtime, source string, autostart bool) {
@@ -228,9 +236,11 @@ func announceStartup(eng *daemon.Engine, sock, explicitCode string) error {
 }
 
 type liveAdmin struct {
-	eng    *daemon.Engine
-	store  *state.Store
-	origin string
+	eng     *daemon.Engine
+	store   *state.Store
+	origin  string
+	process admin.ProcessInfo
+	stop    func()
 }
 
 func (a liveAdmin) Status() admin.Pairing {

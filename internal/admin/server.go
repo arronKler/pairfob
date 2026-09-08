@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"time"
 )
 
@@ -17,28 +16,6 @@ const (
 	rekeyTimeout    = 20 * time.Second
 	pairWaitTimeout = 305 * time.Second
 )
-
-func Listen(path string) (net.Listener, error) {
-	path, err := validatePath(path)
-	if err != nil {
-		return nil, err
-	}
-	if conn, err := net.DialTimeout("unix", path, 200*time.Millisecond); err == nil {
-		_ = conn.Close()
-		return nil, errors.New("pairfob already running")
-	}
-	_ = os.Remove(path)
-	ln, err := net.Listen("unix", path)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.Chmod(path, 0600); err != nil {
-		_ = ln.Close()
-		_ = os.Remove(path)
-		return nil, err
-	}
-	return ln, nil
-}
 
 func Serve(ln net.Listener, svc Service) error {
 	if svc == nil {
@@ -60,7 +37,6 @@ func ListenAndServe(path string, svc Service) error {
 	}
 	defer func() {
 		_ = ln.Close()
-		_ = os.Remove(path)
 	}()
 	return Serve(ln, svc)
 }
@@ -74,6 +50,9 @@ func handleConn(conn net.Conn, svc Service) {
 		return
 	}
 	_ = conn.SetDeadline(time.Now().Add(timeoutFor(req.Op)))
+	if handleProcess(conn, svc, req) {
+		return
+	}
 	_ = json.NewEncoder(conn).Encode(dispatch(svc, req))
 }
 

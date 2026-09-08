@@ -1,18 +1,24 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 var runServiceCommand = func(args []string) ([]byte, error) {
 	if len(args) == 0 {
 		return nil, errors.New("empty service command")
 	}
-	return exec.Command(args[0], args[1:]...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.WaitDelay = time.Second
+	return cmd.CombinedOutput()
 }
 
 func serviceLaunchdLabel(layout serviceLayout) string {

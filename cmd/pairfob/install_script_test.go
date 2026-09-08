@@ -19,6 +19,7 @@ func TestInstallScriptDownloadsVerifiesAndInstalls(t *testing.T) {
 	}
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
 	payload := []byte("#!/bin/sh\necho pairfob-fixture\n")
+	payload = installerFixturePayload(payload)
 	server := httptest.NewServer(updateFixture(name, "test", payload))
 	t.Cleanup(server.Close)
 
@@ -70,6 +71,7 @@ func TestInstallScriptEnrollsWithoutOptionalArgs(t *testing.T) {
 	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
 	payload := []byte("#!/bin/sh\nprintf 'pairfob-fixture'\nprintf ' <%s>' \"$@\"\nprintf '\\n'\n")
+	payload = installerFixturePayload(payload)
 	server := httptest.NewServer(updateFixture(name, "test", payload))
 	t.Cleanup(server.Close)
 
@@ -106,6 +108,7 @@ func TestInstallScriptReinstallMigratesLegacyServiceWithDownloadedBinary(t *test
 	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
 	payload := []byte("#!/bin/sh\nprintf 'downloaded %s\\n' \"$*\" >>\"$PAIRFOB_TEST_SERVICE_LOG\"\n")
+	payload = installerFixturePayload(payload)
 	server := httptest.NewServer(updateFixture(name, "test", payload))
 	t.Cleanup(server.Close)
 
@@ -126,7 +129,7 @@ func TestInstallScriptReinstallMigratesLegacyServiceWithDownloadedBinary(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(called) != "downloaded service migrate-legacy\n" {
+	if string(called) != "downloaded service migrate-legacy\ndownloaded service prepare-install "+filepath.Join(prefix, "pairfob")+"\ndownloaded service uninstall\n" {
 		t.Fatalf("service calls=%q", called)
 	}
 	target, err := os.Readlink(filepath.Join(prefix, "pairfobd"))
@@ -139,6 +142,7 @@ func TestInstallScriptReinstallRemovesCurrentAndLegacyServices(t *testing.T) {
 	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
 	payload := []byte("#!/bin/sh\nprintf 'downloaded %s\\n' \"$*\" >>\"$PAIRFOB_TEST_SERVICE_LOG\"\n")
+	payload = installerFixturePayload(payload)
 	server := httptest.NewServer(updateFixture(name, "test", payload))
 	t.Cleanup(server.Close)
 
@@ -161,7 +165,7 @@ func TestInstallScriptReinstallRemovesCurrentAndLegacyServices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(called) != "downloaded service migrate-legacy\ndownloaded service uninstall\n" {
+	if string(called) != "downloaded service migrate-legacy\ndownloaded service prepare-install "+filepath.Join(prefix, "pairfob")+"\ndownloaded service uninstall\n" {
 		t.Fatalf("service calls=%q", called)
 	}
 }
@@ -170,6 +174,7 @@ func TestInstallScriptKeepsLegacyBinaryWhenMigrationFails(t *testing.T) {
 	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
 	payload := []byte("#!/bin/sh\nif [ \"$*\" = 'service migrate-legacy' ]; then exit 43; fi\n")
+	payload = installerFixturePayload(payload)
 	server := httptest.NewServer(updateFixture(name, "test", payload))
 	t.Cleanup(server.Close)
 

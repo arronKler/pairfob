@@ -29,6 +29,14 @@ func legacyServiceLayout() (serviceLayout, error) {
 }
 
 func migrateLegacyUserService() error {
+	current, err := currentServiceLayout()
+	if err != nil {
+		return err
+	}
+	return withServiceLock(current, migrateLegacyServiceLocked)
+}
+
+func migrateLegacyServiceLocked() error {
 	layout, err := legacyServiceLayout()
 	if err != nil {
 		return err

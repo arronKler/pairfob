@@ -34,6 +34,8 @@ test("legacy daemon offers a command, never an unsupported remote update", async
   connect({daemonUpdateStatus:async()=>{throw new ProtocolError("unknown_op")}},"0.1.0");
   await checkDaemonRelease();await refreshDaemonUpdate();appendDaemonUpdate(app,true);
   expect(app.textContent).toContain("pairfob update");
+  expect(app.querySelector(".daemon-update-version")?.textContent).toContain("无法确认实际版本");
+  expect(app.querySelector(".daemon-update-version")?.textContent).not.toContain("0.1.0");
   expect([...app.querySelectorAll("button")].some(e=>e.textContent==="更新电脑端")).toBeFalse();
 });
 test("concurrent clicks and unknown outcome do not replay the mutation",async()=>{

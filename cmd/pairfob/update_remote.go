@@ -150,6 +150,14 @@ func (u *remoteUpdater) install(target string) error {
 	return u.installAndActivate(target, syscall.Exec)
 }
 func (u *remoteUpdater) installAndActivate(target string, activate func(string, []string, []string) error) error {
+	layout, err := currentServiceLayout()
+	if err != nil {
+		return err
+	}
+	return withServiceLock(layout, func() error { return u.installAndActivateLocked(target, activate) })
+}
+
+func (u *remoteUpdater) installAndActivateLocked(target string, activate func(string, []string, []string) error) error {
 	unlock, err := lockUpdate(u.dest)
 	if err != nil {
 		return err

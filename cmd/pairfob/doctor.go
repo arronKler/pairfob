@@ -14,15 +14,18 @@ import (
 )
 
 type health struct {
-	Version    string
-	Running    bool
-	Phones     int
-	HerdrOK    bool
-	HerdrNote  string
-	Enrolled   bool
-	Origin     string
-	OriginNote string
-	P2P        *bool
+	Version        string
+	RunningVersion string
+	RunningPID     int
+	ProcessNote    string
+	Running        bool
+	Phones         int
+	HerdrOK        bool
+	HerdrNote      string
+	Enrolled       bool
+	Origin         string
+	OriginNote     string
+	P2P            *bool
 }
 
 func doctorCommand(sock string) error {
@@ -56,6 +59,25 @@ func gatherHealth(sock string) (health, error) {
 		}
 	}
 	if h.Running {
+		if p, err := inspectLocalProcess(sock); err == nil {
+			h.RunningPID = p.peer.PID
+			if p.legacy {
+				h.ProcessNote = "legacy interface; actual version unknown"
+			} else {
+				h.RunningVersion = p.info.Version
+				if h.Version != p.info.Version {
+					h.ProcessNote = "installed and running programs differ; run pairfob service restart"
+				}
+				if exe, err := resolvedExecutable(); err == nil {
+					if hash, err := executableHash(exe); err == nil && hash != p.info.SHA256 {
+						h.ProcessNote = "installed and running programs differ; run pairfob service restart"
+					}
+				}
+			}
+			p.peer.Close()
+		} else {
+			h.ProcessNote = "could not verify the running version"
+		}
 		h.P2P = nil
 		if liveP2P, liveErr := loadDaemonP2P(sock); liveErr == nil {
 			h.P2P = liveP2P
@@ -102,6 +124,21 @@ func gatherHealth(sock string) (health, error) {
 
 func writeDoctor(w io.Writer, h health) {
 	fmt.Fprintf(w, "Pairfob %s\n\n", h.Version)
+	fmt.Fprintf(w, "  Installed   %s\n", h.Version)
+	if h.Running {
+		running := h.RunningVersion
+		if running == "" {
+			running = "unknown"
+		}
+		fmt.Fprintf(w, "  Process     %s", running)
+		if h.RunningPID > 0 {
+			fmt.Fprintf(w, " (PID %d)", h.RunningPID)
+		}
+		fmt.Fprintln(w)
+		if h.ProcessNote != "" {
+			fmt.Fprintf(w, "  Notice      %s\n", h.ProcessNote)
+		}
+	}
 	fmt.Fprintf(w, "  Running     %s\n", yesNo(h.Running, "yes", "no — it starts at login after install"))
 	fmt.Fprintf(w, "  Paired      %d\n", h.Phones)
 	fmt.Fprintf(w, "  Herdr       %s\n", h.HerdrNote)

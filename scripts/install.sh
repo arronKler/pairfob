@@ -166,15 +166,19 @@ mkdir -p "$PREFIX"
 dest="${PREFIX}/pairfob"
 legacy="${PREFIX}/pairfobd"
 
+# One lock covers preflight, file replacement, enroll and service readiness.
+"${workdir}/${name}" service with-install-lock sh -s -- "$workdir" "$name" "$dest" "$legacy" "$NO_SERVICE" "$NO_ENROLL" "$ORIGIN" "$SKIP_HERDR_CHECK" <<'INSTALL_TRANSACTION'
+set -eu
+workdir="$1" name="$2" dest="$3" legacy="$4"
+NO_SERVICE="$5" NO_ENROLL="$6" ORIGIN="$7" SKIP_HERDR_CHECK="$8"
+
 # A reinstall is also the supported migration from the pre-release pairfobd
 # command. The verified new binary owns cleanup, so an older uninstaller cannot
 # silently leave a running service behind before its executable is replaced.
 if [ -x "$legacy" ] && [ ! -L "$legacy" ]; then
   "${workdir}/${name}" service migrate-legacy
 fi
-if [ -x "$dest" ]; then
-  "${workdir}/${name}" service uninstall
-fi
+"${workdir}/${name}" service prepare-install "$dest"
 
 mv "${workdir}/${name}" "$dest"
 chmod 0755 "$dest"
@@ -192,29 +196,16 @@ fi
 
 if [ "$NO_SERVICE" -eq 0 ]; then
   "$dest" service install
-  echo "waiting for pairfob…"
-  ok=0
-  attempt=0
-  while [ "$attempt" -lt 40 ]; do
-    if "$dest" pair status >/dev/null 2>&1; then
-      ok=1
-      break
-    fi
-    attempt=$((attempt + 1))
-    sleep 0.25
-  done
-  if [ "$ok" -eq 1 ]; then
-    if [ "$SKIP_HERDR_CHECK" -eq 0 ]; then
-      "$dest" doctor || { echo "Setup incomplete: run pairfob doctor." >&2; exit 1; }
-      echo "Pairfob and Herdr are ready."
-    else
-      echo "Pairfob is running; Herdr readiness was not checked."
-    fi
+  if [ "$SKIP_HERDR_CHECK" -eq 0 ]; then
+    "$dest" doctor || { echo "Setup incomplete: run pairfob doctor." >&2; exit 1; }
+    echo "Pairfob and Herdr are ready."
   else
-    echo "Installed, but not answering yet. Check ~/.config/pairfob/pairfob.log" >&2
-    exit 1
+    echo "Pairfob is running; Herdr readiness was not checked."
   fi
+else
+  "$dest" service uninstall
 fi
+INSTALL_TRANSACTION
 
 case ":${PATH}:" in
   *":${PREFIX}:"*) ;;

@@ -43,6 +43,8 @@ pairfob help
 ```
 Pairfob <version>
 
+  Installed   <version>
+  Process     <version> (PID 1234)
   Running     yes
   Paired      1
   Herdr       ready (0.8.2, protocol 20)
@@ -57,6 +59,8 @@ Pairfob <version>
 | Origin | `pairfob.com` | Not enrolled |
 
 `doctor` exits non-zero when Running or Herdr is unhealthy, so scripts can branch on it.
+
+`Installed` describes this command's version; `Process` describes the daemon answering local requests. A mismatch calls for `pairfob service restart`. Very old daemons cannot report their actual version; the phone shows it as unknown instead of treating the old `0.1.0` placeholder as a release.
 
 ## Service
 
@@ -80,6 +84,10 @@ pairfob update
 ```
 
 Replaces the binary and restarts an installed user service. Do not rerun `install.sh` to update. Hosted binaries use SemVer (`pairfob version`); the site build stamp is separate.
+
+Even when the file is already current, the command verifies the responding daemon's version and image against the user service's PID. Install and restart also wait for the matching daemon to stay ready before reporting success. An independent old daemon is stopped only when its user, executable and state directory can be verified; otherwise the command identifies the conflict for manual resolution. Pairings are preserved.
+
+Downloads report bytes received and retry once after a transient failure. Each attempt allows ten minutes total, with a 45-second limit without progress. SHA-256 verification still runs before replacement. If a proxy repeatedly stalls, inspect the terminal's proxy configuration; the updater does not change it.
 
 The phone checks for new computer versions and shows an update reminder. In Settings, supported service-managed installations offer **Update computer**. Confirming briefly disconnects the phone while the verified binary starts; completion is shown only after the running version is confirmed. Failed startup can restore the previous binary. Older daemons require one manual `pairfob update` to enable this flow. Updates are never installed automatically.
 

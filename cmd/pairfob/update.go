@@ -5,36 +5,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
+	"sync"
 )
-
-const (
-	maxUpdateBytes         = 64 << 20
-	updateMetadataTimeout  = 30 * time.Second
-	updateArtifactTimeout  = 2 * time.Minute
-	updateArtifactAttempts = 2
-	updateRetryDelay       = 500 * time.Millisecond
-)
-
-var errDownloadTooLarge = errors.New("download exceeded size limit")
-
-type downloadPolicy struct {
-	timeout    time.Duration
-	attempts   int
-	retryDelay time.Duration
-}
-
-type downloadStatusError int
-
-func (e downloadStatusError) Error() string { return fmt.Sprintf("HTTP %d", int(e)) }
 
 func updateCommand(args []string) error {
 	if len(args) != 0 {
@@ -51,18 +29,28 @@ func updateCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	unlock, err := lockUpdate(dest)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	if _, err := os.Stat(dest + ".update-pending"); !os.IsNotExist(err) {
-		return errors.New("a daemon update is awaiting startup verification; try again after it completes")
-	}
 	return updateExecutable(dest, base)
 }
 
 func updateExecutable(dest, base string) error {
+	layout, err := currentServiceLayout()
+	if err != nil {
+		return err
+	}
+	return withServiceLock(layout, func() error { return updateExecutableLocked(dest, base) })
+}
+
+func updateExecutableLocked(dest, base string) error {
+	unlock, err := lockUpdate(dest)
+	if err != nil {
+		return err
+	}
+	var once sync.Once
+	release := func() { once.Do(unlock) }
+	defer release()
+	if _, err := os.Stat(dest + ".update-pending"); !os.IsNotExist(err) {
+		return errors.New("a daemon update is awaiting startup verification; try again after it completes")
+	}
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
 	remoteVersion, err := fetchDownloadText(base+"/VERSION", 4096)
 	if err != nil {
@@ -81,6 +69,9 @@ func updateExecutable(dest, base string) error {
 		return err
 	}
 	if err == nil && sha256Hex(current) == want {
+		if err := restartInstalledServiceFor(dest, remoteVersion, release); err != nil {
+			return fmt.Errorf("installed files are current (%s), but the running daemon could not be verified: %w", remoteVersion, err)
+		}
 		fmt.Printf("Already up to date (%s).\n", remoteVersion)
 		return nil
 	}
@@ -94,14 +85,14 @@ func updateExecutable(dest, base string) error {
 	if err := replaceExecutable(dest, payload); err != nil {
 		return err
 	}
-	if err := restartInstalledServiceFor(dest); err != nil {
+	if err := restartInstalledServiceFor(dest, remoteVersion, release); err != nil {
 		return fmt.Errorf("installed %s, but could not restart Pairfob: %w; start Pairfob again to use it", remoteVersion, err)
 	}
 	fmt.Printf("Updated to %s.\n", remoteVersion)
 	return nil
 }
 
-func restartInstalledServiceFor(dest string) error {
+func restartInstalledServiceFor(dest, wantVersion string, release func()) error {
 	layout, err := currentServiceLayout()
 	if err != nil {
 		return err
@@ -116,7 +107,7 @@ func restartInstalledServiceFor(dest string) error {
 	if filepath.Clean(layout.ExecPath) != filepath.Clean(got) {
 		return errors.New("installed service is a different binary")
 	}
-	return applyService(layout, "restart")
+	return reconcileInstalledService(layout, false, wantVersion, release)
 }
 
 func allowedDownloadBase(raw string) error {
@@ -137,79 +128,6 @@ func allowedDownloadBase(raw string) error {
 		}
 	}
 	return errors.New("PAIRFOB_DOWNLOAD_BASE must be https (http is only allowed on loopback)")
-}
-
-func fetchDownloadText(rawURL string, limit int64) (string, error) {
-	b, err := fetchDownloadBytes(rawURL, limit, downloadPolicy{
-		timeout:  updateMetadataTimeout,
-		attempts: 1,
-	})
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(b)), nil
-}
-
-func fetchDownloadArtifact(rawURL string) ([]byte, error) {
-	return fetchDownloadBytes(rawURL, maxUpdateBytes, downloadPolicy{
-		timeout:    updateArtifactTimeout,
-		attempts:   updateArtifactAttempts,
-		retryDelay: updateRetryDelay,
-	})
-}
-
-func fetchDownloadBytes(rawURL string, limit int64, policy downloadPolicy) ([]byte, error) {
-	if policy.attempts < 1 {
-		policy.attempts = 1
-	}
-	var lastErr error
-	for attempt := 0; attempt < policy.attempts; attempt++ {
-		payload, err := fetchDownloadOnce(rawURL, limit, policy.timeout)
-		if err == nil {
-			return payload, nil
-		}
-		lastErr = err
-		if attempt+1 >= policy.attempts || !retryableDownloadError(err) {
-			break
-		}
-		if policy.retryDelay > 0 {
-			time.Sleep(policy.retryDelay)
-		}
-	}
-	return nil, lastErr
-}
-
-func fetchDownloadOnce(rawURL string, limit int64, timeout time.Duration) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Del("Origin")
-	resp, err := originHTTPClient(timeout).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, downloadStatusError(resp.StatusCode)
-	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(b)) > limit {
-		return nil, errDownloadTooLarge
-	}
-	return b, nil
-}
-
-func retryableDownloadError(err error) bool {
-	var status downloadStatusError
-	if errors.As(err, &status) {
-		code := int(status)
-		return code == http.StatusRequestTimeout || code == http.StatusTooManyRequests || code >= 500
-	}
-	return !errors.Is(err, errDownloadTooLarge)
 }
 
 func checksumFor(sums, name string) (string, error) {

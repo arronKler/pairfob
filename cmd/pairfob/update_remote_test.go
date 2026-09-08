@@ -41,6 +41,7 @@ func TestRemoteUpdateDeduplicatesAndRejectsConcurrentMutation(t *testing.T) {
 	}
 }
 func TestRemoteUpdateExecFailureRestoresPreviousBinary(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "pairfob")
 	old := []byte("old binary")
@@ -69,6 +70,7 @@ func TestRemoteUpdateExecFailureRestoresPreviousBinary(t *testing.T) {
 	}
 }
 func TestRemoteUpdateChangedReleaseDoesNotReplaceBinary(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "pairfob")
 	os.WriteFile(dest, []byte("old"), 0755)

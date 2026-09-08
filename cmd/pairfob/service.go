@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"pairfob/internal/admin"
 	"pairfob/internal/state"
 )
 
@@ -19,6 +20,20 @@ const (
 )
 
 func serviceCommand(args []string) error {
+	if len(args) > 1 && args[0] == "with-install-lock" {
+		return runInstallerLocked(args[1:])
+	}
+	if len(args) == 2 && args[0] == "prepare-install" {
+		layout, err := currentServiceLayout()
+		if err != nil {
+			return err
+		}
+		layout.ExecPath, err = canonicalInstallTarget(args[1])
+		if err != nil {
+			return err
+		}
+		return withServiceLock(layout, func() error { return prepareServiceInstall(layout) })
+	}
 	if len(args) != 1 {
 		return errors.New("usage: pairfob service install|uninstall|start|restart|stop|status")
 	}
@@ -64,6 +79,10 @@ func currentServiceLayout() (serviceLayout, error) {
 		return serviceLayout{}, err
 	}
 	stateDir, err := state.DefaultDir()
+	if err != nil {
+		return serviceLayout{}, err
+	}
+	stateDir, err = filepath.Abs(stateDir)
 	if err != nil {
 		return serviceLayout{}, err
 	}
@@ -189,7 +208,14 @@ func installUserService() error {
 	if err != nil {
 		return err
 	}
+	return withServiceLock(layout, func() error { return installUserServiceLayout(layout) })
+}
+
+func installUserServiceLayout(layout serviceLayout) error {
 	if err := os.MkdirAll(layout.StateDir, 0o700); err != nil {
+		return err
+	}
+	if err := prepareServiceInstall(layout); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(layout.UnitPath), 0o755); err != nil {
@@ -202,6 +228,17 @@ func installUserService() error {
 	if err := applyService(layout, "install"); err != nil {
 		return err
 	}
+	want, err := executableHash(layout.ExecPath)
+	if err != nil {
+		return err
+	}
+	sock, err := admin.SocketPathIn(layout.StateDir)
+	if err != nil {
+		return err
+	}
+	if err := waitForService(layout, sock, want, version); err != nil {
+		return err
+	}
 	fmt.Printf("installed user service %s\nlogs: %s\n", layout.UnitPath, layout.LogPath)
 	return nil
 }
@@ -211,7 +248,7 @@ func uninstallUserService() error {
 	if err != nil {
 		return err
 	}
-	if err := uninstallServiceLayout(layout); err != nil {
+	if err := withServiceLock(layout, func() error { return uninstallServiceLayout(layout) }); err != nil {
 		return err
 	}
 	fmt.Printf("removed user service %s\nstate kept in %s\n", layout.UnitPath, layout.StateDir)
@@ -226,7 +263,11 @@ func controlUserService(action string) error {
 	if _, err := os.Stat(layout.UnitPath); err != nil {
 		return fmt.Errorf("user service is not installed; run pairfob service install")
 	}
-	if err := applyService(layout, action); err != nil {
+	if action == "start" || action == "restart" {
+		if err := ensureInstalledService(layout, action == "restart"); err != nil {
+			return err
+		}
+	} else if err := withServiceLock(layout, func() error { return applyService(layout, action) }); err != nil {
 		return err
 	}
 	fmt.Printf("%s %s\n", action, layout.UnitPath)
@@ -238,16 +279,7 @@ func statusUserService() error {
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(layout.UnitPath); err != nil {
-		fmt.Println("not installed")
-		return nil
-	}
-	if err := applyService(layout, "status"); err != nil {
-		fmt.Println("stopped")
-		return nil
-	}
-	fmt.Println("running")
-	return nil
+	return writeServiceStatus(os.Stdout, layout)
 }
 
 func unitBody(layout serviceLayout) string {

@@ -14,12 +14,12 @@ import (
 // Relative paths retain the caller's context; the installer calls from home.
 func serviceRuntimeEnvironment() [][2]string {
 	var out [][2]string
-	for _, key := range []string{"HERDR_SOCKET_PATH", "HERDR_CONFIG_PATH", "HERDR_CLIENT_SOCKET_PATH", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "PAIRFOB_HERDR_AUTOSTART", "PAIRFOB_MULTI_SESSION"} {
+	for _, key := range []string{"HERDR_SOCKET_PATH", "HERDR_CONFIG_PATH", "HERDR_CLIENT_SOCKET_PATH", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "PAIRFOB_STATE_DIR", "PAIRFOB_ADMIN_SOCK", "PAIRFOB_HERDR_AUTOSTART", "PAIRFOB_MULTI_SESSION"} {
 		value := os.Getenv(key)
 		if value == "" {
 			continue
 		}
-		if !strings.HasPrefix(key, "PAIRFOB_") && !filepath.IsAbs(value) {
+		if (!strings.HasPrefix(key, "PAIRFOB_") || key == "PAIRFOB_STATE_DIR" || key == "PAIRFOB_ADMIN_SOCK") && !filepath.IsAbs(value) {
 			if absolute, err := filepath.Abs(value); err == nil {
 				value = absolute
 			}

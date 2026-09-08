@@ -20,6 +20,7 @@ func TestUpdateProcessHelper(t *testing.T) {
 		return
 	}
 	dir := os.Getenv("PAIRFOB_UPDATE_TEST_DIR")
+	t.Setenv("HOME", dir)
 	if mode == "install" {
 		u := &remoteUpdater{dir: dir, dest: filepath.Join(dir, "installed"), base: os.Getenv("PAIRFOB_UPDATE_TEST_URL"), job: daemon.UpdateStatus{Phase: "downloading", Target: "1.1.0"}}
 		if err := u.install("1.1.0"); err != nil {

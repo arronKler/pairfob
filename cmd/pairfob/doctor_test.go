@@ -64,3 +64,13 @@ func TestWriteLiveSnapshot(t *testing.T) {
 		t.Fatalf("%s", buf.String())
 	}
 }
+
+func TestDoctorDistinguishesInstalledAndRunningVersions(t *testing.T) {
+	var out bytes.Buffer
+	writeDoctor(&out, health{Version: "v1.1.0", Running: true, RunningVersion: "0027625", RunningPID: 42, ProcessNote: "installed and running programs differ"})
+	for _, want := range []string{"Installed   v1.1.0", "Process     0027625 (PID 42)", "programs differ"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %q in %s", want, out.String())
+		}
+	}
+}

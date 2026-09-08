@@ -44,6 +44,7 @@ case "$1" in
 esac
 `)
 			name := artifactName(runtime.GOOS, runtime.GOARCH)
+			payload = installerFixturePayload(payload)
 			server := httptest.NewServer(updateFixture(name, "test", payload))
 			defer server.Close()
 			args := []string{filepath.Join(repoRoot(t), "scripts/install.sh"), "--prefix", prefixArg, "--install-herdr", "--non-interactive"}
@@ -88,9 +89,15 @@ esac
 					t.Fatalf("skip claimed ready: %s %s", calls, out)
 				}
 			} else {
-				want := "setup --install-herdr --non-interactive\nservice uninstall\nenroll\nservice install\npair status\ndoctor\n"
-				if string(calls) != want {
+				lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
+				if len(lines) != 5 || lines[0] != "setup --install-herdr --non-interactive" || !strings.HasPrefix(lines[1], "service prepare-install ") || strings.Join(lines[2:], "\n") != "enroll\nservice install\ndoctor" {
 					t.Fatalf("calls %q", calls)
+				}
+				prepared := strings.TrimPrefix(lines[1], "service prepare-install ")
+				gotPath, _ := filepath.EvalSymlinks(prepared)
+				wantPath, _ := filepath.EvalSymlinks(filepath.Join(prefix, "pairfob"))
+				if gotPath != wantPath {
+					t.Fatalf("prepared wrong target: %s", prepared)
 				}
 				if tc.doctorFails && strings.Contains(string(out), "Scan or type") {
 					t.Fatalf("pairing offered while unhealthy: %s", out)

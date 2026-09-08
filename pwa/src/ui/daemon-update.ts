@@ -101,7 +101,7 @@ function fillDaemonUpdate(root: HTMLElement, detailed: boolean): void {
     }
     const row = node("div", "daemon-update-version-row");
     const version = node("div", "daemon-update-version");
-    version.append(node("span", "", t("update.computerVersion")), node("code", "", view.build || t("status.unknown")));
+    version.append(node("span", "", t("update.computerVersion")), node("code", "", legacyBuild(view.build) ? t("update.versionUnknown") : view.build));
     row.append(version, check);
     body.append(row);
     const feedback = node("p", "daemon-update-feedback");

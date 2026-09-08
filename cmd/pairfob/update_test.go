@@ -33,6 +33,7 @@ func TestAllowedDownloadBaseRejectsCleartextInternet(t *testing.T) {
 }
 
 func TestUpdateExecutableReplacesAndVerifies(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
 	dest := filepath.Join(dir, "pairfob")
@@ -52,12 +53,13 @@ func TestUpdateExecutableReplacesAndVerifies(t *testing.T) {
 	if string(got) != string(fresh) {
 		t.Fatalf("got %q", got)
 	}
-	if err := updateExecutable(dest, server.URL); err != nil {
-		t.Fatal(err)
+	if err := updateExecutable(dest, server.URL); err == nil || !strings.Contains(err.Error(), "running daemon could not be verified") {
+		t.Fatalf("matching disk bytes must not bypass runtime verification: %v", err)
 	}
 }
 
 func TestUpdateExecutableRejectsHashMismatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	name := artifactName(runtime.GOOS, runtime.GOARCH)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/VERSION", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("1")) })
