@@ -241,9 +241,16 @@ function bindInput(host: HTMLElement): void {
   keyboard = bindXtermKeyboard(host, state.composeLive && isDesk());
 }
 
+function webglFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (message === WEBGL_CONTEXT_LOST) return t("ft.webglLost");
+  if (message === WEBGL_UNAVAILABLE) return t("ft.webglUnavailable");
+  return messageOf(error);
+}
+
 function handleRendererContextLoss(version: number): void {
   if (version !== rendererVersion || !state.fullTerminal) return;
-  const reason = t("ft.loadFail", { error: WEBGL_CONTEXT_LOST });
+  const reason = t("ft.loadFail", { error: t("ft.webglLost") });
   void suspendBridge(true, reason);
   disposeRenderer();
   terminalStatus.fail(reason);
@@ -268,7 +275,7 @@ async function mount(host: HTMLElement): Promise<void> {
   } catch (error) {
     if (version !== rendererVersion) return;
     mounting = false;
-    terminalStatus.fail(t("ft.loadFail", { error: messageOf(error) }));
+    terminalStatus.fail(t("ft.loadFail", { error: webglFailure(error) }));
     return;
   }
   if (version !== rendererVersion || !state.fullTerminal || !host.isConnected) return;
@@ -292,7 +299,7 @@ async function mount(host: HTMLElement): Promise<void> {
   } catch (error) {
     if (version !== rendererVersion) return;
     disposeRenderer();
-    terminalStatus.fail(t("ft.loadFail", { error: messageOf(error) }));
+    terminalStatus.fail(t("ft.loadFail", { error: webglFailure(error) }));
     return;
   }
   fullTerminalPerf.componentReady();
@@ -524,7 +531,7 @@ function interruptFullTerminal(): void {
   sendPadKey("esc");
 }
 
-function syncFullTerminalChrome(root: ParentNode = app): void {
+export function syncFullTerminalChrome(root: ParentNode = app): void {
   const chrome = root.querySelector(".full-terminal-chrome");
   if (!(chrome instanceof HTMLElement)) return;
   syncChromeStop(chrome, canInterruptAgent(selectedAgent()?.status ?? ""), interruptFullTerminal);

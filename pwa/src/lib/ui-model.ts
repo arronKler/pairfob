@@ -80,6 +80,11 @@ export function notificationAction(
   return { label: t("push.retry"), disabled: false };
 }
 
+export function displayDeviceLabel(label: string): string {
+  if (label === "Existing browser") return t("device.existingBrowser");
+  return label;
+}
+
 export function friendlyDeviceLabel(userAgent: string): string {
   if (/iPad/i.test(userAgent)) return "iPad";
   if (/iPhone/i.test(userAgent)) return "iPhone";

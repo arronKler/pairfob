@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
+  displayDeviceLabel,
   emptySessionCopy,
   formatDeviceAge,
   friendlyDeviceLabel,
@@ -9,8 +10,13 @@ import {
   shouldForgetPairFragment,
   visiblePairedDevices,
 } from "./ui-model";
+import { setLang } from "./i18n";
 
 describe("UI model", () => {
+  afterEach(() => {
+    setLang("zh");
+  });
+
   test("maps pairing failures to the field that needs attention", () => {
     expect(pairErrorField("invalid_pair_code")).toBe("code");
     expect(pairErrorField("unpaired")).toBe("code");
@@ -26,6 +32,15 @@ describe("UI model", () => {
     expect(shouldForgetPairFragment("sas_required")).toBeTrue();
     expect(shouldForgetPairFragment("pairing_cancelled")).toBeTrue();
     expect(shouldForgetPairFragment("timeout")).toBeFalse();
+  });
+
+  test("translates the migrated existing-browser sentinel", () => {
+    setLang("zh");
+    expect(displayDeviceLabel("Existing browser")).toBe("现有浏览器");
+    setLang("en");
+    expect(displayDeviceLabel("Existing browser")).toBe("Existing browser");
+    expect(displayDeviceLabel("iPhone")).toBe("iPhone");
+    setLang("zh");
   });
 
   test("uses coarse recognizable device labels instead of a full user agent", () => {

@@ -26,6 +26,16 @@ describe("i18n catalogs", () => {
     setLang("zh");
     expect(t("boot.connecting", { name: "desk" })).toBe("正在连回desk…");
   });
+
+  test("update and push catalogs cover the former hardcoded copy", () => {
+    expect(t("update.check")).toBe("检查更新");
+    expect(t("push.titleBlocked")).toBe("Pairfob · 等待确认");
+    setLang("en");
+    expect(t("update.check")).toBe("Check for updates");
+    expect(t("push.titleDone")).toBe("Pairfob · Task complete");
+    expect(t("quota.window.premium")).toBe("Premium interactions");
+    expect(t("ft.webglLost")).toContain("WebGL");
+  });
 });
 
 describe("language preference", () => {

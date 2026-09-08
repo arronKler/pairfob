@@ -109,6 +109,32 @@ describe("worker static overlay", () => {
     expect(await res.text()).toContain("pairfob");
   });
 
+  test("GET /manifest.webmanifest follows the language cookie", async () => {
+    const env = testEnv({
+      assets: assets({
+        "/manifest.webmanifest": JSON.stringify({
+          name: "Pairfob",
+          description: "Control agents on your computer from your phone.",
+        }),
+      }),
+    });
+    const zh = await handleFetch(new Request("https://pairfob.com/manifest.webmanifest", {
+      headers: { Cookie: "pairfob_lang=zh" },
+    }), env);
+    expect(zh.status).toBe(200);
+    expect(await zh.json()).toEqual({
+      name: "Pairfob",
+      description: "安全地从手机控制电脑上的 agent",
+    });
+    const en = await handleFetch(new Request("https://pairfob.com/manifest.webmanifest", {
+      headers: { Cookie: "pairfob_lang=en" },
+    }), env);
+    expect(await en.json()).toEqual({
+      name: "Pairfob",
+      description: "Control agents on your computer from your phone.",
+    });
+  });
+
   test("retired /v2/grants does not mint a join grant", async () => {
     const res = await handleFetch(
       new Request("https://pairfob.com/v2/grants", {

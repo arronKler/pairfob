@@ -1,5 +1,5 @@
 import { button, node } from "../lib/dom";
-import { t } from "../lib/i18n";
+import { locale, t, type CopyKey } from "../lib/i18n";
 import { quotaIsStale, type AgentQuota, type QuotaStatus } from "../lib/agent-quota";
 import { ProtocolError } from "../lib/protocol/errors";
 import type { LiveSession } from "../lib/protocol/session-types";
@@ -12,6 +12,33 @@ type QuotaView = { loading: boolean; items: AgentQuota[] | null; error: string }
 export const providerNames = { codex: "Codex", claude: "Claude Code", antigravity: "Antigravity", copilot: "GitHub Copilot", cursor: "Cursor", grok: "Grok Build" };
 const providerHelp = { codex: "quota.codexHelp", claude: "quota.claudeHelp", antigravity: "quota.antigravityHelp", copilot: "quota.copilotHelp", cursor: "quota.cursorHelp", grok: "quota.grokHelp" } as const;
 export const views = new WeakMap<LiveSession, QuotaView>();
+const WINDOW_NAMES: Record<string, CopyKey> = {
+  "premium interactions": "quota.window.premium",
+  chat: "quota.window.chat",
+  completions: "quota.window.completions",
+  "Shared subscription quota": "quota.window.shared",
+  "Included plan": "quota.window.included",
+  "five hour": "quota.window.fiveHour",
+  five_hour: "quota.window.fiveHour",
+  "seven day": "quota.window.sevenDay",
+  seven_day: "quota.window.sevenDay",
+  "seven day sonnet": "quota.window.sevenDaySonnet",
+  "seven day opus": "quota.window.sevenDayOpus",
+  "seven day cowork": "quota.window.sevenDayCowork",
+  "seven day routines": "quota.window.sevenDayRoutines",
+  spend_limit: "quota.window.spend",
+  "spend limit": "quota.window.spend",
+};
+
+function quotaWindowName(name: string): string {
+  const key = WINDOW_NAMES[name] ?? WINDOW_NAMES[name.replaceAll("_", " ")];
+  return key ? t(key) : name;
+}
+
+function formatQuotaWhen(seconds: number): string {
+  return new Date(seconds * 1000).toLocaleString(locale());
+}
+
 const statusKeys = {
   ok: "quota.ok", stale: "quota.stale", not_installed: "quota.notInstalled", not_logged_in: "quota.notLoggedIn",
   unsupported: "quota.unsupported", unavailable: "quota.unavailable", setup_required: "quota.setupRequired", auth_required: "quota.authRequired", not_running: "quota.notRunning",
@@ -59,22 +86,23 @@ export function quotaPanel(): HTMLElement {
           ? t("quota.days", { count: w.window_minutes / 1440 })
           : w.window_minutes && w.window_minutes % 60 === 0
             ? t("quota.hours", { count: w.window_minutes / 60 })
-            : w.window_minutes ? t("quota.window", { minutes: w.window_minutes }) : w.name;
+            : w.window_minutes ? t("quota.window", { minutes: w.window_minutes }) : quotaWindowName(w.name);
+        const windowName = quotaWindowName(w.name);
         if (w.unlimited) {
-          body.append(node("span", "quota-window-label", `${w.name} · ${t("quota.unlimited")}`));
+          body.append(node("span", "quota-window-label", `${windowName} · ${t("quota.unlimited")}`));
           continue;
         }
         body.append(node("span", "quota-window-label", `${label} · ${t("quota.remaining", { percent: remaining })}`));
-        if (w.window_minutes > 0) body.append(node("small", "set-note", w.name));
+        if (w.window_minutes > 0) body.append(node("small", "set-note", windowName));
         const bar = node("progress", "quota-progress") as HTMLProgressElement;
         bar.max = 100;
         bar.value = remaining;
         bar.setAttribute("aria-label", `${title} ${label}`);
-        body.append(bar, node("small", "set-note", w.resets_at ? t("quota.resets", { when: new Date(w.resets_at * 1000).toLocaleString() }) : t("quota.resetUnknown")));
+        body.append(bar, node("small", "set-note", w.resets_at ? t("quota.resets", { when: formatQuotaWhen(w.resets_at) }) : t("quota.resetUnknown")));
       }
     }
     if (["auth_required", "not_installed", "not_running", "not_logged_in"].includes(q.status)) body.append(node("p", "set-note", t(providerHelp[q.provider])));
-    if (q.observed_at) body.append(node("small", "set-note", t("quota.updated", { when: new Date(q.observed_at * 1000).toLocaleString() })));
+    if (q.observed_at) body.append(node("small", "set-note", t("quota.updated", { when: formatQuotaWhen(q.observed_at) })));
     if (q.provider === "copilot") body.append(node("p", "set-note", t("quota.copilotNote")));
     if (q.provider === "grok") body.append(node("p", "set-note", t("quota.grokNote")));
     if (q.source === "statusline") body.append(node("p", "set-note", t("quota.claudeNote")));

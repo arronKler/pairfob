@@ -358,6 +358,7 @@ func (e *Engine) NotifyHerd(event HerdPush) error {
 	payload, _ := json.Marshal(map[string]string{
 		"title": title,
 		"body":  body,
+		"kind":  string(event.Kind),
 		"tag":   fmt.Sprintf("pairfob-pane-%x", tagSum[:8]),
 		"url":   "/pair#" + fragment.Encode(),
 	})

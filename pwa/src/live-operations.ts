@@ -11,6 +11,7 @@ import {
 } from "./lib/diff-notes";
 import { askConfirm, askText } from "./lib/dom";
 import { t } from "./lib/i18n";
+import { displayDeviceLabel } from "./lib/ui-model";
 import { clearAgentTraceCache, forgetAgentTrace } from "./lib/agent-trace-cache";
 import { type NoticeScope } from "./lib/notice-scope";
 import {
@@ -78,7 +79,7 @@ export async function revokeDevice(device: DeviceSummary): Promise<void> {
     return;
   }
   const session = state.live;
-  const name = device.label || t("device.unnamed");
+  const name = displayDeviceLabel(device.label || "") || t("device.unnamed");
   if (!session || !state.credential || !(await askConfirm(t("live.unpairDeviceAsk", { name }), t("settings.unpairOther")))) {
     return;
   }

@@ -187,7 +187,7 @@ func TestPersistentIdentityRPCPushAndRevokeLifecycle(t *testing.T) {
 	if err := json.Unmarshal(plain, &notification); err != nil {
 		t.Fatal(err)
 	}
-	if notification["title"] != "Pairfob · 等待确认" || notification["url"] != "/pair#d="+eng.DaemonID+"&notify=1&pane=w0%3Ap1" {
+	if notification["title"] != "Pairfob · 等待确认" || notification["kind"] != "needs_you" || notification["url"] != "/pair#d="+eng.DaemonID+"&notify=1&pane=w0%3Ap1" {
 		t.Fatalf("notification target mismatch: %+v", notification)
 	}
 	needsTag := notification["tag"]
@@ -208,7 +208,7 @@ func TestPersistentIdentityRPCPushAndRevokeLifecycle(t *testing.T) {
 	if err := json.Unmarshal(donePlain, &notification); err != nil {
 		t.Fatal(err)
 	}
-	if notification["title"] != "Pairfob · 任务已完成" || notification["tag"] != needsTag {
+	if notification["title"] != "Pairfob · 任务已完成" || notification["kind"] != "done" || notification["tag"] != needsTag {
 		t.Fatalf("completion notification mismatch: %+v", notification)
 	}
 	serverMu.Lock()

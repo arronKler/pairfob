@@ -50,7 +50,7 @@ describe("notification service worker", () => {
   });
 
   test("serves the repeat-load shell immediately and caches immutable assets first", () => {
-    expect(worker).toContain('const CACHE = "pairfob-shell-v8"');
+    expect(worker).toContain('const CACHE = "pairfob-shell-v9"');
     expect(worker).toContain("precacheShell()");
     expect(worker).toContain("shellAssetPaths(html)");
     expect(worker).toContain('request.mode === "navigate"');
@@ -91,6 +91,25 @@ describe("notification service worker", () => {
     });
     const response = await strategy({ waitUntil: () => undefined }, new Request("https://pairfob.com/pair"), "/pair");
     expect(await response.text()).toBe("cached");
+  });
+
+  test("localizes push titles from kind or fallback copy", () => {
+    const scope = {
+      location: { origin: "https://pairfob.com" },
+      addEventListener: () => undefined,
+    };
+    const copy = new Function("self", `${worker}\nreturn notificationCopy;`)(scope) as (
+      data: Record<string, string>,
+      lang: string,
+    ) => { title: string; body: string };
+    expect(copy({ kind: "needs_you", body: "claude · lab" }, "en")).toEqual({
+      title: "Pairfob · Waiting for you",
+      body: "claude · lab",
+    });
+    expect(copy({ kind: "done" }, "zh").title).toBe("Pairfob · 任务已完成");
+    expect(copy({ title: "Pairfob · 等待确认" }, "en").title).toBe("Pairfob · Waiting for you");
+    expect(copy({}, "en").body).toBe("Agent status updated");
+    expect(copy({}, "zh").body).toBe("Agent 状态已更新");
   });
 
   test("accepts only the exact private fragment target", () => {

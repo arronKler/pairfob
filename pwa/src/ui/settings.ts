@@ -3,7 +3,7 @@ import { quotaSummary } from "./agent-quota-summary";
 import { button, node } from "../lib/dom";
 import { t } from "../lib/i18n";
 import { type DeviceSummary } from "../lib/protocol/client";
-import { formatDeviceAge, notificationAction, shortDeviceId, TERM_MODE_LABEL, visiblePairedDevices } from "../lib/ui-model";
+import { displayDeviceLabel, formatDeviceAge, notificationAction, shortDeviceId, TERM_MODE_LABEL, visiblePairedDevices } from "../lib/ui-model";
 import { NETWORK_MODE_OPTIONS, type NetworkMode } from "../lib/network-mode";
 import { TERM_MODE_OPTIONS } from "../lib/terminal-mode";
 import { openComputers } from "../computers";
@@ -120,7 +120,7 @@ function deviceRow(device: DeviceSummary): HTMLElement {
   const row = node("div", "device");
   const body = node("div", "device-body");
   const head = node("div", "device-head");
-  const name = device.label || t("device.unnamed");
+  const name = displayDeviceLabel(device.label || "") || t("device.unnamed");
   head.append(node("strong", "device-name", name));
   if (device.self) head.append(node("span", "pill pill-live", t("device.self")));
   else if (device.connected === true) head.append(node("span", "pill pill-live", t("device.connected")));
@@ -169,7 +169,7 @@ export function fillSettings(container: HTMLElement | DocumentFragment, withBack
   networkModeRow.append(networkModeControl());
   conn.append(networkModeRow);
   const self = state.deviceList.find((device) => device.self && !device.revoked_at);
-  if (self) conn.append(setRow(t("settings.thisPhone"), self.label || t("settings.pairedPhone")));
+  if (self) conn.append(setRow(t("settings.thisPhone"), displayDeviceLabel(self.label || "") || t("settings.pairedPhone")));
   container.append(conn);
   container.append(quotaSummary());
 

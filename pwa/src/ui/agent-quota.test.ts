@@ -46,6 +46,23 @@ test("old daemon gets an upgrade message and refresh cannot duplicate an in-flig
   expect(quotaPanel().querySelector("progress")).toBeNull();
 });
 
+test("quota window names follow the selected language", async () => {
+  const { setLang } = await import("../lib/i18n");
+  const q = sample();
+  state.live = session(async () => [{ ...q, provider: "copilot", source: "github_api", windows: [
+    { ...q.windows[0]!, name: "chat", unlimited: true, used_percent: 0, resets_at: 0 },
+    { ...q.windows[0]!, name: "premium interactions", window_minutes: 0, resets_at: 0 },
+  ] }]);
+  await refreshAgentQuota();
+  setLang("zh");
+  expect(quotaPanel().textContent).toContain("对话");
+  expect(quotaPanel().textContent).toContain("高级对话");
+  setLang("en");
+  expect(quotaPanel().textContent).toContain("Chat");
+  expect(quotaPanel().textContent).toContain("Premium interactions");
+  setLang("zh");
+});
+
 test("unlimited buckets omit progress and unknown reset never renders the epoch", async () => {
   const q = sample();
   state.live = session(async () => [{ ...q, provider: "copilot", source: "github_api", windows: [

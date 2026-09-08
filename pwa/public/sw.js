@@ -1,6 +1,47 @@
-const CACHE = "pairfob-shell-v8";
+const CACHE = "pairfob-shell-v9";
+const PREF = "pairfob-pref";
 const SHELL = ["/", "/pair", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 const SHELL_NETWORK_GRACE_MS = 750;
+
+function detectLang() {
+  const nav = self.navigator;
+  const list = nav && nav.languages && nav.languages.length ? nav.languages : [nav?.language || ""];
+  for (const item of list) {
+    const tag = String(item || "").toLowerCase();
+    if (tag.startsWith("zh")) return "zh";
+    if (tag.startsWith("en")) return "en";
+  }
+  return "en";
+}
+
+async function readLang() {
+  try {
+    const cached = await caches.open(PREF).then((cache) => cache.match("lang"));
+    const value = cached ? await cached.text() : "";
+    if (value === "en" || value === "zh") return value;
+  } catch {
+    /* private mode */
+  }
+  return detectLang();
+}
+
+function notificationCopy(data, lang) {
+  const kind = typeof data.kind === "string" ? data.kind : "";
+  const title = typeof data.title === "string" ? data.title : "";
+  const blocked = kind === "needs_you" || title.includes("等待确认") || /waiting for you/i.test(title);
+  const done = kind === "done" || title.includes("任务已完成") || /task complete/i.test(title);
+  const en = lang === "en";
+  const copy = {
+    blocked: en ? "Pairfob · Waiting for you" : "Pairfob · 等待确认",
+    done: en ? "Pairfob · Task complete" : "Pairfob · 任务已完成",
+    body: en ? "Agent status updated" : "Agent 状态已更新",
+    need: en ? "An agent needs you" : "Agent 需要你处理",
+  };
+  return {
+    title: blocked ? copy.blocked : done ? copy.done : title || "Pairfob",
+    body: typeof data.body === "string" && data.body ? data.body : blocked ? copy.need : copy.body,
+  };
+}
 
 function shellAssetPaths(html) {
   return [...html.matchAll(/(?:src|href)=["'](\/assets\/[^"'?#]+)["']/g)].map((match) => match[1]);
@@ -106,17 +147,26 @@ function safeNotificationURL(value) {
   }
 }
 
+self.addEventListener("message", (event) => {
+  const lang = event.data && event.data.lang;
+  if (!event.data || event.data.type !== "pairfob_lang") return;
+  if (lang !== "en" && lang !== "zh" && lang !== "auto") return;
+  event.waitUntil(caches.open(PREF).then((cache) => cache.put("lang", new Response(lang === "auto" ? "" : lang))));
+});
+
 self.addEventListener("push", (event) => {
-  let data = {};
-  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data?.text() || "Agent 需要你处理" }; }
-  const title = typeof data.title === "string" ? data.title : "Pairfob";
-  event.waitUntil(self.registration.showNotification(title, {
-    body: typeof data.body === "string" ? data.body : "Agent 状态已更新",
-    tag: typeof data.tag === "string" ? data.tag : "herd",
-    icon: "/icon.svg",
-    badge: "/icon.svg",
-    data: { url: safeNotificationURL(data.url) },
-  }));
+  event.waitUntil((async () => {
+    let data = {};
+    try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data?.text() || "" }; }
+    const copy = notificationCopy(data, await readLang());
+    await self.registration.showNotification(copy.title, {
+      body: copy.body,
+      tag: typeof data.tag === "string" ? data.tag : "herd",
+      icon: "/icon.svg",
+      badge: "/icon.svg",
+      data: { url: safeNotificationURL(data.url) },
+    });
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {

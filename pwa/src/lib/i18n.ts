@@ -70,6 +70,32 @@ export function applyDocumentLang(): void {
   document.documentElement.lang = locale();
   const meta = document.querySelector('meta[name="description"]');
   if (meta) meta.setAttribute("content", t("meta.description"));
+  const link = document.querySelector('link[rel="manifest"]');
+  if (link && "href" in link) {
+    (link as HTMLLinkElement).href = `/manifest.webmanifest?lang=${current}`;
+  }
+  syncServiceWorkerLang();
+}
+
+function syncServiceWorkerLang(): void {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  const pref = langPref();
+  const value = pref === "auto" ? "auto" : current;
+  const send = (worker: ServiceWorker) => {
+    try {
+      worker.postMessage({ type: "pairfob_lang", lang: value });
+    } catch {
+      /* no controller */
+    }
+  };
+  try {
+    if (navigator.serviceWorker.controller) send(navigator.serviceWorker.controller);
+    void navigator.serviceWorker.ready.then((registration) => {
+      if (registration.active) send(registration.active);
+    }).catch(() => undefined);
+  } catch {
+    /* tests and private mode */
+  }
 }
 
 export function setLang(next: Lang): Lang {

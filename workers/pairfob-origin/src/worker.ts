@@ -150,6 +150,34 @@ async function routeWs(req: Request, env: Env): Promise<Response> {
   return withSecurity(build, res);
 }
 
+function requestLang(req: Request): "en" | "zh" {
+  const cookie = req.headers.get("Cookie") || "";
+  const stored = cookie.match(/(?:^|;\s*)pairfob_lang=(en|zh)(?:;|$)/);
+  if (stored) return stored[1] as "en" | "zh";
+  const accept = (req.headers.get("Accept-Language") || "").toLowerCase();
+  const zh = accept.search(/\bzh\b/);
+  const en = accept.search(/\ben\b/);
+  if (zh >= 0 && (en < 0 || zh < en)) return "zh";
+  return "en";
+}
+
+async function localizeManifest(req: Request, res: Response): Promise<Response> {
+  if (!res.ok) return res;
+  let data: { description?: string };
+  try {
+    data = await res.json() as { description?: string };
+  } catch {
+    return res;
+  }
+  data.description = requestLang(req) === "zh"
+    ? "安全地从手机控制电脑上的 agent"
+    : "Control agents on your computer from your phone.";
+  const headers = new Headers(res.headers);
+  headers.set("Content-Type", "application/manifest+json");
+  headers.set("Cache-Control", "no-store");
+  return new Response(JSON.stringify(data), { status: 200, headers });
+}
+
 async function staticOrPlaceholder(req: Request, env: Env, build: string): Promise<Response> {
   if (env.ASSETS) {
     const url = new URL(req.url);
@@ -165,7 +193,8 @@ async function staticOrPlaceholder(req: Request, env: Env, build: string): Promi
     }
     const res = await followDocAsset(env.ASSETS, req, url, await env.ASSETS.fetch(assetReq));
     observeDocument(env, req.method, url.pathname, res.status);
-    return withSecurity(build, res, staticAssetHeaders(url.pathname, res.ok, res.headers.get("Content-Type")));
+    const localized = url.pathname === "/manifest.webmanifest" ? await localizeManifest(req, res) : res;
+    return withSecurity(build, localized, staticAssetHeaders(url.pathname, localized.ok, localized.headers.get("Content-Type")));
   }
   const headers = new Headers({ "Content-Type": "text/html; charset=utf-8" });
   applySecurityHeaders(headers, build);
@@ -227,6 +256,9 @@ function staticAssetHeaders(path: string, ok: boolean, contentType: string | nul
       headers["Cache-Control"] = "public, max-age=0, must-revalidate, no-transform";
     }
     return headers;
+  }
+  if (path === "/manifest.webmanifest") {
+    return { "Content-Type": "application/manifest+json", "Cache-Control": "no-store" };
   }
   if (path === "/install.sh") {
     return { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "max-age=300" };

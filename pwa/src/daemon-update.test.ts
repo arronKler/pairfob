@@ -10,6 +10,7 @@ const { state, app } = await import("./state");
 const { setRenderer } = await import("./paint");
 const { acceptDaemonVersion, daemonVersion, refreshDaemonUpdate, startDaemonUpdate, checkDaemonRelease } = await import("./daemon-update");
 const { appendDaemonUpdate, appendManualUpdateHelp } = await import("./ui/daemon-update");
+const { setLang } = await import("./lib/i18n");
 setRenderer(()=>{});
 const originalFetch = globalThis.fetch;
 const originalNow = Date.now;
@@ -19,7 +20,7 @@ function visibility(value: string) {
   Object.defineProperty(happy.document,"visibilityState",{value, configurable:true});
   happy.document.dispatchEvent(new happy.Event("visibilitychange"));
 }
-afterEach(()=>{visibility("hidden"); Date.now=originalNow; globalThis.setTimeout=originalSetTimeout; globalThis.clearTimeout=originalClearTimeout; globalThis.fetch=originalFetch;state.live=null;app.replaceChildren();});
+afterEach(()=>{visibility("hidden"); Date.now=originalNow; globalThis.setTimeout=originalSetTimeout; globalThis.clearTimeout=originalClearTimeout; globalThis.fetch=originalFetch;state.live=null;app.replaceChildren();setLang("zh");});
 let serial=0;
 function connect(rpc: Partial<LiveSession>, build="1.0.0") {
   state.credential = {daemonId:`update-test-${++serial}`} as typeof state.credential;
@@ -171,6 +172,15 @@ test("release check has a visible busy state and explicit success or failure fee
   expect(app.querySelector('[data-tone="error"]')?.textContent).toContain("检查失败");
 });
 
+
+test("update copy follows the selected language", async () => {
+  connect({daemonUpdateStatus:async()=>idle},"1.1.0");
+  await checkDaemonRelease(true);
+  setLang("en");
+  appendDaemonUpdate(app,true);
+  expect(app.querySelector(".daemon-update-check")?.textContent).toBe("Check for updates");
+  expect(app.textContent).toContain("Computer version");
+});
 
 test("routine settings version stays compact even when background checks fail", async () => {
   connect({daemonUpdateStatus:async()=>idle},"ad27e83");

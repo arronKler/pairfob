@@ -1,7 +1,7 @@
 {
   "name": "Pairfob",
   "short_name": "Pairfob",
-  "description": "安全地从手机控制电脑上的 agent",
+  "description": "Control agents on your computer from your phone.",
   "start_url": "/pair",
   "scope": "/pair",
   "display": "standalone",
