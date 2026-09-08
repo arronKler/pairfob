@@ -121,3 +121,6 @@ No deployment, daemon upgrade, physical-camera/keyboard/IME acceptance or real
 phone/WAN test was performed. The migration is in the working tree and has no root
 commit. The user's unrelated `design/` and deletions of the two PWA performance
 documents remain untouched.
+# 正式发布补记
+
+React PWA 已于 2026-09-09 发布，BUILD `2026-09-09.2`。发布提交、线上资源、真实配对与刷新恢复结果见 [正式发布记录](pwa-react-deployment-20260909.md)。下文为原迁移与预验收记录。
