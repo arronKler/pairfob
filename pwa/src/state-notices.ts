@@ -13,21 +13,23 @@ type NoticeState = {
 export const STATUS_NOTICE_MS = 2800;
 
 /** Own the scoped toast lifecycle without coupling it to the rest of AppState. */
-export function createNoticeLifecycle(state: NoticeState, app: HTMLElement) {
+export function createNoticeLifecycle(state: NoticeState) {
   let noticeTimer: number | null = null;
+  const listeners = new Set<() => void>();
+
+  function subscribeNotice(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => { listeners.delete(listener); };
+  }
+
+  function notify(): void {
+    for (const listener of listeners) listener();
+  }
 
   function stopNoticeTimer(): void {
     if (noticeTimer === null) return;
     window.clearTimeout(noticeTimer);
     noticeTimer = null;
-  }
-
-  /** Remove the live toast node. A full paint remounts the pane and kicks the keyboard. */
-  function dropAppNotice(text?: string): void {
-    for (const node of app.querySelectorAll("[data-app-notice]")) {
-      if (text !== undefined && node.textContent !== text) continue;
-      node.remove();
-    }
   }
 
   function captureNoticeScope(): NoticeScope {
@@ -52,7 +54,7 @@ export function createNoticeLifecycle(state: NoticeState, app: HTMLElement) {
   function clearNotice(): void {
     stopNoticeTimer();
     state.notice = null;
-    dropAppNotice();
+    notify();
   }
 
   function clearNoticeForScope(scope: NoticeScope): void {
@@ -65,7 +67,7 @@ export function createNoticeLifecycle(state: NoticeState, app: HTMLElement) {
       noticeTimer = null;
       if (state.notice?.tone !== tone || state.notice.text !== text) return;
       state.notice = null;
-      dropAppNotice(text);
+      notify();
     }, STATUS_NOTICE_MS);
   }
 
@@ -75,6 +77,7 @@ export function createNoticeLifecycle(state: NoticeState, app: HTMLElement) {
     const scope = typeof scopeOrPersist === "object" && scopeOrPersist ? scopeOrPersist : undefined;
     const keep = typeof scopeOrPersist === "boolean" ? scopeOrPersist : persist;
     state.notice = { text, tone: "error", ...(scope ? { scope } : {}) };
+    notify();
     if (keep || !text) return;
     scheduleNoticeDismiss(text, "error");
   }
@@ -82,6 +85,7 @@ export function createNoticeLifecycle(state: NoticeState, app: HTMLElement) {
   function showStatus(text: string, persist = false, scope?: NoticeScope): void {
     stopNoticeTimer();
     state.notice = { text, tone: "status", ...(scope ? { scope } : {}) };
+    notify();
     if (persist || !text) return;
     scheduleNoticeDismiss(text, "status");
   }
@@ -90,6 +94,7 @@ export function createNoticeLifecycle(state: NoticeState, app: HTMLElement) {
     captureNoticeScope,
     noticeScopeIsCurrent,
     visibleNotice,
+    subscribeNotice,
     clearNotice,
     clearNoticeForScope,
     showError,

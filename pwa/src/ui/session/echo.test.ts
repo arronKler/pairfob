@@ -14,7 +14,9 @@ const {
   predictKeys,
   predictText,
   resetEcho,
+  setEchoObserver,
   settleEcho,
+  subscribeEcho,
 } = await import("./echo.ts");
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -118,5 +120,22 @@ describe("the echo is display only", () => {
     for (const forbidden of ["sendKeys", "sendText", "operation_id", "requestPaneRefresh", "session"]) {
       expect(source).not.toContain(forbidden);
     }
+  });
+
+  test("subscribeEcho fans out without replacing setEchoObserver", () => {
+    const legacy: number[] = [];
+    const extra: number[] = [];
+    setEchoObserver(() => legacy.push(1));
+    const stop = subscribeEcho(() => extra.push(1));
+    predictKeys("p1", ["x"], "h0");
+    expect(legacy).toEqual([1]);
+    expect(extra).toEqual([1]);
+    setEchoObserver(null);
+    predictKeys("p1", ["y"], "h0");
+    expect(legacy).toEqual([1]);
+    expect(extra).toEqual([1, 1]);
+    stop();
+    predictKeys("p1", ["z"], "h0");
+    expect(extra).toEqual([1, 1]);
   });
 });

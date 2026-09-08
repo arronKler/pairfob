@@ -31,14 +31,29 @@ let echo: Echo = empty;
 let expiry = 0;
 let rollbackTimer = 0;
 let onChange: (() => void) | null = null;
+let echoRevision = 0;
+const echoListeners = new Set<() => void>();
 
-/** term.ts registers the in-place repaint; nothing else observes this module. */
+/** Legacy in-place ghost painter. React hosts subscribe instead of replacing this slot. */
 export function setEchoObserver(observer: (() => void) | null): void {
   onChange = observer;
 }
 
+export function echoStoreRevision(): number {
+  return echoRevision;
+}
+
+export function subscribeEcho(listener: () => void): () => void {
+  echoListeners.add(listener);
+  return () => {
+    echoListeners.delete(listener);
+  };
+}
+
 function changed(): void {
+  echoRevision += 1;
   onChange?.();
+  for (const listener of echoListeners) listener();
 }
 
 /**
@@ -126,6 +141,7 @@ export function settleEcho(paneId: string, texts: readonly string[], hash: strin
       changed();
     }, ECHO_ROLLBACK_MS);
   }
+  changed();
   return !confirmed;
 }
 

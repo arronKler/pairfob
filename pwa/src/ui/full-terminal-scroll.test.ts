@@ -1,21 +1,27 @@
-import { Window } from "happy-dom";
-import { describe, expect, test } from "bun:test";
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { act, createElement } from "react";
+import { setLang } from "../lib/i18n";
+import { app } from "../state";
+import { SCROLL_LINE_PX, bindHostScroll, bindScrollHold, pageLineCount, type RemoteScroll } from "./full-terminal-scroll";
+import { leaveReactScreen, renderReactScreen } from "./react/root";
+import { SessionScrollRail } from "./react/session-scroll";
 
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-g.window = happy;
-g.document = happy.document;
-g.HTMLElement = happy.HTMLElement;
-g.HTMLButtonElement = happy.HTMLButtonElement;
-g.Node = happy.Node;
-g.PointerEvent = happy.PointerEvent;
-g.TouchEvent = happy.TouchEvent;
-g.WheelEvent = happy.WheelEvent;
-g.MouseEvent = happy.MouseEvent;
-g.KeyboardEvent = happy.KeyboardEvent;
-happy.document.body.innerHTML = '<main id="app"></main>';
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  act(leaveReactScreen);
+  setLang("zh");
+});
 
-const { SCROLL_LINE_PX, bindHostScroll, pageLineCount, scrollRail } = await import("./full-terminal-scroll.ts");
+afterEach(() => {
+  act(leaveReactScreen);
+  app.replaceChildren();
+});
+
+function paintRail(scroll: RemoteScroll, pageLines: () => number): HTMLElement {
+  act(() => renderReactScreen(createElement(SessionScrollRail, { scroll, pageLines })));
+  return app.querySelector<HTMLElement>(".full-terminal-scroll")!;
+}
 
 type Call = { direction: "up" | "down"; lines: number; source: "wheel" | "page_key"; at?: { column: number; row: number } };
 
@@ -63,6 +69,7 @@ const source = await Bun.file(new URL("./full-terminal-scroll.ts", import.meta.u
 
 describe("complete-terminal remote scroll", () => {
   test("a zoomed page can pan and pinch without remote scroll or terminal clicks", () => {
+    const originalViewport = Object.getOwnPropertyDescriptor(happy, "visualViewport");
     const viewport = { scale: 2 };
     Object.defineProperty(happy, "visualViewport", { configurable: true, value: viewport });
     const host = document.createElement("div");
@@ -92,6 +99,8 @@ describe("complete-terminal remote scroll", () => {
       expect(calls).toEqual(["scroll"]);
     } finally {
       viewport.scale = 1;
+      if (originalViewport) Object.defineProperty(happy, "visualViewport", originalViewport);
+      else Reflect.deleteProperty(happy, "visualViewport");
       stop();
       host.remove();
     }
@@ -444,10 +453,9 @@ describe("complete-terminal remote scroll", () => {
   test("the on-screen rail offers wheel and page-key scrolling", () => {
     const calls: Call[] = [];
     let pageLines = 23;
-    const rail = scrollRail((direction, lines, source) => {
+    const rail = paintRail((direction, lines, source) => {
       calls.push({ direction, lines, source });
     }, () => pageLines);
-    document.body.append(rail);
     const buttons = [...rail.querySelectorAll("button")] as HTMLButtonElement[];
     expect(buttons.map((el) => el.getAttribute("aria-label"))).toEqual([
       "鼠标滚轮向上",
@@ -455,34 +463,37 @@ describe("complete-terminal remote scroll", () => {
       "下一页",
       "鼠标滚轮向下",
     ]);
-    buttons[1].dispatchEvent(pointer("pointerdown", 10, 10));
+    act(() => buttons[1].dispatchEvent(pointer("pointerdown", 10, 10)));
     pageLines = 31;
-    buttons[2].dispatchEvent(pointer("pointerdown", 10, 10));
+    act(() => buttons[2].dispatchEvent(pointer("pointerdown", 10, 10)));
     expect(calls).toEqual([
       { direction: "up", lines: 23, source: "page_key" },
       { direction: "down", lines: 31, source: "page_key" },
     ]);
-    rail.remove();
+    act(leaveReactScreen);
   });
 
   test("keyboard activation fires once without duplicating pointer or Space clicks", () => {
     const calls: Call[] = [];
-    const rail = scrollRail((direction, lines, source) => {
+    const rail = paintRail((direction, lines, source) => {
       calls.push({ direction, lines, source });
     }, () => 19);
-    document.body.append(rail);
     const [lineUp, pageUp] = [...rail.querySelectorAll("button")] as HTMLButtonElement[];
 
-    lineUp.dispatchEvent(pointer("pointerdown", 10, 10));
-    lineUp.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
-    pageUp.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }));
+    act(() => {
+      lineUp.dispatchEvent(pointer("pointerdown", 10, 10));
+      lineUp.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+      pageUp.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }));
+    });
     const spaceDown = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
     const spaceRepeat = new KeyboardEvent("keydown", { key: " ", repeat: true, bubbles: true, cancelable: true });
     const spaceUp = new KeyboardEvent("keyup", { key: " ", bubbles: true, cancelable: true });
-    lineUp.dispatchEvent(spaceDown);
-    lineUp.dispatchEvent(spaceRepeat);
+    act(() => {
+      lineUp.dispatchEvent(spaceDown);
+      lineUp.dispatchEvent(spaceRepeat);
+    });
     expect(calls).toHaveLength(2);
-    lineUp.dispatchEvent(spaceUp);
+    act(() => lineUp.dispatchEvent(spaceUp));
 
     expect(calls).toEqual([
       { direction: "up", lines: 3, source: "wheel" },
@@ -492,6 +503,21 @@ describe("complete-terminal remote scroll", () => {
     expect(spaceDown.defaultPrevented).toBeTrue();
     expect(spaceRepeat.defaultPrevented).toBeTrue();
     expect(spaceUp.defaultPrevented).toBeTrue();
-    rail.remove();
+    act(leaveReactScreen);
+  });
+
+  test("bindScrollHold cancels repeat timers on dispose even while connected", async () => {
+    const el = document.createElement("button");
+    document.body.append(el);
+    const calls: number[] = [];
+    const stop = bindScrollHold(el, () => calls.push(1));
+    el.dispatchEvent(pointer("pointerdown", 10, 10));
+    expect(calls).toEqual([1]);
+    stop();
+    await new Promise((resolve) => setTimeout(resolve, 520));
+    expect(calls).toEqual([1]);
+    el.dispatchEvent(pointer("pointerdown", 10, 10));
+    expect(calls).toEqual([1]);
+    el.remove();
   });
 });

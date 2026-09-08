@@ -1,35 +1,14 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { act } from "react";
+import { leaveReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { WorktreeJobDriver } from "../lib/worktree-jobs.ts";
 
-const happy = new Window({ url: "https://pairfob.com/", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLDialogElement",
-  "MouseEvent",
-  "PointerEvent",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.history = happy.history;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
-
+const { setLang } = await import("../lib/i18n.ts");
 const { app, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
-const { renderHome, renderRail } = await import("./home.ts");
+const { renderApp } = await import("./react/app-screen");
+function renderHome(): void { act(renderApp); }
 const { t } = await import("../lib/i18n.ts");
 const { NO_OPERATION_CAPABILITIES } = await import("../lib/operations.ts");
 const { dismissWorktreeJob, startWorktreeJob, worktreeJobs } = await import("../lib/worktree-jobs.ts");
@@ -96,11 +75,26 @@ function createButton(): HTMLButtonElement {
 }
 
 function settle(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+  return act(async () => { await new Promise<void>(resolve => window.setTimeout(resolve, 0)); });
 }
 
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  Object.assign(state, { phase: "live", screen: "home", fullTerminal: false, agentChat: false,
+    credential: null, live: null, computers: [], agents: [], paneId: "", panePinned: {}, paneTouched: {},
+    listGroup: "flat", listGroupCollapsed: {}, operationBusy: false, networkOnline: true, runtimeKind: "herdr",
+    herdHost: "", notice: null, settingsLoading: false, deviceList: [], devicesError: "", pushConfigError: "",
+    pushEnabled: null, pushSubscribed: null });
+  setLang("zh");
+});
+
 afterEach(() => {
-  for (const job of [...worktreeJobs()]) dismissWorktreeJob(job.id);
+  act(() => {
+    for (const job of [...worktreeJobs()]) dismissWorktreeJob(job.id);
+    leaveReactScreen();
+  });
+  setRenderer(() => {});
   state.live = null;
   state.agents = [];
   state.paneId = "";
@@ -120,11 +114,11 @@ describe("worktree progress cards on home", () => {
     renderHome();
 
     const card = app.querySelector(".worktree-job");
-    expect(card).toBeTruthy();
+    expect(Boolean(card)).toBe(true);
     expect(card?.textContent).toContain("hotfix");
     expect(card?.textContent).toContain("feat/x");
     expect(card?.textContent).toContain(t("op.creatingWorktree"));
-    expect(card?.querySelector(".spinner")).toBeTruthy();
+    expect(Boolean(card?.querySelector(".spinner"))).toBe(true);
     expect(createButton().disabled).toBe(false);
     expect(state.operationBusy).toBe(false);
   });
@@ -147,10 +141,12 @@ describe("worktree progress cards on home", () => {
     const { driver } = fakeDriver();
     startWorktreeJob(driver, { workspace_id: "w1" });
     renderHome();
-    expect(app.querySelector(".worktree-job")).toBeTruthy();
+    expect(Boolean(app.querySelector(".worktree-job"))).toBe(true);
 
-    const rail = renderRail();
-    expect(rail.querySelector(".worktree-job")).toBeTruthy();
+    happy.happyDOM.setWindowSize({ width: 1440, height: 900 });
+    renderHome();
+    const rail = app.querySelector(".rail")!;
+    expect(Boolean(rail.querySelector(".worktree-job"))).toBe(true);
   });
 
   test("cancel removes a working card and a late result stays ignored", async () => {
@@ -161,12 +157,12 @@ describe("worktree progress cards on home", () => {
 
     const cancel = app.querySelector(".worktree-job button");
     expect(cancel?.textContent).toBe(t("cancel"));
-    (cancel as HTMLButtonElement).click();
-    expect(app.querySelector(".worktree-job")).toBeNull();
+    act(() => { (cancel as HTMLButtonElement).click(); });
+    expect((app.querySelector(".worktree-job")) === null).toBe(true);
 
     pendings[0].resolve(undefined as never);
     await settle();
-    expect(app.querySelector(".worktree-job")).toBeNull();
+    expect((app.querySelector(".worktree-job")) === null).toBe(true);
     expect(worktreeJobs()).toHaveLength(0);
   });
 
@@ -181,17 +177,17 @@ describe("worktree progress cards on home", () => {
     renderHome();
 
     const card = app.querySelector(".worktree-job");
-    expect(card).toBeTruthy();
+    expect(Boolean(card)).toBe(true);
     expect(card?.textContent).toContain("git fetch failed");
-    expect(card?.querySelector(".spinner")).toBeNull();
+    expect((card?.querySelector(".spinner")) === null).toBe(true);
 
     const buttons = [...(card?.querySelectorAll("button") ?? [])] as HTMLButtonElement[];
     const retry = buttons.find((item) => item.textContent === t("retry"));
     const dismiss = buttons.find((item) => item.textContent === t("dismiss"));
-    expect(retry).toBeTruthy();
-    expect(dismiss).toBeTruthy();
+    expect(Boolean(retry)).toBe(true);
+    expect(Boolean(dismiss)).toBe(true);
 
-    retry?.click();
+    act(() => { retry?.click(); });
     expect(fake.pendings).toHaveLength(2);
     expect(worktreeJobs()[0]?.status).toBe("working");
     expect(worktreeJobs()[0]?.id).toBe(job?.id);
@@ -204,8 +200,8 @@ describe("worktree progress cards on home", () => {
     const dismissAgain = [...(failedAgain?.querySelectorAll("button") ?? [])].find(
       (item) => item.textContent === t("dismiss"),
     ) as HTMLButtonElement | undefined;
-    dismissAgain?.click();
+    act(() => { dismissAgain?.click(); });
     expect(worktreeJobs()).toHaveLength(0);
-    expect(app.querySelector(".worktree-job")).toBeNull();
+    expect((app.querySelector(".worktree-job")) === null).toBe(true);
   });
 });

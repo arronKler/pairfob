@@ -7,8 +7,8 @@ import { preProcessFile } from "typescript";
 const sourceRoot = fileURLToPath(new URL(".", import.meta.url));
 
 function productionModules(): string[] {
-  return [...new Bun.Glob("**/*.ts").scanSync({ cwd: sourceRoot, onlyFiles: true })]
-    .filter((file) => !file.endsWith(".test.ts"))
+  return [...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: sourceRoot, onlyFiles: true })]
+    .filter((file) => !/\.test\.tsx?$/.test(file))
     .map((file) => resolve(sourceRoot, file));
 }
 
@@ -17,7 +17,8 @@ function localDependencies(file: string, modules: Set<string>): string[] {
   return imports.flatMap(({ fileName }) => {
     if (!fileName.startsWith(".")) return [];
     const base = resolve(dirname(file), fileName);
-    return [base, `${base}.ts`, join(base, "index.ts")].filter((candidate) => modules.has(candidate)).slice(0, 1);
+    return [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts"), join(base, "index.tsx")]
+      .filter((candidate) => modules.has(candidate)).slice(0, 1);
   });
 }
 

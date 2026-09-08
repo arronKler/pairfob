@@ -1,13 +1,38 @@
-import { button, node } from "../../lib/dom";
 import { t } from "../../lib/i18n";
 import { rowPath, rowText } from "../../lib/termrow";
 import { render } from "../../paint";
 import { haptic, showError, showStatus, state } from "../../state";
 import { insertCompose } from "./compose";
-import { toggleTermSelect } from "./term";
-import { type PaneModel } from "./model";
+import { paneModel, type PaneModel } from "./model";
+
+export function rowBarContent(model: PaneModel): { text: string; path: string | null } | null {
+  const index = state.paneRow;
+  if (index === null) return null;
+  const raw = model.texts[index];
+  if (raw === undefined) return null;
+  const text = rowText(raw);
+  if (!text) return null;
+  return { text, path: rowPath(raw) };
+}
+
+/** Drop a selected row that no longer has copyable text. Never call this from React render. */
+export function discardEmptyPaneRow(model: PaneModel): boolean {
+  if (state.paneRow === null || rowBarContent(model)) return false;
+  state.paneRow = null;
+  return true;
+}
 
 export function openRow(index: number): void {
+  const model = paneModel();
+  const raw = model.texts[index];
+  const text = raw === undefined ? "" : rowText(raw);
+  if (!text) {
+    if (state.paneRow !== null) {
+      state.paneRow = null;
+      render();
+    }
+    return;
+  }
   state.paneRow = state.paneRow === index ? null : index;
   haptic(6);
   render();
@@ -19,7 +44,7 @@ export function closeRow(): void {
   render();
 }
 
-async function copy(text: string, done: string): Promise<void> {
+export async function copyRow(text: string, done: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
     showStatus(done);
@@ -30,37 +55,8 @@ async function copy(text: string, done: string): Promise<void> {
   render();
 }
 
-/**
- * Contextual bar for the tapped row. Lives in the pane's flex column rather
- * than floating over the buffer, so acting on a row never hides it.
- */
-export function rowBar(model: PaneModel): HTMLElement | null {
-  const index = state.paneRow;
-  if (index === null) return null;
-  const raw = model.texts[index];
-  if (raw === undefined) return null;
-  const text = rowText(raw);
-  if (!text) {
-    state.paneRow = null;
-    return null;
-  }
-  const bar = node("div", "row-bar");
-  bar.setAttribute("role", "group");
-  bar.setAttribute("aria-label", t("row.aria"));
-  bar.append(node("p", "row-quote", text));
-  const actions = node("div", "row-actions");
-  actions.append(button(t("row.copyLine"), "row-act", () => copy(text, t("row.copiedLine"))));
-  const path = rowPath(raw);
-  if (path) actions.append(button(t("row.copyPath", { path }), "row-act", () => copy(path, t("row.copiedPath"))));
-  actions.append(
-    button(t("row.quote"), "row-act", () => {
-      insertCompose(text);
-      state.paneRow = null;
-      render();
-    }),
-  );
-  actions.append(button(t("menu.selectText"), "row-act", () => toggleTermSelect(true)));
-  actions.append(button(t("close"), "row-act row-act-ghost", closeRow));
-  bar.append(actions);
-  return bar;
+export function quoteRow(text: string): void {
+  insertCompose(text);
+  state.paneRow = null;
+  render();
 }

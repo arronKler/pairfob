@@ -1,34 +1,16 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLDialogElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.matchMedia = happy.matchMedia.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { act, createElement } from "react";
+import { leaveReactScreen, renderReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 const { app, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
-const { fillSettings } = await import("./settings.ts");
-const { t } = await import("../lib/i18n.ts");
+const { SettingsContent } = await import("./react/settings");
+const { setLang, t } = await import("../lib/i18n.ts");
 
 function paint(): void {
-  app.replaceChildren();
-  fillSettings(app, false);
+  act(() => renderReactScreen(createElement(SettingsContent, { withBack: false })));
 }
 
 function click(label: string): HTMLButtonElement {
@@ -40,11 +22,27 @@ function click(label: string): HTMLButtonElement {
 }
 
 async function flushed(): Promise<void> {
-  for (let i = 0; i < 12; i++) await Promise.resolve();
+  await act(async () => {
+    await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+  });
 }
 
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  Object.assign(state, { phase: "live", screen: "home", fullTerminal: false, agentChat: false,
+    credential: null, live: null, computers: [], agents: [], paneId: "", panePinned: {}, paneTouched: {},
+    listGroup: "flat", listGroupCollapsed: {}, operationBusy: false, networkOnline: true, runtimeKind: "herdr",
+    herdHost: "", notice: null, settingsLoading: false, deviceList: [], devicesError: "", pushConfigError: "",
+    pushEnabled: null, pushSubscribed: null });
+  setLang("zh");
+});
+
 afterEach(() => {
-  for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
+  act(() => leaveReactScreen());
+  setRenderer(() => {});
+  act(() => closeTestDialogs());
   state.live = null;
   state.credential = null;
   state.deviceList = [];
@@ -91,13 +89,13 @@ describe("settings paired devices", () => {
     expect(app.textContent).toContain("离线");
     expect(app.textContent).not.toContain("已解除配对");
     expect(app.textContent).not.toContain("dev_gone");
-    expect(click("解除这台手机的配对")).toBeTruthy();
+    expect(Boolean(click("解除这台手机的配对"))).toBe(true);
     expect([...app.querySelectorAll(".device-forget")].map((el) => el.getAttribute("aria-label"))).toEqual(["解除旧手机的配对"]);
 
-    click("解除旧手机的配对").click();
+    act(() => { click("解除旧手机的配对").click(); });
     const confirm = [...document.querySelectorAll("dialog button")].find((button) => button.textContent === "解除");
     if (!(confirm instanceof HTMLButtonElement)) throw new Error("missing confirm");
-    confirm.click();
+    act(() => { confirm.click(); });
     await flushed();
 
     expect(revoked).toEqual(["dev_stale00001"]);

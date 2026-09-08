@@ -9,8 +9,17 @@ const views = new Map<string, DaemonVersion>();
 let nextCheckAt = 0;
 let releaseTimer: ReturnType<typeof setTimeout> | null = null;
 let observing = false;
-let repaint = () => { if (state.screen === "settings" || state.screen === "home") render(); };
-export function setDaemonUpdateRenderer(callback: () => void): void { repaint = callback; }
+const listeners = new Set<() => void>();
+let revision = 0;
+export function daemonUpdateRevision(): number { return revision; }
+export function subscribeDaemonUpdates(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+function notifyUpdate(): void {
+  revision++;
+  for (const listener of listeners) listener();
+}
 function scheduleReleaseCheck(): void {
   if (releaseTimer) clearTimeout(releaseTimer);
   releaseTimer = null;
@@ -38,7 +47,7 @@ export function observeDaemonUpdates(): void {
 export function markDaemonConfigIncompatible(): void {
   const view = daemonVersion();
   if (view) view.incompatible = true;
-  repaint();
+  notifyUpdate();
 }
 let releaseState: "idle" | "checking" | "success" | "error" = "idle";
 export function daemonReleaseCheckState(): typeof releaseState { return releaseState; }
@@ -90,10 +99,10 @@ export async function checkDaemonRelease(force = false): Promise<void> {
     finally {
       clearTimeout(timer); flight = null;
       scheduleReleaseCheck();
-      repaint();
+      notifyUpdate();
     }
   })();
-  repaint();
+  notifyUpdate();
   return flight;
 }
 
@@ -122,7 +131,7 @@ export async function refreshDaemonUpdate(): Promise<void> {
     } catch { /* Old daemons return unknown_op; keep the manual update path. */ }
     finally {
       if (state.live === session && state.credential?.daemonId === id) {
-        repaint();
+        notifyUpdate();
         if (poll) clearTimeout(poll);
         if (document.visibilityState !== "hidden" && (updateInProgress(views.get(id)?.status) || views.get(id)?.uncertain)) poll = setTimeout(() => { poll = null; void refreshDaemonUpdate(); }, 3000);
       }
@@ -147,7 +156,7 @@ export async function startDaemonUpdate(): Promise<void> {
   finally {
     view.requesting = false;
     if (state.credential?.daemonId === id) {
-      repaint();
+      notifyUpdate();
       void refreshDaemonUpdate();
     }
   }

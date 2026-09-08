@@ -1,6 +1,5 @@
 import { marked } from "marked";
 import remend from "remend";
-import { node } from "./dom";
 
 marked.use({ gfm: true, breaks: false });
 
@@ -81,10 +80,4 @@ export function renderMarkdown(source: string): string {
   template.innerHTML = marked.parse(remend(text), { async: false });
   scrub(template.content);
   return remember(text, template.innerHTML);
-}
-
-export function markdownEl(source: string, className = "agent-md"): HTMLElement {
-  const el = node("div", className);
-  el.innerHTML = renderMarkdown(source);
-  return el;
 }

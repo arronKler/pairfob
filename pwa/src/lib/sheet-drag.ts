@@ -1,11 +1,11 @@
-import { haptic, node, prefersReducedMotion } from "./dom";
+import { haptic, prefersReducedMotion } from "./dom";
 
 /**
  * Drag-to-dismiss for bottom sheets.
  *
  * The close button sits in the top-right corner, which is exactly where a thumb
  * cannot reach on a phone held in one hand. Below the desk breakpoint the modal
- * is already a bottom sheet (see `settings.css`), so a downward drag there means
+ * is already a bottom sheet (see `settings.scss`), so a downward drag there means
  * "put it away" — the same gesture both mobile platforms train.
  */
 
@@ -26,14 +26,6 @@ const UP_LIMIT = 34;
 /** Safety net for a transitionend that never arrives (element removed mid-flight). */
 const CLOSE_FALLBACK_MS = 420;
 
-/** The visible handle. Decorative: the whole head and an unscrolled body drag too. */
-export function sheetGrabber(): HTMLElement {
-  const grab = node("div", "sheet-grab");
-  grab.setAttribute("aria-hidden", "true");
-  grab.append(node("span", "sheet-grab-bar"));
-  return grab;
-}
-
 export function sheetRelease(travel: number, height: number, velocity: number): "close" | "spring" {
   if (travel <= 0) return "spring";
   return travel > height * TRAVEL_RATIO || velocity > FLICK_PX_PER_MS ? "close" : "spring";
@@ -52,16 +44,27 @@ export type SheetDrag = {
   close: () => void;
 };
 
-export function bindSheetDrag({ dialog, form, scroller, close }: SheetDrag): void {
+export function bindSheetDrag({ dialog, form, scroller, close }: SheetDrag): () => void {
+  const bindings = new AbortController();
+  const signal = bindings.signal;
+  let retired = false;
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
+  const cleanup = () => {
+    if (retired) return;
+    retired = true;
+    bindings.abort();
+    clearTimeout(closeTimer);
+    form.classList.remove("is-sheet-dragging", "is-sheet-closing");
+    form.style.transform = "";
+    document.body.classList.remove("sheet-open", "sheet-dragging");
+    document.body.style.removeProperty("--sheet-lift");
+  };
   // The page behind recedes for as long as the sheet is up. The class rides the
   // dialog's own lifecycle so no caller has to remember to clear it.
   queueMicrotask(() => {
-    if (dialog.open) document.body.classList.add("sheet-open");
+    if (!retired && dialog.open) document.body.classList.add("sheet-open");
   });
-  dialog.addEventListener("close", () => {
-    document.body.classList.remove("sheet-open", "sheet-dragging");
-    document.body.style.removeProperty("--sheet-lift");
-  });
+  dialog.addEventListener("close", cleanup, { signal });
 
   let startY = 0;
   let startX = 0;
@@ -96,14 +99,14 @@ export function bindSheetDrag({ dialog, form, scroller, close }: SheetDrag): voi
     lift(0);
     let done = false;
     const run = () => {
-      if (done) return;
+      if (done || retired) return;
       done = true;
       close();
     };
     form.addEventListener("transitionend", (event) => {
       if (event.propertyName === "transform") run();
-    });
-    window.setTimeout(run, CLOSE_FALLBACK_MS);
+    }, { signal });
+    closeTimer = setTimeout(run, CLOSE_FALLBACK_MS);
   };
 
   dialog.addEventListener(
@@ -126,7 +129,7 @@ export function bindSheetDrag({ dialog, form, scroller, close }: SheetDrag): voi
       lastY = touch.clientY;
       lastAt = event.timeStamp;
     },
-    { passive: true },
+    { passive: true, signal },
   );
 
   dialog.addEventListener(
@@ -158,7 +161,7 @@ export function bindSheetDrag({ dialog, form, scroller, close }: SheetDrag): voi
       // The further the sheet goes, the more of the page behind comes back.
       lift(Math.max(0, 1 - Math.max(0, travel) / height));
     },
-    { passive: false },
+    { passive: false, signal },
   );
 
   const release = () => {
@@ -171,6 +174,7 @@ export function bindSheetDrag({ dialog, form, scroller, close }: SheetDrag): voi
     travel = 0;
   };
 
-  dialog.addEventListener("touchend", release);
-  dialog.addEventListener("touchcancel", release);
+  dialog.addEventListener("touchend", release, { signal });
+  dialog.addEventListener("touchcancel", release, { signal });
+  return cleanup;
 }

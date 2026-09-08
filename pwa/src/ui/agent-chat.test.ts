@@ -1,89 +1,78 @@
-import { describe, expect, test } from "bun:test";
+import { happy, resetChatDOM } from "../../test-support/chat-dom";
+import { beforeEach, afterEach, expect, test } from "bun:test";
+import { act } from "react";
+import { app, state } from "../state";
+import { setLang } from "../lib/i18n";
+import { resetComposeDrafts } from "../compose-drafts";
+import { clearAgentTraceCache } from "../lib/agent-trace-cache";
+import * as facade from "./agent-chat";
+import * as controller from "./agent-chat-controller";
+import { renderDesk } from "./desk";
+import { leaveReactScreen } from "./react/root";
 
-const source = await Bun.file(new URL("./agent-chat.ts", import.meta.url)).text();
-const pane = await Bun.file(new URL("./pane.ts", import.meta.url)).text();
-const view = await Bun.file(new URL("./session/view.ts", import.meta.url)).text();
-const desk = await Bun.file(new URL("./desk.ts", import.meta.url)).text();
-
-function fn(name: string, next: string): string {
-  const start = source.indexOf(name);
-  const end = source.indexOf(next);
-  expect(start, name).toBeGreaterThanOrEqual(0);
-  expect(end, next).toBeGreaterThan(start);
-  return source.slice(start, end);
-}
-
-describe("agent-chat is a first-class pane mode", () => {
-  test("enter records the pane mode and does not use History", () => {
-    const enter = fn("export function enterAgentChat(", "export function leaveAgentChat(");
-    expect(enter).toContain('setPaneTermMode(state.paneId, "agent")');
-    expect(source).not.toContain("session.history");
-    expect(source).toContain("session.agentTrace");
-    expect(source).toContain("session.promptAgent");
-    expect(source).toContain("markPaneSubmitted");
-  });
-
-  test("typing stays in the same textarea while the stream patches", () => {
-    expect(source).toContain("export function patchAgentChat(");
-    expect(source).toContain("stream.replaceWith(next)");
-    expect(source).toContain("readDetailsState(stream)");
-    expect(source).toContain("painted.scrollTop = prevTop");
-    expect(source).toContain("stream.dataset.sig === sig");
-    expect(source).toContain('event.key !== "Enter" || event.shiftKey');
-    expect(source).toContain('enterKeyHint = "send"');
-    expect(source).toContain("agentTracePending");
-  });
-
-  test("turns collapse the run and render the reply as markdown", async () => {
-    const paint = await Bun.file(new URL("./agent-chat-stream.ts", import.meta.url)).text();
-    expect(paint).toContain('node("details", "agent-process")');
-    expect(paint).toContain("markdownEl");
-    expect(paint).toContain('t("chat.runningEllipsis")');
-    expect(paint).toContain("agent-assistant");
-    expect(paint).toContain("agent-stream-inner");
-    expect(paint).toContain("agent-user-text");
-    expect(paint).not.toContain("agent-user-role");
-    expect(paint).not.toContain("hist.you");
-    expect(paint).toContain("agent-empty");
-    expect(paint).toContain("agent-empty-sub");
-    expect(paint).not.toContain('"empty-sub"');
-    expect(paint).not.toContain("agent-blocked");
-    expect(source).toContain("agent-confirm");
-    expect(source).toContain("syncChatDock");
-    expect(source).toContain("paintChatNotice");
-    expect(source).toContain("existing.classList.contains(`notice-${want.tone}`)");
-    expect(source).toContain("agent-jump");
-    expect(source).toContain("agentTraceUnread");
-    expect(source).not.toContain("agent-bubble");
-    expect(source).toContain('t("hist.loadEarlier")');
-    expect(source).toContain('next.querySelector(".agent-stream-inner")?.prepend(olderButton())');
-    expect(source).not.toContain("olderButton(), stream");
-    expect(source).toContain("firstTurnNeedsUser");
-    expect(source).toContain("TRACE_PAGE = 200");
-  });
-
-  test("leave paints guided itself; list-back keeps the mode", () => {
-    const leave = fn("export function leaveAgentChat(", "function paintItems(");
-    expect(leave).toContain('setPaneTermMode(state.paneId, "guided")');
-    expect(pane).toContain("renderAgentChat(goBackFromPane, () => void openSelectedWorkspace(), openPaneMenu, openPaneSwitcher)");
-    const back = pane.slice(pane.indexOf("export function goBackFromPane("), pane.indexOf("export function sessionHandlers("));
-    expect(back).toContain("if (state.agentChat)");
-    expect(back).toContain("rememberGuided: false");
-  });
-
-  test("guided chrome and the desk main column both host the mode", () => {
-    expect(view).not.toContain("handlers.onAgentChat");
-    expect(desk).toContain("fillAgentChat(chat, handlers.onBack, false, handlers.onWorkspace, handlers.onMenu, handlers.onSwitch)");
-    expect(desk).toContain("state.agentChat");
-    expect(desk).toContain('node("div", "pane-root")');
-    expect(desk).toContain("fillSession(pane, selected, false, handlers)");
-    expect(desk).not.toContain("fillSession(main,");
-  });
-
-  test("live polling patches the chat instead of replacing the pane", async () => {
-    const live = await Bun.file(new URL("../live.ts", import.meta.url)).text();
-    expect(live).toContain("patchAgentChat");
-    expect(live).toContain("const changed = await refreshAgentTrace()");
-    expect(view).toContain("if (state.agentChat) return");
-  });
+beforeEach(async () => {
+  await resetChatDOM();
+  setLang("zh");
+  resetComposeDrafts();
+  clearAgentTraceCache();
+  state.phase = "live";
+  state.screen = "pane";
+  state.paneId = "p1";
+  state.agentChat = true;
+  state.fullTerminal = false;
+  state.composeDraft = "";
+  state.composeIME = false;
+  state.operationBusy = false;
+  state.notice = null;
+  state.agentTraceLoadState = "ready";
+  state.agentTraceBusy = false;
+  state.agentTraceNote = "";
+  state.agentTraceItems = [{ type: "user", text: "Review this" }, { type: "assistant", text: "**Ready**" }];
+  state.agentTracePending = "";
+  state.agentTracePendingBase = [];
+  state.operationCapabilities = { ...state.operationCapabilities, history: true, prompt_agent: true };
+  state.agents = [{ paneId: "p1", agent: "codex", hasAgent: true, status: "idle",
+    workspaceLabel: "demo", cwd: "/tmp/demo", historyAvailable: true }];
+  state.live = { isConnected: () => true } as NonNullable<typeof state.live>;
 });
+afterEach(async () => await act(async () => {
+  leaveReactScreen();
+  controller.leaveAgentChat({ paint: false });
+  state.live = null;
+  state.paneId = "";
+  state.screen = "home";
+  resetComposeDrafts();
+  clearAgentTraceCache();
+}));
+
+test("the public chat facade exposes the canonical controller functions", () => {
+  for (const key of ["canEnterAgentChat", "enterAgentChat", "leaveAgentChat", "patchAgentChat",
+    "refreshAgentTrace", "restoreAgentTrace", "stickAgentStream"] as const) {
+    expect(facade[key]).toBe(controller[key]);
+  }
+});
+
+test("the phone facade mounts the React page and forwards its chrome callbacks", async () => await act(async () => {
+  const actions: string[] = [];
+  facade.renderAgentChat(() => actions.push("back"), () => actions.push("workspace"),
+    () => actions.push("menu"), () => actions.push("switch"));
+  expect(app.querySelector("[data-react-agent-chat]")?.getAttribute("data-back")).toBe("1");
+  expect(app.querySelector(".agent-md strong")?.textContent).toBe("Ready");
+  for (const selector of [".back", ".icon-workspace", ".icon-more", ".chrome-title"]) {
+    const button = app.querySelector<HTMLButtonElement>(selector);
+    if (!button) throw new Error(`Missing ${selector}`);
+    button.click();
+  }
+  expect(actions).toEqual(["back", "workspace", "menu", "switch"]);
+}));
+
+test("the desktop entry hosts React chat in the main column without a pane back button", async () => await act(async () => {
+  happy.happyDOM.setWindowSize({ width: 1440, height: 900 });
+  renderDesk();
+  const chat = app.querySelector(".main [data-react-agent-chat]");
+  expect(chat).not.toBeNull();
+  expect(chat?.getAttribute("data-back")).toBe("0");
+  expect(chat?.querySelector(".back")).toBeNull();
+  expect(chat?.querySelector(".agent-user-text")?.textContent).toBe("Review this");
+  expect(chat?.querySelector(".agent-dock textarea")).not.toBeNull();
+}));

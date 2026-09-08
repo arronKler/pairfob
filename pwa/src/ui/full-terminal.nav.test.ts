@@ -1,38 +1,9 @@
-import { Window } from "happy-dom";
-import { afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { act } from "react";
+import { leaveReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
 let visibility: DocumentVisibilityState = "visible";
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLTextAreaElement",
-  "Node",
-  "DocumentFragment",
-  "ResizeObserver",
-  "MutationObserver",
-  "DOMParser",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.history = happy.history;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-g.cancelAnimationFrame = happy.cancelAnimationFrame.bind(happy);
-g.visualViewport = happy.visualViewport;
-Object.defineProperty(happy.document, "visibilityState", {
-  configurable: true,
-  get: () => visibility,
-});
-happy.document.body.innerHTML = '<main id="app"></main>';
 
 class TestTerminal {
   cols = 80;
@@ -105,6 +76,7 @@ const {
   handleFullTerminalEvent,
   handleFullTerminalVisibility,
   leaveFullTerminal,
+  releaseFullTerminalScreen,
   setFullTerminalComposeLive,
   setTermFit,
 } = await import("./full-terminal.ts");
@@ -129,90 +101,99 @@ function live() {
 }
 
 function bootFullTerminal(session = live()): void {
-  disposeFullTerminal();
-  state.phase = "live";
-  state.screen = "pane";
-  state.paneId = "p1";
-  state.paneText = "ready";
-  state.composeDraft = DRAFT;
-  state.composeLive = false;
-  state.agents = [{
-    paneId: "p1",
-    agent: "herdr",
-    hasAgent: true,
-    status: "idle",
-    workspaceLabel: "demo",
-    cwd: "/tmp/demo",
-  }];
-  state.live = session;
-  state.fullTerminal = true;
-  setPaneTermMode("p1", "full");
-  setRenderer(() => renderPane());
-  renderPane();
+  act(() => {
+    disposeFullTerminal();
+    state.phase = "live";
+    state.screen = "pane";
+    state.paneId = "p1";
+    state.paneText = "ready";
+    state.composeDraft = DRAFT;
+    state.composeLive = false;
+    state.agents = [{
+      paneId: "p1",
+      agent: "herdr",
+      hasAgent: true,
+      status: "idle",
+      workspaceLabel: "demo",
+      cwd: "/tmp/demo",
+    }];
+    state.live = session;
+    state.fullTerminal = true;
+    setPaneTermMode("p1", "full");
+    setRenderer(() => renderPane());
+    renderPane();
+  });
 }
 
 function click(selector: string): void {
   const el = app.querySelector(selector);
   if (!(el instanceof HTMLButtonElement)) throw new Error(`missing ${selector}: ${app.innerHTML.slice(0, 200)}`);
-  el.click();
+  act(() => el.click());
 }
 
 async function waitUntil(predicate: () => boolean, label: string): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
     if (predicate()) return;
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 10));
+    await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, 10)); });
   }
   throw new Error(`timed out waiting for ${label}`);
 }
 
-beforeAll(() => {
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
   setRenderer(() => renderPane());
 });
 
 afterEach(async () => {
-  visibility = "visible";
-  await leaveFullTerminal({ rememberGuided: false, paint: false });
-  disposeFullTerminal();
-  resetComposeDrafts();
-  state.screen = "pane";
-  state.composeDraft = "";
-  state.composeLive = false;
-  state.paneComposeLive = {};
-  state.paneTermModes = {};
-  state.termFit = "pan";
-  state.live = null;
-  app.replaceChildren();
+  await act(async () => {
+    visibility = "visible";
+    await leaveFullTerminal({ rememberGuided: false, paint: false });
+    disposeFullTerminal();
+    releaseFullTerminalScreen();
+    resetComposeDrafts();
+    state.screen = "pane";
+    state.composeDraft = "";
+    state.composeLive = false;
+    state.paneComposeLive = {};
+    state.paneTermModes = {};
+    state.termFit = "pan";
+    state.live = null;
+    leaveReactScreen();
+    app.replaceChildren();
+    setRenderer(() => {});
+  });
 });
 
 describe("complete-terminal remembers its mode per pane", () => {
   test("‹ returns to the session list and keeps complete-terminal as the pane mode", async () => {
     bootFullTerminal();
     expect(app.querySelector(".full-terminal-root")).toBeTruthy();
-    expect(app.querySelector(".dock")).toBeNull();
+    expect((app.querySelector(".dock")) === null).toBeTrue();
     expect(app.querySelector(".full-terminal-pad")).toBeTruthy();
     expect(app.querySelector('.full-terminal-pad [aria-label="上箭头"]')).toBeTruthy();
     click(".full-terminal-chrome .back");
-    await leaveFullTerminal({ rememberGuided: false, paint: false });
-    await Promise.resolve();
+    await act(async () => { await leaveFullTerminal({ rememberGuided: false, paint: false }); });
+    await act(async () => { await Promise.resolve(); });
     expect(state.fullTerminal).toBe(false);
     expect(state.screen).toBe("home");
     expect(paneTermMode("p1")).toBe("full");
-    expect(app.querySelector(".full-terminal-root")).toBeNull();
+    expect((app.querySelector(".full-terminal-root")) === null).toBeTrue();
   });
 
   test("reopening the pane restores complete-terminal", async () => {
     bootFullTerminal();
     click(".full-terminal-chrome .back");
-    await leaveFullTerminal({ rememberGuided: false, paint: false });
-    await Promise.resolve();
+    await act(async () => { await leaveFullTerminal({ rememberGuided: false, paint: false }); });
+    await act(async () => { await Promise.resolve(); });
     expect(state.screen).toBe("home");
     state.screen = "pane";
     state.paneId = "p1";
     state.fullTerminal = paneTermMode("p1") === "full";
-    renderPane();
+    act(() => renderPane());
     expect(state.fullTerminal).toBe(true);
     expect(app.querySelector(".full-terminal-root")).toBeTruthy();
-    expect(app.querySelector(".dock")).toBeNull();
+    expect((app.querySelector(".dock")) === null).toBeTrue();
   });
 
   test("reopening the same pane remounts xterm after a paintless leave", async () => {
@@ -232,7 +213,7 @@ describe("complete-terminal remembers its mode per pane", () => {
     bootFullTerminal(session);
     await waitUntil(() => openedPanes.length === 1, "first same-pane terminal open");
 
-    await openPane("p1");
+    await act(async () => { await openPane("p1"); });
     await waitUntil(() => openedPanes.length === 2, "second same-pane terminal open");
 
     expect(openedPanes).toEqual(["p1", "p1"]);
@@ -274,14 +255,18 @@ describe("complete-terminal remembers its mode per pane", () => {
     setPaneTermMode("p2", "full");
     await waitUntil(() => openedPanes.length === 1, "first pane terminal open");
 
-    const switching = openPane("p2");
+    let switching!: Promise<void>;
+    act(() => { switching = openPane("p2"); });
     await waitUntil(() => closeRequested, "first pane terminal close");
-    resolveClose();
-    await Promise.resolve();
-    const closingStatus = app.querySelector<HTMLElement>(".full-terminal-state");
-    expect(closingStatus?.dataset.stage).toBe("live");
-    expect(closingStatus?.textContent).not.toContain("终端连接已暂停");
-    await switching;
+    await act(async () => {
+      resolveClose();
+      // Inspect the original one-microtask handoff before act drains the new mount.
+      await Promise.resolve();
+      const closingStatus = app.querySelector<HTMLElement>(".full-terminal-state");
+      expect(closingStatus?.dataset.stage).toBe("live");
+      expect(closingStatus?.textContent).not.toContain("终端连接已暂停");
+      await switching;
+    });
     await waitUntil(() => openedPanes.length === 2, "second pane terminal open");
 
     expect(openedPanes).toEqual(["p1", "p2"]);
@@ -295,24 +280,24 @@ describe("complete-terminal remembers its mode per pane", () => {
   test("leaving the terminal mode from the menu returns to guided", async () => {
     bootFullTerminal();
     expect(app.querySelector('button[aria-label="会话操作"]')).toBeTruthy();
-    expect(app.querySelector(".full-terminal-exit")).toBeNull();
-    await leaveFullTerminal();
+    expect((app.querySelector(".full-terminal-exit")) === null).toBeTrue();
+    await act(async () => { await leaveFullTerminal(); });
     expect(state.fullTerminal).toBe(false);
     expect(state.screen).toBe("pane");
     expect(paneTermMode("p1")).toBe("guided");
     expect(state.composeDraft).toBe("");
     expect(app.querySelector(".dock")).toBeTruthy();
     expect(app.querySelector('button[aria-label="会话操作"]')).toBeTruthy();
-    enterFullTerminal();
+    act(() => enterFullTerminal());
     expect(state.fullTerminal).toBe(true);
     expect(state.composeDraft).toBe(DRAFT);
   });
 
   test("swipe-back from complete-terminal returns to the list", async () => {
     bootFullTerminal();
-    goBackFromPane();
-    await leaveFullTerminal({ rememberGuided: false, paint: false });
-    await Promise.resolve();
+    act(() => goBackFromPane());
+    await act(async () => { await leaveFullTerminal({ rememberGuided: false, paint: false }); });
+    await act(async () => { await Promise.resolve(); });
     expect(state.screen).toBe("home");
     expect(paneTermMode("p1")).toBe("full");
   });
@@ -324,11 +309,11 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(host?.querySelector(".full-terminal-pan")).toBeTruthy();
     expect(host?.querySelector(".full-terminal-canvas")).toBeTruthy();
     expect(host?.querySelector(".full-terminal-scroll")).toBeTruthy();
-    setTermFit("fit");
+    act(() => setTermFit("fit"));
     expect(app.querySelector(".full-terminal-host")?.classList.contains("is-pan")).toBe(false);
-    setTermFit("pan");
+    act(() => setTermFit("pan"));
     expect(app.querySelector(".full-terminal-host")?.classList.contains("is-pan")).toBe(true);
-    setTermFit("pan", 120);
+    act(() => setTermFit("pan", 120));
     expect(state.termCols).toBe(120);
     expect(localStorage.getItem("pairfob:termCols")).toBe("120");
   });
@@ -363,14 +348,14 @@ describe("complete-terminal remembers its mode per pane", () => {
   test("compose and live input switch in place without losing an unsent draft", () => {
     bootFullTerminal();
     expect(app.querySelector(".full-terminal-compose-input")).toBeTruthy();
-    expect(app.querySelector(".full-terminal-kb")).toBeNull();
-    setFullTerminalComposeLive(true);
+    expect((app.querySelector(".full-terminal-kb")) === null).toBeTrue();
+    act(() => setFullTerminalComposeLive(true));
     expect(state.composeLive).toBe(true);
     expect(state.paneComposeLive.p1).toBe(true);
     expect(state.composeDraft).toBe(DRAFT);
-    expect(app.querySelector(".full-terminal-compose-input")).toBeNull();
+    expect((app.querySelector(".full-terminal-compose-input")) === null).toBeTrue();
     expect(app.querySelector(".full-terminal-kb")).toBeTruthy();
-    setFullTerminalComposeLive(false);
+    act(() => setFullTerminalComposeLive(false));
     expect(state.composeLive).toBe(false);
     expect(state.paneComposeLive.p1).toBe(false);
     expect((app.querySelector(".full-terminal-compose-input") as HTMLTextAreaElement).value).toBe(DRAFT);
@@ -378,7 +363,7 @@ describe("complete-terminal remembers its mode per pane", () => {
 
   test("list-back lives on the guided chrome after leaving", async () => {
     bootFullTerminal();
-    await leaveFullTerminal();
+    await act(async () => { await leaveFullTerminal(); });
     click(".chrome .back");
     expect(state.screen).toBe("home");
     expect(state.composeDraft).toBe("");
@@ -393,10 +378,10 @@ describe("complete-terminal remembers its mode per pane", () => {
 
     await waitUntil(() => rejectOpen !== undefined, "pending terminal open");
     expect(rejectOpen).toBeDefined();
-    handleFullTerminalEvent({ type: "disconnected" });
-    rejectOpen?.(new Error("old transport closed"));
-    await Promise.resolve();
-    await Promise.resolve();
+    act(() => handleFullTerminalEvent({ type: "disconnected" }));
+    act(() => { rejectOpen?.(new Error("old transport closed")); });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
 
     const status = app.querySelector<HTMLElement>(".full-terminal-state");
     expect(status?.dataset.stage).toBe("waiting");
@@ -423,19 +408,19 @@ describe("complete-terminal remembers its mode per pane", () => {
     bootFullTerminal(session);
     await waitUntil(() => app.querySelector(".xterm") !== null, "terminal renderer");
 
-    handleFullTerminalEvent({ type: "reconnecting" });
-    await Promise.resolve();
+    act(() => handleFullTerminalEvent({ type: "reconnecting" }));
+    await act(async () => { await Promise.resolve(); });
     expect(opens).toBe(0);
     expect(app.querySelector<HTMLElement>(".full-terminal-state")?.dataset.stage).toBe("waiting");
 
     connected = true;
-    handleFullTerminalEvent({ type: "connected" });
+    act(() => handleFullTerminalEvent({ type: "connected" }));
     await waitUntil(() => opens === 1, "recovered terminal open");
     expect(opens).toBe(1);
     expect(app.querySelector<HTMLElement>(".full-terminal-state")?.hidden).toBe(true);
 
-    handleFullTerminalEvent({ type: "connected" });
-    await Promise.resolve();
+    act(() => handleFullTerminalEvent({ type: "connected" }));
+    await act(async () => { await Promise.resolve(); });
     expect(opens).toBe(1);
   });
 
@@ -455,9 +440,9 @@ describe("complete-terminal remembers its mode per pane", () => {
     };
     bootFullTerminal(session);
 
-    handleFullTerminalEvent({ type: "connected" });
+    act(() => handleFullTerminalEvent({ type: "connected" }));
     expect(opens).toBe(0);
-    expect(app.querySelector(".xterm")).toBeNull();
+    expect((app.querySelector(".xterm")) === null).toBeTrue();
     await waitUntil(() => opens === 1, "renderer-backed terminal open");
     expect(app.querySelector(".xterm")).toBeTruthy();
   });
@@ -484,9 +469,9 @@ describe("complete-terminal remembers its mode per pane", () => {
     bootFullTerminal(session);
     await waitUntil(() => opens === 1, "pending reconnect open");
 
-    handleFullTerminalEvent({ type: "reconnecting" });
-    handleFullTerminalEvent({ type: "connected" });
-    finishFirst();
+    act(() => handleFullTerminalEvent({ type: "reconnecting" }));
+    act(() => handleFullTerminalEvent({ type: "connected" }));
+    act(() => { finishFirst(); });
     await waitUntil(() => opens === 2, "replacement reconnect open");
 
     expect(closed).toEqual(["term_11111111111111111111111111111111"]);
@@ -515,10 +500,10 @@ describe("complete-terminal remembers its mode per pane", () => {
     await waitUntil(() => opens === 1, "pending hidden open");
 
     visibility = "hidden";
-    handleFullTerminalVisibility(true);
+    act(() => handleFullTerminalVisibility(true));
     visibility = "visible";
-    handleFullTerminalVisibility(false);
-    finishFirst();
+    act(() => handleFullTerminalVisibility(false));
+    act(() => { finishFirst(); });
     await waitUntil(() => opens === 2, "replacement visible open");
 
     expect(closed).toEqual(["term_11111111111111111111111111111111"]);
@@ -558,16 +543,16 @@ describe("complete-terminal remembers its mode per pane", () => {
         data: new Uint8Array([65]),
       },
     });
-    handleFullTerminalEvent(terminalFrame("1", true));
-    handleFullTerminalEvent(terminalFrame("1", false));
-    handleFullTerminalEvent(terminalFrame("3", true));
-    handleFullTerminalEvent(terminalFrame("4", false));
-    handleFullTerminalEvent(terminalFrame("2", false));
-    await Promise.resolve();
+    act(() => handleFullTerminalEvent(terminalFrame("1", true)));
+    act(() => handleFullTerminalEvent(terminalFrame("1", false)));
+    act(() => handleFullTerminalEvent(terminalFrame("3", true)));
+    act(() => handleFullTerminalEvent(terminalFrame("4", false)));
+    act(() => handleFullTerminalEvent(terminalFrame("2", false)));
+    await act(async () => { await Promise.resolve(); });
     expect(closes).toBe(0);
 
-    handleFullTerminalEvent(terminalFrame("6", false));
-    await Promise.resolve();
+    act(() => handleFullTerminalEvent(terminalFrame("6", false)));
+    await act(async () => { await Promise.resolve(); });
     expect(closes).toBe(1);
   });
 
@@ -588,7 +573,7 @@ describe("complete-terminal remembers its mode per pane", () => {
     };
     bootFullTerminal(session);
     await waitUntil(() => opens === 1, "initial terminal open");
-    handleFullTerminalEvent({ type: "terminal_closed", terminalId, reason: "frame gap" });
+    act(() => handleFullTerminalEvent({ type: "terminal_closed", terminalId, reason: "frame gap" }));
 
     visibility = "hidden";
     click(".full-terminal-state-retry");
@@ -598,7 +583,7 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(status?.querySelector<HTMLButtonElement>(".full-terminal-state-retry")?.hidden).toBeFalse();
 
     visibility = "visible";
-    handleFullTerminalVisibility(false);
+    act(() => handleFullTerminalVisibility(false));
     await waitUntil(() => opens === 2, "visible terminal reopen");
     expect(status?.hidden).toBeTrue();
     expect(status?.dataset.stage).toBe("live");
@@ -623,16 +608,16 @@ describe("complete-terminal remembers its mode per pane", () => {
     await waitUntil(() => opens === 1, "initial terminal open");
 
     visibility = "hidden";
-    handleFullTerminalVisibility(true);
+    act(() => handleFullTerminalVisibility(true));
     visibility = "visible";
-    handleFullTerminalVisibility(false);
+    act(() => handleFullTerminalVisibility(false));
     await waitUntil(() => opens === 2, "newer terminal open");
     const status = app.querySelector<HTMLElement>(".full-terminal-state");
     expect(opens).toBe(2);
     expect(status?.hidden).toBeTrue();
 
-    resolveClose();
-    await Promise.resolve();
+    act(() => { resolveClose(); });
+    await act(async () => { await Promise.resolve(); });
     expect(status?.hidden).toBeTrue();
     expect(status?.dataset.stage).toBe("live");
   });
@@ -659,9 +644,9 @@ describe("complete-terminal remembers its mode per pane", () => {
     await waitUntil(() => opens === 1, "initial terminal open");
 
     visibility = "hidden";
-    handleFullTerminalVisibility(true);
+    act(() => handleFullTerminalVisibility(true));
     visibility = "visible";
-    handleFullTerminalVisibility(false);
+    act(() => handleFullTerminalVisibility(false));
     await waitUntil(
       () => app.querySelector<HTMLElement>(".full-terminal-state")?.dataset.stage === "error",
       "newer terminal open failure",
@@ -671,8 +656,8 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(status?.dataset.stage).toBe("error");
     expect(status?.querySelector<HTMLButtonElement>(".full-terminal-state-retry")?.hidden).toBeFalse();
 
-    resolveClose();
-    await Promise.resolve();
+    act(() => { resolveClose(); });
+    await act(async () => { await Promise.resolve(); });
     expect(status?.textContent).toBe(failureText);
     expect(status?.textContent).not.toContain("终端连接已暂停");
     expect(status?.querySelector<HTMLButtonElement>(".full-terminal-state-retry")?.hidden).toBeFalse();

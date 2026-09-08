@@ -1,49 +1,20 @@
-import { node } from "../lib/dom";
-import { t } from "../lib/i18n";
-import { app, selectedAgent, state } from "../state";
-import { fillAgentChat } from "./agent-chat";
-import { appendNotice } from "./chrome";
-import { renderRail } from "./home";
+import { createElement } from "react";
+import { selectedAgent, state } from "../state";
 import { sessionHandlers } from "./pane";
-import { fillSession, finishSessionPaint, sessionScroll } from "./session-view";
-import { fillComputers } from "./computers";
-import { fillQuota } from "./agent-quota";
-import { fillSettings } from "./settings";
+import { prepareSessionPaint } from "./session/view";
+import { AgentChatPane } from "./react/agent-chat";
+import { DeskScreen } from "./react/desk";
+import { prepareHerdView } from "./react/home";
+import { SessionPane } from "./react/session-pane";
+import { renderReactScreen } from "./react/root";
 
 export function renderDesk(): void {
-  const scroll = sessionScroll();
-  const root = document.createDocumentFragment();
-  root.append(renderRail());
-  const main = node("section", "main");
-  let input: HTMLTextAreaElement | undefined;
-  if (state.screen === "settings") {
-    main.classList.add("main-settings");
-    fillSettings(main, true);
-  } else if (state.screen === "quota") {
-    main.classList.add("main-settings");
-    fillQuota(main);
-  } else if (state.screen === "computers") {
-    main.classList.add("main-settings");
-    fillComputers(main, true);
-  } else {
-    const selected = selectedAgent();
-    const handlers = sessionHandlers();
-    if (selected && state.paneId && state.agentChat) {
-      const chat = node("div", "pane-root agent-chat-root");
-      input = fillAgentChat(chat, handlers.onBack, false, handlers.onWorkspace, handlers.onMenu, handlers.onSwitch);
-      main.append(chat);
-    } else if (selected && state.paneId) {
-      const pane = node("div", "pane-root");
-      input = fillSession(pane, selected, false, handlers);
-      main.append(pane);
-    } else {
-      appendNotice(main);
-      const empty = node("div", "main-empty");
-      empty.append(node("p", "empty-title", t("desk.pickTitle")), node("p", "empty-sub", t("desk.pickSub")));
-      main.append(empty);
-    }
-  }
-  root.append(main);
-  app.replaceChildren(root);
-  finishSessionPaint(scroll, input);
+  const pane = selectedAgent() && state.paneId;
+  const page = state.screen === "settings" || state.screen === "quota" || state.screen === "computers";
+  const children = pane && !page
+    ? state.agentChat
+      ? createElement(AgentChatPane, { includeBack: false, handlers: sessionHandlers() })
+      : createElement(SessionPane, { includeBack: false, handlers: sessionHandlers(), scroll: prepareSessionPaint() })
+    : undefined;
+  renderReactScreen(createElement(DeskScreen, { view: prepareHerdView(), children }));
 }

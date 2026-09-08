@@ -1,49 +1,93 @@
-import { describe, expect, test } from "bun:test";
+import { resetTestDOM } from "../../test-support/boot-dom";
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { act, createElement } from "react";
+import { setLang, t } from "../lib/i18n";
+import { MenuItem, MenuSection, showActionSheet, type SheetAction } from "./react/action-sheet";
 
-const source = await Bun.file(new URL("./sheet.ts", import.meta.url)).text();
+const pause = () => new Promise<void>(resolve => window.setTimeout(resolve, 0));
+const current = () => document.querySelector<HTMLDialogElement>("dialog.sheet")!;
+
+function open(action?: SheetAction): void {
+  showActionSheet("Actions", modal => createElement(MenuSection, { title: "Workspace", children: [
+    createElement(MenuItem, { key: "disabled", modal, disabled: true, children: "Unavailable" }),
+    createElement(MenuItem, { key: "enabled", modal, action, children: "Open workspace" }),
+  ] }));
+}
+
+beforeEach(async () => {
+  await resetTestDOM();
+  setLang("zh");
+});
+afterEach(async () => {
+  await act(async () => { closeTestDialogs(); await pause(); });
+});
 
 describe("action sheet", () => {
-  test("title ids do not need a secure-context UUID", () => {
-    expect(source).not.toContain("randomUUID");
-    expect(source).toContain("sheet-title-");
+  test("unique linked title ids do not need a secure-context UUID", async () => {
+    const uuid = spyOn(crypto, "randomUUID").mockImplementation(() => { throw new Error("unavailable"); });
+    try {
+      act(() => open());
+      const firstId = current().getAttribute("aria-labelledby")!;
+      expect(firstId).not.toBe("");
+      expect(document.getElementById(firstId)?.textContent).toBe("Actions");
+      await act(async () => { current().close(); await Promise.resolve(); });
+      act(() => open());
+      const secondId = current().getAttribute("aria-labelledby")!;
+      expect(secondId).not.toBe(firstId);
+      expect(document.getElementById(secondId)?.textContent).toBe("Actions");
+      expect(uuid).not.toHaveBeenCalled();
+    } finally { uuid.mockRestore(); }
   });
 
-  /**
-   * The ⋯ control sits above a bottom sheet. Opening from its click used to
-   * attach a backdrop dismiss immediately, so the same tap landed on the
-   * dialog and closed it before anything painted.
-   */
-  test("a full-height sheet can be dismissed from the header", () => {
-    const sheet = source.slice(source.indexOf("export function sheet("), source.indexOf("export function afterClose("));
-    expect(sheet).toContain("sheet-close");
-    expect(sheet).toContain('t("close")');
-    expect(sheet).toContain("sheet-head");
-    expect(sheet).toContain("sheet-body");
-    // Head and body stay siblings of the form, with the drag handle above them.
-    expect(sheet).toContain("form.append(sheetGrabber(), head, body)");
-    // Transform for the drag rides the form, never the dialog in the top layer.
-    expect(sheet).toContain("bindSheetDrag({ dialog, form, scroller: body, close })");
-    expect(source).toContain("button:not(:disabled):not(.sheet-close)");
-    expect(source).toContain("parts.body.append");
-    expect(source).not.toContain("parts.form.append(list");
-    expect(source).not.toContain("parts.form.append(item");
+  test("a full-height sheet keeps header dismissal above its scrolling items", () => {
+    act(() => open());
+    const dialog = current();
+    const form = dialog.querySelector("form")!;
+    expect([...form.children].map(node => node.className)).toEqual(["sheet-grab", "sheet-head", "sheet-body"]);
+    expect(form.querySelector(".sheet-grab")?.getAttribute("aria-hidden")).toBe("true");
+    expect(form.querySelector(".sheet-body > .menu-section-title")?.textContent).toBe("Workspace");
+    expect(form.querySelectorAll(".sheet-body > .menu-item")).toHaveLength(2);
+    const enabled = form.querySelector<HTMLButtonElement>(".menu-item:not(:disabled)")!;
+    expect(document.activeElement === enabled).toBeTrue();
+    const close = form.querySelector<HTMLButtonElement>(".sheet-head > .sheet-close")!;
+    expect(close.type).toBe("button");
+    expect(close.getAttribute("aria-label")).toBe(t("close"));
+    act(() => close.click());
+    expect(dialog.open).toBeFalse();
+    expect(dialog.isConnected).toBeFalse();
   });
 
-  test("backdrop dismiss ignores the opening gesture", () => {
-    const sheet = source.slice(source.indexOf("export function sheet("), source.indexOf("export function afterClose("));
-    expect(sheet).toContain("OPEN_GESTURE_MS");
-    expect(sheet).toContain("performance.now()");
-    expect(sheet).not.toMatch(/preventDefault\(\);\s*close\(\)/);
+  test("backdrop dismissal ignores the opening gesture for 400 ms", () => {
+    let now = 1000;
+    const time = spyOn(performance, "now").mockImplementation(() => now);
+    try {
+      act(() => open());
+      const dialog = current();
+      act(() => dialog.click());
+      expect(dialog.open).toBeTrue();
+      now += 399;
+      act(() => dialog.click());
+      expect(dialog.open).toBeTrue();
+      now += 1;
+      act(() => dialog.click());
+      expect(dialog.open).toBeFalse();
+      expect(dialog.isConnected).toBeFalse();
+    } finally { time.mockRestore(); }
   });
 
-  /**
-   * WebKit drops a showModal() that runs in the same turn as dialog.close().
-   * Menu items that open a follow-up dialog would then look like a dead tap.
-   */
-  test("menu actions run only after the sheet has closed", () => {
-    expect(source).toContain("export function afterClose(");
-    expect(source).toContain("window.setTimeout(() => void action(), 0)");
-    expect(source).not.toMatch(/parts\.close\(\);\s*await action\(\)/);
-    expect(source).toContain("afterClose(parts.dialog, action)");
+  test("menu actions run on the next task after the sheet closes", async () => {
+    const calls: Array<{ open: boolean; connected: boolean }> = [];
+    let dialog!: HTMLDialogElement;
+    act(() => open(() => { calls.push({ open: dialog.open, connected: dialog.isConnected }); }));
+    dialog = current();
+    await act(async () => {
+      dialog.querySelector<HTMLButtonElement>(".menu-item:not(:disabled)")!.click();
+      await Promise.resolve();
+    });
+    expect(dialog.open).toBeFalse();
+    expect(calls).toEqual([]);
+    await act(async () => { await pause(); });
+    expect(calls).toEqual([{ open: false, connected: false }]);
   });
 });

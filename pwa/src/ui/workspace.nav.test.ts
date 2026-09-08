@@ -1,23 +1,9 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const globals = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLDialogElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) globals[key] = (happy as unknown as Record<string, unknown>)[key];
-globals.location = happy.location;
-globals.matchMedia = happy.matchMedia.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { resetTestDOM } from "../../test-support/boot-dom";
+import { act } from "react";
+import { setLang } from "../lib/i18n";
+import { leaveReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 const { app, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
@@ -100,7 +86,7 @@ function buttonNamed(label: string): HTMLButtonElement {
 }
 
 async function settle(): Promise<void> {
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, 0)); });
 }
 
 async function waitForPending(): Promise<void> {
@@ -126,7 +112,7 @@ function prepare(live = liveFixture()): void {
     open_worktree: true,
   };
   state.live = live as unknown as typeof state.live;
-  setRenderer(renderWorkspace);
+  setRenderer(() => act(renderWorkspace));
 }
 
 async function boot(live = liveFixture()): Promise<void> {
@@ -134,10 +120,18 @@ async function boot(live = liveFixture()): Promise<void> {
   await enterWorkspace("p1");
 }
 
+beforeEach(async () => {
+  await resetTestDOM();
+  setLang("zh");
+  state.operationBusy = false;
+});
+
 afterEach(() => {
+  setRenderer(() => {});
+  act(leaveReactScreen);
   clearWorkspacePendingReveal();
   clearAllDiffNotes();
-  for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
+  act(closeTestDialogs);
   state.live = null;
   state.screen = "home";
   state.paneId = "";
@@ -315,14 +309,14 @@ describe("mobile workspace navigation", () => {
     await boot();
     expect(state.screen).toBe("workspace");
     expect(app.querySelectorAll('[role="tab"]')).toHaveLength(2);
-    buttonNamed("src").click();
+    act(() => buttonNamed("src").click());
     await settle();
     expect(app.querySelector(".workspace-breadcrumbs")?.textContent).toContain("src");
-    buttonNamed("app.ts").click();
+    act(() => buttonNamed("app.ts").click());
     await settle();
     expect(app.querySelector(".workspace-shell")?.classList.contains("detail")).toBeTrue();
     expect(app.querySelector(".workspace-code")?.textContent).toContain("ready = true");
-    buttonNamed("返回列表").click();
+    act(() => buttonNamed("返回列表").click());
     expect(workspaceModel.view).toBe("browser");
     expect(app.querySelector(".workspace-nav")).toBeTruthy();
   });
@@ -357,11 +351,11 @@ describe("mobile workspace navigation", () => {
 
   test("refreshes a file in place instead of dropping back to the tree", async () => {
     await boot();
-    buttonNamed("src").click();
+    act(() => buttonNamed("src").click());
     await settle();
-    buttonNamed("app.ts").click();
+    act(() => buttonNamed("app.ts").click());
     await settle();
-    buttonNamed("刷新工作区").click();
+    act(() => buttonNamed("刷新工作区").click());
     await settle();
     expect(workspaceModel.view).toBe("file");
     expect(app.querySelector(".workspace-code")?.textContent).toContain("ready = true");
@@ -390,18 +384,18 @@ describe("mobile workspace navigation", () => {
 
   test("keeps staged and working-tree diffs distinct", async () => {
     await boot();
-    buttonNamed("更改").click();
+    act(() => buttonNamed("更改").click());
     await settle();
     expect(app.querySelectorAll(".workspace-change-group-title")).toHaveLength(2);
     expect(app.querySelectorAll(".workspace-change")).toHaveLength(2);
     expect(app.querySelectorAll(".workspace-change-mark")[0]?.textContent).toBe("M");
 
-    buttonNamed("已暂存的更改").click();
+    act(() => buttonNamed("已暂存的更改").click());
     expect(app.querySelectorAll(".workspace-change")).toHaveLength(1);
     expect(buttonNamed("已暂存的更改").getAttribute("aria-expanded")).toBe("false");
-    buttonNamed("已暂存的更改").click();
+    act(() => buttonNamed("已暂存的更改").click());
 
-    buttonNamed("src/app.ts · 已暂存 · 修改").click();
+    act(() => buttonNamed("src/app.ts · 已暂存 · 修改").click());
     await settle();
     expect(app.querySelector(".workspace-layer-label")?.textContent).toBe("已暂存");
     expect(app.querySelectorAll(".workspace-diff-line")).toHaveLength(3);
@@ -410,7 +404,7 @@ describe("mobile workspace navigation", () => {
 
   test("shows branches read-only and routes changes through worktrees", async () => {
     await boot();
-    buttonNamed("分支与 Worktree").click();
+    act(() => buttonNamed("分支与 Worktree").click());
     await settle();
     const dialog = document.querySelector("dialog.sheet");
     expect(dialog?.textContent).toContain("feature/mobile");
@@ -421,12 +415,12 @@ describe("mobile workspace navigation", () => {
 
   test("shows each worktree as a complete tappable card", async () => {
     await boot();
-    buttonNamed("分支与 Worktree").click();
+    act(() => buttonNamed("分支与 Worktree").click());
     await settle();
     const listAction = [...document.querySelectorAll("dialog.sheet button")]
       .find((item) => item.textContent?.trim() === "Worktree 列表") as HTMLButtonElement | undefined;
     expect(listAction).toBeTruthy();
-    listAction?.click();
+    act(() => listAction?.click());
     await settle();
     await settle();
 
@@ -443,12 +437,12 @@ describe("mobile workspace navigation", () => {
 
   test("keeps a collapsed change group when reopening from the same page", async () => {
     await boot();
-    buttonNamed("更改").click();
+    act(() => buttonNamed("更改").click());
     await settle();
-    buttonNamed("已暂存的更改").click();
+    act(() => buttonNamed("已暂存的更改").click());
     expect(buttonNamed("已暂存的更改").getAttribute("aria-expanded")).toBe("false");
 
-    buttonNamed("返回终端").click();
+    act(() => buttonNamed("返回终端").click());
     await enterWorkspace("p1");
 
     expect(workspaceModel.tab).toBe("changes");
@@ -458,7 +452,7 @@ describe("mobile workspace navigation", () => {
 
   test("back from the root returns to the same terminal pane", async () => {
     await boot();
-    buttonNamed("返回终端").click();
+    act(() => buttonNamed("返回终端").click());
     await settle();
     expect(state.screen).toBe("pane");
     expect(state.paneId).toBe("p1");
@@ -487,13 +481,13 @@ describe("mobile workspace navigation", () => {
       },
     };
     await boot(live);
-    buttonNamed("src").click();
+    act(() => buttonNamed("src").click());
     await settle();
-    buttonNamed("app.ts").click();
+    act(() => buttonNamed("app.ts").click());
     await settle();
     expect(calls).toEqual({ open: 1, list: 2, read: 1, status: 1 });
 
-    buttonNamed("关闭工作区查看").click();
+    act(() => buttonNamed("关闭工作区查看").click());
     expect(state.screen).toBe("pane");
     expect(workspaceModel.view).toBe("file");
     await enterWorkspace("p1");
@@ -503,7 +497,7 @@ describe("mobile workspace navigation", () => {
     expect(app.querySelector(".workspace-code")?.textContent).toContain("ready = true");
     expect(calls).toEqual({ open: 1, list: 2, read: 1, status: 1 });
 
-    buttonNamed("刷新工作区").click();
+    act(() => buttonNamed("刷新工作区").click());
     await settle();
     expect(calls).toEqual({ open: 2, list: 3, read: 2, status: 2 });
   });

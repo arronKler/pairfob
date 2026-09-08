@@ -1,16 +1,25 @@
-import { describe, expect, test, afterEach } from "bun:test";
-import { Window } from "happy-dom";
-
-const happy = new Window({ url: "https://pairfob.com/pair" });
-const g = globalThis as unknown as Record<string, unknown>;
-g.document = happy.document;
-g.HTMLElement = happy.HTMLElement;
-g.HTMLButtonElement = happy.HTMLButtonElement;
-g.Node = happy.Node;
+import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { act } from "react";
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { app } from "../state";
+import { leaveReactScreen } from "./react/root";
 
 const { TERTIARY_KEYS, bindModifier, clearModifiers, pressModifier, releaseModifier, withModifiers } = await import("./keypad.ts");
 
-afterEach(() => clearModifiers());
+const bindings: Array<{ destroy(): void }> = [];
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  act(leaveReactScreen);
+  act(clearModifiers);
+  app.replaceChildren();
+});
+afterEach(() => {
+  act(() => {
+    for (const binding of bindings.splice(0)) binding.destroy();
+    clearModifiers();
+  });
+  app.replaceChildren();
+});
 
 describe("pad modifiers", () => {
   test("the extra row is holdable modifiers plus readline chords Herdr accepts", () => {
@@ -57,8 +66,8 @@ describe("pad modifiers", () => {
 
   test("pointerup followed by lost capture latches once; cancelling never latches", () => {
     const button = happy.document.createElement("button");
-    happy.document.body.append(button);
-    bindModifier(button as unknown as HTMLElement, "ctrl");
+    app.append(button);
+    bindings.push(bindModifier(button as unknown as HTMLElement, "ctrl"));
     const pointer = (type: string) => button.dispatchEvent(new happy.PointerEvent(type, {
       pointerId: 1, button: 0, bubbles: true, cancelable: true,
     }));
@@ -85,5 +94,22 @@ describe("pad modifiers", () => {
     clearModifiers();
     releaseModifier("ctrl");
     expect(withModifiers("c")).toEqual(["c"]);
+  });
+
+  test("destroy unregisters the button and drops permanent press listeners", () => {
+    const button = happy.document.createElement("button");
+    app.append(button);
+    const binding = bindModifier(button as unknown as HTMLElement, "ctrl");
+    bindings.push(binding);
+    binding.destroy();
+    pressModifier("ctrl");
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    button.dispatchEvent(new happy.PointerEvent("pointerdown", {
+      pointerId: 1, button: 0, bubbles: true, cancelable: true,
+    }));
+    expect(button.classList.contains("is-pressed")).toBe(false);
+    expect(button.classList.contains("on")).toBe(false);
+    button.remove();
+    clearModifiers();
   });
 });

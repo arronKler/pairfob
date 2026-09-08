@@ -1,6 +1,4 @@
-import { button, node } from "../lib/dom";
 import { isPageZoomed } from "../lib/gesture-boundary";
-import { t } from "../lib/i18n";
 import { tapAsMouse } from "./full-terminal-input";
 
 /** Pixels of finger or wheel travel that map to one remote TUI line. */
@@ -252,7 +250,12 @@ export function bindHostScroll(
   };
 }
 
-function bindHold(element: HTMLElement, fire: () => void): void {
+/**
+ * Press-and-hold repeat for a scroll-rail button. Returns a disposer that
+ * clears timers and removes listeners; React hosts must call it on unmount
+ * instead of waiting for detached-element polling.
+ */
+export function bindScrollHold(element: HTMLElement, fire: () => void): () => void {
   let hold: number | null = null;
   let tick: number | null = null;
   const stop = () => {
@@ -261,7 +264,7 @@ function bindHold(element: HTMLElement, fire: () => void): void {
     hold = null;
     tick = null;
   };
-  element.addEventListener("pointerdown", (event) => {
+  const onDown = (event: PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
     fire();
@@ -277,56 +280,40 @@ function bindHold(element: HTMLElement, fire: () => void): void {
         fire();
       }, REPEAT_EVERY_MS);
     }, REPEAT_DELAY_MS);
-  });
-  element.addEventListener("click", (event) => {
+  };
+  const onClick = (event: MouseEvent) => {
     // Pointer activation already fired on pointerdown so the press can repeat.
     // Keyboard and programmatic button activation produce a zero-detail click.
     if (event.detail !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     fire();
-  });
-  element.addEventListener("keydown", (event) => {
+  };
+  const onKeyDown = (event: KeyboardEvent) => {
     // Some embedded browsers do not synthesize a click for Space on buttons.
     // Own both key phases so no native click or page scroll can duplicate it.
     if (event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-  });
-  element.addEventListener("keyup", (event) => {
+  };
+  const onKeyUp = (event: KeyboardEvent) => {
     if (event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
     fire();
-  });
-  for (const type of ["pointerup", "pointercancel", "pointerleave", "lostpointercapture"] as const) {
-    element.addEventListener(type, stop);
-  }
-}
-
-export function scrollRail(scroll: RemoteScroll, pageLines: () => number): HTMLElement {
-  const rail = node("div", "full-terminal-scroll");
-  rail.setAttribute("role", "group");
-  rail.setAttribute("aria-label", t("keys.scrollAria"));
-  const add = (
-    mark: string,
-    aria: string,
-    direction: "up" | "down",
-    source: "wheel" | "page_key",
-    lines: number | (() => number),
-  ) => {
-    const el = button("", `full-terminal-scroll-btn ${mark}`);
-    el.setAttribute("aria-label", aria);
-    el.title = aria;
-    bindHold(el, () => {
-      const count = typeof lines === "function" ? lines() : lines;
-      scroll(direction, Number.isFinite(count) ? Math.max(1, Math.round(count)) : 1, source);
-    });
-    rail.append(el);
   };
-  add("scroll-up", t("keys.wheelUp"), "up", "wheel", 3);
-  add("scroll-page-up", t("keys.pageUp"), "up", "page_key", pageLines);
-  add("scroll-page-down", t("keys.pageDown"), "down", "page_key", pageLines);
-  add("scroll-down", t("keys.wheelDown"), "down", "wheel", 3);
-  return rail;
+  const endTypes = ["pointerup", "pointercancel", "pointerleave", "lostpointercapture"] as const;
+  element.addEventListener("pointerdown", onDown);
+  element.addEventListener("click", onClick);
+  element.addEventListener("keydown", onKeyDown);
+  element.addEventListener("keyup", onKeyUp);
+  for (const type of endTypes) element.addEventListener(type, stop);
+  return () => {
+    stop();
+    element.removeEventListener("pointerdown", onDown);
+    element.removeEventListener("click", onClick);
+    element.removeEventListener("keydown", onKeyDown);
+    element.removeEventListener("keyup", onKeyUp);
+    for (const type of endTypes) element.removeEventListener(type, stop);
+  };
 }

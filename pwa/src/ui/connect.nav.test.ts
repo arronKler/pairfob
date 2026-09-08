@@ -1,33 +1,12 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.matchMedia = happy.matchMedia.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { act } from "react";
+import { leaveReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 const { app, clearNotice, showError, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
-const { renderConnect } = await import("./connect.ts");
+const { renderConnect: paintConnect } = await import("./connect.ts");
 const { setLang } = await import("../lib/i18n.ts");
-
-setRenderer(() => {
-  if (state.phase === "connect" || state.phase === "pairing") renderConnect();
-});
 
 function paintAdd(busy = false): void {
   state.phase = busy ? "pairing" : "connect";
@@ -39,7 +18,25 @@ function paintAdd(busy = false): void {
   renderConnect();
 }
 
+function renderConnect(): void { act(paintConnect); }
+
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  Object.assign(state, { phase: "live", screen: "home", fullTerminal: false, agentChat: false,
+    credential: null, live: null, computers: [], agents: [], paneId: "", panePinned: {}, paneTouched: {},
+    listGroup: "flat", listGroupCollapsed: {}, operationBusy: false, networkOnline: true, runtimeKind: "herdr",
+    herdHost: "", notice: null, settingsLoading: false, deviceList: [], devicesError: "", pushConfigError: "",
+    pushEnabled: null, pushSubscribed: null });
+  setLang("zh");
+  setRenderer(() => {
+    if (state.phase === "connect" || state.phase === "pairing") renderConnect();
+  });
+});
+
 afterEach(() => {
+  act(() => leaveReactScreen());
+  setRenderer(() => {});
   state.phase = "boot";
   state.addingComputer = false;
   state.computers = [];
@@ -64,25 +61,25 @@ describe("add-computer pairing chrome", () => {
     state.addingComputer = false;
     state.computers = [];
     renderConnect();
-    expect(app.querySelector(".prelude")).toBeTruthy();
-    expect(app.querySelector(".settings-page")).toBeNull();
-    expect(app.querySelector(".topbar-title")).toBeNull();
+    expect(Boolean(app.querySelector(".prelude"))).toBe(true);
+    expect((app.querySelector(".settings-page")) === null).toBe(true);
+    expect((app.querySelector(".topbar-title")) === null).toBe(true);
     expect(app.querySelector(".prelude-title")?.textContent).toBe("连上你的电脑");
   });
 
   test("adding another computer uses the settings-page topbar", () => {
     paintAdd();
-    expect(app.querySelector(".prelude")).toBeNull();
-    expect(app.querySelector(".settings-page")).toBeTruthy();
+    expect((app.querySelector(".prelude")) === null).toBe(true);
+    expect(Boolean(app.querySelector(".settings-page"))).toBe(true);
     expect(app.querySelector(".topbar-title")?.textContent).toBe("添加另一台电脑");
-    expect(app.querySelector(".prelude-title")).toBeNull();
+    expect((app.querySelector(".prelude-title")) === null).toBe(true);
     expect(app.querySelector(".back")?.getAttribute("aria-label")).toBe("返回");
     expect(app.querySelector(".btn-scan")?.textContent).toBe("扫码连接");
   });
 
   test("waiting for the computer still keeps the back bar", () => {
     paintAdd(true);
-    expect(app.querySelector(".settings-page")).toBeTruthy();
+    expect(Boolean(app.querySelector(".settings-page"))).toBe(true);
     expect(app.querySelector(".topbar-title")?.textContent).toBe("添加另一台电脑");
     expect(app.querySelector(".pair-wait-title")?.textContent).toBe("正在验证配对码");
   });
@@ -100,13 +97,13 @@ describe("add-computer pairing chrome", () => {
     state.phase = "connect";
     state.pairAwaitingApproval = false;
     state.pairFailedStep = "verify";
-    showError("电脑上没有确认。", true);
+    act(() => showError("电脑上没有确认。", true));
     state.pairErrorTarget = null;
     renderConnect();
     expect(states()).toEqual(["pair-step is-done", "pair-step is-done", "pair-step is-failed"]);
     expect(app.querySelector(".pair-step-note")?.textContent).toBe("电脑上没有确认。");
     // The same sentence must not also appear as a standalone notice.
-    expect(app.querySelector(".notice-error")).toBeNull();
+    expect((app.querySelector(".notice-error")) === null).toBe(true);
     state.pairFailedStep = null;
   });
 
@@ -116,11 +113,11 @@ describe("add-computer pairing chrome", () => {
     state.computers = [];
     renderConnect();
     const select = app.querySelector<HTMLSelectElement>('select[aria-label="语言"]');
-    expect(select).toBeTruthy();
+    expect(Boolean(select)).toBe(true);
     expect([...select!.options].map((option) => option.textContent)).toEqual(["自动", "中文", "English"]);
-    expect(app.querySelector(".trust")?.nextElementSibling).toBe(app.querySelector(".connect-lang"));
+    expect((app.querySelector(".trust")?.nextElementSibling) === (app.querySelector(".connect-lang"))).toBe(true);
     select!.value = "en";
-    select!.dispatchEvent(new happy.Event("change", { bubbles: true }));
+    act(() => { select!.dispatchEvent(new happy.Event("change", { bubbles: true })); });
     expect(app.querySelector(".prelude-title")?.textContent).toBe("Connect your computer");
     expect(app.querySelector(".btn-scan")?.textContent).toBe("Scan to connect");
     expect(app.querySelector<HTMLSelectElement>('select[aria-label="Language"]')?.value).toBe("en");
@@ -130,7 +127,7 @@ describe("add-computer pairing chrome", () => {
     paintAdd();
     const lang = app.querySelector(".connect-lang");
     expect(app.querySelector(".topbar")?.contains(lang)).toBe(true);
-    expect(app.querySelector(".trust")?.nextElementSibling).toBeNull();
-    expect(app.querySelector(".seg")).toBeNull();
+    expect((app.querySelector(".trust")?.nextElementSibling) === null).toBe(true);
+    expect((app.querySelector(".seg")) === null).toBe(true);
   });
 });

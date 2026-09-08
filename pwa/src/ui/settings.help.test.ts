@@ -1,34 +1,16 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLDialogElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.matchMedia = happy.matchMedia.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { act, createElement } from "react";
+import { leaveReactScreen, renderReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 const { app, setNetworkMode, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
-const { fillSettings } = await import("./settings.ts");
-const { t } = await import("../lib/i18n.ts");
+const { SettingsContent } = await import("./react/settings");
+const { setLang, t } = await import("../lib/i18n.ts");
 
 function paint(): void {
-  app.replaceChildren();
-  fillSettings(app, false);
+  act(() => renderReactScreen(createElement(SettingsContent, { withBack: false })));
 }
 
 function help(topic: string): HTMLButtonElement {
@@ -38,14 +20,27 @@ function help(topic: string): HTMLButtonElement {
 }
 
 function openHelp(topic: string): HTMLDialogElement {
-  help(topic).click();
+  act(() => { help(topic).click(); });
   const dialog = document.querySelector("dialog.help");
   if (!(dialog instanceof HTMLDialogElement)) throw new Error("missing help dialog");
   return dialog;
 }
 
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  Object.assign(state, { phase: "live", screen: "home", fullTerminal: false, agentChat: false,
+    credential: null, live: null, computers: [], agents: [], paneId: "", panePinned: {}, paneTouched: {},
+    listGroup: "flat", listGroupCollapsed: {}, operationBusy: false, networkOnline: true, runtimeKind: "herdr",
+    herdHost: "", notice: null, settingsLoading: false, deviceList: [], devicesError: "", pushConfigError: "",
+    pushEnabled: null, pushSubscribed: null });
+  setLang("zh");
+});
+
 afterEach(() => {
-  for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
+  act(() => leaveReactScreen());
+  setRenderer(() => {});
+  act(() => closeTestDialogs());
   state.p2pEnabled = false;
   state.networkMode = "auto";
   setNetworkMode("auto");
@@ -92,15 +87,15 @@ describe("settings help copy", () => {
 
     const close = dialog.querySelector(".help-close");
     if (!(close instanceof HTMLButtonElement)) throw new Error("missing close");
-    close.click();
-    expect(document.querySelector("dialog.help")).toBeNull();
+    act(() => { close.click(); });
+    expect((document.querySelector("dialog.help")) === null).toBe(true);
 
     const quotaHelp = openHelp("订阅余量");
     expect(quotaHelp.textContent).toContain("当前电脑配置的账号额度，同一账号的多个会话共享");
     expect(quotaHelp.textContent).toContain("概览环显示已报告窗口中最低的剩余比例");
     expect(app.textContent).not.toContain("概览环显示已报告窗口中最低的剩余比例");
-    (quotaHelp.querySelector(".help-close") as HTMLButtonElement).click();
-    expect(document.querySelector("dialog.help")).toBeNull();
+    act(() => { (quotaHelp.querySelector(".help-close") as HTMLButtonElement).click(); });
+    expect((document.querySelector("dialog.help")) === null).toBe(true);
   });
 
   test("connection help covers the path; P2P-off stays a status line", () => {

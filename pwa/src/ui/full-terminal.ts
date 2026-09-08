@@ -11,7 +11,7 @@ import {
   type SessionEvent,
 } from "../lib/protocol/client";
 import { render } from "../paint";
-import { applyComposeDraft, bumpViewIncarnation, captureComposeDraft, switchComposeView } from "../compose-drafts";
+import { applyComposeDraft, bumpViewIncarnation, captureComposeDraft, currentViewIncarnation, switchComposeView } from "../compose-drafts";
 import { app, haptic, messageOf, saveTermCols, saveTermFit, selectedAgent, setPaneTermMode, showStatus, state, type TermCols, type TermFit } from "../state";
 import { isDesk } from "../viewport";
 import {
@@ -30,12 +30,14 @@ import {
   bindXtermKeyboard,
   encodeTerminalKey,
   httpLinkProvider,
-  syncKeyboardButton,
+  notifyFullTerminalKeyboard,
   terminalLinkHandler,
   type TerminalKeyboard,
 } from "./full-terminal-input";
-import { setFullTerminalInputMode, submitFullTerminalCompose, syncFullTerminalControls } from "./full-terminal-compose";
+import { setFullTerminalInputMode, submitFullTerminalCompose, type FullTerminalControlsOptions } from "./full-terminal-compose";
 import { bindHostScroll, pageLineCount, type ScrollAt } from "./full-terminal-scroll";
+import { attachFullTerminalHost, clearFullTerminalAttach, connectFullTerminalEngine, fullTerminalOwnerKey } from "./full-terminal-engine";
+import { paintFullTerminalScreen, releaseFullTerminalScreen } from "./react/full-terminal";
 import { TerminalCommandPump, type TerminalCommand, type TerminalInputQueueOptions } from "./full-terminal-command";
 import { loadFullTerminalXterm, terminalWebglSupported } from "./full-terminal-loader";
 import { afterNextPaint, observeHostResize } from "./full-terminal-lifecycle";
@@ -48,9 +50,8 @@ import {
   setFullTerminalDocumentMode,
 } from "./full-terminal-state";
 import { track } from "../lib/telemetry";
-import { syncChromeStop } from "./session/chrome-actions";
 import { guidedScrollController } from "./session/guided-scroll";
-import { createFullTerminalView, updateFullTerminalTitle } from "./full-terminal-view";
+import { publishFullTerminalView, resetFullTerminalView, type FullTerminalViewSnapshot } from "./full-terminal-view";
 
 let terminal: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
@@ -69,6 +70,8 @@ let bridgePane = "";
 let bridgeVersion = 0;
 let opening = false;
 let leaving: Promise<void> | null = null;
+export type FullTerminalLeaveTransition = { from: number; to: number };
+let leaveResult: { transition: FullTerminalLeaveTransition | null } | null = null;
 let leaveSeq = 0;
 let commandPump: TerminalCommandPump | null = null;
 const frameGate = new FullTerminalFrameGate();
@@ -82,9 +85,30 @@ let remoteGrid: { cols: number; rows: number } | null = null;
 let fittedSize: FullTerminalFittedSize | null = null;
 const assembler = new TerminalFrameAssembler();
 const MAX_RENDER_QUEUE_BYTES = 8 * 1024 * 1024;
-const terminalStatus = new FullTerminalStatus(() => syncStatus());
-function syncStatus(root: ParentNode = app): void {
-  terminalStatus.sync(root, { active: state.fullTerminal, busy: opening, hasBridge: Boolean(bridgeId) });
+const terminalStatus = new FullTerminalStatus(() => {
+  emitFullTerminalView();
+});
+
+function captureFullTerminalView(): FullTerminalViewSnapshot {
+  const selected = selectedAgent();
+  return {
+    owner: fullTerminalOwnerKey(),
+    paneId: state.paneId,
+    title: selected ? agentTitle(selected) : t("title.terminal"),
+    working: canInterruptAgent(selected?.status ?? ""),
+    stage: terminalStatus.stage,
+    detail: terminalStatus.detail,
+    retry: Boolean(state.fullTerminal && terminalStatus.retry && !opening && !bridgeId),
+    busy: opening,
+    composeLive: state.composeLive,
+    keyboardOpen: keyboard?.isOpen() === true,
+  };
+}
+
+function emitFullTerminalView(): void {
+  const view = captureFullTerminalView();
+  notifyFullTerminalKeyboard(view.keyboardOpen);
+  publishFullTerminalView(view);
 }
 
 function terminalDocumentHidden(): boolean { return document.visibilityState === "hidden"; }
@@ -176,17 +200,17 @@ function cellAt(clientX: number, clientY: number): ScrollAt | undefined {
 
 function closeTerminalKeyboard(): void {
   keyboard?.close();
-  syncKeyboardButton(app, keyboard?.isOpen() === true);
+  emitFullTerminalView();
 }
 
-function sendScroll(direction: "up" | "down", lines: number, source: "wheel" | "page_key", at?: ScrollAt): void {
+export function sendFullTerminalScroll(direction: "up" | "down", lines: number, source: "wheel" | "page_key", at?: ScrollAt): void {
   closeTerminalKeyboard();
   if (!bridgeId || opening || !commandPump) return;
   const count = clamp(Math.round(lines), 1, TERMINAL_MAX_ROWS);
   commandPump.enqueueScroll({ direction, lines: count, source, at });
 }
 
-function pageScrollLines(): number {
+export function pageScrollLines(): number {
   return clamp(pageLineCount(terminal?.rows || fittedSize?.rows || 24), 1, TERMINAL_MAX_ROWS);
 }
 
@@ -232,7 +256,7 @@ function bindInput(host: HTMLElement): void {
     });
   });
   unbindScroll?.();
-  unbindScroll = bindHostScroll(host, sendScroll, cellAt, {
+  unbindScroll = bindHostScroll(host, sendFullTerminalScroll, cellAt, {
     panXScroller: () => state.termFit === "pan" ? host.querySelector<HTMLElement>(".full-terminal-pan") : null,
   });
   unbindPinch?.();
@@ -256,6 +280,7 @@ function bindInput(host: HTMLElement): void {
     },
   );
   keyboard = bindXtermKeyboard(host, state.composeLive && isDesk());
+  emitFullTerminalView();
 }
 
 function webglFailure(error: unknown): string {
@@ -365,6 +390,8 @@ function disposeRenderer(): void {
   fittedSize = null;
   window.clearTimeout(pinchResizeTimer);
   pinchResizeTimer = 0;
+  keyboard?.close();
+  keyboard?.destroy();
   keyboard = null;
   resizeObserver?.disconnect();
   resizeObserver = null;
@@ -416,7 +443,7 @@ async function openBridge(takeover: boolean): Promise<void> {
   } finally {
     if (version === bridgeVersion) {
       opening = false;
-      syncStatus();
+      emitFullTerminalView();
     }
   }
 }
@@ -437,6 +464,7 @@ async function suspendBridge(sendClose: boolean, reason?: string, showFailure = 
   opening = false;
   await pendingOpen;
   if (sendClose && session && id) await session.terminalClose(id).catch(() => undefined);
+  emitFullTerminalView();
   if (!showFailure || version !== bridgeVersion || renderer !== rendererVersion || bridgeId || opening || !state.fullTerminal) return;
   terminalStatus.fail(reason ?? t("ft.paused"));
 }
@@ -509,17 +537,24 @@ export function leaveFullTerminal(opts?: { rememberGuided?: boolean; paint?: boo
   const rememberGuided = opts?.rememberGuided !== false;
   const paint = opts?.paint !== false;
   captureComposeDraft();
+  const result = { transition: null as FullTerminalLeaveTransition | null };
+  leaveResult = result;
   leaving = (async () => {
     try {
       await suspendBridge(true, undefined, false);
       if (seq !== leaveSeq) return;
+      const from = currentViewIncarnation();
       disposeRenderer();
       terminalShellActive = false;
+      clearFullTerminalAttach();
+      releaseFullTerminalScreen();
+      resetFullTerminalView();
       fullTerminalPerf.publish("leave");
       if (rememberGuided) setPaneTermMode(state.paneId, "guided");
       state.fullTerminal = false;
       setFullTerminalDocumentMode(false);
-      bumpViewIncarnation();
+      const to = bumpViewIncarnation();
+      result.transition = { from, to };
       applyComposeDraft();
       if (paint) render();
     } finally {
@@ -527,6 +562,15 @@ export function leaveFullTerminal(opts?: { rememberGuided?: boolean; paint?: boo
     }
   })();
   return leaving;
+}
+
+/** Actual view transition made by this shared leave; no caller predicts its increments. */
+export async function leaveFullTerminalWithTransition(opts?: { rememberGuided?: boolean; paint?: boolean }): Promise<FullTerminalLeaveTransition | null> {
+  if (!state.fullTerminal && !leaving) return null;
+  const pending = leaveFullTerminal(opts);
+  const result = leaveResult;
+  await pending;
+  return result?.transition ?? null;
 }
 
 export function disposeFullTerminal(): void {
@@ -542,83 +586,64 @@ export function disposeFullTerminal(): void {
   bridgeVersion++;
   opening = false;
   disposeRenderer();
+  clearFullTerminalAttach();
+  releaseFullTerminalScreen();
+  resetFullTerminalView();
 }
 
-function interruptFullTerminal(): void {
+export function interruptFullTerminal(): void {
   sendPadKey("esc");
 }
 
-export function syncFullTerminalChrome(root: ParentNode = app): void {
-  const chrome = root.querySelector(".full-terminal-chrome");
-  if (!(chrome instanceof HTMLElement)) return;
-  syncChromeStop(chrome, canInterruptAgent(selectedAgent()?.status ?? ""), interruptFullTerminal);
-  syncStatus(root);
-}
-
-function syncFullTerminalInput(root: HTMLElement, host: HTMLElement): void {
-  syncFullTerminalControls(root, {
+export function fullTerminalControlOptions(): FullTerminalControlsOptions {
+  return {
     sendKey: sendPadKey,
     sendCompose: sendComposedInput,
     desk: isDesk(),
     keyboard: {
       toggle: () => {
-        if (!keyboard) keyboard = bindXtermKeyboard(host, false);
-        keyboard.toggle();
+        const host = app.querySelector<HTMLElement>(".full-terminal-host");
+        if (!keyboard && host) keyboard = bindXtermKeyboard(host, false);
+        keyboard?.toggle();
+        emitFullTerminalView();
       },
       open: () => {
         keyboard?.open();
         terminal?.focus();
+        emitFullTerminalView();
       },
       close: closeTerminalKeyboard,
       isOpen: () => keyboard?.isOpen() === true,
     },
-  });
+  };
+}
+
+export function syncFullTerminalChrome(): void {
+  emitFullTerminalView();
 }
 
 export function setFullTerminalComposeLive(live: boolean): void {
-  const root = app.querySelector<HTMLElement>(".full-terminal-root");
-  const host = root?.querySelector<HTMLElement>(".full-terminal-host");
   setFullTerminalInputMode(live, sendComposedInput, () => {
-    if (root && host) syncFullTerminalInput(root, host);
+    emitFullTerminalView();
   });
 }
 
 export function renderFullTerminal(onBack: () => void, onWorkspace: () => void, onMenu: () => void): void {
   setFullTerminalDocumentMode(true);
-  const title = selectedAgent() ? agentTitle(selectedAgent()!) : t("title.terminal");
+  const props = { onBack, onWorkspace, onMenu, onStop: interruptFullTerminal, onRetry: retryFullTerminal,
+    scroll: sendFullTerminalScroll, pageLines: pageScrollLines, controls: fullTerminalControlOptions() };
   const mounted = app.querySelector<HTMLElement>(".full-terminal-root");
-  if (terminalShellActive && mounted?.dataset.paneId === state.paneId) {
-    updateFullTerminalTitle(mounted, title);
-    syncFullTerminalChrome(mounted);
-    const host = mounted.querySelector<HTMLElement>(".full-terminal-host");
-    if (host) syncFullTerminalInput(mounted, host);
+  if (terminalShellActive && mounted?.dataset.terminalOwner === fullTerminalOwnerKey()) {
+    emitFullTerminalView();
+    paintFullTerminalScreen(props);
     return;
   }
   disposeRenderer();
   terminalStatus.reset(t("ft.preparing"));
   fullTerminalPerf.begin();
-  const { root, host } = createFullTerminalView(
-    state.paneId,
-    title,
-    terminalStatus.detail,
-    state.termFit === "pan",
-    {
-      onBack,
-      onWorkspace,
-      onMenu,
-      onRetry: retryFullTerminal,
-      onScroll: (direction, lines, source) => {
-        haptic(4);
-        sendScroll(direction, lines, source);
-      },
-      pageLines: pageScrollLines,
-    },
-  );
   terminalShellActive = true;
-  syncFullTerminalChrome(root);
-  syncFullTerminalInput(root, host);
-  app.replaceChildren(root);
-  scheduleMount(host);
+  emitFullTerminalView();
+  paintFullTerminalScreen(props);
 }
 
 export function handleFullTerminalEvent(event: SessionEvent): boolean {
@@ -719,3 +744,16 @@ export function handleFullTerminalVisibility(hidden: boolean): void {
   if (hidden) void suspendBridge(true);
   else void resumeFullTerminal();
 }
+
+connectFullTerminalEngine({
+  scheduleMount,
+  disposeRenderer,
+  rendererBusy: () => Boolean(terminal || mounting || cancelMount),
+  setShellActive: (active) => {
+    terminalShellActive = active;
+  },
+});
+
+export { attachFullTerminalHost };
+export { FullTerminalScreen, releaseFullTerminalScreen } from "./react/full-terminal";
+export { getFullTerminalView, subscribeFullTerminalView } from "./full-terminal-view";

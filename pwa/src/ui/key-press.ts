@@ -6,12 +6,14 @@ type KeyPressOptions = {
   release?: (cancelled: boolean) => void;
 };
 
+export type PadPressBinding = { stop: () => void; destroy: () => void };
+
 /** One physical press owns its repeats and release; clicks only add keyboard/AT activation. */
 export function bindPadPress(
   element: HTMLElement,
   press: () => void,
   options: KeyPressOptions = {},
-): { stop: () => void } {
+): PadPressBinding {
   const doc = element.ownerDocument;
   const view = doc.defaultView!;
   let pointer: number | null = null;
@@ -49,7 +51,7 @@ export function bindPadPress(
     if (pointer !== null) timer = view.setTimeout(repeat, REPEAT_EVERY_MS);
   };
 
-  element.addEventListener("pointerdown", (event) => {
+  const onPointerDown = (event: PointerEvent) => {
     if (event.button !== 0 || disabled()) return;
     // Keep the current textarea, selection and mobile keyboard in place.
     event.preventDefault();
@@ -62,18 +64,14 @@ export function bindPadPress(
     view.addEventListener("blur", stop);
     press();
     if (options.repeat && pointer !== null) timer = view.setTimeout(repeat, REPEAT_DELAY_MS + REPEAT_EVERY_MS);
-  });
-  for (const type of ["pointerleave", "lostpointercapture"] as const) {
-    element.addEventListener(type, cancel);
-  }
-  // Touch implicitly captures pointers, so leaving the hit area may not emit pointerleave.
-  element.addEventListener("pointermove", (event) => {
+  };
+  const onPointerMove = (event: PointerEvent) => {
     if (event.pointerId !== pointer) return;
     const rect = element.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right ||
         event.clientY < rect.top || event.clientY > rect.bottom) stop();
-  });
-  element.addEventListener("click", (event) => {
+  };
+  const onClick = (event: MouseEvent) => {
     // Pointer-generated clicks belong to the already delivered pointerdown,
     // including PointerEvents whose detail is zero. No time-based debounce:
     // separate rapid taps and keyboard/assistive activation remain independent.
@@ -81,6 +79,25 @@ export function bindPadPress(
     event.preventDefault();
     press();
     options.release?.(false);
-  });
-  return { stop };
+  };
+
+  element.addEventListener("pointerdown", onPointerDown);
+  for (const type of ["pointerleave", "lostpointercapture"] as const) {
+    element.addEventListener(type, cancel);
+  }
+  // Touch implicitly captures pointers, so leaving the hit area may not emit pointerleave.
+  element.addEventListener("pointermove", onPointerMove);
+  element.addEventListener("click", onClick);
+  return {
+    stop,
+    destroy() {
+      stop();
+      element.removeEventListener("pointerdown", onPointerDown);
+      for (const type of ["pointerleave", "lostpointercapture"] as const) {
+        element.removeEventListener(type, cancel);
+      }
+      element.removeEventListener("pointermove", onPointerMove);
+      element.removeEventListener("click", onClick);
+    },
+  };
 }

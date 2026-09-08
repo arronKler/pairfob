@@ -1,39 +1,14 @@
-import { Window } from "happy-dom";
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLTextAreaElement",
-  "HTMLDialogElement",
-  "Node",
-  "DocumentFragment",
-  "PointerEvent",
-  "ResizeObserver",
-  "MutationObserver",
-  "DOMParser",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.history = happy.history;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-g.cancelAnimationFrame = happy.cancelAnimationFrame.bind(happy);
-g.visualViewport = happy.visualViewport;
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { closeTestDialogs } from "../../../test-support/close-dialogs";
+import { happy, resetBoardTestDOM } from "../../../test-support/dom";
+import { act } from "react";
+import { beforeEach, afterEach, beforeAll, describe, expect, test } from "bun:test";
 
 const { app, state } = await import("../../state.ts");
 const { setRenderer } = await import("../../paint.ts");
-const { renderPane } = await import("../pane.ts");
+const { renderPane: paintPane } = await import("../pane.ts");
+const { leaveReactScreen } = await import("../react/root");
+const renderPane = () => act(paintPane);
+beforeEach(resetBoardTestDOM);
 const { NO_OPERATION_CAPABILITIES } = await import("../../lib/operations.ts");
 const { guidedScrollController } = await import("./guided-scroll.ts");
 
@@ -75,7 +50,7 @@ function click(label: string): void {
     return button.getAttribute("aria-label") === label || button.textContent === label;
   });
   if (!(el instanceof HTMLButtonElement)) throw new Error(`missing ${label}: ${app.innerHTML.slice(0, 280)}`);
-  el.click();
+  act(() => el.click());
 }
 
 beforeAll(() => {
@@ -84,20 +59,23 @@ beforeAll(() => {
 
 afterEach(() => {
   guidedScrollController.dispose();
-  for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
+  closeTestDialogs();
   state.screen = "pane";
   state.live = null;
   state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES };
+  act(leaveReactScreen);
   app.replaceChildren();
 });
 
 describe("guided pane no longer overlays earlier output", () => {
   test("a zoomed Control buffer leaves pinch to the browser and preserves its font", () => {
     const viewport = { scale: 2 };
-    Object.defineProperty(app.ownerDocument.defaultView!, "visualViewport", { configurable: true, value: viewport });
     bootGuided();
     const font = state.termFontPx;
     const term = app.querySelector<HTMLElement>(".term")!;
+    const pageWindow = term.ownerDocument.defaultView!;
+    const previousViewport = Object.getOwnPropertyDescriptor(pageWindow, "visualViewport");
+    Object.defineProperty(pageWindow, "visualViewport", { configurable: true, value: viewport });
     const touch = (type: string, distance: number) => {
       const event = new happy.Event(type, { bubbles: true, cancelable: true });
       Object.defineProperty(event, "touches", { value: [{ clientX: 0, clientY: 0 }, { clientX: distance, clientY: 0 }] });
@@ -115,7 +93,8 @@ describe("guided pane no longer overlays earlier output", () => {
       expect(touch("touchmove", 140).defaultPrevented).toBeTrue();
       expect(state.termFontPx).toBeGreaterThan(font);
     } finally {
-      viewport.scale = 1;
+      if (previousViewport) Object.defineProperty(pageWindow, "visualViewport", previousViewport);
+      else Reflect.deleteProperty(pageWindow, "visualViewport");
       state.termFontPx = font;
     }
   });
@@ -194,9 +173,11 @@ describe("control-mode TUI page rail", () => {
     if (!wheelUp || !wheelDown) throw new Error("missing wheel buttons");
     const tap = () =>
       new PointerEvent("pointerdown", { pointerId: 1, isPrimary: true, button: 0, bubbles: true, cancelable: true });
-    wheelUp.dispatchEvent(tap());
-    wheelDown.dispatchEvent(tap());
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await act(async () => {
+      wheelUp.dispatchEvent(tap());
+      wheelDown.dispatchEvent(tap());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
 
     expect(scrolls).toEqual([
       { terminalId: "term_00000000000000000000000000000000", sequence: 1, direction: "up", lines: 3, source: "wheel" },
@@ -226,9 +207,11 @@ describe("control-mode TUI page rail", () => {
     if (!pageUp || !pageDown) throw new Error("missing page buttons");
     const tap = () =>
       new PointerEvent("pointerdown", { pointerId: 1, isPrimary: true, button: 0, bubbles: true, cancelable: true });
-    pageUp.dispatchEvent(tap());
-    pageDown.dispatchEvent(tap());
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await act(async () => {
+      pageUp.dispatchEvent(tap());
+      pageDown.dispatchEvent(tap());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
     expect(texts).toEqual(["\u001b[5~", "\u001b[6~"]);
     expect(keys).toEqual([]);
   });

@@ -1,40 +1,47 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
+import { act, createElement } from "react";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { resetBoardTestDOM } from "../../../test-support/dom";
+import { leaveReactScreen, renderReactScreen } from "../react/root";
 
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLTextAreaElement",
-  "KeyboardEvent",
-  "Node",
-  "localStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-happy.document.body.innerHTML = '<main id="app"></main>';
-
-const { app, paneComposeLive, setPaneComposeLive, state } = await import("../../state.ts");
-const { t } = await import("../../lib/i18n.ts");
-const { composeForm, flushLiveInput, handlePaneKey, sendPad, setComposeLive, submitTyped } = await import("./compose.ts");
-const { disposeFullTerminal } = await import("../full-terminal.ts");
+const { setRenderer } = await import("../../paint");
+const { app, clearNotice, paneComposeLive, setPaneComposeLive, state } = await import("../../state.ts");
+const { setLang, t } = await import("../../lib/i18n.ts");
+const { flushLiveInput, handlePaneKey, sendPad, setComposeLive, submitTyped } = await import("./compose.ts");
 const { dropQueuedKeys, flushKeys } = await import("./keys.ts");
+const { SessionCompose } = await import("../react/session-compose.tsx");
+
+function paint(): void {
+  renderReactScreen(createElement(SessionCompose, { includeBack: false }));
+}
 
 function mount(draft: string, live = false): HTMLButtonElement {
   state.composeDraft = draft;
   state.composeLive = live;
-  const { form } = composeForm(false);
-  app.replaceChildren(form);
-  const button = form.querySelector(".send-btn");
+  act(() => { paint(); });
+  const button = app.querySelector(".send-btn");
   if (!(button instanceof HTMLButtonElement)) throw new Error("missing compose Enter");
   return button;
 }
 
-afterEach(() => {
-  disposeFullTerminal();
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  act(leaveReactScreen);
+  app.replaceChildren();
+  setLang("zh");
+  setRenderer(() => {});
+  Object.assign(state, {
+    phase: "live", screen: "home", paneId: "", paneText: "", paneHash: "", live: null,
+    agents: [], fullTerminal: false, agentChat: false, operationBusy: false,
+    composeDraft: "", composeLive: false, composeIME: false, composeFocused: false,
+    defaultComposeLive: false, paneComposeLive: {}, keysExpanded: false, padKind: "keys",
+    termSelect: false, termWrap: false, paneRow: null, paneFollow: true, paneUnread: false,
+  });
+  clearNotice();
+});
+
+afterEach(async () => {
+  await act(async () => { await flushLiveInput(); });
+  await act(() => leaveReactScreen());
   dropQueuedKeys();
   state.composeDraft = "";
   state.composeLive = false;
@@ -44,6 +51,8 @@ afterEach(() => {
   state.paneId = "";
   state.paneText = "";
   state.screen = "home";
+  clearNotice();
+  setRenderer(() => {});
   app.replaceChildren();
 });
 
@@ -87,7 +96,7 @@ describe("compose trailing Enter", () => {
     state.live = { isConnected: () => true } as typeof state.live;
     mount("");
 
-    await setComposeLive(true);
+    await act(async () => { await setComposeLive(true); });
 
     expect(state.composeLive).toBeTrue();
     expect(state.fullTerminal).toBeFalse();
@@ -106,16 +115,19 @@ describe("compose trailing Enter", () => {
     mount("", true);
     const input = app.querySelector("textarea");
     if (!(input instanceof HTMLTextAreaElement)) throw new Error("missing live compose");
-    input.value = "one";
-    input.dispatchEvent(new happy.Event("input", { bubbles: true }));
+    const view = app.ownerDocument.defaultView!;
+    act(() => {
+      input.value = "one";
+      input.dispatchEvent(new view.Event("input", { bubbles: true }));
+    });
 
-    const changing = setComposeLive(false);
-    await Promise.resolve();
+    let changing!: Promise<void>;
+    act(() => { changing = setComposeLive(false); });
+    await act(async () => { await Promise.resolve(); });
     state.paneId = "p2";
     state.composeLive = true;
     setPaneComposeLive("p2", true);
-    finishSend();
-    await changing;
+    await act(async () => { finishSend(); await changing; });
 
     expect(state.composeLive).toBeTrue();
     expect(paneComposeLive("p1")).toBeFalse();
@@ -136,9 +148,12 @@ describe("compose trailing Enter", () => {
     const input = app.querySelector("textarea");
     const form = app.querySelector(".dock-form");
     if (!(input instanceof HTMLTextAreaElement) || !(form instanceof HTMLElement)) throw new Error("missing live compose");
+    const view = app.ownerDocument.defaultView!;
 
-    input.value = "hello";
-    input.dispatchEvent(new happy.Event("input", { bubbles: true }));
+    act(() => {
+      input.value = "hello";
+      input.dispatchEvent(new view.Event("input", { bubbles: true }));
+    });
 
     expect(input.value).toBe("");
     expect(input.placeholder).toBe("本机待回显 · hello");
@@ -146,7 +161,7 @@ describe("compose trailing Enter", () => {
     expect(form.querySelector(".live-input-status")?.textContent).toBe(t("compose.pendingStatus", { n: 5 }));
     expect(sent).toEqual([]);
 
-    expect(await flushLiveInput()).toBeTrue();
+    expect(await act(() => flushLiveInput())).toBeTrue();
     expect(sent).toEqual(["hello"]);
     expect(input.placeholder).toBe("实时 · 边打边进终端");
   });
@@ -161,10 +176,13 @@ describe("compose trailing Enter", () => {
     mount("", true);
     const input = app.querySelector("textarea");
     if (!(input instanceof HTMLTextAreaElement)) throw new Error("missing live compose");
-    input.value = "retry me";
-    input.dispatchEvent(new happy.Event("input", { bubbles: true }));
+    const view = app.ownerDocument.defaultView!;
+    act(() => {
+      input.value = "retry me";
+      input.dispatchEvent(new view.Event("input", { bubbles: true }));
+    });
 
-    expect(await flushLiveInput()).toBeFalse();
+    expect(await act(() => flushLiveInput())).toBeFalse();
     expect(state.composeLive).toBeFalse();
     expect(state.composeDraft).toBe("retry me");
     expect(input.value).toBe("retry me");
@@ -182,9 +200,9 @@ describe("compose trailing Enter", () => {
     } as typeof state.live;
     mount("");
 
-    const event = new happy.KeyboardEvent("keydown", { key: "Enter", cancelable: true });
-    handlePaneKey(event, true);
-    await flushKeys();
+    const view = app.ownerDocument.defaultView!;
+    const event = new view.KeyboardEvent("keydown", { key: "Enter", cancelable: true });
+    await act(async () => { handlePaneKey(event, true); await flushKeys(); });
 
     expect(event.defaultPrevented).toBe(true);
     expect(sent).toEqual([["enter"]]);
@@ -201,18 +219,18 @@ describe("compose trailing Enter", () => {
     } as typeof state.live;
     const button = mount("");
 
-    await submitTyped(true);
-    await flushKeys();
+    await act(async () => { await submitTyped(true); });
+    await act(async () => { await flushKeys(); });
     expect(sent).toEqual([["enter"]]);
 
     sent.length = 0;
-    button.click();
-    await flushKeys();
+    await act(() => { button.click(); });
+    await act(async () => { await flushKeys(); });
     expect(sent).toEqual([["enter"]]);
 
     sent.length = 0;
-    await sendPad("enter");
-    await flushKeys();
+    await act(async () => { await sendPad("enter"); });
+    await act(async () => { await flushKeys(); });
     expect(sent).toEqual([["enter"]]);
   });
 
@@ -228,8 +246,8 @@ describe("compose trailing Enter", () => {
     } as typeof state.live;
     mount("");
 
-    await submitTyped(true);
-    await flushKeys();
+    await act(async () => { await submitTyped(true); });
+    await act(async () => { await flushKeys(); });
     expect(sent).toEqual([["enter"]]);
   });
 });

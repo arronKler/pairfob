@@ -1,42 +1,27 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLDialogElement",
-  "MouseEvent",
-  "PointerEvent",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.history = happy.history;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { resetBoardTestDOM } from "../../test-support/dom";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { act } from "react";
 
 const { app, replaceAgentsFromSnapshot, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
-const { renderHome } = await import("./home.ts");
+const { renderApp } = await import("./react/app-screen");
+const { leaveReactScreen } = await import("./react/root");
+const { setLang } = await import("../lib/i18n");
 const { NO_OPERATION_CAPABILITIES } = await import("../lib/operations.ts");
+
+beforeEach(async () => { await resetBoardTestDOM(); setLang("zh"); });
 
 function boot(): void {
   state.phase = "live";
   state.screen = "home";
   state.paneId = "p1";
   state.listGroup = "flat";
+  state.listGroupCollapsed = {};
+  state.paneTouched = {};
   state.panePinned = {};
+  state.fullTerminal = false;
+  state.agentChat = false;
   state.operationBusy = false;
   state.runtimeKind = "herdr";
   state.networkOnline = true;
@@ -85,8 +70,8 @@ function boot(): void {
     renameTab: async () => undefined,
     renameWorkspace: async () => undefined,
   };
-  setRenderer(() => renderHome());
-  renderHome();
+  setRenderer(() => renderApp());
+  renderApp();
 }
 
 function cardNamed(name: string): HTMLButtonElement {
@@ -95,8 +80,11 @@ function cardNamed(name: string): HTMLButtonElement {
   return card;
 }
 
-afterEach(() => {
-  for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
+afterEach(async () => await act(async () => {
+  closeTestDialogs();
+  await Promise.resolve();
+  leaveReactScreen();
+  setRenderer(() => {});
   state.live = null;
   state.agents = [];
   state.paneId = "";
@@ -104,33 +92,33 @@ afterEach(() => {
   state.panePinned = {};
   state.notice = null;
   app.replaceChildren();
-});
+}));
 
 describe("session list object controls", () => {
-  test("app notices sit above the session cards", () => {
+  test("app notices sit above the session cards", async () => await act(async () => {
     boot();
     state.notice = { text: "网络已恢复，正在确认连接…", tone: "status" };
-    renderHome();
+    renderApp();
     const page = app.querySelector(".page");
     const children = page ? [...page.children] : [];
     const noticeIdx = children.findIndex((el) => el.hasAttribute("data-app-notice"));
     const listIdx = children.findIndex((el) => el.classList.contains("herd-list"));
     expect(noticeIdx).toBeGreaterThan(-1);
     expect(listIdx).toBeGreaterThan(noticeIdx);
-  });
+  }));
 
-  test("the card is a single open control with no trailing menu button", () => {
+  test("the card is a single open control with no trailing menu button", async () => await act(async () => {
     boot();
     expect(app.querySelectorAll("article.card")).toHaveLength(3);
     expect(app.querySelector(".card-more")).toBeNull();
     expect(app.querySelector(".card-split")).toBeNull();
     expect(cardNamed("one").getAttribute("aria-haspopup")).toBe("menu");
-  });
+  }));
 
-  test("an unknown agent status shows the unknown pill and is not Needs you", () => {
+  test("an unknown agent status shows the unknown pill and is not Needs you", async () => await act(async () => {
     boot();
     state.agents[0].status = "unknown";
-    renderHome();
+    renderApp();
     const card = cardNamed("one").closest("article.card");
     expect(card?.classList.contains("status-unknown")).toBe(true);
     expect(card?.classList.contains("status-blocked")).toBe(false);
@@ -139,9 +127,9 @@ describe("session list object controls", () => {
     expect(pill?.textContent).toBe("未知");
     expect(pill?.textContent).not.toBe("空闲");
     expect(card?.querySelector(".pill-idle")).toBeNull();
-  });
+  }));
 
-  test("a default tab is not offered rename; a named or split tab is", () => {
+  test("a default tab is not offered rename; a named or split tab is", async () => await act(async () => {
     boot();
     cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const plain = document.querySelector("dialog.sheet");
@@ -161,7 +149,7 @@ describe("session list object controls", () => {
     expect(plain?.textContent).not.toContain("在同一工作区再开一页");
     expect(plain?.textContent).not.toContain("分屏");
     expect(plain?.textContent).not.toContain("取消");
-    plain?.remove();
+    (plain as HTMLDialogElement | null)?.close("cancel");
 
     cardNamed("two").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const split = document.querySelector("dialog.sheet");
@@ -169,9 +157,9 @@ describe("session list object controls", () => {
     expect(split?.querySelector(".sheet-facts")?.textContent).toContain("2 格");
     expect(split?.textContent).toContain("改标签页名");
     expect(split?.textContent).toContain("关闭整个标签页");
-  });
+  }));
 
-  test("a hold opens the menu and does not navigate", async () => {
+  test("a hold opens the menu and does not navigate", async () => await act(async () => {
     boot();
     const opened = state.paneId;
     const card = cardNamed("two");
@@ -184,12 +172,12 @@ describe("session list object controls", () => {
     card.click();
     expect(state.paneId).toBe(opened);
     expect(state.screen).toBe("home");
-  });
+  }));
 
-  test("workspace grouping moves rename off the card and onto the heading", () => {
+  test("workspace grouping moves rename off the card and onto the heading", async () => await act(async () => {
     boot();
     state.listGroup = "space";
-    renderHome();
+    renderApp();
     const heading = [...app.querySelectorAll(".group-title")].find((el) => el.textContent?.includes("alpha"));
     if (!(heading instanceof HTMLButtonElement)) throw new Error("missing workspace heading");
     heading.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
@@ -199,28 +187,28 @@ describe("session list object controls", () => {
     expect(sheet?.textContent).toContain("关闭这个工作区");
     expect(sheet?.textContent).not.toContain("改会话名");
     expect(sheet?.textContent).not.toContain("在这个工作区新建标签页");
-    sheet?.remove();
+    (sheet as HTMLDialogElement | null)?.close("cancel");
 
     cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const cardSheet = document.querySelector("dialog.sheet");
     expect(cardSheet?.textContent).toContain("改会话名");
     expect(cardSheet?.textContent).not.toContain("改工作区名");
     expect(cardSheet?.textContent).not.toContain("关闭这个工作区");
-  });
+  }));
 
-  test("create_tab offers another tab on the card and the workspace heading", () => {
+  test("create_tab offers another tab on the card and the workspace heading", async () => await act(async () => {
     boot();
     state.operationCapabilities = { ...state.operationCapabilities, create_tab: true };
-    renderHome();
+    renderApp();
     cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const card = document.querySelector("dialog.sheet");
     expect(card?.textContent).toContain("在同一工作区再开一页");
     expect(card?.textContent).not.toContain("分屏");
     expect(card?.textContent).not.toContain("在这个工作区新建标签页");
-    card?.remove();
+    (card as HTMLDialogElement | null)?.close("cancel");
 
     state.listGroup = "space";
-    renderHome();
+    renderApp();
     const heading = [...app.querySelectorAll(".group-title")].find((el) => el.textContent?.includes("alpha"));
     if (!(heading instanceof HTMLButtonElement)) throw new Error("missing workspace heading");
     heading.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
@@ -230,9 +218,9 @@ describe("session list object controls", () => {
     expect(group?.textContent).toContain("关闭这个工作区");
     expect(group?.textContent).not.toContain("分屏");
     expect(group?.textContent).not.toContain("改会话名");
-  });
+  }));
 
-  test("pinning a session puts it in the pinned section at the top", async () => {
+  test("pinning a session puts it in the pinned section at the top", async () => await act(async () => {
     boot();
     cardNamed("two").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const pin = [...document.querySelectorAll("dialog.sheet .menu-item")].find((el) => el.textContent === "置顶");
@@ -253,11 +241,11 @@ describe("session list object controls", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect([...app.querySelectorAll(".section-title")].map((el) => el.textContent).join("")).not.toContain("置顶");
     expect(app.querySelector("article.card.pinned")).toBeNull();
-  });
+  }));
 });
 
 describe("session list pin persistence", () => {
-  test("an empty snapshot does not drop pins; missing panes do", () => {
+  test("an empty snapshot does not drop pins; missing panes do", async () => await act(async () => {
     state.panePinned = { p1: 9, p2: 8 };
     replaceAgentsFromSnapshot({ panes: [] });
     expect(state.panePinned).toEqual({ p1: 9, p2: 8 });
@@ -266,5 +254,5 @@ describe("session list pin persistence", () => {
       panes: [{ pane_id: "p2", workspace_id: "w", cwd: "/", agent: "claude", agent_status: "idle" }],
     });
     expect(state.panePinned).toEqual({ p2: 8 });
-  });
+  }));
 });

@@ -23,26 +23,31 @@ let pendingPane = "";
 let batchTimer: number | null = null;
 let flushing = false;
 const pagePending = new Map<string, { up: number; down: number }>();
+let pagePendingRevision = 0;
+const pagePendingListeners = new Set<() => void>();
+
+export function pagePendingStoreRevision(): number {
+  return pagePendingRevision;
+}
+
+export function subscribePagePending(listener: () => void): () => void {
+  pagePendingListeners.add(listener);
+  return () => {
+    pagePendingListeners.delete(listener);
+  };
+}
+
+export function pagePendingCounts(paneId = state.paneId): { up: number; down: number } {
+  return pagePending.get(paneId) ?? { up: 0, down: 0 };
+}
 
 function nowMs(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
-export function syncPagePending(root: ParentNode = app): void {
-  const counts = pagePending.get(state.paneId) ?? { up: 0, down: 0 };
-  const busy = counts.up + counts.down > 0;
-  root.querySelectorAll<HTMLElement>(".full-terminal-scroll").forEach((rail) => {
-    if (busy) rail.setAttribute("aria-busy", "true");
-    else rail.removeAttribute("aria-busy");
-  });
-  for (const direction of ["up", "down"] as const) {
-    root.querySelectorAll<HTMLElement>(`.scroll-page-${direction}`).forEach((button) => {
-      const active = counts[direction] > 0;
-      button.classList.toggle("is-pending", active);
-      if (active) button.setAttribute("aria-busy", "true");
-      else button.removeAttribute("aria-busy");
-    });
-  }
+export function syncPagePending(): void {
+  pagePendingRevision += 1;
+  for (const listener of pagePendingListeners) listener();
 }
 
 function beginPagePending(paneId: string, direction: "up" | "down"): () => void {

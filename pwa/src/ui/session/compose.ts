@@ -1,11 +1,11 @@
+import { currentViewIncarnation } from "../../compose-drafts";
 import { guardedReply } from "../../lib/guarded";
-import { node } from "../../lib/dom";
 import { t } from "../../lib/i18n";
-import { fitOperationPrompt, OPERATION_INPUT_LIMITS } from "../../lib/operations";
+import { fitOperationPrompt } from "../../lib/operations";
 import { type NoticeScope } from "../../lib/notice-scope";
 import { type LiveSession } from "../../lib/protocol/client";
 import { ProtocolError } from "../../lib/protocol/errors";
-import { reportMutationError } from "../../mutations";
+import { reconcileAmbiguousMutation, reportMutationError } from "../../mutations";
 import { requestPaneRefresh } from "../../pane-refresh-request";
 import { render } from "../../paint";
 import {
@@ -17,8 +17,8 @@ import {
   clearNoticeForScope,
   haptic,
   markPaneSubmitted,
+  messageOf,
   noticeScopeIsCurrent,
-  setDefaultComposeLive,
   setPaneComposeLive,
   showError,
   showStatus,
@@ -26,7 +26,7 @@ import {
 } from "../../state";
 import { predictText } from "./echo";
 import { flushKeys, queueKey } from "./keys";
-import { LiveInputPump, type LiveInputPumpState } from "./live-input";
+import { LiveInputPump } from "./live-input";
 
 const SPECIAL_KEYS: Record<string, string> = {
   Enter: "enter",
@@ -69,22 +69,68 @@ export function preserveCompose(): boolean {
   return state.composeIME || state.composeFocused || Boolean(state.composeDraft) || Boolean(liveInputText());
 }
 
-const batchPlaceholder = () => t("compose.batchPh");
-const livePlaceholder = () => t("compose.livePh");
 const LIVE_PREVIEW_CHARS = 80;
 
 let liveInputPump: LiveInputPump | null = null;
 let liveInputSession: LiveSession | null = null;
 let liveInputPane = "";
+let submitBusy = false;
 
-function liveInputText(): string {
+function reapStaleLiveInputPump(): void {
   if (liveInputPump && (liveInputSession !== state.live || liveInputPane !== state.paneId)) {
     liveInputPump.stop();
     liveInputPump = null;
     liveInputSession = null;
     liveInputPane = "";
   }
+}
+
+function liveInputVisible(): string {
+  if (liveInputSession !== state.live || liveInputPane !== state.paneId) return "";
   return liveInputPump?.snapshot().visibleText ?? "";
+}
+
+function liveInputText(): string {
+  reapStaleLiveInputPump();
+  return liveInputVisible();
+}
+
+export type ComposeViewSnapshot = {
+  live: boolean;
+  pendingText: string;
+  draft: string;
+  submitBusy: boolean;
+};
+
+const composeListeners = new Set<() => void>();
+let composeSnap: ComposeViewSnapshot = { live: false, pendingText: "", draft: "", submitBusy: false };
+
+export function subscribeComposeView(onStoreChange: () => void): () => void {
+  composeListeners.add(onStoreChange);
+  return () => { composeListeners.delete(onStoreChange); };
+}
+
+export function composeViewSnapshot(): ComposeViewSnapshot {
+  const next: ComposeViewSnapshot = {
+    live: state.composeLive,
+    pendingText: liveInputVisible(),
+    draft: state.composeDraft,
+    submitBusy,
+  };
+  const prev = composeSnap;
+  if (
+    prev.live === next.live
+    && prev.pendingText === next.pendingText
+    && prev.draft === next.draft
+    && prev.submitBusy === next.submitBusy
+  ) return prev;
+  composeSnap = next;
+  return next;
+}
+
+function notifyComposeView(): void {
+  composeViewSnapshot();
+  for (const listener of composeListeners) listener();
 }
 
 export function liveInputPreview(text: string): string {
@@ -96,29 +142,8 @@ export function liveInputPreview(text: string): string {
   return chars.length > LIVE_PREVIEW_CHARS ? `…${chars.slice(-LIVE_PREVIEW_CHARS).join("")}` : safe;
 }
 
-function applyLiveInputFeedback(
-  form: HTMLFormElement,
-  input: HTMLTextAreaElement,
-  status: HTMLElement | null,
-  text: string,
-): void {
-  const pending = state.composeLive && Boolean(text);
-  form.classList.toggle("live-pending", pending);
-  input.placeholder = pending
-    ? t("compose.pendingPh", { text: liveInputPreview(text) })
-    : state.composeLive
-      ? livePlaceholder()
-      : batchPlaceholder();
-  const nextStatus = pending ? t("compose.pendingStatus", { n: Array.from(text).length }) : "";
-  if (status && status.textContent !== nextStatus) status.textContent = nextStatus;
-}
-
-function syncLiveInputFeedback(snapshot?: LiveInputPumpState): void {
-  const input = composeField();
-  const form = input?.closest<HTMLFormElement>(".dock-form");
-  if (!input || !form) return;
-  const status = form.querySelector(".live-input-status") as HTMLElement | null;
-  applyLiveInputFeedback(form, input, status, snapshot?.visibleText ?? liveInputText());
+function syncLiveInputFeedback(): void {
+  notifyComposeView();
 }
 
 function stopLiveInputPump(): void {
@@ -127,6 +152,7 @@ function stopLiveInputPump(): void {
   liveInputSession = null;
   liveInputPane = "";
   syncLiveInputFeedback();
+  notifyComposeView();
 }
 
 function restoreLiveInput(text: string, paneId: string): void {
@@ -163,8 +189,8 @@ function ensureLiveInputPump(): LiveInputPump | null {
     },
     // The mutation frame is already on the ordered socket when this runs.
     requestRead: () => { void requestPaneRefresh(); },
-    onChange: (snapshot) => {
-      if (liveInputPump === pump) syncLiveInputFeedback(snapshot);
+    onChange: () => {
+      if (liveInputPump === pump) syncLiveInputFeedback();
     },
     onError: async (error, input) => {
       if (liveInputPump === pump) {
@@ -215,18 +241,7 @@ function takeLiveField(input: HTMLTextAreaElement): void {
 }
 
 export function syncComposeMode(): void {
-  const form = app.querySelector(".dock-form") as HTMLFormElement | null;
-  if (!form) return;
-  form.classList.toggle("live", state.composeLive);
-  const input = form.querySelector("textarea");
-  if (input) {
-    input.placeholder = state.composeLive ? livePlaceholder() : batchPlaceholder();
-    input.setAttribute("aria-label", state.composeLive ? t("compose.liveAria") : t("compose.batchAria"));
-  }
-  const label = form.querySelector("label.sr-only");
-  if (label) label.textContent = state.composeLive ? t("compose.liveAria") : t("compose.batchAria");
-  syncLiveInputFeedback();
-  syncSendButton();
+  notifyComposeView();
 }
 
 export async function setComposeLive(on: boolean): Promise<void> {
@@ -257,20 +272,8 @@ export async function setComposeLive(on: boolean): Promise<void> {
  * The dock action is always Enter. Empty Enter is a deliberate PTY keypress,
  * including when an agent's own TUI is asking for confirmation.
  */
-export function syncSendButton(send = app.querySelector(".dock-form .send-btn") as HTMLButtonElement | null): void {
-  if (!send) return;
-  send.removeAttribute("aria-busy");
-  if (submitBusy && !state.composeLive) {
-    send.disabled = true;
-    send.textContent = t("compose.sending");
-    send.setAttribute("aria-busy", "true");
-    send.setAttribute("aria-label", t("compose.sendingAria"));
-    return;
-  }
-  send.disabled = false;
-  send.textContent = "Enter";
-  if (state.composeDraft.trim()) send.setAttribute("aria-label", t("compose.sendEnterAria"));
-  else send.setAttribute("aria-label", t("compose.enterAria"));
+export function syncSendButton(): void {
+  notifyComposeView();
 }
 
 function clearComposeDraft(): void {
@@ -349,8 +352,6 @@ const stallNotice = () => t("compose.stall");
 // lines=0 as a zero-row snapshot, so an explicit positive window is required.
 const GUARDED_PANE_READ_LINES = 80;
 
-let submitBusy = false;
-
 const RETRYABLE_GUARDED_READ = new Set(["backpressure", "daemon_replaced", "disconnected", "reconnecting", "timeout", "unbound"]);
 
 async function guardedSubmit(
@@ -358,13 +359,16 @@ async function guardedSubmit(
   paneId: string,
   text: string,
   noticeScope: NoticeScope,
+  incarnation: number,
 ): Promise<"sent" | "stalled" | "cancelled"> {
+  const isActive = () => state.live === session && currentViewIncarnation() === incarnation
+    && state.screen === "pane" && state.paneId === paneId && noticeScopeIsCurrent(noticeScope);
   return guardedReply({
     text,
-    isActive: () => state.live === session && state.screen === "pane" && state.paneId === paneId && noticeScopeIsCurrent(noticeScope),
+    isActive,
     sendText: async (value) => {
       await session.sendText(paneId, value);
-      if (state.composeDraft === value) clearComposeDraft();
+      if (isActive() && state.composeDraft === value) clearComposeDraft();
     },
     // Matching the daemon's bounds makes this hash a proof of the exact screen
     // it will check immediately before sending Enter.
@@ -402,9 +406,12 @@ export async function submitTyped(allowBareEnter = false): Promise<void> {
   submitBusy = true;
   syncSendButton();
   const noticeScope = captureNoticeScope();
+  const incarnation = currentViewIncarnation();
+  const ownsSubmit = () => state.live === session && currentViewIncarnation() === incarnation && noticeScopeIsCurrent(noticeScope);
   try {
     await flushKeys();
-    const outcome = await guardedSubmit(session, paneId, text, noticeScope);
+    const outcome = await guardedSubmit(session, paneId, text, noticeScope, incarnation);
+    if (!ownsSubmit()) return;
     if (outcome === "cancelled") {
       clearNoticeForScope(noticeScope);
       return;
@@ -423,7 +430,11 @@ export async function submitTyped(allowBareEnter = false): Promise<void> {
     clearNoticeForScope(noticeScope);
     await requestPaneRefresh();
   } catch (error) {
-    await reportMutationError(session, error);
+    await reconcileAmbiguousMutation(session, error, undefined, ownsSubmit);
+    if (ownsSubmit()) {
+      showError(messageOf(error), noticeScope);
+      render();
+    }
   } finally {
     submitBusy = false;
     syncSendButton();
@@ -492,11 +503,13 @@ export function handlePaneKey(event: KeyboardEvent, fromField: boolean): void {
   queueKey(special);
 }
 
-function bindTermField(input: HTMLTextAreaElement): void {
+export function bindTermField(input: HTMLTextAreaElement): () => void {
+  reapStaleLiveInputPump();
   state.composeDraft = fitOperationPrompt(state.composeDraft).text;
   input.value = state.composeDraft;
   sizeCompose(input);
-  input.addEventListener("input", () => {
+  let blurTimer: number | null = null;
+  const onInput = () => {
     if (state.composeLive) {
       if (state.composeIME) {
         state.composeDraft = input.value;
@@ -510,11 +523,11 @@ function bindTermField(input: HTMLTextAreaElement): void {
     input.value = state.composeDraft;
     sizeCompose(input);
     syncSendButton();
-  });
-  input.addEventListener("compositionstart", () => {
+  };
+  const onCompositionStart = () => {
     state.composeIME = true;
-  });
-  input.addEventListener("compositionend", () => {
+  };
+  const onCompositionEnd = () => {
     state.composeIME = false;
     if (state.composeLive) {
       takeLiveField(input);
@@ -524,90 +537,30 @@ function bindTermField(input: HTMLTextAreaElement): void {
     input.value = state.composeDraft;
     sizeCompose(input);
     syncSendButton();
-  });
-  input.addEventListener("focus", () => {
+  };
+  const onFocus = () => {
     state.composeFocused = true;
-  });
-  input.addEventListener("blur", () => {
-    window.setTimeout(() => {
+  };
+  const onBlur = () => {
+    blurTimer = window.setTimeout(() => {
+      blurTimer = null;
       if (document.activeElement !== composeField()) state.composeFocused = false;
     }, 0);
-  });
-  input.addEventListener("keydown", (event) => handlePaneKey(event, true));
-}
-
-const composeModeLabel = () => t("pane.inputAria");
-
-export function syncComposeLiveControl(): void {
-  for (const bar of app.querySelectorAll(`[aria-label="${composeModeLabel()}"]`)) {
-    for (const item of bar.querySelectorAll("button")) {
-      const live = item.dataset.live === "1";
-      const selected = state.defaultComposeLive === live;
-      item.classList.toggle("on", selected);
-      item.setAttribute("aria-checked", selected ? "true" : "false");
-    }
-  }
-}
-
-export function composeLiveControl(): HTMLElement {
-  const bar = node("div", "seg compose-live");
-  bar.setAttribute("role", "radiogroup");
-  bar.setAttribute("aria-label", composeModeLabel());
-  for (const option of [
-    { live: false, label: t("compose.batch") },
-    { live: true, label: t("compose.live") },
-  ]) {
-    const selected = state.defaultComposeLive === option.live;
-    const item = node("button", `seg-item${selected ? " on" : ""}`, option.label);
-    item.type = "button";
-    item.dataset.live = option.live ? "1" : "0";
-    item.setAttribute("role", "radio");
-    item.setAttribute("aria-checked", selected ? "true" : "false");
-    item.addEventListener("click", () => {
-      if (state.defaultComposeLive === option.live) return;
-      setDefaultComposeLive(option.live);
-      syncComposeLiveControl();
-    });
-    bar.append(item);
-  }
-  return bar;
-}
-
-export function composeForm(includeBack: boolean): { form: HTMLFormElement; input: HTMLTextAreaElement } {
-  const form = node("form", `dock-form${state.composeLive ? " live" : ""}`);
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    void submitTyped(true);
-  });
-  const input = node("textarea");
-  const inputID = includeBack ? "compose-text-mobile" : "compose-text-desktop";
-  const inputLabel = node("label", "sr-only", state.composeLive ? t("compose.liveAria") : t("compose.batchAria"));
-  const liveStatus = node("span", "sr-only live-input-status");
-  inputLabel.htmlFor = inputID;
-  liveStatus.id = `${inputID}-live-status`;
-  liveStatus.setAttribute("role", "status");
-  liveStatus.setAttribute("aria-live", "polite");
-  input.id = inputID;
-  input.name = "pairfob-compose";
-  input.rows = 1;
-  input.wrap = "soft";
-  input.autocomplete = "off";
-  input.spellcheck = false;
-  input.autocapitalize = "none";
-  input.setAttribute("autocorrect", "off");
-  input.setAttribute("inputmode", "text");
-  input.setAttribute("aria-describedby", liveStatus.id);
-  input.placeholder = state.composeLive ? livePlaceholder() : batchPlaceholder();
-  input.enterKeyHint = "enter";
-  input.maxLength = OPERATION_INPUT_LIMITS.prompt;
-  bindTermField(input);
-  const send = node("button", "send-btn", "Enter");
-  send.type = "submit";
-  send.addEventListener("pointerdown", (event) => {
-    if (!state.composeIME) event.preventDefault();
-  });
-  syncSendButton(send);
-  form.append(inputLabel, liveStatus, input, send);
-  applyLiveInputFeedback(form, input, liveStatus, liveInputText());
-  return { form, input };
+  };
+  const onKeyDown = (event: KeyboardEvent) => handlePaneKey(event, true);
+  input.addEventListener("input", onInput);
+  input.addEventListener("compositionstart", onCompositionStart);
+  input.addEventListener("compositionend", onCompositionEnd);
+  input.addEventListener("focus", onFocus);
+  input.addEventListener("blur", onBlur);
+  input.addEventListener("keydown", onKeyDown);
+  return () => {
+    if (blurTimer !== null) window.clearTimeout(blurTimer);
+    input.removeEventListener("input", onInput);
+    input.removeEventListener("compositionstart", onCompositionStart);
+    input.removeEventListener("compositionend", onCompositionEnd);
+    input.removeEventListener("focus", onFocus);
+    input.removeEventListener("blur", onBlur);
+    input.removeEventListener("keydown", onKeyDown);
+  };
 }

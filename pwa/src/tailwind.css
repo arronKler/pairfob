@@ -1,0 +1,7 @@
+/* Tailwind v4 entry for @tailwindcss/vite. Not processed by Sass.
+   Preflight is omitted so existing base styles stay in charge.
+   prefix(tw) keeps utilities and theme variables off existing class names. */
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw);

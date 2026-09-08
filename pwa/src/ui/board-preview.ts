@@ -1,5 +1,4 @@
-import { lineFillBackground, parseAnsi, spanCss, type StyledLine } from "../lib/ansi";
-import { node } from "../lib/dom";
+import { parseAnsi, type StyledLine } from "../lib/ansi";
 import { BOARD_CELL_H, BOARD_CELL_W, layoutForTab, type TabLayout } from "../lib/layout";
 import type { LiveSession } from "../lib/protocol/client";
 import { state } from "../state";
@@ -13,14 +12,37 @@ type Preview = { text: string; hash: string };
 const previews = new Map<string, Preview>();
 let generation = 0;
 let tail: Promise<void> = Promise.resolve();
+let previewRevision = 0;
+const previewListeners = new Set<() => void>();
+
+export function boardPreviewRevision(): number {
+  return previewRevision;
+}
+
+export function subscribeBoardPreviews(listener: () => void): () => void {
+  previewListeners.add(listener);
+  return () => {
+    previewListeners.delete(listener);
+  };
+}
+
+function notifyBoardPreviews(): void {
+  previewRevision += 1;
+  for (const listener of previewListeners) listener();
+}
 
 export function boardPreviewText(paneId: string): string {
   return previews.get(paneId)?.text || "";
 }
 
+export function boardPreviewSnapshot(paneId: string): Readonly<Preview> | undefined {
+  return previews.get(paneId);
+}
+
 export function clearBoardPreviews(): void {
   generation += 1;
   previews.clear();
+  notifyBoardPreviews();
 }
 
 export function previewLineCount(rows?: number, cellHeight?: number): number {
@@ -39,22 +61,6 @@ export function boardPreviewPaneIds(layout: TabLayout | null): string[] {
   return ids.slice(0, BOARD_PREVIEW_MAX_PANES);
 }
 
-function previewRow(line: StyledLine): HTMLElement {
-  const row = node("div", "board-pane-line");
-  const fill = lineFillBackground(line.spans);
-  if (fill) row.style.backgroundColor = fill;
-  if (!line.spans.length) row.append(document.createTextNode("\u00a0"));
-  else {
-    for (const span of line.spans) {
-      const el = node("span");
-      el.textContent = span.text || "\u00a0";
-      Object.assign(el.style, spanCss(span.style));
-      row.append(el);
-    }
-  }
-  return row;
-}
-
 export function previewGridPx(cols: number, rows: number): { width: number; height: number } {
   return {
     width: Math.max(0, Math.round(cols) * BOARD_CELL_W),
@@ -70,6 +76,14 @@ function padPreviewRows(lines: StyledLine[], rows: number): StyledLine[] {
   return out;
 }
 
+export function ansiPreviewModel(text: string, cols = 0, rows = 0): { lines: StyledLine[]; width: number; height: number } {
+  const parsed = parseAnsi(text);
+  const live = parsed.length ? parsed : [{ text: "", spans: [] }];
+  const lines = rows > 0 ? padPreviewRows(live, rows) : live;
+  const grid = cols > 0 && rows > 0 ? previewGridPx(cols, rows) : { width: 0, height: 0 };
+  return { lines, width: grid.width, height: grid.height };
+}
+
 /** Fit the TUI grid into the cell; keep glyph aspect (no X/Y stretch). */
 export function previewFillScale(sw: number, sh: number, cw: number, ch: number): { x: number; y: number } {
   if (sw <= 1 || cw <= 1) return { x: 1, y: 1 };
@@ -80,7 +94,7 @@ export function previewFillScale(sw: number, sh: number, cw: number, ch: number)
   return { x: scale, y: scale };
 }
 
-function setPreviewFont(host: HTMLElement): void {
+export function applyBoardPreviewFont(host: HTMLElement): void {
   const probe = document.createElement("span");
   probe.textContent = "0000000000";
   probe.style.fontFamily = globalThis.getComputedStyle?.(host).fontFamily || "monospace";
@@ -110,43 +124,6 @@ export function fitPreviewBuffer(host: HTMLElement): void {
   inner.style.transformOrigin = "0 0";
 }
 
-export function fitBoardPreviews(root: ParentNode = document): void {
-  for (const host of root.querySelectorAll<HTMLElement>(".board-pane-screen")) fitPreviewBuffer(host);
-}
-
-export function fillAnsiPreview(host: HTMLElement, text: string, cols = 0, rows = 0): void {
-  const parsed = parseAnsi(text);
-  const live = parsed.length ? parsed : [{ text: "", spans: [] }];
-  const lines = rows > 0 ? padPreviewRows(live, rows) : live;
-  const inner = node("div", "board-pane-buffer");
-  for (const line of lines) inner.append(previewRow(line));
-  if (cols > 0 && rows > 0) {
-    const grid = previewGridPx(cols, rows);
-    inner.style.width = `${grid.width}px`;
-    inner.style.height = `${grid.height}px`;
-  }
-  host.replaceChildren(inner);
-  setPreviewFont(host);
-  fitPreviewBuffer(host);
-}
-
-export function patchBoardPreview(paneId: string): boolean {
-  if (!paneId) return false;
-  const layout = layoutForTab(state.boardTabId, state.layouts, state.agents);
-  const pane = layout?.panes.find((item) => item.paneId === paneId);
-  const cols = Math.round(pane?.rect.width || 0);
-  const rows = Math.round(pane?.rect.height || 0);
-  let patched = false;
-  for (const tile of document.querySelectorAll<HTMLElement>(".board-pane")) {
-    if (tile.dataset.paneId !== paneId) continue;
-    const host = tile.querySelector(".board-pane-screen");
-    if (!(host instanceof HTMLElement)) continue;
-    fillAnsiPreview(host, boardPreviewText(paneId), cols, rows);
-    patched = true;
-  }
-  return patched;
-}
-
 export async function refreshBoardPanePreview(paneId: string): Promise<void> {
   if (!paneId || state.screen !== "board") return;
   const session = state.live;
@@ -156,21 +133,22 @@ export async function refreshBoardPanePreview(paneId: string): Promise<void> {
   if (!pane) return;
   const agent = state.agents.find((item) => item.paneId === paneId);
   try {
-    const changed = await readOne(session, paneId, previewLineCount(agent?.viewportRows, pane.rect.height));
-    if (changed && state.screen === "board") patchBoardPreview(paneId);
+    await readOne(session, paneId, previewLineCount(agent?.viewportRows, pane.rect.height));
   } catch {
     /* a missed thumbnail is retried by the board poll */
   }
 }
 
-async function readOne(session: LiveSession, paneId: string, lines: number): Promise<boolean> {
+async function readOne(session: LiveSession, paneId: string, lines: number, token = generation): Promise<void> {
   const read = await session.paneRead(paneId, lines);
+  // A late reply must not repopulate a cleared cache or notify another session.
+  if (token !== generation || state.live !== session || state.screen !== "board") return;
   const text = typeof read?.text === "string" ? read.text : "";
   const hash = typeof read?.hash === "string" ? read.hash : "";
   const prev = previews.get(paneId);
-  if (prev && hash && prev.hash === hash && prev.text === text) return false;
+  if (prev && hash && prev.hash === hash && prev.text === text) return;
   previews.set(paneId, { text, hash });
-  return true;
+  notifyBoardPreviews();
 }
 
 async function runBoardPreviews(token: number): Promise<void> {
@@ -188,14 +166,11 @@ async function runBoardPreviews(token: number): Promise<void> {
     const pane = layout?.panes.find((item) => item.paneId === paneId);
     const agent = state.agents.find((item) => item.paneId === paneId);
     const lines = previewLineCount(agent?.viewportRows, pane?.rect.height);
-    let changed = false;
     try {
-      changed = await readOne(session, paneId, lines);
+      await readOne(session, paneId, lines, token);
     } catch {
       continue;
     }
-    if (token !== generation || state.screen !== "board") return;
-    if (changed) patchBoardPreview(paneId);
   }
 }
 

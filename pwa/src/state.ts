@@ -748,11 +748,12 @@ export const {
   captureNoticeScope,
   noticeScopeIsCurrent,
   visibleNotice,
+  subscribeNotice,
   clearNotice,
   clearNoticeForScope,
   showError,
   showStatus,
-} = createNoticeLifecycle(state, app);
+} = createNoticeLifecycle(state);
 
 export function selectedAgent(): DashboardAgentCard | undefined {
   return state.agents.find((agent) => agent.paneId === state.paneId);

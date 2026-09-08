@@ -1,33 +1,14 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLTextAreaElement",
-  "HTMLDetailsElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { happy, resetChatDOM } from "../../test-support/chat-dom";
+import { beforeEach, afterEach, describe, expect, test } from "bun:test";
+import { act } from "react";
 
 const { state, app } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
 const { patchAgentChat } = await import("./agent-chat.ts");
 const { renderPane } = await import("./pane.ts");
+
+const { leaveReactScreen } = await import("./react/root");
+beforeEach(resetChatDOM);
 
 const SEED_ITEMS = [
   { type: "user" as const, text: "inspect this" },
@@ -65,7 +46,7 @@ function bootIdleChat(): void {
  * cards the reader had expanded.
  */
 describe("agent-chat keeps expanded steps while older pages load", () => {
-  test("an open tool card survives prepended history", () => {
+  test("an open tool card survives prepended history", async () => await act(async () => {
     bootIdleChat();
     const tool = app.querySelector("details.agent-tool");
     if (!(tool instanceof happy.HTMLDetailsElement)) throw new Error("missing tool card");
@@ -82,18 +63,18 @@ describe("agent-chat keeps expanded steps while older pages load", () => {
     const next = app.querySelector("details.agent-tool");
     if (!(next instanceof happy.HTMLDetailsElement)) throw new Error("tool card vanished");
     expect(next.open).toBe(true);
-  });
+  }));
 
-  test("a finished turn collapses the run and keeps the markdown reply visible", () => {
+  test("a finished turn collapses the run and keeps the markdown reply visible", async () => await act(async () => {
     bootIdleChat();
     const process = app.querySelector("details.agent-process");
     if (!(process instanceof happy.HTMLDetailsElement)) throw new Error("missing process");
     expect(process.open).toBe(false);
     expect(process.textContent).toContain("执行过程");
     expect(app.querySelector(".agent-md strong")?.textContent).toBe("fine");
-  });
+  }));
 
-  test("the in-flight turn stays open until the agent is idle", () => {
+  test("the in-flight turn stays open until the agent is idle", async () => await act(async () => {
     bootIdleChat();
     state.agents[0].status = "working";
     expect(patchAgentChat({ follow: true })).toBe(true);
@@ -108,10 +89,10 @@ describe("agent-chat keeps expanded steps while older pages load", () => {
     if (!(done instanceof happy.HTMLDetailsElement)) throw new Error("missing done process");
     expect(done.open).toBe(false);
     expect(app.querySelector(".agent-md strong")?.textContent).toBe("fine");
-  });
+  }));
 });
 
-afterEach(() => {
+afterEach(async () => await act(async () => {
   state.agentChat = false;
   state.agentTraceItems = [];
   state.agentTraceLoadState = "cold";
@@ -123,5 +104,6 @@ afterEach(() => {
   state.live = null;
   state.paneId = "";
   state.screen = "home";
+  leaveReactScreen();
   app.replaceChildren();
-});
+}));

@@ -1,187 +1,201 @@
-import { haptic, node, prefersReducedMotion } from "../lib/dom";
+import { haptic, prefersReducedMotion } from "../lib/dom";
+import { currentViewIncarnation } from "../compose-drafts";
 import { app, state } from "../state";
 import { isDesk } from "../viewport";
-import { homePage } from "./home";
+import { mountPaneUnderlay, type PaneUnderlay } from "./react/pane-underlay";
 
-/**
- * Edge swipe back.
- *
- * The gesture is invisible unless something hints at it, so the pane carries a
- * faint edge line that brightens under the finger, and the screen it came from
- * follows the drag underneath. Both make the same point: this pane is a layer
- * on top of the list, and it can be pushed off.
- */
-
-/** Matches the Android system back gesture zone. Widening it would fight the OS. */
+/** Edge swipe-back uses the same travel and spring as the pane's list transition. */
 const EDGE_PX = 28;
-
-/** Travel before the drag is the app's rather than a scroll or a tap. */
 const ENGAGE_PX = 14;
-
-/** Past this the pane keeps going on its own. */
 const THRESHOLD_PX = 90;
-
-/** The pane trails the finger slightly; it is being pushed, not carried. */
 const FOLLOW = 0.85;
-
-/** Where the layer underneath starts: back and to the left, in the middle distance. */
 const UNDER_SCALE = 0.94;
 const UNDER_SHIFT = 18;
-
-/** Ceiling for the settle animation, matching --dur-4. */
 const SETTLE_MS = 320;
-
 const HINT_KEY = "pairfob_swipe_hint";
 
 function hintAlreadyShown(): boolean {
-  try {
-    return localStorage.getItem(HINT_KEY) === "1";
-  } catch {
-    // Private mode denies storage; a hint on every visit is worse than none.
-    return true;
-  }
+  try { return localStorage.getItem(HINT_KEY) === "1"; }
+  catch { return true; }
 }
 
-/**
- * Play the edge hint once ever. It is an animation class rather than a tooltip
- * so it costs nothing on every later paint.
- */
 export function armSwipeHint(paneRoot: HTMLElement): void {
   if (isDesk() || prefersReducedMotion() || hintAlreadyShown()) return;
   paneRoot.classList.add("hint-edge");
-  try {
-    localStorage.setItem(HINT_KEY, "1");
-  } catch {
-    /* the hint just plays again next time */
-  }
+  try { localStorage.setItem(HINT_KEY, "1"); }
+  catch { /* An unavailable preference does not prevent the gesture. */ }
 }
 
-/** Underneath a pane is the herd list. Board keeps its own camera, so it is not rebuilt here. */
-function underLayer(): HTMLElement | null {
-  if (state.boardReturn || prefersReducedMotion()) return null;
-  const under = node("div", "pane-under");
-  under.setAttribute("aria-hidden", "true");
-  under.append(homePage());
-  under.style.transform = `translateX(-${UNDER_SHIFT}%) scale(${UNDER_SCALE})`;
-  return under;
-}
+type Swipe = {
+  root: HTMLElement;
+  session: typeof state.live;
+  paneId: string;
+  incarnation: number;
+  boardReturn: boolean;
+  touchId: number;
+  startX: number;
+  startY: number;
+  dx: number;
+  tracking: boolean;
+  engaged: boolean;
+  transform: string;
+  appliedTransform: string;
+  under: PaneUnderlay | null;
+  stopTransition?: () => void;
+  timers: Set<number>;
+};
 
-function drop(under: HTMLElement | null): void {
-  if (!under) return;
-  let gone = false;
-  const remove = () => {
-    if (gone) return;
-    gone = true;
-    under.remove();
+let installed: (() => void) | undefined;
+
+/** Reinitializing replaces this binding; callers may also dispose it explicitly. */
+export function initSwipeBack(goBack: () => void): () => void {
+  installed?.();
+  const view = window;
+  let swipe: Swipe | null = null;
+  let retired = false;
+  const current = (owner: Swipe) => !retired && state.phase === "live" && state.screen === "pane"
+    && !isDesk() && state.live === owner.session && state.paneId === owner.paneId
+    && currentViewIncarnation() === owner.incarnation && state.boardReturn === owner.boardReturn
+    && owner.root.isConnected && app.querySelector(".pane-root") === owner.root;
+
+  const restoreRoot = (owner: Swipe) => {
+    owner.root.classList.remove("edge-armed", "dragging", "settling");
+    if (owner.root.style.transform === owner.appliedTransform) owner.root.style.transform = owner.transform;
   };
-  under.addEventListener("transitionend", remove, { once: true });
-  window.setTimeout(remove, SETTLE_MS + 80);
-}
-
-export function initSwipeBack(goBack: () => void): void {
-  let startX = 0;
-  let startY = 0;
-  let dx = 0;
-  let tracking = false;
-  let engaged = false;
-  let root: HTMLElement | null = null;
-  let under: HTMLElement | null = null;
-
-  const paint = (progress: number) => {
-    if (!under) return;
-    const shift = UNDER_SHIFT * (1 - progress);
-    const scale = UNDER_SCALE + (1 - UNDER_SCALE) * progress;
-    under.style.transform = `translateX(-${shift}%) scale(${scale})`;
+  const clear = () => {
+    const owner = swipe;
+    swipe = null;
+    observer.disconnect();
+    if (!owner) return;
+    for (const timer of owner.timers) view.clearTimeout(timer);
+    owner.timers.clear();
+    owner.stopTransition?.();
+    restoreRoot(owner);
+    owner.under?.dispose();
+    owner.under = null;
+  };
+  const checkOwner = () => { if (swipe && !current(swipe)) clear(); };
+  // A route paint can retire the gesture before its animation/navigation timer.
+  const observer = new MutationObserver(checkOwner);
+  const later = (owner: Swipe, delay: number, run: () => void) => {
+    const timer = view.setTimeout(() => {
+      owner.timers.delete(timer);
+      if (swipe !== owner) return;
+      if (!current(owner)) { clear(); return; }
+      run();
+    }, delay);
+    owner.timers.add(timer);
+  };
+  const translate = (owner: Swipe, transform: string) => {
+    owner.root.style.transform = transform;
+    owner.appliedTransform = owner.root.style.transform;
   };
 
-  app.addEventListener(
-    "touchstart",
-    (event) => {
-      if (state.phase !== "live" || state.screen !== "pane" || isDesk()) return;
-      if (event.touches.length !== 1) return;
-      if ((event.target as Element | null)?.closest?.(".full-terminal-pan")) return;
-      const touch = event.touches[0];
-      if (touch.clientX > EDGE_PX) return;
-      tracking = true;
-      engaged = false;
-      startX = touch.clientX;
-      startY = touch.clientY;
-      dx = 0;
-      root = app.querySelector(".pane-root");
-      // Brighten the edge line as soon as the finger lands on the hot zone.
-      root?.classList.add("edge-armed");
-    },
-    { passive: true },
-  );
+  const start = (event: TouchEvent) => {
+    clear();
+    if (retired || state.phase !== "live" || state.screen !== "pane" || isDesk()) return;
+    if (event.touches.length !== 1) return;
+    if ((event.target as Element | null)?.closest?.(".full-terminal-pan")) return;
+    const touch = event.touches[0];
+    if (touch.clientX > EDGE_PX) return;
+    const root = app.querySelector<HTMLElement>(".pane-root");
+    if (!root) return;
+    swipe = { root, session: state.live, paneId: state.paneId, incarnation: currentViewIncarnation(),
+      boardReturn: state.boardReturn, touchId: touch.identifier, startX: touch.clientX, startY: touch.clientY,
+      dx: 0, tracking: true, engaged: false, transform: root.style.transform, appliedTransform: root.style.transform,
+      under: null, timers: new Set() };
+    root.classList.add("edge-armed");
+    observer.observe(app, { childList: true, subtree: true });
+  };
 
-  app.addEventListener(
-    "touchmove",
-    (event) => {
-      if (!tracking || !root) return;
-      const touch = event.touches[0];
-      const nx = touch.clientX - startX;
-      const ny = touch.clientY - startY;
-      if (!engaged) {
-        if (Math.abs(nx) < ENGAGE_PX || Math.abs(nx) < Math.abs(ny) * 1.2) return;
-        if (nx <= 0) {
-          tracking = false;
-          root.classList.remove("edge-armed");
-          return;
-        }
-        engaged = true;
-        root.classList.add("dragging");
-        // Built from state that is already in memory: no read is issued for it.
-        under = underLayer();
-        if (under) app.insertBefore(under, app.firstChild);
+  const move = (event: TouchEvent) => {
+    const owner = swipe;
+    if (!owner?.tracking) return;
+    if (!current(owner) || event.touches.length !== 1) { clear(); return; }
+    const touch = event.touches[0];
+    if (touch.identifier !== owner.touchId) { clear(); return; }
+    const nx = touch.clientX - owner.startX;
+    const ny = touch.clientY - owner.startY;
+    if (!owner.engaged) {
+      if (Math.abs(nx) < ENGAGE_PX || Math.abs(nx) < Math.abs(ny) * 1.2) return;
+      if (nx <= 0) { clear(); return; }
+      owner.engaged = true;
+      owner.root.classList.add("dragging");
+      if (!state.boardReturn && !prefersReducedMotion()) {
+        owner.under = mountPaneUnderlay(app, `translateX(-${UNDER_SHIFT}%) scale(${UNDER_SCALE})`);
       }
-      event.preventDefault();
-      dx = Math.max(0, nx);
-      root.style.transform = `translateX(${dx * FOLLOW}px)`;
-      paint(Math.min(1, dx / Math.max(1, window.innerWidth)));
-    },
-    { passive: false },
-  );
-
-  const finish = () => {
-    const element = root;
-    const layer = under;
-    under = null;
-    if (!tracking || !element) {
-      tracking = false;
-      element?.classList.remove("edge-armed");
-      return;
     }
-    tracking = false;
-    element.classList.remove("edge-armed");
-    if (!engaged) return;
-    engaged = false;
-    element.classList.remove("dragging");
-    const done = dx > THRESHOLD_PX;
-    dx = 0;
+    event.preventDefault();
+    owner.dx = Math.max(0, nx);
+    translate(owner, `translateX(${owner.dx * FOLLOW}px)`);
+    if (owner.under) {
+      const progress = Math.min(1, owner.dx / Math.max(1, view.innerWidth));
+      owner.under.element.style.transform = `translateX(-${UNDER_SHIFT * (1 - progress)}%) scale(${UNDER_SCALE + (1 - UNDER_SCALE) * progress})`;
+    }
+  };
+
+  const finish = (cancelled: boolean) => {
+    const owner = swipe;
+    if (!owner?.tracking) return;
+    if (!current(owner) || !owner.engaged) { clear(); return; }
+    owner.tracking = false;
+    owner.root.classList.remove("edge-armed", "dragging");
+    const done = !cancelled && owner.dx > THRESHOLD_PX;
     if (prefersReducedMotion()) {
-      element.style.transform = "";
-      drop(layer);
+      clear();
       if (done) goBack();
       return;
     }
-    element.classList.add("settling");
-    if (layer) layer.classList.add("settling");
+    owner.root.classList.add("settling");
+    const layer = owner.under?.element;
+    layer?.classList.add("settling");
     if (done) {
       haptic(8);
-      // The layer underneath arrives at its real size just as the pane leaves,
-      // so the paint that follows lands on an identical screen.
-      element.style.transform = "translateX(100%)";
+      translate(owner, "translateX(100%)");
       if (layer) layer.style.transform = "none";
-      // goBack() repaints #app, which takes the borrowed layer with it.
-      window.setTimeout(goBack, SETTLE_MS);
+      later(owner, SETTLE_MS, () => { clear(); goBack(); });
       return;
     }
-    element.style.transform = "";
-    if (layer) layer.style.transform = `translateX(-${UNDER_SHIFT}%) scale(${UNDER_SCALE})`;
-    drop(layer);
-    window.setTimeout(() => element.classList.remove("settling"), SETTLE_MS);
+    translate(owner, owner.transform);
+    if (layer) {
+      layer.style.transform = `translateX(-${UNDER_SHIFT}%) scale(${UNDER_SCALE})`;
+      const transition = (event: Event) => {
+        if (event.target !== layer) return;
+        owner.stopTransition?.();
+        owner.under?.dispose();
+        owner.under = null;
+      };
+      layer.addEventListener("transitionend", transition);
+      owner.stopTransition = () => layer.removeEventListener("transitionend", transition);
+      later(owner, SETTLE_MS + 80, clear);
+    }
+    later(owner, SETTLE_MS, () => {
+      restoreRoot(owner);
+      if (!owner.under) clear();
+    });
   };
+  const end = () => finish(false);
+  const cancel = () => finish(true);
+  const pageHide = () => clear();
+  app.addEventListener("touchstart", start, { passive: true });
+  app.addEventListener("touchmove", move, { passive: false });
+  app.addEventListener("touchend", end);
+  app.addEventListener("touchcancel", cancel);
+  view.addEventListener("resize", checkOwner);
+  view.addEventListener("pagehide", pageHide);
 
-  app.addEventListener("touchend", finish);
-  app.addEventListener("touchcancel", finish);
+  const dispose = () => {
+    if (retired) return;
+    retired = true;
+    clear();
+    app.removeEventListener("touchstart", start);
+    app.removeEventListener("touchmove", move);
+    app.removeEventListener("touchend", end);
+    app.removeEventListener("touchcancel", cancel);
+    view.removeEventListener("resize", checkOwner);
+    view.removeEventListener("pagehide", pageHide);
+    if (installed === dispose) installed = undefined;
+  };
+  installed = dispose;
+  return dispose;
 }

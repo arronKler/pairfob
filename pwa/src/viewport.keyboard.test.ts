@@ -67,8 +67,8 @@ describe("the row being typed into stays visible", () => {
   });
 
   test("the dock settle rides on the settled state, never on the shell height", async () => {
-    const dock = await Bun.file(new URL("./styles/dock.css", import.meta.url)).text();
-    const shell = await Bun.file(new URL("./styles/session-shell.css", import.meta.url)).text();
+    const dock = await Bun.file(new URL("./styles/dock.scss", import.meta.url)).text();
+    const shell = await Bun.file(new URL("./styles/session-shell.scss", import.meta.url)).text();
     expect(dock).toContain('html[data-kb="open"] .dock { animation: dock-settle');
     expect(shell).not.toMatch(/#app\.session\s*\{[^}]*transition/);
   });

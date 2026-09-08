@@ -4,7 +4,11 @@ const HOLD_MS = 450;
 const SLOP_PX = 8;
 
 /** Long-press, right-click, and the context-menu key open an object menu. */
-export function bindObjectPress(el: HTMLElement, open: () => void): void {
+export function bindObjectPress(el: HTMLElement, open: () => void): () => void {
+  const lifetime = new AbortController();
+  const on = <K extends keyof HTMLElementEventMap>(type: K, listener: (event: HTMLElementEventMap[K]) => void, capture = false) => {
+    el.addEventListener(type, listener, { capture, signal: lifetime.signal });
+  };
   let timer = 0;
   let startX = 0;
   let startY = 0;
@@ -25,7 +29,7 @@ export function bindObjectPress(el: HTMLElement, open: () => void): void {
     if (fromHold && pointerId !== null) swallowReleaseClick(el.ownerDocument, pointerId);
   };
 
-  el.addEventListener("pointerdown", (event) => {
+  on("pointerdown", (event) => {
     if (!event.isPrimary) { clearTimer(); return; }
     eatClick = false;
     pointerId = null;
@@ -39,15 +43,15 @@ export function bindObjectPress(el: HTMLElement, open: () => void): void {
       fire(true);
     }, HOLD_MS);
   });
-  el.addEventListener("pointermove", (event) => {
+  on("pointermove", (event) => {
     if (!timer || event.pointerId !== pointerId) return;
     if (Math.hypot(event.clientX - startX, event.clientY - startY) > SLOP_PX) clearTimer();
   });
-  el.addEventListener("pointerup", () => { clearTimer(); pointerId = null; });
-  el.addEventListener("pointercancel", clearTimer);
-  el.addEventListener("pointerleave", clearTimer);
-  el.addEventListener("lostpointercapture", clearTimer);
-  el.addEventListener(
+  on("pointerup", () => { clearTimer(); pointerId = null; });
+  on("pointercancel", clearTimer);
+  on("pointerleave", clearTimer);
+  on("lostpointercapture", clearTimer);
+  on(
     "click",
     (event) => {
       if (!eatClick) return;
@@ -57,15 +61,19 @@ export function bindObjectPress(el: HTMLElement, open: () => void): void {
     },
     true,
   );
-  el.addEventListener("keydown", (event) => {
+  on("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") eatClick = false;
   });
-  el.addEventListener("contextmenu", (event) => {
+  on("contextmenu", (event) => {
     event.preventDefault();
     clearTimer();
     if (pointerId === null) eatClick = false;
     fire();
   });
+  return () => {
+    clearTimer();
+    lifetime.abort();
+  };
 }
 
 /** showModal can retarget the opening gesture's click onto its backdrop or an

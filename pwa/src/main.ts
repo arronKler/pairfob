@@ -1,6 +1,7 @@
-import "./style.css";
+import "./tailwind.css";
+import "./style.scss";
 import { detectLang, initI18n, langPref, setLang, t } from "./lib/i18n";
-import { computerTitle, pickResumeCredential } from "./lib/computer-catalog";
+import { pickResumeCredential } from "./lib/computer-catalog";
 import { loadOriginConfig } from "./lib/origin-config";
 import { resumeComputer } from "./computers";
 import {
@@ -13,26 +14,18 @@ import {
 } from "./live";
 import { applyOriginPairingPolicy, beginPairing } from "./pairing";
 import { render as paint, setRenderer } from "./paint";
-import { app, capturePairingFragment, clearNotice, messageOf, showError, showStatus, state, termLineHeightPx } from "./state";
-import { bindVisualViewport, isDesk } from "./viewport";
-import { brandNode, spinnerNode } from "./ui/chrome";
-import { renderComputers } from "./ui/computers";
-import { renderConnect } from "./ui/connect";
-import { renderDesk } from "./ui/desk";
-import { renderHome } from "./ui/home";
-import { initSwipeBack, renderPane } from "./ui/pane";
-import { renderQuota } from "./ui/agent-quota";
-import { renderSettings } from "./ui/settings";
-import { renderBoard } from "./ui/board";
-import { renderWorkspace } from "./ui/workspace";
+import { capturePairingFragment, clearNotice, messageOf, showError, showStatus, state } from "./state";
+import { bindVisualViewport } from "./viewport";
+import { initSwipeBack } from "./ui/pane";
 import { stickAgentStream } from "./ui/agent-chat";
 import { handlePaneKey, revealCaretRow, stickBottom } from "./ui/session-view";
-import { bindRippleSurface, node } from "./lib/dom";
+import { bindRippleSurface } from "./lib/dom";
 import { handleFullTerminalVisibility } from "./ui/full-terminal";
 import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
 import { track } from "./lib/telemetry";
 import { bindLegacyGestureBoundary } from "./lib/gesture-boundary";
 import { takeTransition, withTransition } from "./ui/transition";
+import { renderApp } from "./ui/react/app-screen";
 
 initI18n();
 window.addEventListener("languagechange", () => {
@@ -44,67 +37,8 @@ window.addEventListener("languagechange", () => {
 capturePairingFragment();
 let bootBlockedByNetwork = false;
 
-function renderLive(): void {
-  if (state.screen === "workspace") {
-    renderWorkspace();
-    return;
-  }
-  if (state.screen === "board") {
-    renderBoard();
-    return;
-  }
-  if (state.fullTerminal) {
-    renderPane();
-    return;
-  }
-  if (isDesk()) {
-    renderDesk();
-    return;
-  }
-  if (state.screen === "settings") renderSettings();
-  else if (state.screen === "quota") renderQuota();
-  else if (state.screen === "computers") renderComputers();
-  else if (state.screen === "pane") renderPane();
-  else renderHome();
-}
-
-function render(): void {
-  const workspace = state.phase === "live" && state.screen === "workspace";
-  const board = state.phase === "live" && state.screen === "board";
-  const desk = state.phase === "live" && isDesk() && !state.fullTerminal && !workspace && !board;
-  const session = state.phase === "live" && state.screen === "pane" && (!desk || state.fullTerminal);
-  const booting = state.phase === "boot" || state.phase === "resuming";
-  app.classList.toggle("session", session);
-  app.classList.toggle("desk", desk);
-  app.classList.toggle("workspace", workspace);
-  app.classList.toggle("board", board);
-  app.classList.toggle("boot-screen", booting);
-  document.documentElement.classList.toggle("lock", session || desk || workspace || board || booting);
-  document.body.classList.toggle("lock", session || desk || workspace || board || booting);
-  app.style.setProperty("--term-fs", `${state.termFontPx}px`);
-  app.style.setProperty("--term-lh", `${termLineHeightPx(state.termFontPx)}px`);
-  app.setAttribute("aria-busy", state.operationBusy ? "true" : "false");
-  if (state.phase === "boot" || state.phase === "resuming") {
-    const wrap = node("div", "boot");
-    wrap.append(
-      brandNode(),
-      spinnerNode(),
-      node(
-        "p",
-        "boot-text",
-        state.phase === "boot"
-          ? t("boot.reading")
-          : t("boot.connecting", { name: state.credential ? computerTitle(state.credential) : t("boot.computer") }),
-      ),
-    );
-    app.replaceChildren(wrap);
-  } else if (state.phase === "connect" || state.phase === "pairing") renderConnect();
-  else if (state.phase === "pick") renderComputers();
-  else renderLive();
-}
-
 // Only a declared navigation animates; a poll repaint goes straight to paint.
-setRenderer(() => withTransition(takeTransition(), render));
+setRenderer(() => withTransition(takeTransition(), renderApp));
 
 function applyNetworkAvailability(available: boolean): void {
   const changed = state.networkOnline !== available;

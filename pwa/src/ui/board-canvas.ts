@@ -1,18 +1,11 @@
-import { agentTitle, statusLabel } from "../lib/dashboard";
-import { button, node } from "../lib/dom";
-import { t } from "../lib/i18n";
-import { emptyNode } from "./chrome";
-import { morphingPane, nextTransition, queuedKind, shareOpening } from "./transition";
+import { nextTransition, shareOpening } from "./transition";
 import {
   BOARD_CELL_H,
   BOARD_CELL_W,
   clampBoardScale,
   fitBoardCamera,
   layoutForTab,
-  numberDuplicateTitles,
-  paneBoxes,
   paneCellGrid,
-  type PaneBox,
   type TabLayout,
 } from "../lib/layout";
 import { TERMINAL_MAX_COLS, TERMINAL_MAX_ROWS, TERMINAL_MIN_COLS, TERMINAL_MIN_ROWS } from "../lib/protocol/terminal";
@@ -20,22 +13,22 @@ import { openPane } from "../live";
 import { state } from "../state";
 import { focusCompose } from "./session-view";
 import { BOARD_GESTURE_SLOP_PX, boardDragMode, boardScrollLines } from "./board-gesture";
-import { boardPreviewText, fillAnsiPreview, fitBoardPreviews, refreshBoardPanePreview } from "./board-preview";
+import { refreshBoardPanePreview } from "./board-preview";
 import { guidedScrollController } from "./session/guided-scroll";
 
-function applyTransform(stage: HTMLElement): void {
+export function applyBoardTransform(stage: HTMLElement): void {
   stage.style.transform = `translate(${state.boardPanX}px, ${state.boardPanY}px) scale(${state.boardScale})`;
 }
 
-function stageSize(layout: TabLayout): { width: number; height: number } {
+export function boardStageSize(layout: TabLayout): { width: number; height: number } {
   return {
     width: Math.max(120, layout.area.width * BOARD_CELL_W),
     height: Math.max(80, layout.area.height * BOARD_CELL_H),
   };
 }
 
-function placeStage(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout): void {
-  const size = stageSize(layout);
+export function placeBoardStage(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout): void {
+  const size = boardStageSize(layout);
   const camera = fitBoardCamera(
     viewport.clientWidth,
     viewport.clientHeight,
@@ -46,10 +39,10 @@ function placeStage(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout
   state.boardPanX = camera.panX;
   state.boardPanY = camera.panY;
   state.boardFitted = true;
-  applyTransform(stage);
+  applyBoardTransform(stage);
 }
 
-function zoomAt(viewport: HTMLElement, stage: HTMLElement, clientX: number, clientY: number, nextScale: number): void {
+export function zoomBoardAt(viewport: HTMLElement, stage: HTMLElement, clientX: number, clientY: number, nextScale: number): void {
   const prev = state.boardScale;
   const scale = clampBoardScale(nextScale);
   if (scale === prev) return;
@@ -61,10 +54,10 @@ function zoomAt(viewport: HTMLElement, stage: HTMLElement, clientX: number, clie
   state.boardScale = scale;
   state.boardPanX = x - sx * scale;
   state.boardPanY = y - sy * scale;
-  applyTransform(stage);
+  applyBoardTransform(stage);
 }
 
-function openBoardPane(paneId: string, tile?: HTMLElement): void {
+export function openBoardPane(paneId: string, tile?: HTMLElement): void {
   if (!paneId) return;
   state.boardReturn = true;
   // The tile is the same object as the pane about to fill the screen, so it
@@ -77,90 +70,6 @@ function openBoardPane(paneId: string, tile?: HTMLElement): void {
       requestAnimationFrame(() => focusCompose());
     }
   });
-}
-
-function paneTile(
-  box: PaneBox,
-  layout: TabLayout,
-  titles: Record<string, string>,
-  zoomToPane: (box: PaneBox, tile: HTMLElement) => void,
-): HTMLElement {
-  const agent = state.agents.find((item) => item.paneId === box.paneId);
-  const selected = box.paneId === state.paneId;
-  const title = titles[box.paneId] || box.paneId;
-  const tile = button("", `board-pane status-${agent?.status || "idle"}${selected ? " sel" : ""}${box.focused ? " focused" : ""}`);
-  tile.dataset.paneId = box.paneId;
-  tile.style.left = `${box.left}px`;
-  tile.style.top = `${box.top}px`;
-  tile.style.width = `${box.width}px`;
-  tile.style.height = `${box.height}px`;
-  tile.style.minWidth = `${box.width}px`;
-  tile.style.minHeight = `${box.height}px`;
-  tile.setAttribute("aria-label", t("board.paneAria", { title }));
-  const head = node("span", "board-pane-head");
-  head.append(node("span", `agent-dot agent-${agent?.status || "idle"}`), node("span", "board-pane-name", title));
-  const status = agent ? statusLabel(agent.status) : "";
-  if (status) head.append(node("span", `pill pill-${agent?.status || "idle"}`, status));
-  if (layout.zoomed && (box.focused || box.paneId === layout.focusedPaneId)) {
-    head.append(node("span", "board-pane-zoom", t("board.zoomed")));
-  }
-  const screen = node("span", "board-pane-screen");
-  screen.setAttribute("aria-hidden", "true");
-  const pane = layout.panes.find((item) => item.paneId === box.paneId);
-  fillAnsiPreview(screen, boardPreviewText(box.paneId), Math.round(pane?.rect.width || 0), Math.round(pane?.rect.height || 0));
-  tile.append(head, screen);
-  // A tap opens the pane at once. Waiting out a double-tap window made every
-  // open feel broken to buy a shortcut nobody could discover; the second tap
-  // now means "fill the canvas with this pane", which does not race the first.
-  tile.addEventListener("click", (event) => {
-    event.preventDefault();
-    openBoardPane(box.paneId, tile);
-  });
-  tile.addEventListener("dblclick", (event) => {
-    event.preventDefault();
-    zoomToPane(box, tile);
-  });
-  // Coming back out of the pane, this tile is where it collapses to.
-  if (queuedKind() === "expand" && morphingPane() === box.paneId) shareOpening(tile);
-  return tile;
-}
-
-export function fillBoardCanvas(host: HTMLElement): void {
-  const viewport = node("div", "board-canvas");
-  viewport.setAttribute("role", "application");
-  viewport.setAttribute("aria-label", t("board.canvasAria"));
-  const layout = layoutForTab(state.boardTabId, state.layouts, state.agents);
-  if (!layout) {
-    viewport.append(emptyNode({ figure: "grid", title: t("board.emptyTitle"), sub: t("board.empty") }));
-    host.append(viewport);
-    return;
-  }
-  const size = stageSize(layout);
-  const stage = node("div", "board-stage");
-  stage.style.width = `${size.width}px`;
-  stage.style.height = `${size.height}px`;
-  const boxes = paneBoxes(layout);
-  const titles = numberDuplicateTitles(
-    boxes.map((box) => {
-      const agent = state.agents.find((item) => item.paneId === box.paneId);
-      return {
-        id: box.paneId,
-        title: agent ? agentTitle(agent, "flat") : box.paneId,
-        cwd: agent?.cwd || "",
-      };
-    }),
-  );
-  // Second tap: bring this pane up to fill the canvas, keeping it under the finger.
-  const zoomToPane = (box: PaneBox, tile: HTMLElement) => {
-    const frame = viewport.getBoundingClientRect();
-    const spot = tile.getBoundingClientRect();
-    const fill = Math.min(frame.width / Math.max(1, box.width), frame.height / Math.max(1, box.height));
-    zoomAt(viewport, stage, spot.left + spot.width / 2, spot.top + spot.height / 2, fill);
-  };
-  for (const box of boxes) stage.append(paneTile(box, layout, titles, zoomToPane));
-  viewport.append(stage);
-  bindCanvas(viewport, stage, layout);
-  host.append(viewport);
 }
 
 function paneIdFromEvent(event: Event): string {
@@ -210,12 +119,12 @@ export function releaseBoardScroll(): void {
   guidedScrollController.dispose();
 }
 
-function bindCanvas(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout): void {
-  applyTransform(stage);
-  requestAnimationFrame(() => {
-    if (!viewport.isConnected) return;
-    if (!state.boardFitted) placeStage(viewport, stage, layout);
-    fitBoardPreviews(viewport);
+export function bindBoardCanvasGestures(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout): () => void {
+  let retired = false;
+  applyBoardTransform(stage);
+  const frame = requestAnimationFrame(() => {
+    if (retired || !viewport.isConnected) return;
+    if (!state.boardFitted) placeBoardStage(viewport, stage, layout);
   });
   let pointers = new Map<number, { x: number; y: number }>();
   let origin = { x: 0, y: 0 };
@@ -225,7 +134,8 @@ function bindCanvas(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout
   let pinch = 0;
   let scrollRemainder = 0;
   const point = (event: PointerEvent) => ({ x: event.clientX, y: event.clientY });
-  viewport.addEventListener("pointerdown", (event) => {
+  const onDown = (event: PointerEvent) => {
+    if (retired) return;
     const next = point(event);
     pointers.set(event.pointerId, next);
     origin = next;
@@ -245,9 +155,9 @@ function bindCanvas(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout
       hitPane = "";
     }
     if (event.pointerType === "touch" || event.pointerType === "pen") event.preventDefault();
-  }, { capture: true, passive: false });
-  viewport.addEventListener("pointermove", (event) => {
-    if (!pointers.has(event.pointerId)) return;
+  };
+  const onMove = (event: PointerEvent) => {
+    if (retired || !pointers.has(event.pointerId)) return;
     const prev = pointers.get(event.pointerId)!;
     const next = point(event);
     pointers.set(event.pointerId, next);
@@ -258,7 +168,7 @@ function bindCanvas(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout
       if (pinch > 0 && dist > 0) {
         const midX = (a.x + b.x) / 2;
         const midY = (a.y + b.y) / 2;
-        zoomAt(viewport, stage, midX, midY, state.boardScale * (dist / pinch));
+        zoomBoardAt(viewport, stage, midX, midY, state.boardScale * (dist / pinch));
         pinch = dist;
         moved = true;
       }
@@ -275,7 +185,7 @@ function bindCanvas(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout
       if (mode === "pan") {
         state.boardPanX += fromOriginX;
         state.boardPanY += fromOriginY;
-        applyTransform(stage);
+        applyBoardTransform(stage);
       } else {
         const stepped = boardScrollLines(0, fromOriginY);
         scrollRemainder = stepped.remainder;
@@ -288,7 +198,7 @@ function bindCanvas(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout
       event.preventDefault();
       state.boardPanX += next.x - prev.x;
       state.boardPanY += next.y - prev.y;
-      applyTransform(stage);
+      applyBoardTransform(stage);
       return;
     }
     if (mode !== "scroll") return;
@@ -297,8 +207,9 @@ function bindCanvas(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout
     const stepped = boardScrollLines(scrollRemainder, next.y - prev.y);
     scrollRemainder = stepped.remainder;
     if (stepped.lines) scrollBoardPane(layout, hitPane, stepped.direction, stepped.lines);
-  }, { capture: true, passive: false });
+  };
   const end = (event: PointerEvent) => {
+    if (retired) return;
     pointers.delete(event.pointerId);
     if (pointers.size < 2) pinch = 0;
     if (pointers.size === 0) {
@@ -314,15 +225,12 @@ function bindCanvas(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout
     }
     if (moved) event.preventDefault();
   };
-  viewport.addEventListener("pointerup", end, true);
-  viewport.addEventListener("pointercancel", end, true);
-  viewport.addEventListener(
-    "wheel",
-    (event) => {
-      if (event.ctrlKey || event.metaKey) {
+  const onWheel = (event: WheelEvent) => {
+    if (retired) return;
+    if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
         const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
-        zoomAt(viewport, stage, event.clientX, event.clientY, state.boardScale * factor);
+        zoomBoardAt(viewport, stage, event.clientX, event.clientY, state.boardScale * factor);
         return;
       }
       const paneId = paneIdFromEvent(event);
@@ -335,19 +243,29 @@ function bindCanvas(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout
       }
       event.preventDefault();
       const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
-      zoomAt(viewport, stage, event.clientX, event.clientY, state.boardScale * factor);
-    },
-    { passive: false },
-  );
-  viewport.addEventListener(
-    "click",
-    (event) => {
-      if (!moved) return;
-      event.preventDefault();
-      event.stopPropagation();
-    },
-    true,
-  );
+      zoomBoardAt(viewport, stage, event.clientX, event.clientY, state.boardScale * factor);
+  };
+  const onClick = (event: MouseEvent) => {
+    if (retired || !moved) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  viewport.addEventListener("pointerdown", onDown, { capture: true, passive: false });
+  viewport.addEventListener("pointermove", onMove, { capture: true, passive: false });
+  viewport.addEventListener("pointerup", end, true);
+  viewport.addEventListener("pointercancel", end, true);
+  viewport.addEventListener("wheel", onWheel, { passive: false });
+  viewport.addEventListener("click", onClick, true);
+  return () => {
+    retired = true;
+    cancelAnimationFrame(frame);
+    viewport.removeEventListener("pointerdown", onDown, true);
+    viewport.removeEventListener("pointermove", onMove, true);
+    viewport.removeEventListener("pointerup", end, true);
+    viewport.removeEventListener("pointercancel", end, true);
+    viewport.removeEventListener("wheel", onWheel);
+    viewport.removeEventListener("click", onClick, true);
+  };
 }
 
 export function fitCurrentBoard(): void {
@@ -355,7 +273,7 @@ export function fitCurrentBoard(): void {
   const stage = document.querySelector<HTMLElement>(".board-stage");
   const layout = layoutForTab(state.boardTabId, state.layouts, state.agents);
   if (!viewport || !stage || !layout) return;
-  placeStage(viewport, stage, layout);
+  placeBoardStage(viewport, stage, layout);
 }
 
 export function nudgeBoardZoom(direction: 1 | -1): void {
@@ -363,5 +281,5 @@ export function nudgeBoardZoom(direction: 1 | -1): void {
   const stage = document.querySelector<HTMLElement>(".board-stage");
   if (!viewport || !stage) return;
   const rect = viewport.getBoundingClientRect();
-  zoomAt(viewport, stage, rect.left + rect.width / 2, rect.top + rect.height / 2, state.boardScale * (direction > 0 ? 1.2 : 1 / 1.2));
+  zoomBoardAt(viewport, stage, rect.left + rect.width / 2, rect.top + rect.height / 2, state.boardScale * (direction > 0 ? 1.2 : 1 / 1.2));
 }

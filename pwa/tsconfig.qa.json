@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["qa/**/*.ts"],
+  "exclude": ["qa/baseline.ts"]
+}

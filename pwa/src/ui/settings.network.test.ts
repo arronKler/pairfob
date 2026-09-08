@@ -1,21 +1,17 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of ["window", "document", "navigator", "HTMLElement", "HTMLButtonElement", "HTMLDialogElement", "Node", "DocumentFragment", "localStorage"] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { act, createElement } from "react";
+import { leaveReactScreen, renderReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 const { NETWORK_MODE_KEY, app, clearNotice, setNetworkMode, state } = await import("../state.ts");
+const { setLang } = await import("../lib/i18n.ts");
 const { DirectError } = await import("../lib/protocol/direct-peer.ts");
 const { setRenderer } = await import("../paint.ts");
-const { fillSettings } = await import("./settings.ts");
+const { SettingsContent } = await import("./react/settings");
 
 function paint(): void {
-  app.replaceChildren();
-  fillSettings(app, false);
+  act(() => renderReactScreen(createElement(SettingsContent, { withBack: false })));
 }
 
 function group(): HTMLElement {
@@ -31,12 +27,26 @@ function choice(label: string): HTMLButtonElement {
 }
 
 async function settle(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  await act(async () => {
+    await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+  });
 }
 
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  Object.assign(state, { phase: "live", screen: "home", fullTerminal: false, agentChat: false,
+    credential: null, live: null, computers: [], agents: [], paneId: "", panePinned: {}, paneTouched: {},
+    listGroup: "flat", listGroupCollapsed: {}, operationBusy: false, networkOnline: true, runtimeKind: "herdr",
+    herdHost: "", notice: null, settingsLoading: false, deviceList: [], devicesError: "", pushConfigError: "",
+    pushEnabled: null, pushSubscribed: null });
+  setLang("zh");
+});
+
 afterEach(() => {
-  for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
+  act(() => leaveReactScreen());
+  setRenderer(() => {});
+  act(() => closeTestDialogs());
   state.live = null;
   state.p2pEnabled = false;
   state.sessionTransport = "relay";
@@ -71,7 +81,7 @@ describe("settings network transport", () => {
     expect([...group().querySelectorAll("button")].map((item) => item.textContent)).toEqual(["自动", "P2P", "Relay"]);
     expect(group().querySelector('[aria-checked="true"]')?.textContent).toBe("自动");
 
-    choice("Relay").click();
+    act(() => { choice("Relay").click(); });
     await settle();
     expect(targets).toEqual(["relay"]);
     expect(state.networkMode).toBe("relay");
@@ -97,13 +107,13 @@ describe("settings network transport", () => {
     paint();
 
     expect(app.textContent).toContain("Relay 中继 · 42 毫秒");
-    choice("P2P").click();
+    act(() => { choice("P2P").click(); });
     await settle();
     expect(targets).toEqual(["p2p"]);
     expect(state.networkMode).toBe("p2p");
     expect(group().querySelector('[aria-checked="true"]')?.textContent).toBe("P2P");
 
-    choice("自动").click();
+    act(() => { choice("自动").click(); });
     await settle();
     expect(targets).toEqual(["p2p", "auto"]);
     expect(state.networkMode).toBe("auto");
@@ -130,7 +140,7 @@ describe("settings network transport", () => {
     setRenderer(paint);
     paint();
 
-    choice("P2P").click();
+    act(() => { choice("P2P").click(); });
     await settle();
 
     expect(state.sessionTransport).toBe("relay");
@@ -149,7 +159,7 @@ describe("settings network transport", () => {
     setRenderer(paint);
     paint();
 
-    choice("P2P").click();
+    act(() => { choice("P2P").click(); });
     await settle();
 
     expect(state.notice?.text).toContain("手机浏览器未能收集直连地址");
@@ -175,10 +185,10 @@ describe("settings network transport", () => {
     expect(app.querySelector(".network-mode-row")?.textContent).not.toContain("无需重新切换");
     const help = app.querySelector('[aria-label="连接的说明"]');
     if (!(help instanceof HTMLButtonElement)) throw new Error("missing connection help");
-    help.click();
+    act(() => { help.click(); });
     expect(document.querySelector("dialog.help")?.textContent).toContain("无需重新切换");
     expect(group().querySelector('[aria-checked="true"]')?.textContent).toBe("P2P");
-    choice("P2P").click();
+    act(() => { choice("P2P").click(); });
     await settle();
     expect(targets).toEqual(["p2p"]);
   });
@@ -212,6 +222,6 @@ describe("settings network transport", () => {
 
     const fail = app.querySelector(".network-mode-row .network-p2p-fail");
     expect(fail?.textContent).toBe("两端网络无法互相直连，常见于蜂窝网络或严格 NAT。");
-    expect(app.querySelector(".set-card > .network-p2p-fail")).toBeNull();
+    expect((app.querySelector(".set-card > .network-p2p-fail")) === null).toBe(true);
   });
 });

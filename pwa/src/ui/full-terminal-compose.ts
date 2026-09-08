@@ -1,6 +1,5 @@
-import { node } from "../lib/dom";
 import { t } from "../lib/i18n";
-import { fitOperationPrompt, OPERATION_INPUT_LIMITS } from "../lib/operations";
+import { fitOperationPrompt } from "../lib/operations";
 import {
   COMPOSE_MAX_PX,
   COMPOSE_MIN_PX,
@@ -8,9 +7,8 @@ import {
   setPaneComposeLive,
   state,
 } from "../state";
-import { fullTerminalPad, syncKeyboardButton } from "./full-terminal-input";
 
-type TerminalKeyboardControl = {
+export type TerminalKeyboardControl = {
   toggle: () => void;
   open: () => void;
   close: () => void;
@@ -45,6 +43,12 @@ export type ComposeEnterPolicyEvent =
 export type ComposeEnterPolicyAction = "pass" | "defer" | "submit" | "suppress";
 
 const padComposeSubmitters = new WeakMap<HTMLFormElement, () => void>();
+
+/** Explicit pad Enter: same IME fallback as the legacy pad submitter. */
+export function requestFullTerminalPadEnter(root: ParentNode): void {
+  const form = root.querySelector<HTMLFormElement>(".full-terminal-compose-form");
+  if (form) padComposeSubmitters.get(form)?.();
+}
 
 export const INITIAL_COMPOSE_ENTER_POLICY: ComposeEnterPolicyState = {
   composing: false,
@@ -124,6 +128,12 @@ function sizeField(field: HTMLTextAreaElement): void {
   field.style.height = `${Math.min(Math.max(field.scrollHeight, COMPOSE_MIN_PX), COMPOSE_MAX_PX)}px`;
 }
 
+export type FullTerminalComposeFeedback = {
+  draft: string;
+};
+
+const padComposeBindings = new WeakMap<HTMLFormElement, () => void>();
+
 function setComposeText(root: ParentNode, text: string): void {
   const next = fitOperationPrompt(text).text;
   state.composeDraft = next;
@@ -131,44 +141,32 @@ function setComposeText(root: ParentNode, text: string): void {
   if (!input) return;
   input.value = next;
   sizeField(input);
-  const send = root.querySelector<HTMLButtonElement>(".full-terminal-compose-send");
-  send?.setAttribute("aria-label", next.trim() ? t("compose.sendEnterAria") : t("compose.enterAria"));
+  const EventCtor = input.ownerDocument.defaultView?.Event;
+  if (EventCtor) input.dispatchEvent(new EventCtor("input", { bubbles: true }));
   input.focus({ preventScroll: true });
   input.setSelectionRange(next.length, next.length);
   haptic(4);
 }
 
-function composeForm(send: FullTerminalControlsOptions["sendCompose"]): HTMLFormElement {
-  const form = node("form", "full-terminal-compose-form");
-  const label = node("label", "sr-only", t("compose.batchAria"));
-  const input = node("textarea", "full-terminal-compose-input");
-  const sendButton = node("button", "full-terminal-compose-send", "Enter");
-  const inputID = "full-terminal-compose";
-  label.htmlFor = inputID;
-  input.id = inputID;
-  input.name = "pairfob-full-terminal-compose";
-  input.rows = 1;
-  input.wrap = "soft";
-  input.autocomplete = "off";
-  input.spellcheck = false;
-  input.autocapitalize = "none";
-  input.setAttribute("autocorrect", "off");
-  input.setAttribute("inputmode", "text");
-  input.placeholder = t("compose.batchPh");
-  input.enterKeyHint = "enter";
-  input.maxLength = OPERATION_INPUT_LIMITS.prompt;
-  state.composeDraft = fitOperationPrompt(state.composeDraft).text;
-  input.value = state.composeDraft;
-  sizeField(input);
-  sendButton.type = "submit";
-  sendButton.addEventListener("pointerdown", (event) => {
-    // An active IME still needs the native blur/commit sequence on submission.
-    if (!state.composeIME) event.preventDefault();
-  });
-  sendButton.setAttribute(
-    "aria-label",
-    state.composeDraft.trim() ? t("compose.sendEnterAria") : t("compose.enterAria"),
-  );
+/** Slash chips in batch mode fill/focus the full-terminal field; never append Enter. */
+export function setFullTerminalComposeText(root: ParentNode, text: string): void {
+  setComposeText(root, text);
+}
+
+/**
+ * Controller-owned field/form: value, height, IME reducer, pad Enter, microtask
+ * submit. Idempotent: a second bind on the same form disposes the first.
+ */
+export function bindFullTerminalCompose(
+  field: HTMLTextAreaElement,
+  form: HTMLFormElement,
+  send: (text: string, enter: boolean) => boolean,
+  feedback?: (next: FullTerminalComposeFeedback) => void,
+): () => void {
+  padComposeBindings.get(form)?.();
+  const sendButton = form.querySelector<HTMLButtonElement>(".full-terminal-compose-send");
+  let alive = true;
+  let blurTimer: number | null = null;
   let enterPolicy: ComposeEnterPolicyState = {
     ...INITIAL_COMPOSE_ENTER_POLICY,
     composing: state.composeIME,
@@ -176,22 +174,28 @@ function composeForm(send: FullTerminalControlsOptions["sendCompose"]): HTMLForm
   let deferredSubmitQueued = false;
   let explicitPadEnter = false;
 
-  const sync = (): void => {
-    state.composeDraft = fitOperationPrompt(input.value).text;
-    input.value = state.composeDraft;
-    sizeField(input);
+  const publish = (): void => {
+    feedback?.({ draft: state.composeDraft });
+    if (feedback || !sendButton) return;
     sendButton.setAttribute(
       "aria-label",
       state.composeDraft.trim() ? t("compose.sendEnterAria") : t("compose.enterAria"),
     );
   };
+  const sync = (): void => {
+    state.composeDraft = fitOperationPrompt(field.value).text;
+    field.value = state.composeDraft;
+    sizeField(field);
+    publish();
+  };
   const submit = (): void => {
+    if (!alive) return;
     sync();
     if (!send(state.composeDraft, true)) return;
     state.composeDraft = "";
-    input.value = "";
-    sizeField(input);
-    sendButton.setAttribute("aria-label", t("compose.enterAria"));
+    field.value = "";
+    sizeField(field);
+    publish();
     haptic(8);
   };
   const transition = (event: ComposeEnterPolicyEvent): ComposeEnterPolicyAction => {
@@ -206,6 +210,7 @@ function composeForm(send: FullTerminalControlsOptions["sendCompose"]): HTMLForm
     // while Chromium updates the value before it. A microtask observes either
     // ordering without relying on a timer or sending the unfinished candidate.
     queueMicrotask(() => {
+      if (!alive) return;
       deferredSubmitQueued = false;
       if (enterPolicy.composing) return;
       submit();
@@ -213,6 +218,7 @@ function composeForm(send: FullTerminalControlsOptions["sendCompose"]): HTMLForm
     });
   };
   const finishComposition = (): void => {
+    if (!alive) return;
     const releaseEnterGate = explicitPadEnter;
     explicitPadEnter = false;
     state.composeIME = false;
@@ -221,43 +227,31 @@ function composeForm(send: FullTerminalControlsOptions["sendCompose"]): HTMLForm
       deferSubmitUntilCompositionSettles(releaseEnterGate);
     }
   };
-  padComposeSubmitters.set(form, () => {
-    explicitPadEnter = true;
-    if (enterPolicy.composing) input.blur();
-    form.requestSubmit();
-    if (!enterPolicy.composing) {
-      explicitPadEnter = false;
-      return;
-    }
-    // Screen keys prevent their pointerdown default, so some IMEs never emit
-    // compositionend. Commit the textarea's current value instead of hanging.
-    queueMicrotask(() => {
-      if (enterPolicy.composing && enterPolicy.pendingSubmit) finishComposition();
-    });
-  });
 
-  input.addEventListener("input", () => {
+  const onInput = (): void => {
     if (enterPolicy.composing) {
-      state.composeDraft = input.value;
-      sizeField(input);
+      state.composeDraft = field.value;
+      sizeField(field);
+      feedback?.({ draft: state.composeDraft });
       return;
     }
     sync();
-  });
-  input.addEventListener("compositionstart", () => {
+  };
+  const onCompositionStart = (): void => {
     state.composeIME = true;
     transition({ type: "compositionstart" });
-  });
-  input.addEventListener("compositionend", finishComposition);
-  input.addEventListener("focus", () => {
+  };
+  const onFocus = (): void => {
     state.composeFocused = true;
-  });
-  input.addEventListener("blur", () => {
-    window.setTimeout(() => {
-      if (document.activeElement !== input) state.composeFocused = false;
+  };
+  const onBlur = (): void => {
+    blurTimer = window.setTimeout(() => {
+      blurTimer = null;
+      if (!alive) return;
+      if (document.activeElement !== field) state.composeFocused = false;
     }, 0);
-  });
-  input.addEventListener("keydown", (event) => {
+  };
+  const onKeyDown = (event: KeyboardEvent): void => {
     const action = transition({
       type: "keydown",
       enter: event.key === "Enter",
@@ -267,52 +261,73 @@ function composeForm(send: FullTerminalControlsOptions["sendCompose"]): HTMLForm
     if (action === "pass" || action === "defer") return;
     event.preventDefault();
     if (action === "submit") submit();
-  });
-  input.addEventListener("keyup", (event) => {
+  };
+  const onKeyUp = (event: KeyboardEvent): void => {
     transition({ type: "keyup", enter: event.key === "Enter" });
-  });
-  form.addEventListener("submit", (event) => {
+  };
+  const onSubmit = (event: Event): void => {
     event.preventDefault();
-    if (deferredSubmitQueued) return;
+    if (!alive || deferredSubmitQueued) return;
     if (transition({ type: "submit" }) === "submit") submit();
-  });
-  form.append(label, input, sendButton);
-  return form;
-}
+  };
+  const onSendPointerDown = (event: Event): void => {
+    // An active IME still needs the native blur/commit sequence on submission.
+    if (!state.composeIME) event.preventDefault();
+  };
 
-export function syncFullTerminalControls(root: HTMLElement, options: FullTerminalControlsOptions): void {
-  const mode = state.composeLive ? "live" : "compose";
-  const current = root.querySelector<HTMLElement>(".full-terminal-pad");
-  if (current?.dataset.inputMode === mode) {
-    syncKeyboardButton(current, options.keyboard.isOpen());
-    return;
-  }
-  if (state.composeLive) {
-    if (options.desk) options.keyboard.open();
-  } else {
-    options.keyboard.close();
-  }
-  let pad!: HTMLElement;
-  const routeKey = (key: string): void => {
-    if (!state.composeLive && key === "enter") {
-      const form = pad.querySelector<HTMLFormElement>(".full-terminal-compose-form");
-      if (form) padComposeSubmitters.get(form)?.();
+  state.composeDraft = fitOperationPrompt(state.composeDraft).text;
+  field.value = state.composeDraft;
+  sizeField(field);
+  publish();
+
+  padComposeSubmitters.set(form, () => {
+    if (!alive) return;
+    explicitPadEnter = true;
+    if (enterPolicy.composing) field.blur();
+    form.requestSubmit();
+    if (!enterPolicy.composing) {
+      explicitPadEnter = false;
       return;
     }
-    options.sendKey(key);
+    // Screen keys prevent their pointerdown default, so some IMEs never emit
+    // compositionend. Commit the textarea's current value instead of hanging.
+    queueMicrotask(() => {
+      if (!alive) return;
+      if (enterPolicy.composing && enterPolicy.pendingSubmit) finishComposition();
+    });
+  });
+
+  field.addEventListener("input", onInput);
+  field.addEventListener("compositionstart", onCompositionStart);
+  field.addEventListener("compositionend", finishComposition);
+  field.addEventListener("focus", onFocus);
+  field.addEventListener("blur", onBlur);
+  field.addEventListener("keydown", onKeyDown);
+  field.addEventListener("keyup", onKeyUp);
+  form.addEventListener("submit", onSubmit);
+  sendButton?.addEventListener("pointerdown", onSendPointerDown);
+
+  const dispose = (): void => {
+    if (!alive) return;
+    alive = false;
+    deferredSubmitQueued = false;
+    explicitPadEnter = false;
+    if (blurTimer !== null) window.clearTimeout(blurTimer);
+    blurTimer = null;
+    padComposeSubmitters.delete(form);
+    field.removeEventListener("input", onInput);
+    field.removeEventListener("compositionstart", onCompositionStart);
+    field.removeEventListener("compositionend", finishComposition);
+    field.removeEventListener("focus", onFocus);
+    field.removeEventListener("blur", onBlur);
+    field.removeEventListener("keydown", onKeyDown);
+    field.removeEventListener("keyup", onKeyUp);
+    form.removeEventListener("submit", onSubmit);
+    sendButton?.removeEventListener("pointerdown", onSendPointerDown);
+    if (padComposeBindings.get(form) === dispose) padComposeBindings.delete(form);
   };
-  const selectCommand = (text: string): void => {
-    if (state.composeLive) {
-      options.sendCompose(text, false);
-      return;
-    }
-    setComposeText(pad, text);
-  };
-  pad = fullTerminalPad(routeKey, state.composeLive ? options.keyboard : undefined, selectCommand);
-  pad.dataset.inputMode = mode;
-  if (!state.composeLive) pad.append(composeForm(options.sendCompose));
-  if (current) current.replaceWith(pad);
-  else root.append(pad);
+  padComposeBindings.set(form, dispose);
+  return dispose;
 }
 
 export function setFullTerminalInputMode(

@@ -1,13 +1,8 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of ["window", "document", "navigator", "HTMLElement", "Node", "localStorage"] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.performance = happy.performance;
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { resetTestDOM } from "../../../test-support/boot-dom";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { act, createElement } from "react";
+import { leaveReactScreen, renderReactScreen } from "../react/root";
+import { SessionScrollRail } from "../react/session-scroll";
 
 const { PANE_PAGE_PERF_EVENT } = await import("../../pane-page-perf.ts");
 const { bindPaneRefresh } = await import("../../pane-refresh-request.ts");
@@ -20,7 +15,13 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+beforeEach(async () => {
+  await resetTestDOM();
+  act(leaveReactScreen);
+});
+
 afterEach(() => {
+  act(leaveReactScreen);
   bindPaneRefresh(async () => null);
   state.live = null;
   state.paneId = "";
@@ -29,9 +30,15 @@ afterEach(() => {
   app.replaceChildren();
 });
 
+function paintRail(): void {
+  act(() => renderReactScreen(createElement(SessionScrollRail, {
+    scroll: direction => void sendPage(direction),
+    pageLines: () => 23,
+  })));
+}
+
 describe("guided page-key feedback", () => {
   test("stays visibly busy until the changed screen is confirmed", async () => {
-    app.innerHTML = '<div class="full-terminal-scroll"><button class="scroll-page-up"></button><button class="scroll-page-down"></button></div>';
     const mutation = deferred<void>();
     state.screen = "pane";
     state.paneId = "p1";
@@ -49,15 +56,15 @@ describe("guided page-key feedback", () => {
     const samples: unknown[] = [];
     document.addEventListener(PANE_PAGE_PERF_EVENT, (event) => samples.push((event as CustomEvent).detail), { once: true });
 
-    const page = sendPage("up");
-    await Promise.resolve();
+    paintRail();
+    let page!: Promise<void>;
+    await act(async () => { page = sendPage("up"); await Promise.resolve(); });
     const up = app.querySelector(".scroll-page-up");
     expect(up?.getAttribute("aria-busy")).toBe("true");
     expect(up?.classList.contains("is-pending")).toBeTrue();
     expect(app.querySelector(".full-terminal-scroll")?.getAttribute("aria-busy")).toBe("true");
 
-    mutation.resolve();
-    await page;
+    await act(async () => { mutation.resolve(); await page; });
     expect(up?.hasAttribute("aria-busy")).toBeFalse();
     expect(up?.classList.contains("is-pending")).toBeFalse();
     expect(samples).toHaveLength(1);
@@ -78,18 +85,17 @@ describe("guided page-key feedback", () => {
       paneId: "p1", text: "after", hash: "new", changed: true,
       startedAt: performance.now(), completedAt: performance.now(),
     }));
-    app.innerHTML = '<div class="full-terminal-scroll"><button class="scroll-page-up"></button></div>';
-    const page = sendPage("up");
-    await Promise.resolve();
+    paintRail();
+    let page!: Promise<void>;
+    await act(async () => { page = sendPage("up"); await Promise.resolve(); });
     expect(app.querySelector(".scroll-page-up")?.getAttribute("aria-busy")).toBe("true");
 
     state.paneId = "p2";
-    app.innerHTML = '<div class="full-terminal-scroll"><button class="scroll-page-up"></button></div>';
-    syncPagePending();
+    paintRail();
+    act(syncPagePending);
     expect(app.querySelector(".scroll-page-up")?.hasAttribute("aria-busy")).toBeFalse();
 
-    mutation.resolve();
-    await page;
+    await act(async () => { mutation.resolve(); await page; });
   });
 
   test("pipelines the first confirmation read behind the mutation frame", async () => {
@@ -114,10 +120,10 @@ describe("guided page-key feedback", () => {
       };
     });
 
-    const page = sendPage("down");
-    await Promise.resolve();
+    paintRail();
+    let page!: Promise<void>;
+    await act(async () => { page = sendPage("down"); await Promise.resolve(); });
     expect(order).toEqual(["mutation", "read"]);
-    mutation.resolve();
-    await page;
+    await act(async () => { mutation.resolve(); await page; });
   });
 });

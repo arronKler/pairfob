@@ -1,14 +1,17 @@
-import { node } from "../lib/dom";
+import { createElement } from "react";
 import { render } from "../paint";
 import { applyComposeDraft, parkComposeView } from "../compose-drafts";
-import { app, leavePaneScreen, resetPaneView, selectedAgent, state } from "../state";
+import { app, leavePaneScreen, resetPaneView, state } from "../state";
 import { enterWorkspace } from "../workspace";
-import { armSwipeHint, initSwipeBack as bindSwipeBack } from "./pane-swipe";
-import { morphingPane, nextTransition, queuedKind, shareOpening } from "./transition";
+import { initSwipeBack as bindSwipeBack } from "./pane-swipe";
+import { nextTransition, shareOpening } from "./transition";
 import { openPaneMenu, openPaneSwitcher } from "./pane-menu";
-import { dropQueuedKeys, fillSession, finishSessionPaint, sessionScroll, type SessionHandlers } from "./session-view";
+import { dropQueuedKeys, type SessionHandlers } from "./session-view";
+import { prepareSessionPaint } from "./session/view";
 import { leaveAgentChat, renderAgentChat } from "./agent-chat";
 import { leaveFullTerminal, renderFullTerminal } from "./full-terminal";
+import { SessionPane } from "./react/session-pane";
+import { renderReactScreen } from "./react/root";
 
 export { openPaneMenu, openPaneSwitcher };
 
@@ -73,13 +76,7 @@ export function renderPane(): void {
     renderAgentChat(goBackFromPane, () => void openSelectedWorkspace(), openPaneMenu, openPaneSwitcher);
     return;
   }
-  const scroll = sessionScroll();
-  const paneRoot = node("div", "pane-root");
-  const input = fillSession(paneRoot, selectedAgent(), true, sessionHandlers());
-  if (queuedKind() === "expand" && morphingPane() === state.paneId) shareOpening(paneRoot);
-  armSwipeHint(paneRoot);
-  app.replaceChildren(paneRoot);
-  finishSessionPaint(scroll, input);
+  renderReactScreen(createElement(SessionPane, { includeBack: true, handlers: sessionHandlers(), scroll: prepareSessionPaint() }));
 }
 
 export function initSwipeBack(): void {

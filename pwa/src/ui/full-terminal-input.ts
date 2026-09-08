@@ -1,12 +1,5 @@
 import type { ILink, ILinkProvider, ITerminalOptions, Terminal } from "@xterm/xterm";
 
-import { button, node } from "../lib/dom";
-import { t } from "../lib/i18n";
-import { saveKeysExpanded, state } from "../state";
-import { PRIMARY_KEYS, SECONDARY_KEYS, TERTIARY_KEYS, bindModifier, clearModifiers, paintKey, withModifiers, type KeySpec } from "./keypad";
-import { bindPadPress } from "./key-press";
-import { padModeBar, slashPad } from "./session/slash-pad";
-
 /** CSI / application-cursor bytes a TUI expects from a hardware key. */
 export function encodeTerminalKey(key: string, applicationCursor = false): string {
   switch (key) {
@@ -138,31 +131,12 @@ export function tapAsMouse(
   fire("mouseup", 0);
 }
 
-function keyButton(spec: KeySpec, send: PadSend): HTMLButtonElement {
-  const el = paintKey(spec);
-  if (spec.modifier) {
-    bindModifier(el, spec.modifier);
-    return el;
-  }
-  bindPadPress(el, () => {
-    for (const key of withModifiers(spec.key)) send(key, el);
-  }, { repeat: spec.repeat === true });
-  return el;
-}
-
-function keyRow(specs: KeySpec[], label: string, send: PadSend): HTMLElement {
-  const row = node("div", "keys");
-  row.setAttribute("role", "group");
-  row.setAttribute("aria-label", label);
-  for (const spec of specs) row.append(keyButton(spec, send));
-  return row;
-}
-
 export type TerminalKeyboard = {
   open: () => void;
   close: () => void;
   toggle: () => void;
   isOpen: () => boolean;
+  destroy: () => void;
 };
 
 /**
@@ -172,6 +146,7 @@ export type TerminalKeyboard = {
 export function bindXtermKeyboard(host: HTMLElement, startOpen: boolean): TerminalKeyboard {
   let wanted = startOpen;
   let attached: HTMLTextAreaElement | null = null;
+  let alive = true;
 
   const textarea = (): HTMLTextAreaElement | null =>
     host.querySelector("textarea.xterm-helper-textarea");
@@ -181,6 +156,7 @@ export function bindXtermKeyboard(host: HTMLElement, startOpen: boolean): Termin
   };
 
   const attach = (): HTMLTextAreaElement | null => {
+    if (!alive) return null;
     const el = textarea();
     if (el === attached) return el;
     attached?.removeEventListener("focus", onFocus);
@@ -190,6 +166,7 @@ export function bindXtermKeyboard(host: HTMLElement, startOpen: boolean): Termin
   };
 
   const apply = (): void => {
+    if (!alive) return;
     const el = attach();
     host.classList.toggle("kb-on", wanted);
     host.classList.toggle("kb-off", !wanted);
@@ -207,75 +184,45 @@ export function bindXtermKeyboard(host: HTMLElement, startOpen: boolean): Termin
   apply();
   return {
     open() {
+      if (!alive) return;
       wanted = true;
       apply();
     },
     close() {
+      if (!alive) return;
       wanted = false;
       apply();
     },
     toggle() {
+      if (!alive) return;
       wanted = !wanted;
       apply();
     },
     isOpen: () => wanted,
+    destroy() {
+      if (!alive) return;
+      alive = false;
+      attached?.removeEventListener("focus", onFocus);
+      attached = null;
+    },
   };
 }
 
-export function syncKeyboardButton(root: ParentNode, open: boolean): void {
-  const el = root.querySelector(".full-terminal-kb") as HTMLButtonElement | null;
-  if (!el) return;
-  el.textContent = open ? t("ft.kbHide") : t("ft.kbType");
-  el.setAttribute("aria-pressed", open ? "true" : "false");
-  el.setAttribute("aria-label", open ? t("ft.kbHide") : t("ft.kbOpen"));
+const keyboardListeners = new Set<() => void>();
+let keyboardOpen = false;
+
+/** Subscribe to keyboard visibility changes from the terminal controller. */
+export function subscribeFullTerminalKeyboard(onStoreChange: () => void): () => void {
+  keyboardListeners.add(onStoreChange);
+  return () => { keyboardListeners.delete(onStoreChange); };
 }
 
-/** The pressed keycap travels with the key so a phone without vibration can still acknowledge it. */
-type PadSend = (key: string, source?: HTMLElement | null) => void;
+export function fullTerminalKeyboardOpen(): boolean {
+  return keyboardOpen;
+}
 
-/** On-screen keys the phone keyboard cannot emit, typed into the live PTY. */
-export function fullTerminalPad(
-  send: PadSend,
-  keyboard?: { toggle: () => void; isOpen: () => boolean },
-  selectCommand: (text: string) => void = () => undefined,
-): HTMLElement {
-  const pad = node("div", "full-terminal-pad");
-  const controls = node("div", "full-terminal-pad-controls");
-  pad.append(controls);
-  const paint = () => {
-    controls.replaceChildren();
-    if (keyboard) {
-      const kb = button("", "full-terminal-kb");
-      kb.type = "button";
-      controls.append(kb);
-      syncKeyboardButton(controls, keyboard.isOpen());
-      bindPadPress(kb, () => {
-        keyboard.toggle();
-        syncKeyboardButton(pad, keyboard.isOpen());
-      });
-    }
-    const primary = keyRow(PRIMARY_KEYS, t("keys.primary"), send);
-    const more = button("", "key key-more");
-    more.setAttribute("aria-label", t("keys.morePad"));
-    more.setAttribute("aria-expanded", state.keysExpanded ? "true" : "false");
-    more.addEventListener("pointerdown", (event) => event.preventDefault());
-    more.addEventListener("click", () => {
-      clearModifiers();
-      state.keysExpanded = !state.keysExpanded;
-      saveKeysExpanded();
-      paint();
-    });
-    primary.append(more);
-    controls.append(primary);
-    if (state.keysExpanded) {
-      controls.append(padModeBar(paint));
-      if (state.padKind === "slash") {
-        controls.append(slashPad(selectCommand));
-        return;
-      }
-      controls.append(keyRow(SECONDARY_KEYS, t("keys.more"), send), keyRow(TERTIARY_KEYS, t("keys.mods"), send));
-    }
-  };
-  paint();
-  return pad;
+export function notifyFullTerminalKeyboard(open: boolean): void {
+  if (keyboardOpen === open) return;
+  keyboardOpen = open;
+  for (const listener of keyboardListeners) listener();
 }

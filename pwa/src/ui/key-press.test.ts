@@ -137,6 +137,20 @@ describe("pad physical press ownership", () => {
     }
   });
 
+  test("destroy removes permanent listeners so a later press does not fire", () => {
+    const button = happy.document.createElement("button");
+    button.type = "button";
+    happy.document.body.append(button);
+    let count = 0;
+    const binding = bindPadPress(button as unknown as HTMLElement, () => { count++; });
+    binding.destroy();
+    button.dispatchEvent(new happy.PointerEvent("pointerdown", {
+      pointerId: 1, button: 0, pointerType: "touch", bubbles: true, cancelable: true,
+    }));
+    button.dispatchEvent(new happy.MouseEvent("click", { detail: 0 }));
+    expect(count).toBe(0);
+  });
+
   test("repeats only while held, and stops when the button is detached", async () => {
     const { pointer, count, button, releases } = setup(true);
     pointer("pointerdown");

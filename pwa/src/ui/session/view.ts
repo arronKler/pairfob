@@ -1,20 +1,21 @@
-import { agentMeta, agentTitle, chromeName, cwdName, statusLabel, tabIsSplit } from "../../lib/dashboard";
-import { button, node } from "../../lib/dom";
-import { t } from "../../lib/i18n";
-import { type AgentCard } from "../../lib/ranking";
-import { app, selectedAgent, state } from "../../state";
+import { app, state } from "../../state";
 import { isDesk } from "../../viewport";
-import { appendNotice, backButton, canInterruptAgent, herdLiveness } from "../chrome";
-import { chromeActionCluster, syncChromeStop } from "./chrome-actions";
 import { composeField, sizeCompose, syncSendButton } from "./compose";
-import { dockNode } from "./dock";
 import { settleEcho } from "./echo";
-import { queueKey } from "./keys";
-import { paneModel, type PaneModel } from "./model";
-import { morphingPane, shareTitle } from "../transition";
-import { openRow, rowBar } from "./rowbar";
-import { atBottom, fillTerm, restoreTermScroll, sessionScroll, stickBottom, syncJump, termElement, termView, toggleTermSelect } from "./term";
+import { paneModel } from "./model";
+import { discardEmptyPaneRow } from "./rowbar";
+import {
+  atBottom,
+  displayedTermModel,
+  restoreTermScroll,
+  sessionScroll,
+  stickBottom,
+  syncJump,
+  termElement,
+} from "./term";
 import { markCaughtUp, noteSnapshot, unreadCount } from "./unread";
+import { flushSync } from "react-dom";
+import { notifySessionUI } from "./ui-revision";
 
 export type SessionHandlers = {
   onBack: () => void;
@@ -22,103 +23,6 @@ export type SessionHandlers = {
   onSwitch: () => void;
   onWorkspace: () => void;
 };
-
-/** While the verdict is unverifiable, last-known done/idle is not a fresh fact. */
-function statusCopy(selected: AgentCard): string {
-  return herdLiveness() === "unverifiable" ? t("status.unverifiable") : statusLabel(selected.status);
-}
-
-function statusLine(selected: AgentCard): string {
-  return [statusCopy(selected), agentMeta(selected)].filter(Boolean).join(" · ");
-}
-
-function chromeMeta(selected: AgentCard): string {
-  return [statusCopy(selected), cwdName(selected.cwd), tabIsSplit(selected, state.agents) ? t("chrome.split") : ""]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function titleBody(selected: AgentCard): HTMLElement[] {
-  const name = node("span", "chrome-name", chromeName(selected));
-  const line = chromeMeta(selected);
-  if (!line) return [name];
-  const stale = herdLiveness() === "unverifiable";
-  const meta = node("span", "chrome-meta");
-  meta.append(node("span", `agent-dot agent-${stale ? "unknown" : selected.status}`), node("span", "chrome-meta-text", line));
-  return [name, meta];
-}
-
-/**
- * The accessible name and the interrupt button carry the same status the dot
- * shows. Both the builder and the in-place patch go through here, because a
- * status flip seen while the pane is open only ever runs the patch.
- */
-function syncChromeStatus(chrome: HTMLElement, title: HTMLElement, selected: AgentCard): void {
-  const line = statusLine(selected);
-  title.title = [agentTitle(selected), line].filter(Boolean).join(" · ");
-  title.setAttribute(
-    "aria-label",
-    line ? t("chrome.switchAriaMeta", { title: agentTitle(selected), line }) : t("chrome.switchAria", { title: agentTitle(selected) }),
-  );
-  syncChromeStop(chrome, canInterruptAgent(selected.status), () => queueKey("esc"));
-}
-
-function chromeNode(selected: AgentCard | undefined, includeBack: boolean, handlers: SessionHandlers): HTMLElement {
-  const chrome = node("header", "chrome");
-  if (includeBack) {
-    chrome.append(backButton(handlers.onBack, t("chrome.backList")));
-  }
-  const title = node("button", "chrome-title");
-  title.type = "button";
-  // The other half of the card-title morph, when this pane is the one arriving.
-  if (selected && morphingPane() === selected.paneId) shareTitle(title);
-  title.addEventListener("click", handlers.onSwitch);
-  title.append(...(selected ? titleBody(selected) : [node("span", "chrome-name", t("title.session"))]));
-  chrome.append(title);
-  chrome.append(chromeActionCluster(handlers.onWorkspace, handlers.onMenu));
-  if (selected) syncChromeStatus(chrome, title, selected);
-  return chrome;
-}
-
-function fillExtras(host: HTMLElement, model: PaneModel): void {
-  const parts: HTMLElement[] = [];
-  const bar = rowBar(model);
-  if (bar) parts.push(bar);
-  host.replaceChildren(...parts);
-}
-
-function selectBar(): HTMLElement {
-  const bar = node("div", "select-bar");
-  bar.append(node("p", "select-hint", t("term.selectHint")));
-  bar.append(button(t("term.done"), "btn btn-small", () => toggleTermSelect(false)));
-  return bar;
-}
-
-export function fillSession(
-  container: HTMLElement | DocumentFragment,
-  selected: AgentCard | undefined,
-  includeBack: boolean,
-  handlers: SessionHandlers,
-): HTMLTextAreaElement | undefined {
-  container.append(chromeNode(selected, includeBack, handlers));
-  if (!selected) {
-    container.append(node("p", "empty-sub", t("err.paneGone")));
-    return;
-  }
-  appendNotice(container);
-  const model = paneModel();
-  container.append(termView(model, openRow));
-  const extras = node("div", "session-extras");
-  fillExtras(extras, model);
-  container.append(extras);
-  if (state.termSelect) {
-    container.append(selectBar());
-    return;
-  }
-  const { dock, input } = dockNode(includeBack);
-  container.append(dock);
-  return input;
-}
 
 export function finishSessionPaint(scroll: { top: number; left: number; bottom: boolean }, input?: HTMLTextAreaElement): void {
   if (state.agentChat) return;
@@ -144,12 +48,9 @@ export function finishSessionPaint(scroll: { top: number; left: number; bottom: 
 }
 
 export function patchChromeTitle(): void {
-  const chrome = app.querySelector(".chrome") as HTMLElement | null;
-  const wrap = app.querySelector(".chrome-title") as HTMLElement | null;
-  const selected = selectedAgent();
-  if (!chrome || !wrap || !selected) return;
-  wrap.replaceChildren(...titleBody(selected));
-  syncChromeStatus(chrome, wrap, selected);
+  if (app.querySelector("[data-react-session-chrome]")) {
+    flushSync(notifySessionUI);
+  }
 }
 
 /** In-place buffer update that keeps scroll, selection and a typed draft. */
@@ -165,10 +66,8 @@ export function patchSessionScreen(): boolean {
   const model = paneModel();
   // The snapshot is the truth: resolve the prediction before drawing it.
   settleEcho(state.paneId ?? "", model.texts, state.paneHash);
-  fillTerm(term, model);
-  fillExtras(extras, model);
-  syncSendButton();
-  patchChromeTitle();
+  discardEmptyPaneRow(displayedTermModel(model));
+  flushSync(() => { syncSendButton(); notifySessionUI(); });
   restoreTermScroll(term, { left, top, bottom: following });
   state.paneFollow = following;
   // A repaint that changed nothing is not new output, so the chip stays away.
@@ -179,3 +78,9 @@ export function patchSessionScreen(): boolean {
 }
 
 export { sessionScroll, stickBottom };
+
+/** Normalize controller state before rendering; JSX only reads the prepared view. */
+export function prepareSessionPaint(): ReturnType<typeof sessionScroll> {
+  discardEmptyPaneRow(displayedTermModel(paneModel()));
+  return sessionScroll();
+}

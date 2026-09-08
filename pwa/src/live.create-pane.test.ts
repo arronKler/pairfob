@@ -1,40 +1,19 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLTextAreaElement",
-  "HTMLDetailsElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.FormData = happy.FormData;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { happy, resetChatDOM } from "../test-support/chat-dom";
+import { act } from "react";
+import { closeTestDialogs } from "../test-support/close-dialogs";
+import { beforeEach, afterEach, describe, expect, test } from "bun:test";
 
 const { app, setDefaultTermMode, state } = await import("./state.ts");
 const { setRenderer } = await import("./paint.ts");
-const { renderHome } = await import("./ui/home.ts");
-const { renderPane } = await import("./ui/pane.ts");
+const { renderApp } = await import("./ui/react/app-screen");
+const { leaveReactScreen } = await import("./ui/react/root");
+const { setLang } = await import("./lib/i18n");
+beforeEach(async () => { await resetChatDOM(); setLang("zh"); });
 const { createSelectedTab, splitSelectedPane, startNewConversation } = await import("./live-operations.ts");
 const { LAST_AGENT_KIND_KEY } = await import("./lib/operation-ui.ts");
 
 function paint(): void {
-  if (state.screen === "pane") renderPane();
-  else renderHome();
+  act(renderApp);
 }
 
 const SNAPSHOT_TWO_PANES = {
@@ -116,7 +95,7 @@ async function submitOperationForm(options: { cwd?: string; agentKind?: string }
  * remembered / default view mode and always landed in the guided view.
  */
 describe("a created pane opens through the normal pane-open path", () => {
-  test("new conversations honor the default agent-chat mode", async () => {
+  test("new conversations honor the default agent-chat mode", async () => await act(async () => {
     boot();
     setDefaultTermMode("agent");
 
@@ -129,9 +108,9 @@ describe("a created pane opens through the normal pane-open path", () => {
     expect(state.agentChat).toBe(true);
     expect(state.fullTerminal).toBe(false);
     expect(app.querySelector(".agent-chat-root")).toBeTruthy();
-  });
+  }));
 
-  test("new conversations honor the guided default", async () => {
+  test("new conversations honor the guided default", async () => await act(async () => {
     boot();
     setDefaultTermMode("guided");
 
@@ -143,9 +122,9 @@ describe("a created pane opens through the normal pane-open path", () => {
     expect(state.agentChat).toBe(false);
     expect(app.querySelector(".agent-chat-root")).toBeNull();
     expect(app.querySelector(".term")).toBeTruthy();
-  });
+  }));
 
-  test("new conversations use the safe Control fallback for Auto before P2P is active", async () => {
+  test("new conversations use the safe Control fallback for Auto before P2P is active", async () => await act(async () => {
     boot();
     state.sessionTransport = "relay";
     setDefaultTermMode("auto");
@@ -158,11 +137,11 @@ describe("a created pane opens through the normal pane-open path", () => {
     expect(state.agentChat).toBe(false);
     expect(state.fullTerminal).toBe(false);
     expect(app.querySelector(".term")).toBeTruthy();
-  });
+  }));
 });
 
 describe.each(["", "codex"])("new tabs and splits with pane kind %s", (agentKind) => {
-  test("create tab sends the selected pane kind", async () => {
+  test("create tab sends the selected pane kind", async () => await act(async () => {
     boot();
     localStorage.setItem(LAST_AGENT_KIND_KEY, "codex");
     const created: Array<Record<string, unknown>> = [];
@@ -187,9 +166,9 @@ describe.each(["", "codex"])("new tabs and splits with pane kind %s", (agentKind
     expect(created).toEqual([{ workspace_id: "w1", cwd: "/tmp/demo", ...(agentKind ? { agent_kind: agentKind } : {}) }]);
     expect(localStorage.getItem(LAST_AGENT_KIND_KEY)).toBe(agentKind);
     expect(state.paneId).toBe("p2");
-  });
+  }));
 
-  test("split pane sends the selected pane kind", async () => {
+  test("split pane sends the selected pane kind", async () => await act(async () => {
     boot();
     localStorage.setItem(LAST_AGENT_KIND_KEY, "codex");
     state.paneId = "p1";
@@ -215,7 +194,7 @@ describe.each(["", "codex"])("new tabs and splits with pane kind %s", (agentKind
     expect(created).toEqual([{ pane_id: "p1", direction: "right", ratio: 0.5, cwd: "/tmp/demo", ...(agentKind ? { agent_kind: agentKind } : {}) }]);
     expect(localStorage.getItem(LAST_AGENT_KIND_KEY)).toBe(agentKind);
     expect(state.paneId).toBe("p2");
-  });
+  }));
 });
 
 describe.each(["tab", "split"])("%s pane type form", (operation) => {
@@ -236,7 +215,7 @@ describe.each(["tab", "split"])("%s pane type form", (operation) => {
     dialog.close("cancel");
   }
 
-  test("offers every advertised kind and remembers the last supported choice", async () => {
+  test("offers every advertised kind and remembers the last supported choice", async () => await act(async () => {
     boot();
     state.agentKinds = ["codex", "claude"];
     localStorage.setItem(LAST_AGENT_KIND_KEY, "claude");
@@ -248,9 +227,9 @@ describe.each(["tab", "split"])("%s pane type form", (operation) => {
     await done;
     expect(localStorage.getItem(LAST_AGENT_KIND_KEY)).toBe("claude");
     expect(state.paneId).toBe("p1");
-  });
+  }));
 
-  test("keeps the terminal type visible when no agents are available", async () => {
+  test("keeps the terminal type visible when no agents are available", async () => await act(async () => {
     boot();
     state.agentKinds = [];
     localStorage.setItem(LAST_AGENT_KIND_KEY, "codex");
@@ -260,9 +239,9 @@ describe.each(["tab", "split"])("%s pane type form", (operation) => {
     await submitOperationForm();
     await done;
     expect(state.paneId).toBe("p2");
-  });
+  }));
 
-  test("rejects an unadvertised kind before creating anything", async () => {
+  test("rejects an unadvertised kind before creating anything", async () => await act(async () => {
     boot();
     const done = open();
     const option = happy.document.createElement("option");
@@ -274,11 +253,11 @@ describe.each(["tab", "split"])("%s pane type form", (operation) => {
     expect(localStorage.getItem(LAST_AGENT_KIND_KEY)).toBeNull();
     cancel();
     await done;
-  });
+  }));
 });
 
 afterEach(() => {
-  for (const dialog of happy.document.querySelectorAll("dialog")) dialog.remove();
+  act(() => { closeTestDialogs(); leaveReactScreen(); });
   state.live = null;
   state.paneId = "";
   state.screen = "home";

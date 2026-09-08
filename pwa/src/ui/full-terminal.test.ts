@@ -4,8 +4,8 @@ const source = await Bun.file(new URL("./full-terminal.ts", import.meta.url)).te
 const fitController = await Bun.file(new URL("./full-terminal-fit-controller.ts", import.meta.url)).text();
 const shell = await Bun.file(new URL("./full-terminal-view.ts", import.meta.url)).text();
 const stateView = await Bun.file(new URL("./full-terminal-state.ts", import.meta.url)).text();
-const dock = await Bun.file(new URL("./session/dock.ts", import.meta.url)).text();
-const view = await Bun.file(new URL("./session/view.ts", import.meta.url)).text();
+const dock = await Bun.file(new URL("./react/session-dock.tsx", import.meta.url)).text();
+const view = await Bun.file(new URL("./react/session-pane.tsx", import.meta.url)).text();
 const pane = await Bun.file(new URL("./pane.ts", import.meta.url)).text();
 const swipe = await Bun.file(new URL("./pane-swipe.ts", import.meta.url)).text();
 
@@ -18,31 +18,41 @@ function fn(name: string, next: string): string {
 }
 
 describe("complete-terminal chrome stays a distinct surface", () => {
-  test("chrome matches the other pane modes: stop, workspace, and more", () => {
+  test("chrome matches the other pane modes: stop, workspace, and more", async () => {
     const renderFn = fn("export function renderFullTerminal(", "export function handleFullTerminalEvent(");
-    expect(renderFn).toContain("createFullTerminalView(");
-    expect(renderFn).toContain("syncFullTerminalChrome(mounted)");
-    expect(shell).toContain("chromeActionCluster(actions.onWorkspace, actions.onMenu)");
-    expect(source).toContain("syncChromeStop(chrome, canInterruptAgent(selectedAgent()?.status ?? \"\"), interruptFullTerminal)");
+    expect(renderFn).toContain("paintFullTerminalScreen");
+    expect(source).toContain("emitFullTerminalView");
+    expect(source).toContain("syncFullTerminalChrome");
+    const reactShell = await Bun.file(new URL("./react/full-terminal.tsx", import.meta.url)).text();
+    expect(reactShell).toContain("full-terminal-chrome");
+    expect(reactShell).toContain("SessionActions");
+    expect(reactShell).toContain("working={view.working}");
+    expect(reactShell).toContain("FullTerminalPad");
+    expect(source).toContain("interruptFullTerminal");
     expect(renderFn).not.toContain('button("退出"');
     expect(renderFn).not.toContain("full-terminal-exit");
     expect(renderFn).not.toContain('button("重连"');
-    expect(shell).toContain('backButton(actions.onBack, t("chrome.backList"))');
     expect(renderFn).toContain("onBack");
     expect(renderFn).not.toContain("goBackFromPane");
-    expect(shell).toContain("scrollRail(actions.onScroll, actions.pageLines)");
-    expect(renderFn).toContain("syncFullTerminalInput(root, host)");
+    expect(renderFn).not.toContain("createFullTerminalView(");
+    expect(renderFn).not.toContain("app.replaceChildren(root)");
     expect(renderFn).not.toContain("dockNode");
     expect(renderFn).not.toContain("fillSession");
     expect(renderFn).not.toContain("keyPad");
   });
 
-  test("guided compose stays off the live xterm root", () => {
+  test("guided compose stays off the live xterm root", async () => {
     expect(source).not.toContain("dockNode");
     expect(source).not.toContain("composeForm");
     expect(source).toContain("bindHostScroll(");
-    expect(source).toContain("sendScroll");
-    expect(source).toContain("syncFullTerminalControls");
+    expect(source).toContain("sendFullTerminalScroll");
+    expect(source).not.toContain("syncFullTerminalControls");
+    expect(source).toContain("paintFullTerminalScreen");
+    expect(shell).toContain("publishFullTerminalView");
+    expect(shell).not.toContain("createFullTerminalView");
+    expect(shell).not.toContain("updateFullTerminalTitle");
+    expect(stateView).not.toContain("fullTerminalStateLayer");
+    expect(stateView).not.toContain("syncFullTerminalState");
     expect(fitController).toContain("pickFontSize");
     expect(source).toContain("bindFontPinch");
     expect(source).toContain("document.fonts");
@@ -50,8 +60,11 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(fitController).toContain("ptyCols(visibleCols, state.termFit, targetCols)");
     expect(fitController).toContain("panePtySize(state.paneId, state.layouts, state.agents)");
     expect(source).toContain("panXScroller");
-    expect(shell).toContain("full-terminal-pan");
-    expect(shell).toContain("full-terminal-canvas");
+    const host = await Bun.file(new URL("./react/full-terminal-host.tsx", import.meta.url)).text();
+    expect(host).toContain("full-terminal-pan");
+    expect(host).toContain("full-terminal-canvas");
+    expect(host).toContain("SessionScrollRail");
+    expect(host).toContain("FullTerminalStateLayer");
     expect(fitController).toContain("displayGrid");
     expect(fitController).toContain("remoteGrid");
     expect(fitController).toContain("pitchLineHeight");
@@ -75,7 +88,8 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(dock).not.toContain("退出完整终端");
     expect(view).not.toContain("full-terminal-retry");
     expect(view).not.toContain("full-terminal-scroll");
-    expect(view).toContain("dockNode(includeBack)");
+    expect(view).toContain("Dock: SessionDock");
+    expect(view).toContain("<Dock includeBack={includeBack} />");
   });
 
   test("a failed bridge stays in complete-terminal with retry", () => {
@@ -165,11 +179,14 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(eventFn.indexOf('admission === "stale"')).toBeLessThan(eventFn.indexOf('admission === "gap"'));
   });
 
-  test("paints the loading shell before mounting xterm and skips the observer's initial duplicate fit", () => {
-    const renderFn = fn("export function renderFullTerminal(", "export function handleFullTerminalEvent(");
+  test("paints the loading shell before mounting xterm and skips the observer's initial duplicate fit", async () => {
+    const engine = await Bun.file(new URL("./full-terminal-engine.ts", import.meta.url)).text();
     const mountFn = fn("async function mount(", "function disposeRenderer(");
-    expect(renderFn).toContain("scheduleMount(host)");
-    expect(renderFn.indexOf("app.replaceChildren(root)")).toBeLessThan(renderFn.indexOf("scheduleMount(host)"));
+    expect(engine).toContain("export function attachFullTerminalHost");
+    expect(engine).toContain("scheduleMount(host)");
+    expect(engine).not.toContain("leaveFullTerminal(");
+    expect(source).toContain("paintFullTerminalScreen");
+    expect(source).toContain("afterNextPaint");
     expect(mountFn).toContain("observeHostResize(host");
     expect(mountFn.indexOf("fit();")).toBeLessThan(mountFn.indexOf("observeHostResize(host"));
   });
@@ -194,7 +211,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
   test("document text autosizing is disabled only while complete-terminal is mounted", () => {
     const renderFn = fn("export function renderFullTerminal(", "export function handleFullTerminalEvent(");
     const leaveFn = fn("export function leaveFullTerminal(", "export function disposeFullTerminal(");
-    const disposeFn = fn("export function disposeFullTerminal(", "function interruptFullTerminal(");
+    const disposeFn = fn("export function disposeFullTerminal(", "export function interruptFullTerminal(");
     expect(stateView).toContain('const FULL_TERMINAL_DOCUMENT_CLASS = "full-terminal-active"');
     expect(renderFn).toContain("setFullTerminalDocumentMode(true)");
     expect(leaveFn).toContain("setFullTerminalDocumentMode(false)");

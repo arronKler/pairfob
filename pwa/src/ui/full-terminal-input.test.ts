@@ -1,15 +1,21 @@
-import { Window } from "happy-dom";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { act, createElement } from "react";
+import { resetBoardTestDOM } from "../../test-support/dom";
+import { leaveReactScreen, renderReactScreen } from "./react/root";
 
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of ["window", "document", "HTMLElement", "HTMLButtonElement", "Node", "MouseEvent", "PointerEvent", "localStorage"] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-happy.document.body.innerHTML = '<main id="app"></main>';
+const { bindXtermKeyboard, encodeTerminalKey, httpUrlsInLine, notifyFullTerminalKeyboard, openTerminalLink, tapAsMouse } = await import("./full-terminal-input.ts");
+const { app, state } = await import("../state.ts");
+const { FullTerminalPad } = await import("./react/full-terminal-pad.tsx");
 
-const { bindXtermKeyboard, encodeTerminalKey, fullTerminalPad, httpUrlsInLine, openTerminalLink, tapAsMouse } = await import("./full-terminal-input.ts");
-const { state } = await import("../state.ts");
+beforeEach(resetBoardTestDOM);
+afterEach(async () => {
+  await act(() => leaveReactScreen());
+  notifyFullTerminalKeyboard(false);
+  state.keysExpanded = false;
+  state.padKind = "keys";
+  state.composeLive = false;
+  app.replaceChildren();
+});
 
 describe("complete-terminal pad encoding", () => {
   test("arrow keys follow application cursor mode", () => {
@@ -96,6 +102,24 @@ describe("complete-terminal xterm keyboard gate", () => {
     kb.close();
     expect(ta.readOnly).toBe(true);
     expect(document.activeElement === ta).toBe(false);
+    kb.destroy();
+    ta.focus();
+    await Promise.resolve();
+    expect(document.activeElement === ta).toBe(true);
+    host.remove();
+  });
+
+  test("destroy drops the focus listener so a late microtask cannot retarget", async () => {
+    const host = document.createElement("div");
+    const ta = document.createElement("textarea");
+    ta.className = "xterm-helper-textarea";
+    host.append(ta);
+    document.body.append(host);
+    const kb = bindXtermKeyboard(host, false);
+    ta.focus();
+    kb.destroy();
+    await Promise.resolve();
+    expect(document.activeElement === ta).toBe(true);
     host.remove();
   });
 });
@@ -105,14 +129,23 @@ describe("complete-terminal pad chrome", () => {
     state.keysExpanded = false;
     state.padKind = "keys";
     const sent: string[] = [];
-    const pad = fullTerminalPad((key) => sent.push(key));
-    document.body.append(pad);
-    const labels = [...pad.querySelectorAll("button")].map((el) => el.textContent);
+    act(() => {
+      renderReactScreen(createElement(FullTerminalPad, {
+        options: {
+          sendKey: (key: string) => sent.push(key),
+          sendCompose: () => true,
+          keyboard: { toggle: () => undefined, open: () => undefined, close: () => undefined, isOpen: () => false },
+          desk: false,
+        },
+      }));
+    });
+    const pad = app;
+    const labels = [...pad.querySelectorAll(".full-terminal-pad button")].map((el) => el.textContent);
     expect(labels.slice(0, 6)).toEqual(["Esc", "↑", "↓", "←", "→", "⌫"]);
-    expect(pad.querySelector('[aria-label="更多按键"]')).toBeTruthy();
-    (pad.querySelector('[aria-label="更多按键"]') as HTMLButtonElement).click();
+    expect(pad.querySelector('[aria-label="更多按键"]') !== null).toBeTrue();
+    act(() => { (pad.querySelector('[aria-label="更多按键"]') as HTMLButtonElement).click(); });
     expect(state.keysExpanded).toBe(true);
-    const expanded = [...pad.querySelectorAll("button")].map((el) => el.textContent);
+    const expanded = [...pad.querySelectorAll(".full-terminal-pad button")].map((el) => el.textContent);
     expect(expanded).toContain("Ctrl+C");
     expect(expanded).toContain("Opt");
     expect(expanded).toContain("Shift");
@@ -123,43 +156,60 @@ describe("complete-terminal pad chrome", () => {
       new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }),
     );
     expect(sent).toEqual(["up"]);
-    pad.remove();
     state.keysExpanded = false;
   });
 
   test("expanded commands use the same switch and slash catalog as guided mode", () => {
     state.keysExpanded = true;
     state.padKind = "keys";
-    const selected: string[] = [];
-    const pad = fullTerminalPad(() => undefined, undefined, (text) => selected.push(text));
-    document.body.append(pad);
+    act(() => {
+      renderReactScreen(createElement(FullTerminalPad, {
+        options: {
+          sendKey: () => undefined,
+          sendCompose: () => true,
+          keyboard: { toggle: () => undefined, open: () => undefined, close: () => undefined, isOpen: () => false },
+          desk: false,
+        },
+      }));
+    });
+    const pad = app;
     const commandMode = [...pad.querySelectorAll<HTMLButtonElement>(".pad-mode button")]
       .find((el) => el.textContent === "命令");
-    commandMode?.click();
+    act(() => { commandMode?.click(); });
     expect(state.padKind).toBe("slash");
     expect(pad.querySelector('[aria-checked="true"]')?.textContent).toBe("命令");
-    (pad.querySelector('[aria-label="插入 /clear"]') as HTMLButtonElement).click();
-    expect(selected).toEqual(["/clear"]);
-    pad.remove();
+    act(() => { (pad.querySelector('[aria-label="插入 /clear"]') as HTMLButtonElement).click(); });
+    expect(state.composeDraft).toBe("/clear");
+    expect((pad.querySelector(".full-terminal-compose-input") as HTMLTextAreaElement).value).toBe("/clear");
     state.keysExpanded = false;
     state.padKind = "keys";
   });
 
   test("the type field is a named control separate from scroll and pad keys", () => {
     let open = false;
-    const pad = fullTerminalPad(() => undefined, {
-      toggle: () => {
-        open = !open;
-      },
-      isOpen: () => open,
+    state.composeLive = true;
+    act(() => {
+      renderReactScreen(createElement(FullTerminalPad, {
+        options: {
+          sendKey: () => undefined,
+          sendCompose: () => true,
+          keyboard: {
+            toggle: () => { open = !open; },
+            open: () => { open = true; },
+            close: () => { open = false; },
+            isOpen: () => open,
+          },
+          desk: false,
+        },
+      }));
     });
-    document.body.append(pad);
-    const kb = pad.querySelector(".full-terminal-kb") as HTMLButtonElement;
+    const kb = app.querySelector(".full-terminal-kb") as HTMLButtonElement;
     expect(kb.textContent).toBe("点这里输入");
     expect(kb.getAttribute("aria-pressed")).toBe("false");
-    kb.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+    act(() => {
+      kb.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+    });
     expect(open).toBe(true);
     expect(kb.textContent).toBe("收起键盘");
-    pad.remove();
   });
 });

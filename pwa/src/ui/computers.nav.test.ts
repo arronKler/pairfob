@@ -1,29 +1,13 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { act } from "react";
+import { leaveReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { PairResult } from "../lib/protocol/client.ts";
 
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.matchMedia = happy.matchMedia.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
-
+const { setRenderer } = await import("../paint.ts");
 const { app, state } = await import("../state.ts");
 const { setLang } = await import("../lib/i18n.ts");
-const { renderComputers } = await import("./computers.ts");
+const { renderComputers: paintComputers } = await import("./computers.ts");
 
 function sampleComputer(id: string, hostname: string): PairResult {
   return {
@@ -50,7 +34,22 @@ function paintPicker(): void {
   renderComputers();
 }
 
+function renderComputers(): void { act(paintComputers); }
+
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  Object.assign(state, { phase: "live", screen: "home", fullTerminal: false, agentChat: false,
+    credential: null, live: null, computers: [], agents: [], paneId: "", panePinned: {}, paneTouched: {},
+    listGroup: "flat", listGroupCollapsed: {}, operationBusy: false, networkOnline: true, runtimeKind: "herdr",
+    herdHost: "", notice: null, settingsLoading: false, deviceList: [], devicesError: "", pushConfigError: "",
+    pushEnabled: null, pushSubscribed: null });
+  setLang("zh");
+});
+
 afterEach(() => {
+  act(() => leaveReactScreen());
+  setRenderer(() => {});
   state.phase = "boot";
   state.screen = "home";
   state.computers = [];
@@ -63,15 +62,15 @@ describe("computer picker add row", () => {
   test("the add action is a list row that carries its own hint", () => {
     paintPicker();
     const add = app.querySelector(".computer-add");
-    expect(add).toBeInstanceOf(HTMLButtonElement);
+    expect((add) instanceof HTMLButtonElement).toBe(true);
     expect(add?.classList.contains("switch-item")).toBe(true);
     expect(add?.classList.contains("btn-ghost")).toBe(false);
-    expect(add?.querySelector(".add-mark")).toBeTruthy();
+    expect(Boolean(add?.querySelector(".add-mark"))).toBe(true);
     expect(add?.querySelector(".switch-name")?.textContent).toBe("添加另一台电脑");
     expect(add?.querySelector(".switch-meta")?.textContent).toBe(
       "先装 pairfob 再执行 pairfob pair。只是多一条凭证，不会替换现在这台。",
     );
-    expect(app.querySelector(".computer-add + .lede")).toBeNull();
+    expect((app.querySelector(".computer-add + .lede")) === null).toBe(true);
     expect(app.querySelectorAll(".computer-row")).toHaveLength(2);
   });
 

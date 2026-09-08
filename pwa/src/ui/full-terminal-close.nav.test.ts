@@ -1,33 +1,7 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, mock, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLTextAreaElement",
-  "Node",
-  "DocumentFragment",
-  "ResizeObserver",
-  "MutationObserver",
-  "DOMParser",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.history = happy.history;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-g.cancelAnimationFrame = happy.cancelAnimationFrame.bind(happy);
-g.visualViewport = happy.visualViewport;
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { act } from "react";
+import { leaveReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 class TestTerminal {
   cols = 80;
@@ -96,7 +70,7 @@ const { setRenderer } = await import("../paint.ts");
 const { openPane } = await import("../live.ts");
 const { closePane } = await import("../live-operations.ts");
 const { renderPane } = await import("./pane.ts");
-const { disposeFullTerminal, leaveFullTerminal } = await import("./full-terminal.ts");
+const { disposeFullTerminal, leaveFullTerminal, releaseFullTerminalScreen } = await import("./full-terminal.ts");
 
 function live() {
   return {
@@ -117,59 +91,68 @@ function live() {
 }
 
 function bootFullTerminal(session = live()): void {
-  disposeFullTerminal();
-  state.phase = "live";
-  state.screen = "pane";
-  state.paneId = "p1";
-  state.paneText = "ready";
-  state.networkOnline = true;
-  state.operationBusy = false;
-  state.agents = [{
-    paneId: "p1",
-    agent: "herdr",
-    hasAgent: true,
-    status: "idle",
-    workspaceId: "w1",
-    tabId: "t1",
-    workspaceLabel: "demo",
-    cwd: "/tmp/demo",
-  }];
-  state.live = session;
-  state.fullTerminal = true;
-  setPaneTermMode("p1", "full");
-  setRenderer(() => renderPane());
-  renderPane();
+  act(() => {
+    disposeFullTerminal();
+    state.phase = "live";
+    state.screen = "pane";
+    state.paneId = "p1";
+    state.paneText = "ready";
+    state.networkOnline = true;
+    state.operationBusy = false;
+    state.agents = [{
+      paneId: "p1",
+      agent: "herdr",
+      hasAgent: true,
+      status: "idle",
+      workspaceId: "w1",
+      tabId: "t1",
+      workspaceLabel: "demo",
+      cwd: "/tmp/demo",
+    }];
+    state.live = session;
+    state.fullTerminal = true;
+    setPaneTermMode("p1", "full");
+    setRenderer(() => renderPane());
+    renderPane();
+  });
 }
 
 async function confirmDanger(): Promise<void> {
-  await Promise.resolve();
+  await act(async () => { await Promise.resolve(); });
   const dialog = happy.document.querySelector("dialog.modal");
   const go = [...(dialog?.querySelectorAll("button") ?? [])]
     .find((button) => button.className.includes("btn-danger"));
   if (!(go instanceof happy.HTMLButtonElement)) throw new Error("missing danger confirmation");
-  go.click();
-  await Promise.resolve();
+  act(() => go.click());
+  await act(async () => { await Promise.resolve(); });
 }
 
 async function waitUntil(predicate: () => boolean, label: string): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
     if (predicate()) return;
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 10));
+    await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, 10)); });
   }
   throw new Error(`timed out waiting for ${label}`);
 }
 
+beforeEach(async () => { await resetBoardTestDOM(); });
+
 afterEach(async () => {
-  for (const dialog of happy.document.querySelectorAll("dialog")) dialog.remove();
-  await leaveFullTerminal({ rememberGuided: false, paint: false });
-  disposeFullTerminal();
-  state.operationBusy = false;
-  state.live = null;
-  state.agents = [];
-  state.paneId = "";
-  state.screen = "home";
-  state.paneTermModes = {};
-  app.replaceChildren();
+  await act(async () => {
+    for (const dialog of document.querySelectorAll<HTMLDialogElement>("dialog")) dialog.close();
+    await leaveFullTerminal({ rememberGuided: false, paint: false });
+    disposeFullTerminal();
+    releaseFullTerminalScreen();
+    state.operationBusy = false;
+    state.live = null;
+    state.agents = [];
+    state.paneId = "";
+    state.screen = "home";
+    state.paneTermModes = {};
+    leaveReactScreen();
+    app.replaceChildren();
+    setRenderer(() => {});
+  });
 });
 
 describe("closing panes coordinates the active complete-terminal bridge", () => {
@@ -190,9 +173,10 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     bootFullTerminal(session);
     await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
-    const closing = closePane(state.agents[0]);
+    let closing!: Promise<void>;
+    act(() => { closing = closePane(state.agents[0]); });
     await confirmDanger();
-    await closing;
+    await act(async () => { await closing; });
 
     expect(calls).toEqual([`terminal:${terminalId}`, "pane:p1"]);
     expect(state.fullTerminal).toBeFalse();
@@ -223,12 +207,13 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     bootFullTerminal(session);
     await waitUntil(() => calls[0] === "open", "pending terminal open");
 
-    const closing = closePane(state.agents[0]);
+    let closing!: Promise<void>;
+    act(() => { closing = closePane(state.agents[0]); });
     await confirmDanger();
-    await Promise.resolve();
+    await act(async () => { await Promise.resolve(); });
     expect(calls).toEqual(["open"]);
-    finishOpen();
-    await closing;
+    act(() => { finishOpen(); });
+    await act(async () => { await closing; });
 
     expect(calls).toEqual(["open", `terminal:${terminalId}`, "pane:p1"]);
   });
@@ -255,9 +240,10 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     state.agents.push(other);
     await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
-    const closing = closePane(other);
+    let closing!: Promise<void>;
+    act(() => { closing = closePane(other); });
     await confirmDanger();
-    await closing;
+    await act(async () => { await closing; });
 
     expect(calls).toEqual(["pane:p2"]);
     expect(state.fullTerminal).toBeTrue();
@@ -283,9 +269,10 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     bootFullTerminal(session);
     await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
-    const closing = closePane(state.agents[0]);
+    let closing!: Promise<void>;
+    act(() => { closing = closePane(state.agents[0]); });
     await confirmDanger();
-    await closing;
+    await act(async () => { await closing; });
 
     expect(calls).toEqual(["terminal", "pane:p1"]);
     expect(state.operationBusy).toBeFalse();
@@ -316,9 +303,10 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     bootFullTerminal(session);
     await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
-    const closing = closePane(state.agents[0]);
+    let closing!: Promise<void>;
+    act(() => { closing = closePane(state.agents[0]); });
     await confirmDanger();
-    await closing;
+    await act(async () => { await closing; });
 
     expect(calls).toEqual(["terminal", "pane", "snapshot"]);
     expect(state.operationBusy).toBeFalse();
@@ -358,24 +346,27 @@ describe("closing panes coordinates the active complete-terminal bridge", () => 
     setPaneTermMode("p2", "full");
     await waitUntil(() => app.querySelector('.full-terminal-state[data-stage="live"]') !== null, "active terminal bridge");
 
-    const first = closePane(state.agents[0]);
-    const second = closePane(state.agents[0]);
-    await Promise.resolve();
+    let first!: Promise<void>;
+    act(() => { first = closePane(state.agents[0]); });
+    let second!: Promise<void>;
+    act(() => { second = closePane(state.agents[0]); });
+    await act(async () => { await Promise.resolve(); });
     const dialogs = [...happy.document.querySelectorAll("dialog.modal")];
     expect(dialogs).toHaveLength(2);
     for (const dialog of dialogs) {
       const go = [...dialog.querySelectorAll("button")]
         .find((button) => button.className.includes("btn-danger"));
       if (!(go instanceof happy.HTMLButtonElement)) throw new Error("missing duplicate close confirmation");
-      go.click();
-      await Promise.resolve();
+      act(() => go.click());
+      await act(async () => { await Promise.resolve(); });
     }
     expect(calls).toEqual(["terminal:term_11111111111111111111111111111111"]);
-    const switching = openPane("p2");
-    await Promise.resolve();
+    let switching!: Promise<void>;
+    act(() => { switching = openPane("p2"); });
+    await act(async () => { await Promise.resolve(); });
     expect(openedPanes).toEqual(["p1"]);
-    releaseTerminalClose();
-    await Promise.all([first, second, switching]);
+    act(() => { releaseTerminalClose(); });
+    await act(async () => { await Promise.all([first, second, switching]); });
     await waitUntil(() => openedPanes.length === 2, "new pane terminal bridge");
 
     expect(calls).toEqual(["terminal:term_11111111111111111111111111111111", "pane:p1"]);

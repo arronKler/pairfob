@@ -1,36 +1,8 @@
-import { Window } from "happy-dom";
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { happy, resetChatDOM } from "../../test-support/chat-dom";
+import { beforeEach, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { act } from "react";
+import { closeTestDialogs } from "../../test-support/close-dialogs";
 import { ProtocolError } from "../lib/protocol/errors";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLTextAreaElement",
-  "HTMLDetailsElement",
-  "HTMLDialogElement",
-  "Node",
-  "DocumentFragment",
-  "ResizeObserver",
-  "MutationObserver",
-  "DOMParser",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.history = happy.history;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-g.cancelAnimationFrame = happy.cancelAnimationFrame.bind(happy);
-g.visualViewport = happy.visualViewport;
-happy.document.body.innerHTML = '<main id="app"></main>';
 
 const { app, paneTermMode, setPaneTermMode, state } = await import("../state.ts");
 const { clearAgentTraceCache } = await import("../lib/agent-trace-cache.ts");
@@ -38,6 +10,9 @@ const { setRenderer } = await import("../paint.ts");
 const { renderPane, goBackFromPane } = await import("./pane.ts");
 const { leaveAgentChat, patchAgentChat, refreshAgentTrace, restoreAgentTrace } = await import("./agent-chat.ts");
 const { resetComposeDrafts } = await import("../compose-drafts.ts");
+
+const { leaveReactScreen } = await import("./react/root");
+beforeEach(resetChatDOM);
 
 function live() {
   return {
@@ -62,11 +37,11 @@ function live() {
   };
 }
 
-function bootAgentChat(): void {
+function bootAgentChat(draft = ""): void {
   state.phase = "live";
   state.screen = "pane";
   state.paneId = "p1";
-  state.composeDraft = "";
+  state.composeDraft = draft;
   state.operationCapabilities = { ...state.operationCapabilities, prompt_agent: true, history: true };
   state.agents = [{
     paneId: "p1",
@@ -109,9 +84,7 @@ beforeAll(() => {
   setRenderer(() => renderPane());
 });
 
-test("a restored multiline draft is measured after its chat field is mounted", async () => {
-  bootAgentChat();
-  state.composeDraft = "first line\nsecond line\nthird line";
+test("a restored multiline draft is measured after its chat field is mounted", async () => await act(async () => {
   const prototype = happy.HTMLTextAreaElement.prototype;
   const descriptor = Object.getOwnPropertyDescriptor(prototype, "scrollHeight");
   Object.defineProperty(prototype, "scrollHeight", {
@@ -119,7 +92,7 @@ test("a restored multiline draft is measured after its chat field is mounted", a
     get() { return this.isConnected ? 96 : 0; },
   });
   try {
-    renderPane();
+    bootAgentChat("first line\nsecond line\nthird line");
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     const field = app.querySelector<HTMLTextAreaElement>(".agent-dock textarea")!;
     expect(field.value).toBe(state.composeDraft);
@@ -128,9 +101,9 @@ test("a restored multiline draft is measured after its chat field is mounted", a
     if (descriptor) Object.defineProperty(prototype, "scrollHeight", descriptor);
     else delete (prototype as unknown as Record<string, unknown>).scrollHeight;
   }
-});
+}));
 
-test.each([true, false])("growing the chat composer preserves follow=%s", async (following) => {
+test.each([true, false])("growing the chat composer preserves follow=%s", async (following) => await act(async () => {
   bootAgentChat();
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   const stream = app.querySelector<HTMLElement>(".agent-stream")!;
@@ -143,9 +116,10 @@ test.each([true, false])("growing the chat composer preserves follow=%s", async 
   field.dispatchEvent(new happy.Event("input", { bubbles: true }));
   expect(field.style.height).toBe("96px");
   expect(stream.scrollTop).toBe(following ? 1000 : 80);
-});
+}));
 
-afterEach(() => {
+afterEach(async () => await act(async () => {
+  closeTestDialogs();
   leaveAgentChat({ rememberGuided: false, paint: false });
   resetComposeDrafts();
   state.screen = "pane";
@@ -163,11 +137,12 @@ afterEach(() => {
   state.notice = null;
   state.live = null;
   clearAgentTraceCache();
+  leaveReactScreen();
   app.replaceChildren();
-});
+}));
 
 describe("agent-chat remembers its mode per pane", () => {
-  test("renders thinking, tools, and the final reply", () => {
+  test("renders thinking, tools, and the final reply", async () => await act(async () => {
     bootAgentChat();
     expect(app.querySelector(".agent-chat-root")).toBeTruthy();
     expect(app.querySelector(".agent-process")).toBeTruthy();
@@ -186,10 +161,10 @@ describe("agent-chat remembers its mode per pane", () => {
     if (!(title instanceof HTMLButtonElement)) throw new Error("title is not a button");
     title.click();
     expect(document.querySelector("dialog.sheet .modal-title")?.textContent).toBe("切换会话");
-    document.querySelector("dialog.sheet")?.remove();
-  });
+    closeTestDialogs();
+  }));
 
-  test("a cold working conversation shows loading instead of the empty call to action", async () => {
+  test("a cold working conversation shows loading instead of the empty call to action", async () => await act(async () => {
     bootAgentChat();
     let finish: ((page: Awaited<ReturnType<ReturnType<typeof live>["agentTrace"]>>) => void) | undefined;
     state.agentTraceItems = [];
@@ -205,14 +180,15 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".agent-empty .spinner")).toBeTruthy();
     expect(app.textContent).not.toContain("还没有对话");
 
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
     finish?.({ items: [], nextCursor: null, truncated: false });
     await Promise.resolve();
     await Promise.resolve();
     expect(app.querySelector(".agent-empty-working")).toBeTruthy();
     expect(app.textContent).not.toContain("还没有对话");
-  });
+  }));
 
-  test("a cold idle conversation uses loading and only shows the empty action after success", async () => {
+  test("a cold idle conversation uses loading and only shows the empty action after success", async () => await act(async () => {
     bootAgentChat();
     let finish: ((page: { items: []; nextCursor: null; truncated: false }) => void) | undefined;
     state.agents[0].status = "idle";
@@ -231,15 +207,16 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.textContent).not.toContain("还没有对话");
     expect(app.querySelector(".agent-stream")?.getAttribute("aria-busy")).toBe("true");
 
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
     finish?.({ items: [], nextCursor: null, truncated: false });
     await Promise.resolve();
     await Promise.resolve();
     expect(app.querySelector(".agent-empty-empty .agent-empty-title")?.textContent).toBe("还没有对话");
     expect(app.querySelector(".agent-empty-sub")?.textContent).toContain("在下面");
     expect(app.querySelector(".agent-stream")?.getAttribute("aria-busy")).toBe("false");
-  });
+  }));
 
-  test("returning to a pane paints its last successful trace before refreshing", async () => {
+  test("returning to a pane paints its last successful trace before refreshing", async () => await act(async () => {
     bootAgentChat();
     await refreshAgentTrace();
     goBackFromPane();
@@ -250,9 +227,9 @@ describe("agent-chat remembers its mode per pane", () => {
     renderPane();
     expect(app.textContent).toContain("looks fine");
     expect(app.textContent).not.toContain("还没有对话");
-  });
+  }));
 
-  test("the newest page paints before background context pagination finishes", async () => {
+  test("the newest page paints before background context pagination finishes", async () => await act(async () => {
     bootAgentChat();
     let finishOlder: ((page: { items: Array<{ type: "user"; text: string }>; nextCursor: null; truncated: false }) => void) | undefined;
     state.agentTraceItems = [];
@@ -267,6 +244,7 @@ describe("agent-chat remembers its mode per pane", () => {
     } as typeof state.live;
 
     renderPane();
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
     await Promise.resolve();
     await Promise.resolve();
     expect(app.textContent).toContain("newest reply");
@@ -276,9 +254,9 @@ describe("agent-chat remembers its mode per pane", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(app.textContent).toContain("owning prompt");
-  });
+  }));
 
-  test("deduplicates a repeated page-context user without losing older steps on refresh", async () => {
+  test("deduplicates a repeated page-context user without losing older steps on refresh", async () => await act(async () => {
     bootAgentChat();
     let latestOutput = "latest-old";
     state.agentTraceItems = [];
@@ -315,9 +293,9 @@ describe("agent-chat remembers its mode per pane", () => {
     await refreshAgentTrace();
     expect(state.agentTraceItems.map((item) => item.name || item.text)).toEqual(["owning prompt", "Early", "Latest"]);
     expect(state.agentTraceItems.at(-1)?.output).toBe("latest-new");
-  });
+  }));
 
-  test("a stale pane request cannot replace or unlock the current conversation", async () => {
+  test("a stale pane request cannot replace or unlock the current conversation", async () => await act(async () => {
     bootAgentChat();
     let finishP1: ((page: { items: Array<{ type: "assistant"; text: string }>; nextCursor: null; truncated: false }) => void) | undefined;
     let finishP2: ((page: { items: Array<{ type: "assistant"; text: string }>; nextCursor: null; truncated: false }) => void) | undefined;
@@ -334,6 +312,7 @@ describe("agent-chat remembers its mode per pane", () => {
     state.live = session;
 
     renderPane();
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
     expect(state.agentTraceBusy).toBe(true);
 
     leaveAgentChat({ rememberGuided: false, paint: false });
@@ -344,6 +323,7 @@ describe("agent-chat remembers its mode per pane", () => {
     state.agentTraceLoadState = "cold";
     state.agentTraceSig = "";
     renderPane();
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
     expect(state.agentTraceBusy).toBe(true);
 
     finishP1?.({ items: [{ type: "assistant", text: "stale p1 reply" }], nextCursor: null, truncated: false });
@@ -357,9 +337,9 @@ describe("agent-chat remembers its mode per pane", () => {
     await Promise.resolve();
     expect(state.agentTraceBusy).toBe(false);
     expect(app.textContent).toContain("current p2 reply");
-  });
+  }));
 
-  test("every turn stays in the stream, including earlier user messages", () => {
+  test("every turn stays in the stream, including earlier user messages", async () => await act(async () => {
     bootAgentChat();
     state.agentTraceItems = [
       { type: "user", text: "first question" },
@@ -373,9 +353,9 @@ describe("agent-chat remembers its mode per pane", () => {
     const users = [...app.querySelectorAll(".agent-user-text")].map((el) => el.textContent);
     expect(users).toEqual(["first question", "inspect this"]);
     expect(app.querySelectorAll(".agent-assistant")).toHaveLength(2);
-  });
+  }));
 
-  test("keeps preamble, tool, and final reply in source order", () => {
+  test("keeps preamble, tool, and final reply in source order", async () => await act(async () => {
     bootAgentChat();
     state.agents[0].status = "idle";
     state.agentTraceItems = [
@@ -398,9 +378,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(final.textContent).toContain("Everything is fine.");
     expect(Boolean(preamble.compareDocumentPosition(tool) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(Boolean(fold.compareDocumentPosition(final) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-  });
+  }));
 
-  test("anchors an optimistic prompt before output that arrives ahead of its transcript echo", () => {
+  test("anchors an optimistic prompt before output that arrives ahead of its transcript echo", async () => await act(async () => {
     bootAgentChat();
     state.agentTracePendingBase = state.agentTraceItems.map((item) => ({ ...item }));
     state.agentTracePending = "new question";
@@ -413,9 +393,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(pending.textContent).toContain("new question");
     expect(work.textContent).toContain("思考");
     expect(Boolean(pending.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-  });
+  }));
 
-  test("shows explicit running, completed, and failed tool states", () => {
+  test("shows explicit running, completed, and failed tool states", async () => await act(async () => {
     bootAgentChat();
     state.agents[0].status = "idle";
     state.agentTraceItems = [
@@ -430,9 +410,9 @@ describe("agent-chat remembers its mode per pane", () => {
       "完成",
       "失败",
     ]);
-  });
+  }));
 
-  test("loads tool bodies only after expansion and reuses the loaded detail", async () => {
+  test("loads tool bodies only after expansion and reuses the loaded detail", async () => await act(async () => {
     bootAgentChat();
     let reads = 0;
     let finish: ((detail: { detailRef: string; input: string; output: string; truncated: true }) => void) | undefined;
@@ -473,9 +453,9 @@ describe("agent-chat remembers its mode per pane", () => {
     painted.open = true;
     painted.dispatchEvent(new happy.Event("toggle"));
     expect(reads).toBe(1);
-  });
+  }));
 
-  test("keeps a failed detail read inside the tool card and retries on demand", async () => {
+  test("keeps a failed detail read inside the tool card and retries on demand", async () => await act(async () => {
     bootAgentChat();
     let reads = 0;
     state.agentTraceItems = [{ type: "tool", name: "Read", toolState: "done", detailRef: "detail-retry" }];
@@ -501,9 +481,9 @@ describe("agent-chat remembers its mode per pane", () => {
     await Promise.resolve();
     expect(reads).toBe(2);
     expect(app.textContent).toContain("loaded after retry");
-  });
+  }));
 
-  test("copies only the completed final reply", async () => {
+  test("copies only the completed final reply", async () => await act(async () => {
     let copied = "";
     Object.defineProperty(happy.navigator, "clipboard", {
       configurable: true,
@@ -517,9 +497,9 @@ describe("agent-chat remembers its mode per pane", () => {
     await Promise.resolve();
     expect(copied).toBe("looks fine");
     expect(app.querySelector(".agent-chat-root > [data-app-notice]")?.textContent).toContain("已复制回答");
-  });
+  }));
 
-  test("older history sits in the stream so it scrolls away from the latest turn", () => {
+  test("older history sits in the stream so it scrolls away from the latest turn", async () => await act(async () => {
     bootAgentChat();
     expect(app.querySelector(".agent-chat-root > .agent-older")).toBeNull();
     expect(app.querySelector(".agent-stream-inner > .agent-older")?.hidden).toBe(true);
@@ -531,18 +511,18 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(older.textContent).toBe("加载更早内容");
     expect(older.disabled).toBe(false);
     expect(older).toBe(app.querySelector(".agent-stream-inner")?.firstElementChild);
-  });
+  }));
 
-  test("‹ returns to the session list and keeps agent-chat as the pane mode", () => {
+  test("‹ returns to the session list and keeps agent-chat as the pane mode", async () => await act(async () => {
     bootAgentChat();
     click(".chrome .back");
     expect(state.agentChat).toBe(false);
     expect(state.screen).toBe("home");
     expect(paneTermMode("p1")).toBe("agent");
     expect(app.querySelector(".agent-chat-root")).toBeNull();
-  });
+  }));
 
-  test("reopening the pane restores agent-chat", () => {
+  test("reopening the pane restores agent-chat", async () => await act(async () => {
     bootAgentChat();
     click(".chrome .back");
     state.screen = "pane";
@@ -552,9 +532,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(state.agentChat).toBe(true);
     expect(app.querySelector(".agent-chat-root")).toBeTruthy();
     expect(app.querySelector(".dock")).toBeTruthy();
-  });
+  }));
 
-  test("退出对话 returns to the guided pane and remembers guided", () => {
+  test("退出对话 returns to the guided pane and remembers guided", async () => await act(async () => {
     bootAgentChat();
     leaveAgentChat();
     expect(state.agentChat).toBe(false);
@@ -562,16 +542,16 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(paneTermMode("p1")).toBe("guided");
     expect(app.querySelector(".dock")).toBeTruthy();
     expect(app.querySelector('button[aria-label="会话操作"]')).toBeTruthy();
-  });
+  }));
 
-  test("swipe-back from agent-chat returns to the list", () => {
+  test("swipe-back from agent-chat returns to the list", async () => await act(async () => {
     bootAgentChat();
     goBackFromPane();
     expect(state.screen).toBe("home");
     expect(paneTermMode("p1")).toBe("agent");
-  });
+  }));
 
-  test("Enter sends the draft and keeps the same compose field", async () => {
+  test("Enter sends the draft and keeps the same compose field", async () => await act(async () => {
     bootAgentChat();
     const field = app.querySelector(".agent-dock textarea");
     if (!(field instanceof HTMLTextAreaElement)) throw new Error("missing compose");
@@ -586,9 +566,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".agent-user-role")).toBeNull();
     expect([...app.querySelectorAll(".agent-user-text")].at(-1)?.textContent).toBe("hello there");
     expect(state.agents[0]?.status).toBe("working");
-  });
+  }));
 
-  test("stream patches do not rebuild the compose textarea", () => {
+  test("stream patches do not rebuild the compose textarea", async () => await act(async () => {
     bootAgentChat();
     const field = app.querySelector(".agent-dock textarea");
     if (!(field instanceof HTMLTextAreaElement)) throw new Error("missing compose");
@@ -597,9 +577,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(patchAgentChat({ follow: true })).toBe(true);
     expect(app.querySelector(".agent-dock textarea")).toBe(field);
     expect(field.value).toBe("keep me");
-  });
+  }));
 
-  test("renders trace clipping as a quiet stream note instead of a pinned global notice", async () => {
+  test("renders trace clipping as a quiet stream note instead of a pinned global notice", async () => await act(async () => {
     bootAgentChat();
     state.live = {
       ...live(),
@@ -615,9 +595,9 @@ describe("agent-chat remembers its mode per pane", () => {
     state.live = live() as typeof state.live;
     await refreshAgentTrace();
     expect(app.querySelector(".agent-trace-limit")).toBeNull();
-  });
+  }));
 
-  test("composer enforces the 32 KiB wire limit for multibyte text", () => {
+  test("composer enforces the 32 KiB wire limit for multibyte text", async () => await act(async () => {
     bootAgentChat();
     const field = app.querySelector(".agent-dock textarea");
     if (!(field instanceof HTMLTextAreaElement)) throw new Error("missing compose");
@@ -627,9 +607,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(field.value).toBe(state.composeDraft);
     expect(app.querySelector(".agent-compose-hint")?.textContent).toContain("32 KiB");
     expect(app.querySelector<HTMLElement>(".agent-compose-hint")?.hidden).toBe(false);
-  });
+  }));
 
-  test("an oversized trace read keeps the current chat instead of claiming the prompt was not sent", async () => {
+  test("an oversized trace read keeps the current chat instead of claiming the prompt was not sent", async () => await act(async () => {
     bootAgentChat();
     state.live = {
       ...live(),
@@ -644,9 +624,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.textContent).toContain("looks fine");
     expect(patchAgentChat({ follow: true })).toBe(true);
     expect(app.querySelector(".agent-chat-root > [data-app-notice]")).toBe(notice);
-  });
+  }));
 
-  test("blocked agents get a way back to the guided confirm UI", () => {
+  test("blocked agents get a way back to the guided confirm UI", async () => await act(async () => {
     bootAgentChat();
     state.agents[0].status = "blocked";
     renderPane();
@@ -657,9 +637,9 @@ describe("agent-chat remembers its mode per pane", () => {
     go.click();
     expect(state.agentChat).toBe(false);
     expect(paneTermMode("p1")).toBe("guided");
-  });
+  }));
 
-  test("unknown agents do not show the confirm bar", () => {
+  test("unknown agents do not show the confirm bar", async () => await act(async () => {
     bootAgentChat();
     state.agents[0].status = "unknown";
     renderPane();
@@ -668,9 +648,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".chrome-meta-text")?.textContent).toBe("未知");
     expect(app.querySelector(".agent-unknown")).not.toBeNull();
     expect(app.querySelector(".icon-stop")).toBeNull();
-  });
+  }));
 
-  test("a failed empty read offers retry in the centered empty state", async () => {
+  test("a failed empty read offers retry in the centered empty state", async () => await act(async () => {
     bootAgentChat();
     state.agents[0].status = "idle";
     state.agentTraceItems = [];
@@ -685,9 +665,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".agent-empty-error")).toBeTruthy();
     expect(app.querySelector(".agent-empty-error button")?.textContent).toBe("重试");
     expect(app.querySelector(".agent-dock [data-app-notice]")).toBeNull();
-  });
+  }));
 
-  test("会话操作 omits terminal display actions in 对话", () => {
+  test("会话操作 omits terminal display actions in 对话", async () => await act(async () => {
     bootAgentChat();
     click('button[aria-label="会话操作"]');
     const sheet = document.querySelector("dialog.sheet");
@@ -697,10 +677,10 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(sheet?.textContent).not.toContain("更早的输出");
     expect(sheet?.textContent).not.toContain("选择文本");
     expect(sheet?.textContent).not.toContain("长行自动折行");
-    sheet?.remove();
-  });
+    closeTestDialogs();
+  }));
 
-  test("new turns while scrolled up offer ↓ 新回复", () => {
+  test("new turns while scrolled up offer ↓ 新回复", async () => await act(async () => {
     bootAgentChat();
     state.agentTraceFollow = false;
     state.agentTraceUnread = false;
@@ -714,5 +694,5 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(state.agentTraceFollow).toBe(true);
     expect(state.agentTraceUnread).toBe(false);
     expect(jump.hidden).toBe(true);
-  });
+  }));
 });

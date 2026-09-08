@@ -1,27 +1,12 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
+import { resetBoardTestDOM } from "../test-support/dom";
+import { act, createElement } from "react";
+import { beforeEach, afterEach, expect, test } from "bun:test";
 import type { LiveSession, PairResult, SessionEvent } from "./lib/protocol/client.ts";
+import { FullTerminalScreen } from "./ui/react/full-terminal";
+import { leaveReactScreen, renderReactScreen } from "./ui/react/root";
+import { syncFullTerminalChrome } from "./ui/full-terminal";
 
-const happy = new Window({ url: "https://pairfob.com/", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.FormData = happy.FormData;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+beforeEach(resetBoardTestDOM);
 
 const { state, app } = await import("./state.ts");
 const { setRenderer } = await import("./paint.ts");
@@ -30,11 +15,12 @@ const { closeComputerSession, establish, stopPolling } = await import("./live.ts
 
 const originalFetch = globalThis.fetch;
 const daemonId = "agent_status_events";
-afterEach(() => {
+afterEach(() => act(() => {
+  leaveReactScreen();
   stopPolling();closeComputerSession(daemonId);
   state.live=null;state.credential=null;state.fullTerminal=false;state.agentChat=false;
   globalThis.fetch=originalFetch;app.replaceChildren();
-});
+}));
 
 async function boot(fullTerminal: boolean) {
   setRenderer(()=>undefined);
@@ -86,9 +72,22 @@ test("hidden status events do not start network reads",async()=>{
 
 test("mobile full-terminal controls follow status without remounting the terminal",async()=>{
   const runtime=await boot(true);state.runtimeKind="herdr";state.networkOnline=true;
-  app.innerHTML='<div class="full-terminal-root"><header class="full-terminal-chrome"><div class="chrome-actions"></div></header><div class="full-terminal-host"></div></div>';
+  const noop = () => {};
+  act(() => {
+    syncFullTerminalChrome();
+    renderReactScreen(createElement(FullTerminalScreen, {
+      onBack: noop, onWorkspace: noop, onMenu: noop, onStop: noop, onRetry: noop,
+      scroll: noop, pageLines: () => 23, engineActive: false,
+      controls: { sendKey: noop, sendCompose: () => true, desk: false,
+        keyboard: { toggle: noop, open: noop, close: noop, isOpen: () => false } },
+    }));
+  });
   const host=app.querySelector(".full-terminal-host");
-  runtime.change("working");await settle();expect(app.querySelector(".icon-stop")).not.toBeNull();
-  runtime.change("done");await settle();expect(app.querySelector(".icon-stop")).toBeNull();
+  expect(host === null).toBeFalse();
+  expect(app.querySelector("[data-react-full-terminal]") === null).toBeFalse();
+  await act(async () => { runtime.change("working"); await settle(); });
+  expect(app.querySelector(".icon-stop") === null).toBeFalse();
+  await act(async () => { runtime.change("done"); await settle(); });
+  expect(app.querySelector(".icon-stop") === null).toBeTrue();
   expect(app.querySelector(".full-terminal-host")).toBe(host);
 });

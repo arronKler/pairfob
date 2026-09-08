@@ -37,6 +37,7 @@ import {
   FRIENDLY_ERROR,
   acknowledgePaneCompletion,
   clearNotice,
+  captureNoticeScope,
   noticeScopeIsCurrent,
   leavePaneScreen,
   loadPaneTouched,
@@ -61,9 +62,9 @@ import {
 import { isDesk } from "./viewport";
 import { refreshBoardPreviews } from "./ui/board-preview";
 import { composeField, dropQueuedKeys, paneReadLines, patchChromeTitle, patchSessionScreen, preserveCompose } from "./ui/session-view";
-import { applyComposeDraft, captureComposeDraft, parkComposeView } from "./compose-drafts";
+import { applyComposeDraft, captureComposeDraft, currentViewIncarnation, parkComposeView } from "./compose-drafts";
 import { canEnterAgentChat, patchAgentChat, refreshAgentTrace, restoreAgentTrace } from "./ui/agent-chat";
-import { disposeFullTerminal, handleFullTerminalEvent, leaveFullTerminal, syncFullTerminalChrome } from "./ui/full-terminal";
+import { disposeFullTerminal, handleFullTerminalEvent, leaveFullTerminal, leaveFullTerminalWithTransition, syncFullTerminalChrome } from "./ui/full-terminal";
 import { preloadFullTerminalXterm } from "./ui/full-terminal-loader";
 import { resolvedPaneTermMode } from "./ui/terminal-mode";
 import { guidedScrollController } from "./ui/session/guided-scroll";
@@ -377,11 +378,35 @@ export async function refreshHerdConfig(): Promise<boolean> {
   }
 }
 
+let paneNavigationSerial = 0;
+export type PaneNavigation = {
+  scope: ReturnType<typeof captureNoticeScope>;
+  incarnation: number;
+  isCurrent: () => boolean;
+};
+
 export async function openPane(paneId: string): Promise<void> {
+  await openPaneWithOwner(paneId);
+}
+
+/** A completed navigation owns further UI only until another route/session/view wins. */
+export async function openPaneWithOwner(paneId: string): Promise<PaneNavigation | null> {
+  const request = ++paneNavigationSerial;
+  const session = state.live;
+  const viewVersion = liveViewVersion;
+  let scope = captureNoticeScope();
   parkComposeView();
+  let incarnation = currentViewIncarnation();
+  const isCurrent = () => request === paneNavigationSerial && state.live === session && liveViewVersion === viewVersion
+    && currentViewIncarnation() === incarnation && noticeScopeIsCurrent(scope);
   dropQueuedKeys();
   guidedScrollController.dispose();
-  if (state.fullTerminal) await leaveFullTerminal({ rememberGuided: false, paint: false });
+  if (state.fullTerminal) {
+    const transition = await leaveFullTerminalWithTransition({ rememberGuided: false, paint: false });
+    if (!transition || transition.from !== incarnation) return null;
+    incarnation = transition.to;
+  }
+  if (!isCurrent()) return null;
   rememberPane(paneId);
   state.paneId = paneId;
   resetPaneView();
@@ -398,8 +423,12 @@ export async function openPane(paneId: string): Promise<void> {
   applyComposeDraft();
   if (!state.notice?.scope || !noticeScopeIsCurrent(state.notice.scope)) clearNotice();
   acknowledgePaneCompletion(paneId);
+  scope = captureNoticeScope();
+  incarnation = currentViewIncarnation();
+  const navigation = { scope, incarnation, isCurrent };
   render();
   await refreshPane();
+  return isCurrent() ? navigation : null;
 }
 
 function abandonOpenPane(message: string): void {

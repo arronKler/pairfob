@@ -25,7 +25,7 @@ for (const key of [
 }
 g.location = happy.location;
 
-const { markdownEl, renderMarkdown } = await import("./agent-markdown.ts");
+const { renderMarkdown } = await import("./agent-markdown.ts");
 
 describe("agent markdown", () => {
   test("renders GFM and heals incomplete emphasis while streaming", () => {
@@ -41,8 +41,10 @@ describe("agent markdown", () => {
     expect(html.toLowerCase()).not.toContain("javascript:");
   });
 
-  test("mounts sanitized nodes", () => {
-    const el = markdownEl("# Title\n\nUse `Read` then **edit**.");
+  test("returns sanitized HTML with heading and inline formatting", () => {
+    const template = document.createElement("template");
+    template.innerHTML = renderMarkdown("# Title\n\nUse `Read` then **edit**.");
+    const el = template.content;
     expect(el.querySelector("h1")?.textContent).toBe("Title");
     expect(el.querySelector("code")?.textContent).toBe("Read");
     expect(el.querySelector("strong")?.textContent).toBe("edit");

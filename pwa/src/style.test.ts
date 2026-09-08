@@ -1,17 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { compile } from "sass";
+import { fileURLToPath } from "node:url";
 
-async function loadCss(url: URL): Promise<string> {
-  const text = await Bun.file(url).text();
-  const specs: string[] = [];
-  const rest = text.replace(/@import\s+["']([^"']+)["']\s*;/g, (_match, spec: string) => {
-    specs.push(spec);
-    return "";
-  });
-  const imported = await Promise.all(specs.map((spec) => loadCss(new URL(spec, url))));
-  return `${imported.join("\n")}\n${rest}`;
-}
-
-const css = await loadCss(new URL("./style.css", import.meta.url));
+const css = compile(fileURLToPath(new URL("./style.scss", import.meta.url)), { style: "expanded" }).css;
 const html = await Bun.file(new URL("../index.html", import.meta.url)).text();
 const manifest = JSON.parse(await Bun.file(new URL("../public/manifest.webmanifest", import.meta.url)).text());
 const main = await Bun.file(new URL("../src/main.ts", import.meta.url)).text();
@@ -37,7 +28,9 @@ function contrast(a: string, b: string): number {
 }
 
 function rule(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Sass omits optional quotes around identifier-valued attribute selectors.
+  const serialized = selector.replace(/\[([\w-]+)="([\w-]+)"\]/g, "[$1=$2]");
+  const escaped = serialized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] || "";
 }
 
@@ -99,7 +92,7 @@ describe("UI accessibility guardrails", () => {
     expect(css).toMatch(/\.key-more::after,\s*\.icon-more::after\s*\{[^}]*box-shadow:/);
     expect(rule(".icon-workspace::before")).toMatch(/mask:/);
     expect(rule(".icon-workspace::before")).not.toMatch(/linear-gradient/);
-    expect(css).toMatch(/\.key-more\[aria-expanded="true"\]::after\s*\{[^}]*clip-path:\s*polygon\(/);
+    expect(css).toMatch(/\.key-more\[aria-expanded=true\]::after\s*\{[^}]*clip-path:\s*polygon\(/);
     expect(css).not.toMatch(/content:\s*"▾"|content:\s*"⌄"|content:\s*"›"|content:\s*"\+"/);
     expect(rule(".set-help::before")).toMatch(/content:\s*""/);
     expect(rule(".set-help::before")).toMatch(/mask:/);
@@ -498,7 +491,7 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".full-terminal-pad :is(.keys)")).toMatch(/overflow-x:\s*auto/);
     expect(rule(".full-terminal-pad :is(.key)")).toMatch(/min-width:\s*44px/);
     expect(css).toMatch(/@media \(max-width: 363\.98px\)[\s\S]*?grid-template-columns:\s*repeat\(6, minmax\(44px, 1fr\)\)/);
-    expect(css).toMatch(/@media \(max-width: 363\.98px\)[\s\S]*?\.full-terminal-pad :is\(\.key-more\)[\s\S]*?grid-column:\s*1 \/ -1/);
+    expect(css).toMatch(/@media \(max-width: 363\.98px\)[\s\S]*?\.full-terminal-pad :is\(\.key-more\)[\s\S]*?grid-column:\s*1\s*\/\s*-1/);
   });
 
   test("standalone PWA paints the home-indicator strip with the app canvas", () => {

@@ -1,69 +1,79 @@
-import { describe, expect, test } from "bun:test";
+import { resetBoardTestDOM } from "../../test-support/dom";
+import { beforeEach, afterEach, expect, test } from "bun:test";
+import { act } from "react";
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { t, setLang } from "../lib/i18n";
+import { NO_OPERATION_CAPABILITIES } from "../lib/operations";
+import { state } from "../state";
+import { setRenderer } from "../paint";
+import { openListPaneMenu, openListWorkspaceMenu } from "./list-menu";
 
-const source = await Bun.file(new URL("./list-menu.ts", import.meta.url)).text();
-const home = await Bun.file(new URL("./home.ts", import.meta.url)).text();
-const press = await Bun.file(new URL("./press-menu.ts", import.meta.url)).text();
+const card = () => state.agents[1];
+const labels = () => [...document.querySelectorAll(".sheet-body button")].map(button => button.textContent);
+async function pause(): Promise<void> {
+  await Promise.resolve();
+  await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+}
+beforeEach(async () => {
+  await resetBoardTestDOM(); setLang("zh"); setRenderer(() => {});
+  Object.assign(state, { paneId: "p1", panePinned: {}, paneTouched: {}, listGroup: "flat", operationBusy: false,
+    operationCapabilities: { ...NO_OPERATION_CAPABILITIES },
+    agents: [
+      { paneId: "p1", agent: "codex", status: "working", workspaceId: "w1", workspaceLabel: "One", tabId: "t1", cwd: "/one" },
+      { paneId: "p2", paneLabel: "Target", agent: "codex", status: "idle", workspaceId: "w2", workspaceLabel: "Two", tabId: "t2", cwd: "/two/project" },
+    ] });
+});
+afterEach(async () => await act(async () => { closeTestDialogs(); await pause(); }));
 
-describe("list object menu", () => {
-  test("card actions target the card's agent, not the open pane", () => {
-    expect(source).toContain("export function openListPaneMenu(agent: AgentCard)");
-    expect(source).toContain("renamePane(agent)");
-    expect(source).toContain("closePane(agent)");
-    expect(source).toContain("togglePanePin(agent.paneId)");
-    expect(source).toContain('t("menu.pin")');
-    expect(source).toContain('t("menu.unpin")');
-    expect(source).toContain("renameTab(agent)");
-    expect(source).toContain("closeTab(agent)");
-    expect(source).toContain("renameWorkspace(agent)");
-    expect(source).toContain("closeWorkspace(agent)");
-    expect(source).toContain("createSelectedTab(agent)");
-    expect(source).not.toContain("selectedAgent()");
-    expect(source).not.toContain("state.paneId");
+test("object actions keep full facts above the list and pin the card rather than the selected pane", async () => {
+  act(() => openListPaneMenu(card()));
+  const body = document.querySelector(".sheet-body")!;
+  expect(body.firstElementChild?.className).toBe("sheet-facts");
+  expect(body.querySelector(".sheet-fact-path")?.textContent).toContain("/two/project");
+  expect(labels()).toContain(t("menu.renamePane"));
+  expect(labels()).toContain(t("op.closePane"));
+  expect(labels()).not.toContain(t("cancel"));
+  await act(async () => {
+    [...body.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === t("menu.pin"))!.click();
+    await pause();
   });
+  expect(state.panePinned.p2).toBeGreaterThan(0);
+  expect(state.panePinned.p1).toBeUndefined();
+  act(() => openListPaneMenu(card()));
+  expect(labels()).toContain(t("menu.unpin"));
+});
 
-  test("tab rename needs a visible tab name or a split; close is split-only", () => {
-    expect(source).toContain("visibleTabLabel(agent.tabLabel)");
-    expect(source).toContain("tabIsSplit(agent, state.agents)");
-    expect(source).toContain('t("menu.renameTab")');
-    expect(source).toContain('t("op.closeTab")');
-    expect(source).toContain('t("op.closeWorkspace")');
-    expect(source).not.toContain("sheetSection");
-    expect(source).not.toContain('t("cancel")');
-  });
+test("tab rename requires a visible label or split; tab close requires a split", async () => {
+  act(() => openListPaneMenu(card()));
+  expect(labels()).not.toContain(t("menu.renameTab"));
+  expect(labels()).not.toContain(t("op.closeTab"));
+  await act(async () => { closeTestDialogs(); await pause(); });
+  card().tabLabel = "Review";
+  act(() => openListPaneMenu(card()));
+  expect(labels()).toContain(t("menu.renameTab"));
+  expect(labels()).not.toContain(t("op.closeTab"));
+  await act(async () => { closeTestDialogs(); await pause(); });
+  state.agents.push({ ...card(), paneId: "p3" });
+  act(() => openListPaneMenu(card()));
+  expect(labels()).toContain(t("op.closeTab"));
+});
 
-  test("the object menu lists full pane facts above the actions", () => {
-    expect(source).toContain("agentDetailRows(agent, state.agents, state.listGroup)");
-    expect(source).toContain("sheet-facts");
-    expect(source).toContain("sheet-fact-path");
-    const facts = source.slice(source.indexOf("function appendPaneFacts"), source.indexOf("export function openListPaneMenu"));
-    expect(facts).not.toContain("paneId");
-  });
+test("workspace grouping moves parent management to the workspace menu", async () => {
+  state.listGroup = "space";
+  act(() => openListPaneMenu(card()));
+  expect(labels()).not.toContain(t("menu.renameWorkspace"));
+  expect(labels()).not.toContain(t("op.closeWorkspace"));
+  await act(async () => { closeTestDialogs(); await pause(); });
+  act(() => openListWorkspaceMenu(card()));
+  expect(labels()).toEqual([t("menu.renameWorkspace"), t("op.closeWorkspace")]);
+});
 
-  test("workspace rename leaves the card when the list is grouped by workspace", () => {
-    expect(source).toContain('state.listGroup !== "space"');
-    expect(source).toContain("export function openListWorkspaceMenu");
-    expect(home).toContain('state.listGroup === "space" && group.id !== PINNED_GROUP_ID');
-    expect(home).toContain("openListWorkspaceMenu(agent)");
-    expect(source).not.toContain("list_worktrees");
-  });
-
-  test("the list can create a tab in the card's workspace, not a split", () => {
-    expect(source).toContain("state.operationCapabilities.create_tab");
-    expect(source).toContain('t("menu.newTabBeside")');
-    expect(source).toContain('t("menu.newTabInWorkspace")');
-    expect(source).toContain("createSelectedTab(agent)");
-    expect(source).not.toContain("splitSelectedPane");
-    expect(source).not.toContain('t("menu.split")');
-  });
-
-  test("the list card is one control; long-press opens the object menu", () => {
-    expect(home).toContain("bindObjectPress(main");
-    expect(home).toContain("openListPaneMenu(agent)");
-    expect(home).toContain('aria-haspopup", "menu"');
-    expect(home).not.toContain("card-more");
-    expect(home).not.toContain("card-split");
-    expect(press).toContain("HOLD_MS = 450");
-    expect(press).toContain('addEventListener("contextmenu"');
-    expect(press).toContain("stopImmediatePropagation");
-  });
+test("new-tab capability gates both card and workspace entry without offering split", async () => {
+  state.operationCapabilities.create_tab = true;
+  act(() => openListPaneMenu(card()));
+  expect(labels()).toContain(t("menu.newTabBeside"));
+  expect(labels()).not.toContain(t("menu.split"));
+  await act(async () => { closeTestDialogs(); await pause(); });
+  act(() => openListWorkspaceMenu(card()));
+  expect(labels()[0]).toBe(t("menu.newTabInWorkspace"));
 });

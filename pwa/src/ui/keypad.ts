@@ -1,5 +1,3 @@
-import { node } from "../lib/dom";
-import { t, type CopyKey } from "../lib/i18n";
 import { bindPadPress } from "./key-press";
 
 export type Modifier = "ctrl" | "alt" | "shift" | "cmd";
@@ -50,9 +48,24 @@ const down = new Set<Modifier>();
 const sticky = new Set<Modifier>();
 const used = new Set<Modifier>();
 const buttons: Array<{ el: HTMLElement; mod: Modifier }> = [];
+const modifierListeners = new Set<() => void>();
 
 function active(mod: Modifier): boolean {
   return down.has(mod) || sticky.has(mod);
+}
+
+export function modifierIsActive(mod: Modifier): boolean {
+  return active(mod);
+}
+
+export function subscribeModifiers(onStoreChange: () => void): () => void {
+  modifierListeners.add(onStoreChange);
+  return () => { modifierListeners.delete(onStoreChange); };
+}
+
+export function modifierSnapshot(): string {
+  const list = (set: Set<Modifier>) => [...set].sort().join(",");
+  return `${list(down)}|${list(sticky)}|${list(used)}`;
 }
 
 function paintModifier(el: HTMLElement, mod: Modifier): void {
@@ -69,6 +82,7 @@ function paintAllModifiers(): void {
     }
     paintModifier(buttons[i].el, buttons[i].mod);
   }
+  for (const listener of modifierListeners) listener();
 }
 
 export function clearModifiers(): void {
@@ -121,11 +135,12 @@ export function withModifiers(key: string): string[] {
   return [key];
 }
 
-export function bindModifier(element: HTMLElement, mod: Modifier): void {
-  buttons.push({ el: element, mod });
+export function bindModifier(element: HTMLElement, mod: Modifier): { stop: () => void; destroy: () => void } {
+  const entry = { el: element, mod };
+  buttons.push(entry);
   element.classList.add("key-mod");
   element.setAttribute("aria-pressed", "false");
-  bindPadPress(element, () => pressModifier(mod), {
+  const press = bindPadPress(element, () => pressModifier(mod), {
     release(cancelled) {
       if (!cancelled) {
         releaseModifier(mod);
@@ -136,22 +151,10 @@ export function bindModifier(element: HTMLElement, mod: Modifier): void {
       paintAllModifiers();
     },
   });
-}
-
-const KEY_ARIA: Partial<Record<string, CopyKey>> = {
-  up: "key.up",
-  down: "key.down",
-  left: "key.left",
-  right: "key.right",
-  backspace: "key.backspace",
-};
-
-export function paintKey(spec: KeySpec): HTMLButtonElement {
-  const el = node("button", spec.modifier ? "key key-mod" : "key", spec.label ?? "");
-  el.type = "button";
-  const mapped = KEY_ARIA[spec.key];
-  const name = mapped ? t(mapped) : spec.aria ?? spec.label;
-  if (name) el.setAttribute("aria-label", name);
-  if (spec.modifier) el.setAttribute("aria-pressed", "false");
-  return el;
+  const destroy = () => {
+    press.destroy();
+    const index = buttons.indexOf(entry);
+    if (index >= 0) buttons.splice(index, 1);
+  };
+  return { stop: press.stop, destroy };
 }

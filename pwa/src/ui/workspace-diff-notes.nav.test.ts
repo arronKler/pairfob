@@ -1,23 +1,9 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const globals = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLDialogElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) globals[key] = (happy as unknown as Record<string, unknown>)[key];
-globals.location = happy.location;
-globals.matchMedia = happy.matchMedia.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { happy, resetTestDOM } from "../../test-support/boot-dom";
+import { act } from "react";
+import { setLang } from "../lib/i18n";
+import { leaveReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 const { app, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
@@ -65,7 +51,7 @@ function liveFixture(promptAgent?: (input: { pane_id: string; text: string }) =>
 }
 
 async function settle(): Promise<void> {
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, 0)); });
 }
 
 async function boot(
@@ -89,7 +75,7 @@ async function boot(
     prompt_agent: options.prompt_agent,
   };
   state.live = live as unknown as typeof state.live;
-  setRenderer(renderWorkspace);
+  setRenderer(() => act(renderWorkspace));
   await enterWorkspace("p1");
 }
 
@@ -105,7 +91,7 @@ function rowContaining(text: string): HTMLElement {
 }
 
 async function addNote(row: HTMLElement, body: string): Promise<void> {
-  row.click();
+  act(() => row.click());
   await settle();
   const dialog = document.querySelector("dialog.diff-note-modal");
   if (!dialog) throw new Error("note editor dialog did not open");
@@ -114,12 +100,20 @@ async function addNote(row: HTMLElement, body: string): Promise<void> {
   textarea.value = body;
   const form = dialog.querySelector("form");
   if (!form) throw new Error("note editor has no form");
-  form.dispatchEvent(new happy.Event("submit", { bubbles: true, cancelable: true }));
+  act(() => { form.dispatchEvent(new happy.Event("submit", { bubbles: true, cancelable: true })); });
   await settle();
 }
 
+beforeEach(async () => {
+  await resetTestDOM();
+  setLang("zh");
+  state.operationBusy = false;
+});
+
 afterEach(() => {
-  for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
+  setRenderer(() => {});
+  act(leaveReactScreen);
+  act(closeTestDialogs);
   clearAllDiffNotes();
   state.live = null;
   state.screen = "home";
@@ -150,7 +144,7 @@ describe("diff notes batch send", () => {
     const send = app.querySelector<HTMLButtonElement>(".workspace-notes-send");
     expect(send).toBeTruthy();
     expect(send?.disabled).toBeFalse();
-    send?.click();
+    act(() => send?.click());
     await settle();
     await settle();
 
@@ -183,7 +177,7 @@ describe("diff notes batch send", () => {
     await addNote(rowContaining("false"), "first batch");
 
     const send = app.querySelector<HTMLButtonElement>(".workspace-notes-send");
-    send?.click();
+    act(() => send?.click());
     await settle();
     expect(sent).toHaveLength(1);
     expect(diffNoteSendOpen()).toBeTrue();
@@ -250,7 +244,7 @@ describe("diff notes batch send", () => {
   test("opens the editor with the line quote above the field", async () => {
     await boot(liveFixture(), { prompt_agent: true, hasAgent: true });
     await openDiff();
-    rowContaining("false").click();
+    act(() => rowContaining("false").click());
     await settle();
     const dialog = document.querySelector("dialog.diff-note-modal");
     expect(dialog?.getAttribute("aria-labelledby")).toBeTruthy();
@@ -260,7 +254,7 @@ describe("diff notes batch send", () => {
     expect(quote?.textContent).toContain("第 2 行（旧）");
     expect(quote?.textContent).toContain("false");
     expect(quote && field && Boolean(quote.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTrue();
-    dialog?.querySelector("form")?.dispatchEvent(new happy.Event("submit", { bubbles: true, cancelable: true }));
+    act(() => { dialog?.querySelector("form")?.dispatchEvent(new happy.Event("submit", { bubbles: true, cancelable: true })); });
     await settle();
     const textarea = document.querySelector<HTMLTextAreaElement>("dialog.diff-note-modal textarea");
     expect(textarea?.getAttribute("aria-invalid")).toBe("true");

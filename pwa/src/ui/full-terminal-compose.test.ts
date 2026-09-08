@@ -1,31 +1,15 @@
-import { Window } from "happy-dom";
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { act, createElement } from "react";
+import { resetBoardTestDOM } from "../../test-support/dom";
+import { leaveReactScreen, renderReactScreen } from "./react/root";
 
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLFormElement",
-  "HTMLTextAreaElement",
-  "Event",
-  "KeyboardEvent",
-  "Node",
-  "localStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-happy.document.body.innerHTML = '<main id="app"></main>';
-
-const { state } = await import("../state.ts");
+const { app, state } = await import("../state.ts");
 const {
   setFullTerminalInputMode,
   submitFullTerminalCompose,
-  syncFullTerminalControls,
 } = await import("./full-terminal-compose.ts");
+const { FullTerminalPad } = await import("./react/full-terminal-pad.tsx");
+const { notifyFullTerminalKeyboard } = await import("./full-terminal-input.ts");
 
 function keyboard() {
   let open = false;
@@ -38,14 +22,20 @@ function keyboard() {
 }
 
 function render(sendCompose: (text: string, enter: boolean) => boolean) {
-  const root = document.createElement("div");
-  syncFullTerminalControls(root, {
+  const options = {
     sendKey: () => undefined,
     sendCompose,
     keyboard: keyboard(),
     desk: false,
+  };
+  act(() => {
+    renderReactScreen(createElement(FullTerminalPad, { options }));
   });
-  return root;
+  return app;
+}
+
+function viewOf(node: Node) {
+  return node.ownerDocument!.defaultView!;
 }
 
 function dispatchKey(
@@ -54,16 +44,24 @@ function dispatchKey(
   init: KeyboardEventInit,
   keyCode?: number,
 ): void {
-  const event = new KeyboardEvent(type, { bubbles: true, ...init });
+  const view = viewOf(input);
+  const event = new view.KeyboardEvent(type, { bubbles: true, ...init });
   if (keyCode !== undefined) Object.defineProperty(event, "keyCode", { value: keyCode });
-  input.dispatchEvent(event);
+  act(() => { input.dispatchEvent(event); });
 }
 
-beforeAll(() => {
+function fire(node: Node, type: string): void {
+  act(() => { node.dispatchEvent(new (viewOf(node).Event)(type)); });
+}
+
+beforeEach(async () => {
+  await resetBoardTestDOM();
   state.paneId = "p1";
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await act(() => leaveReactScreen());
+  notifyFullTerminalKeyboard(false);
   state.composeDraft = "";
   state.composeFocused = false;
   state.composeIME = false;
@@ -72,6 +70,7 @@ afterEach(() => {
   state.padKind = "keys";
   state.paneComposeLive = {};
   localStorage.clear();
+  app.replaceChildren();
 });
 
 describe("complete-terminal compose input", () => {
@@ -80,29 +79,25 @@ describe("complete-terminal compose input", () => {
     state.composeDraft = "draft";
     const sent: string[] = [];
     const root = render((text) => { sent.push(text); return true; });
-    document.body.append(root);
-    try {
-      const input = root.querySelector("textarea")!;
-      input.focus();
-      input.setSelectionRange(1, 3);
-      const more = root.querySelector<HTMLButtonElement>(".key-more")!;
-      const down = new happy.PointerEvent("pointerdown", { button: 0, cancelable: true });
-      more.dispatchEvent(down);
-      expect(down.defaultPrevented).toBe(true);
-      more.click();
-      expect(document.activeElement).toBe(input);
-      expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
-      const enter = root.querySelector<HTMLButtonElement>('[aria-label="Enter"]')!;
-      enter.click();
-      expect(sent).toEqual(["draft"]);
-      expect(document.activeElement).toBe(input);
-      const send = root.querySelector<HTMLButtonElement>(".full-terminal-compose-send")!;
-      const sendDown = new happy.PointerEvent("pointerdown", { button: 0, cancelable: true });
-      send.dispatchEvent(sendDown);
-      expect(sendDown.defaultPrevented).toBe(true);
-    } finally {
-      root.remove();
-    }
+    const input = root.querySelector("textarea")!;
+    input.focus();
+    input.setSelectionRange(1, 3);
+    const more = root.querySelector<HTMLButtonElement>(".key-more")!;
+    const down = new PointerEvent("pointerdown", { button: 0, cancelable: true });
+    more.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true);
+    act(() => { more.click(); });
+    expect(root.querySelector("textarea") === input).toBeTrue();
+    expect(document.activeElement === input).toBeTrue();
+    expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
+    const enter = root.querySelector<HTMLButtonElement>('[aria-label="Enter"]')!;
+    act(() => { enter.click(); });
+    expect(sent).toEqual(["draft"]);
+    expect(document.activeElement === input).toBeTrue();
+    const send = root.querySelector<HTMLButtonElement>(".full-terminal-compose-send")!;
+    const sendDown = new PointerEvent("pointerdown", { button: 0, cancelable: true });
+    send.dispatchEvent(sendDown);
+    expect(sendDown.defaultPrevented).toBe(true);
   });
 
   test("sends composed text before a distinct Enter command", () => {
@@ -135,9 +130,9 @@ describe("complete-terminal compose input", () => {
     const form = root.querySelector(".full-terminal-compose-form") as HTMLFormElement;
     const input = root.querySelector(".full-terminal-compose-input") as HTMLTextAreaElement;
     expect(input.value).toBe("待发送");
-    form.requestSubmit();
+    act(() => { form.requestSubmit(); });
     expect(state.composeDraft).toBe("待发送");
-    form.requestSubmit();
+    act(() => { form.requestSubmit(); });
     expect(attempts).toEqual([["待发送", true], ["待发送", true]]);
     expect(state.composeDraft).toBe("");
     expect(input.value).toBe("");
@@ -151,10 +146,10 @@ describe("complete-terminal compose input", () => {
     });
     const input = root.querySelector("textarea") as HTMLTextAreaElement;
     input.value = "拼音";
-    input.dispatchEvent(new Event("compositionstart"));
+    fire(input, "compositionstart");
     dispatchKey(input, "keydown", { key: "Enter", shiftKey: true });
     expect(sent).toEqual([]);
-    input.dispatchEvent(new Event("compositionend"));
+    fire(input, "compositionend");
     dispatchKey(input, "keydown", { key: "Enter", shiftKey: true });
     expect(sent).toEqual([]);
     dispatchKey(input, "keydown", { key: "Enter" });
@@ -169,20 +164,18 @@ describe("complete-terminal compose input", () => {
     });
     const form = root.querySelector("form") as HTMLFormElement;
     const input = root.querySelector("textarea") as HTMLTextAreaElement;
-    input.dispatchEvent(new Event("compositionstart"));
+    fire(input, "compositionstart");
     input.value = "中文";
-    input.dispatchEvent(new Event("input"));
+    fire(input, "input");
     dispatchKey(input, "keydown", { key: "Enter", isComposing: true }, 229);
     expect(sent).toEqual([]);
-    input.dispatchEvent(new Event("compositionend"));
-    // Firefox can publish the committed value in an input event after
-    // compositionend. The queued submit must observe that value as well.
+    fire(input, "compositionend");
     input.value = "中文完成";
-    input.dispatchEvent(new Event("input"));
+    fire(input, "input");
     dispatchKey(input, "keydown", { key: "Enter", repeat: true });
-    form.requestSubmit();
+    act(() => { form.requestSubmit(); });
     dispatchKey(input, "keyup", { key: "Enter" });
-    await Promise.resolve();
+    await act(async () => { await Promise.resolve(); });
     expect(sent).toEqual([["中文完成", true]]);
     expect(input.value).toBe("");
     expect(state.composeDraft).toBe("");
@@ -196,13 +189,13 @@ describe("complete-terminal compose input", () => {
     });
     const form = root.querySelector("form") as HTMLFormElement;
     const input = root.querySelector("textarea") as HTMLTextAreaElement;
-    input.dispatchEvent(new Event("compositionstart"));
+    fire(input, "compositionstart");
     input.value = "候选词";
-    input.dispatchEvent(new Event("input"));
-    input.dispatchEvent(new Event("compositionend"));
+    fire(input, "input");
+    fire(input, "compositionend");
     dispatchKey(input, "keydown", { key: "Enter" }, 229);
     dispatchKey(input, "keydown", { key: "Enter", repeat: true }, 229);
-    form.requestSubmit();
+    act(() => { form.requestSubmit(); });
     dispatchKey(input, "keyup", { key: "Enter" });
     expect(sent).toEqual([["候选词", true]]);
   });
@@ -214,13 +207,13 @@ describe("complete-terminal compose input", () => {
       return attempts.length > 1;
     });
     const input = root.querySelector("textarea") as HTMLTextAreaElement;
-    input.dispatchEvent(new Event("compositionstart"));
+    fire(input, "compositionstart");
     input.value = "暂存中文";
-    input.dispatchEvent(new Event("input"));
+    fire(input, "input");
     dispatchKey(input, "keydown", { key: "Enter", isComposing: true }, 229);
-    input.dispatchEvent(new Event("compositionend"));
+    fire(input, "compositionend");
     dispatchKey(input, "keyup", { key: "Enter" });
-    await Promise.resolve();
+    await act(async () => { await Promise.resolve(); });
     expect(attempts).toEqual([["暂存中文", true]]);
     expect(input.value).toBe("暂存中文");
     expect(state.composeDraft).toBe("暂存中文");
@@ -242,7 +235,7 @@ describe("complete-terminal compose input", () => {
       sent.push([text, enter]);
       return true;
     });
-    (root.querySelector('[aria-label="Enter"]') as HTMLButtonElement).click();
+    act(() => { (root.querySelector('[aria-label="Enter"]') as HTMLButtonElement).click(); });
     expect(sent).toEqual([["confirm", true]]);
   });
 
@@ -255,13 +248,13 @@ describe("complete-terminal compose input", () => {
     });
     const input = root.querySelector("textarea") as HTMLTextAreaElement;
     input.focus();
-    input.dispatchEvent(new Event("compositionstart"));
+    fire(input, "compositionstart");
     input.value = "屏幕回车";
-    input.dispatchEvent(new Event("input"));
+    fire(input, "input");
 
-    (root.querySelector('[aria-label="Enter"]') as HTMLButtonElement).click();
-    await Promise.resolve();
-    await Promise.resolve();
+    act(() => { (root.querySelector('[aria-label="Enter"]') as HTMLButtonElement).click(); });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
 
     expect(sent).toEqual([["屏幕回车", true]]);
     expect(input.value).toBe("");
@@ -272,32 +265,31 @@ describe("complete-terminal compose input", () => {
     state.keysExpanded = false;
     state.padKind = "keys";
     const sent: Array<[string, boolean]> = [];
-    const root = render((text, enter) => {
-      sent.push([text, enter]);
-      return true;
-    });
-    (root.querySelector('[aria-label="更多按键"]') as HTMLButtonElement).click();
-    expect(root.querySelector(".full-terminal-compose-input")).toBeTruthy();
-    const commandMode = [...root.querySelectorAll<HTMLButtonElement>(".pad-mode button")]
-      .find((el) => el.textContent === "命令");
-    commandMode?.click();
-    expect(root.querySelector(".full-terminal-compose-input")).toBeTruthy();
-    (root.querySelector('[aria-label="插入 /goal，接着填目标"]') as HTMLButtonElement).click();
-    expect(state.composeDraft).toBe("/goal ");
-    expect((root.querySelector(".full-terminal-compose-input") as HTMLTextAreaElement).value).toBe("/goal ");
-    expect(sent).toEqual([]);
-
-    state.composeLive = true;
-    syncFullTerminalControls(root, {
+    const options = {
       sendKey: () => undefined,
-      sendCompose: (text, enter) => {
+      sendCompose: (text: string, enter: boolean) => {
         sent.push([text, enter]);
         return true;
       },
       keyboard: keyboard(),
       desk: false,
-    });
-    (root.querySelector('[aria-label="插入 /clear"]') as HTMLButtonElement).click();
+    };
+    act(() => { renderReactScreen(createElement(FullTerminalPad, { options })); });
+    const root = app;
+    act(() => { (root.querySelector('[aria-label="更多按键"]') as HTMLButtonElement).click(); });
+    expect(root.querySelector(".full-terminal-compose-input") !== null).toBeTrue();
+    const commandMode = [...root.querySelectorAll<HTMLButtonElement>(".pad-mode button")]
+      .find((el) => el.textContent === "命令");
+    act(() => { commandMode?.click(); });
+    expect(root.querySelector(".full-terminal-compose-input") !== null).toBeTrue();
+    act(() => { (root.querySelector('[aria-label="插入 /goal，接着填目标"]') as HTMLButtonElement).click(); });
+    expect(state.composeDraft).toBe("/goal ");
+    expect((root.querySelector(".full-terminal-compose-input") as HTMLTextAreaElement).value).toBe("/goal ");
+    expect(sent).toEqual([]);
+
+    state.composeLive = true;
+    act(() => { renderReactScreen(createElement(FullTerminalPad, { options })); });
+    act(() => { (root.querySelector('[aria-label="插入 /clear"]') as HTMLButtonElement).click(); });
     expect(sent).toEqual([["/clear", false]]);
   });
 

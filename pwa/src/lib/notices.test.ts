@@ -6,7 +6,7 @@ import { setLang } from "./i18n.ts";
 const liveSrc = await Bun.file(new URL("../live.ts", import.meta.url)).text();
 const operationSrc = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
 const stateSrc = await Bun.file(new URL("../state-notices.ts", import.meta.url)).text();
-const chromeSrc = await Bun.file(new URL("../ui/chrome.ts", import.meta.url)).text();
+const chromeSrc = await Bun.file(new URL("../ui/react/chrome.tsx", import.meta.url)).text();
 const mainSrc = await Bun.file(new URL("../main.ts", import.meta.url)).text();
 const liveSettingsSrc = await Bun.file(new URL("../live-settings.ts", import.meta.url)).text();
 const pairingSrc = await Bun.file(new URL("../pairing.ts", import.meta.url)).text();
@@ -125,7 +125,7 @@ describe("shipped user notices", () => {
 
   test("herd operation success toasts dismiss; pending and reconnect stay", () => {
     expect(operationSrc).toContain("showStatus(pending, true, noticeScope)");
-    expect(operationSrc).toContain("showStatus(success, false, noticeScope)");
+    expect(operationSrc).toContain("showStatus(success, false, options.noticeScope ?? owner.scope)");
     expect(liveSrc).toContain("showStatus(sessionEventNotice(event), true)");
     expect(mainSrc).toContain('showStatus(t("net.offline"), true)');
     expect(mainSrc).toContain('showStatus(t("net.restored")');
@@ -139,16 +139,23 @@ describe("shipped user notices", () => {
     const operationStart = operationSrc.indexOf("async function runHerdOperation");
     const operationEnd = operationSrc.indexOf("async function selectCreatedPane", operationStart);
     const operation = operationSrc.slice(operationStart, operationEnd);
-    const noteNode = fnBody(chromeSrc, "noteNode");
+    const noticeSubscription = fnBody(chromeSrc, "useAppNotice");
     expect(prompt).toContain("const noticeScope = captureNoticeScope()");
     expect(prompt).toContain("noticeScopeIsCurrent(noticeScope)");
     expect(prompt).toContain("noticeScope,");
-    expect(operation).toContain("state.live === session && noticeScopeIsCurrent(noticeScope)");
+    expect(operation).toContain("ownsOperationView(owner)");
+    const ownerCheck = fnBody(operationSrc, "ownsOperationView");
+    expect(ownerCheck).toContain("ownsComputer(owner)");
+    expect(ownerCheck).toContain("owner.incarnation === currentViewIncarnation()");
+    expect(ownerCheck).toContain("noticeScopeIsCurrent(owner.scope)");
+    const computerCheck = fnBody(operationSrc, "ownsComputer");
+    expect(computerCheck).toContain("state.live === owner.session");
+    expect(computerCheck).toContain("state.credential?.daemonId ?? null");
     expect(operation).toContain("clearNoticeForScope(noticeScope)");
-    expect(noteNode).toContain("visibleNotice()");
-    expect(chromeSrc).toContain('element.setAttribute("role", value.tone === "error" ? "alert" : "status")');
-    expect(chromeSrc).toContain('element.setAttribute("aria-live", value.tone === "error" ? "assertive" : "polite")');
-    expect(chromeSrc).toContain('element.setAttribute("aria-atomic", "true")');
+    expect(noticeSubscription).toContain("useSyncExternalStore(subscribeNotice, visibleNotice)");
+    expect(chromeSrc).toContain('role={value.tone === "error" ? "alert" : "status"}');
+    expect(chromeSrc).toContain('aria-live={value.tone === "error" ? "assertive" : "polite"}');
+    expect(chromeSrc).toContain('aria-atomic="true"');
   });
 
   test("status toast timeout drops the live notice without remounting the pane", () => {
@@ -156,16 +163,15 @@ describe("shipped user notices", () => {
     const showError = fnBody(stateSrc, "showError");
     const schedule = fnBody(stateSrc, "scheduleNoticeDismiss");
     const clearNotice = fnBody(stateSrc, "clearNotice");
-    const dropAppNotice = fnBody(stateSrc, "dropAppNotice");
     expect(stateSrc).toContain("STATUS_NOTICE_MS = 2800");
     expect(showStatus).toContain('scheduleNoticeDismiss(text, "status")');
     expect(showError).toContain('scheduleNoticeDismiss(text, "error")');
     expect(showError).toContain("const keep = typeof scopeOrPersist === \"boolean\" ? scopeOrPersist : persist");
-    expect(schedule).toContain("dropAppNotice(text)");
+    expect(schedule).toContain("notify()");
     expect(schedule).not.toContain("render(");
     expect(showStatus).not.toContain("render(");
-    expect(clearNotice).toContain("dropAppNotice()");
-    expect(dropAppNotice).toContain('querySelectorAll("[data-app-notice]")');
-    expect(chromeSrc).toContain('element.setAttribute("data-app-notice", "")');
+    expect(clearNotice).toContain("notify()");
+    expect(schedule).toContain("state.notice = null");
+    expect(chromeSrc).toContain('data-app-notice={appNotice ? "" : undefined}');
   });
 });

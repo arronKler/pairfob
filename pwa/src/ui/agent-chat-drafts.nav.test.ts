@@ -1,55 +1,7 @@
-import { Window } from "happy-dom";
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { happy, resetChatDOM } from "../../test-support/chat-dom";
+import { beforeEach, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { act } from "react";
 import { ProtocolError } from "../lib/protocol/errors";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLTextAreaElement",
-  "HTMLDetailsElement",
-  "HTMLDialogElement",
-  "Node",
-  "DocumentFragment",
-  "ResizeObserver",
-  "MutationObserver",
-  "DOMParser",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.history = happy.history;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-g.cancelAnimationFrame = happy.cancelAnimationFrame.bind(happy);
-g.visualViewport = happy.visualViewport;
-let deskLayout = false;
-const realMatchMedia = happy.matchMedia.bind(happy);
-const matchMedia = (query: string) => {
-  if (String(query).includes("min-width: 900px")) {
-    return {
-      matches: deskLayout,
-      media: query,
-      addEventListener() {},
-      removeEventListener() {},
-      addListener() {},
-      removeListener() {},
-      dispatchEvent() { return false; },
-      onchange: null,
-    };
-  }
-  return realMatchMedia(query);
-};
-g.matchMedia = matchMedia;
-(happy as unknown as { matchMedia: typeof matchMedia }).matchMedia = matchMedia;
-(g.window as { matchMedia: typeof matchMedia }).matchMedia = matchMedia;
-happy.document.body.innerHTML = '<main id="app"></main>';
 
 const { app, messageOf, setPaneTermMode, state, visibleNotice } = await import("../state.ts");
 const { bumpViewIncarnation, currentViewIncarnation, promptRequestIsLive, resetComposeDrafts } = await import("../compose-drafts.ts");
@@ -57,8 +9,9 @@ const { readStoredDraft } = await import("../state-drafts.ts");
 const { clearAgentTraceCache } = await import("../lib/agent-trace-cache.ts");
 const { setRenderer } = await import("../paint.ts");
 const { renderPane } = await import("./pane.ts");
-const { renderSettings } = await import("./settings.ts");
-const { renderComputers } = await import("./computers.ts");
+const { renderApp } = await import("./react/app-screen");
+const { leaveReactScreen } = await import("./react/root");
+beforeEach(resetChatDOM);
 const { enterAgentChat, leaveAgentChat } = await import("./agent-chat.ts");
 const { clearLiveConnection, closeComputerSession, establish, openPane } = await import("../live.ts");
 const { openSettings } = await import("../live-settings.ts");
@@ -138,9 +91,7 @@ function boot(): void {
 }
 
 function paintLive(): void {
-  if (state.screen === "settings") renderSettings();
-  else if (state.screen === "computers") renderComputers();
-  else renderPane();
+  renderApp();
 }
 
 function field(): HTMLTextAreaElement {
@@ -165,8 +116,7 @@ beforeAll(() => {
   setRenderer(paintLive);
 });
 
-afterEach(() => {
-  deskLayout = false;
+afterEach(async () => await act(async () => {
   closeComputerSession("draft-nav-a");
   closeComputerSession("draft-nav-b");
   leaveAgentChat({ rememberGuided: false, paint: false });
@@ -180,11 +130,12 @@ afterEach(() => {
   state.credential = null;
   state.paneTermModes = {};
   clearAgentTraceCache();
+  leaveReactScreen();
   app.replaceChildren();
-});
+}));
 
 describe("navigation keeps unsent drafts", () => {
-  test("A then B then A restores each pane's unsent chat draft", async () => {
+  test("A then B then A restores each pane's unsent chat draft", async () => await act(async () => {
     boot();
     typeDraft("draft for A");
     await openPane("p2");
@@ -198,9 +149,9 @@ describe("navigation keeps unsent drafts", () => {
     await openPane("p2");
     expect(state.composeDraft).toBe("draft for B");
     expect(field().value).toBe("draft for B");
-  });
+  }));
 
-  test("leaving chat and returning keeps the chat draft off the guided composer", () => {
+  test("leaving chat and returning keeps the chat draft off the guided composer", async () => await act(async () => {
     boot();
     typeDraft("only in chat");
     leaveAgentChat();
@@ -211,11 +162,11 @@ describe("navigation keeps unsent drafts", () => {
     enterAgentChat();
     expect(state.agentChat).toBe(true);
     expect(field().value).toBe("only in chat");
-  });
+  }));
 });
 
 describe("async prompt results stay on the originating request", () => {
-  test("stale reconciliation paints navigation when the current pane disappears", async () => {
+  test("stale reconciliation paints navigation when the current pane disappears", async () => await act(async () => {
     boot();
     let fail!: () => void;
     const session = live();
@@ -239,11 +190,11 @@ describe("async prompt results stay on the originating request", () => {
     expect(state.paneId).toBe("");
     expect(state.screen).toBe("home");
     expect(paintedScreen).toBe("home");
-  });
+  }));
 
   for (const mode of ["agent", "guided"] as const) {
     for (const outcome of ["success", "conflict", "unknown_outcome"] as const) {
-      test(`stale ${outcome} preserves the other pane's ${mode} composer`, async () => {
+      test(`stale ${outcome} preserves the other pane's ${mode} composer`, async () => await act(async () => {
         boot();
         let finish!: () => void;
         let snapshots = 0;
@@ -284,11 +235,11 @@ describe("async prompt results stay on the originating request", () => {
         expect(state.composeIME).toBe(true);
         expect(sends).toBe(1);
         expect(snapshots - priorReads).toBe(outcome === "unknown_outcome" ? 1 : 0);
-      });
+      }));
     }
   }
 
-  test("a delayed failure after A→B does not inject A's text or error into B", async () => {
+  test("a delayed failure after A→B does not inject A's text or error into B", async () => await act(async () => {
     boot();
     let reject!: (error: Error) => void;
     let postedPane = "";
@@ -310,8 +261,7 @@ describe("async prompt results stay on the originating request", () => {
 
     await openPane("p2");
     expect(state.operationBusy).toBe(false);
-    state.composeDraft = "Draft belonging to pane B";
-    renderPane();
+    typeDraft("Draft belonging to pane B");
     const focusedBefore = document.activeElement;
     const failed = new ProtocolError("timeout", "audit delayed response for pane A");
     reject(failed);
@@ -336,9 +286,9 @@ describe("async prompt results stay on the originating request", () => {
     expect(field().value).toBe("Prompt intended for pane A");
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).error).toBe(messageOf(failed));
     expect(visibleNotice()).toBeNull();
-  });
+  }));
 
-  test("A pending then B IME input is not overwritten when A fails", async () => {
+  test("A pending then B IME input is not overwritten when A fails", async () => await act(async () => {
     boot();
     let reject!: (error: Error) => void;
     state.live = {
@@ -373,9 +323,9 @@ describe("async prompt results stay on the originating request", () => {
     expect(input.selectionStart).toBe(beforeStart);
     expect(input.selectionEnd).toBe(beforeEnd);
     expect(state.composeIME).toBe(true);
-  });
+  }));
 
-  test("a delayed success after A→B does not paint or focus B", async () => {
+  test("a delayed success after A→B does not paint or focus B", async () => await act(async () => {
     boot();
     let resolvePrompt!: () => void;
     state.live = {
@@ -393,8 +343,7 @@ describe("async prompt results stay on the originating request", () => {
     await Promise.resolve();
     await openPane("p2");
     expect(state.operationBusy).toBe(false);
-    state.composeDraft = "B draft";
-    renderPane();
+    typeDraft("B draft");
     resolvePrompt();
     await Promise.resolve();
     await Promise.resolve();
@@ -405,9 +354,9 @@ describe("async prompt results stay on the originating request", () => {
     expect(field().value).toBe("B draft");
     expect(state.agentTracePending).toBe("");
     expect(state.operationBusy).toBe(false);
-  });
+  }));
 
-  test("unknown_outcome after a pane switch does not restore the prompt for replay", async () => {
+  test("unknown_outcome after a pane switch does not restore the prompt for replay", async () => await act(async () => {
     boot();
     let reject!: (error: Error) => void;
     let promptCalls = 0;
@@ -424,8 +373,7 @@ describe("async prompt results stay on the originating request", () => {
     clickSend();
     await Promise.resolve();
     await openPane("p2");
-    state.composeDraft = "B stays";
-    renderPane();
+    typeDraft("B stays");
     const unknown = new ProtocolError("unknown_outcome", "refresh before retry");
     reject(unknown);
     await Promise.resolve();
@@ -441,9 +389,9 @@ describe("async prompt results stay on the originating request", () => {
     expect(field().value).toBe("");
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).error).toBe(messageOf(unknown));
     expect(visibleNotice()).toBeNull();
-  });
+  }));
 
-  test("A→B→A while the request is in flight still owns the original pane", async () => {
+  test("A→B→A while the request is in flight still owns the original pane", async () => await act(async () => {
     boot();
     let reject!: (error: Error) => void;
     state.live = {
@@ -470,9 +418,9 @@ describe("async prompt results stay on the originating request", () => {
     expect(field().value).toBe("still A's prompt");
     expect(visibleNotice()).toBeNull();
     expect(state.operationBusy).toBe(false);
-  });
+  }));
 
-  test("the same pane id on another computer does not take the original result", async () => {
+  test("the same pane id on another computer does not take the original result", async () => await act(async () => {
     boot();
     let reject!: (error: Error) => void;
     const sessionA = state.live;
@@ -504,9 +452,9 @@ describe("async prompt results stay on the originating request", () => {
     expect(state.agentTraceNote).not.toContain("computer A failed");
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("computer A prompt");
     expect(sessionA).not.toBe(state.live);
-  });
+  }));
 
-  test("agent→guided→agent while pending does not treat the new chat as live", async () => {
+  test("agent→guided→agent while pending does not treat the new chat as live", async () => await act(async () => {
     boot();
     let reject!: (error: Error) => void;
     state.live = {
@@ -532,9 +480,9 @@ describe("async prompt results stay on the originating request", () => {
     expect(visibleNotice()).toBeNull();
     expect(field().value).toBe("mode switch prompt");
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).error).toBe(messageOf(failed));
-  });
+  }));
 
-  test("an older success does not erase a newer draft typed after A→B→A", async () => {
+  test("an older success does not erase a newer draft typed after A→B→A", async () => await act(async () => {
     boot();
     let resolvePrompt!: () => void;
     state.live = {
@@ -558,9 +506,9 @@ describe("async prompt results stay on the originating request", () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(field().value).toBe("newer attempt");
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("newer attempt");
-  });
+  }));
 
-  test("success after switching computers does not mark the new computer's same pane id", async () => {
+  test("success after switching computers does not mark the new computer's same pane id", async () => await act(async () => {
     boot();
     state.agents = [
       { ...agent("p1"), status: "idle" },
@@ -600,9 +548,9 @@ describe("async prompt results stay on the originating request", () => {
 
     expect(state.agents[0]?.status).toBe("idle");
     expect(state.completionSeen).toEqual({ p1: true });
-  });
+  }));
 
-  test("establish parks the original computer's draft before changing identity", async () => {
+  test("establish parks the original computer's draft before changing identity", async () => await act(async () => {
     boot();
     state.credential = credential("draft-nav-a");
     typeDraft("keep on computer A");
@@ -610,9 +558,9 @@ describe("async prompt results stay on the originating request", () => {
     await establish(credential("draft-nav-b") as never, connect);
     expect(readStoredDraft({ daemonId: "draft-nav-a", paneId: "p1", mode: "agent" }).text).toBe("keep on computer A");
     expect(readStoredDraft({ daemonId: "draft-nav-b", paneId: "p1", mode: "agent" }).text).toBe("");
-  });
+  }));
 
-  test("clearLiveConnection parks a full-terminal draft before disposing the mode", () => {
+  test("clearLiveConnection parks a full-terminal draft before disposing the mode", async () => await act(async () => {
     boot();
     state.agentChat = false;
     state.fullTerminal = true;
@@ -620,9 +568,9 @@ describe("async prompt results stay on the originating request", () => {
     clearLiveConnection();
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "full" }).text).toBe("full draft stays with full");
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "guided" }).text).toBe("");
-  });
+  }));
 
-  test("openSettings then openComputers still parks the pane draft for establish", async () => {
+  test("openSettings then openComputers still parks the pane draft for establish", async () => await act(async () => {
     boot();
     typeDraft("keep through settings");
     openSettings();
@@ -635,11 +583,11 @@ describe("async prompt results stay on the originating request", () => {
     await establish(credential("draft-nav-b") as never, connect);
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe("keep through settings");
     expect(readStoredDraft({ daemonId: "draft-nav-b", paneId: "p1", mode: "agent" }).text).toBe("");
-  });
+  }));
 
-  test("returning from settings does not give a pending send DOM ownership", async () => {
+  test("returning from settings does not give a pending send DOM ownership", async () => await act(async () => {
     boot();
-    deskLayout = true;
+    happy.happyDOM.setWindowSize({ width: 1440, height: 900 });
     let reject!: (error: Error) => void;
     state.live = {
       ...live(),
@@ -677,5 +625,5 @@ describe("async prompt results stay on the originating request", () => {
       draftScope: { daemonId: "daemon-a", paneId: "p1", mode: "agent" },
       text: "pending through settings",
     })).toBe(false);
-  });
+  }));
 });

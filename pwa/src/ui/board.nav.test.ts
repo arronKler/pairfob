@@ -1,34 +1,15 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
-
-const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLDialogElement",
-  "MouseEvent",
-  "PointerEvent",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.history = happy.history;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { resetBoardTestDOM } from "../../test-support/dom";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { act } from "react";
 
 const { app, leavePaneScreen, replaceAgentsFromSnapshot, state } = await import("../state.ts");
 const { setRenderer } = await import("../paint.ts");
-const { renderBoard } = await import("./board.ts");
+const { renderApp } = await import("./react/app-screen");
+const { leaveReactScreen } = await import("./react/root");
+const { setLang } = await import("../lib/i18n");
+
+beforeEach(async () => { await resetBoardTestDOM(); setLang("zh"); });
 const { releaseBoardScroll } = await import("./board-canvas.ts");
 const { clearBoardPreviews } = await import("./board-preview.ts");
 const { NO_OPERATION_CAPABILITIES } = await import("../lib/operations.ts");
@@ -36,6 +17,8 @@ const { NO_OPERATION_CAPABILITIES } = await import("../lib/operations.ts");
 function boot(): void {
   state.phase = "live";
   state.screen = "board";
+  state.fullTerminal = false;
+  state.agentChat = false;
   state.operationBusy = false;
   state.runtimeKind = "herdr";
   state.networkOnline = true;
@@ -86,14 +69,13 @@ function boot(): void {
     },
     paneRead: async (paneId: string) => ({ text: `screen of ${paneId}`, hash: `h-${paneId}` }),
   } as typeof state.live;
-  setRenderer(() => renderBoard());
-  renderBoard();
+  setRenderer(renderApp);
+  act(renderApp);
 }
 
 afterEach(() => {
-  releaseBoardScroll();
-  for (const dialog of document.querySelectorAll("dialog")) dialog.remove();
-  clearBoardPreviews();
+  act(() => { releaseBoardScroll(); closeTestDialogs(); leaveReactScreen(); clearBoardPreviews(); });
+  setRenderer(() => {});
   state.live = null;
   state.agents = [];
   state.layouts = [];
@@ -132,7 +114,7 @@ describe("board screen", () => {
     } as typeof state.live;
     const beta = [...app.querySelectorAll(".board-chip")].find((el) => el.textContent === "beta");
     expect(beta).toBeTruthy();
-    (beta as HTMLButtonElement).click();
+    act(() => (beta as HTMLButtonElement).click());
     expect(state.boardWorkspaceId).toBe("w2");
     expect(state.boardTabId).toBe("w2:t1");
     expect(calls).toEqual([]);
@@ -141,10 +123,10 @@ describe("board screen", () => {
   });
 
   /** One tap opens: no double-tap window to wait out, so the board never feels stuck. */
-  test("tapping a pane opens the session, not a dialog", () => {
+  test("tapping a pane opens the session, not a dialog", async () => {
     boot();
     const pane = app.querySelector(".board-pane") as HTMLButtonElement;
-    pane.click();
+    await act(async () => { pane.click(); await Promise.resolve(); });
     expect(document.querySelector("dialog")).toBeNull();
     expect(state.screen).toBe("pane");
     expect(state.boardReturn).toBe(true);
@@ -156,7 +138,7 @@ describe("board screen", () => {
     boot();
     const before = state.boardScale;
     const pane = app.querySelector(".board-pane") as HTMLButtonElement;
-    pane.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    act(() => pane.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
     expect(document.querySelector("dialog")).toBeNull();
     expect(state.screen).toBe("board");
     expect(state.boardScale).not.toBe(before);
@@ -189,7 +171,7 @@ describe("board screen", () => {
         { pane_id: "w2:p1", workspace_id: "w2", tab_id: "w2:t1", cwd: "/tmp/github/pairfob", agent: "", agent_status: "idle" },
       ],
     });
-    renderBoard();
+    act(renderApp);
     const chips = [...app.querySelectorAll(".board-chip")].map((el) => el.textContent);
     expect(chips).toContain("pairfob · test/pairfob");
     expect(chips).toContain("pairfob · github/pairfob");
@@ -222,7 +204,7 @@ describe("board screen", () => {
         },
       ],
     });
-    renderBoard();
+    act(renderApp);
     const panes = [...app.querySelectorAll<HTMLElement>(".board-pane")];
     expect(panes.map((el) => el.style.width)).toEqual(["424px", "432px", "848px"]);
     expect(panes[2].style.left).toBe("856px");

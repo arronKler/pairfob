@@ -1,48 +1,14 @@
-import { button, node } from "../lib/dom";
-import { locale, t, type CopyKey } from "../lib/i18n";
-import { quotaIsStale, type AgentQuota, type QuotaStatus } from "../lib/agent-quota";
+import type { AgentQuota } from "../lib/agent-quota";
+import { t } from "../lib/i18n";
 import { ProtocolError } from "../lib/protocol/errors";
 import type { LiveSession } from "../lib/protocol/session-types";
 import { adoptScreen } from "../compose-drafts";
-import { app, state } from "../state";
+import { state } from "../state";
 import { render } from "../paint";
-import { backBar } from "./chrome";
 
 type QuotaView = { loading: boolean; items: AgentQuota[] | null; error: string };
 export const providerNames = { codex: "Codex", claude: "Claude Code", antigravity: "Antigravity", copilot: "GitHub Copilot", cursor: "Cursor", grok: "Grok Build" };
-const providerHelp = { codex: "quota.codexHelp", claude: "quota.claudeHelp", antigravity: "quota.antigravityHelp", copilot: "quota.copilotHelp", cursor: "quota.cursorHelp", grok: "quota.grokHelp" } as const;
 export const views = new WeakMap<LiveSession, QuotaView>();
-const WINDOW_NAMES: Record<string, CopyKey> = {
-  "premium interactions": "quota.window.premium",
-  chat: "quota.window.chat",
-  completions: "quota.window.completions",
-  "Shared subscription quota": "quota.window.shared",
-  "Included plan": "quota.window.included",
-  "five hour": "quota.window.fiveHour",
-  five_hour: "quota.window.fiveHour",
-  "seven day": "quota.window.sevenDay",
-  seven_day: "quota.window.sevenDay",
-  "seven day sonnet": "quota.window.sevenDaySonnet",
-  "seven day opus": "quota.window.sevenDayOpus",
-  "seven day cowork": "quota.window.sevenDayCowork",
-  "seven day routines": "quota.window.sevenDayRoutines",
-  spend_limit: "quota.window.spend",
-  "spend limit": "quota.window.spend",
-};
-
-function quotaWindowName(name: string): string {
-  const key = WINDOW_NAMES[name] ?? WINDOW_NAMES[name.replaceAll("_", " ")];
-  return key ? t(key) : name;
-}
-
-function formatQuotaWhen(seconds: number): string {
-  return new Date(seconds * 1000).toLocaleString(locale());
-}
-
-const statusKeys = {
-  ok: "quota.ok", stale: "quota.stale", not_installed: "quota.notInstalled", not_logged_in: "quota.notLoggedIn",
-  unsupported: "quota.unsupported", unavailable: "quota.unavailable", setup_required: "quota.setupRequired", auth_required: "quota.authRequired", not_running: "quota.notRunning",
-} as const satisfies Record<QuotaStatus, string>;
 
 export async function refreshAgentQuota(): Promise<void> {
   const session = state.live;
@@ -61,83 +27,8 @@ export async function refreshAgentQuota(): Promise<void> {
   }
 }
 
-export function quotaPanel(): HTMLElement {
-  const section = node("section", "quota-panel");
-  const view = state.live ? views.get(state.live) : undefined;
-  section.setAttribute("aria-busy", String(!!view?.loading));
-  if (view?.error) section.append(node("p", "set-note", view.error));
-  if (!state.live?.isConnected()) section.append(node("p", "set-note", t("quota.offline")));
-  const hasData = (q: AgentQuota) => q.status === "ok" && !quotaIsStale(q);
-  const items = [...(view?.items ?? [])].sort((a, b) => Number(hasData(b)) - Number(hasData(a)));
-  for (const q of items) {
-    const card = node("div", "set-card quota-card");
-    const row = node("div", "set-row");
-    const title = providerNames[q.provider];
-    row.append(node("strong", "set-key", title), node("span", "set-value", q.plan || t("quota.planUnknown")));
-    card.append(row);
-    const body = node("div", "set-row set-row-stack");
-    const stale = (q.status === "ok" || q.status === "stale") && quotaIsStale(q);
-    const status = stale ? "stale" : q.status;
-    body.append(node("p", "set-note", t(statusKeys[status])));
-    if (status === "ok") {
-      for (const w of q.windows) {
-        const remaining = Math.round((100 - w.used_percent) * 10) / 10;
-        const label = w.window_minutes && w.window_minutes % 1440 === 0
-          ? t("quota.days", { count: w.window_minutes / 1440 })
-          : w.window_minutes && w.window_minutes % 60 === 0
-            ? t("quota.hours", { count: w.window_minutes / 60 })
-            : w.window_minutes ? t("quota.window", { minutes: w.window_minutes }) : quotaWindowName(w.name);
-        const windowName = quotaWindowName(w.name);
-        if (w.unlimited) {
-          body.append(node("span", "quota-window-label", `${windowName} · ${t("quota.unlimited")}`));
-          continue;
-        }
-        body.append(node("span", "quota-window-label", `${label} · ${t("quota.remaining", { percent: remaining })}`));
-        if (w.window_minutes > 0) body.append(node("small", "set-note", windowName));
-        const bar = node("progress", "quota-progress") as HTMLProgressElement;
-        bar.max = 100;
-        bar.value = remaining;
-        bar.setAttribute("aria-label", `${title} ${label}`);
-        body.append(bar, node("small", "set-note", w.resets_at ? t("quota.resets", { when: formatQuotaWhen(w.resets_at) }) : t("quota.resetUnknown")));
-      }
-    }
-    if (["auth_required", "not_installed", "not_running", "not_logged_in"].includes(q.status)) body.append(node("p", "set-note", t(providerHelp[q.provider])));
-    if (q.observed_at) body.append(node("small", "set-note", t("quota.updated", { when: formatQuotaWhen(q.observed_at) })));
-    if (q.provider === "copilot") body.append(node("p", "set-note", t("quota.copilotNote")));
-    if (q.provider === "grok") body.append(node("p", "set-note", t("quota.grokNote")));
-    if (q.source === "statusline") body.append(node("p", "set-note", t("quota.claudeNote")));
-    if (q.status === "setup_required") body.append(node("code", "quota-command", "pairfob quota-setup-claude"));
-    card.append(body);
-    section.append(card);
-  }
-  return section;
-}
-
 export function openQuota(): void {
   adoptScreen("quota");
   render();
   void refreshAgentQuota();
-}
-export function fillQuota(container: HTMLElement): void {
-  const view = state.live ? views.get(state.live) : undefined;
-  const bar = backBar(t("quota.title"), () => {
-    adoptScreen("settings");
-    render();
-  });
-  const actions = node("div", "topbar-actions");
-  const refresh = button(
-    t(view?.loading ? "quota.loading" : "quota.refresh"),
-    "topbar-create quota-refresh",
-    () => void refreshAgentQuota(),
-  );
-  refresh.disabled = !!view?.loading || !state.live?.isConnected();
-  refresh.setAttribute("aria-busy", String(!!view?.loading));
-  actions.append(refresh);
-  bar.append(actions);
-  container.append(bar, quotaPanel());
-}
-export function renderQuota(): void {
-  const root = node("div", "page settings-page quota-page");
-  fillQuota(root);
-  app.replaceChildren(root);
 }

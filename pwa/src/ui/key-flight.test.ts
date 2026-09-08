@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 const source = await Bun.file(new URL("./key-flight.ts", import.meta.url)).text();
 const keys = await Bun.file(new URL("./session/keys.ts", import.meta.url)).text();
 const fullTerminal = await Bun.file(new URL("./full-terminal.ts", import.meta.url)).text();
-const motion = await Bun.file(new URL("../styles/motion.css", import.meta.url)).text();
+const motion = await Bun.file(new URL("../styles/motion.scss", import.meta.url)).text();
 
 describe("a pressed key shows where it went", () => {
   test("the spark only promises keys that are already on their way", () => {

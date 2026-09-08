@@ -1,16 +1,13 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
+import { happy, resetBoardTestDOM } from "../../test-support/dom";
+import { act } from "react";
+import { leaveReactScreen } from "./react/root";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-const happy = new Window({ url: "https://pairfob.com/", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of ["window", "document", "navigator", "HTMLElement", "HTMLButtonElement", "HTMLDialogElement", "Node", "DocumentFragment", "localStorage"] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-happy.document.body.innerHTML = '<main id="app"></main>';
-
+const { setLang } = await import("../lib/i18n.ts");
+const { setRenderer } = await import("../paint.ts");
 const { app, state } = await import("../state.ts");
 const { canInterruptAgent, herdLiveness, herdStatus } = await import("./chrome.ts");
-const { renderHome } = await import("./home.ts");
+const { renderHome: paintHome } = await import("./home.ts");
 
 type FakeSession = { isConnected: () => boolean };
 
@@ -24,7 +21,22 @@ function leftoverAgent(): void {
   ] as unknown as typeof state.agents;
 }
 
+function renderHome(): void { act(paintHome); }
+
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  Object.assign(state, { phase: "live", screen: "home", fullTerminal: false, agentChat: false,
+    credential: null, live: null, computers: [], agents: [], paneId: "", panePinned: {}, paneTouched: {},
+    listGroup: "flat", listGroupCollapsed: {}, operationBusy: false, networkOnline: true, runtimeKind: "herdr",
+    herdHost: "", notice: null, settingsLoading: false, deviceList: [], devicesError: "", pushConfigError: "",
+    pushEnabled: null, pushSubscribed: null });
+  setLang("zh");
+});
+
 afterEach(() => {
+  act(() => leaveReactScreen());
+  setRenderer(() => {});
   setSession(null);
   state.networkOnline = true;
   state.runtimeKind = "";
@@ -134,14 +146,14 @@ describe("home list while unverifiable", () => {
     expect(statusline?.textContent).not.toContain("Herdr 不可用");
     // Cards survive the drop; they are dimmed, not wiped.
     const card = app?.querySelector(".card");
-    expect(card).not.toBeNull();
+    expect((card) !== null).toBe(true);
     expect(card?.className).toContain("unverifiable");
     expect(card?.textContent).toContain("build");
-    expect(app?.querySelector(".empty")).toBeNull();
+    expect((app?.querySelector(".empty")) === null).toBe(true);
     // Last-known done never paints as a fresh fact.
-    expect(card?.querySelector(".pill-done")).toBeNull();
+    expect((card?.querySelector(".pill-done")) === null).toBe(true);
     expect(card?.querySelector(".pill-unknown")?.textContent).toBe("未知");
-    expect(app?.querySelector(".banner-warn")).toBeNull();
+    expect((app?.querySelector(".banner-warn")) === null).toBe(true);
   });
 
   test("live home shows fresh statuses and no stale banner", () => {
@@ -152,7 +164,7 @@ describe("home list while unverifiable", () => {
     const card = app.querySelector(".card");
     expect(card?.className).not.toContain("unverifiable");
     expect(card?.querySelector(".pill-done")?.textContent).toBe("完成");
-    expect(app?.querySelector(".banner-warn")).toBeNull();
+    expect((app?.querySelector(".banner-warn")) === null).toBe(true);
   });
 
   test("disconnected home without agents offers the reconnecting empty state, not no-sessions", () => {

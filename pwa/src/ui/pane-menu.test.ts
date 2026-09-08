@@ -1,117 +1,88 @@
-import { describe, expect, test } from "bun:test";
+import { resetBoardTestDOM } from "../../test-support/dom";
+import { beforeEach, afterEach, expect, test } from "bun:test";
+import { act } from "react";
+import { closeTestDialogs } from "../../test-support/close-dialogs";
+import { setLang, t } from "../lib/i18n";
+import { NO_OPERATION_CAPABILITIES } from "../lib/operations";
+import { TERM_MODE_MENU } from "../lib/ui-model";
+import { state, TERM_COL_PRESETS, TERM_FONT_MAX } from "../state";
+import { setRenderer } from "../paint";
+import { openPaneMenu, openPaneSwitcher } from "./pane-menu";
 
-const source = await Bun.file(new URL("./pane-menu.ts", import.meta.url)).text();
-const modeSource = await Bun.file(new URL("./terminal-mode.ts", import.meta.url)).text();
-const liveSource = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
-const chromeSource = await Bun.file(new URL("./session/view.ts", import.meta.url)).text();
-const termSource = await Bun.file(new URL("./session/term.ts", import.meta.url)).text();
-const settingsStyle = await Bun.file(new URL("../styles/settings.css", import.meta.url)).text();
+const labels = () => [...document.querySelectorAll(".sheet-body button")].map(button => button.textContent);
+const sections = () => [...document.querySelectorAll(".menu-section-title")].map(node => node.textContent);
+const radio = (aria: string) => document.querySelector<HTMLButtonElement>(`[role=radio][aria-label="${aria}"]`)!;
+beforeEach(async () => {
+  await resetBoardTestDOM(); setLang("zh"); setRenderer(() => {});
+  Object.assign(state, { phase: "live", screen: "pane", paneId: "p1", panePinned: {}, paneTouched: {}, listGroup: "flat",
+    fullTerminal: false, agentChat: false, composeLive: false, termWrap: false, termSelect: false,
+    paneTermModes: { p1: "guided" }, operationBusy: false, termFit: "fit", termCols: 120, termFontPx: 14,
+    operationCapabilities: { ...NO_OPERATION_CAPABILITIES },
+    agents: [{ paneId: "p1", paneLabel: "First", agent: "codex", status: "idle", workspaceId: "w1", workspaceLabel: "One", tabId: "t1", cwd: "/one" }],
+    live: { isConnected: () => true } });
+});
+afterEach(async () => await act(async () => { closeTestDialogs(); await new Promise(resolve => setTimeout(resolve, 10)); }));
 
-describe("session view sheet", () => {
-  test("this-view menu keeps pane rename and close, not parent-object admin", () => {
-    expect(source).toContain('sheet(t("pane.menuTitle"))');
-    expect(source).toContain('item(t("menu.newTab"), createSelectedTab)');
-    expect(liveSource).toContain("export async function createSelectedTab(agent: AgentCard | undefined = selectedAgent())");
-    expect(source).not.toContain('section(t("pane.thisCell")');
-    expect(source).toContain('item(t("menu.renamePane"), renamePane)');
-    expect(source).toContain('item(t("op.closePane"), closePane, "danger")');
-    expect(source).not.toContain('item("改标签页名"');
-    expect(source).not.toContain('item("改工作区名"');
-    expect(source).not.toContain('item("关闭整个标签页"');
-    expect(source).not.toContain('section("管理"');
-    expect(source).not.toContain('t("workspace.open")');
-    expect(source).not.toContain("enterWorkspace");
-    expect(liveSource).toContain('t("op.renamePane")');
-    expect(liveSource).toContain('t("op.renameTab")');
-    expect(liveSource).toContain('t("op.renameWorkspace")');
-    expect(liveSource).not.toMatch(/新建标签(?!页)|关闭整个标签(?!页)|标签名不能为空/);
-  });
+test("guided menu shows modes, input/display and this-pane actions with capability-gated sections", () => {
+  act(openPaneMenu);
+  expect(document.querySelector("h2")?.textContent).toBe(t("pane.menuTitle"));
+  expect(radio(TERM_MODE_MENU.guided).getAttribute("aria-checked")).toBe("true");
+  expect(radio(TERM_MODE_MENU.agent).disabled).toBeTrue();
+  expect(sections()).toContain(t("menu.input"));
+  expect(sections()).toContain(t("menu.display"));
+  expect(sections()).not.toContain(t("menu.new"));
+  expect(sections()).not.toContain(t("menu.worktree"));
+  expect(labels()).toContain(t("menu.renamePane"));
+  expect(labels()).toContain(t("op.closePane"));
+  expect(labels()).not.toContain(t("menu.renameWorkspace"));
+  expect(labels()).not.toContain(t("op.closeTab"));
+  expect(labels()).not.toContain(t("menu.history"));
+});
 
-  test("conversation transcripts open the agent-chat mode, not a history sheet", () => {
-    expect(source).toContain("TERM_MODE_LABEL");
-    expect(modeSource).toContain("enterAgentChat");
-    expect(source).toContain("canEnterAgentChat()");
-    expect(source).not.toMatch(/\bopenSelectedHistory\b/);
-    expect(source).not.toContain("openSelectedTerminalHistory");
-    expect(source).not.toContain("对话记录");
-  });
+test("full terminal retains retry and width choices, with no wrap action", () => {
+  state.fullTerminal = true; state.paneTermModes = { p1: "full" }; state.termFit = "pan"; state.termCols = 120;
+  act(openPaneMenu);
+  expect(labels()).toContain(t("pane.reconnect"));
+  expect(labels()).not.toContain(t("menu.wrap"));
+  expect(radio(t("pane.fitAria")).getAttribute("aria-checked")).toBe("false");
+  for (const cols of TERM_COL_PRESETS) expect(radio(t("pane.panColsAria", { cols })).getAttribute("aria-checked")).toBe(String(cols === 120));
+});
 
-  test("the session menu has no earlier-output action", () => {
-    expect(source).not.toContain('t("menu.history")');
-    expect(source).not.toContain("openSelectedTerminalHistory");
-    expect(liveSource).not.toContain("showHistory");
-    expect(liveSource).not.toContain("openSelectedTerminalHistory");
-    expect(liveSource).not.toContain("session.history(");
-    expect(chromeSource).not.toContain('button("历史"');
-    expect(chromeSource).not.toContain("onHistory");
-    expect(termSource).not.toContain("↑ 更早的输出");
-    expect(termSource).not.toContain("olderThanLive");
-    expect(settingsStyle).not.toContain(".history-tabs");
-    expect(settingsStyle).not.toContain(".terminal-history-text");
-  });
+test("agent chat omits terminal input/display while retaining pane operations", () => {
+  state.agentChat = true; state.paneTermModes = { p1: "agent" };
+  act(openPaneMenu);
+  expect(radio(TERM_MODE_MENU.agent).disabled).toBeFalse();
+  expect(sections()).not.toContain(t("menu.input"));
+  expect(sections()).not.toContain(t("menu.display"));
+  expect(labels()).toContain(t("op.closePane"));
+});
 
-  test("pane modes switch from a tab bar; other actions stay a labeled list", () => {
-    expect(source).toContain("menu-mode");
-    expect(source).toContain("TERM_MODE_OPTIONS");
-    expect(source).toContain("TERM_MODE_LABEL");
-    expect(source).toContain("TERM_MODE_MENU[mode]");
-    expect(source).toContain("selectPaneTermMode");
-    expect(source).toContain('t("mode.autoHint")');
-    expect(source).toContain('item(t("pane.reconnect"), retryFullTerminal)');
-    expect(source).toContain("fill.menu");
-    expect(source).toContain("fillSelectedPane");
-    expect(source).toContain('t("pane.splitUnsupported")');
-    expect(source).toContain('t("pane.fontUpCurrent"');
-    expect(source).toContain('t("pane.fontDownCurrent"');
-    expect(source).toContain('item(t("menu.zoom"), () => layoutSelectedPane("resize"))');
-    expect(source).toContain('section(t("menu.display")');
-    expect(source).toContain('menu-section-title", t("pane.width")');
-    expect(source).toContain('label: t("pane.fit")');
-    expect(source).toContain("TERM_COL_PRESETS.map");
-    expect(source).toContain('label: t("pane.colsShort", { cols })');
-    expect(source).toContain('setTermFit("pan", cols)');
-    expect(source).toContain("state.termCols === cols");
-    expect(source).toContain("setTermFit");
-    expect(source).toContain("!state.fullTerminal ? [item(state.termWrap");
-    expect(source).not.toContain("menu-grid");
-    expect(source).not.toContain("menu-tile");
-    expect(source).not.toContain("切换单窗放大");
-    expect(source).not.toContain("放大字号");
-    expect(source).not.toContain("完整终端");
-  });
+test("individual capabilities reveal creation, worktree and split-layout actions", () => {
+  state.operationCapabilities = { ...NO_OPERATION_CAPABILITIES, create_tab: true, split_pane: true, list_worktrees: true,
+    create_worktree: true, open_worktree: true, zoom_pane: true, resize_pane: true, swap_pane: true };
+  state.agents.push({ ...state.agents[0], paneId: "p2" });
+  state.termFontPx = TERM_FONT_MAX;
+  act(openPaneMenu);
+  for (const label of [t("menu.newTab"), t("menu.split"), t("menu.worktrees"), t("menu.newWorktree"), t("menu.openWorktree"), t("menu.zoom"), t("menu.swap")]) expect(labels()).toContain(label);
+  const grow = [...document.querySelectorAll<HTMLButtonElement>(".menu-item")].find(button => button.textContent === t("pane.fontUpCurrent", { n: TERM_FONT_MAX }))!;
+  expect(grow.disabled).toBeTrue();
+});
 
-  test("compose live typing is a switch on this sheet", () => {
-    expect(source).toContain('menu-section-title", t("menu.input")');
-    expect(source).toContain("setComposeLive");
-    expect(source).toContain("setFullTerminalComposeLive");
-    expect(source).toContain('label: t("compose.batch")');
-    expect(source).toContain('label: t("compose.live")');
-    expect(source).toContain("if (!state.agentChat)");
-    expect(source).not.toContain("!state.fullTerminal && !state.agentChat");
-    expect(source).not.toContain("改为组字后发送");
-    expect(source).not.toContain("改为实时输入");
-  });
+test("switcher keeps ranked cards, pinned marker, active state and contextual metadata", () => {
+  state.agents.push({ ...state.agents[0], paneId: "p2", paneLabel: "Pinned", status: "working" });
+  state.panePinned = { p2: 1 };
+  act(openPaneSwitcher);
+  const items = [...document.querySelectorAll(".switch-item")];
+  expect(items).toHaveLength(2);
+  expect(items[0].querySelector(".switch-name")?.textContent).toBe("Pinned");
+  expect(items[0].querySelector(".pin-mark")?.getAttribute("aria-hidden")).toBe("true");
+  expect(items[1].classList.contains("on")).toBeTrue();
+  expect(items[0].querySelector(".switch-meta")?.textContent).toContain(t("status.working"));
+});
 
-  test("prompting the agent is the 对话 view, not a menu dialog", () => {
-    expect(source).not.toContain('section("Agent"');
-    expect(source).not.toContain("给 Agent 发任务");
-    expect(source).not.toContain("promptSelectedAgent");
-    expect(source).not.toContain("canPromptAgent");
-  });
-
-  test("对话 hides terminal display actions that do not apply to the transcript", () => {
-    expect(source).toContain("if (!state.agentChat)");
-    const display = source.slice(source.indexOf("if (!state.agentChat)"), source.indexOf('section(t("menu.new")'));
-    expect(display).toContain('section(t("menu.display")');
-    expect(display).toContain("toggleTermWrap");
-    expect(display).toContain("toggleTermSelect");
-    expect(display).toContain("copyScreenText");
-    expect(display).not.toContain('t("menu.history")');
-  });
-
-  test("view actions wait until the sheet has closed", () => {
-    expect(source).toContain("afterClose(parts.dialog, option.run)");
-    expect(source).toContain("sheetItem");
-    expect(source).not.toMatch(/parts\.close\(\);\s*await action\(\)/);
-  });
+test("empty switcher retains its explanation and cancel action", () => {
+  state.agents = [];
+  act(openPaneSwitcher);
+  expect(document.querySelector(".switch-list")?.textContent).toContain(t("home.switcherEmptyTitle"));
+  expect(labels()).toContain(t("cancel"));
 });

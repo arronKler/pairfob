@@ -1,0 +1,432 @@
+
+/* --- Brand ---------------------------------------------------------------- */
+
+.wordmark {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.brand-dot,
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+
+.dot { width: 7px; height: 7px; }
+.dot-live { background: var(--ok); }
+.dot-warn { background: var(--warn); }
+.dot-off { background: var(--danger-bright); }
+.dot-demo { background: var(--muted); }
+
+/* --- Boot ----------------------------------------------------------------- */
+
+/*
+  Nested min-height: 100dvh / inset:0 inside #app often collapses on iOS, so
+  the loading copy sits at the top of the visual viewport. The app shell is
+  the positioned box; .boot is only the centered stack.
+*/
+#app.boot-screen {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: env(safe-area-inset-top, 0px) 24px env(safe-area-inset-bottom, 0px);
+}
+
+.boot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  max-width: 20rem;
+  text-align: center;
+}
+
+.boot .wordmark { font-size: 1.9rem; }
+
+.boot-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-lead);
+  line-height: 1.45;
+}
+
+.spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--line-strong);
+  border-top-color: var(--accent);
+  animation: spin 0.85s linear infinite;
+  display: inline-block;
+  flex: none;
+}
+
+.btn .spinner { width: 16px; height: 16px; border-width: 2px; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+
+/* --- Buttons --------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 640;
+  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease), opacity var(--dur-1) var(--ease);
+}
+
+.btn:active:not(:disabled) { transform: scale(0.98); }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-primary:active:not(:disabled) { background: var(--accent-deep); }
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted);
+  background: transparent;
+}
+
+.btn-danger { background: var(--danger); color: #fff; }
+
+.btn-small {
+  width: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: var(--text-body);
+  border-radius: 10px;
+}
+
+
+/* --- Notices / banners ------------------------------------------------------- */
+
+.notice {
+  font-size: var(--text-lead);
+  line-height: 1.5;
+  margin: var(--space-3) 0 0;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+}
+
+.notice-error {
+  background: rgba(214, 59, 49, 0.12);
+  border: 1px solid rgba(214, 59, 49, 0.35);
+  color: var(--error);
+}
+
+.notice-status {
+  background: rgba(110, 168, 254, 0.1);
+  border: 1px solid rgba(110, 168, 254, 0.3);
+  color: var(--accent);
+}
+
+.banner {
+  margin: var(--space-3) 0 0;
+  padding: 11px 14px;
+  border-radius: var(--r-md);
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+
+.banner-demo {
+  background: var(--surface);
+  border: 1px dashed rgba(233, 237, 243, 0.26);
+  color: var(--muted);
+}
+
+.banner-off {
+  background: rgba(214, 59, 49, 0.1);
+  border: 1px solid rgba(214, 59, 49, 0.35);
+  color: var(--error);
+}
+
+/* --- Page shell (home / settings) ------------------------------------------- */
+
+.page {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(32px + env(safe-area-inset-bottom, 0px));
+}
+
+.topbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+}
+
+.topbar-title {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  min-width: 0;
+  min-height: 44px;
+  flex: 1 1 auto;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.text-link {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-lead);
+  font-weight: 550;
+  border-radius: 8px;
+}
+
+.text-link:disabled { opacity: 0.4; }
+
+.topbar-create {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 11px 0 9px;
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--text-lead);
+  font-weight: 620;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.topbar-create::after {
+  content: "";
+  position: absolute;
+  inset: 6px 0;
+  border-radius: 999px;
+  background: rgba(110, 168, 254, 0.12);
+  border: 1px solid rgba(110, 168, 254, 0.22);
+  z-index: -1;
+}
+
+.topbar-create:active:not(:disabled)::after { background: rgba(110, 168, 254, 0.2); }
+
+.topbar-create:disabled { opacity: 0.4; }
+
+.statusline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 6px 0 4px;
+  color: var(--muted);
+  font-size: var(--text-body);
+}
+
+.statusline .dot-live { box-shadow: 0 0 0 3px rgba(70, 214, 140, 0.16); animation: pulse 2.6s var(--ease) infinite; }
+.statusline .dot-warn { animation: pulse 1.4s var(--ease) infinite; }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 178, 36, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 178, 36, 0); }
+}
+
+.dot-live { animation: pulse-live 2.6s var(--ease) infinite; }
+
+@keyframes pulse-live {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(70, 214, 140, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(70, 214, 140, 0); }
+}
+
+.seg {
+  --seg-pad: var(--space-1);
+  --seg-gap: var(--space-1);
+  --seg-count: 1;
+  --seg-on: 0;
+  position: relative;
+  display: flex;
+  gap: var(--seg-gap);
+  margin: var(--space-3) 0 6px;
+  padding: var(--seg-pad);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+/*
+  One indicator that slides, instead of a background jumping between siblings.
+  Items are flex: 1 1 0, so an index and a count are enough geometry; both are
+  read off the DOM with :has() so all eight bars in the app get this for free.
+  Bars run two to four items today; five is headroom.
+*/
+.seg:has(> .seg-item:nth-child(2):last-child) { --seg-count: 2; }
+.seg:has(> .seg-item:nth-child(3):last-child) { --seg-count: 3; }
+.seg:has(> .seg-item:nth-child(4):last-child) { --seg-count: 4; }
+.seg:has(> .seg-item:nth-child(5):last-child) { --seg-count: 5; }
+.seg:has(> .seg-item:nth-child(2).on) { --seg-on: 1; }
+.seg:has(> .seg-item:nth-child(3).on) { --seg-on: 2; }
+.seg:has(> .seg-item:nth-child(4).on) { --seg-on: 3; }
+.seg:has(> .seg-item:nth-child(5).on) { --seg-on: 4; }
+
+.seg::before {
+  content: "";
+  position: absolute;
+  top: var(--seg-pad);
+  bottom: var(--seg-pad);
+  left: var(--seg-pad);
+  width: calc((100% - 2 * var(--seg-pad) - (var(--seg-count) - 1) * var(--seg-gap)) / var(--seg-count));
+  border-radius: 10px;
+  background: var(--bg);
+  /* Percentages resolve against this box, so one item plus one gap is the pitch. */
+  transform: translateX(calc(var(--seg-on) * (100% + var(--seg-gap))));
+  transition: transform var(--dur-2) var(--ease);
+  pointer-events: none;
+}
+
+.seg:not(:has(> .seg-item.on))::before { opacity: 0; }
+
+.seg-item {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border-radius: 10px;
+  font-size: var(--text-body);
+  font-weight: 620;
+  color: var(--muted);
+  background: transparent;
+}
+
+.seg-item.on { color: var(--ink); }
+
+/* A bar wider than the indicator rules cover still needs to show its choice. */
+.seg:not(:has(> .seg-item:nth-child(-n+5):last-child)) > .seg-item.on { background: var(--bg); }
+
+.seg-item:disabled { opacity: 0.45; }
+
+.herd-list .section-title:first-child,
+.herd-list .herd-group:first-child .group-title {
+  margin-top: 10px;
+}
+
+.section-title,
+.group-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 24px 2px 10px;
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.group-title {
+  width: 100%;
+  min-height: 44px;
+  margin: var(--space-2) 0 2px;
+  padding: 0 2px;
+  align-items: center;
+  -webkit-touch-callout: none;
+  user-select: none;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: var(--text-body);
+}
+
+.group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-count {
+  font: 600 var(--text-caption) var(--mono);
+  color: var(--warn);
+  background: rgba(255, 178, 36, 0.14);
+  border-radius: 99px;
+  padding: 1px 8px;
+}
+
+.empty {
+  margin: var(--space-2) 0 0;
+  padding: 26px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-lg);
+  text-align: center;
+}
+
+.empty-title { margin: 0; font-size: var(--text-subhead); font-weight: 600; color: var(--ink); }
+
+.empty-sub { margin: 6px 0 0; font-size: var(--text-body); color: var(--muted); line-height: 1.55; }
+
+.empty-action { margin: var(--space-4) auto 0; }
+
+
+/* --- Menu sections + create controls ---------------------------------------- */
+
+.menu-section-title {
+  margin: 14px 0 0;
+  font-size: 0.68rem;
+  font-weight: 640;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.menu-section-title:not(:first-of-type) { border-top: 1px solid var(--line); padding-top: var(--space-3); }
+
+/* --- Status line long-host ellipsis ------------------------------------------ */
+
+.statusline-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.done-count {
+  flex: none;
+  margin-left: auto;
+  padding: 0 var(--space-2);
+  color: var(--ok);
+  font-weight: 620;
+  white-space: nowrap;
+}

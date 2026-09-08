@@ -1,30 +1,9 @@
-import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
+import { happy, resetBoardTestDOM } from "../test-support/dom";
+import { act } from "react";
+import { beforeEach, afterEach, describe, expect, test } from "bun:test";
 import type { AgentCard } from "./lib/ranking.ts";
 
-const happy = new Window({ url: "https://pairfob.com/", width: 390, height: 844 });
-const g = globalThis as unknown as Record<string, unknown>;
-for (const key of [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLButtonElement",
-  "HTMLDialogElement",
-  "HTMLFormElement",
-  "Node",
-  "DocumentFragment",
-  "localStorage",
-  "sessionStorage",
-] as const) {
-  g[key] = (happy as unknown as Record<string, unknown>)[key];
-}
-g.location = happy.location;
-g.FormData = happy.FormData;
-g.getComputedStyle = happy.getComputedStyle.bind(happy);
-g.matchMedia = happy.matchMedia.bind(happy);
-g.requestAnimationFrame = happy.requestAnimationFrame.bind(happy);
-happy.document.body.innerHTML = '<main id="app"></main>';
+beforeEach(resetBoardTestDOM);
 
 const { state } = await import("./state.ts");
 const { setRenderer } = await import("./paint.ts");
@@ -89,8 +68,9 @@ async function confirmDanger(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-afterEach(() => {
-  for (const dialog of happy.document.querySelectorAll("dialog")) dialog.remove();
+afterEach(async () => act(async () => {
+  for (const dialog of happy.document.querySelectorAll("dialog")) dialog.close("cancel");
+  await new Promise((resolve) => setTimeout(resolve, 0));
   state.live = null;
   state.paneId = "";
   state.screen = "home";
@@ -98,10 +78,10 @@ afterEach(() => {
   state.operationBusy = false;
   state.fullTerminal = false;
   state.operationCapabilities = { ...state.operationCapabilities, create_tab: false };
-});
+}));
 
 describe("object mutations target the given pane", () => {
-  test("closing another pane does not abandon the open one", async () => {
+  test("closing another pane does not abandon the open one", async () => act(async () => {
     boot(p1, [p2]);
     cache("p1");
     cache("p2");
@@ -122,18 +102,18 @@ describe("object mutations target the given pane", () => {
     expect(state.screen).toBe("pane");
     expect(cachedAgentTrace("p2")).toBeNull();
     expect(cachedAgentTrace("p1")?.note).toBe("p1");
-  });
+  }));
 
-  test("closing the open pane returns to the list", async () => {
+  test("closing the open pane returns to the list", async () => act(async () => {
     boot(p1, [p2]);
     const done = closePane(p1);
     await confirmDanger();
     await done;
     expect(state.paneId).toBe("");
     expect(state.screen).toBe("home");
-  });
+  }));
 
-  test("closing the highlighted pane on the list keeps the list", async () => {
+  test("closing the highlighted pane on the list keeps the list", async () => act(async () => {
     boot(p1, [p2]);
     state.screen = "home";
     const done = closePane(p1);
@@ -141,9 +121,9 @@ describe("object mutations target the given pane", () => {
     await done;
     expect(state.paneId).toBe("");
     expect(state.screen).toBe("home");
-  });
+  }));
 
-  test("closing a tab only drops panes in that tab", async () => {
+  test("closing a tab only drops panes in that tab", async () => act(async () => {
     boot(p2, [p1, p1b]);
     cache("p1");
     cache("p1b");
@@ -166,9 +146,9 @@ describe("object mutations target the given pane", () => {
     expect(cachedAgentTrace("p1")).toBeNull();
     expect(cachedAgentTrace("p1b")).toBeNull();
     expect(cachedAgentTrace("p2")?.note).toBe("p2");
-  });
+  }));
 
-  test("closing a workspace drops every pane in that workspace", async () => {
+  test("closing a workspace drops every pane in that workspace", async () => act(async () => {
     boot(p2, [p1, p1b]);
     cache("p1");
     cache("p1b");
@@ -191,9 +171,9 @@ describe("object mutations target the given pane", () => {
     expect(cachedAgentTrace("p1")).toBeNull();
     expect(cachedAgentTrace("p1b")).toBeNull();
     expect(cachedAgentTrace("p2")?.note).toBe("p2");
-  });
+  }));
 
-  test("create tab uses the card workspace, not the open pane", async () => {
+  test("create tab uses the card workspace, not the open pane", async () => act(async () => {
     boot(p1, [p2]);
     state.operationCapabilities = { ...state.operationCapabilities, create_tab: true };
     const created: Array<{ workspace_id: string; cwd?: string }> = [];
@@ -215,9 +195,9 @@ describe("object mutations target the given pane", () => {
     expect(created).toEqual([{ workspace_id: "w2", cwd: "/tmp/demo" }]);
     expect(state.paneId).toBe("p1");
     expect(state.screen).toBe("pane");
-  });
+  }));
 
-  test("rename uses the card pane id, not the open pane", async () => {
+  test("rename uses the card pane id, not the open pane", async () => act(async () => {
     boot(p1, [p2]);
     const renamed: Array<{ paneId: string; label: string | null }> = [];
     const session = state.live!;
@@ -240,5 +220,5 @@ describe("object mutations target the given pane", () => {
     expect(renamed).toEqual([{ paneId: "p2", label: "other" }]);
     expect(state.paneId).toBe("p1");
     expect(state.screen).toBe("pane");
-  });
+  }));
 });

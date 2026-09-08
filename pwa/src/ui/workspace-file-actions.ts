@@ -5,18 +5,18 @@ import type { WorkspaceEntry } from "../lib/workspace";
 import { messageOf, state } from "../state";
 import { render } from "../paint";
 import { invalidateWorkspaceFiles, refreshWorkspace, workspaceModel } from "../workspace";
-import { present, sheet, sheetItem } from "./sheet";
+import { openFileMenu } from "./react/file-menu";
 import { bindObjectPress } from "./press-menu";
-import "../styles/workspace-file-actions.css";
+import "../styles/workspace-file-actions.scss";
 
-export function bindWorkspaceFileActions(row: HTMLElement, entry: WorkspaceEntry): void {
+export function bindWorkspaceFileActions(row: HTMLElement, entry: WorkspaceEntry): () => void {
   const session = state.live;
   const { paneId, descriptor, directory } = workspaceModel;
   const root = descriptor?.root;
   const revision = entry.revision;
   const cwd = state.agents.find((pane) => pane.paneId === paneId)?.cwd;
-  if (!session || !root || !revision || entry.kind !== "file") return;
-  if (!state.operationCapabilities.rename_file && !state.operationCapabilities.delete_file) return;
+  if (!session || !root || !revision || entry.kind !== "file") return () => {};
+  if (!state.operationCapabilities.rename_file && !state.operationCapabilities.delete_file) return () => {};
   const current = () => state.live === session && state.screen === "workspace"
     && workspaceModel.paneId === paneId && workspaceModel.descriptor?.root === root
     && workspaceModel.directory === directory
@@ -62,20 +62,26 @@ export function bindWorkspaceFileActions(row: HTMLElement, entry: WorkspaceEntry
   };
   const open = () => {
     if (!current() || state.operationBusy) return;
-    const parts = sheet(entry.name);
-    if (state.operationCapabilities.rename_file) parts.body.append(sheetItem(parts, t("fileActions.rename"), () => act(true)));
-    if (state.operationCapabilities.delete_file) parts.body.append(sheetItem(parts, t("fileActions.delete"), () => act(false), "danger"));
-    parts.body.append(sheetItem(parts, t("cancel"), parts.close));
-    present(parts);
+    openFileMenu(entry.name,
+      state.operationCapabilities.rename_file ? () => act(true) : undefined,
+      state.operationCapabilities.delete_file ? () => act(false) : undefined);
   };
   row.classList.add("workspace-file-actionable");
   row.setAttribute("aria-haspopup", "dialog");
   row.title = t("fileActions.hint");
-  bindObjectPress(row, open);
-  row.addEventListener("keydown", (event) => {
+  const stopPress = bindObjectPress(row, open);
+  const onKey = (event: KeyboardEvent) => {
     if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
       event.preventDefault();
       open();
     }
-  });
+  };
+  row.addEventListener("keydown", onKey);
+  return () => {
+    stopPress();
+    row.removeEventListener("keydown", onKey);
+    row.classList.remove("workspace-file-actionable");
+    row.removeAttribute("aria-haspopup");
+    if (row.title === t("fileActions.hint")) row.removeAttribute("title");
+  };
 }
