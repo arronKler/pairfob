@@ -31,14 +31,7 @@ func cursorQuotaToken(ctx context.Context) (string, string) {
 	case "memory":
 		return "", "auth_required"
 	case "keychain":
-		raw, err := quotaKeychainRead(ctx, "cursor-access-token", "cursor-user", 16384)
-		if err == errQuotaKeychainNotFound {
-			return "", "not_logged_in"
-		}
-		if err != nil || len(raw) == 0 {
-			return "", "auth_required"
-		}
-		return string(raw), ""
+		return cursorQuotaKeychain(ctx)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

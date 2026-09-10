@@ -52,8 +52,12 @@ The UI hides percentages for expired samples and samples older than 15 minutes.
   Windows `%APPDATA%/Cursor/auth.json`. `CURSOR_CONFIG_DIR` does not move CLI
   credentials. Pairfob must inherit the same credential-store environment as
   the CLI. A missing or invalid selected store never falls back to another
-  account. Keychain reads prohibit interaction. Missing credentials report
-  `not_logged_in`; expired or inaccessible credentials report `auth_required`.
+  account. On macOS, Cursor uses the same `/usr/bin/security` credential reader
+  as its CLI; authorization can differ from a JXA reader. macOS may request
+  Keychain access. The read has a three-second deadline, bounded stdout and
+  discarded stderr. It does not change Keychain permissions or unlock it.
+  Missing credentials report `not_logged_in`; expired, denied or timed-out
+  reads report `auth_required`.
   API-key-only credentials and
   custom API endpoints are unsupported. No API-key exchange, token refresh,
   model turn, browser-cookie collection, or credential write occurs.
@@ -92,9 +96,10 @@ return `unknown_op`, displayed as an upgrade prompt.
 ## Cursor CLI login
 
 Run `cursor-agent login` as the daemon user. The CLI browser login is sufficient;
-the Cursor editor is not used. A locked or inaccessible macOS Keychain stays
-`auth_required` without opening a dialog. If the Keychain cannot be made readable,
-the CLI also supports file storage:
+the Cursor editor is not used. macOS may ask to authorize Keychain access for
+its `security` utility. A denied, locked or timed-out read stays `auth_required`;
+Pairfob does not unlock the Keychain or change its access rules. To avoid relying
+on Keychain authorization, the CLI also supports file storage:
 
 ```sh
 export AGENT_CLI_CREDENTIAL_STORE=file
