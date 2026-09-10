@@ -16,7 +16,7 @@ import { muxProtocolFromRelayURL } from "./mux.ts";
 import type { PairResult } from "./pair-ws.ts";
 import { SessionTransport } from "./session-transport.ts";
 import type { ReconnectReason, SessionEvent } from "./session-types.ts";
-import { commitDirectSession, prepareDirectSession, restartDirectSession } from "./session-upgrade.ts";
+import { commitDirectSession, prepareDirectSession, restartDirectSession, type DirectRestartResult } from "./session-upgrade.ts";
 import type { TransportSwitchLease } from "./transport-switch.ts";
 
 import { pageHidden } from "./page-activity.ts";
@@ -55,6 +55,7 @@ export type DirectSessionHost = {
 export class DirectSessionDriver {
   private directAbort: AbortController | null = null;
   private restartAbort: AbortController | null = null;
+  private restartAttempt: { transport: SessionTransport; promise: Promise<DirectRestartResult> } | null = null;
   private directAttempt: Promise<void> | null = null;
   private directRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private directRetryAttempt = 0;
@@ -73,6 +74,7 @@ export class DirectSessionDriver {
     this.directAbort = null;
     this.restartAbort?.abort();
     this.restartAbort = null;
+    this.restartAttempt = null;
     this.clearDirectRetry();
     this.unwatchIce?.();
     this.unwatchIce = null;
@@ -157,16 +159,23 @@ export class DirectSessionDriver {
 
   private async runProbe(transport: SessionTransport, reason: ReconnectReason, version: number): Promise<void> {
     const current = () => this.activityVersion === version && !this.hidden && !pageHidden() && this.host.getTransport() === transport;
-    if (transport.kind === "p2p" && reason === "path") {
-      const channel = transport.directChannel();
-      if (channel?.iceDisconnected()) await this.recoverDirectPath(transport);
-      else if (channel?.iceHealthy()) await this.maybeRestart(transport);
-    }
     if (!current()) return;
     try {
       const timeout = transport.kind === "p2p" && reason === "path" ? DIRECT_HEALTH_PING_MS : DIRECT_RESUME_GRACE_MS;
       transport.diagnose("probe_start", { reason });
-      await transport.rpc("Ping", { t_ms: Date.now() }, timeout);
+      try {
+        await transport.rpc("Ping", { t_ms: Date.now() }, timeout);
+      } catch (error) {
+        if (!current()) return;
+        // A network-change hint does not prove the existing path is broken.
+        // Renegotiate only after a failed encrypted read, then require a fresh
+        // response before enabling input. No user operation is replayed here.
+        if (transport.kind !== "p2p" || reason !== "path") throw error;
+        const repaired = await this.maybeRestart(transport);
+        if (!current()) return;
+        if (repaired !== "ok") throw error;
+        await transport.rpc("Ping", { t_ms: Date.now() }, DIRECT_HEALTH_PING_MS);
+      }
       if (!current()) return;
       transport.diagnose("probe_success", { reason });
       this.host.emit({ type: "connected" });
@@ -197,15 +206,21 @@ export class DirectSessionDriver {
     const channel = transport.directChannel();
     if (!channel || this.host.stopped || !this.host.networkAvailable) return "skipped";
     if (parseNetworkMode(this.host.networkMode) === "relay") return "skipped";
+    // Join the current repair before applying the retry throttle. A failed
+    // probe must await its result and confirm readiness, not abandon checking.
+    if (this.restartAttempt?.transport === transport) return this.restartAttempt.promise;
     if (this.lastRestartAt !== 0 && Date.now() - this.lastRestartAt < DIRECT_RESTART_MIN_INTERVAL_MS) return "skipped";
     if (this.restartAbort) return "skipped";
     this.lastRestartAt = Date.now();
     const controller = new AbortController();
     this.restartAbort = controller;
+    const attempt = { transport, promise: restartDirectSession(transport, channel, controller.signal) };
+    this.restartAttempt = attempt;
     try {
-      return await restartDirectSession(transport, channel, controller.signal);
+      return await attempt.promise;
     } finally {
       if (this.restartAbort === controller) this.restartAbort = null;
+      if (this.restartAttempt === attempt) this.restartAttempt = null;
     }
   }
 

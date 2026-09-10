@@ -279,3 +279,127 @@ describe("transport lifecycle integration", () => {
     f.driver.dispose();
   });
 });
+
+
+describe("network-change probe ordering", () => {
+  function fixture() {
+    const f = driverFixture();
+    let finish!: (result: "ok" | "failed") => void;
+    let restarts = 0;
+    const internals = f.driver as unknown as { maybeRestart: () => Promise<"ok" | "failed"> };
+    internals.maybeRestart = () => {
+      restarts++;
+      return new Promise(resolve => { finish = resolve; });
+    };
+    return { ...f, restarts: () => restarts, finish: (result: "ok" | "failed") => finish(result) };
+  }
+
+  for (const order of [["path", "probe"], ["probe", "path"]] as const) {
+    test(`healthy connection responds immediately with ${order[0]} first`, async () => {
+      const f = fixture();
+      try {
+        page.show(true); page.show(false);
+        for (const reason of order) f.driver.probe(f.session, reason);
+        expect(f.calls).toHaveLength(1);
+        expect(f.restarts()).toBe(0);
+        f.calls[0]!.resolve({});
+        await settle();
+        expect(f.events).toEqual(["checking", "connected"]);
+        expect(f.restarts()).toBe(0);
+        expect(f.failures).toHaveLength(0);
+      } finally { f.driver.dispose(); }
+    });
+  }
+
+  test("failed path probe repairs once and requires a fresh Ping before connected", async () => {
+    const f = fixture();
+    try {
+      f.driver.probe(f.session, "path");
+      f.calls[0]!.reject(new ProtocolError("timeout", "test"));
+      await settle();
+      expect(f.restarts()).toBe(1);
+      f.driver.probe(f.session, "probe");
+      expect(f.calls).toHaveLength(1);
+      f.finish("ok");
+      await settle();
+      expect(f.calls).toHaveLength(2);
+      expect(f.events).toEqual(["checking"]);
+      f.calls[1]!.resolve({});
+      await settle();
+      expect(f.events).toEqual(["checking", "connected"]);
+      expect(f.failures).toHaveLength(0);
+    } finally { f.driver.dispose(); }
+  });
+
+  for (const stage of ["repair", "confirmation"] as const) {
+    test(`${stage} failure falls back without marking connected`, async () => {
+      const f = fixture();
+      try {
+        f.driver.probe(f.session, "path");
+        f.calls[0]!.reject(new ProtocolError("timeout", "first probe"));
+        await settle();
+        f.finish(stage === "repair" ? "failed" : "ok");
+        await settle();
+        if (stage === "confirmation") {
+          f.calls[1]!.reject(new ProtocolError("timeout", "second probe"));
+          await settle();
+        }
+        expect(f.events).toEqual(["checking"]);
+        expect(f.failures).toHaveLength(1);
+      } finally { f.driver.dispose(); }
+    });
+  }
+
+  for (const result of ["ok", "failed"] as const) {
+    test(`old ${result} repair cannot affect a later foreground`, async () => {
+      const f = fixture();
+      try {
+        f.driver.probe(f.session, "path");
+        f.calls[0]!.reject(new ProtocolError("timeout", "old probe"));
+        await settle();
+        page.show(true); page.show(false);
+        f.driver.probe(f.session, "probe");
+        f.calls[1]!.resolve({});
+        await settle();
+        const events = [...f.events];
+        f.finish(result);
+        await settle();
+        expect(f.events).toEqual(events);
+        expect(f.events.at(-1)).toBe("connected");
+        expect(f.calls).toHaveLength(2);
+        expect(f.failures).toHaveLength(0);
+      } finally { f.driver.dispose(); }
+    });
+  }
+});
+
+
+test("a failed path probe joins an in-flight repair despite the restart throttle", async () => {
+  const f = driverFixture();
+  Object.assign(f.host, { networkAvailable: true, networkMode: "auto" });
+  let finish!: (result: "ok") => void;
+  const promise = new Promise<"ok">(resolve => { finish = resolve; });
+  const internals = f.driver as unknown as {
+    restartAttempt: { transport: SessionTransport; promise: Promise<"ok"> };
+    restartAbort: AbortController;
+    lastRestartAt: number;
+  };
+  internals.restartAttempt = { transport: f.session, promise };
+  internals.restartAbort = new AbortController();
+  internals.lastRestartAt = Date.now();
+  try {
+    f.driver.probe(f.session, "path");
+    f.calls[0]!.reject(new ProtocolError("timeout", "repair still running"));
+    await settle();
+    expect(f.failures).toHaveLength(0);
+    expect(f.calls).toHaveLength(1);
+    finish("ok");
+    await settle();
+    expect(f.calls).toHaveLength(2);
+    expect(f.events).toEqual(["checking"]);
+    f.calls[1]!.resolve({});
+    await settle();
+    expect(f.events).toEqual(["checking", "connected"]);
+    expect(f.failures).toHaveLength(0);
+  } finally { f.driver.dispose(); finish("ok"); }
+});
