@@ -1,20 +1,54 @@
-import { state, replaceAgentsFromSnapshot, type AppState } from "../src/state";
-import { initialBoardViewState } from "../src/state-board";
-import { t } from "../src/lib/i18n";
-import { NO_OPERATION_CAPABILITIES } from "../src/lib/operations";
 import { clearAgentTraceCache } from "../src/lib/agent-trace-cache";
 import { clearAllDiffNotes } from "../src/lib/diff-notes";
-import { resetComposeDrafts } from "../src/compose-drafts";
-import { acceptDaemonVersion, checkDaemonRelease } from "../src/daemon-update";
-import { views } from "../src/ui/agent-quota";
-import { refreshBoardPreviews, clearBoardPreviews } from "../src/ui/board-preview";
-import { clearWorkspacePendingReveal, enterWorkspace, loadDirectory, loadGitDiff, loadWorkspaceFile, workspaceModel, WORKSPACE_PENDING_DELAY_MS } from "../src/workspace";
+import { t } from "../src/lib/i18n";
+import { NO_OPERATION_CAPABILITIES } from "../src/lib/operations";
+import { applyOriginConfig, clearNotificationTarget, clearPairingFragment, noteRelayRtt, setNetworkMode,
+  setNetworkOnline, setPhase, setSessionTransport } from "../src/features/connection/connection-store";
+import { applyRuntimeIdentity, resetRuntime, applyDeviceList, setPushEnabled, setPushSubscribed,
+  setDevicesError, setPushConfigError, beginSettingsRead } from "../src/features/connection/runtime-store";
+import { setScreen, setComputersFrom } from "../src/app/navigation-store";
+import { attachLiveSession, setAddingComputer, setComputers, setCredential, setLastUsedDaemon } from "../src/features/computers/catalog-store";
+import { setPairAwaitingApproval, setPairCodeDraft, setPairFailure, setPairManualOpen, resetPairingInput } from "../src/features/pairing/form-store";
+import { resetDashboard, replaceAgentsFromSnapshot } from "../src/features/dashboard/catalog-store";
+import { focusBoard } from "../src/features/board/layout-store";
+import {
+  applyPaneRead, resetPaneView, selectPane, setAgentChat, setFullTerminal, setPaneRow, setTermSelect,
+  noteSnapshotAt,
+} from "../src/features/session/session-store";
+import { adoptPaneCompose, resetComposeField, setComposeDraft, setComposeLive } from "../src/features/session/compose-store";
+import { applyTrace, resetTrace, setTraceBusy, setTraceLoadState, setTraceNote } from "../src/features/session/chat/trace-store";
+import {
+  adoptDaemonPreferences, panePinned, setDefaultTermMode, setKeysExpanded, setListGroup, setListGroupCollapsed,
+  setPadKind, setTermFont, setTermGrid, setTermWrap, togglePanePin,
+} from "../src/features/settings/preferences-store";
+import { applyCapabilities, setOperationBusy } from "../src/features/operations/capabilities-store";
+import { clearNotice, showError } from "../src/app/notices-store";
+import { resetComposeDrafts } from "../src/features/session/drafts/compose-drafts";
+import { acceptDaemonVersion, checkDaemonRelease } from "../src/features/settings/daemon-update";
+import { clearBoardPreviews } from "../src/features/board/preview/store";
+import { refreshBoardPreviews } from "../src/features/board/preview/refresh";
+import { setQuotaSnapshot } from "../src/features/agent-quota/store";
+import {
+  clearWorkspacePendingReveal, enterWorkspace, loadDirectory, loadGitDiff, loadWorkspaceFile, setWorkspaceError,
+  showWorkspaceTab, WORKSPACE_PENDING_DELAY_MS,
+} from "../src/features/workspace";
 import type { FixtureScene } from "./types";
 import type { FixtureSession } from "./session";
 import { FIXED_NOW } from "./environment";
 import * as data from "./data";
 
-const initial = structuredClone({ ...state, live: null, pairAbort: null });
+/**
+ * Named-domain fixture setup for the 56 QA scenes.
+ *
+ * Every scene is expressed as typed, named actions on the ownership domains the
+ * stable App reads — never the compatibility `state` facade and never a writable
+ * whole-app bag. `resetFixtureBaseline` returns each domain to the fixture
+ * baseline (idempotent, no subscriber removal), `applyScene` then raises the
+ * fields a single scene needs, and the fixture commits once so the App composes
+ * the page from the frame. Feature caches are cleared through their own
+ * fixture-safe actions.
+ */
+
 export const scenes: FixtureScene[] = [
   { name: "boot", description: "Initial credential loading" },
   { name: "resuming", description: "Saved computer reconnecting" },
@@ -74,84 +108,171 @@ export const scenes: FixtureScene[] = [
   { name: "terminal-error", description: "Full terminal shell retry state", shellOnly: true },
 ];
 
-export function resetFixtureState(session: FixtureSession): void {
+const AGENT_KINDS = ["codex", "claude", "grok", "pi"];
+
+function allCapabilities(): Record<string, boolean> {
+  return Object.fromEntries(Object.keys(NO_OPERATION_CAPABILITIES).map((key) => [key, true]));
+}
+
+function paneScene(paneId: string): void {
+  setScreen("pane");
+  selectPane(paneId);
+}
+
+function guidedPane(): void {
+  paneScene(data.PANE);
+  setAgentChat(false);
+  setFullTerminal(false);
+}
+
+function chatPane(): void {
+  paneScene(data.PANE);
+  setAgentChat(true);
+  setFullTerminal(false);
+  applyTrace({ agentTraceItems: data.trace(), agentTraceTail: data.trace().length, agentTraceLoadState: "ready", agentTraceSig: "qa-fixture" });
+}
+
+/** The herd/board fixture snapshot with the focused pane reported idle. */
+function idleFocusedSnapshot(): ReturnType<typeof data.snapshot> {
+  const base = data.snapshot();
+  return {
+    ...base,
+    panes: (base.panes ?? []).map((entry) => entry.pane_id === base.focused?.pane_id ? { ...entry, agent_status: "idle" } : entry),
+  };
+}
+
+/**
+ * Return every domain to the QA fixture baseline. Idempotent and subscription-
+ * safe: it never clears store subscribers, never unmounts the running App and
+ * never writes a whole-app record. Call before each scene, then `applyScene`.
+ */
+export function resetFixtureBaseline(session: FixtureSession): void {
   clearWorkspacePendingReveal();
   clearAgentTraceCache();
   clearAllDiffNotes();
   clearBoardPreviews();
   resetComposeDrafts();
-  Object.assign(state, structuredClone(initial), initialBoardViewState(), {
-    phase: "live", screen: "home", live: session.live, credential: data.computers()[0], computers: data.computers(),
-    networkOnline: true, p2pEnabled: true, networkMode: "auto", sessionTransport: "p2p", relayRttMs: 18,
-    herdHost: "MacBook Pro", runtimeKind: "herdr", agentKinds: ["codex", "claude", "grok", "pi"],
-    defaultTermMode: "guided", composeLive: false, defaultComposeLive: false, termFontPx: window.matchMedia("(min-width: 900px)").matches ? 13 : 12,
-    termCols: 80, termFit: "pan", termWrap: false, listGroup: "flat", settingsLoading: false,
-    pushEnabled: false, pushSubscribed: false, deviceList: [data.devices()[0]], snapshotAt: FIXED_NOW,
-    operationCapabilities: Object.fromEntries(Object.keys(NO_OPERATION_CAPABILITIES).map((key) => [key, true])) as AppState["operationCapabilities"],
-  } satisfies Partial<AppState>);
-  replaceAgentsFromSnapshot(data.snapshot());
-  state.paneId = "";
-  state.paneText = data.PANE_TEXT;
-  state.paneHash = "1".padStart(64, "0");
-  views.set(session.live, { loading: false, items: data.quotas(), error: "" });
-}
 
-function pane(): void { state.screen = "pane"; state.paneId = data.PANE; }
-function chat(): void {
-  pane();
-  state.agentChat = true;
-  state.agentTraceLoadState = "ready";
-  state.agentTraceItems = data.trace();
-  state.agentTraceTail = state.agentTraceItems.length;
-  state.agentTraceSig = "qa-fixture";
+  // Connection / navigation baseline.
+  applyOriginConfig({ protocol: 2, p2p: true });
+  clearPairingFragment();
+  clearNotificationTarget();
+  resetPairingInput();
+  setNetworkMode("auto");
+  setNetworkOnline(true);
+  setSessionTransport("p2p");
+  noteRelayRtt(18);
+  setPhase("live");
+  setScreen("home");
+  setComputersFrom("home");
+
+  // Computers baseline: catalog + credential + the opaque live session handle.
+  setComputers(data.computers());
+  setCredential(data.computers()[0] ?? null);
+  // The real catalog action remembers the seeded credential as last used; the
+  // historical plain-state fixture had no such side effect, so restore its
+  // no-last-used baseline explicitly. The product stores/app bootstrap still
+  // read the same real lastUsedDaemon() — only QA re-asserts the fixture norm.
+  setLastUsedDaemon(null);
+  setAddingComputer(false);
+  attachLiveSession(session.live);
+
+  // Dashboard / herd projection.
+  resetDashboard();
+  replaceAgentsFromSnapshot(data.snapshot());
+
+  // Session baseline: no pane, no chat, no terminal, guided text.
+  resetPaneView();
+  selectPane("");
+  setAgentChat(false);
+  setFullTerminal(false);
+  applyPaneRead(data.PANE_TEXT, "1".padStart(64, "0"));
+  noteSnapshotAt(FIXED_NOW);
+
+  // Compose / chat baseline.
+  resetComposeField();
+  setComposeDraft("");
+  setComposeLive(false);
+  adoptPaneCompose("");
+  resetTrace();
+
+  // Preferences baseline (desktop font matches the 900px breakpoint). A pin a
+  // previous scene applied is toggled back off so the next home scene starts
+  // flat again — the domain has no full `setPanePinned` API to overwrite.
+  const desk = window.matchMedia("(min-width: 900px)").matches;
+  adoptDaemonPreferences();
+  setDefaultTermMode("guided");
+  setTermFont(desk ? 13 : 12);
+  setTermWrap(false);
+  setTermGrid("pan", 80);
+  setKeysExpanded(false);
+  setPadKind("keys");
+  setListGroup("flat");
+  setListGroupCollapsed({});
+  for (const pinnedId of Object.keys(panePinned())) togglePanePin(pinnedId);
+
+  // Runtime / capabilities / quota baseline.
+  resetRuntime();
+  applyRuntimeIdentity({ herdHost: "MacBook Pro", runtimeKind: "herdr" });
+  setPushEnabled(false);
+  setPushSubscribed(false);
+  applyDeviceList(data.devices().slice(0, 1));
+  applyCapabilities(allCapabilities() as typeof NO_OPERATION_CAPABILITIES, AGENT_KINDS);
+  setOperationBusy(false);
+  clearNotice();
+  setQuotaSnapshot(session.live, { loading: false, items: data.quotas(), error: "" });
 }
-const pendingReveal = () => new Promise<void>((resolve) => setTimeout(resolve, WORKSPACE_PENDING_DELAY_MS + 40));
 
 export async function applyScene(name: string, session: FixtureSession): Promise<void> {
   if (!scenes.some((scene) => scene.name === name)) throw new Error(`Unknown QA scene: ${name}`);
-  if (name === "boot" || name === "resuming") { state.phase = name; return; }
+  if (name === "boot" || name === "resuming") { setPhase(name); return; }
   if (name.startsWith("connect") || name.startsWith("pairing")) {
-    state.phase = name === "pairing" || name === "pairing-approval" ? "pairing" : "connect";
-    state.addingComputer = name === "connect-add";
-    state.computers = state.addingComputer ? data.computers() : [];
-    state.credential = null;
-    state.pairManualOpen = name === "connect-manual" || name === "connect-error";
-    state.pairCodeDraft = name === "connect-error" ? "ABCD" : name === "connect-manual" ? "ABCD-EFGH-JKMPQR" : "";
-    state.pairAwaitingApproval = name === "pairing-approval";
-    if (name === "connect-error") { state.pairErrorTarget = "code"; state.notice = { text: t("err.pairIncomplete", { n: 4 }), tone: "error" }; }
-    if (name === "pairing-error") { state.pairFailedStep = "verify"; state.notice = { text: t("err.pair_timeout"), tone: "error" }; }
+    setPhase(name === "pairing" || name === "pairing-approval" ? "pairing" : "connect");
+    setAddingComputer(name === "connect-add");
+    setComputers(name === "connect-add" ? data.computers() : []);
+    setCredential(null);
+    setPairManualOpen(name === "connect-manual" || name === "connect-error");
+    setPairCodeDraft(name === "connect-error" ? "ABCD" : name === "connect-manual" ? "ABCD-EFGH-JKMPQR" : "");
+    setPairAwaitingApproval(name === "pairing-approval");
+    if (name === "connect-error") { setPairFailure("code", null); showError(t("err.pairIncomplete", { n: 4 }), true); }
+    if (name === "pairing-error") { setPairFailure(null, "verify"); showError(t("err.pair_timeout"), true); }
     return;
   }
   if (name.startsWith("computers")) {
-    state.phase = "pick";
-    state.computers = name === "computers-one" ? data.computers().slice(0, 1) : data.computers();
-    state.live = null;
-    state.credential = null;
+    setPhase("pick");
+    setComputers(name === "computers-one" ? data.computers().slice(0, 1) : data.computers());
+    attachLiveSession(null);
+    setCredential(null);
+    // Keep the historical no-last-used picker: like the old plain-state
+    // credential write, a picker scene must not leave the seeded daemon marked
+    // as 上次使用 on its first row.
+    setLastUsedDaemon(null);
     return;
   }
   if (name === "home-empty" || name === "board-empty") replaceAgentsFromSnapshot({ panes: [] });
-  if (name === "home-grouped") { state.listGroup = "space"; state.panePinned = { "w1:p3": FIXED_NOW - 3600000 }; }
-  if (name === "home-offline" || name === "settings-offline") { state.networkOnline = false; session.setConnected(false); }
+  if (name === "home-grouped") { setListGroup("space"); togglePanePin("w1:p3"); }
+  if (name === "home-offline" || name === "settings-offline") { setNetworkOnline(false); session.setConnected(false); }
   if (name.startsWith("settings")) {
-    state.screen = "settings";
-    if (name === "settings-devices") state.deviceList = data.devices();
-    if (name === "settings-loading") { state.settingsLoading = true; state.deviceList = []; state.pushEnabled = null; }
-    if (name === "settings-error") { state.devicesError = t("err.devicesLoad"); state.pushConfigError = t("err.pushStatusLoad"); }
+    setScreen("settings");
+    if (name === "settings-devices") applyDeviceList(data.devices());
+    if (name === "settings-loading") { applyDeviceList([]); setPushEnabled(null); beginSettingsRead(); }
+    if (name === "settings-error") { setDevicesError(t("err.devicesLoad")); setPushConfigError(t("err.pushStatusLoad")); }
     acceptDaemonVersion({ build: "v2.4.0" });
     await checkDaemonRelease();
   }
   if (name.startsWith("quota")) {
-    state.screen = "quota";
-    views.set(session.live, { loading: name === "quota-loading", items: name === "quota" ? data.quotas() : null,
+    setScreen("quota");
+    setQuotaSnapshot(session.live, { loading: name === "quota-loading", items: name === "quota" ? data.quotas() : null,
       error: name === "quota-error" ? t("quota.failed") : "" });
   }
   if (name.startsWith("board")) {
-    state.screen = "board";
-    state.boardFitted = false;
+    setScreen("board");
+    const focus = data.snapshot().focused;
+    if (focus) focusBoard(focus.workspace_id ?? "", focus.tab_id ?? "");
     await refreshBoardPreviews();
   }
   if (name.startsWith("workspace")) {
-    pane();
+    guidedPane();
     if (name === "workspace-loading") {
       session.hold("workspaceOpen");
       void enterWorkspace(data.PANE);
@@ -165,36 +286,44 @@ export async function applyScene(name: string, session: FixtureSession): Promise
       const pending = loadWorkspaceFile("src/app.ts");
       if (name.endsWith("loading")) { void pending; await pendingReveal(); } else await pending;
     }
-    if (name === "workspace-changes" || name.startsWith("workspace-diff")) workspaceModel.tab = "changes";
+    if (name === "workspace-changes" || name.startsWith("workspace-diff")) showWorkspaceTab("changes");
     if (name === "workspace-diff-loading") session.hold("gitDiff");
     if (name.startsWith("workspace-diff")) {
       const pending = loadGitDiff("src/app.ts", "worktree");
       if (name.endsWith("loading")) { void pending; await pendingReveal(); } else await pending;
     }
-    if (name === "workspace-error") workspaceModel.error = t("err.daemon_offline");
+    if (name === "workspace-error") setWorkspaceError(t("err.daemon_offline"));
   }
   if (name.startsWith("guided") || name === "desktop-guided") {
-    pane();
-    state.composeDraft = name === "guided-draft" ? "Review the changes and explain the next step." : name === "guided-ime" ? "正在编辑的文字" : "";
-    state.keysExpanded = name === "guided-expanded" || name === "guided-slash";
-    state.padKind = name === "guided-slash" ? "slash" : "keys";
-    state.termWrap = name === "guided-wrap";
-    state.termSelect = name === "guided-select";
-    state.paneRow = name === "guided-row" ? 2 : null;
+    guidedPane();
+    setComposeDraft(name === "guided-draft" ? "Review the changes and explain the next step." : name === "guided-ime" ? "正在编辑的文字" : "");
+    setKeysExpanded(name === "guided-expanded" || name === "guided-slash");
+    setPadKind(name === "guided-slash" ? "slash" : "keys");
+    setTermWrap(name === "guided-wrap");
+    setTermSelect(name === "guided-select");
+    setPaneRow(name === "guided-row" ? 2 : null);
   }
   if (name.startsWith("chat") || name === "desktop-chat") {
-    chat();
-    if (name === "chat-draft") state.composeDraft = "Review the interaction changes.\nKeep focus and selection stable.\nThen run the checks.";
-    if (name === "chat-complete") { state.agents[0].status = "idle"; state.agentTraceItems = data.trace().slice(0, 4); }
-    if (["chat-empty", "chat-loading", "chat-error"].includes(name)) state.agentTraceItems = [];
-    if (name === "chat-loading") { state.agentTraceLoadState = "loading"; state.agentTraceBusy = true; }
-    if (name === "chat-error") { state.agentTraceLoadState = "error"; state.agentTraceNote = t("chat.detailFailed"); }
-    if (name === "chat-older") { state.agentTraceNext = "qa:older"; state.agentTraceTruncated = true; }
-    state.agentTraceTail = state.agentTraceItems.length;
+    chatPane();
+    if (name === "chat-draft") setComposeDraft("Review the interaction changes.\nKeep focus and selection stable.\nThen run the checks.");
+    if (name === "chat-complete") {
+      replaceAgentsFromSnapshot(idleFocusedSnapshot());
+      applyTrace({ agentTraceItems: data.trace().slice(0, 4), agentTraceTail: 4 });
+    }
+    if (["chat-empty", "chat-loading", "chat-error"].includes(name)) applyTrace({ agentTraceItems: [], agentTraceTail: 0 });
+    if (name === "chat-loading") { setTraceLoadState("loading"); setTraceBusy(true); }
+    if (name === "chat-error") { setTraceLoadState("error"); setTraceNote(t("chat.detailFailed")); }
+    if (name === "chat-older") applyTrace({ agentTraceNext: "qa:older", agentTraceTruncated: true });
   }
-  if (name.startsWith("terminal")) { pane(); state.fullTerminal = true; }
+  if (name.startsWith("terminal")) {
+    paneScene(data.PANE);
+    setFullTerminal(true);
+    setAgentChat(false);
+  }
   if (name === "terminal-open-error") session.failNext("terminalOpen", "herdr_offline");
 }
+
+const pendingReveal = () => new Promise<void>((resolve) => setTimeout(resolve, WORKSPACE_PENDING_DELAY_MS + 40));
 
 export function afterScenePaint(name: string): void {
   if (name !== "guided-ime") return;

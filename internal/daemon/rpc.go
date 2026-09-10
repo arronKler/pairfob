@@ -27,13 +27,82 @@ const (
 )
 
 func (e *Engine) reply(s *sess, id string, result any) bool {
+	return e.sendRPCResult(s, id, result, false)
+}
+
+func (e *Engine) replyMedia(s *sess, id string, result any) bool {
+	return e.sendRPCResult(s, id, result, true)
+}
+
+// replyMediaAuthorized sends a media result, but performs a final BOUNDED owner
+// check after acquiring the send lock and immediately before sealing/sending.
+// The interactive-priority gate can make a media reply wait inside lockSend
+// while a Close, pane/root switch or session retirement completes; the full
+// mediaRevalidate (which performs Runtime/Herdr Snapshot I/O for the live root)
+// is run outside the send lock after each quota wait — never inside it, so an
+// in-flight Snapshot cannot block same-session interactive RPCs for seconds.
+// Under the lock we only touch in-memory state: the session epoch and that the
+// exact handle is still installed for this session. That catches Close/retirement
+// and session replacement that completed while parked, without holding any I/O or
+// taking a second lock path; on failure an error is sealed inline.
+func (e *Engine) replyMediaAuthorized(s *sess, id string, result any, h *mediaHandle) bool {
 	body, err := json.Marshal(map[string]any{"v": 1, "id": id, "ok": true, "result": result})
 	if err != nil || len(body) > aead.MaxPlaintext {
 		e.replyErr(s, id, "too_large", "response exceeds protocol limit")
 		return false
 	}
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
+	s.lockSend(true)
+	defer s.unlockSend(true)
+	if !s.sendEpochLive() {
+		return false
+	}
+	e.mu.Lock()
+	active := s.state == "established" && e.sessions[s.routeID] == s && s.s2c != nil
+	e.mu.Unlock()
+	if !active {
+		return false
+	}
+	// Pure in-memory authority: no filesystem/Runtime Snapshot I/O under sendMu.
+	if !e.mediaHandleInstalled(s, h) {
+		e.sendRPCErrorLocked(s, id, "workspace_not_found", "the media file is no longer available")
+		return false
+	}
+	payload, err := aead.Seal(s.s2c, s.routeID, body)
+	if err != nil {
+		return false
+	}
+	return e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload}) == nil
+}
+
+// sendRPCErrorLocked seals and sends an error response. The caller MUST already
+// hold s.sendMu and have verified the session is established/active; this never
+// takes the lock itself, so it is safe to call from inside a send critical
+// section (it must not recurse into replyErr).
+func (e *Engine) sendRPCErrorLocked(s *sess, id, code, message string) {
+	if utf8.RuneCountInString(message) > 512 {
+		message = string([]rune(message)[:512])
+	}
+	body, err := json.Marshal(map[string]any{
+		"v": 1, "id": id, "ok": false,
+		"error": map[string]string{"code": code, "message": message},
+	})
+	if err != nil || len(body) > aead.MaxPlaintext {
+		return
+	}
+	payload, err := aead.Seal(s.s2c, s.routeID, body)
+	if err == nil {
+		_ = e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload})
+	}
+}
+
+func (e *Engine) sendRPCResult(s *sess, id string, result any, media bool) bool {
+	body, err := json.Marshal(map[string]any{"v": 1, "id": id, "ok": true, "result": result})
+	if err != nil || len(body) > aead.MaxPlaintext {
+		e.replyErr(s, id, "too_large", "response exceeds protocol limit")
+		return false
+	}
+	s.lockSend(media)
+	defer s.unlockSend(media)
 	if !s.sendEpochLive() {
 		return false
 	}
@@ -61,8 +130,8 @@ func (e *Engine) replyErr(s *sess, id, code, message string) {
 	if err != nil || len(body) > aead.MaxPlaintext {
 		return
 	}
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
+	s.lockSend(false)
+	defer s.unlockSend(false)
 	if !s.sendEpochLive() {
 		return
 	}
@@ -253,6 +322,8 @@ func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
 		e.rpcListWorktrees(s, id, params)
 	case "WorkspaceOpen", "WorkspaceList", "WorkspaceRead", "GitStatus", "GitDiff", "GitBranches":
 		go e.dispatchWorkspaceRead(s, id, op, params)
+	case "WorkspaceMediaOpen", "WorkspaceMediaRead", "WorkspaceMediaClose":
+		go e.dispatchWorkspaceMedia(s, id, op, params)
 	case "WorkspaceRename", "WorkspaceDelete":
 		go e.rpcWorkspaceMutation(s, id, op, params)
 	case "CreateWorktree":

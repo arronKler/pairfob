@@ -9,6 +9,9 @@ import (
 	"unicode/utf8"
 )
 
+// CanonicalRoot resolves a trusted live workspace directory.
+func CanonicalRoot(root string) (string, error) { return canonicalRoot(root) }
+
 func canonicalRoot(root string) (string, error) {
 	if root == "" || !filepath.IsAbs(root) || !utf8.ValidString(root) || strings.ContainsRune(root, 0) {
 		return "", ErrInvalidPath

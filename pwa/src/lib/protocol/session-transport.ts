@@ -18,8 +18,25 @@ export const READ_RPC_TIMEOUT_MS = 8_000;
 export const MUTATION_RPC_TIMEOUT_MS = 45_000;
 /** Live terminal control fails visibly instead of stalling the input queue. */
 export const TERMINAL_RPC_TIMEOUT_MS = 10_000;
+/**
+ * Late-success callbacks (a media Open whose response arrives after the caller
+ * timed out) only close an orphaned handle; they are not request memory. They
+ * get a finite grace period and a hard cap so a timeout storm cannot grow the
+ * map without bound. An abandoned Open handle past this window is authoritatively
+ * reclaimed by the daemon's own handle-idle/teardown, never by client liveness.
+ */
+const MAX_LATE_CALLBACKS = MAX_IN_FLIGHT;
+export { MAX_LATE_CALLBACKS as MEDIA_LATE_CALLBACK_CAP };
+const LATE_CALLBACK_TTL_MS = 60_000;
 
 type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> };
+type Late = { fn: (result: unknown) => void; expires: ReturnType<typeof setTimeout> };
+/**
+ * WorkspaceMediaOpen hashes up to 32 MiB at 8 MiB/s session disk quota
+ * (~4 s) plus sniff/JPEG scan. 20 s matches the daemon Open deadline and
+ * leaves READ_RPC_TIMEOUT_MS / TERMINAL_RPC_TIMEOUT_MS unchanged.
+ */
+export const MEDIA_OPEN_RPC_TIMEOUT_MS = 20_000;
 
 export function validateEstablishedFWD(frame: Frame, routeId: Uint8Array): void {
   if (frame.typ !== Typ.FWD) throw new ProtocolError("bad_frame", `Established 会话收到非法控制帧 ${frame.typ}`);
@@ -29,6 +46,12 @@ export function validateEstablishedFWD(frame: Frame, routeId: Uint8Array): void 
 /** RPC and push semantics shared by relay and P2P frame adapters. */
 export class SessionTransport {
   private pending = new Map<string, Pending>();
+  // Requests that already timed out client-side but whose successful response
+  // must still be observed: a late WorkspaceMediaOpen needs its remote handle
+  // closed so the daemon does not leak the open media handle after our deadline.
+  // Bounded: a finite per-entry TTL plus MAX_LATE_CALLBACKS cap (the evicted
+  // entry's orphan is reclaimed daemon-side). Cleared on every retirement.
+  private late = new Map<string, Late>();
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private heartbeatCounter = 0n;
   private expectedPong: Uint8Array | null = null;
@@ -112,7 +135,7 @@ export class SessionTransport {
     if (this.stopError) handler(this.stopError);
   }
 
-  async rpc(op: string, params: unknown, timeoutMs = READ_RPC_TIMEOUT_MS, onSent?: () => void): Promise<unknown> {
+  async rpc(op: string, params: unknown, timeoutMs = READ_RPC_TIMEOUT_MS, onSent?: () => void, onLate?: (result: unknown) => void): Promise<unknown> {
     if (this.stopped) throw new ProtocolError("disconnected", "连接正在恢复");
     if (this.pending.size >= MAX_IN_FLIGHT) throw new ProtocolError("backpressure", "请求过多，请稍后再试");
     const id = `req_${b64url(crypto.getRandomValues(new Uint8Array(12)))}`;
@@ -120,6 +143,7 @@ export class SessionTransport {
     return new Promise((resolve, reject) => {
       const timer = globalThis.setTimeout(() => {
         this.pending.delete(id);
+        this.rememberLate(id, onLate);
         reject(new ProtocolError("timeout", `${op} 响应超时；写操作不会自动重试`));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
@@ -129,10 +153,34 @@ export class SessionTransport {
       } catch (error) {
         clearTimeout(timer);
         this.pending.delete(id);
+        this.dropLate(id);
         reject(error instanceof ProtocolError ? error : new ProtocolError("disconnected", String(error)));
         this.failEpoch(new ProtocolError("disconnected", "加密帧发送失败，正在恢复连接"));
       }
     });
+  }
+
+  /** Remember a best-effort late-success callback with a finite TTL and hard cap. */
+  private rememberLate(id: string, fn?: (result: unknown) => void): void {
+    if (!fn) return;
+    if (this.late.size >= MAX_LATE_CALLBACKS) {
+      // Evict the oldest abandoned entry: its orphaned remote handle is reclaimed
+      // by the daemon idle/teardown, so this epoch keeps accepting new requests.
+      const oldest = this.late.keys().next().value;
+      if (oldest !== undefined) this.dropLate(oldest);
+    }
+    const entry: Late = {
+      fn,
+      expires: globalThis.setTimeout(() => this.dropLate(id), LATE_CALLBACK_TTL_MS),
+    };
+    this.late.set(id, entry);
+  }
+
+  private dropLate(id: string): void {
+    const entry = this.late.get(id);
+    if (!entry) return;
+    clearTimeout(entry.expires);
+    this.late.delete(id);
   }
 
   async waitIdle(timeoutMs = 2_000): Promise<void> {
@@ -208,9 +256,22 @@ export class SessionTransport {
         return;
       }
       const pending = this.pending.get(message.id);
-      if (!pending) return;
+      if (!pending) {
+        // A request that timed out client-side still observes a late response:
+        // a SUCCESS result closes the now-orphaned remote handle; an ERROR has
+        // no handle to close. Either way the bounded late entry (map + TTL timer)
+        // is consumed immediately, not held until its TTL. Drop before the
+        // callback so a reentrant/duplicate response cannot replay it.
+        const late = this.late.get(message.id);
+        if (late) {
+          this.dropLate(message.id);
+          if (message.kind === "response" && message.ok) late.fn(message.result);
+        }
+        return;
+      }
       clearTimeout(pending.timer);
       this.pending.delete(message.id);
+      this.dropLate(message.id);
       if (message.ok) pending.resolve(message.result);
       else pending.reject(new ProtocolError(message.error.code, message.error.message));
     } catch (error) {
@@ -239,6 +300,8 @@ export class SessionTransport {
       pending.reject(error);
     }
     this.pending.clear();
+    for (const id of [...this.late.keys()]) this.dropLate(id);
+    this.late.clear();
   }
 
   private failEpoch(error: ProtocolError): void {

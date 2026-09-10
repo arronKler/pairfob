@@ -11,6 +11,11 @@ const (
 	MaxDiffBytes        = 180 * 1024
 	MaxStatusEntries    = 1200
 	MaxPathRunes        = 4096
+	MaxMediaImageBytes  = 10 << 20
+	MaxMediaBytes       = 32 << 20
+	MediaChunkBytes     = 64 * 1024
+	MaxMediaPixels      = 16_777_216
+	MaxMediaDimension   = 8192
 )
 
 var (
@@ -18,6 +23,9 @@ var (
 	ErrNotFound      = errors.New("workspace path not found")
 	ErrNotDirectory  = errors.New("workspace path is not a directory")
 	ErrNotRepository = errors.New("workspace is not inside a Git repository")
+	ErrTooLarge      = errors.New("workspace media exceeds size limit")
+	ErrChanged       = errors.New("workspace file changed")
+	ErrInvalidRange  = errors.New("invalid workspace media range")
 )
 
 type Features struct {
@@ -67,6 +75,25 @@ type FileView struct {
 	Content    string `json:"content"`
 	Truncated  bool   `json:"truncated"`
 	Revision   string `json:"revision"`
+}
+
+const (
+	MediaImage    = "image"
+	MediaVideo    = "video"
+	MediaAudio    = "audio"
+	MediaDownload = "download"
+)
+
+type MediaInfo struct {
+	Path       string
+	Kind       string
+	MIME       string
+	Size       int64
+	ModifiedMS int64
+	SHA256     string
+	MaxBytes   int64
+	Width      int
+	Height     int
 }
 
 type Change struct {

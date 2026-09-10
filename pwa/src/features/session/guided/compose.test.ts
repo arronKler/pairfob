@@ -1,0 +1,197 @@
+import { describe, expect, test } from "bun:test";
+
+const composeSource = await Bun.file(new URL("./compose.ts", import.meta.url)).text();
+const composeViewSource = await Bun.file(new URL("./session-compose.tsx", import.meta.url)).text();
+
+describe("compose send button", () => {
+  test("is a real Enter key and does not depend on parsed terminal text", () => {
+    expect(composeSource).not.toContain("liftedPromptSelect");
+    expect(composeSource).not.toContain("prompt-select");
+    expect(composeViewSource).toContain("disabled={sending}");
+    expect(composeViewSource).toContain("const sending = snap.submitBusy && !snap.live");
+    expect(composeViewSource).toContain(' : "Enter"}</button>');
+    expect(composeViewSource).not.toContain(' : "发送"}</button>');
+    expect(composeViewSource).not.toContain('t("compose.blockedAria")');
+    expect(composeSource).toContain("void submitTyped(true)");
+    const submit = composeSource.slice(composeSource.indexOf("export async function submitTyped"));
+    expect(submit).toContain('if (allowBareEnter) queueKey("enter")');
+  });
+
+  test("every path that changes the draft resyncs it", () => {
+    for (const fn of ["clearComposeDraft", "insertNewline", "insertCompose", "setComposeText"]) {
+      const start = composeSource.indexOf(`function ${fn}(`);
+      expect(start).toBeGreaterThan(-1);
+      const body = composeSource.slice(start, composeSource.indexOf("\n}", start));
+      expect(body).toContain("syncSendButton()");
+    }
+    const bind = composeSource.slice(composeSource.indexOf("function bindTermField("));
+    expect(bind.match(/syncSendButton\(\)/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("tapping the buffer focuses the same field the keyboard types into", async () => {
+    const composeView = await Bun.file(new URL("./session-compose.tsx", import.meta.url)).text();
+    expect(composeSource).toContain("export function focusCompose");
+    expect(composeSource).toContain(".full-terminal-compose-input");
+    expect(composeViewSource).toContain('t("compose.batchPh")');
+    expect(composeView).toContain('enterKeyHint="enter"');
+    expect(composeSource).toContain("field.focus({ preventScroll: true })");
+  });
+
+  test("a deliberate Enter key press can still send a bare Enter", () => {
+    const submit = composeSource.slice(composeSource.indexOf("export async function submitTyped"));
+    expect(submit).toContain("allowBareEnter = false");
+    expect(submit).toContain("if (allowBareEnter) queueKey");
+    expect(composeSource).toContain("submitTyped(true)");
+    expect(submit).toContain('queueKey("enter")');
+  });
+
+  test("submit binds Enter to the exact confirmed screen", () => {
+    const submit = composeSource.slice(composeSource.indexOf("async function guardedSubmit"));
+    expect(composeSource).toContain("const GUARDED_PANE_READ_LINES = 80");
+    expect(submit).toContain('paneRead(paneId, GUARDED_PANE_READ_LINES, "text")');
+    expect(submit).toContain('currentScreen() === "pane"');
+    expect(submit).toContain("intent: \"submit\"");
+    expect(submit).toContain("expected_signature: expectedSignature");
+  });
+
+  test("serializes submit taps so SendText cannot be duplicated", () => {
+    const submit = composeSource.slice(composeSource.indexOf("export async function submitTyped"));
+    expect(submit).toContain("submitBusy");
+    expect(submit).toContain("finally");
+    expect(composeSource).toContain("composeDraft() === value");
+    expect(composeViewSource).toContain('t("compose.sending")');
+    expect(composeViewSource).toContain('aria-busy={sending ? "true" : undefined}');
+  });
+
+  test("keeps delayed guarded submit automatic and quiet unless it stalls", () => {
+    const guarded = composeSource.slice(composeSource.indexOf("async function guardedSubmit"));
+    expect(guarded).toContain("retryRead:");
+    expect(guarded).not.toContain("showStatus(");
+    expect(composeSource).not.toContain('t("compose.submitPending")');
+    expect(composeSource).toContain("showError(stallNotice(), noticeScope, true)");
+  });
+
+  test("batch and live input share the UTF-8 wire budget", () => {
+    expect(composeSource).toContain("fitOperationPrompt(queued + text)");
+    expect(composeSource).toContain("fitOperationPrompt(input.value)");
+    expect(composeSource).toContain("fitOperationPrompt(composeDraft() + event.key)");
+  });
+});
+
+describe("Tab stays a focus key outside the compose field", () => {
+  /**
+   * The pane opens with focus on the body, where the global keydown listener
+   * treats every key as terminal input. Claiming Tab there left no way to reach
+   * the back button, the menu, the keypad or the compose field by keyboard, and
+   * each swallowed Tab was forwarded to the agent as a keystroke.
+   */
+  test("only an unshifted Tab typed into the field reaches the TUI", () => {
+    const handler = composeSource.slice(composeSource.indexOf("export function handlePaneKey"));
+    const guard = handler.slice(0, handler.indexOf('if (event.key === "Enter"'));
+    expect(guard).toContain('event.key === "Tab" && (!fromField || event.shiftKey)');
+  });
+
+  test("the keypad still offers a literal Tab", async () => {
+    const pad = await Bun.file(new URL("./session-keypad.tsx", import.meta.url)).text();
+    expect(pad).toContain("SECONDARY_KEYS");
+    expect(pad).toContain("TERTIARY_KEYS");
+    const tables = await Bun.file(new URL("../keypad/keys.ts", import.meta.url)).text();
+    expect(tables).toContain('{ key: "tab", label: "Tab" }');
+    expect(tables).toContain('{ key: "up", label: "↑"');
+    const { PRIMARY_KEYS, SECONDARY_KEYS } = await import("../keypad/keys.ts");
+    expect(tables).toContain("export const PRIMARY_KEYS");
+    expect(tables).toContain("export const SECONDARY_KEYS");
+    expect(SECONDARY_KEYS.some((spec) => spec.key === "tab" && spec.label === "Tab")).toBeTrue();
+    expect(PRIMARY_KEYS.some((spec) => spec.key === "up" && spec.label === "↑")).toBeTrue();
+  });
+});
+
+describe("slash command pad", () => {
+  test("replaces the draft and never submits Enter on its own", () => {
+    const setText = composeSource.slice(composeSource.indexOf("export function setComposeText"));
+    const body = setText.slice(0, setText.indexOf("\n}\n\n"));
+    expect(body).toContain("fitOperationPrompt(text)");
+    expect(body).toContain("syncSendButton()");
+    expect(body).not.toContain("submitTyped");
+    expect(body).not.toContain("queueKey");
+    expect(body).toContain("typeLive(text)");
+  });
+});
+
+describe("compose live vs batch", () => {
+  test("batch remains the default and pane choices use separate persistence", async () => {
+    const preferencesSrc = await Bun.file(new URL("../../../features/settings/preferences-store.ts", import.meta.url)).text();
+    const load = preferencesSrc.slice(preferencesSrc.indexOf("function loadDefaultComposeLive"));
+    expect(load).toContain('read(DEFAULT_COMPOSE_LIVE_KEY) === "1"');
+    expect(preferencesSrc).toContain("export function loadPaneComposeLive");
+    expect(preferencesSrc).toContain("export function setPaneComposeLive");
+    expect(composeSource).not.toContain("compose-modes");
+    expect(composeSource).not.toContain("composeModePicker");
+    expect(composeSource).not.toContain("export function composeLiveControl");
+    expect(composeSource).not.toContain("syncComposeLiveControl");
+    expect(composeViewSource).toContain(' : "Enter"}</button>');
+    expect(composeViewSource).toContain('t("compose.livePh")');
+    const composeView = await Bun.file(new URL("./session-compose.tsx", import.meta.url)).text();
+    expect(composeView).toContain('className="send-btn"');
+    expect(composeView).toContain(' : "Enter"}</button>');
+    expect(composeView).toContain('aria-live="polite"');
+    const dock = await Bun.file(new URL("./session-dock.tsx", import.meta.url)).text();
+    expect(dock).not.toContain("composeLiveControl");
+    const settings = await Bun.file(new URL("../../../pages/settings/settings-page.tsx", import.meta.url)).text();
+    expect(settings).toContain("function ComposeLiveControl");
+    expect(settings).toContain('t("settings.input")');
+    expect(settings).toContain("setDefaultComposeLive(option.live)");
+    const menu = await Bun.file(new URL("./pane-menu.tsx", import.meta.url)).text();
+    expect(menu).toContain("export function fillSelectedPane");
+    expect(menu).toContain("export function openPaneMenu");
+    expect(menu).toContain('t("menu.input")');
+    expect(menu).toContain('selected={composeLive() === option.live}');
+    expect(menu).toContain('else void setComposeLive(option.live)');
+  });
+
+  test("live keystrokes send text without waiting for guarded Enter", () => {
+    expect(composeSource).toContain("function typeLive(");
+    expect(composeSource).toContain("takeLiveField(input)");
+    expect(composeSource).toContain("session.sendText(paneId, text)");
+    const liveEnterStart = composeSource.indexOf("async function submitLiveEnter");
+    const liveEnter = composeSource.slice(liveEnterStart, composeSource.indexOf("export async function submitTyped"));
+    expect(liveEnter).toContain("flushLiveInput()");
+    expect(liveEnter).toContain('queueKey("enter")');
+    expect(liveEnter).not.toContain("guardedSubmit");
+    expect(composeSource).toContain("if (composeLive())");
+    expect(composeSource).toContain("await submitLiveEnter()");
+  });
+
+  test("keeps input behavior independent from the terminal display mode", () => {
+    const switcher = composeSource.slice(composeSource.indexOf("export async function setComposeLive"));
+    expect(switcher).toContain("setPaneComposeLive(paneId, on)");
+    expect(switcher).toContain("openPaneId() !== paneId || liveSession() !== session");
+    expect(switcher).not.toContain("enterFullTerminal");
+  });
+
+  test("shows local pending text immediately and pipelines the ordered screen read", async () => {
+    expect(composeSource).toContain("new LiveInputPump");
+    expect(composeViewSource).toContain('t("compose.pendingPh"');
+    const composeView = await Bun.file(new URL("./session-compose.tsx", import.meta.url)).text();
+    expect(composeView).toContain('aria-live="polite"');
+    expect(composeSource).toContain("const request = session.sendText(paneId, text)");
+    expect(composeSource).toContain("requestRead: () => { void requestPaneRefresh(); }");
+    expect(composeSource).not.toContain("const LIVE_FLUSH_MS = 55");
+  });
+
+  test("Enter waits for all queued live text and does not replay an uncertain mutation", () => {
+    const liveEnterStart = composeSource.indexOf("async function submitLiveEnter");
+    const liveEnter = composeSource.slice(liveEnterStart, composeSource.indexOf("export async function submitTyped"));
+    expect(liveEnter).toContain("if (!(await flushLiveInput())) return");
+    expect(composeSource).toContain('error.code === "unknown_outcome"');
+    expect(composeSource).toContain("? input.queuedText");
+  });
+
+  test("IME composition is held until the character is committed", () => {
+    const bind = composeSource.slice(composeSource.indexOf("function bindTermField("));
+    expect(bind).toContain("compositionstart");
+    expect(bind).toContain("if (composeIME())");
+    expect(bind).toContain("compositionend");
+    expect(bind).toContain("takeLiveField(input)");
+  });
+});

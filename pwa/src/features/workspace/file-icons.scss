@@ -1,0 +1,90 @@
+/* Seti-colored file marks for the workspace inspector. */
+
+.file-icon {
+  display: block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+  color: #d4d7d6;
+}
+
+.workspace-detail-head .file-icon,
+.workspace-change .file-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.file-icon[data-file-icon="folder"],
+.file-icon[data-file-icon="ts"],
+.file-icon[data-file-icon="react"],
+.file-icon[data-file-icon="css"],
+.file-icon[data-file-icon="md"],
+.file-icon[data-file-icon="py"],
+.file-icon[data-file-icon="go"],
+.file-icon[data-file-icon="c"],
+.file-icon[data-file-icon="csharp"],
+.file-icon[data-file-icon="docker"],
+.file-icon[data-file-icon="dart"],
+.file-icon[data-file-icon="lua"],
+.file-icon[data-file-icon="r"],
+.file-icon[data-file-icon="nix"] { color: #519aba; }
+
+.file-icon[data-file-icon="js"],
+.file-icon[data-file-icon="json"],
+.file-icon[data-file-icon="lock"],
+.file-icon[data-file-icon="license"],
+.file-icon[data-file-icon="vite"] { color: #cbcb41; }
+
+.file-icon[data-file-icon="html"],
+.file-icon[data-file-icon="xml"],
+.file-icon[data-file-icon="rs"],
+.file-icon[data-file-icon="make"],
+.file-icon[data-file-icon="swift"],
+.file-icon[data-file-icon="svelte"],
+.file-icon[data-file-icon="astro"],
+.file-icon[data-file-icon="svg"],
+.file-icon[data-file-icon="zig"] { color: #e37933; }
+
+.file-icon[data-file-icon="sass"],
+.file-icon[data-file-icon="sql"],
+.file-icon[data-file-icon="graphql"],
+.file-icon[data-file-icon="video"] { color: #f55385; }
+
+.file-icon[data-file-icon="yaml"],
+.file-icon[data-file-icon="php"],
+.file-icon[data-file-icon="kt"],
+.file-icon[data-file-icon="cpp"],
+.file-icon[data-file-icon="image"],
+.file-icon[data-file-icon="audio"],
+.file-icon[data-file-icon="wasm"],
+.file-icon[data-file-icon="elixir"],
+.file-icon[data-file-icon="haskell"],
+.file-icon[data-file-icon="terraform"] { color: #a074c4; }
+
+.file-icon[data-file-icon="rb"],
+.file-icon[data-file-icon="java"],
+.file-icon[data-file-icon="npm"],
+.file-icon[data-file-icon="font"],
+.file-icon[data-file-icon="pdf"],
+.file-icon[data-file-icon="scala"] { color: #cc3e44; }
+
+.file-icon[data-file-icon="sh"],
+.file-icon[data-file-icon="vue"],
+.file-icon[data-file-icon="env"],
+.file-icon[data-file-icon="toml"],
+.file-icon[data-file-icon="csv"],
+.file-icon[data-file-icon="proto"],
+.file-icon[data-file-icon="prisma"],
+.file-icon[data-file-icon="less"] { color: #8dc149; }
+
+.file-icon[data-file-icon="git"] { color: #8b9aa6; }
+
+.file-icon[data-file-icon="symlink"],
+.file-icon[data-file-icon="config"],
+.file-icon[data-file-icon="zip"],
+.file-icon[data-file-icon="binary"] { color: #6d8086; }
+
+.file-icon[data-file-icon="file"],
+.file-icon[data-file-icon="text"],
+.file-icon[data-file-icon="bun"] { color: #d4d7d6; }

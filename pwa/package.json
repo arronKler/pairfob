@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "bun test src",
+    "test:qa": "bun test test-support/qa-app-smoke.test.ts test-support/qa-fixture-api.test.ts --timeout 90000",
     "typecheck": "tsc --noEmit",
     "typecheck:qa": "tsc --noEmit -p tsconfig.qa.json",
     "dev": "vite",

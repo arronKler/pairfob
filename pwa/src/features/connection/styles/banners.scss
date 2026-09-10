@@ -1,0 +1,22 @@
+// Connection feature's reachability banners (HerdBanners).
+@mixin herd-banners {
+  .banner {
+    margin: var(--space-3) 0 0;
+    padding: 11px 14px;
+    border-radius: var(--r-md);
+    font-size: var(--text-body);
+    line-height: 1.5;
+  }
+
+  .banner-demo {
+    background: var(--surface);
+    border: 1px dashed rgba(233, 237, 243, 0.26);
+    color: var(--muted);
+  }
+
+  .banner-off {
+    background: rgba(214, 59, 49, 0.1);
+    border: 1px solid rgba(214, 59, 49, 0.35);
+    color: var(--error);
+  }
+}

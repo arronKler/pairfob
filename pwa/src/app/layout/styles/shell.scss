@@ -1,0 +1,20 @@
+// App-owned global shell rules. Emitted through mixins at the exact cascade
+// points the global reset stylesheet used, so App shell duties (#app root,
+// body scroll lock) live with the App, not the generic reset.
+
+// Document/body scroll lock applied by the App shell for terminals/sheets.
+@mixin app-shell-lock {
+  html.lock, body.lock {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
+// The mounted App root fills the visual viewport like body.
+@mixin app-shell-root {
+  #app {
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    background: var(--bg);
+  }
+}

@@ -1,0 +1,39 @@
+// Shared status line and status dot primitives (StatusLine / StatusDot),
+// including the live/warn pulse animations. Emitted in the chrome cascade.
+@mixin statusline {
+  .statusline {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 6px 0 4px;
+    color: var(--muted);
+    font-size: var(--text-body);
+  }
+
+  .statusline .dot-live { box-shadow: 0 0 0 3px rgba(70, 214, 140, 0.16); animation: pulse 2.6s var(--ease) infinite; }
+  .statusline .dot-warn { animation: pulse 1.4s var(--ease) infinite; }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 178, 36, 0.3); }
+    50% { box-shadow: 0 0 0 4px rgba(255, 178, 36, 0); }
+  }
+
+  .dot-live { animation: pulse-live 2.6s var(--ease) infinite; }
+
+  @keyframes pulse-live {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(70, 214, 140, 0.3); }
+    50% { box-shadow: 0 0 0 4px rgba(70, 214, 140, 0); }
+  }
+}
+
+// Shared StatusLine long-host ellipsis; emitted after the menu section titles.
+@mixin statusline-text {
+  /* --- Status line long-host ellipsis ------------------------------------------ */
+
+  .statusline-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

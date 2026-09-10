@@ -316,6 +316,11 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 	candidate.sendMu.Unlock()
 	parent.sendMu.Unlock()
 	stopSessionRPC(candidate)
+	// The candidate epoch never established media (it stayed in upgrade_ready and
+	// its quota binds require an established session), but retire it explicitly.
+	// The parent's media follows the *sess owner onto the new route with no map
+	// migration; the later closeSession(route) drains that same owner.
+	e.closeSessionMedia(candidate)
 	e.audit("p2p_committed", map[string]any{"device_id": parent.deviceID})
 }
 

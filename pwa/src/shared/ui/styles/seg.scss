@@ -1,0 +1,69 @@
+// Shared segmented control (the .seg radio group used by GroupToggle /
+// ListGroupControl and other settings choices). Emitted in the chrome cascade.
+@mixin seg-control {
+  .seg {
+    --seg-pad: var(--space-1);
+    --seg-gap: var(--space-1);
+    --seg-count: 1;
+    --seg-on: 0;
+    position: relative;
+    display: flex;
+    gap: var(--seg-gap);
+    margin: var(--space-3) 0 6px;
+    padding: var(--seg-pad);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+
+  /*
+    One indicator that slides, instead of a background jumping between siblings.
+    Items are flex: 1 1 0, so an index and a count are enough geometry; both are
+    read off the DOM with :has() so all eight bars in the app get this for free.
+    Bars run two to four items today; five is headroom.
+  */
+  .seg:has(> .seg-item:nth-child(2):last-child) { --seg-count: 2; }
+  .seg:has(> .seg-item:nth-child(3):last-child) { --seg-count: 3; }
+  .seg:has(> .seg-item:nth-child(4):last-child) { --seg-count: 4; }
+  .seg:has(> .seg-item:nth-child(5):last-child) { --seg-count: 5; }
+  .seg:has(> .seg-item:nth-child(2).on) { --seg-on: 1; }
+  .seg:has(> .seg-item:nth-child(3).on) { --seg-on: 2; }
+  .seg:has(> .seg-item:nth-child(4).on) { --seg-on: 3; }
+  .seg:has(> .seg-item:nth-child(5).on) { --seg-on: 4; }
+
+  .seg::before {
+    content: "";
+    position: absolute;
+    top: var(--seg-pad);
+    bottom: var(--seg-pad);
+    left: var(--seg-pad);
+    width: calc((100% - 2 * var(--seg-pad) - (var(--seg-count) - 1) * var(--seg-gap)) / var(--seg-count));
+    border-radius: 10px;
+    background: var(--bg);
+    /* Percentages resolve against this box, so one item plus one gap is the pitch. */
+    transform: translateX(calc(var(--seg-on) * (100% + var(--seg-gap))));
+    transition: transform var(--dur-2) var(--ease);
+    pointer-events: none;
+  }
+
+  .seg:not(:has(> .seg-item.on))::before { opacity: 0; }
+
+  .seg-item {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 44px;
+    padding: 0 var(--space-2);
+    border-radius: 10px;
+    font-size: var(--text-body);
+    font-weight: 620;
+    color: var(--muted);
+    background: transparent;
+  }
+
+  .seg-item.on { color: var(--ink); }
+
+  /* A bar wider than the indicator rules cover still needs to show its choice. */
+  .seg:not(:has(> .seg-item:nth-child(-n+5):last-child)) > .seg-item.on { background: var(--bg); }
+
+  .seg-item:disabled { opacity: 0.45; }
+}

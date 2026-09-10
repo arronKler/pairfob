@@ -1,0 +1,66 @@
+// App-owned screen view transitions: native View Transitions navigation and the
+// CSS-only fallback that animates the arriving #app. Emitted through mixins by
+// the motion composition so these rules stay with the App shell.
+
+@mixin app-view-transitions {
+  /* --- Screen transitions -------------------------------------------------------
+     Only a declared navigation sets html[data-transition] (see ui/transition.ts),
+     so none of this can fire on a poll repaint. Push travels in, pop travels back
+     out, and a sideways move only cross-fades — which is what the browser already
+     does by default, so `fade` needs no rules of its own.
+     ------------------------------------------------------------------------------ */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: var(--dur-4);
+    animation-timing-function: var(--ease);
+  }
+
+  html[data-transition="push"]::view-transition-old(root) { animation-name: screen-behind; }
+  html[data-transition="push"]::view-transition-new(root) { animation-name: screen-from-right; }
+  html[data-transition="pop"]::view-transition-old(root) { animation-name: screen-to-right; }
+  html[data-transition="pop"]::view-transition-new(root) { animation-name: screen-forward; }
+
+  /* An expanding tile carries the travel by itself, so the screens only cross-fade. */
+  ::view-transition-group(pane-title),
+  ::view-transition-group(pane-open) { animation-duration: var(--dur-4); }
+
+  @keyframes screen-from-right {
+    from { transform: translateX(100%); }
+    to { transform: none; }
+  }
+
+  @keyframes screen-to-right {
+    from { transform: none; }
+    to { transform: translateX(100%); }
+  }
+
+  /* The screen being covered steps back rather than leaving. */
+  @keyframes screen-behind {
+    from { transform: none; opacity: 1; }
+    to { transform: translateX(-22%) scale(0.96); opacity: 0.4; }
+  }
+
+  @keyframes screen-forward {
+    from { transform: translateX(-22%) scale(0.96); opacity: 0.4; }
+    to { transform: none; opacity: 1; }
+  }
+}
+
+@mixin app-fallback-transitions {
+  /* Fallback for engines without View Transitions: only the arriving screen
+     moves. Cloning a live terminal grid to animate the old one out would cost
+     more than the effect is worth. */
+  html[data-fallback-transition="push"] #app { animation: screen-from-right var(--dur-4) var(--ease); }
+  html[data-fallback-transition="pop"] #app { animation: screen-forward var(--dur-4) var(--ease); }
+  html[data-fallback-transition="fade"] #app,
+  html[data-fallback-transition="expand"] #app { animation: screen-fade var(--dur-3) var(--ease); }
+
+  @keyframes screen-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+@mixin app-transition-reduced {
+  html[data-fallback-transition] #app { animation: none; }
+}

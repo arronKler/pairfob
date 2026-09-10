@@ -44,7 +44,7 @@ describe("legacy iOS gesture boundary", () => {
     const document = window.document as unknown as Document;
     const dispose = bindLegacyGestureBoundary(document);
 
-    for (const className of ["full-terminal-host", "board-canvas"]) {
+    for (const className of ["full-terminal-host", "board-canvas", "workspace-media-viewer"]) {
       const surface = document.createElement("section");
       const child = document.createElement("span");
       surface.className = className;

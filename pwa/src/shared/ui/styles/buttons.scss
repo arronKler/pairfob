@@ -1,0 +1,46 @@
+// Shared button primitive styles (the generic .btn family used everywhere).
+@mixin buttons {
+  /* --- Buttons --------------------------------------------------------------- */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 18px;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    background: var(--surface-2);
+    color: var(--ink);
+    font-size: 1rem;
+    font-weight: 640;
+    transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease), opacity var(--dur-1) var(--ease);
+  }
+
+  .btn:active:not(:disabled) { transform: scale(0.98); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .btn-primary:active:not(:disabled) { background: var(--accent-deep); }
+
+  .btn-ghost {
+    border-color: transparent;
+    color: var(--muted);
+    background: transparent;
+  }
+
+  .btn-danger { background: var(--danger); color: #fff; }
+
+  .btn-small {
+    width: auto;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: var(--text-body);
+    border-radius: 10px;
+  }
+}

@@ -521,6 +521,9 @@ func failAgentStart(operationID string, err error) (Receipt, error) {
 }
 
 func (h *Herdr) startAgentOnPane(ctx context.Context, session SessionRef, paneID, name, kind string) (string, error) {
+	if err := h.waitCreatedShell(ctx, session, paneID); err != nil {
+		return "", err
+	}
 	result, startErr := h.callWithTimeout(ctx, session, "agent.start", map[string]any{
 		"name": name, "kind": kind, "pane_id": paneID, "timeout_ms": 30000,
 	}, true, 35*time.Second)

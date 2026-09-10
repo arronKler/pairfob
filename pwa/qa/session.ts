@@ -1,7 +1,7 @@
 import { ProtocolError } from "../src/lib/protocol/errors";
 import { NO_OPERATION_CAPABILITIES } from "../src/lib/operations";
 import type { LiveSession, SessionEvent } from "../src/lib/protocol/session-types";
-import { state } from "../src/state";
+import { setSessionTransport } from "../src/features/connection/connection-store";
 import { FIXED_NOW, record } from "./environment";
 import type { FixtureTerminalFrame } from "./types";
 import * as data from "./data";
@@ -78,6 +78,9 @@ export function createSession(): FixtureSession {
     workspaceOpen: (paneId: string) => request("workspaceOpen", [paneId], data.descriptor),
     workspaceList: (paneId: string, path = "", cursor?: string) => request("workspaceList", [paneId, path, cursor], () => data.directory(path)),
     workspaceRead: (paneId: string, path: string) => request("workspaceRead", [paneId, path], () => data.file(path)),
+    workspaceMediaOpen: (paneId: string, path: string) => request("workspaceMediaOpen", [paneId, path], () => data.mediaOpen(path)),
+    workspaceMediaRead: (handle: string, offset: number, length: number) => request("workspaceMediaRead", [handle, offset, length], () => data.mediaChunk(handle, offset, length)),
+    workspaceMediaClose: (handle: string) => request("workspaceMediaClose", [handle], () => ({ handle, closed: true as const })),
     gitStatus: (paneId: string) => request("gitStatus", [paneId], data.status),
     gitDiff: (paneId: string, path: string, layer: "staged" | "worktree") => request("gitDiff", [paneId, path, layer], () => data.diff(path, layer)),
     gitBranches: (paneId: string) => request("gitBranches", [paneId], () => ({ items: [
@@ -110,8 +113,8 @@ export function createSession(): FixtureSession {
     daemonUpdate: (target: string) => mutation("daemonUpdate", [target]),
     async switchTransport(target: "auto" | "p2p" | "relay") {
       record("lifecycle", "switchTransport", [target]);
-      state.sessionTransport = target === "relay" ? "relay" : "p2p";
-      emit({ type: "latency", rttMs: target === "relay" ? 48 : 18, transport: state.sessionTransport });
+      setSessionTransport(target === "relay" ? "relay" : "p2p");
+      emit({ type: "latency", rttMs: target === "relay" ? 48 : 18, transport: target === "relay" ? "relay" : "p2p" });
     },
     reconnectNow: (reason?: string) => { record("lifecycle", "reconnectNow", [reason]); },
     setNetworkAvailable: (available: boolean) => { record("lifecycle", "setNetworkAvailable", [available]); connected = available; },

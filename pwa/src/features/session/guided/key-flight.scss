@@ -1,0 +1,65 @@
+/* Keypad and terminal are separate on a phone; a silent key (Esc, Ctrl+C)
+   leaves no terminal echo. The spark and caret pulse are that trace. */
+
+.key-flight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+}
+
+.key-spark {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.key-spark.is-silent {
+  background: var(--warn);
+  box-shadow: 0 0 8px var(--warn);
+}
+
+.key-caret-pulse {
+  position: absolute;
+  width: 10px;
+  height: 16px;
+  margin: -8px 0 0 -2px;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: key-caret-pulse 160ms var(--ease-out) forwards;
+}
+
+@keyframes key-caret-pulse {
+  from { opacity: 0.55; }
+  to { opacity: 0; }
+}
+
+.key-flight-label {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--warn);
+  color: var(--accent-ink);
+  font-size: var(--text-caption);
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  animation: key-label-out 600ms var(--ease) forwards;
+}
+
+@keyframes key-label-out {
+  0% { opacity: 0; }
+  14% { opacity: 1; }
+  74% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .key-spark { display: none; }
+}

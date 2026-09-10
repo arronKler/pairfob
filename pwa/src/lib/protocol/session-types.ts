@@ -29,6 +29,11 @@ import type {
   WorkspaceDirectoryPage,
   WorkspaceFile,
 } from "../workspace.ts";
+import type {
+  WorkspaceMediaChunk,
+  WorkspaceMediaClose,
+  WorkspaceMediaOpen,
+} from "./workspace-media.ts";
 
 export interface SessionEvent {
   type: "connected" | "disconnected" | "reconnecting" | "latency" | "poke" | "terminal" | "terminal_frame" | "terminal_closed";
@@ -89,6 +94,9 @@ export type LiveSession = {
   workspaceOpen: (paneId: string) => Promise<WorkspaceDescriptor>;
   workspaceList: (paneId: string, path?: string, cursor?: string, limit?: number) => Promise<WorkspaceDirectoryPage>;
   workspaceRead: (paneId: string, path: string) => Promise<WorkspaceFile>;
+  workspaceMediaOpen: (paneId: string, path: string) => Promise<WorkspaceMediaOpen>;
+  workspaceMediaRead: (handle: string, offset: number, length: number) => Promise<WorkspaceMediaChunk>;
+  workspaceMediaClose: (handle: string) => Promise<WorkspaceMediaClose>;
   gitStatus: (paneId: string) => Promise<GitStatus>;
   gitDiff: (paneId: string, path: string, layer: GitLayer) => Promise<GitDiff>;
   gitBranches: (paneId: string) => Promise<GitBranches>;

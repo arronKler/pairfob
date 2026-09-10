@@ -271,6 +271,8 @@ esac
   });
 
   test("fails closed when the service never becomes ready", () => {
+    // Drives the real 40-round readiness loop; subprocess-creation cost can
+    // exceed Bun's default 5s even with the zero-delay sleep stub — 15s, this case only.
     const f = fixture();
     try {
       writeFileSync(
@@ -295,7 +297,7 @@ esac
     } finally {
       rmSync(f.dir, { recursive: true, force: true });
     }
-  });
+  }, { timeout: 15000 });
 
   test("does not bootstrap Pairfob for a non-pairing action", () => {
     const f = fixture();

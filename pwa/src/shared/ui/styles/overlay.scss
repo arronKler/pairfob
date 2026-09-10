@@ -1,0 +1,344 @@
+/*
+  Shared overlay layer: the modal card, the bottom-sheet variant, the help
+  dialog, drag-to-dismiss and the action-sheet menu rows.
+
+  Emitted from style.scss where these rules used to live inside settings.scss,
+  so the compiled cascade order is unchanged.
+*/
+
+/* --- Modal / action sheet ------------------------------------------------------------------ */
+
+dialog.modal {
+  width: min(23rem, calc(100vw - 32px));
+  max-height: min(40rem, calc(100dvh - 24px));
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xl);
+  padding: 18px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-3);
+}
+
+@keyframes help-in {
+  from { transform: scale(0.97); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes help-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+dialog.modal.help {
+  width: min(22rem, calc(100vw - 40px));
+  max-height: min(70dvh, 28rem);
+  margin: auto;
+  padding: 16px 16px 18px;
+}
+
+dialog.modal.help > form { animation: help-in var(--dur-2) var(--ease); }
+
+.help-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: -6px -6px 0 0;
+}
+
+.help-head .modal-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 8px;
+}
+
+.help-close {
+  margin: -2px -2px 0 0;
+  color: var(--ink);
+}
+
+.help-copy {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: var(--text-lead);
+  line-height: 1.55;
+}
+
+.help-copy + .help-copy { margin-top: 8px; }
+
+.help-copy code {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+
+dialog.modal::backdrop {
+  background: rgba(4, 6, 10, 0.66);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+dialog.modal form > label { display: block; color: var(--muted); margin-top: 10px; }
+
+dialog.modal .action-row {
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+}
+
+dialog.modal .btn { display: flex; width: 100%; margin: 8px 0 0; }
+
+.modal-title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+/*
+  Header is a flex sibling of the scroller, not position:sticky inside it.
+  WebKit overflow-scrolling paints list rows through a sticky title bar.
+*/
+dialog.modal.sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+dialog.modal.sheet > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* --- Drag to dismiss ----------------------------------------------------------
+   The handle is only meaningful where the modal is a bottom sheet, so above the
+   desk breakpoint it is not drawn at all.
+   ------------------------------------------------------------------------------ */
+
+.sheet-grab { display: none; }
+
+.sheet-grab-bar {
+  display: block;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.sheet-head {
+  flex: none;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 8px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+
+.sheet-facts {
+  margin: 6px 0 8px;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet-facts dt,
+.sheet-facts dd { margin: 0; }
+
+.sheet-fact {
+  display: grid;
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+  gap: 4px 12px;
+  padding: 7px 0;
+  align-items: start;
+}
+
+.sheet-fact-key {
+  color: var(--muted);
+  font-size: var(--text-caption);
+  font-weight: 620;
+  line-height: 1.45;
+}
+
+.sheet-fact-val {
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 560;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.sheet-fact-path {
+  font-family: var(--mono);
+  font-size: var(--text-secondary);
+  font-weight: 500;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.sheet-head .modal-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sheet-close {
+  flex: none;
+  color: var(--ink);
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1;
+  border-radius: var(--r-sm);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  margin: 7px 0 0;
+  padding: 0 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  color: var(--ink);
+  font-size: var(--text-lead);
+  font-weight: 560;
+  text-align: left;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.menu-item:active { background: #232c38; }
+
+.menu-danger { color: var(--danger-bright); }
+
+.menu-item:disabled { opacity: 0.45; }
+
+.menu-mode {
+  margin: 4px 0 8px;
+}
+
+@media (max-width: 899.98px) {
+  /*
+    The finger moves the form, because a transform on <dialog> knocks it out of
+    the centered top layer. So the card itself — border, corners, fill, shadow,
+    padding and the scroll — has to live on the form too, or the sheet slides out
+    from under its own frame. The dialog is reduced to a bottom-anchored,
+    non-clipping box.
+  */
+  dialog.modal {
+    margin: auto auto 0;
+    width: calc(100vw - 14px);
+    max-height: calc(100dvh - 24px);
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  dialog.modal > form {
+    border: 1px solid var(--line-strong);
+    border-bottom: 0;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    background: var(--surface);
+    box-shadow: var(--shadow-3);
+    animation: sheet-up var(--dur-3) var(--ease);
+    transition: transform var(--dur-3) var(--ease-spring);
+    touch-action: pan-y;
+  }
+
+  /* Sheets already scroll inside .sheet-body; every other modal scrolls itself,
+     and that scroller has to move with the card. */
+  dialog.modal:not(.sheet) > form {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* The base rule clips the dialog so a long list cannot escape the rounded
+     head; on a phone that clip belongs to the form, which is what travels. */
+  dialog.modal.sheet {
+    overflow: visible;
+    display: flex;
+  }
+
+  .sheet-grab {
+    flex: none;
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 2px;
+  }
+
+  /* A finger-tracked sheet must not fight a transition, and a released one
+     springs back or continues off-screen. */
+  dialog.modal > form.is-sheet-dragging { transition: none; }
+
+  dialog.modal > form.is-sheet-closing {
+    transform: translateY(100%);
+    transition: transform var(--dur-3) var(--ease);
+  }
+
+  /* The page behind steps back for as long as a sheet is up, and comes forward
+     again in step with the finger that is putting the sheet away. */
+  body.sheet-open #app {
+    transform: scale(calc(1 - 0.015 * var(--sheet-lift, 1)));
+    border-radius: calc(14px * var(--sheet-lift, 1));
+    overflow: hidden;
+    transition: transform var(--dur-3) var(--ease), border-radius var(--dur-3) var(--ease);
+  }
+
+  body.sheet-open.sheet-dragging #app { transition: none; }
+
+  /* Help is centered and never dragged, so it keeps the card on the dialog. */
+  dialog.modal.help {
+    margin: auto;
+    width: min(22rem, calc(100vw - 40px));
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-xl);
+    padding: 16px 16px 18px;
+    background: var(--surface);
+    box-shadow: var(--shadow-3);
+    overflow: auto;
+  }
+
+  /* Nothing moves here, so the form stays a plain container. */
+  dialog.modal.help > form {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    max-height: none;
+    overflow: visible;
+    background: transparent;
+    box-shadow: none;
+    animation: help-in var(--dur-2) var(--ease);
+    transition: none;
+  }
+
+  dialog.modal.help .sheet-grab { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.sheet-open #app { transform: none; }
+}

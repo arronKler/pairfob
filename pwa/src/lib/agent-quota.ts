@@ -43,7 +43,14 @@ export function parseAgentQuota(value: unknown): AgentQuota[] {
     return v as unknown as AgentQuota;
   });
 }
-export function quotaIsStale(q: AgentQuota, now = Date.now()): boolean {
+/**
+ * What a staleness check reads. A published read-only snapshot satisfies it as
+ * well as a freshly parsed one, so a predicate never forces a caller to hand
+ * over writable quota data.
+ */
+export type QuotaRead = Omit<AgentQuota, "windows"> & { windows: readonly QuotaWindow[] };
+
+export function quotaIsStale(q: QuotaRead, now = Date.now()): boolean {
   return q.status === "stale" || now / 1000 - q.observed_at >= 900 || q.observed_at > now / 1000 + 60
     || q.windows.some((w) => w.resets_at > 0 && w.resets_at <= now / 1000);
 }

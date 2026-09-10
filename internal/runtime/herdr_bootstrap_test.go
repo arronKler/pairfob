@@ -194,6 +194,19 @@ func TestRealHerdrBootstrapWhenRequested(t *testing.T) {
 	t.Setenv("HERDR_CONFIG_PATH", configPath)
 	t.Setenv("HERDR_SOCKET_PATH", socket)
 	t.Setenv("HERDR_CLIENT_SOCKET_PATH", filepath.Join(dir, "client.sock"))
+	if os.Getenv("PAIRFOB_TEST_REAL_HERDR_SLOW_SHELL") == "1" {
+		shell := filepath.Join(dir, "slow-shell")
+		if err := os.WriteFile(filepath.Join(dir, ".zshrc"), []byte("sleep 3\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(shell, []byte("#!/bin/sh\nexport ZDOTDIR="+dir+"\nexec /bin/zsh -d -i\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		config := "[terminal]\ndefault_shell = \"" + shell + "\"\nshell_mode = \"non_login\"\n"
+		if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	var serverLaunched atomic.Bool
 	stop := func() {

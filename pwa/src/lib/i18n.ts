@@ -13,6 +13,31 @@ export type CopyKey = keyof typeof zh;
 
 /** Tests skip `initI18n`; production calls it first. Default matches the previous PWA. */
 let current: Lang = "zh";
+let langRevisionCounter = 0;
+let langListeners: Set<() => void> | null = null;
+
+/**
+ * Language subscription for mounted copy. Copy lives in the React tree, so a
+ * screen whose text is language-dependent re-renders on this revision instead
+ * of a global repaint. The revision advances on every applied language action,
+ * including auto -> explicit with the same resolved language: the selected
+ * preference control must re-render even when the resolved copy is unchanged.
+ */
+export function langRevision(): number {
+  return langRevisionCounter;
+}
+
+export function subscribeLang(listener: () => void): () => void {
+  langListeners ??= new Set();
+  langListeners.add(listener);
+  return () => langListeners?.delete(listener);
+}
+
+function notifyLang(): void {
+  langRevisionCounter += 1;
+  if (!langListeners?.size) return;
+  for (const listener of [...langListeners]) listener();
+}
 
 function readStored(): Lang | null {
   try {
@@ -101,6 +126,7 @@ function syncServiceWorkerLang(): void {
 export function setLang(next: Lang): Lang {
   current = next;
   applyDocumentLang();
+  notifyLang();
   return current;
 }
 

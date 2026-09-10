@@ -35,7 +35,9 @@ bun test plugin/herdr/plugin.test.ts
 (
   cd pwa
   bun test src
+  bun run test:qa
   bun run typecheck
+  bun run typecheck:qa
   bun run build
 )
 

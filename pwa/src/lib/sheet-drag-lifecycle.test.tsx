@@ -2,8 +2,8 @@ import { happy, resetTestDOM } from "../../test-support/boot-dom";
 import { closeTestDialogs } from "../../test-support/close-dialogs";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
-import { askCreateTab } from "./operation-forms";
-import { bindSheetDrag } from "./sheet-drag";
+import { askCreateTab } from "../features/operations/operation-forms";
+import { bindSheetDrag } from "../shared/ui/overlay/sheet-drag";
 
 beforeEach(resetTestDOM);
 afterEach(closeTestDialogs);

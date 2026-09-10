@@ -56,7 +56,7 @@ export function prunePinnedAt(current: PinnedAt, liveIds: Iterable<string>): Pin
   return changed ? out : current;
 }
 
-export function rankAgents(agents: AgentCard[], touchedAt: TouchedAt = {}, pinnedAt: PinnedAt = {}): AgentCard[] {
+export function rankAgents(agents: readonly AgentCard[], touchedAt: TouchedAt = {}, pinnedAt: PinnedAt = {}): AgentCard[] {
   return [...agents].sort((a, b) => {
     const pinnedDelta = Number(paneIsPinned(pinnedAt, b.paneId)) - Number(paneIsPinned(pinnedAt, a.paneId));
     if (pinnedDelta !== 0) return pinnedDelta;
@@ -67,7 +67,7 @@ export function rankAgents(agents: AgentCard[], touchedAt: TouchedAt = {}, pinne
 }
 
 /** New panes and status changes count as the latest operation. */
-export function nextTouchedAt(previous: AgentCard[], next: AgentCard[], current: TouchedAt, now = Date.now()): TouchedAt {
+export function nextTouchedAt(previous: readonly AgentCard[], next: readonly AgentCard[], current: TouchedAt, now = Date.now()): TouchedAt {
   const prevStatus = new Map(previous.map((agent) => [agent.paneId, agent.status]));
   const live = new Set<string>();
   const out: TouchedAt = { ...current };
@@ -124,7 +124,7 @@ function groupTouched(group: AgentGroup, touchedAt: TouchedAt): number {
 }
 
 export function groupAgents(
-  agents: AgentCard[],
+  agents: readonly AgentCard[],
   mode: ListGroup,
   touchedAt: TouchedAt = {},
   pinnedAt: PinnedAt = {},
@@ -172,17 +172,41 @@ export function groupAgents(
   );
 }
 
+/**
+ * Accordion defaults over the group order a list actually displays.
+ *
+ * The fold belongs to the rendered model: a group that is not on screen has no
+ * entry, and "first group open" (two when a pinned section leads) is a property
+ * of that order, not of the record.
+ */
+export function syncCollapsedForIds(
+  groupIds: string[],
+  current: Record<string, boolean>,
+): Record<string, boolean> {
+  const next: Record<string, boolean> = {};
+  const openCount = groupIds[0] === PINNED_GROUP_ID ? 2 : 1;
+  groupIds.forEach((groupId, index) => {
+    next[groupId] = current[groupId] ?? index >= openCount;
+  });
+  return next;
+}
+
+export function toggleCollapsedForIds(
+  groupIds: string[],
+  current: Record<string, boolean>,
+  groupId: string,
+): Record<string, boolean> {
+  const synced = syncCollapsedForIds(groupIds, current);
+  if (!groupIds.includes(groupId)) return synced;
+  return { ...synced, [groupId]: !synced[groupId] };
+}
+
 /** First group starts open; a leading pinned section also leaves the next group open. */
 export function syncGroupCollapsed(
   groups: AgentGroup[],
   current: Record<string, boolean>,
 ): Record<string, boolean> {
-  const next: Record<string, boolean> = {};
-  const openCount = groups[0]?.id === PINNED_GROUP_ID ? 2 : 1;
-  groups.forEach((group, index) => {
-    next[group.id] = current[group.id] ?? index >= openCount;
-  });
-  return next;
+  return syncCollapsedForIds(groups.map((group) => group.id), current);
 }
 
 export function toggleGroupCollapsed(
@@ -190,7 +214,5 @@ export function toggleGroupCollapsed(
   current: Record<string, boolean>,
   groupId: string,
 ): Record<string, boolean> {
-  const synced = syncGroupCollapsed(groups, current);
-  if (!(groupId in synced)) return synced;
-  return { ...synced, [groupId]: !synced[groupId] };
+  return toggleCollapsedForIds(groups.map((group) => group.id), current, groupId);
 }

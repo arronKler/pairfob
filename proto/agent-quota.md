@@ -41,9 +41,22 @@ The UI hides percentages for expired samples and samples older than 15 minutes.
   across Copilot hosts/apps files, then `gh auth token --hostname github.com`
   only when no Copilot token exists. Ambiguous accounts require explicit
   selection. Enterprise tokens are never sent to github.com.
-- Cursor: reads the desktop app's access token from `state.vscdb` using
-  `sqlite3 -readonly`, then queries `https://cursor.com/api/usage-summary`.
-  Requires the desktop login and sqlite3. No browser-cookie collection.
+- Cursor: reads the Cursor CLI login, then GETs
+  `https://cursor.com/api/usage-summary`. No editor or sqlite3 is required.
+  `CURSOR_AUTH_TOKEN` takes precedence. Otherwise, the CLI's default store is
+  macOS Keychain (`cursor-access-token`, account `cursor-user`), or the CLI's
+  `auth.json` file on other platforms. `AGENT_CLI_CREDENTIAL_STORE=file`
+  explicitly selects the file on macOS too; `memory` has no readable login.
+  File paths follow the CLI: macOS `~/.cursor/auth.json`, Linux
+  `$XDG_CONFIG_HOME/cursor/auth.json` (default `~/.config/cursor/auth.json`),
+  Windows `%APPDATA%/Cursor/auth.json`. `CURSOR_CONFIG_DIR` does not move CLI
+  credentials. Pairfob must inherit the same credential-store environment as
+  the CLI. A missing or invalid selected store never falls back to another
+  account. Keychain reads prohibit interaction. Missing credentials report
+  `not_logged_in`; expired or inaccessible credentials report `auth_required`.
+  API-key-only credentials and
+  custom API endpoints are unsupported. No API-key exchange, token refresh,
+  model turn, browser-cookie collection, or credential write occurs.
 - Antigravity: queries the already-running, same-user app/CLI through
   loopback listener ports attributed to its PID using `ps` and `lsof`.
   Uses grouped quota summaries, then legacy model quotas. No app launch,
@@ -75,6 +88,31 @@ The daemon caches a complete read for 60 seconds. Concurrent refreshes return
 produce a provider status and do not expose raw subprocess output. The UI has
 an explicit refresh button and does not poll in the background. Older daemons
 return `unknown_op`, displayed as an upgrade prompt.
+
+## Cursor CLI login
+
+Run `cursor-agent login` as the daemon user. The CLI browser login is sufficient;
+the Cursor editor is not used. A locked or inaccessible macOS Keychain stays
+`auth_required` without opening a dialog. If the Keychain cannot be made readable,
+the CLI also supports file storage:
+
+```sh
+export AGENT_CLI_CREDENTIAL_STORE=file
+cursor-agent login
+```
+
+Use the same environment for subsequent Cursor CLI sessions and Pairfob. For a
+background Pairfob service, run `pairfob service install` from the configured
+shell to persist this store selector in launchd/systemd. Login tokens and API
+keys are never written into the service definition. If installation sees an
+explicit token, API key, or custom endpoint, it records only a nonsecret
+`PAIRFOB_CURSOR_QUOTA_NO_STORED_LOGIN=1` marker: without the explicit credential,
+the service reports `unsupported` instead of borrowing a saved account. To
+switch that service to the CLI's saved login, clear those environment overrides
+(including the marker if present in the installing shell), log in, and reinstall
+the service definition. Restarting an existing
+service alone does not change its stored environment. API-key-only login
+requires an interactive CLI login before quota can be read.
 
 ## Optional Claude statusline fallback
 

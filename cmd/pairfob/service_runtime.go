@@ -26,6 +26,18 @@ func serviceRuntimeEnvironment() [][2]string {
 		}
 		out = append(out, [2]string{key, value})
 	}
+	// Cursor CLI's file/memory selector is not a path or a credential. Preserve
+	// it for background quota reads, but never persist Cursor tokens or API keys.
+	if mode := os.Getenv("AGENT_CLI_CREDENTIAL_STORE"); mode == "file" || mode == "memory" || mode == "default" {
+		out = append(out, [2]string{"AGENT_CLI_CREDENTIAL_STORE", mode})
+	}
+	// Omitting a transient credential must not select another saved account.
+	// Only a local marker survives installation; no secret or custom URL does.
+	endpoint := strings.TrimRight(os.Getenv("CURSOR_API_ENDPOINT"), "/")
+	if os.Getenv("CURSOR_AUTH_TOKEN") != "" || os.Getenv("CURSOR_API_KEY") != "" ||
+		(endpoint != "" && endpoint != "https://api2.cursor.sh") || os.Getenv("PAIRFOB_CURSOR_QUOTA_NO_STORED_LOGIN") == "1" {
+		out = append(out, [2]string{"PAIRFOB_CURSOR_QUOTA_NO_STORED_LOGIN", "1"})
+	}
 	// Resolve against the installer's PATH before launchd/systemd replace it.
 	if binary, err := runtimeapi.ResolveHerdrBinary(); err == nil {
 		out = append(out, [2]string{"HERDR_BIN", binary})

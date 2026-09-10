@@ -43,6 +43,10 @@
       "type": "string",
       "pattern": "^term_[0-9a-f]{32}$"
     },
+    "mediaHandle": {
+      "type": "string",
+      "pattern": "^media_[0-9a-f]{32}$"
+    },
     "terminalSequence": {
       "type": "integer",
       "minimum": 1
@@ -434,6 +438,50 @@
       },
       "additionalProperties": false
     },
+    "workspaceMediaKind": {
+      "enum": ["image", "video", "audio", "download"]
+    },
+    "workspaceMediaOpenResult": {
+      "type": "object",
+      "required": ["handle", "path", "kind", "mime", "size", "modified_ms", "sha256", "expires_ms", "chunk_bytes", "max_bytes", "max_pixels", "width", "height"],
+      "properties": {
+        "handle": { "$ref": "#/$defs/mediaHandle" },
+        "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "kind": { "$ref": "#/$defs/workspaceMediaKind" },
+        "mime": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "size": { "type": "integer", "minimum": 0, "maximum": 33554432 },
+        "modified_ms": { "type": "integer" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "expires_ms": { "type": "integer", "minimum": 0 },
+        "chunk_bytes": { "const": 65536 },
+        "max_bytes": { "type": "integer", "minimum": 1, "maximum": 33554432 },
+        "max_pixels": { "type": "integer", "minimum": 1 },
+        "width": { "type": "integer", "minimum": 0, "maximum": 8192 },
+        "height": { "type": "integer", "minimum": 0, "maximum": 8192 }
+      },
+      "additionalProperties": false
+    },
+    "workspaceMediaReadResult": {
+      "type": "object",
+      "required": ["handle", "offset", "length", "bytes", "eof"],
+      "properties": {
+        "handle": { "$ref": "#/$defs/mediaHandle" },
+        "offset": { "type": "integer", "minimum": 0, "maximum": 33554432 },
+        "length": { "type": "integer", "minimum": 0, "maximum": 65536 },
+        "bytes": { "type": "string", "maxLength": 87384, "contentEncoding": "base64" },
+        "eof": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "workspaceMediaCloseResult": {
+      "type": "object",
+      "required": ["handle", "closed"],
+      "properties": {
+        "handle": { "$ref": "#/$defs/mediaHandle" },
+        "closed": { "const": true }
+      },
+      "additionalProperties": false
+    },
     "gitChange": {
       "type": "object",
       "required": ["path", "original_path", "index", "worktree"],
@@ -753,6 +801,9 @@
             "WorkspaceOpen",
             "WorkspaceList",
             "WorkspaceRead",
+            "WorkspaceMediaOpen",
+            "WorkspaceMediaRead",
+            "WorkspaceMediaClose",
             "WorkspaceRename",
             "WorkspaceDelete",
             "GitStatus",
@@ -1270,6 +1321,55 @@
                   "session": { "$ref": "#/$defs/session" },
                   "pane_id": { "$ref": "#/$defs/paneId" },
                   "path": { "type": "string", "minLength": 1, "maxLength": 4096 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceMediaOpen" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id", "path"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "path": { "type": "string", "minLength": 1, "maxLength": 4096 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceMediaRead" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["handle", "offset", "length"],
+                "properties": {
+                  "handle": { "$ref": "#/$defs/mediaHandle" },
+                  "offset": { "type": "integer", "minimum": 0, "maximum": 33554432 },
+                  "length": { "type": "integer", "minimum": 1, "maximum": 65536 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceMediaClose" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["handle"],
+                "properties": {
+                  "handle": { "$ref": "#/$defs/mediaHandle" }
                 },
                 "additionalProperties": false
               }

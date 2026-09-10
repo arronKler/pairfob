@@ -10,6 +10,7 @@ export async function resetBoardTestDOM(): Promise<void> {
     WheelEvent: happy.WheelEvent,
     KeyboardEvent: happy.KeyboardEvent,
     TouchEvent: happy.TouchEvent,
+    CompositionEvent: happy.CompositionEvent,
     ResizeObserver: happy.ResizeObserver,
     MutationObserver: happy.MutationObserver,
     DOMParser: happy.DOMParser,

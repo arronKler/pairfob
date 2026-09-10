@@ -3,11 +3,11 @@ package phone
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/curve25519"
@@ -31,6 +31,11 @@ type Client struct {
 	c2s, s2c    *aead.Direction
 	Established bool
 	Events      []json.RawMessage
+
+	sendMu     sync.Mutex
+	muxMu      sync.Mutex
+	muxOnce    sync.Once
+	muxPending map[string]chan rpcOutcome
 }
 
 func (c *Client) recv(timeout time.Duration) (envelope.Frame, error) {
@@ -289,24 +294,30 @@ func (c *Client) Resume(daemonID string) error {
 }
 
 func (c *Client) RPC(op string, params any) (json.RawMessage, error) {
+	return c.RPCTimeout(op, params, 3*time.Second)
+}
+
+func (c *Client) RPCTimeout(op string, params any, timeout time.Duration) (json.RawMessage, error) {
+	c.muxMu.Lock()
+	muxed := c.muxPending != nil
+	c.muxMu.Unlock()
+	if muxed {
+		return c.MuxRPC(op, params, timeout)
+	}
 	if !c.Established || c.c2s == nil || c.s2c == nil {
 		return nil, errors.New("session not established")
 	}
-	var idb [8]byte
-	if _, err := io.ReadFull(rand.Reader, idb[:]); err != nil {
-		return nil, err
-	}
-	id := "req_" + hex.EncodeToString(idb[:])
-	body := sessionkeys.MustJSON(map[string]any{"v": 1, "id": id, "op": op, "params": params})
-	payload, err := aead.Seal(c.c2s, c.routeID, body)
+	id, err := c.sendRPC(op, params)
 	if err != nil {
 		return nil, err
 	}
-	if err := c.Conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: c.routeID, Payload: payload}); err != nil {
-		return nil, err
-	}
+	deadline := time.Now().Add(timeout)
 	for {
-		f, err := c.recv(3 * time.Second)
+		remain := time.Until(deadline)
+		if remain <= 0 {
+			return nil, errors.New("timeout")
+		}
+		f, err := c.recv(remain)
 		if err != nil {
 			return nil, err
 		}

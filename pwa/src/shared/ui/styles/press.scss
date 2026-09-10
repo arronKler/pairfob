@@ -1,0 +1,110 @@
+// Shared cross-cutting press feedback (generic, screen-agnostic): the ripple
+// surface, the vibration stand-in and the 44px control press states. Emitted
+// through mixins by the motion composition so the rules stay with shared.
+
+@mixin press-feedback {
+  /* --- Ripple ------------------------------------------------------------------ */
+
+  /* The delegated surface in bindRippleSurface() needs these ready before the
+     press, so the ink cannot escape a rounded corner on its first frame. */
+  .ripple-host,
+  .btn-primary,
+  .btn-scan,
+  .send-btn,
+  .card-main,
+  .menu-item {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ripple {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    background: currentColor;
+    opacity: 0.2;
+    transform: translate(-50%, -50%) scale(0);
+    animation: ripple-out 520ms var(--ease) forwards;
+  }
+
+  @keyframes ripple-out {
+    to {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 0;
+    }
+  }
+
+  /* --- Vibration stand-in ------------------------------------------------------ */
+
+  /*
+    iOS Safari has no navigator.vibrate, so the pad's main feedback channel is
+    silent there. A brightness pulse says the same thing and, unlike a nudge,
+    composes with the :active scale the keycap is already holding — which also
+    makes it safe under reduced motion.
+  */
+  .tap-ack {
+    animation: tap-ack var(--dur-1) var(--ease);
+  }
+
+  @keyframes tap-ack {
+    from { filter: brightness(1.45); }
+    to { filter: brightness(1); }
+  }
+
+  /* --- Press states for the controls that had none ---------------------------- */
+
+  /*
+    All 44px targets, all previously inert on press. One rule so they cannot drift
+    apart from .btn and .key, which already sink on touch.
+  */
+  .text-link:active:not(:disabled),
+  .back:active:not(:disabled),
+  .seg-item:active:not(:disabled),
+  .sheet-close:active,
+  .agent-older:active:not(:disabled),
+  .workspace-crumb:active:not(:disabled) {
+    transform: scale(0.965);
+    background: var(--surface-2);
+  }
+
+  .text-link,
+  .back,
+  .seg-item,
+  .sheet-close,
+  .agent-older,
+  .workspace-crumb {
+    transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+  }
+
+  .text-link:focus-visible,
+  .back:focus-visible,
+  .seg-item:focus-visible,
+  .sheet-close:focus-visible,
+  .agent-older:focus-visible,
+  .workspace-crumb:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@mixin press-reduced-ripple {
+  .ripple { display: none; }
+}
+
+@mixin press-reduced-tapack {
+  @keyframes tap-ack {
+    from { filter: brightness(1.45); }
+    to { filter: brightness(1); }
+  }
+}
+
+@mixin press-reduced-press {
+  .text-link:active:not(:disabled),
+  .back:active:not(:disabled),
+  .seg-item:active:not(:disabled),
+  .sheet-close:active,
+  .agent-older:active:not(:disabled),
+  .workspace-crumb:active:not(:disabled) {
+    transform: none;
+  }
+}

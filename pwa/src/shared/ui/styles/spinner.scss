@@ -1,0 +1,18 @@
+// Shared spinner primitive (Spinner component; used by operations, chat,
+// settings and the boot screen). Emitted at the boot slot position.
+@mixin spinner {
+  .spinner {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 3px solid var(--line-strong);
+    border-top-color: var(--accent);
+    animation: spin 0.85s linear infinite;
+    display: inline-block;
+    flex: none;
+  }
+
+  .btn .spinner { width: 16px; height: 16px; border-width: 2px; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+}

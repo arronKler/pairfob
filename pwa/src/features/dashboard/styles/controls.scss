@@ -1,0 +1,20 @@
+// Dashboard herd controls: the herd-list-specific section spacing and the
+// completion count control. The generic status line, dots/pulse, segmented
+// control, section/group headings and empty state live in shared/ui/styles.
+@mixin herd-list-context {
+  .herd-list .section-title:first-child,
+  .herd-list .herd-group:first-child .group-title {
+    margin-top: 10px;
+  }
+}
+
+@mixin herd-done-count {
+  .done-count {
+    flex: none;
+    margin-left: auto;
+    padding: 0 var(--space-2);
+    color: var(--ok);
+    font-weight: 620;
+    white-space: nowrap;
+  }
+}

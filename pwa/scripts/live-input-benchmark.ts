@@ -1,4 +1,4 @@
-import { LiveInputPump } from "../src/ui/session/live-input";
+import { LiveInputPump } from "../src/features/session/guided/live-input";
 
 type Timer = { at: number; run: () => void; cancelled: boolean };
 type Ack = { at: number; resolve: () => void };

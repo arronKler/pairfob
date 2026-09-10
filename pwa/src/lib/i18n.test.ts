@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import "../../test-support/boot-dom";
 import { copyKeys, detectLang, lang, langPref, setLang, setLangPref, t } from "./i18n";
 import { en } from "./i18n-en";
 import { zh } from "./i18n-zh";

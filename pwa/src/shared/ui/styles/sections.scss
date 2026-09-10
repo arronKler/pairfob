@@ -1,0 +1,58 @@
+// Shared section/group headings and empty-state primitives.
+@mixin sections {
+  .section-title,
+  .group-title {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    margin: 24px 2px 10px;
+    font-size: var(--text-secondary);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .group-title {
+    width: 100%;
+    min-height: 44px;
+    margin: var(--space-2) 0 2px;
+    padding: 0 2px;
+    align-items: center;
+    -webkit-touch-callout: none;
+    user-select: none;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-size: var(--text-body);
+  }
+
+  .group-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .section-count {
+    font: 600 var(--text-caption) var(--mono);
+    color: var(--warn);
+    background: rgba(255, 178, 36, 0.14);
+    border-radius: 99px;
+    padding: 1px 8px;
+  }
+
+  .empty {
+    margin: var(--space-2) 0 0;
+    padding: 26px 18px;
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--r-lg);
+    text-align: center;
+  }
+
+  .empty-title { margin: 0; font-size: var(--text-subhead); font-weight: 600; color: var(--ink); }
+
+  .empty-sub { margin: 6px 0 0; font-size: var(--text-body); color: var(--muted); line-height: 1.55; }
+
+  .empty-action { margin: var(--space-4) auto 0; }
+}

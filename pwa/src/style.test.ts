@@ -6,8 +6,9 @@ const css = compile(fileURLToPath(new URL("./style.scss", import.meta.url)), { s
 const html = await Bun.file(new URL("../index.html", import.meta.url)).text();
 const manifest = JSON.parse(await Bun.file(new URL("../public/manifest.webmanifest", import.meta.url)).text());
 const main = await Bun.file(new URL("../src/main.ts", import.meta.url)).text();
-const viewportSrc = await Bun.file(new URL("./viewport.ts", import.meta.url)).text();
-const stateSrc = await Bun.file(new URL("./state.ts", import.meta.url)).text();
+const boot = await Bun.file(new URL("./app/bootstrap.ts", import.meta.url)).text();
+const viewportSrc = await Bun.file(new URL("./app/viewport.ts", import.meta.url)).text();
+const preferencesSrc = await Bun.file(new URL("./features/settings/preferences-store.ts", import.meta.url)).text();
 
 function color(token: string): string {
   const match = css.match(new RegExp(`--${token}:\\s*(#[0-9a-f]{6})`, "i"));
@@ -308,7 +309,11 @@ describe("UI accessibility guardrails", () => {
     expect(manifest.icons.some((icon: { sizes?: string }) => icon.sizes === "512x512")).toBe(true);
     expect(manifest.icons.some((icon: { purpose?: string }) => icon.purpose === "maskable")).toBe(true);
     expect(rule("html, body")).toMatch(/touch-action:\s*pan-x pan-y pinch-zoom/);
-    expect(main).toContain("bindLegacyGestureBoundary(document)");
+    // The browser entry is styles plus one lifecycle call; the bindings live in
+    // the boot module that owns the page lifetime.
+    expect(main).toContain('import "./style.scss"');
+    expect(main).toContain("startApplication()");
+    expect(boot).toContain("bindLegacyGestureBoundary(document)");
   });
 
   test("mobile form controls do not trigger iOS focus zoom", () => {
@@ -379,8 +384,8 @@ describe("UI accessibility guardrails", () => {
   test("a finger pan does not pin the terminal to the newest row", () => {
     expect(viewportSrc).toContain('addEventListener("scroll", applyVisualViewport)');
     expect(viewportSrc).not.toMatch(/visualViewport\?\.addEventListener\("scroll", resized\)/);
-    expect(main).toContain("bindVisualViewport");
-    expect(main).toContain("stickBottom");
+    expect(boot).toContain("bindVisualViewport");
+    expect(boot).toContain("stickBottom");
   });
 
   test("agent-chat stream is a definite box WebKit can pan", () => {
@@ -518,15 +523,15 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("the phone keeps the TUI grid and only wraps when the reader asks", () => {
-    const wrap = stateSrc.slice(stateSrc.indexOf("function loadTermWrap"));
-    expect(wrap).toContain('getItem(TERM_WRAP_KEY) === "1"');
+    const wrap = preferencesSrc.slice(preferencesSrc.indexOf("function loadTermWrap"));
+    expect(wrap).toContain('read(TERM_WRAP_KEY) === "1"');
     expect(wrap).not.toContain("return !isDesk()");
   });
 
   test("the live terminal defaults to 80 columns with a side pan", () => {
-    const fit = stateSrc.slice(stateSrc.indexOf("function loadTermFit"));
-    expect(fit).toContain('getItem(TERM_FIT_KEY) === "fit" ? "fit" : "pan"');
-    const cols = stateSrc.slice(stateSrc.indexOf("function loadTermCols"));
+    const fit = preferencesSrc.slice(preferencesSrc.indexOf("function loadTermFit"));
+    expect(fit).toContain('read(TERM_FIT_KEY) === "fit" ? "fit" : "pan"');
+    const cols = preferencesSrc.slice(preferencesSrc.indexOf("function loadTermCols"));
     expect(cols).toContain("TERM_COL_PRESETS.includes(raw as TermCols)");
     expect(cols).toContain("return 80");
   });

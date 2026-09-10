@@ -20,22 +20,6 @@ type claudeQuotaAuth struct {
 	} `json:"claudeAiOauth"`
 }
 
-// Security.framework is called with interaction forbidden: a phone refresh
-// must not open a Keychain password/permission dialog on the unattended Mac.
-const quotaKeychainScript = `ObjC.import('Security');
-function run(argv) {
- const q = $.NSMutableDictionary.alloc.init;
- q.setObjectForKey($.kSecClassGenericPassword, $.kSecClass);
- q.setObjectForKey($(argv[0]), $.kSecAttrService);
- q.setObjectForKey($.kCFBooleanTrue, $.kSecReturnData);
- q.setObjectForKey($.kSecMatchLimitOne, $.kSecMatchLimit);
- q.setObjectForKey($.kSecUseAuthenticationUIFail, $.kSecUseAuthenticationUI);
- const result = Ref();
- const status = $.SecItemCopyMatching(q, result);
- if (status !== 0) return '';
- return ObjC.unwrap($.NSString.alloc.initWithDataEncoding(result[0], $.NSUTF8StringEncoding));
-}`
-
 func claudeQuotaCredentials(ctx context.Context) (claudeQuotaAuth, string) {
 	var auth claudeQuotaAuth
 	path, err := ClaudeQuotaPath()
@@ -44,7 +28,7 @@ func claudeQuotaCredentials(ctx context.Context) (claudeQuotaAuth, string) {
 	}
 	raw, err := quotaFile(filepath.Join(filepath.Dir(path), ".credentials.json"), 1024*1024)
 	if os.IsNotExist(err) && goruntime.GOOS == "darwin" && os.Getenv("CLAUDE_CONFIG_DIR") == "" {
-		raw, err = quotaCommand(ctx, 1024*1024, "/usr/bin/osascript", "-l", "JavaScript", "-e", quotaKeychainScript, "Claude Code-credentials")
+		raw, err = quotaKeychainRead(ctx, "Claude Code-credentials", "", 1024*1024)
 	}
 	if err != nil || len(raw) == 0 || json.Unmarshal(raw, &auth) != nil {
 		return auth, "auth_required"

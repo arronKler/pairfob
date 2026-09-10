@@ -1,238 +1,32 @@
+// Motion composition. Cross-cutting feedback that is not owned by any one screen.
+// The shared press/ripple rules come from shared/ui/styles/press; the App screen
+// view transitions come from app/layout/styles/transitions. The mixins are
+// emitted in the original cascade order so the compiled CSS is unchanged; the
+// App view-transition/fallback slot stays last, after every feature stylesheet.
+@use "../shared/ui/styles/press";
+@use "../app/layout/styles/transitions";
+
 /* --- Motion primitives ---------------------------------------------------------
    Cross-cutting feedback that is not owned by any one screen: the press ripple,
    the visual stand-in for a missing vibration, and the press states for controls
    whose own stylesheet only described their resting look. Imported last so a
    press state can darken a selected control.
    ------------------------------------------------------------------------------ */
+@include press.press-feedback();
 
-/* --- Ripple ------------------------------------------------------------------ */
+@include transitions.app-view-transitions();
 
-/* The delegated surface in bindRippleSurface() needs these ready before the
-   press, so the ink cannot escape a rounded corner on its first frame. */
-.ripple-host,
-.btn-primary,
-.btn-scan,
-.send-btn,
-.card-main,
-.menu-item {
-  position: relative;
-  overflow: hidden;
-}
-
-.ripple {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  background: currentColor;
-  opacity: 0.2;
-  transform: translate(-50%, -50%) scale(0);
-  animation: ripple-out 520ms var(--ease) forwards;
-}
-
-@keyframes ripple-out {
-  to {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0;
-  }
-}
-
-/* --- Vibration stand-in ------------------------------------------------------ */
-
-/*
-  iOS Safari has no navigator.vibrate, so the pad's main feedback channel is
-  silent there. A brightness pulse says the same thing and, unlike a nudge,
-  composes with the :active scale the keycap is already holding — which also
-  makes it safe under reduced motion.
-*/
-.tap-ack {
-  animation: tap-ack var(--dur-1) var(--ease);
-}
-
-@keyframes tap-ack {
-  from { filter: brightness(1.45); }
-  to { filter: brightness(1); }
-}
-
-/* --- Press states for the controls that had none ---------------------------- */
-
-/*
-  All 44px targets, all previously inert on press. One rule so they cannot drift
-  apart from .btn and .key, which already sink on touch.
-*/
-.text-link:active:not(:disabled),
-.back:active:not(:disabled),
-.seg-item:active:not(:disabled),
-.sheet-close:active,
-.agent-older:active:not(:disabled),
-.workspace-crumb:active:not(:disabled) {
-  transform: scale(0.965);
-  background: var(--surface-2);
-}
-
-.text-link,
-.back,
-.seg-item,
-.sheet-close,
-.agent-older,
-.workspace-crumb {
-  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
-}
-
-.text-link:focus-visible,
-.back:focus-visible,
-.seg-item:focus-visible,
-.sheet-close:focus-visible,
-.agent-older:focus-visible,
-.workspace-crumb:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* --- Screen transitions -------------------------------------------------------
-   Only a declared navigation sets html[data-transition] (see ui/transition.ts),
-   so none of this can fire on a poll repaint. Push travels in, pop travels back
-   out, and a sideways move only cross-fades — which is what the browser already
-   does by default, so `fade` needs no rules of its own.
-   ------------------------------------------------------------------------------ */
-
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: var(--dur-4);
-  animation-timing-function: var(--ease);
-}
-
-html[data-transition="push"]::view-transition-old(root) { animation-name: screen-behind; }
-html[data-transition="push"]::view-transition-new(root) { animation-name: screen-from-right; }
-html[data-transition="pop"]::view-transition-old(root) { animation-name: screen-to-right; }
-html[data-transition="pop"]::view-transition-new(root) { animation-name: screen-forward; }
-
-/* An expanding tile carries the travel by itself, so the screens only cross-fade. */
-::view-transition-group(pane-title),
-::view-transition-group(pane-open) { animation-duration: var(--dur-4); }
-
-@keyframes screen-from-right {
-  from { transform: translateX(100%); }
-  to { transform: none; }
-}
-
-@keyframes screen-to-right {
-  from { transform: none; }
-  to { transform: translateX(100%); }
-}
-
-/* The screen being covered steps back rather than leaving. */
-@keyframes screen-behind {
-  from { transform: none; opacity: 1; }
-  to { transform: translateX(-22%) scale(0.96); opacity: 0.4; }
-}
-
-@keyframes screen-forward {
-  from { transform: translateX(-22%) scale(0.96); opacity: 0.4; }
-  to { transform: none; opacity: 1; }
-}
-
-/* Fallback for engines without View Transitions: only the arriving screen
-   moves. Cloning a live terminal grid to animate the old one out would cost
-   more than the effect is worth. */
-html[data-fallback-transition="push"] #app { animation: screen-from-right var(--dur-4) var(--ease); }
-html[data-fallback-transition="pop"] #app { animation: screen-forward var(--dur-4) var(--ease); }
-html[data-fallback-transition="fade"] #app,
-html[data-fallback-transition="expand"] #app { animation: screen-fade var(--dur-3) var(--ease); }
-
-@keyframes screen-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* --- Key flight ---------------------------------------------------------------
-   Keypad and terminal are two separate regions on a phone, so a key that prints
-   nothing (Esc, Ctrl+C) leaves no trace of having been sent. The spark and the
-   caret pulse are that trace; the label names the key the terminal will not echo.
-   ------------------------------------------------------------------------------ */
-
-.key-flight-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 3;
-}
-
-.key-spark {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-}
-
-.key-spark.is-silent {
-  background: var(--warn);
-  box-shadow: 0 0 8px var(--warn);
-}
-
-.key-caret-pulse {
-  position: absolute;
-  width: 10px;
-  height: 16px;
-  margin: -8px 0 0 -2px;
-  border-radius: 2px;
-  background: var(--accent);
-  animation: key-caret-pulse 160ms var(--ease-out) forwards;
-}
-
-@keyframes key-caret-pulse {
-  from { opacity: 0.55; }
-  to { opacity: 0; }
-}
-
-.key-flight-label {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 3px 10px;
-  border-radius: 99px;
-  background: var(--warn);
-  color: var(--accent-ink);
-  font-size: var(--text-caption);
-  font-weight: 640;
-  font-variant-numeric: tabular-nums;
-  animation: key-label-out 600ms var(--ease) forwards;
-}
-
-@keyframes key-label-out {
-  0% { opacity: 0; }
-  14% { opacity: 1; }
-  74% { opacity: 1; }
-  100% { opacity: 0; }
-}
+@include transitions.app-fallback-transitions();
 
 /* --- Reduced motion --------------------------------------------------------- */
-
 @media (prefers-reduced-motion: reduce) {
-  .ripple { display: none; }
+  @include press.press-reduced-ripple();
 
-  /* The spark is travel and is dropped in JS; the caret pulse and the label are
-     information, so they stay as plain fades. */
-  .key-spark { display: none; }
-
-  html[data-fallback-transition] #app { animation: none; }
+  @include transitions.app-transition-reduced();
 
   /* Travel is already absent from tap-ack; state it so the override survives
      someone adding a nudge later. */
-  @keyframes tap-ack {
-    from { filter: brightness(1.45); }
-    to { filter: brightness(1); }
-  }
+  @include press.press-reduced-tapack();
 
-  .text-link:active:not(:disabled),
-  .back:active:not(:disabled),
-  .seg-item:active:not(:disabled),
-  .sheet-close:active,
-  .agent-older:active:not(:disabled),
-  .workspace-crumb:active:not(:disabled) {
-    transform: none;
-  }
+  @include press.press-reduced-press();
 }

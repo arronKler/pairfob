@@ -1,0 +1,24 @@
+// Shared application toast styles (the Feedback primitive's .notice).
+@mixin notice-toast {
+  /* --- Notices / banners ------------------------------------------------------- */
+
+  .notice {
+    font-size: var(--text-lead);
+    line-height: 1.5;
+    margin: var(--space-3) 0 0;
+    padding: 11px 13px;
+    border-radius: var(--r-md);
+  }
+
+  .notice-error {
+    background: rgba(214, 59, 49, 0.12);
+    border: 1px solid rgba(214, 59, 49, 0.35);
+    color: var(--error);
+  }
+
+  .notice-status {
+    background: rgba(110, 168, 254, 0.1);
+    border: 1px solid rgba(110, 168, 254, 0.3);
+    color: var(--accent);
+  }
+}

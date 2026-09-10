@@ -1,0 +1,71 @@
+// Shared navigation primitives: topbar, back/text-link targets and the create pill.
+@mixin navigation {
+  .topbar {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 44px;
+  }
+
+  .topbar-title {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    min-width: 0;
+    min-height: 44px;
+    flex: 1 1 auto;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+
+  .text-link {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--space-1);
+    color: var(--muted);
+    font-size: var(--text-lead);
+    font-weight: 550;
+    border-radius: 8px;
+  }
+
+  .text-link:disabled { opacity: 0.4; }
+
+  .topbar-create {
+    position: relative;
+    isolation: isolate;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 11px 0 9px;
+    background: transparent;
+    color: var(--accent);
+    font-size: var(--text-lead);
+    font-weight: 620;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .topbar-create::after {
+    content: "";
+    position: absolute;
+    inset: 6px 0;
+    border-radius: 999px;
+    background: rgba(110, 168, 254, 0.12);
+    border: 1px solid rgba(110, 168, 254, 0.22);
+    z-index: -1;
+  }
+
+  .topbar-create:active:not(:disabled)::after { background: rgba(110, 168, 254, 0.2); }
+
+  .topbar-create:disabled { opacity: 0.4; }
+}

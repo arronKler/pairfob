@@ -27,6 +27,7 @@ export {
   type PairResult,
 } from "./pair-ws.ts";
 export {
+  MEDIA_OPEN_RPC_TIMEOUT_MS,
   MUTATION_RPC_TIMEOUT_MS,
   READ_RPC_TIMEOUT_MS,
   TERMINAL_RPC_TIMEOUT_MS,
@@ -41,6 +42,21 @@ export {
   type FinishedP2PAttemptObservation,
   type P2PAttemptObservation,
 } from "./session-ws.ts";
+export {
+  MEDIA_CHUNK_BYTES,
+  MEDIA_IMAGE_MAX_BYTES,
+  MEDIA_MAX_BYTES,
+  MEDIA_MAX_DIMENSION,
+  MEDIA_MAX_PIXELS,
+  imageExceedsPixelBudget,
+  parseWorkspaceMediaChunk,
+  parseWorkspaceMediaClose,
+  parseWorkspaceMediaOpen,
+  type WorkspaceMediaChunk,
+  type WorkspaceMediaClose,
+  type WorkspaceMediaKind,
+  type WorkspaceMediaOpen,
+} from "./workspace-media.ts";
 export {
   TerminalFrameAssembler,
   parseTerminalCloseResult,

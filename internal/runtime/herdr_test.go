@@ -133,6 +133,15 @@ func standardReply(request scriptedRequest) scriptedReply {
 		return scriptedReply{Result: map[string]any{"type": "agent_manifest_status", "manifests": []any{
 			map[string]any{"agent": "codex"}, map[string]any{"agent": "claude"},
 		}}}
+	case "pane.process_info":
+		var params struct {
+			PaneID string `json:"pane_id"`
+		}
+		_ = json.Unmarshal(request.Params, &params)
+		return scriptedReply{Result: map[string]any{"type": "pane_process_info", "process_info": map[string]any{
+			"pane_id": params.PaneID, "shell_pid": 42, "foreground_process_group_id": 42,
+			"foreground_processes": []any{map[string]any{"pid": 42}},
+		}}}
 	case "pane.read":
 		return scriptedReply{Result: map[string]any{"type": "pane_read", "read": map[string]any{"text": "ready", "truncated": false}}}
 	case "pane.send_text", "pane.send_keys", "pane.rename", "tab.rename", "workspace.rename", "pane.close", "tab.close", "workspace.close":

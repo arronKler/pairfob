@@ -3,65 +3,14 @@ package runtime
 import (
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"math"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
-	goruntime "runtime"
 	"strings"
 	"time"
-	"unicode/utf16"
 )
 
-func cursorQuotaToken(ctx context.Context) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	dir := os.Getenv("XDG_CONFIG_HOME")
-	if dir == "" {
-		dir = filepath.Join(home, ".config")
-	}
-	if goruntime.GOOS == "darwin" {
-		dir = filepath.Join(home, "Library", "Application Support")
-	}
-	path := filepath.Join(dir, "Cursor", "User", "globalStorage", "state.vscdb")
-	st, err := os.Stat(path)
-	if err != nil || !st.Mode().IsRegular() {
-		return ""
-	}
-	uri := url.URL{Scheme: "file", Path: path}
-	params := url.Values{"mode": {"ro"}}
-	if _, err := os.Stat(path + "-wal"); os.IsNotExist(err) {
-		params.Set("immutable", "1")
-	}
-	uri.RawQuery = params.Encode()
-	raw, err := quotaCommand(ctx, 65536, "sqlite3", "-readonly", uri.String(), "SELECT hex(value) FROM ItemTable WHERE key='cursorAuth/accessToken' LIMIT 1;")
-	if err != nil {
-		return ""
-	}
-	data, err := hex.DecodeString(strings.TrimSpace(string(raw)))
-	if err != nil {
-		return ""
-	}
-	if len(data) > 1 && (data[1] == 0 || (data[0] == 0xff && data[1] == 0xfe)) {
-		if data[0] == 0xff && data[1] == 0xfe {
-			data = data[2:]
-		}
-		if len(data)%2 != 0 {
-			return ""
-		}
-		words := make([]uint16, len(data)/2)
-		for i := range words {
-			words[i] = uint16(data[2*i]) | uint16(data[2*i+1])<<8
-		}
-		return string(utf16.Decode(words))
-	}
-	return string(data)
-}
 func cursorQuotaCookie(token string, now time.Time) string {
 	if len(token) > 16384 {
 		return ""
@@ -94,7 +43,11 @@ func cursorQuotaCookie(token string, now time.Time) string {
 	return "WorkosCursorSessionToken=" + url.QueryEscape(id+"::"+token)
 }
 func readCursorQuota(ctx context.Context) AgentQuota {
-	cookie := cursorQuotaCookie(cursorQuotaToken(ctx), time.Now())
+	token, status := cursorQuotaToken(ctx)
+	if status != "" {
+		return emptyQuota("cursor", "web_api", status)
+	}
+	cookie := cursorQuotaCookie(token, time.Now())
 	if cookie == "" {
 		return emptyQuota("cursor", "web_api", "auth_required")
 	}

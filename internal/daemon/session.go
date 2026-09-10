@@ -77,6 +77,10 @@ func (e *Engine) handleSessionBound(f envelope.Frame) {
 	go e.runSessionRPC(created)
 	if old != nil {
 		stopSessionRPC(old)
+		// SESSION_BOUND retires the old session epoch: drain ITS media. Keyed by
+		// the old pointer, this never touches the new session's media even though
+		// they share the same route.
+		e.closeSessionMedia(old)
 		old.sendMu.Lock()
 		e.wipeSession(old)
 		old.sendMu.Unlock()
@@ -409,6 +413,7 @@ func (e *Engine) failTransportEpoch(s *sess) {
 	e.audit("session_send_failed", map[string]any{"device_id": deviceID, "transport": transport})
 	stopSessionRPC(s)
 	closeSessionTerminal(s)
+	e.closeSessionMedia(s)
 	s.sendMu.Lock()
 	e.wipeSession(s)
 	s.sendMu.Unlock()
@@ -433,6 +438,7 @@ func (e *Engine) closeSession(rid [16]byte, code string, notify bool) {
 	e.mu.Unlock()
 	stopSessionRPC(s)
 	closeSessionTerminal(s)
+	e.closeSessionMedia(s)
 	if notify && code != "" {
 		_ = e.sendSessionFrame(s, envelope.JSON(envelope.TypERROR, rid, envelope.ErrorBody{
 			Code: code, RouteID: hex.EncodeToString(rid[:]), Message: code,
@@ -503,6 +509,7 @@ func (e *Engine) ResetTransport() bool {
 	for _, s := range sessions {
 		stopSessionRPC(s)
 		closeSessionTerminal(s)
+		e.closeSessionMedia(s)
 		s.sendMu.Lock()
 		e.wipeSession(s)
 		s.sendMu.Unlock()

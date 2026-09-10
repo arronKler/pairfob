@@ -67,7 +67,7 @@ export function mapSnapshotAgents(snapshot: SnapshotWire): DashboardAgentCard[] 
 }
 
 /** Keep the open pane if it still exists. Never invent a selection. */
-export function choosePane(current: string, agents: AgentCard[], focused = ""): string {
+export function choosePane(current: string, agents: readonly AgentCard[], focused = ""): string {
   if (current && agents.some((agent) => agent.paneId === current)) return current;
   if (focused && agents.some((agent) => agent.paneId === focused)) return focused;
   return "";

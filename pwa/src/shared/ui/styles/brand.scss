@@ -1,0 +1,29 @@
+// Shared brand mark and the generic status dot primitives (StatusDot/Brand).
+@mixin brand-dots {
+  /* --- Brand ---------------------------------------------------------------- */
+
+  .wordmark {
+    margin: 0;
+    font-size: var(--text-display);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: var(--ink);
+  }
+
+  .brand-dot,
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex: none;
+  }
+
+  .dot { width: 7px; height: 7px; }
+  .dot-live { background: var(--ok); }
+  .dot-warn { background: var(--warn); }
+  .dot-off { background: var(--danger-bright); }
+  .dot-demo { background: var(--muted); }
+}

@@ -1,5 +1,5 @@
 import { TERMINAL_INPUT_CHUNK } from "../src/lib/protocol/terminal";
-import { TerminalCommandPump, type TerminalCommandQueueState } from "../src/ui/full-terminal-command";
+import { TerminalCommandPump, type TerminalCommandQueueState } from "../src/features/session/full-terminal/full-terminal-command";
 
 type PendingAcknowledgement = {
   at: number;

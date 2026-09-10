@@ -1,0 +1,125 @@
+// Generic global reset: element sizing, document/body baseline, accessibility
+// helpers, button reset, focus rings, the shared sheet entrance keyframe and the
+// reduced-motion baseline. Emitted in three mixins so the App shell rules can
+// sit at their exact original cascade positions between them.
+
+@mixin document-baseline {
+  * { box-sizing: border-box; }
+
+  html {
+    height: 100%;
+    height: -webkit-fill-available;
+  }
+
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: pan-x pan-y pinch-zoom;
+    overscroll-behavior: none;
+    text-rendering: optimizeLegibility;
+    /*
+      No screen pans the page itself sideways: the terminal, the board and every
+      chip rail own their horizontal scroller. Without this, one decoration that
+      reaches past the right edge turns the whole list into a page you can drag
+      into a strip of empty background. `clip` rather than `hidden`, which would
+      make the document a scroll container and take vertical scrolling with it.
+    */
+    overflow-x: clip;
+  }
+}
+
+@mixin accessibility-controls {
+  ::selection { background: rgba(110, 168, 254, 0.32); }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  button {
+    font: inherit;
+    border: 0;
+    cursor: pointer;
+    color: inherit;
+    background: none;
+    touch-action: manipulation;
+  }
+
+  /* Author display rules must never override the platform's hidden contract. */
+  [hidden] { display: none !important; }
+
+  button,
+  input,
+  textarea,
+  select,
+  summary,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
+  button:disabled { cursor: not-allowed; }
+
+  button:focus-visible,
+  summary:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@mixin motion-baseline {
+  /* Shared entrance for sheets, panels and toasts. */
+  @keyframes sheet-up {
+    from { transform: translateY(14px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  /* --- Motion sensitivity ------------------------------------------------------------------------- */
+
+  /*
+    Reduce means "stop moving me", not "stop telling me things". Travel and scale
+    drop out; opacity, color and elevation keep a short transition, because the
+    old blanket 0.01ms also erased every status change the color was carrying.
+    Ambient loops and per-screen entrances are switched off next to their own
+    keyframes, so an override always sits with the animation it modifies.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-property: opacity, color, background-color, border-color, box-shadow, fill, stroke !important;
+      transition-duration: var(--dur-1) !important;
+    }
+
+    /* A pulsing dot reports nothing its color does not already say. */
+    .dot-live,
+    .statusline .dot-live,
+    .statusline .dot-warn {
+      animation: none !important;
+    }
+
+    /* Entrances keep the fade and lose the travel. */
+    @keyframes sheet-up {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  }
+}

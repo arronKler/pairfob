@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Direction, DIR_C, DIR_S } from "./aead.ts";
 import { DataFrameChannel } from "./data-channel.ts";
 import { DirectFrameAssembler } from "./direct-frame.ts";
@@ -6,7 +6,7 @@ import { decode, Typ, type Frame } from "./envelope.ts";
 import { ProtocolError } from "./errors.ts";
 import type { FrameChannel, FrameChannelKind } from "./frame-channel.ts";
 import { heartbeatPayload } from "./frame-socket.ts";
-import { SessionTransport } from "./session-transport.ts";
+import { MEDIA_LATE_CALLBACK_CAP, SessionTransport } from "./session-transport.ts";
 import { trackMutationDelivery } from "./session-ws.ts";
 
 class MockChannel implements FrameChannel {
@@ -249,7 +249,130 @@ describe("DataFrameChannel queue-full through SessionTransport", () => {
   });
 });
 
+describe("late WorkspaceMediaOpen replies", () => {
+  test("timeout keeps a closer for a late Open handle", async () => {
+    const { c2s, s2c, route } = keys();
+    const channel = new MockChannel();
+    const transport = openTransport(channel, c2s, s2c, route);
+    const closed: string[] = [];
+    const pending = transport.rpc("WorkspaceMediaOpen", { pane_id: "w0:p1", path: "a.bin" }, 20, undefined, (result) => {
+      closed.push((result as { handle: string }).handle);
+    });
+    const error = await pending.catch((caught) => caught);
+    expect(error).toBeInstanceOf(ProtocolError);
+    expect((error as ProtocolError).code).toBe("timeout");
+    const fwd = channel.fwd()[0];
+    const opener = new Direction(new Uint8Array(32).fill(7), DIR_C);
+    const req = JSON.parse(new TextDecoder().decode(opener.open(route, fwd.payload))) as { id: string };
+    const inbound = new Direction(new Uint8Array(32).fill(7), DIR_S);
+    const handle = "media_" + "a".repeat(32);
+    channel.deliver({
+      version: 1,
+      typ: Typ.FWD,
+      flags: 0,
+      routeId: route,
+      payload: inbound.seal(route, new TextEncoder().encode(JSON.stringify({ v: 1, id: req.id, ok: true, result: { handle } }))),
+    });
+    expect(closed).toEqual([handle]);
+    transport.close();
+    expect(c2s.seq).toBe(1n);
+  });
+});
+
+describe("late media callback table is bounded", () => {
+  test("stays at/under the cap under a timeout storm and clears on stop", async () => {
+    const { c2s, s2c, route } = keys();
+    const channel = new MockChannel();
+    const transport = openTransport(channel, c2s, s2c, route);
+    const late = (transport as unknown as { late: Map<string, unknown> }).late;
+    for (let batch = 0; batch < 8; batch++) {
+      const rejections: Promise<unknown>[] = [];
+      for (let i = 0; i < 32; i++) {
+        rejections.push(
+          transport
+            .rpc("WorkspaceMediaOpen", { pane_id: "w0:p1", path: `b${batch}-${i}.bin` }, 1, undefined, () => undefined)
+            .catch((caught) => caught),
+        );
+      }
+      await Promise.all(rejections);
+      expect(late.size).toBeLessThanOrEqual(MEDIA_LATE_CALLBACK_CAP);
+    }
+    expect(channel.fwd().filter((f) => f.typ === Typ.FWD).length).toBe(8 * 32);
+    expect(late.size).toBeLessThanOrEqual(MEDIA_LATE_CALLBACK_CAP);
+    transport.close();
+    expect(late.size).toBe(0);
+  });
+
+  test("a late ERROR response consumes the bounded entry immediately, no replay", async () => {
+    const { c2s, s2c, route } = keys();
+    const channel = new MockChannel();
+    const transport = openTransport(channel, c2s, s2c, route);
+    const late = (transport as unknown as { late: Map<string, unknown> }).late;
+
+    let closeCalls = 0;
+    const pending = transport.rpc(
+      "WorkspaceMediaOpen",
+      { pane_id: "w0:p1", path: "err.bin" },
+      5,
+      undefined,
+      () => { closeCalls += 1; },
+    );
+    const err = await pending.catch((caught) => caught);
+    expect(err).toBeInstanceOf(ProtocolError);
+    expect(late.size).toBe(1); // timeout parked the late callback
+
+    // Deliver a late ERROR response (e.g. the daemon rejected the Open).
+    const opener = new Direction(new Uint8Array(32).fill(7), DIR_C);
+    const req = JSON.parse(new TextDecoder().decode(opener.open(route, channel.fwd()[0].payload))) as { id: string };
+    const server = new Direction(new Uint8Array(32).fill(7), DIR_S);
+    channel.deliver({
+      version: 1, typ: Typ.FWD, flags: 0, routeId: route,
+      payload: server.seal(route, new TextEncoder().encode(JSON.stringify({
+        v: 1, id: req.id, ok: false, error: { code: "conflict", message: "retired" },
+      }))),
+    });
+    await Promise.resolve();
+
+    // Entry + TTL consumed right away, and a successful later duplicate neither
+    // replays a close nor resurrects the entry.
+    expect(late.size).toBe(0);
+    expect(closeCalls).toBe(0);
+    channel.deliver({
+      version: 1, typ: Typ.FWD, flags: 0, routeId: route,
+      payload: server.seal(route, new TextEncoder().encode(JSON.stringify({
+        v: 1, id: req.id, ok: true, result: { handle: "media_" + "a".repeat(32) },
+      }))),
+    });
+    await Promise.resolve();
+    expect(late.size).toBe(0);
+    expect(closeCalls).toBe(0);
+    expect(channel.fwd().filter((f) => f.typ === Typ.FWD)).toHaveLength(1); // only the Open
+    transport.close();
+  });
+});
+
 describe("heartbeat payload helper still matches the transport", () => {
+  // The opening heartbeat is suppressed on a hidden page, and page visibility is
+  // ambient: a Happy DOM suite that ran earlier can leave `visibilityState`
+  // "hidden" on the shared realm. Pin it here so this protocol assertion depends
+  // on the transport, not on whichever test file happened to run last.
+  const globals = globalThis as unknown as Record<string, unknown>;
+  let restoreVisibility = () => {};
+  beforeEach(() => {
+    const doc = globals.document as Document | undefined;
+    if (!doc) {
+      restoreVisibility = () => {};
+      return;
+    }
+    const previous = Object.getOwnPropertyDescriptor(doc, "visibilityState");
+    Object.defineProperty(doc, "visibilityState", { value: "visible", configurable: true });
+    restoreVisibility = () => {
+      if (previous) Object.defineProperty(doc, "visibilityState", previous);
+      else delete (doc as unknown as Record<string, unknown>).visibilityState;
+    };
+  });
+  afterEach(() => restoreVisibility());
+
   test("constructor emits an envelope PING, not an AEAD FWD", () => {
     const { c2s, s2c, route } = keys();
     const channel = new MockChannel();

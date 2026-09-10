@@ -1,0 +1,623 @@
+import { closeTestDialogs } from "../../../test-support/close-dialogs";
+import { happy, resetBoardTestDOM } from "../../../test-support/dom";
+import { act } from "react";
+import { setLang } from "../../lib/i18n";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import type { LiveSession } from "../../lib/protocol/client";
+
+const { appRoot } = await import("../../app/dom-root.ts");
+const { appHost } = await import("../../app/host.ts");
+const { isAppMounted, mountApp, unmountApp } = await import("../../app/mount.tsx");
+const { registerSessionOwnerPreparer } = await import("../../app/frame.ts");
+const { registerSessionView } = await import("../session/register.ts");
+const { resetTransitionState } = await import("../../app/transition.ts");
+const { setPhase } = await import("../connection/connection-store.ts");
+const { currentScreen, setScreen } = await import("../../app/navigation-store.ts");
+const { openPaneId, resetPaneView, selectPane } = await import("../session/session-store.ts");
+const { attachLiveSession, liveSession } = await import("../computers/catalog-store.ts");
+const { applySnapshot } = await import("../dashboard/catalog-store.ts");
+const { applyCapabilities, clearCapabilities, setOperationBusy } = await import("../operations/capabilities-store.ts");
+const { enterWorkspace, leaveWorkspace, loadDirectory, loadGitDiff, loadWorkspaceFile, refreshWorkspace, workspaceModel, WORKSPACE_PENDING_DELAY_MS, clearWorkspacePendingReveal } = await import("./index.ts");
+const { ProtocolError } = await import("../../lib/protocol/errors.ts");
+const { diffNoteScope, upsertDiffNote, diffNotes, clearAllDiffNotes } = await import("../../lib/diff-notes.ts");
+const { WORKSPACE_CACHE_TTL_MS } = await import("../../lib/workspace-cache.ts");
+
+const app = appRoot();
+
+const revision = "a".repeat(64);
+
+function liveFixture() {
+  return {
+    isConnected: () => true,
+    workspaceOpen: async () => ({
+      name: "pairfob",
+      root: "/work/pairfob",
+      features: { files: true, git_status: true, git_diff: true, git_branches: true },
+      git: { name: "pairfob", branch: "main", head: "1234567890", detached: false },
+    }),
+    workspaceList: async (_paneId: string, path = "") => ({
+      path,
+      entries: path
+        ? [{ name: "app.ts", path: "src/app.ts", kind: "file" as const, size: 25, modified_ms: 1, hidden: false }]
+        : [{ name: "src", path: "src", kind: "directory" as const, size: 0, modified_ms: 1, hidden: false }],
+      next_cursor: null,
+      truncated: false,
+      revision,
+    }),
+    workspaceRead: async () => ({
+      path: "src/app.ts", kind: "text" as const, size: 25, modified_ms: 1,
+      content: "export const ready = true;\n", truncated: false, revision,
+    }),
+    gitStatus: async () => ({
+      branch: "main", head: "1234567890", upstream: "origin/main", ahead: 1, behind: 0, truncated: false, revision,
+      changes: [{ path: "src/app.ts", original_path: null, index: "M", worktree: "M" }],
+    }),
+    gitDiff: async (_paneId: string, path: string, layer: "worktree" | "staged") => ({
+      path, layer, patch: "@@ -1 +1 @@\n-false\n+true\n", additions: 1, deletions: 1, binary: false, truncated: false, revision,
+    }),
+    gitBranches: async () => ({
+      items: [
+        { name: "main", kind: "local" as const, current: true, head: "1234567890", upstream: "origin/main" },
+        { name: "feature/mobile", kind: "local" as const, current: false, head: "abcdef", upstream: null },
+      ],
+      truncated: false,
+      revision,
+    }),
+    listWorktrees: async () => ({
+      worktrees: [
+        {
+          path: "/work/pairfob-workspace-inspector",
+          branch: "feat/workspace-inspector-mobile",
+          label: "Workspace inspector",
+          is_bare: false,
+          is_detached: false,
+          is_prunable: false,
+          is_linked_worktree: true,
+          open_workspace_id: "w1",
+        },
+      ],
+    }),
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function addSibling(): void {
+  applySnapshot({
+    workspaces: [{ workspace_id: "w1", label: "pairfob", cwd: "/work/pairfob" }],
+    panes: [
+      { pane_id: "p1", workspace_id: "w1", agent: "codex", agent_status: "idle" },
+      { pane_id: "p2", workspace_id: "w1", agent: "codex", agent_status: "idle" },
+    ],
+  });
+}
+
+function buttonNamed(label: string): HTMLButtonElement {
+  const found = [...app.querySelectorAll("button")].find((item) => item.getAttribute("aria-label") === label || item.textContent?.trim().includes(label));
+  if (!found) throw new Error(`missing button ${label}: ${app.innerHTML.slice(0, 500)}`);
+  return found as HTMLButtonElement;
+}
+
+async function settle(): Promise<void> {
+  await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, 0)); });
+}
+
+// Every production interaction that publishes a workspace snapshot is a React
+// update, so run it inside act instead of letting its async continuation emit
+// outside the test boundary.
+async function actRun(work: () => unknown): Promise<void> {
+  await act(async () => { await work(); });
+}
+
+async function waitForPending(): Promise<void> {
+  await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, WORKSPACE_PENDING_DELAY_MS + 20)); });
+}
+
+function prepare(live: LiveSession = liveFixture()): void {
+  act(() => {
+    setPhase("live");
+    setScreen("pane");
+    selectPane("p1");
+    resetPaneView();
+    applySnapshot({
+      workspaces: [{ workspace_id: "w1", label: "pairfob", cwd: "/work/pairfob" }],
+      panes: [{ pane_id: "p1", workspace_id: "w1", agent: "codex", agent_status: "idle" }],
+    });
+    applyCapabilities({ list_worktrees: true, create_worktree: true, open_worktree: true }, []);
+    setOperationBusy(false);
+    attachLiveSession(live);
+  });
+}
+
+async function boot(live: LiveSession = liveFixture()): Promise<LiveSession> {
+  prepare(live);
+  await act(async () => {
+    await enterWorkspace("p1");
+    // Drain the completion continuations (finishLoad, reveal settle) so no
+    // workspace publication resolves after this act boundary.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  });
+  return live;
+}
+
+beforeEach(async () => {
+  await resetBoardTestDOM();
+  setLang("zh");
+  resetTransitionState();
+  setOperationBusy(false);
+  registerSessionOwnerPreparer(registerSessionView);
+  act(() => mountApp());
+});
+
+afterEach(async () => {
+  await act(async () => {
+    clearWorkspacePendingReveal();
+    clearAllDiffNotes();
+    closeTestDialogs();
+    await actRun(() => leaveWorkspace());
+    unmountApp();
+    registerSessionOwnerPreparer(null);
+    attachLiveSession(null);
+    clearCapabilities();
+    setOperationBusy(false);
+    resetTransitionState();
+    await happy.happyDOM.abort();
+  });
+  expect(appHost()).toBeNull();
+  expect(isAppMounted()).toBeFalse();
+});
+
+describe("mobile workspace navigation", () => {
+  test("shares directory data across panes while navigation and diff notes remain independent", async () => {
+    const live = liveFixture();
+    const open = spyOn(live, "workspaceOpen");
+    const list = spyOn(live, "workspaceList");
+    const status = spyOn(live, "gitStatus");
+    const read = spyOn(live, "workspaceRead");
+    const diff = spyOn(live, "gitDiff");
+    await boot(live);
+    await actRun(() => addSibling());
+    await actRun(() => loadDirectory("src"));
+    await actRun(() => loadWorkspaceFile("src/app.ts"));
+    await actRun(() => loadGitDiff("src/app.ts", "worktree"));
+    await actRun(() => upsertDiffNote({ path: "src/app.ts", layer: "worktree", side: "new", line: 1, snippet: "true" }, "p1 comment"));
+    expect(diffNotes()).toHaveLength(1);
+
+    await actRun(() => enterWorkspace("p2"));
+    expect(workspaceModel.directory).toBe("");
+    expect(workspaceModel.view).toBe("browser");
+    await actRun(() => loadDirectory("src"));
+    await actRun(() => loadWorkspaceFile("src/app.ts"));
+    await actRun(() => loadGitDiff("src/app.ts", "worktree"));
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(status).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(diff).toHaveBeenCalledTimes(1);
+    expect(diffNoteScope()?.paneId).toBe("p2");
+    expect(diffNotes()).toHaveLength(0);
+    await actRun(() => leaveWorkspace());
+    expect(openPaneId()).toBe("p2");
+    await actRun(() => enterWorkspace("p1"));
+    expect(workspaceModel.directory).toBe("src");
+    expect(workspaceModel.view).toBe("diff");
+    expect(diffNoteScope()?.paneId).toBe("p1");
+    expect(diffNotes()[0]?.body).toBe("p1 comment");
+    expect(diff).toHaveBeenCalledTimes(1);
+  });
+
+  test("joins an in-flight file read after switching to another pane in the same root", async () => {
+    const live = liveFixture();
+    const pending = deferred<Awaited<ReturnType<typeof live.workspaceRead>>>();
+    const file = await live.workspaceRead();
+    const read = spyOn(live, "workspaceRead").mockImplementation(() => pending.promise);
+    await boot(live);
+    await actRun(() => addSibling());
+    let first!: Promise<unknown>;
+    act(() => { first = loadWorkspaceFile("src/app.ts"); });
+    await actRun(() => enterWorkspace("p2"));
+    let second!: ReturnType<typeof loadWorkspaceFile>;
+    act(() => { second = loadWorkspaceFile("src/app.ts"); });
+    await settle();
+    expect(read).toHaveBeenCalledTimes(1);
+    pending.resolve(file);
+    await actRun(() => Promise.all([first, second]));
+    expect(workspaceModel.paneId).toBe("p2");
+    expect(workspaceModel.file?.content).toContain("ready = true");
+  });
+
+  test("revalidates expired diff content while keeping the cached preview visible", async () => {
+    const live = liveFixture();
+    const diff = await live.gitDiff("p1", "src/app.ts", "worktree");
+    const now = Date.now();
+    const clock = spyOn(Date, "now").mockReturnValue(now);
+    try {
+      await boot(live);
+      await actRun(() => addSibling());
+      await act(async () => { await loadGitDiff("src/app.ts", "worktree"); });
+      clock.mockReturnValue(now + WORKSPACE_CACHE_TTL_MS);
+      const pending = deferred<typeof diff>();
+      const read = spyOn(live, "gitDiff").mockImplementation(() => pending.promise);
+      await act(async () => { await enterWorkspace("p2"); });
+      let loading!: ReturnType<typeof loadGitDiff>;
+      act(() => { loading = loadGitDiff("src/app.ts", "worktree"); });
+      await settle();
+      expect(workspaceModel.diff?.revision).toBe(revision);
+      expect(app.querySelector(".workspace-diff-line")).toBeTruthy();
+      expect(app.querySelector(".workspace-diff-pending")).toBeNull();
+      expect(diffNoteScope()?.paneId).toBe("p2");
+      pending.resolve({ ...diff, revision: "b".repeat(64), patch: "@@ -1 +1 @@\n-old\n+new\n" });
+      await act(async () => { await loading; });
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(app.querySelector(".diff-add")?.textContent).toContain("new");
+      expect(diffNoteScope()?.revision).toBe("b".repeat(64));
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("refreshing one pane invalidates data reused by its sibling", async () => {
+    const live = liveFixture();
+    const read = spyOn(live, "workspaceRead");
+    await boot(live);
+    await actRun(() => addSibling());
+    await actRun(() => loadWorkspaceFile("src/app.ts"));
+    await actRun(() => enterWorkspace("p2"));
+    const updated = { ...await liveFixture().workspaceRead(), content: "updated" };
+    read.mockImplementation(async () => updated);
+    await actRun(() => refreshWorkspace());
+    await actRun(() => enterWorkspace("p1"));
+    expect(workspaceModel.file?.content).toBe("updated");
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  test("a pane moving directories does not restore its previous root's preview", async () => {
+    const live = liveFixture();
+    await boot(live);
+    await actRun(() => loadWorkspaceFile("src/app.ts"));
+    applySnapshot({
+      workspaces: [{ workspace_id: "w1", label: "pairfob", cwd: "/other" }],
+      panes: [{ pane_id: "p1", workspace_id: "w1", agent: "codex", agent_status: "idle", cwd: "/other" }],
+    });
+    const descriptor = await live.workspaceOpen();
+    live.workspaceOpen = async () => ({ ...descriptor, root: "/other" });
+    await actRun(() => enterWorkspace("p1"));
+    expect(workspaceModel.descriptor?.root).toBe("/other");
+    expect(workspaceModel.view).toBe("browser");
+    expect(workspaceModel.file).toBeNull();
+  });
+
+  test("restores cached directory pages once and stops restoration after navigation", async () => {
+    const live = liveFixture();
+    const firstPage = { ...await live.workspaceList("p1"), next_cursor: "120" as string | null };
+    const secondPage = { ...await live.workspaceList("p1", "src"), path: "" };
+    const list = spyOn(live, "workspaceList").mockImplementation(async (_pane, path = "", ...rest: unknown[]) => {
+      if (path) return { ...secondPage, path };
+      return rest[0] ? secondPage : firstPage;
+    });
+    await boot(live);
+    await actRun(() => loadDirectory("", true));
+    await actRun(() => leaveWorkspace());
+    await actRun(() => enterWorkspace("p1"));
+    expect(workspaceModel.entries.map((entry) => entry.path)).toEqual(["src", "src/app.ts"]);
+    expect(list).toHaveBeenCalledTimes(2);
+
+    const now = Date.now();
+    const clock = spyOn(Date, "now").mockReturnValue(now + WORKSPACE_CACHE_TTL_MS);
+    try {
+      const pending = deferred<typeof firstPage>();
+      list.mockImplementation(async (_pane, path = "") => path ? { ...secondPage, path } : pending.promise);
+      let opening!: Promise<void>;
+      act(() => { opening = enterWorkspace("p1"); });
+      await settle();
+      await actRun(() => loadDirectory("src"));
+      pending.resolve(firstPage);
+      await actRun(() => opening);
+      expect(workspaceModel.directory).toBe("src");
+      expect(workspaceModel.entries.map((entry) => entry.path)).toEqual(["src/app.ts"]);
+      expect(list).toHaveBeenCalledTimes(4);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("finishing the initial status load does not clear a newer file's pending state", async () => {
+    const live = liveFixture();
+    const status = await live.gitStatus();
+    const file = await live.workspaceRead();
+    const pendingStatus = deferred<typeof status>();
+    const pendingFile = deferred<typeof file>();
+    live.gitStatus = () => pendingStatus.promise;
+    live.workspaceRead = () => pendingFile.promise;
+    prepare(live);
+    let opening!: Promise<void>;
+    act(() => { opening = enterWorkspace("p1"); });
+    await settle();
+    let reading!: Promise<unknown>;
+    act(() => { reading = loadWorkspaceFile("src/app.ts"); });
+    pendingStatus.resolve(status);
+    await actRun(() => opening);
+    expect(workspaceModel.loading).toBeTrue();
+    pendingFile.resolve(file);
+    await actRun(() => reading);
+    expect(workspaceModel.loading).toBeFalse();
+  });
+
+  test("drills into a directory and opens a file as a page", async () => {
+    await boot();
+    expect(currentScreen()).toBe("workspace");
+    expect(app.querySelectorAll('[role="tab"]')).toHaveLength(2);
+    act(() => buttonNamed("src").click());
+    await settle();
+    expect(app.querySelector(".workspace-breadcrumbs")?.textContent).toContain("src");
+    act(() => buttonNamed("app.ts").click());
+    await settle();
+    expect(app.querySelector(".workspace-shell")?.classList.contains("detail")).toBeTrue();
+    expect(app.querySelector(".workspace-code")?.textContent).toContain("ready = true");
+    act(() => buttonNamed("返回列表").click());
+    expect(workspaceModel.view).toBe("browser");
+    expect(app.querySelector(".workspace-nav")).toBeTruthy();
+  });
+
+  test("file preview occupies the code pane while the read is in flight", async () => {
+    await boot();
+    type FileResult = Awaited<ReturnType<ReturnType<typeof liveFixture>["workspaceRead"]>>;
+    let release!: (value: FileResult) => void;
+    const held = new Promise<FileResult>((resolve) => { release = resolve; });
+    Object.assign(liveSession()!, { workspaceRead: async () => held });
+
+    let load!: ReturnType<typeof loadWorkspaceFile>;
+    act(() => { load = loadWorkspaceFile("src/app.ts"); });
+    expect(app.querySelector(".workspace-file-pending")).toBeNull();
+    await waitForPending();
+    const pending = app.querySelector(".workspace-file-pending");
+    expect(pending).toBeTruthy();
+    expect(pending?.getAttribute("role")).toBe("status");
+    expect(pending?.getAttribute("aria-label")).toContain("正在读取文件");
+    expect(pending?.querySelector(".spinner")).toBeNull();
+    expect(pending?.textContent?.trim()).toBe("");
+    expect(app.querySelector(".workspace-detail-name")?.textContent).toBe("src/app.ts");
+    expect(app.querySelector(".workspace-detail-head .workspace-row-meta")?.classList.contains("is-pending")).toBeTrue();
+    expect(app.querySelectorAll(".workspace-file-skeleton-line").length).toBe(48);
+    expect(app.querySelector(".workspace-code")).toBeNull();
+    expect(app.querySelector(".workspace-feedback")).toBeNull();
+
+    release({ path: "src/app.ts", kind: "text", size: 4, modified_ms: 1, content: "ok\n", truncated: false, revision });
+    await actRun(() => load);
+    expect(app.querySelector(".workspace-file-pending")).toBeNull();
+    expect(app.querySelector(".workspace-code")?.textContent).toBe("ok\n");
+  });
+
+  test("refreshes a file in place instead of dropping back to the tree", async () => {
+    await boot();
+    act(() => buttonNamed("src").click());
+    await settle();
+    act(() => buttonNamed("app.ts").click());
+    await settle();
+    act(() => buttonNamed("刷新工作区").click());
+    await settle();
+    expect(workspaceModel.view).toBe("file");
+    expect(app.querySelector(".workspace-code")?.textContent).toContain("ready = true");
+  });
+
+  test("ignores an older file response after a faster selection", async () => {
+    await boot();
+    type FileResult = Awaited<ReturnType<ReturnType<typeof liveFixture>["workspaceRead"]>>;
+    let resolveSlow!: (value: FileResult) => void;
+    let resolveFast!: (value: FileResult) => void;
+    const slow = new Promise<FileResult>((resolve) => { resolveSlow = resolve; });
+    const fast = new Promise<FileResult>((resolve) => { resolveFast = resolve; });
+    Object.assign(liveSession()!, { workspaceRead: async (_paneId: string, path: string) => path === "slow.ts" ? slow : fast });
+
+    let slowLoad!: Promise<unknown>;
+    let fastLoad!: Promise<unknown>;
+    act(() => { slowLoad = loadWorkspaceFile("slow.ts"); fastLoad = loadWorkspaceFile("fast.ts"); });
+    resolveFast({ path: "fast.ts", kind: "text", size: 4, modified_ms: 1, content: "fast", truncated: false, revision });
+    await actRun(() => fastLoad);
+    resolveSlow({ path: "slow.ts", kind: "text", size: 4, modified_ms: 1, content: "slow", truncated: false, revision });
+    await actRun(() => slowLoad);
+
+    expect(workspaceModel.detailPath).toBe("fast.ts");
+    expect(workspaceModel.file?.path).toBe("fast.ts");
+    expect(app.querySelector(".workspace-code")?.textContent).toBe("fast");
+  });
+
+  test("keeps staged and working-tree diffs distinct", async () => {
+    await boot();
+    act(() => buttonNamed("更改").click());
+    await settle();
+    expect(app.querySelectorAll(".workspace-change-group-title")).toHaveLength(2);
+    expect(app.querySelectorAll(".workspace-change")).toHaveLength(2);
+    expect(app.querySelectorAll(".workspace-change-mark")[0]?.textContent).toBe("M");
+
+    act(() => buttonNamed("已暂存的更改").click());
+    expect(app.querySelectorAll(".workspace-change")).toHaveLength(1);
+    expect(buttonNamed("已暂存的更改").getAttribute("aria-expanded")).toBe("false");
+    act(() => buttonNamed("已暂存的更改").click());
+
+    act(() => buttonNamed("src/app.ts · 已暂存 · 修改").click());
+    await settle();
+    expect(app.querySelector(".workspace-layer-label")?.textContent).toBe("已暂存");
+    expect(app.querySelectorAll(".workspace-diff-line")).toHaveLength(3);
+    expect(app.querySelector(".diff-add")?.textContent).toContain("true");
+  });
+
+  test("shows branches read-only and routes changes through worktrees", async () => {
+    await boot();
+    act(() => buttonNamed("分支与 Worktree").click());
+    await settle();
+    const dialog = document.querySelector("dialog.sheet");
+    expect(dialog?.textContent).toContain("feature/mobile");
+    expect(dialog?.textContent).toContain("新建 Worktree");
+    expect(dialog?.textContent).not.toContain("删除分支");
+    expect(dialog?.textContent).not.toContain("强制切换");
+  });
+
+  test("shows each worktree as a complete tappable card", async () => {
+    await boot();
+    act(() => buttonNamed("分支与 Worktree").click());
+    await settle();
+    const listAction = [...document.querySelectorAll("dialog.sheet button")]
+      .find((item) => item.textContent?.trim() === "Worktree 列表") as HTMLButtonElement | undefined;
+    expect(listAction).toBeTruthy();
+    act(() => listAction?.click());
+    await settle();
+    await settle();
+
+    const dialog = document.querySelector("dialog.operation-modal");
+    const card = dialog?.querySelector<HTMLButtonElement>(".worktree-card");
+    expect(dialog?.querySelector(".modal-title")?.textContent).toBe("Worktree 列表");
+    expect(card?.textContent).toContain("Workspace inspector");
+    expect(card?.textContent).toContain("feat/workspace-inspector-mobile");
+    expect(card?.textContent).toContain("/work/pairfob-workspace-inspector");
+    expect(card?.textContent).toContain("已打开");
+    expect(card?.getAttribute("aria-label")).toBe("打开 Workspace inspector");
+    expect(dialog?.querySelector(".worktree-item > .btn-primary")).toBeNull();
+  });
+
+  test("keeps a collapsed change group when reopening from the same page", async () => {
+    await boot();
+    act(() => buttonNamed("更改").click());
+    await settle();
+    act(() => buttonNamed("已暂存的更改").click());
+    expect(buttonNamed("已暂存的更改").getAttribute("aria-expanded")).toBe("false");
+
+    act(() => buttonNamed("返回终端").click());
+    await actRun(() => enterWorkspace("p1"));
+
+    expect(workspaceModel.tab).toBe("changes");
+    expect(buttonNamed("已暂存的更改").getAttribute("aria-expanded")).toBe("false");
+    expect(app.querySelectorAll(".workspace-change")).toHaveLength(1);
+  });
+
+  test("back from the root returns to the same terminal pane", async () => {
+    await boot();
+    act(() => buttonNamed("返回终端").click());
+    await settle();
+    expect(currentScreen()).toBe("pane");
+    expect(openPaneId()).toBe("p1");
+  });
+
+  test("dismisses and reopens the cached file without another read", async () => {
+    const base = liveFixture();
+    const calls = { open: 0, list: 0, read: 0, status: 0 };
+    const live = {
+      ...base,
+      workspaceOpen: async () => {
+        calls.open++;
+        return base.workspaceOpen();
+      },
+      workspaceList: async (paneId: string, path = "") => {
+        calls.list++;
+        return base.workspaceList(paneId, path);
+      },
+      workspaceRead: async () => {
+        calls.read++;
+        return base.workspaceRead();
+      },
+      gitStatus: async () => {
+        calls.status++;
+        return base.gitStatus();
+      },
+    };
+    await boot(live);
+    act(() => buttonNamed("src").click());
+    await settle();
+    act(() => buttonNamed("app.ts").click());
+    await settle();
+    expect(calls).toEqual({ open: 1, list: 2, read: 1, status: 1 });
+
+    act(() => buttonNamed("关闭工作区查看").click());
+    expect(currentScreen()).toBe("pane");
+    expect(workspaceModel.view).toBe("file");
+    await actRun(() => enterWorkspace("p1"));
+
+    expect(currentScreen()).toBe("workspace");
+    expect(workspaceModel.view).toBe("file");
+    expect(app.querySelector(".workspace-code")?.textContent).toContain("ready = true");
+    expect(calls).toEqual({ open: 1, list: 2, read: 1, status: 1 });
+
+    act(() => buttonNamed("刷新工作区").click());
+    await settle();
+    expect(calls).toEqual({ open: 2, list: 3, read: 2, status: 2 });
+  });
+
+  test("a cold file list uses row skeletons instead of empty copy", async () => {
+    type ListResult = Awaited<ReturnType<ReturnType<typeof liveFixture>["workspaceList"]>>;
+    let release!: (value: ListResult) => void;
+    const held = new Promise<ListResult>((resolve) => { release = resolve; });
+    const base = liveFixture();
+    prepare({
+      ...base,
+      workspaceList: async () => held,
+    });
+    let opening!: Promise<void>;
+    act(() => { opening = enterWorkspace("p1"); });
+    await waitForPending();
+    const pending = app.querySelector(".workspace-list-pending");
+    expect(pending?.getAttribute("aria-label")).toContain("正在读取工作区");
+    expect(app.querySelectorAll(".workspace-list-skeleton-row").length).toBe(10);
+    expect(app.querySelector(".workspace-empty")).toBeNull();
+    expect(app.querySelector(".workspace-feedback")).toBeNull();
+    expect(app.querySelector(".workspace-breadcrumbs")).toBeNull();
+    expect(app.querySelector(".spinner")).toBeNull();
+
+    release({
+      path: "",
+      entries: [{ name: "src", path: "src", kind: "directory", size: 0, modified_ms: 1, hidden: false }],
+      next_cursor: null,
+      truncated: false,
+      revision,
+    });
+    await actRun(() => opening);
+    expect(app.querySelector(".workspace-list-pending")).toBeNull();
+    expect(app.querySelector(".workspace-row-name")?.textContent).toBe("src");
+  });
+
+  test("a missing workspace error fills the pane without claiming the directory is empty", async () => {
+    prepare({
+      ...liveFixture(),
+      workspaceOpen: async () => {
+        throw new ProtocolError("workspace_not_found", "gone");
+      },
+    });
+    await actRun(() => enterWorkspace("p1"));
+    expect(app.querySelector(".workspace-feedback-pane.workspace-error")?.textContent).toContain("已经不在了");
+    expect(app.querySelector(".workspace-empty")).toBeNull();
+    expect(app.querySelector(".workspace-breadcrumbs")).toBeNull();
+    expect(app.querySelector(".workspace-list")).toBeNull();
+  });
+
+  test("diff preview uses a diff-shaped skeleton instead of workspace copy", async () => {
+    await boot();
+    type DiffResult = Awaited<ReturnType<ReturnType<typeof liveFixture>["gitDiff"]>>;
+    let release!: (value: DiffResult) => void;
+    const held = new Promise<DiffResult>((resolve) => { release = resolve; });
+    Object.assign(liveSession()!, { gitDiff: async () => held });
+
+    let load!: ReturnType<typeof loadGitDiff>;
+    act(() => { load = loadGitDiff("src/app.ts", "worktree"); });
+    await waitForPending();
+    const pending = app.querySelector(".workspace-diff-pending");
+    expect(pending?.getAttribute("aria-label")).toContain("正在读取差异");
+    expect(app.querySelectorAll(".workspace-diff-skeleton-line").length).toBe(28);
+    expect(app.querySelector(".workspace-diff-skeleton-line.diff-add")).toBeTruthy();
+    expect(app.querySelector(".workspace-diff-skeleton-line.diff-delete")).toBeTruthy();
+    expect(app.querySelector(".workspace-diff-skeleton-line.diff-hunk")).toBeTruthy();
+    expect(app.querySelector(".workspace-feedback")).toBeNull();
+    expect(app.textContent).not.toContain("正在读取工作区");
+    expect(app.querySelector(".workspace-detail-head .workspace-additions")?.classList.contains("is-pending")).toBeTrue();
+
+    release({
+      path: "src/app.ts", layer: "worktree", patch: "@@ -1 +1 @@\n-false\n+true\n",
+      additions: 1, deletions: 1, binary: false, truncated: false, revision,
+    });
+    await actRun(() => load);
+    expect(app.querySelector(".workspace-diff-pending")).toBeNull();
+    expect(app.querySelector(".workspace-diff-line")).toBeTruthy();
+  });
+});

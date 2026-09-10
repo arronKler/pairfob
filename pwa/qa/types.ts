@@ -1,9 +1,24 @@
-import type { AppState } from "../src/state";
 import type { SessionEvent } from "../src/lib/protocol/session-types";
+import type { Phase } from "../src/features/connection/connection-store";
+import type { Screen } from "../src/app/navigation-store";
 
+/**
+ * QA fixture contract.
+ *
+ * The fixture is a Vite development HTML entry that mounts the SAME stable
+ * production App (`src/app/mount.tsx`) with real domain actions, a real commit
+ * boundary and the production session-owner seam. There is no baseline DOM
+ * branch, no duplicate shell orchestrator and no paint fallback: a scene change
+ * resets named domains and commits, and the App renders itself.
+ *
+ * This file is the browser-facing surface (`window.qa`). The fixture never
+ * exposes a mutable whole-app state bag — callers drive named domain actions
+ * (`setScene`, `setConnected`, `hold`, `release`, `failNext`, `emit`) and read
+ * the snapshot.
+ */
 export type FixtureTerminalFrame = { full?: boolean; sequence?: string; cols?: number; rows?: number };
 
-export type FixtureMode = "baseline" | "react";
+export type FixtureMode = "react";
 export type FixtureCall = { sequence: number; kind: "read" | "mutation" | "lifecycle" | "network"; method: string; args: unknown[] };
 export type FixtureScene = { name: string; description: string; shellOnly?: boolean };
 export type FixtureRect = { x: number; y: number; width: number; height: number };
@@ -20,8 +35,8 @@ export type FixtureSnapshot = {
   appClass: string;
   bodyClass: string;
   rootClass: string;
-  phase: AppState["phase"];
-  screen: AppState["screen"];
+  phase: Phase;
+  screen: Screen;
   overflow: { documentX: number; appX: number };
   rects: Record<string, FixtureRect[]>;
   inputs: Array<{ nodeId: number; selector: string; value: string; focused: boolean; selection: [number | null, number | null] }>;
@@ -44,7 +59,6 @@ export type FixtureAPI = {
   hold(method: string): void;
   release(method: string): void;
   failNext(method: string, code: string): void;
-  state: AppState;
 };
 
 declare global {

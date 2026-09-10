@@ -83,8 +83,11 @@ export function diffNoteSendOpen(): boolean {
 }
 
 /** Add or replace the note at the pin. Refuses without a bound owner or during send. */
-export function upsertDiffNote(target: DiffNoteTarget, body: string): DiffNote | null {
+export function upsertDiffNote(target: DiffNoteTarget, body: string, expectedScope?: DiffNoteScope | null): DiffNote | null {
   if (!scope) return null;
+  if (expectedScope && (expectedScope.session !== scope.session || expectedScope.paneId !== scope.paneId || expectedScope.revision !== scope.revision)) {
+    return null;
+  }
   const trimmed = body.trim().slice(0, DIFF_NOTE_BODY_LIMIT);
   if (!trimmed) return null;
   const existing = diffNoteForPin(target);

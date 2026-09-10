@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-const main = await Bun.file(new URL("./main.ts", import.meta.url)).text();
+// The browser entry is styles plus one lifecycle call; the wiring lives in the
+// boot module that owns the page lifetime.
+const main = await Bun.file(new URL("./app/bootstrap.ts", import.meta.url)).text();
 const session = [
   await Bun.file(new URL("./lib/protocol/session-ws.ts", import.meta.url)).text(),
   await Bun.file(new URL("./lib/protocol/session-direct.ts", import.meta.url)).text(),

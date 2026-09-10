@@ -12,6 +12,16 @@ export type TabLayout = {
   panes: Array<{ paneId: string; focused: boolean; rect: LayoutRect }>;
 };
 
+/** Structural read view of a tab layout for pure consumers (terminal fit). */
+export type TabLayoutView = {
+  workspaceId: string;
+  tabId: string;
+  zoomed: boolean;
+  area: LayoutRect;
+  focusedPaneId: string;
+  panes: ReadonlyArray<{ paneId: string; focused: boolean; rect: LayoutRect }>;
+};
+
 export type PaneBox = {
   paneId: string;
   focused: boolean;
@@ -172,14 +182,20 @@ export function paneCellGrid(
   return { cols, rows };
 }
 
+/** Cell grid of one pane on the computer. Used so a phone open does not resize that split. */
 export function panePtySize(
   paneId: string,
-  layouts: TabLayout[],
-  agents: AgentCard[],
+  layouts: readonly TabLayoutView[],
+  agents: readonly AgentCard[],
 ): { cols: number; rows: number } | null {
+  // The layout sources are frozen published snapshots; the pure lookup below
+  // only reads them, so a readonly->mutable boundary cast is safe here (same
+  // pattern the board consumers already use). layoutForPane keeps the
+  // tab-level fallback (fallbackTabLayout) so a split with no published layout
+  // still sizes the PTY from the sibling pane grid instead of default 80 cols.
   return paneCellGrid(
     paneId,
-    layoutForPane(paneId, layouts, agents),
+    layoutForPane(paneId, layouts as TabLayout[], agents as AgentCard[]),
     agents.find((item) => item.paneId === paneId)?.viewportRows,
   );
 }

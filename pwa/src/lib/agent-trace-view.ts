@@ -18,7 +18,7 @@ const QUERY_KEYS = ["pattern", "query", "regex", "search", "q"];
 const URL_KEYS = ["url", "uri"];
 const PATCH_FILE = /(?:\*\*\* (?:Update|Add|Delete) File:\s*)(\S+)/;
 
-export function groupAgentTurns(items: AgentTraceItem[]): AgentTurn[] {
+export function groupAgentTurns(items: readonly AgentTraceItem[]): AgentTurn[] {
   const turns: AgentTurn[] = [];
   let current: AgentTurn | null = null;
   const take = (): AgentTurn => {
@@ -63,7 +63,7 @@ export type AgentTraceMerge = {
 };
 
 /** Tail pages may repeat their owning user as context; keep that user at the source position once. */
-export function mergeAgentTraceSegments(earlier: AgentTraceItem[], later: AgentTraceItem[]): AgentTraceMerge {
+export function mergeAgentTraceSegments(earlier: readonly AgentTraceItem[], later: readonly AgentTraceItem[]): AgentTraceMerge {
   const head = later[0];
   if (head?.type === "user") {
     for (let index = earlier.length - 1; index >= 0; index -= 1) {
@@ -80,7 +80,7 @@ export function mergeAgentTraceSegments(earlier: AgentTraceItem[], later: AgentT
 }
 
 /** Newest AgentTrace pages are a tail window; a long run can start mid-turn. */
-export function firstTurnNeedsUser(items: AgentTraceItem[], nextCursor: string | null): boolean {
+export function firstTurnNeedsUser(items: readonly AgentTraceItem[], nextCursor: string | null): boolean {
   if (!nextCursor || !items.length) return false;
   return !groupAgentTurns(items)[0]?.user;
 }

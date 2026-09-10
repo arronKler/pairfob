@@ -3,7 +3,7 @@ import QrScanner from "qr-scanner";
 import { t } from "./i18n.ts";
 import { haptic, prefersReducedMotion } from "./dom.ts";
 import { parsePairingURL, type FragmentPairing } from "./pairing-input.ts";
-import { presentModal, type ModalController } from "./react-modal.tsx";
+import { presentModal, type ModalController } from "../shared/ui/overlay/modal";
 
 export class PairingScanError extends Error {}
 

@@ -1,0 +1,10 @@
+// App page container: the centered phone page column (home / settings).
+@mixin app-page-shell {
+  /* --- Page shell (home / settings) ------------------------------------------- */
+
+  .page {
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px calc(32px + env(safe-area-inset-bottom, 0px));
+  }
+}

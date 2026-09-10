@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -87,28 +86,6 @@ func TestCopilotQuotaMissingAndUnlimitedAreDistinct(t *testing.T) {
 	c := quotaFixtureClient(t, "api.github.com", "/copilot_internal/user", "token test-credential", 200, `{"quota_snapshots":{"chat":{"unlimited":true}}}`)
 	if q = fetchCopilotQuota(context.Background(), c, "test-credential", now); q.Status != "ok" {
 		t.Fatalf("%+v", q)
-	}
-}
-func TestCursorQuotaReadsIncludedPlanWithoutInventingReset(t *testing.T) {
-	now := time.Unix(1800000000, 0)
-	for _, body := range []string{`{"membershipType":"pro","individualUsage":{"plan":{"enabled":true,"totalPercentUsed":25}}}`, `{"membershipType":"pro","individualUsage":{"plan":{"used":500,"limit":2000}}}`} {
-		q := parseCursorQuota([]byte(body), now)
-		if q.Status != "ok" || q.Windows[0].UsedPercent != 25 || q.Windows[0].ResetsAt != 0 {
-			t.Fatalf("%+v", q)
-		}
-	}
-	for _, body := range []string{`{}`, `{"individualUsage":{"plan":{"enabled":false,"totalPercentUsed":0}}}`, `{"individualUsage":{"plan":{"used":0,"limit":0}}}`} {
-		if q := parseCursorQuota([]byte(body), now); q.Status != "unavailable" {
-			t.Fatalf("%+v", q)
-		}
-	}
-	claims := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"auth0|user_test","exp":2100000000}`))
-	token := "header." + claims + ".signature"
-	if cookie := cursorQuotaCookie(token, now); !strings.HasPrefix(cookie, "WorkosCursorSessionToken=user_test%3A%3A") {
-		t.Fatal("invalid derived Cursor session")
-	}
-	if cursorQuotaCookie(token, time.Unix(2100000000, 0)) != "" || cursorQuotaCookie("invalid", now) != "" {
-		t.Fatal("expired or invalid login accepted")
 	}
 }
 func TestAntigravityQuotaRequiresActualRemainingFraction(t *testing.T) {

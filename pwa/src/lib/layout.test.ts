@@ -127,6 +127,16 @@ describe("tab layout mapping", () => {
     expect(boxes[1].left).toBe(60 * BOARD_CELL_W);
   });
 
+  test("pty grid sizes a no-layout split from the fallback sibling grid, not default 80 cols", () => {
+    // Regression: panePtySize must keep the baseline layoutForTab ->
+    // fallbackTabLayout path. A same-tab split with no published layout and a
+    // recorded viewport rows sizes the PTY from the fallback equal-column grid
+    // (120 cols / 2 panes) instead of falling through to default termCols(80).
+    const fallback = panePtySize("w1:p1", [], [{ ...agents[0], viewportRows: 16 }, agents[1]]);
+    expect(fallback).toEqual({ cols: 60, rows: 16 });
+    expect(panePtySize("w1:p1", [], agents)).toEqual({ cols: 60, rows: 40 });
+  });
+
   test("a split pane keeps its layout cell grid for a phone open", () => {
     const layouts = parseSnapshotLayouts({
       layouts: [

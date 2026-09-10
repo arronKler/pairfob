@@ -1,22 +1,32 @@
-@use "./styles/agent-quota";
+@use "./features/agent-quota/styles/quota";
 /* Pairfob styles — split by screen/control family; imported by main.ts. */
-@use "./styles/tokens";
+@use "./shared/ui/styles/tokens";
 @use "./styles/base";
-@use "./styles/icons";
+@use "./shared/ui/styles/icons";
 @use "./styles/chrome";
-@use "./styles/card";
-@use "./styles/connect";
-@use "./styles/session-shell";
-@use "./styles/terminal";
-@use "./styles/full-terminal";
-@use "./styles/agent-chat";
-@use "./styles/row-actions";
-@use "./styles/dock";
-@use "./styles/desk";
+@use "./features/dashboard/styles/herd-card";
+@use "./features/pairing/styles/connect";
+@use "./features/session/guided/session-shell";
+@use "./features/session/guided/terminal";
+@use "./features/session/guided/key-flight";
+@use "./features/session/full-terminal/full-terminal";
+@use "./features/session/chat/agent-chat";
+@use "./features/session/guided/row-actions";
+@use "./features/session/guided/dock";
+@use "./app/layout/styles/desk";
 @use "./styles/switcher";
-@use "./styles/computers";
-@use "./styles/settings";
-@use "./styles/workspace";
-@use "./styles/workspace-pending";
-@use "./styles/board";
+@use "./features/computers/styles/computers";
+@use "./features/settings/styles/settings";
+/* Overlay and operation styles left settings.scss. Emitting the four partials in
+   the former section order keeps every other rule in place; the only positions
+   that change are the two operation-modal phone overrides, which move into the
+   feature sheet where they out-specify the generic rules they cross. */
+@use "./shared/ui/styles/overlay";
+@use "./features/operations/styles/operations";
+@use "./features/settings/styles/daemon-update";
+@use "./features/workspace/workspace";
+@use "./features/workspace/workspace-media";
+@use "./features/workspace/file-icons";
+@use "./features/workspace/workspace-pending";
+@use "./features/board/styles/board";
 @use "./styles/motion";

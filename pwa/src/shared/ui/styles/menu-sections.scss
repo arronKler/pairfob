@@ -1,0 +1,15 @@
+// Shared menu/sheet section headings used by the operation menus.
+@mixin menu-sections {
+  /* --- Menu sections + create controls ---------------------------------------- */
+
+  .menu-section-title {
+    margin: 14px 0 0;
+    font-size: 0.68rem;
+    font-weight: 640;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .menu-section-title:not(:first-of-type) { border-top: 1px solid var(--line); padding-top: var(--space-3); }
+}

@@ -3,13 +3,16 @@ import { ProtocolError } from "./protocol/errors.ts";
 import { FRIENDLY_ERROR, genericNotice, messageOf, noticeFor, sessionEventNotice } from "./notices.ts";
 import { setLang } from "./i18n.ts";
 
-const liveSrc = await Bun.file(new URL("../live.ts", import.meta.url)).text();
-const operationSrc = await Bun.file(new URL("../live-operations.ts", import.meta.url)).text();
-const stateSrc = await Bun.file(new URL("../state-notices.ts", import.meta.url)).text();
-const chromeSrc = await Bun.file(new URL("../ui/react/chrome.tsx", import.meta.url)).text();
-const mainSrc = await Bun.file(new URL("../main.ts", import.meta.url)).text();
-const liveSettingsSrc = await Bun.file(new URL("../live-settings.ts", import.meta.url)).text();
-const pairingSrc = await Bun.file(new URL("../pairing.ts", import.meta.url)).text();
+const liveSrc = await Bun.file(new URL("../features/connection/session-events.ts", import.meta.url)).text();
+const operationRunSrc = await Bun.file(new URL("../features/operations/run.ts", import.meta.url)).text();
+const operationOwnerSrc = await Bun.file(new URL("../features/operations/owner.ts", import.meta.url)).text();
+const operationSrc = await Bun.file(new URL("../features/operations/controller.ts", import.meta.url)).text();
+const noticesSrc = await Bun.file(new URL("../app/notices-store.ts", import.meta.url)).text();
+const noticeSrc = await Bun.file(new URL("../app/notice.tsx", import.meta.url)).text();
+const feedbackSrc = await Bun.file(new URL("../shared/ui/primitives/feedback.tsx", import.meta.url)).text();
+const mainSrc = await Bun.file(new URL("../app/bootstrap.ts", import.meta.url)).text();
+const liveSettingsSrc = await Bun.file(new URL("../features/settings/actions.ts", import.meta.url)).text();
+const pairingSrc = await Bun.file(new URL("../features/pairing/actions.ts", import.meta.url)).text();
 
 function fnBody(source: string, name: string): string {
   const start = source.indexOf(`function ${name}`);
@@ -124,9 +127,11 @@ describe("shipped user notices", () => {
   });
 
   test("herd operation success toasts dismiss; pending and reconnect stay", () => {
-    expect(operationSrc).toContain("showStatus(pending, true, noticeScope)");
-    expect(operationSrc).toContain("showStatus(success, false, options.noticeScope ?? owner.scope)");
-    expect(liveSrc).toContain("showStatus(sessionEventNotice(event), true)");
+    expect(operationRunSrc).toContain("showStatus(pending, true, noticeScope)");
+    expect(operationRunSrc).toContain("showStatus(success, false, options.noticeScope ?? owner.scope)");
+    expect(liveSrc).not.toMatch(/showStatus\(event\.message/);
+    expect(liveSrc).not.toMatch(/showError\(event\.message/);
+    expect(liveSrc).toContain("ports.showStatus(ports.sessionEventNotice(event), true)");
     expect(mainSrc).toContain('showStatus(t("net.offline"), true)');
     expect(mainSrc).toContain('showStatus(t("net.restored")');
     expect(mainSrc).not.toContain('showStatus(t("net.restored"), true)');
@@ -136,42 +141,58 @@ describe("shipped user notices", () => {
 
   test("prompt notices and refreshes stay with the pane that started the task", () => {
     const prompt = fnBody(operationSrc, "promptSelectedAgent");
-    const operationStart = operationSrc.indexOf("async function runHerdOperation");
-    const operationEnd = operationSrc.indexOf("async function selectCreatedPane", operationStart);
-    const operation = operationSrc.slice(operationStart, operationEnd);
-    const noticeSubscription = fnBody(chromeSrc, "useAppNotice");
     expect(prompt).toContain("const noticeScope = captureNoticeScope()");
     expect(prompt).toContain("noticeScopeIsCurrent(noticeScope)");
     expect(prompt).toContain("noticeScope,");
-    expect(operation).toContain("ownsOperationView(owner)");
-    const ownerCheck = fnBody(operationSrc, "ownsOperationView");
-    expect(ownerCheck).toContain("ownsComputer(owner)");
-    expect(ownerCheck).toContain("owner.incarnation === currentViewIncarnation()");
+    // The mutation runner revalidates the same owner contract (run.ts).
+    expect(operationRunSrc).toContain("ownsOperationView(owner, ports, ports.currentLive(), ports.currentDaemonId())");
+    expect(operationRunSrc).toContain("clearNoticeForScope(noticeScope)");
+    const ownerCheck = fnBody(operationOwnerSrc, "ownsOperationView");
+    expect(ownerCheck).toContain("ownsComputer(owner, current, daemonId)");
+    expect(ownerCheck).toContain("owner.incarnation === ports.currentIncarnation()");
     expect(ownerCheck).toContain("noticeScopeIsCurrent(owner.scope)");
-    const computerCheck = fnBody(operationSrc, "ownsComputer");
-    expect(computerCheck).toContain("state.live === owner.session");
-    expect(computerCheck).toContain("state.credential?.daemonId ?? null");
-    expect(operation).toContain("clearNoticeForScope(noticeScope)");
-    expect(noticeSubscription).toContain("useSyncExternalStore(subscribeNotice, visibleNotice)");
-    expect(chromeSrc).toContain('role={value.tone === "error" ? "alert" : "status"}');
-    expect(chromeSrc).toContain('aria-live={value.tone === "error" ? "assertive" : "polite"}');
-    expect(chromeSrc).toContain('aria-atomic="true"');
+    const computerCheck = fnBody(operationOwnerSrc, "ownsComputer");
+    expect(computerCheck).toContain("current === owner.session");
+    expect(computerCheck).toContain("daemonId === owner.scope.daemonId");
+    // The live session/daemon are the owner action-time defaults (function
+    // signature), so a stale facade identity is not read inside the check.
+    // Read the exact declaration span: from `function ownsComputer(` up to the
+    // body's opening brace (the first `{` on the parameter list line).
+    const ownsStart = operationOwnerSrc.indexOf("function ownsComputer(");
+    expect(ownsStart).toBeGreaterThanOrEqual(0);
+    const paramLineStart = operationOwnerSrc.indexOf("(", ownsStart);
+    const bodyOpen = operationOwnerSrc.indexOf("{", paramLineStart);
+    expect(bodyOpen).toBeGreaterThan(paramLineStart);
+    const computerSignature = operationOwnerSrc.slice(ownsStart, bodyOpen);
+    expect(computerSignature).toContain("current: LiveSession | null = liveSession()");
+    expect(computerSignature).toContain("daemonId: string | null = currentDaemonId()");
+    // The visible notice depends on the scope, which is read from four other
+    // domains, so the subscription has to cover them and not the record alone.
+    const noticeSubscription = fnBody(noticeSrc, "useAppNotice");
+    expect(noticeSubscription).toContain("useSyncExternalStore(subscribeVisibleNotice, visibleNotice)");
+    expect(feedbackSrc).toContain('role={value.tone === "error" ? "alert" : "status"}');
+    expect(feedbackSrc).toContain('aria-live={value.tone === "error" ? "assertive" : "polite"}');
+    expect(feedbackSrc).toContain('aria-atomic="true"');
   });
 
   test("status toast timeout drops the live notice without remounting the pane", () => {
-    const showStatus = fnBody(stateSrc, "showStatus");
-    const showError = fnBody(stateSrc, "showError");
-    const schedule = fnBody(stateSrc, "scheduleNoticeDismiss");
-    const clearNotice = fnBody(stateSrc, "clearNotice");
-    expect(stateSrc).toContain("STATUS_NOTICE_MS = 2800");
+    const showStatus = fnBody(noticesSrc, "showStatus");
+    const showError = fnBody(noticesSrc, "showError");
+    const schedule = fnBody(noticesSrc, "scheduleNoticeDismiss");
+    const clearNotice = fnBody(noticesSrc, "clearNotice");
+    expect(noticesSrc).toContain("STATUS_NOTICE_MS = 2800");
     expect(showStatus).toContain('scheduleNoticeDismiss(text, "status")');
     expect(showError).toContain('scheduleNoticeDismiss(text, "error")');
     expect(showError).toContain("const keep = typeof scopeOrPersist === \"boolean\" ? scopeOrPersist : persist");
-    expect(schedule).toContain("notify()");
+    // The timeout and an explicit clear both drop the notice through the notice
+    // domain's own publication, never through a page repaint.
+    expect(schedule).toContain("write((record)");
+    expect(schedule).toContain("record.notice = null");
     expect(schedule).not.toContain("render(");
     expect(showStatus).not.toContain("render(");
-    expect(clearNotice).toContain("notify()");
-    expect(schedule).toContain("state.notice = null");
-    expect(chromeSrc).toContain('data-app-notice={appNotice ? "" : undefined}');
+    expect(showError).toContain("write((record)");
+    expect(clearNotice).toContain("write((record)");
+    expect(clearNotice).toContain("record.notice = null");
+    expect(feedbackSrc).toContain('data-app-notice={appNotice ? "" : undefined}');
   });
 });

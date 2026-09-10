@@ -4,10 +4,30 @@ import type { AgentTraceItem } from "../src/lib/operations";
 import type { PairResult } from "../src/lib/protocol/client";
 import type { DeviceSummary } from "../src/lib/protocol/session-types";
 import type { GitDiff, GitStatus, WorkspaceDescriptor, WorkspaceDirectoryPage, WorkspaceFile } from "../src/lib/workspace";
+import {
+  MEDIA_CHUNK_BYTES,
+  MEDIA_IMAGE_MAX_BYTES,
+  MEDIA_MAX_BYTES,
+  MEDIA_MAX_PIXELS,
+  type WorkspaceMediaChunk,
+  type WorkspaceMediaKind,
+  type WorkspaceMediaOpen,
+} from "../src/lib/protocol/workspace-media";
 import { FIXED_NOW } from "./environment";
 
 export const REVISION = "a".repeat(64);
 export const PANE = "w1:p1";
+
+const TINY_PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00,
+  0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00,
+  0x00, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0xfe, 0xd4, 0xef, 0x00, 0x00,
+  0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+]);
+const TINY_PNG_SHA = "d6ad79754ddf8117ef07ae148ac239cf61d9ff537511a2b6f86e5d5b8de08d6b";
+const MEDIA_HANDLE = "media_" + "a".repeat(32);
 export const ROOT = "/work/pairfob";
 export const PANE_TEXT = [
   "\u001b[1;36mPairfob\u001b[0m  ·  workspace /work/pairfob",
@@ -103,17 +123,55 @@ export function directory(path = ""): WorkspaceDirectoryPage {
   const modified = FIXED_NOW - 3600000;
   const file = (name: string, parent = path, size = 284) => ({ name, path: parent ? `${parent}/${name}` : name,
     kind: "file" as const, size, modified_ms: modified, hidden: name.startsWith("."), revision: REVISION });
-  return { path, entries: path ? [file("app.ts"), file("styles.scss", path, 1840), file("types.ts", path, 312)] : [
-    { name: "src", path: "src", kind: "directory", size: 0, modified_ms: modified, hidden: false },
-    { name: "public", path: "public", kind: "directory", size: 0, modified_ms: modified, hidden: false },
-    file("README.md", "", 1485), file("package.json", "", 946), file(".gitignore", "", 64),
-  ], next_cursor: null, truncated: false, revision: REVISION };
+  const dir = (name: string, parent = path) => ({
+    name, path: parent ? `${parent}/${name}` : name, kind: "directory" as const, size: 0, modified_ms: modified, hidden: false,
+  });
+  // Extension-name/list samples for file-icon mapping (no media RPC fixtures:
+  // these are directory entries only, with no binary content).
+  const nested = path === "src"
+    ? [
+      file("app.ts"), file("app.tsx", path, 512), file("index.js", path, 196), file("styles.scss", path, 1840),
+      file("types.ts", path, 312), file("main.go", path, 890), file("util.py", path, 220), file("lib.rs", path, 740),
+      file("schema.proto", path, 640), file("query.sql", path, 410), file("App.vue", path, 380), file("Widget.svelte", path, 290),
+    ]
+    : path === "public"
+      ? [file("logo.svg", path, 812), file("index.html", path, 420), file("app.css", path, 160), file("notes.txt", path, 88)]
+      : path
+        ? [file("app.ts"), file("styles.scss", path, 1840), file("types.ts", path, 312)]
+        : [
+          dir("src"), dir("public"), dir("proto"), dir("workers"),
+          file("README.md", "", 1485), file("package.json", "", 946), file("go.mod", "", 180),
+          file("Dockerfile", "", 420), file(".gitignore", "", 64), file("wrangler.toml", "", 310),
+          file("LICENSE", "", 1080), file("Makefile", "", 220), file(".env.local", "", 96),
+          file("yarn.lock", "", 1800), file("tsconfig.json", "", 540),
+        ];
+  return { path, entries: nested, next_cursor: null, truncated: false, revision: REVISION };
 }
 
 export function file(path = "src/app.ts"): WorkspaceFile {
   const content = 'import { createRoot } from "react-dom/client";\n\nexport function App() {\n  return <main className="workspace">Ready</main>;\n}\n\ncreateRoot(document.getElementById("app")!).render(<App />);\n';
   return { path, kind: "text", size: new TextEncoder().encode(content).length, modified_ms: FIXED_NOW - 3600000,
     content, truncated: false, revision: REVISION };
+}
+
+export function mediaOpen(path: string): WorkspaceMediaOpen {
+  const kind: WorkspaceMediaKind = /\.(png|jpe?g|gif|webp)$/i.test(path) ? "image"
+    : /\.(mp4|webm|mov|m4v|ogv)$/i.test(path) ? "video"
+    : /\.(mp3|wav|ogg|oga|m4a|aac|flac|weba)$/i.test(path) ? "audio"
+    : "download";
+  const mime = kind === "image" ? "image/png" : kind === "video" ? "video/mp4" : kind === "audio" ? "audio/mpeg"
+    : path.endsWith(".svg") ? "image/svg+xml" : "application/octet-stream";
+  return {
+    handle: MEDIA_HANDLE, path, kind, mime, size: TINY_PNG.length, modified_ms: FIXED_NOW - 3600000, sha256: TINY_PNG_SHA,
+    expires_ms: FIXED_NOW + 60_000, chunk_bytes: MEDIA_CHUNK_BYTES,
+    max_bytes: kind === "image" ? MEDIA_IMAGE_MAX_BYTES : MEDIA_MAX_BYTES,
+    max_pixels: MEDIA_MAX_PIXELS, width: kind === "image" ? 1 : 0, height: kind === "image" ? 1 : 0,
+  };
+}
+
+export function mediaChunk(handle: string, offset: number, length: number): WorkspaceMediaChunk {
+  const bytes = TINY_PNG.subarray(offset, offset + length);
+  return { handle, offset, length: bytes.length, bytes, eof: offset + bytes.length >= TINY_PNG.length };
 }
 
 export function status(): GitStatus {

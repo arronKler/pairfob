@@ -71,3 +71,51 @@ func TestServiceKeepsInvalidExplicitHerdrOverrideForDiagnosis(t *testing.T) {
 	}
 	t.Fatal("explicit invalid override silently removed")
 }
+
+func TestServicePreservesCursorStoreWithoutPersistingCredentials(t *testing.T) {
+	t.Setenv("CURSOR_AUTH_TOKEN", "forbidden-cursor-token")
+	t.Setenv("CURSOR_API_KEY", "forbidden-cursor-api-key")
+	for _, mode := range []string{"file", "memory", "default"} {
+		t.Setenv("AGENT_CLI_CREDENTIAL_STORE", mode)
+		plist := launchdRuntimeEnvironment()
+		unit := systemdRuntimeEnvironment()
+		if !strings.Contains(plist, "<key>AGENT_CLI_CREDENTIAL_STORE</key>\n    <string>"+mode+"</string>") || !strings.Contains(unit, "Environment=AGENT_CLI_CREDENTIAL_STORE="+systemdEnvironmentValue(mode)+"\n") {
+			t.Fatal("service lost or changed the CLI credential-store selector")
+		}
+		for _, forbidden := range []string{"CURSOR_AUTH_TOKEN", "CURSOR_API_KEY", "forbidden-cursor"} {
+			if strings.Contains(plist, forbidden) || strings.Contains(unit, forbidden) {
+				t.Fatal("service persisted a Cursor credential")
+			}
+		}
+	}
+}
+
+func TestServiceDoesNotChangeCursorAccountWhenDroppingExplicitAuth(t *testing.T) {
+	for _, name := range []string{"CURSOR_AUTH_TOKEN", "CURSOR_API_KEY", "CURSOR_API_ENDPOINT", "PAIRFOB_CURSOR_QUOTA_NO_STORED_LOGIN"} {
+		t.Setenv(name, "")
+	}
+	for _, tc := range []struct{ name, value string }{
+		{"CURSOR_AUTH_TOKEN", "transient-token"}, {"CURSOR_API_KEY", "transient-key"},
+		{"CURSOR_API_ENDPOINT", "https://custom.example"}, {"PAIRFOB_CURSOR_QUOTA_NO_STORED_LOGIN", "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(tc.name, tc.value)
+			env := map[string]string{}
+			for _, entry := range serviceRuntimeEnvironment() {
+				env[entry[0]] = entry[1]
+			}
+			if env["PAIRFOB_CURSOR_QUOTA_NO_STORED_LOGIN"] != "1" {
+				t.Fatal("service may fall back to another saved Cursor account")
+			}
+			if env["CURSOR_AUTH_TOKEN"] != "" || env["CURSOR_API_KEY"] != "" || env["CURSOR_API_ENDPOINT"] != "" {
+				t.Fatal("service persisted explicit credentials or endpoint")
+			}
+		})
+	}
+	t.Setenv("CURSOR_API_ENDPOINT", "https://api2.cursor.sh/")
+	for _, entry := range serviceRuntimeEnvironment() {
+		if entry[0] == "PAIRFOB_CURSOR_QUOTA_NO_STORED_LOGIN" {
+			t.Fatal("official endpoint prevented use of the saved CLI login")
+		}
+	}
+}

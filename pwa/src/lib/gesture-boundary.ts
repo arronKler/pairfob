@@ -1,4 +1,4 @@
-const APPLICATION_GESTURE_SURFACE = ".full-terminal-host, .board-canvas";
+const APPLICATION_GESTURE_SURFACE = ".full-terminal-host, .board-canvas, .workspace-media-viewer";
 const LEGACY_GESTURE_EVENTS = ["gesturestart", "gesturechange"] as const;
 
 export function isPageZoomed(document: Document): boolean {
@@ -9,7 +9,7 @@ function applicationOwnsGesture(document: Document, target: EventTarget | null):
   const ElementType = document.defaultView?.Element;
   if (!ElementType || !(target instanceof ElementType)) return false;
   const surface = target.closest(APPLICATION_GESTURE_SURFACE);
-  return Boolean(surface && (surface.matches(".board-canvas") || !isPageZoomed(document)));
+  return Boolean(surface && (surface.matches(".board-canvas, .workspace-media-viewer") || !isPageZoomed(document)));
 }
 
 /**

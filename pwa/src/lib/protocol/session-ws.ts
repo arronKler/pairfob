@@ -50,6 +50,7 @@ import { DirectSessionDriver, type P2PAttemptObservation } from "./session-direc
 import { establishSessionEpoch } from "./session-handshake.ts";
 import { isRecord } from "./session-message.ts";
 import {
+  MEDIA_OPEN_RPC_TIMEOUT_MS,
   MUTATION_RPC_TIMEOUT_MS,
   SessionTransport,
   TERMINAL_RPC_TIMEOUT_MS,
@@ -65,6 +66,11 @@ import {
   parseWorkspaceMutation,
   type GitLayer,
 } from "../workspace.ts";
+import {
+  parseWorkspaceMediaChunk,
+  parseWorkspaceMediaClose,
+  parseWorkspaceMediaOpen,
+} from "./workspace-media.ts";
 import { TransportSwitchBarrier, type TransportSwitchLease } from "./transport-switch.ts";
 import {
   encodeTerminalInput,
@@ -78,6 +84,7 @@ import { AgentTraceRPC } from "./agent-trace.ts";
 export { validateSessionMessage } from "./session-message.ts";
 export { validateSessionEstablished } from "./session-handshake.ts";
 export {
+  MEDIA_OPEN_RPC_TIMEOUT_MS,
   MUTATION_RPC_TIMEOUT_MS,
   READ_RPC_TIMEOUT_MS,
   TERMINAL_RPC_TIMEOUT_MS,
@@ -308,6 +315,35 @@ class ReconnectingSession implements LiveSession {
     parseWorkspaceDirectory(await this.readRPC("WorkspaceList", { pane_id: paneId, path, cursor, limit }));
   workspaceRead = async (paneId: string, path: string) =>
     parseWorkspaceFile(await this.readRPC("WorkspaceRead", { pane_id: paneId, path }));
+  workspaceMediaOpen = async (paneId: string, path: string) => {
+    const transport = await this.captureTransport();
+    if (!transport) return Promise.reject(new ProtocolError("reconnecting", "连接正在恢复"));
+    return parseWorkspaceMediaOpen(await transport.rpc(
+      "WorkspaceMediaOpen",
+      { pane_id: paneId, path },
+      MEDIA_OPEN_RPC_TIMEOUT_MS,
+      undefined,
+      (result) => {
+        // Close on the SAME epoch that performed the Open — never re-capture the
+        // current transport (a P2P commit may have moved this session to a new
+        // direct transport; closing on it would send WorkspaceMediaClose to the
+        // wrong epoch). If the Open epoch is already retired this Close fails on
+        // send; the orphaned remote handle is then reclaimed authoritatively by
+        // the daemon's own media handle lease (idle/absolute timer) or that
+        // session's teardown — never by any client assumption. A session can
+        // survive a P2P switch, so this does not rely on the old epoch being torn
+        // down on send.
+        if (!isRecord(result) || typeof result.handle !== "string") return;
+        if (!/^media_[0-9a-f]{32}$/u.test(result.handle)) return;
+        const handle = result.handle;
+        void transport.rpc("WorkspaceMediaClose", { handle }).catch(() => undefined);
+      },
+    ));
+  };
+  workspaceMediaRead = async (handle: string, offset: number, length: number) =>
+    parseWorkspaceMediaChunk(await this.readRPC("WorkspaceMediaRead", { handle, offset, length }));
+  workspaceMediaClose = async (handle: string) =>
+    parseWorkspaceMediaClose(await this.readRPC("WorkspaceMediaClose", { handle }));
   gitStatus = async (paneId: string) => parseGitStatus(await this.readRPC("GitStatus", { pane_id: paneId }));
   gitDiff = async (paneId: string, path: string, layer: GitLayer) =>
     parseGitDiff(await this.readRPC("GitDiff", { pane_id: paneId, path, layer }));

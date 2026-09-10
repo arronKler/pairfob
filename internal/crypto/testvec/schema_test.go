@@ -81,7 +81,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"PushSubscribe", "RevokeDevice", "ListDevices", "History", "AgentTrace", "AgentTraceSummary", "AgentTraceDetail", "RenamePane",
 		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace",
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
-		"WorkspaceOpen", "WorkspaceList", "WorkspaceRead", "WorkspaceRename", "WorkspaceDelete", "GitStatus", "GitDiff", "GitBranches",
+		"WorkspaceOpen", "WorkspaceList", "WorkspaceRead", "WorkspaceMediaOpen", "WorkspaceMediaRead", "WorkspaceMediaClose", "WorkspaceRename", "WorkspaceDelete", "GitStatus", "GitDiff", "GitBranches",
 		"CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
 		"TransportOffer", "TransportCommit", "TransportRestart",
@@ -161,6 +161,29 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		if params.AdditionalProperties == nil || *params.AdditionalProperties {
 			t.Errorf("%s params must reject additional properties", op)
 		}
+	}
+	mediaOpen := paramsByOp["WorkspaceMediaOpen"]
+	if got, want := sortedPropertyNames(mediaOpen.Properties), []string{"pane_id", "path", "session"}; !slices.Equal(got, want) || !slices.Equal(mediaOpen.Required, []string{"pane_id", "path"}) {
+		t.Errorf("WorkspaceMediaOpen params fields=%q required=%q", got, mediaOpen.Required)
+	}
+	if mediaOpen.AdditionalProperties == nil || *mediaOpen.AdditionalProperties {
+		t.Error("WorkspaceMediaOpen params must reject additional properties")
+	}
+	mediaRead := paramsByOp["WorkspaceMediaRead"]
+	if got, want := sortedPropertyNames(mediaRead.Properties), []string{"handle", "length", "offset"}; !slices.Equal(got, want) {
+		t.Errorf("WorkspaceMediaRead params fields=%q", got)
+	}
+	mediaReadRequired := slices.Clone(mediaRead.Required)
+	sort.Strings(mediaReadRequired)
+	if !slices.Equal(mediaReadRequired, []string{"handle", "length", "offset"}) || mediaRead.AdditionalProperties == nil || *mediaRead.AdditionalProperties {
+		t.Errorf("WorkspaceMediaRead required=%q additional=%v", mediaReadRequired, mediaRead.AdditionalProperties)
+	}
+	mediaClose := paramsByOp["WorkspaceMediaClose"]
+	if got, want := sortedPropertyNames(mediaClose.Properties), []string{"handle"}; !slices.Equal(got, want) || !slices.Equal(mediaClose.Required, []string{"handle"}) {
+		t.Errorf("WorkspaceMediaClose params fields=%q required=%q", got, mediaClose.Required)
+	}
+	if mediaClose.AdditionalProperties == nil || *mediaClose.AdditionalProperties {
+		t.Error("WorkspaceMediaClose params must reject additional properties")
 	}
 	for op, required := range map[string][]string{
 		"WorkspaceList":   {"pane_id"},
@@ -273,6 +296,12 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	requireExactObject(t, schema.Defs, "workspaceListResult", []string{"path", "entries", "next_cursor", "truncated", "revision"})
 	requireExactObject(t, schema.Defs, "workspaceMutationResult", []string{"operation_id", "outcome"})
 	requireExactObject(t, schema.Defs, "workspaceReadResult", []string{"path", "kind", "size", "modified_ms", "content", "truncated", "revision"})
+	requireExactObject(t, schema.Defs, "workspaceMediaOpenResult", []string{
+		"handle", "path", "kind", "mime", "size", "modified_ms", "sha256", "expires_ms",
+		"chunk_bytes", "max_bytes", "max_pixels", "width", "height",
+	})
+	requireExactObject(t, schema.Defs, "workspaceMediaReadResult", []string{"handle", "offset", "length", "bytes", "eof"})
+	requireExactObject(t, schema.Defs, "workspaceMediaCloseResult", []string{"handle", "closed"})
 	requireExactObject(t, schema.Defs, "gitChange", []string{"path", "original_path", "index", "worktree"})
 	requireExactObject(t, schema.Defs, "gitStatusResult", []string{"branch", "head", "upstream", "ahead", "behind", "changes", "truncated", "revision"})
 	requireExactObject(t, schema.Defs, "gitDiffResult", []string{"path", "layer", "patch", "additions", "deletions", "binary", "truncated", "revision"})
