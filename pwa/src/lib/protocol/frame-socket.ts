@@ -74,6 +74,7 @@ export class FrameSocket implements FrameChannel {
 
   constructor(readonly ws: WebSocket) {
     ws.addEventListener("message", (event: MessageEvent) => {
+      if (this.ended) return;
       try {
         const frame = decode(toBytes(event.data));
         if (frame.version !== 1) throw new ProtocolError("bad_frame", "协议版本错误");
@@ -109,11 +110,15 @@ export class FrameSocket implements FrameChannel {
   }
 
   send(frame: Frame): void {
+    if (this.ended) throw new ProtocolError("disconnected", "连接已关闭");
     send(this.ws, frame);
   }
 
   close(code?: number, reason?: string): void {
-    this.ws.close(code, reason);
+    // Browser close events may arrive much later, especially after a network change.
+    // End protocol waits now; the wire closing handshake is only cleanup.
+    try { this.fail(new ProtocolError("disconnected", "连接已关闭", { reason: "local_close" })); }
+    finally { this.ws.close(code, reason); }
   }
 
   next(timeoutMs: number): Promise<Frame> {
@@ -130,6 +135,7 @@ export class FrameSocket implements FrameChannel {
   }
 
   use(handler: (frame: Frame) => void): void {
+    if (this.ended) throw new ProtocolError("disconnected", "连接已关闭");
     if (this.waiters.length) throw new Error("pending frame waiter");
     this.handler = handler;
     const queued = this.queue;
@@ -145,6 +151,7 @@ export class FrameSocket implements FrameChannel {
   private fail(error: ProtocolError): void {
     if (this.ended) return;
     this.ended = true;
+    this.queue = [];
     for (const waiter of this.waiters.splice(0)) {
       clearTimeout(waiter.timer);
       waiter.reject(error);

@@ -114,6 +114,7 @@ class ReconnectingSession implements LiveSession {
   private stopped = false;
   private checking = false;
   private reconnecting = false;
+  private reconnectRequested = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectAbort: AbortController | null = null;
   private networkMode: NetworkMode = "auto";
@@ -197,7 +198,10 @@ class ReconnectingSession implements LiveSession {
       this.direct.probe(this.transport, reason);
       return;
     }
-    if (this.reconnecting || this.connectAbort) return;
+    if (this.reconnecting || this.connectAbort) {
+      this.reconnectRequested = true;
+      return;
+    }
     if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.scheduleReconnect(true);
@@ -362,6 +366,7 @@ class ReconnectingSession implements LiveSession {
   close = (): void => {
     this.unwatchVisibility();
     this.stopped = true;
+    this.reconnectRequested = false;
     this.relayWarmup.cancel();
     this.connectAbort?.abort();
     this.connectAbort = null;
@@ -506,22 +511,27 @@ class ReconnectingSession implements LiveSession {
     this.emit({ type: "reconnecting", message: immediate ? "正在重新连接" : `${Math.ceil(delay / 1000)} 秒后重连` });
     this.reconnectTimer = globalThis.setTimeout(async () => {
       this.reconnectTimer = null;
-      if (pageHidden()) return;
+      if (this.stopped || !this.networkAvailable || pageHidden()) return;
       this.reconnecting = true;
+      this.reconnectRequested = false;
       try {
         await this.connect();
       } catch (error) {
-        if (!this.networkAvailable) return;
-        this.checking = false;
+        if (this.stopped || !this.networkAvailable) return;
         const protocolError = error instanceof ProtocolError ? error : new ProtocolError("disconnected", String(error));
         if (TERMINAL_CODES.has(protocolError.code)) {
           this.stopped = true;
           this.unwatchVisibility();
           this.emit({ type: "terminal", code: protocolError.code, message: protocolError.message });
-        } else this.emit({ type: "disconnected", code: protocolError.code, message: protocolError.message });
+        } else if (!this.reconnectRequested) {
+          this.checking = false;
+          this.emit({ type: "disconnected", code: protocolError.code, message: protocolError.message });
+        }
       } finally {
         this.reconnecting = false;
-        if (!this.stopped && !this.transport) this.scheduleReconnect();
+        const immediate = this.reconnectRequested;
+        this.reconnectRequested = false;
+        if (!this.stopped && !this.transport) this.scheduleReconnect(immediate);
       }
     }, delay);
   }

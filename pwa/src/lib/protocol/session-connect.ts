@@ -21,7 +21,7 @@ export async function connectSession(
   const trace = prepared?.trace ?? connectionTrace();
   let socket = prepared?.socket;
   let transport: SessionTransport | undefined;
-  const abort = () => socket?.ws.close(1000, "connection cancelled");
+  const abort = () => socket?.close(1000, "connection cancelled");
   try {
     if (!socket) {
       socket = await openWS(relayWS, muxSubprotocol(protocol), signal);
@@ -36,6 +36,7 @@ export async function connectSession(
     if (bound.typ !== Typ.SESSION_BOUND) throw new ProtocolError("bad_message", `预期 SESSION_BOUND，实际 ${bound.typ}`);
     trace("route_bound");
     const epoch = await establishSessionEpoch(socket, bound.routeId, pair, protocol, trace);
+    if (signal?.aborted) throw new ProtocolError("disconnected", "连接已取消");
     transport = new SessionTransport(socket, epoch.routeId, epoch.c2s, epoch.s2c, emit);
     // A fresh encrypted response is still required before enabling operations.
     await transport.rpc("Ping", { t_ms: Date.now() }, 8_000);
@@ -45,7 +46,7 @@ export async function connectSession(
   } catch (error) {
     trace("connect_failed", error instanceof ProtocolError ? error.code : "error");
     if (transport) transport.close();
-    else socket?.ws.close(1000, "session handshake failed");
+    else socket?.close(1000, "session handshake failed");
     throw error;
   } finally { signal?.removeEventListener("abort", abort); }
 }
