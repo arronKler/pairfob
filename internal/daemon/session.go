@@ -323,7 +323,7 @@ func (e *Engine) FinishHello3(s *sess, proofP []byte, ts int64) bool {
 			e.closeSession(s.routeID, "daemon_offline", false)
 			return false
 		}
-		e.audit("p2p_ready", map[string]any{"device_id": s.deviceID})
+		e.audit("p2p_ready", map[string]any{"device_id": s.deviceID, "route_id": hex.EncodeToString(s.routeID[:]), "attempt_id": s.attemptID})
 		return true
 	}
 	old, hasOld := e.byDevice[s.deviceID]
@@ -407,10 +407,10 @@ func (e *Engine) failTransportEpoch(s *sess) {
 			delete(e.byDevice, s.deviceID)
 		}
 	}
+	record := captureSessionClose(s)
 	s.state = "closed"
-	deviceID, transport := s.deviceID, s.transport
 	e.mu.Unlock()
-	e.audit("session_send_failed", map[string]any{"device_id": deviceID, "transport": transport})
+	e.auditSessionClose("session_send_failed", "send_failed", "", record)
 	stopSessionRPC(s)
 	closeSessionTerminal(s)
 	e.closeSessionMedia(s)
@@ -423,6 +423,14 @@ func (e *Engine) failTransportEpoch(s *sess) {
 }
 
 func (e *Engine) closeSession(rid [16]byte, code string, notify bool) {
+	reason := code
+	if reason == "" {
+		reason = "session_closed"
+	}
+	e.closeSessionWithReason(rid, code, notify, reason)
+}
+
+func (e *Engine) closeSessionWithReason(rid [16]byte, code string, notify bool, reason string) {
 	e.mu.Lock()
 	s := e.sessions[rid]
 	if s == nil {
@@ -430,12 +438,14 @@ func (e *Engine) closeSession(rid [16]byte, code string, notify bool) {
 		return
 	}
 	deviceID := s.deviceID
+	record := captureSessionClose(s)
 	s.state = "closed"
 	if active, ok := e.byDevice[deviceID]; ok && active == rid {
 		delete(e.byDevice, deviceID)
 	}
 	delete(e.sessions, rid)
 	e.mu.Unlock()
+	e.auditSessionClose("session_closed", reason, code, record)
 	stopSessionRPC(s)
 	closeSessionTerminal(s)
 	e.closeSessionMedia(s)
@@ -483,10 +493,12 @@ func (e *Engine) deviceConnectedLocked(deviceID string) bool {
 func (e *Engine) ResetTransport() bool {
 	e.mu.Lock()
 	sessions := make([]*sess, 0, len(e.sessions))
+	records := make([]sessionCloseRecord, 0, len(e.sessions))
 	for rid, s := range e.sessions {
 		if s.transport == "p2p" && s.state == "established" {
 			continue
 		}
+		records = append(records, captureSessionClose(s))
 		s.state = "closed"
 		sessions = append(sessions, s)
 		delete(e.sessions, rid)
@@ -506,7 +518,8 @@ func (e *Engine) ResetTransport() bool {
 		}
 	}
 	e.mu.Unlock()
-	for _, s := range sessions {
+	for i, s := range sessions {
+		e.auditSessionClose("session_closed", "relay_transport_reset", "", records[i])
 		stopSessionRPC(s)
 		closeSessionTerminal(s)
 		e.closeSessionMedia(s)

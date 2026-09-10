@@ -1,3 +1,4 @@
+import { exportConnectionDiagnostics } from "../../features/settings/connection-diagnostics";
 import { useSyncExternalStore, type ReactNode } from "react";
 import { openComputers } from "../../features/computers/actions";
 import { useComputers } from "../../features/computers/hooks";
@@ -236,6 +237,7 @@ export function SettingsContent({ withBack }: { withBack: boolean }) {
           onClick={openComputers}
         />
         <SetRow label={t("settings.status")} value={status.text} tone={status.tone} />
+        <SetNavRow label={t("settings.exportConnectionDiagnostics")} value={t("settings.connectionDiagnosticsLocal")} onClick={exportConnectionDiagnostics} />
         <SetRow label={t("settings.networkRtt")} value={settingsNetworkPath(networkInput)} />
         <div className="set-row set-row-stack network-mode-row">
           {p2pFail ? <p className="set-note network-p2p-fail">{p2pFail}</p> : null}

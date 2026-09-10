@@ -1,3 +1,4 @@
+import { connectionDiagnostics } from "./connection-diagnostics";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Direction, DIR_C, DIR_S } from "./aead.ts";
 import { DataFrameChannel } from "./data-channel.ts";
@@ -382,4 +383,23 @@ describe("heartbeat payload helper still matches the transport", () => {
     expect(c2s.seq).toBe(0n);
     transport.close();
   });
+});
+
+test("disconnect evidence retains pending count and route before cleanup", async () => {
+  const channel = new MockChannel();
+  const { c2s, s2c } = keys();
+  const route = new Uint8Array(16).fill(42);
+  const transport = openTransport(channel, c2s, s2c, route);
+  const pending = transport.rpc("Ping", {});
+  const result = pending.catch((error) => error);
+  await Promise.resolve();
+  transport.suspend(new ProtocolError("timeout", "private error text", { reason: "foreground_probe_failed" }));
+  await result;
+  const record = connectionDiagnostics().filter((record) => record.route_id === "2a".repeat(16) && record.event === "disconnect").at(-1)!;
+  expect(record.pending_rpcs).toBe(1);
+  expect(record.reason).toBe("foreground_probe_failed");
+  expect(record.code).toBe("timeout");
+  expect(JSON.stringify(record)).not.toContain("private");
+  transport.close();
+  expect(connectionDiagnostics().filter((record) => record.route_id === "2a".repeat(16) && record.event === "disconnect")).toHaveLength(1);
 });

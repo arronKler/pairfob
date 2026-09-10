@@ -149,3 +149,16 @@ describe("independent ICE pause owners", () => {
     });
   }
 });
+
+test("queue overflow reports the first cause and states before cleanup", () => {
+  const peer = new FakePeer();
+  const channel = new FakeChannel();
+  channel.bufferedAmount = 2 * 1024 * 1024;
+  const link = new DataFrameChannel(channel as unknown as RTCDataChannel, peer as unknown as RTCPeerConnection);
+  const failures: ProtocolError[] = [];
+  link.onClose((error) => failures.push(error));
+  expect(() => link.send(jsonFrame(Typ.PING, new Uint8Array(16), {}))).toThrow();
+  expect(failures).toHaveLength(1);
+  expect(failures[0]!.diagnostics).toEqual({ reason: "send_queue_full", ice_state: "connected", peer_state: "connected", channel_state: "open", buffered_bytes: 2 * 1024 * 1024 });
+  expect(peer.connectionState).toBe("closed");
+});

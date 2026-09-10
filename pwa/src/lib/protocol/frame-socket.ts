@@ -1,3 +1,4 @@
+import type { ConnectionDetails } from "./connection-diagnostics.ts";
 import { b64url, b64urlDecode } from "./bytes.ts";
 import { decode, encode, parseJSON, type Frame } from "./envelope.ts";
 import { ProtocolError } from "./errors.ts";
@@ -69,6 +70,7 @@ export class FrameSocket implements FrameChannel {
   private handler: ((frame: Frame) => void) | null = null;
   private closeHandlers = new Set<(error: ProtocolError) => void>();
   private ended = false;
+  private diagnosticHandler?: (details: ConnectionDetails) => void;
 
   constructor(readonly ws: WebSocket) {
     ws.addEventListener("message", (event: MessageEvent) => {
@@ -88,8 +90,22 @@ export class FrameSocket implements FrameChannel {
         ws.close(1002, "bad frame");
       }
     });
-    ws.addEventListener("close", () => this.fail(new ProtocolError("disconnected", "连接已断开")));
-    ws.addEventListener("error", () => this.fail(new ProtocolError("disconnected", "WebSocket 错误")));
+    ws.addEventListener("close", (event) => {
+      const details = { reason: "websocket_closed", ws_code: event.code, ws_clean: event.wasClean };
+      // An error event often precedes close. Preserve the eventual close code
+      // without delivering another disconnect or starting another recovery.
+      this.diagnosticHandler?.(details);
+      this.fail(new ProtocolError("disconnected", "连接已断开", details));
+    });
+    ws.addEventListener("error", () => this.fail(new ProtocolError("disconnected", "WebSocket 错误", { reason: "websocket_error" })));
+  }
+
+  onDiagnostic(handler: (details: ConnectionDetails) => void): void {
+    this.diagnosticHandler = handler;
+  }
+
+  diagnosticState(): ConnectionDetails {
+    return { channel_state: ["connecting", "open", "closing", "closed"][this.ws.readyState], buffered_bytes: this.ws.bufferedAmount };
   }
 
   send(frame: Frame): void {

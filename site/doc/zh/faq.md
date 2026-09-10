@@ -121,3 +121,9 @@ description: 账号、Herdr、锁屏、合盖、断网、丢失手机、Windows�
 去 GitHub 开 issue：<https://github.com/arronKler/pairfob/issues/new>
 
 功能和体验问题走这条公开渠道。安全漏洞请走 [GitHub Security Advisories](https://github.com/arronKler/pairfob/security/advisories/new)，不要开公开 issue。
+
+## 频繁断开、重连，怎么保留诊断？
+
+在 Pairfob 页面打开 **设置 → 导出连接诊断**。浏览器在本标签页保留最近 24 小时、最多 200 条连接事件；刷新后仍保留，关闭标签页后可能清除。存储不可用时只保留当前页面内存中的记录。日志不会自动上传。
+
+诊断包含会话路由、连接状态、心跳等待时间和断开分类，不含终端内容、密钥、SDP 或原始异常文本。电脑端的 `audit.log` 同时记录 `session_closed` / `p2p_closed`；用相同的 `route_id` 对齐两端。`reason` 是会话关闭原因，`transport_reason` 是底层首先观察到的原因，不能单凭它认定网络故障根因。

@@ -1,3 +1,4 @@
+import { recordConnectionDiagnostic, type ConnectionDetails } from "./connection-diagnostics.ts";
 import { Direction } from "./aead.ts";
 import { b64url } from "./bytes.ts";
 import { DataFrameChannel } from "./data-channel.ts";
@@ -71,6 +72,8 @@ export class SessionTransport {
     private readonly s2c: Direction,
     private readonly emit: (event: SessionEvent) => void,
   ) {
+    channel.onDiagnostic?.((details) => this.diagnose("transport_closed", details));
+    this.diagnose("session_open");
     channel.use((frame) => this.receive(frame));
     channel.onClose((error) => this.disconnect(error));
     if (this.stopped) return;
@@ -87,7 +90,7 @@ export class SessionTransport {
         this.expectedPongAt = performance.now();
         this.channel.send({ version: 1, typ: Typ.PING, flags: 0, routeId: this.routeId, payload });
       } catch {
-        this.disconnect(new ProtocolError("disconnected", "心跳发送失败"));
+        this.disconnect(new ProtocolError("disconnected", "心跳发送失败", { reason: "heartbeat_send_failed" }));
         this.channel.close(1011, "heartbeat send failed");
       }
     };
@@ -102,6 +105,7 @@ export class SessionTransport {
     const wasHidden = this.hidden;
     if (!hidden && !wasHidden) return;
     this.hidden = hidden;
+    this.diagnose(hidden ? "page_hidden" : "page_visible");
     if (this.resumeTimer !== null) clearTimeout(this.resumeTimer);
     this.resumeTimer = null;
     if (hidden) {
@@ -155,7 +159,7 @@ export class SessionTransport {
         this.pending.delete(id);
         this.dropLate(id);
         reject(error instanceof ProtocolError ? error : new ProtocolError("disconnected", String(error)));
-        this.failEpoch(new ProtocolError("disconnected", "加密帧发送失败，正在恢复连接"));
+        this.failEpoch(new ProtocolError("disconnected", "加密帧发送失败，正在恢复连接", { reason: "encrypted_send_failed" }));
       }
     });
   }
@@ -192,8 +196,9 @@ export class SessionTransport {
     }
   }
 
-  close(): void {
+  close(reason = "local_close"): void {
     if (this.stopped) return;
+    this.diagnose("session_close", { reason });
     this.stopped = true;
     this.stopLifecycle();
     this.rejectPending(new ProtocolError("closed", "会话已关闭"));
@@ -213,7 +218,7 @@ export class SessionTransport {
         try {
           this.channel.send({ ...frame, typ: Typ.PONG });
         } catch {
-          this.failEpoch(new ProtocolError("disconnected", "心跳发送失败"));
+          this.failEpoch(new ProtocolError("disconnected", "心跳发送失败", { reason: "heartbeat_send_failed" }));
         }
         return;
       }
@@ -290,7 +295,7 @@ export class SessionTransport {
     try {
       this.sendSealed(plaintext);
     } catch {
-      this.failEpoch(new ProtocolError("disconnected", "加密帧发送失败，正在恢复连接"));
+      this.failEpoch(new ProtocolError("disconnected", "加密帧发送失败，正在恢复连接", { reason: "encrypted_send_failed" }));
     }
   }
 
@@ -313,8 +318,18 @@ export class SessionTransport {
     }
   }
 
+  diagnose(event: string, details: ConnectionDetails & { code?: string } = {}): void {
+    recordConnectionDiagnostic({
+      event, route_id: Array.from(this.routeId, (byte) => byte.toString(16).padStart(2, "0")).join(""),
+      transport: this.kind, hidden: this.hidden, pending_rpcs: this.pending.size,
+      pong_wait_ms: this.expectedPong ? Math.max(0, performance.now() - this.expectedPongAt) : 0,
+      ...this.channel.diagnosticState?.(), ...details,
+    });
+  }
+
   private disconnect(error: ProtocolError): void {
     if (this.stopped) return;
+    this.diagnose("disconnect", { code: error.code, reason: error.code, ...error.diagnostics });
     this.stopped = true;
     this.stopError = error;
     this.stopLifecycle();

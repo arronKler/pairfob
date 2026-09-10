@@ -1,7 +1,8 @@
+import { recordConnectionDiagnostic } from "../../lib/protocol/connection-diagnostics";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { act } from "react";
-import { beforeEach, afterEach, describe, expect, test } from "bun:test";
+import { beforeEach, afterEach, describe, expect, spyOn, test } from "bun:test";
 import { batch } from "../../shared/model/domain-store";
 import { mountApp, unmountApp } from "../../app/mount";
 import { appRoot } from "../../app/dom-root";
@@ -265,4 +266,30 @@ describe("settings network transport (actual App)", () => {
     expect(fail?.textContent).toBe("两端网络无法互相直连，常见于蜂窝网络或严格 NAT。");
     expect(app.querySelector(".set-card > .network-p2p-fail")).toBeNull();
   });
+});
+
+test("connection diagnostics export works from settings while disconnected", async () => {
+  mountSettings();
+  recordConnectionDiagnostic({ event: "disconnect", reason: "heartbeat_timeout" });
+  const button = [...appRoot().querySelectorAll("button")].find((item) => item.textContent?.includes("导出连接诊断"));
+  expect(button).toBeDefined();
+  let blob: Blob | undefined;
+  let downloaded = "";
+  let release = () => undefined;
+  const create = spyOn(URL, "createObjectURL").mockImplementation((value) => { blob = value as Blob; return "blob:diagnostics-test"; });
+  const revoke = spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+  const click = spyOn(happy.HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloaded = this.download; });
+  const timer = spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void) => { release = callback; return 1; }) as typeof setTimeout);
+  try {
+    button!.click();
+    expect(downloaded).toMatch(/^pairfob-connection-\d+\.json$/);
+    const report = JSON.parse(await blob!.text());
+    expect(report.records.some((record: { reason?: string }) => record.reason === "heartbeat_timeout")).toBe(true);
+    expect(revoke).not.toHaveBeenCalled();
+    release();
+    expect(revoke).toHaveBeenCalledWith("blob:diagnostics-test");
+    expect(document.querySelector('a[download^="pairfob-connection-"]')).toBeNull();
+  } finally {
+    timer.mockRestore(); click.mockRestore(); revoke.mockRestore(); create.mockRestore();
+  }
 });

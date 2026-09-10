@@ -121,3 +121,9 @@ No. [Chinese docs](/zh/). The language menu in the docs top bar switches the doc
 Open a GitHub issue: <https://github.com/arronKler/pairfob/issues/new>
 
 That is the public channel for bugs and product feedback. A security vulnerability goes to [GitHub Security Advisories](https://github.com/arronKler/pairfob/security/advisories/new), not a public issue.
+
+## How can I diagnose repeated disconnects?
+
+Open **Settings → Export connection diagnostics** in Pairfob. The browser keeps up to 200 connection events from the last 24 hours in this tab, including across reloads. Closing the tab may clear them. If browser storage is unavailable, only the current page's in-memory records remain. Records are not uploaded automatically.
+
+Diagnostics contain route IDs, connection states, heartbeat wait times and failure classifications, but no terminal content, keys, SDP or raw exception text. The daemon also writes `session_closed` / `p2p_closed` to `audit.log`; correlate both sides by `route_id`. `reason` describes session closure and `transport_reason` the transport's first observed cause, not a proven network root cause.

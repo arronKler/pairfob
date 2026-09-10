@@ -269,6 +269,8 @@ export const en: { [K in keyof typeof zh]: string } = {
   "forget": "Forget",
 
   "settings.title": "Settings",
+  "settings.exportConnectionDiagnostics": "Export connection diagnostics",
+  "settings.connectionDiagnosticsLocal": "This tab · last 24 hours",
   "settings.connection": "Connection",
   "settings.computer": "Computer",
   "settings.status": "Status",

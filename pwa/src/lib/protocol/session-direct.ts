@@ -165,13 +165,18 @@ export class DirectSessionDriver {
     if (!current()) return;
     try {
       const timeout = transport.kind === "p2p" && reason === "path" ? DIRECT_HEALTH_PING_MS : DIRECT_RESUME_GRACE_MS;
+      transport.diagnose("probe_start", { reason });
       await transport.rpc("Ping", { t_ms: Date.now() }, timeout);
       if (!current()) return;
+      transport.diagnose("probe_success", { reason });
       this.host.emit({ type: "connected" });
       if (current() && transport.kind === "relay") this.startAutomaticDirectUpgrade(transport);
     } catch (error) {
       if (current()) {
-        transport.suspend(error instanceof ProtocolError ? error : new ProtocolError("disconnected", "前台探测失败"));
+        const failure = error instanceof ProtocolError ? error : new ProtocolError("disconnected", "前台探测失败");
+        const cause = reason === "path" ? "path_probe_failed" : "foreground_probe_failed";
+        transport.diagnose("probe_failed", { reason: cause, code: failure.code });
+        transport.suspend(new ProtocolError(failure.code, failure.message, { reason: cause, ...failure.diagnostics }));
       }
     }
   }
@@ -264,7 +269,7 @@ export class DirectSessionDriver {
       this.host.emit({ type: "latency", rttMs: direct.rttMs, transport: "p2p" });
       this.host.observe({ result: "connected", extra: iceGathering });
       this.clearDirectRetry();
-      relay.close();
+      relay.close("transport_upgrade");
     } catch (error) {
       const diagnostic = directFailureDiagnostic(error);
       this.host.observe({

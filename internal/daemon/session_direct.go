@@ -164,21 +164,27 @@ func (e *Engine) rpcTransportOffer(parent *sess, id string, params json.RawMessa
 		"route_id":   hex.EncodeToString(route[:]),
 		"sdp":        answer,
 	}) {
-		e.expireDirectCandidate(route, candidate)
+		e.expireDirectCandidateWithReason(route, candidate, "offer_reply_failed")
 		return
 	}
-	e.audit("p2p_offer", map[string]any{"device_id": parent.deviceID})
+	e.audit("p2p_offer", map[string]any{"device_id": parent.deviceID, "route_id": hex.EncodeToString(route[:]), "attempt_id": input.AttemptID})
 }
 
 func (e *Engine) expireDirectCandidate(route [16]byte, candidate *sess) {
+	e.expireDirectCandidateWithReason(route, candidate, "candidate_expired")
+}
+
+func (e *Engine) expireDirectCandidateWithReason(route [16]byte, candidate *sess, reason string) {
 	e.mu.Lock()
 	if e.sessions[route] != candidate || candidate.state == "established" {
 		e.mu.Unlock()
 		return
 	}
+	record := captureSessionClose(candidate)
 	delete(e.sessions, route)
 	candidate.state = "closed"
 	e.mu.Unlock()
+	e.auditSessionClose("session_closed", reason, "", record)
 	stopSessionRPC(candidate)
 	candidate.sendMu.Lock()
 	e.wipeSession(candidate)
@@ -190,19 +196,19 @@ func (e *Engine) expireDirectCandidate(route [16]byte, candidate *sess) {
 
 func (e *Engine) handleDirectFrame(route [16]byte, conn mux.Conn, frame envelope.Frame) {
 	if frame.Version != 1 || frame.RouteID != route {
-		conn.Close()
+		closeDirectConnection(conn, "invalid_frame_route")
 		return
 	}
 	if frame.Typ == envelope.TypPING {
 		if len(frame.Payload) != 8 {
-			conn.Close()
+			closeDirectConnection(conn, "invalid_heartbeat")
 			return
 		}
 		_ = conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypPONG, RouteID: route, Payload: append([]byte(nil), frame.Payload...)})
 		return
 	}
 	if frame.Typ != envelope.TypFWD {
-		conn.Close()
+		closeDirectConnection(conn, "invalid_frame_type")
 		return
 	}
 	e.mu.Lock()
@@ -218,10 +224,14 @@ func (e *Engine) handleDirectClose(route [16]byte, conn mux.Conn) {
 	e.mu.Lock()
 	s := e.sessions[route]
 	active := s != nil && s.link == conn
+	var record sessionCloseRecord
+	if active {
+		record = captureSessionClose(s)
+	}
 	e.mu.Unlock()
 	if active {
-		e.closeSession(route, "", false)
-		e.audit("p2p_closed", map[string]any{"device_id": s.deviceID})
+		e.closeSessionWithReason(route, "", false, "direct_transport_closed")
+		e.auditSessionClose("p2p_closed", "direct_transport_closed", "", record)
 	}
 }
 
@@ -321,7 +331,7 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 	// The parent's media follows the *sess owner onto the new route with no map
 	// migration; the later closeSession(route) drains that same owner.
 	e.closeSessionMedia(candidate)
-	e.audit("p2p_committed", map[string]any{"device_id": parent.deviceID})
+	e.audit("p2p_committed", map[string]any{"device_id": parent.deviceID, "route_id": hex.EncodeToString(route[:]), "previous_route_id": hex.EncodeToString(oldRoute[:])})
 }
 
 func (e *Engine) rpcTransportRestart(parent *sess, id string, params json.RawMessage) {

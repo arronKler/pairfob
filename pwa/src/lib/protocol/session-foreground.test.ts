@@ -94,6 +94,7 @@ function driverFixture() {
   const failures: ProtocolError[] = [];
   const session = {
     kind: "p2p",
+    diagnose: () => undefined,
     directChannel: () => ({ iceDisconnected: () => true }),
     rpc: (_op: string, _params: unknown, timeout?: number) => new Promise((resolve, reject) => calls.push({ timeout, resolve, reject })),
     suspend: (error: ProtocolError) => failures.push(error),
@@ -132,6 +133,7 @@ describe("foreground P2P probes", () => {
     f.calls[0]!.reject(new ProtocolError("timeout", "test"));
     await settle();
     expect(f.failures).toHaveLength(1);
+    expect(f.failures[0]!.diagnostics?.reason).toBe("foreground_probe_failed");
     f.driver.dispose();
   });
 

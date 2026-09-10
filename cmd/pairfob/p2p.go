@@ -5,9 +5,11 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pion/webrtc/v4"
 
+	"pairfob/internal/daemon"
 	"pairfob/internal/envelope"
 	"pairfob/internal/mux"
 )
@@ -38,7 +40,7 @@ func (a *webRTCAcceptor) Accept(
 	if err != nil {
 		return "", nil, err
 	}
-	link := &webRTCConn{peer: peer, onFrame: onFrame, onClose: onClose}
+	link := &webRTCConn{peer: peer, onFrame: onFrame, onClose: onClose, createdAt: time.Now()}
 	peer.OnDataChannel(func(channel *webrtc.DataChannel) {
 		if channel.Label() != p2pDataChannelLabel || channel.Protocol() != p2pDataChannelProtocol ||
 			!channel.Ordered() || channel.MaxPacketLifeTime() != nil || channel.MaxRetransmits() != nil ||
@@ -49,7 +51,7 @@ func (a *webRTCAcceptor) Accept(
 		channel.OnMessage(func(message webrtc.DataChannelMessage) {
 			encoded, assembleErr := link.assembler.Push(message.Data)
 			if assembleErr != nil {
-				link.Close()
+				link.closeWithReason("invalid_fragment", assembleErr)
 				return
 			}
 			if encoded == nil {
@@ -57,17 +59,17 @@ func (a *webRTCAcceptor) Accept(
 			}
 			frame, decodeErr := envelope.Decode(encoded)
 			if decodeErr != nil {
-				link.Close()
+				link.closeWithReason("invalid_frame", decodeErr)
 				return
 			}
 			onFrame(link, frame)
 		})
-		channel.OnClose(link.notifyClosed)
-		channel.OnError(func(error) { link.notifyClosed() })
+		channel.OnClose(func() { link.notifyClosedWithReason("data_channel_closed", nil) })
+		channel.OnError(func(err error) { link.notifyClosedWithReason("data_channel_error", err) })
 	})
 	peer.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateClosed {
-			link.notifyClosed()
+			link.notifyClosedWithReason("peer_"+state.String(), nil)
 		}
 	})
 	if err := peer.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer}); err != nil {
@@ -99,15 +101,18 @@ func (a *webRTCAcceptor) Accept(
 }
 
 type webRTCConn struct {
-	peer      *webrtc.PeerConnection
-	onFrame   func(mux.Conn, envelope.Frame)
-	onClose   func(mux.Conn)
-	mu        sync.Mutex
-	restartMu sync.Mutex
-	channel   *webrtc.DataChannel
-	closed    bool
-	closeOnce sync.Once
-	assembler p2pFrameAssembler
+	peer         *webrtc.PeerConnection
+	onFrame      func(mux.Conn, envelope.Frame)
+	onClose      func(mux.Conn)
+	mu           sync.Mutex
+	restartMu    sync.Mutex
+	channel      *webrtc.DataChannel
+	closed       bool
+	createdAt    time.Time
+	diagnosticMu sync.Mutex
+	closeInfo    daemon.DirectCloseInfo
+	closeOnce    sync.Once
+	assembler    p2pFrameAssembler
 	// maxBuffered is 0 for the product 2 MiB cap; tests may lower it.
 	maxBuffered uint64
 }
@@ -176,6 +181,7 @@ func (c *webRTCConn) Send(frame envelope.Frame) error {
 	c.mu.Lock()
 	if c.closed || c.channel == nil || c.channel.ReadyState() != webrtc.DataChannelStateOpen {
 		c.mu.Unlock()
+		c.noteClose("send_not_open", nil)
 		return errors.New("P2P data channel is not open")
 	}
 	incoming := uint64(0)
@@ -184,13 +190,13 @@ func (c *webRTCConn) Send(frame envelope.Frame) error {
 	}
 	if c.channel.BufferedAmount()+incoming > c.maxBufferedAmount() {
 		c.mu.Unlock()
-		c.Close()
+		c.closeWithReason("send_queue_full", nil)
 		return errors.New("P2P send queue is full")
 	}
 	for _, chunk := range chunks {
 		if err := c.channel.Send(chunk); err != nil {
 			c.mu.Unlock()
-			c.Close()
+			c.closeWithReason("send_failed", err)
 			return err
 		}
 	}
@@ -199,6 +205,7 @@ func (c *webRTCConn) Send(frame envelope.Frame) error {
 }
 
 func (c *webRTCConn) Close() {
+	c.noteClose("local_close", nil)
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()

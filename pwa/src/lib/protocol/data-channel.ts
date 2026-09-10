@@ -58,16 +58,23 @@ export class DataFrameChannel implements FrameChannel {
       }
     });
     channel.addEventListener("close", () => {
-      this.fail(new ProtocolError("disconnected", "P2P 连接已断开"));
+      this.fail(new ProtocolError("disconnected", "P2P 连接已断开", { reason: "data_channel_closed", ...this.diagnosticState() }));
       try { this.peer.close(); } catch { /* already closed */ }
     });
     channel.addEventListener("error", () => {
-      this.fail(new ProtocolError("disconnected", "P2P DataChannel 错误"));
+      this.fail(new ProtocolError("disconnected", "P2P DataChannel 错误", { reason: "data_channel_error", ...this.diagnosticState() }));
       this.close();
     });
     peer.addEventListener("iceconnectionstatechange", this.onICEState);
     peer.addEventListener("connectionstatechange", this.onConnectionState);
     this.handleICE();
+  }
+
+  diagnosticState() {
+    return {
+      ice_state: this.peer.iceConnectionState, peer_state: this.peer.connectionState,
+      channel_state: this.channel.readyState, buffered_bytes: this.channel.bufferedAmount,
+    };
   }
 
   peerConnection(): RTCPeerConnection {
@@ -106,18 +113,18 @@ export class DataFrameChannel implements FrameChannel {
   }
 
   send(frame: Frame): void {
-    if (this.ended || this.channel.readyState !== "open") throw new ProtocolError("disconnected", "P2P 连接已断开");
+    if (this.ended || this.channel.readyState !== "open") throw new ProtocolError("disconnected", "P2P 连接已断开", { reason: "data_channel_closed", ...this.diagnosticState() });
     const chunks = splitDirectFrame(encode(frame));
     const bytes = chunks.reduce((total, chunk) => total + chunk.length, 0);
     if (this.channel.bufferedAmount + bytes > MAX_BUFFERED_BYTES) {
-      this.fail(new ProtocolError("disconnected", "P2P 发送队列已满"));
+      this.fail(new ProtocolError("disconnected", "P2P 发送队列已满", { reason: "send_queue_full", ...this.diagnosticState() }));
       this.closeUnderlying();
       throw new ProtocolError("backpressure", "P2P 发送队列已满");
     }
     try {
       for (const chunk of chunks) this.channel.send(chunk.buffer as ArrayBuffer);
     } catch (error) {
-      this.fail(new ProtocolError("disconnected", "P2P 发送失败"));
+      this.fail(new ProtocolError("disconnected", "P2P 发送失败", { reason: "send_failed", ...this.diagnosticState() }));
       this.closeUnderlying();
       throw error;
     }
@@ -129,7 +136,7 @@ export class DataFrameChannel implements FrameChannel {
   }
 
   next(timeoutMs: number): Promise<Frame> {
-    if (this.ended) return Promise.reject(new ProtocolError("disconnected", "P2P 连接已断开"));
+    if (this.ended) return Promise.reject(new ProtocolError("disconnected", "P2P 连接已断开", { reason: "data_channel_closed", ...this.diagnosticState() }));
     if (this.queue.length) return Promise.resolve(this.queue.shift()!);
     return new Promise((resolve, reject) => {
       const timer = globalThis.setTimeout(() => {
@@ -160,7 +167,7 @@ export class DataFrameChannel implements FrameChannel {
     const connection = this.peer.connectionState;
     if (ice === "failed" || ice === "closed" || connection === "failed" || connection === "closed") {
       this.clearIceGrace();
-      this.fail(new ProtocolError("disconnected", "P2P ICE 失败"));
+      this.fail(new ProtocolError("disconnected", "P2P ICE 失败", { reason: "ice_failed", ...this.diagnosticState() }));
       this.close();
       return;
     }
@@ -175,7 +182,7 @@ export class DataFrameChannel implements FrameChannel {
       if (this.ended || this.icePauses.size > 0 || this.iceHealthy()) return;
       if (this.iceUnhealthy) this.iceUnhealthy();
       else {
-        this.fail(new ProtocolError("disconnected", "P2P ICE 已断开"));
+        this.fail(new ProtocolError("disconnected", "P2P ICE 已断开", { reason: "ice_grace_expired", ...this.diagnosticState() }));
         this.close();
       }
     }, this.iceGraceMs);
