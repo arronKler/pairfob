@@ -1,7 +1,7 @@
 /* Background job machine for CreateWorktree. The RPC itself stays a blocking
  * mutation; this layer only stops the PWA from holding the global
  * `operationBusy` lock while `git fetch` + `worktree add` run. Jobs surface as
- * progress cards (ui/worktree-progress.ts) instead of a modal status line.
+ * progress cards (features/operations/worktree-progress.tsx) instead of a modal status line.
  *
  * Rules kept here:
  * - Retry always issues a brand-new CreateWorktree call (fresh operation_id);

@@ -23,8 +23,6 @@ import { revokeDevice } from "../../features/operations/controller";
  * the credential, device list and session through named typed actions; the
  * forget flow runs through the real revokeDevice controller (confirm dialog,
  * one revokeDevice RPC, listDevices re-read, published re-render).
- * Migrated from the former ui/settings.devices and ui/react/settings.devices
- * facade fixtures with the same assertions.
  */
 
 const self: DeviceSummary = {

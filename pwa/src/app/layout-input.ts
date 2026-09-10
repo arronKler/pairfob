@@ -10,9 +10,8 @@ import { isAgentChat, isFullTerminal, openPaneId, sessionStore } from "../featur
 /**
  * The layout input, read from the domains that own it.
  *
- * These are live owner reads, not published snapshots: during the bridge phase an
- * unmigrated module may have written `state.screen` without publishing yet, and
- * the composition must still describe the application as it is right now.
+ * These live owner reads include staged writes that have not been published yet,
+ * so commit preparation describes the current intended composition.
  */
 export function currentLayoutInput(): LayoutInput {
   const paneId = openPaneId();

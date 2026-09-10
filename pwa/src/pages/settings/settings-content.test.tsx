@@ -13,8 +13,7 @@ import { SettingsContent } from "./settings-page";
  * belong to the screen/shell that mounts it (SettingsScreen / DeskShell), so
  * the bare content with no back bar adds no .page wrapper of its own. This
  * fixture deliberately owns its own React root and typed setup — no global app
- * root, state facade, paint helper or old react wrapper — and unmounts after
- * the assertions. Assertion kept from the former ui/react settings fixture.
+ * root — and unmounts after the assertions.
  */
 
 let root: Root | null = null;

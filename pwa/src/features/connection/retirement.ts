@@ -10,7 +10,7 @@
  * computer's capabilities), so the whole retirement is one `batch`: every domain
  * is written before any listener runs.
  *
- * Nothing here reads or writes the legacy record. The session-scoped caches that
+ * The session-scoped caches that
  * are not domain state arrive as ports, so this module never reaches into another
  * slice's DOM, storage or paint loop.
  */

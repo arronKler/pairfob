@@ -20,8 +20,7 @@ import { isDesk } from "../../app/viewport";
  * action-time readers stay with the click/async handlers.
  *
  * Back goes through `leaveComputers` so a pending forget sees the navigation
- * intent. `AppNotice` and `ManualUpdateHelp` stay imported from their current
- * entries until those owners migrate.
+ * intent. The page composes the app notice and daemon update help.
  */
 
 function useComputersView(withBack: boolean) {

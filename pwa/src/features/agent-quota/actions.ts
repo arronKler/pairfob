@@ -9,7 +9,7 @@ import { quotaSnapshot, setQuotaSnapshot } from "./store";
  * Quota controller — the feature's one connected adapter.
  *
  * It reads the computers domain for the established session and navigates
- * through the navigation action, so nothing here touches the legacy facade.
+ * through the navigation action.
  *
  * Data updates deliberately do NOT repaint the app: the snapshot store notifies
  * its own subscribers, so a mounted quota page or settings summary refreshes on

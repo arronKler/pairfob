@@ -53,7 +53,7 @@ export type ComposeEnterPolicyAction = "pass" | "defer" | "submit" | "suppress";
 
 const padComposeSubmitters = new WeakMap<HTMLFormElement, () => void>();
 
-/** Explicit pad Enter: same IME fallback as the legacy pad submitter. */
+/** Explicit pad Enter with an IME composition fallback. */
 export function requestFullTerminalPadEnter(root: ParentNode): void {
   const form = root.querySelector<HTMLFormElement>(".full-terminal-compose-form");
   if (form) padComposeSubmitters.get(form)?.();

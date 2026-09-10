@@ -82,7 +82,7 @@ export type DomainView<Data extends object, Opaque extends keyof Data = never> =
   & { readonly [K in Opaque]: Data[K] };
 
 export type DomainStore<Data extends object, Opaque extends keyof Data = never> = {
-  /** Stable name for diagnostics, tests and the migration inventory. */
+  /** Stable name for diagnostics and tests. */
   readonly name: string;
   /** Published snapshot for React: deep-frozen, stable until the next publish. */
   get(): DomainView<Data, Opaque>;

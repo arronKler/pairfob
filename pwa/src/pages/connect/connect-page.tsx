@@ -20,12 +20,12 @@ import { isDesk } from "../../app/viewport";
  *
  * Subscribes to pairing, connection and computers so typed handshake updates
  * reach an already-mounted form without a global paint. The view input is
- * assembled from live records because production still writes the fragment,
- * catalog and some pairing fields through the compatibility facade.
+ * assembled from the subscribed domain snapshots, keeping staged composition
+ * changes aligned with the published frame.
  *
  * The pair-code field is a controlled input whose value comes from the pairing
  * domain. Keystrokes call `setPairCode`, which publishes that domain — the same
- * local-update the previous reducer performed, without the global paint loop.
+ * local update drives the subscribed form.
  * Caret/IME stay on the node because the form is not remounted.
  *
  * Scanner/paste teardown: this screen instance owns pairing work. Unmount

@@ -75,9 +75,7 @@ export function displayedSession(layout: LayoutDescriptor): SessionKind | null {
  * The description handed over is frozen and the frame keeps a detached copy, so a
  * preparer cannot edit what the frame publishes, and the preparer binds exactly
  * the supplied handle and incarnation instead of re-reading a replacement the
- * domains may have published by the time a later callback runs. Until a preparer
- * registers, the legacy pages keep deriving their own owner keys during render,
- * which is why this seam changes no behaviour on its own.
+ * domains may have published by the time a later callback runs.
  *
  * Production binds the live owner by registering `registerSessionView` from
  * `features/session/register.ts` (the leaf, not the `features/session` barrel)

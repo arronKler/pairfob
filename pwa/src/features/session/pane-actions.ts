@@ -20,9 +20,7 @@ import { leaveFullTerminal } from "./full-terminal/full-terminal";
  *
  * The intents a reader can have on the pane screen — back, workspace, menu,
  * switcher — that `<App/>` hands to the session, chat and terminal routes. They
- * use named domain readers/actions and the App commit seam; they never touch the
- * legacy state facade or a root renderer. The compatibility `ui/pane-actions.ts`
- * path re-exports this module until the final import sweep.
+ * use named domain readers/actions and the App commit seam.
  */
 
 export { openPaneMenu, openPaneSwitcher };

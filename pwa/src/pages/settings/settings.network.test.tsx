@@ -24,10 +24,8 @@ import { stopPolling } from "../../features/connection/controller";
 /**
  * Settings network transport controls against the actual mounted App.
  *
- * Setup writes named typed domain actions (published snapshots) instead of the
- * legacy facade; the mounted Settings page reads its connection/computers
- * domains by subscription. Migrated from the former ui/settings.network and
- * ui/react/settings.network facade fixtures with the same assertions.
+ * Setup writes named typed domain actions (published snapshots); the mounted
+ * Settings page reads its connection/computers domains by subscription.
  */
 
 type Mode = "auto" | "relay" | "p2p";

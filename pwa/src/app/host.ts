@@ -58,7 +58,7 @@ export function appHost(): AppHost | null {
  *
  * A feature controller that needs the arriving composition on screen right
  * away — a navigation it just declared, a focus/transition target it measures —
- * calls this instead of the retired paint. It forwards to the installed
+ * calls this boundary. It forwards to the installed
  * application host with synchronous intent, so it inherits the host's full
  * commit lifecycle: staged publication, frame preparation, declared-transition
  * consumption, shell, render.

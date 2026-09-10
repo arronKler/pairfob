@@ -341,7 +341,7 @@ export function sessionScroll(): { top: number; left: number; bottom: boolean } 
   return prev ? { top: prev.scrollTop, left: prev.scrollLeft, bottom: atBottom(prev) } : { top: 0, left: 0, bottom: true };
 }
 
-/** WebKit resets scrollTop in the same turn as replaceChildren. Apply twice. */
+/** Restore scroll after the DOM update and again on the next animation frame. */
 export function restoreTermScroll(term: HTMLElement, scroll: { top: number; left: number; bottom: boolean }): void {
   const apply = () => {
     if (termElement() !== term) return;

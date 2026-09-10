@@ -4,7 +4,7 @@
 
 @mixin app-view-transitions {
   /* --- Screen transitions -------------------------------------------------------
-     Only a declared navigation sets html[data-transition] (see ui/transition.ts),
+     Only a declared navigation sets html[data-transition] (see app/transition.ts),
      so none of this can fire on a poll repaint. Push travels in, pop travels back
      out, and a sideways move only cross-fades — which is what the browser already
      does by default, so `fade` needs no rules of its own.

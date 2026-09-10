@@ -37,7 +37,7 @@ export { retirePairingWork } from "./work";
  * Pairing controller — the feature's one connected adapter.
  *
  * Handshake mutations and reads go through the pairing/connection/computers
- * domain actions and selectors; nothing here reads the compatibility facade.
+ * domain actions and selectors.
  * Focus-after-error and landing boundaries commit the composition through the
  * application port (`commitView`); ordinary handshake updates publish their
  * domains and the mounted page repaints through its own subscriptions.
@@ -57,7 +57,7 @@ function currentWork(): number {
  * notification. Once that page is released its late results must not paint;
  * a still-mounted page only owns landing while its handle is the current
  * attempt, because an awaiting/abort callback may have started a replacement
- * on the same page. Controller-only attempts (no page) keep the legacy
+ * on the same page. Controller-only attempts (no page) use the
  * abort-handle fallback.
  */
 export function pairingErrorStillOwned(work: number, abort: AbortController, page: object | null = null): boolean {

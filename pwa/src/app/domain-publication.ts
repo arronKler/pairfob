@@ -1,5 +1,5 @@
 import { batch, beginPublicationTransaction, endPublicationTransaction, flushNotifications,
-  inPublicationTransaction, type DomainStore, type Unsubscribe } from "../shared/model/domain-store";
+  inPublicationTransaction, type DomainStore } from "../shared/model/domain-store";
 import { boardStore } from "../features/board/layout-store";
 import { capabilitiesStore } from "../features/operations/capabilities-store";
 import { chatStore } from "../features/session/chat/trace-store";
@@ -95,22 +95,6 @@ export function publishAllDomains(): void {
   } finally {
     endPublicationTransaction();
   }
-}
-
-/**
- * Temporary bridge: subscribe to every domain at once.
- *
- * Screens that still read the `state` facade cannot know which domains they
- * depend on. Migrated components subscribe to one domain instead. Tests use this
- * to assert that a facade write notifies exactly once per touched domain.
- *
- * Retirement is M2, after the last facade subscriber migrates to a named domain.
- */
-export function subscribeAllDomains(listener: () => void): Unsubscribe {
-  const releases = domainStores.map((store) => store.subscribe(listener));
-  return () => {
-    for (const release of releases) release();
-  };
 }
 
 export { batch, flushNotifications };

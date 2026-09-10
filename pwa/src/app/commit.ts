@@ -14,8 +14,7 @@ import { takeTransition, withSynchronousTransition } from "./transition";
 /**
  * The commit pipeline: the only place the application renders.
  *
- * One commit is one transaction. Domain writes made through the compatibility
- * facade are published, the frame for the new composition is prepared (including
+ * One commit is one transaction. Staged domain writes are published, the frame for the new composition is prepared (including
  * the imperative work a page needs before React renders it), writes the
  * preparation itself made are published, the shell is applied, and only then are
  * subscribers notified — so React renders once with coherent data, and `<App/>`
@@ -47,7 +46,7 @@ let lastLayoutKey = "";
 
 /**
  * Ask for a commit without forcing one. Domain actions that change the
- * composition call this so a migrated caller does not have to paint by hand; the
+ * composition call this to schedule rendering; the
  * request is coalesced, and an explicit commit before the microtask cancels it.
  */
 export function requestCommit(): void {
@@ -124,7 +123,7 @@ export function commitApp(options: CommitOptions = {}): void {
   notifying = true;
   try {
     // A navigation is the only commit that consumes a declared view transition,
-    // and it consumes it exactly once: a legacy explicit paint already took the
+    // and it consumes it exactly once: an explicit transition adapter already took the
     // declared kind, a typed navigation's coalesced commit takes it here, and a
     // bounded recommit pass runs against the same key and takes nothing.
     const kind = navigation ? takeTransition() : "none";

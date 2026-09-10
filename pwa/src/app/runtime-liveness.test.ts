@@ -1,13 +1,13 @@
 import { happy, resetBoardTestDOM } from "../../test-support/dom";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act } from "react";
-import { appRoot } from "../app/dom-root";
+import { appRoot } from "./dom-root";
 import { commitTest, mountTestApp, unmountTestApp } from "../../test-support/react-harness";
 import { canInterruptAgent, herdLiveness, herdStatus } from "../features/connection/runtime-status";
 import { attachLiveSession } from "../features/computers/catalog-store";
 import { setNetworkOnline, setPhase } from "../features/connection/connection-store";
 import { replaceAgentsFromSnapshot, resetDashboard } from "../features/dashboard/catalog-store";
-import { setScreen } from "../app/navigation-store";
+import { setScreen } from "./navigation-store";
 import { applyCapabilities, setOperationBusy } from "../features/operations/capabilities-store";
 import { applyRuntimeIdentity, resetRuntime } from "../features/connection/runtime-store";
 import { resetHerdPresentationChoices } from "../features/settings/preferences-store";

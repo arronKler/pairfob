@@ -1,9 +1,8 @@
 /**
  * Memory for the two things a herd list has to make visible: which cards are
  * new to the list, and which agents just changed status. Both need to survive
- * across paints, because the screen is rebuilt with replaceChildren on every
- * poll — "this one just changed" cannot be read back off the DOM, and a CSS
- * transition on a freshly created element never runs.
+ * across snapshot updates and component remounts. Keeping this history outside
+ * the DOM lets React render the same attention window throughout an update.
  */
 
 export type StatusMark = "" | "changed" | "done";

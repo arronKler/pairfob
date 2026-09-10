@@ -17,12 +17,8 @@ import { BackBar, Button } from "../../shared/ui/primitives";
  * session, and the quota snapshot store for that session's data. A refresh
  * repaints this subtree on its own and never needs the global paint loop.
  *
- * The session snapshot is the live record (`liveSession()`), not the last
- * published computers snapshot. Production still attaches through the
- * compatibility facade, which marks the domain dirty without publishing, so a
- * page that read only `useComputers().live` stayed offline after a successful
- * connect. Subscribing to the store still wakes an already-mounted panel when
- * `attachLiveSession` publishes, so typed attach/detach does not need paint.
+ * The session snapshot uses the canonical `liveSession()` reader and subscribes
+ * to the computers store. Attach/detach publications update the mounted panel.
  *
  * Back commits through the application port (`commitView`), so the installed
  * App composes the arriving settings screen synchronously; ordinary data

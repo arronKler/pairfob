@@ -53,9 +53,8 @@ import { bindVisualViewport, releaseVisualViewport } from "./viewport";
  * are idempotent: a second start is a no-op, and stop releases exactly what
  * start acquired so a later start can run cleanly.
  *
- * Boot reads the typed canonical readers and scoped notice actions directly —
- * the compatibility `state` facade and the paint bridge are not part of this
- * module's surface. It binds the session feature's owner adoption on the frame
+ * Boot uses typed canonical readers and scoped notice actions. It binds the
+ * session feature's owner adoption on the frame
  * seam before the first commit, clearing the seam when the page lifecycle stops.
  */
 

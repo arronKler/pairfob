@@ -1,10 +1,10 @@
 /**
- * Legacy DOM helper entry.
+ * DOM effects and shared interaction exports.
  *
- * The generic pieces moved to `shared/ui`: press feedback and motion preference
+ * Press feedback and motion preference
  * live in `shared/ui/dom`, and the promise dialogs live in
  * `shared/ui/overlay/basic-dialogs`. Both are re-exported here so existing
- * callers keep compiling during the staged migration. What remains is the
+ * callers have a stable import surface. This module also owns the
  * element factory and the app-wide ripple surface.
  */
 export { askConfirm, askText, showHelp, type HelpBlock } from "../shared/ui/overlay/basic-dialogs";

@@ -18,8 +18,7 @@ import { closeTestDialogs } from "../../../test-support/close-dialogs";
 /**
  * Settings help dialogs against the actual mounted App. Long copy stays out of
  * the page and only appears in the centered help dialog; a later help tap
- * replaces the open dialog. Migrated from the former ui/settings.help and
- * ui/react/settings.help facade fixtures with the same assertions.
+ * replaces the open dialog.
  */
 
 function helpButton(topic: string): HTMLButtonElement {

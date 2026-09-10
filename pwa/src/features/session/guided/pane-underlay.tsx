@@ -14,8 +14,7 @@ export function mountPaneUnderlay(app: HTMLElement, transform: string): PaneUnde
   const root = createRoot(element);
   // Prepare before render: consume dashboard attention and reconcile the
   // accordion defaults outside React; the real HomePage subscribes to the
-  // published attention, so the underlay presents the same borrowed list the
-  // retired compatibility wrapper handed down as a prop.
+  // published attention so the underlay stays consistent with the main list.
   prepareHerdView();
   // Keep the original sibling order: underlay first, current pane above it.
   app.insertBefore(element, app.firstChild);

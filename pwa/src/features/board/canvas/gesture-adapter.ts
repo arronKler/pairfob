@@ -6,7 +6,7 @@
  * zoom and remote scroll, the tap synthesis that a prevented gesture still
  * owes the tile, and the click suppression that keeps a finished drag from
  * reopening a pane. Everything stateful lives in `BoardCanvasPorts`, so this
- * module is the same code on the legacy record and on a domain store, and
+ * module is independent of the application store implementation, and
  * disposing it retires every listener, frame and in-flight gesture.
  */
 import type { TabLayout } from "../../../lib/layout";

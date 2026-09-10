@@ -1,21 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act } from "react";
-import { resetBoardTestDOM } from "../../../test-support/dom";
-import { commitTest, mountTestApp, unmountTestApp } from "../../../test-support/react-harness";
-import { appRoot } from "../../app/dom-root";
-import { batch } from "../../shared/model/domain-store";
-import { boardStore, liveBoardCatalog, resetBoardCatalog, setBoardReturn, stageBoardReturnCleared } from "../../features/board/layout-store";
-import { publishAllDomains } from "../../app/domain-publication";
-import { runtimeStore } from "../../features/connection/runtime-store";
-import { setLang, t } from "../../lib/i18n";
-import { setPhase, setNetworkOnline } from "../../features/connection/connection-store";
-import { setScreen } from "../../app/navigation-store";
-import { attachLiveSession } from "../../features/computers/catalog-store";
-import { replaceAgentsFromSnapshot, resetDashboard } from "../../features/dashboard/catalog-store";
-import { resetBoardCatalog } from "../../features/board/layout-store";
-import { resetPaneView, setAgentChat, setFullTerminal } from "../../features/session/session-store";
-import { applyRuntimeIdentity } from "../../features/connection/runtime-store";
-import type { LiveSession } from "../../lib/protocol/client";
+import { resetBoardTestDOM } from "../../test-support/dom";
+import { commitTest, mountTestApp, unmountTestApp } from "../../test-support/react-harness";
+import { appRoot } from "./dom-root";
+import { batch } from "../shared/model/domain-store";
+import { boardStore, liveBoardCatalog, resetBoardCatalog, setBoardReturn, stageBoardReturnCleared } from "../features/board/layout-store";
+import { publishAllDomains } from "./domain-publication";
+import { runtimeStore } from "../features/connection/runtime-store";
+import { setLang, t } from "../lib/i18n";
+import { setPhase, setNetworkOnline } from "../features/connection/connection-store";
+import { setScreen } from "./navigation-store";
+import { attachLiveSession } from "../features/computers/catalog-store";
+import { replaceAgentsFromSnapshot, resetDashboard } from "../features/dashboard/catalog-store";
+import { resetBoardCatalog } from "../features/board/layout-store";
+import { resetPaneView, setAgentChat, setFullTerminal } from "../features/session/session-store";
+import { applyRuntimeIdentity } from "../features/connection/runtime-store";
+import type { LiveSession } from "../lib/protocol/client";
 
 /**
  * Stable App publication seam for board/runtime domains.

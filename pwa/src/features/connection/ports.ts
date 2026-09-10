@@ -1,7 +1,6 @@
 /**
  * Ports the connection controllers need from session, shell, credentials and
- * observation. Feature modules never import ui/, paint.ts or the legacy record;
- * the live.ts adapter supplies these callbacks.
+ * observation. The connection controller supplies these callbacks.
  */
 import type { PairResult } from "../../lib/protocol/client";
 import type { NoticeScope } from "../../lib/notice-scope";
@@ -17,8 +16,8 @@ export type SessionLeavePorts = {
 
 export type ShellPorts = {
   /**
-   * Apply `#app` classes, scroll lock and terminal CSS vars. Retires when core's
-   * declarative shell owns those. Never call from a React render.
+   * Commit the arriving composition through the application host.
+   * Never call from a React render.
    */
   commitView(): void;
   documentVisible(): boolean;
