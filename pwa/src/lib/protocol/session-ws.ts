@@ -150,6 +150,7 @@ class ReconnectingSession implements LiveSession {
   private transport: SessionTransport | null = null;
   private listeners = new Set<(event: SessionEvent) => void>();
   private stopped = false;
+  private checking = false;
   private reconnecting = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectAbort: AbortController | null = null;
@@ -196,6 +197,7 @@ class ReconnectingSession implements LiveSession {
     });
     this.unwatchVisibility = watchPageVisibility((hidden) => {
       this.direct.setPageHidden(hidden);
+      if (hidden && this.transport) this.emit({ type: "checking" });
       if (hidden && this.reconnectTimer !== null) {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
@@ -215,7 +217,8 @@ class ReconnectingSession implements LiveSession {
     }
   }
 
-  isConnected = (): boolean => this.transport !== null;
+  isConnected = (): boolean => this.transport !== null && !this.checking;
+  isChecking = (): boolean => this.checking && !this.stopped;
   switchTransport = async (target: NetworkMode): Promise<void> => {
     this.networkMode = target;
     await this.direct.switchTransport(target);
@@ -408,14 +411,17 @@ class ReconnectingSession implements LiveSession {
 
   /** Capture one transport; mutation RPCs are never replayed on another socket. */
   private async mutationRPC(op: string, params: unknown): Promise<unknown> {
-    const transport = await this.captureTransport();
-    if (!transport) return Promise.reject(new ProtocolError("disconnected", "连接已断开；为避免重复输入，本次操作未发送"));
+    const transport = this.checking ? null : await this.captureTransport();
+    if (!transport || this.checking) return Promise.reject(new ProtocolError("disconnected", "连接已断开；为避免重复输入，本次操作未发送"));
     return trackMutationDelivery((markSent) => transport.rpc(op, params, MUTATION_RPC_TIMEOUT_MS, markSent));
   }
 
   private async terminalRPC(op: string, params: unknown): Promise<unknown> {
-    const transport = await this.captureTransport();
-    if (!transport) return Promise.reject(new ProtocolError("disconnected", "连接已断开；本次终端操作未发送"));
+    // Background cleanup releases a controller on the existing epoch once.
+    // Input/open/resize remain blocked until the connection is confirmed.
+    const cleanup = op === "TerminalClose";
+    const transport = this.checking && !cleanup ? null : await this.captureTransport();
+    if (!transport || (this.checking && !cleanup)) return Promise.reject(new ProtocolError("disconnected", "连接已断开；本次终端操作未发送"));
     return trackMutationDelivery((markSent) => transport.rpc(op, params, TERMINAL_RPC_TIMEOUT_MS, markSent));
   }
 
@@ -448,6 +454,10 @@ class ReconnectingSession implements LiveSession {
   }
 
   private emit(event: SessionEvent): void {
+    if (event.type === "checking") {
+      if (this.checking) return;
+      this.checking = true;
+    } else if (event.type === "connected") this.checking = pageHidden();
     if (event.type === "latency" && typeof event.rttMs === "number") {
       this.lastRttMs = event.rttMs;
       this.lastTransport = event.transport ?? this.lastTransport;
@@ -503,6 +513,7 @@ class ReconnectingSession implements LiveSession {
       this.emit({ type: "terminal", code: error.code, message: error.message });
       return;
     }
+    this.checking = true;
     this.emit({ type: "disconnected", code: error.code, message: error.message });
     // A healthy session gets one immediate recovery attempt. Only failed
     // reconnects enter the jittered exponential backoff below.
@@ -531,6 +542,7 @@ class ReconnectingSession implements LiveSession {
         await this.connect();
       } catch (error) {
         if (!this.networkAvailable) return;
+        this.checking = false;
         const protocolError = error instanceof ProtocolError ? error : new ProtocolError("disconnected", String(error));
         if (TERMINAL_CODES.has(protocolError.code)) {
           this.stopped = true;

@@ -14,9 +14,10 @@ export function herdLivenessModel(input: RuntimeLivenessInput): RuntimeLiveness 
   return runtimeLiveness(input);
 }
 
-export function herdStatusModel(input: RuntimeLivenessInput & { herdHost: string; liveness?: RuntimeLiveness }): HerdStatus {
+export function herdStatusModel(input: RuntimeLivenessInput & { herdHost: string; checking?: boolean; liveness?: RuntimeLiveness }): HerdStatus {
   const liveness = input.liveness ?? runtimeLiveness(input);
   if (!input.networkOnline) return { tone: "warn", text: t("chrome.networkOffline") };
+  if (input.checking) return { tone: "pending", text: t("chrome.checking") };
   if (liveness === "unverifiable") {
     return { tone: "warn", text: input.connected ? t("chrome.unverifiable") : t("chrome.reconnecting") };
   }

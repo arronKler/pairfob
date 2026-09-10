@@ -23,6 +23,7 @@
 
   .dot { width: 7px; height: 7px; }
   .dot-live { background: var(--ok); }
+  .dot-pending { background: var(--muted); }
   .dot-warn { background: var(--warn); }
   .dot-off { background: var(--danger-bright); }
   .dot-demo { background: var(--muted); }

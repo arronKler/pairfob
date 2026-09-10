@@ -18,6 +18,7 @@ import type { StatusTone } from "../../shared/ui/primitives";
 export type HerdStatusInput = RuntimeLivenessInput & {
   /** Last known Herdr host label; empty means the daemon never reported one. */
   herdHost: string;
+  checking?: boolean;
 };
 
 export type HerdStatus = { tone: StatusTone; text: string };
@@ -33,6 +34,7 @@ export function canInterruptAgentWith(agentStatus: string, liveness: RuntimeLive
 
 export function herdStatusOf(input: HerdStatusInput): HerdStatus {
   if (!input.networkOnline) return { tone: "warn", text: t("chrome.networkOffline") };
+  if (input.checking) return { tone: "pending", text: t("chrome.checking") };
   const verdict = herdLivenessOf(input);
   if (verdict === "unverifiable") {
     return { tone: "warn", text: input.connected ? t("chrome.unverifiable") : t("chrome.reconnecting") };

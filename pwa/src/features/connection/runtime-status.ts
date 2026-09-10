@@ -26,6 +26,7 @@ export function currentHerdStatusInput(): HerdStatusInput {
   const identity = runtimeIdentity();
   return {
     connected: liveSession()?.isConnected() === true,
+    checking: liveSession()?.isChecking?.() === true,
     networkOnline: networkOnline(),
     runtimeKind: identity.runtimeKind,
     herdHost: identity.herdHost,

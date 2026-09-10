@@ -222,6 +222,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chrome.back": "Back",
   "chrome.langAuto": "Auto",
   "chrome.networkOffline": "Phone is offline · resumes on the network",
+  "chrome.checking": "Restoring connection",
   "chrome.reconnecting": "Connection dropped, reconnecting",
   "chrome.unverifiable": "Can't confirm Herdr · retrying",
   "chrome.demo": "Demo data · not your computer",

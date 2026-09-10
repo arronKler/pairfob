@@ -24,7 +24,7 @@ import type { RuntimeLiveness } from "../../../lib/runtime-liveness";
 import { emptySessionCopy, type EmptySessionAction } from "../../../lib/ui-model";
 
 /** Status tone vocabulary of the app chrome; core publishes the same union. */
-export type HerdTone = "live" | "warn" | "off" | "demo";
+export type HerdTone = "live" | "warn" | "off" | "demo" | "pending";
 
 export type HerdStatus = { tone: HerdTone; text: string };
 

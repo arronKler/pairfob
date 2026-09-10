@@ -122,7 +122,7 @@ export function readHerdInput(painted: HerdPaint): HerdModelInput {
     selectedPaneId: openPaneId(),
     attention: painted,
     liveness: herdLivenessModel(reachability),
-    status: herdStatusModel({ ...reachability, herdHost: runtime.herdHost }),
+    status: herdStatusModel({ checking: liveSession()?.isChecking?.() === true, ...reachability, herdHost: runtime.herdHost }),
     connected,
     networkOnline: online,
     runtimeKind: runtime.runtimeKind,

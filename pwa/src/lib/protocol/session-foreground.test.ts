@@ -98,11 +98,12 @@ function driverFixture() {
     rpc: (_op: string, _params: unknown, timeout?: number) => new Promise((resolve, reject) => calls.push({ timeout, resolve, reject })),
     suspend: (error: ProtocolError) => failures.push(error),
   } as unknown as SessionTransport;
-  const host = { getTransport: () => session } as DirectSessionHost;
+  const events: string[] = [];
+  const host = { getTransport: () => session, emit: (event: { type: string }) => events.push(event.type) } as DirectSessionHost;
   const driver = new DirectSessionDriver(host);
   const visibility = () => driver.setPageHidden(page.visibilityState === "hidden");
   page.addEventListener("visibilitychange", visibility);
-  return { driver, session, calls, failures };
+  return { driver, session, calls, failures, events, host };
 }
 const settle = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
 
@@ -117,9 +118,11 @@ describe("foreground P2P probes", () => {
     f.driver.probe(f.session, "probe");
     expect(f.calls).toHaveLength(1);
     expect(f.calls[0]!.timeout).toBe(8_000);
+    expect(f.events).toEqual(["checking"]);
     f.calls[0]!.resolve({});
     await settle();
     expect(f.failures).toHaveLength(0);
+    expect(f.events).toEqual(["checking", "connected"]);
     f.driver.dispose();
   });
 
@@ -149,6 +152,44 @@ describe("foreground P2P probes", () => {
   });
 });
 
+
+describe("probe readiness ownership", () => {
+  test("an old success cannot mark a later foreground ready", async () => {
+    const f = driverFixture();
+    f.driver.probe(f.session, "probe");
+    page.show(true);
+    page.show(false);
+    f.driver.probe(f.session, "probe");
+    f.calls[0]!.resolve({});
+    await settle();
+    expect(f.events).toEqual(["checking", "checking"]);
+    f.calls[1]!.resolve({});
+    await settle();
+    expect(f.events.at(-1)).toBe("connected");
+    f.driver.dispose();
+  });
+
+  test("disposing a probe suppresses its late success", async () => {
+    const f = driverFixture();
+    f.driver.probe(f.session, "probe");
+    f.driver.dispose();
+    f.calls[0]!.resolve({});
+    await settle();
+    expect(f.events).toEqual(["checking"]);
+  });
+
+  test("relay recovery also waits for a fresh response", async () => {
+    const f = driverFixture();
+    Object.assign(f.session, { kind: "relay" });
+    Object.assign(f.host, { options: {}, networkAvailable: true });
+    f.driver.probe(f.session, "probe");
+    expect(f.events).toEqual(["checking"]);
+    f.calls[0]!.resolve({});
+    await settle();
+    expect(f.events).toEqual(["checking", "connected"]);
+    f.driver.dispose();
+  });
+});
 
 describe("background direct recovery", () => {
   test("an ICE restart finishing in a later activity cannot disconnect the session", async () => {

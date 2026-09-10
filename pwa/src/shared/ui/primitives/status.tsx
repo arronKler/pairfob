@@ -4,7 +4,7 @@
  * `state.ts` keeps its own structurally identical union for the application
  * side; shared UI declares the one it paints so it never imports app state.
  */
-export type StatusTone = "live" | "warn" | "off" | "demo";
+export type StatusTone = "live" | "warn" | "off" | "demo" | "pending";
 
 export function StatusDot({ tone }: { tone: StatusTone }) {
   return <span className={`dot dot-${tone}`} />;

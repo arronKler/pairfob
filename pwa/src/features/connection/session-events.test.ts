@@ -70,6 +70,21 @@ afterEach(() => {
 });
 
 describe("session event observation", () => {
+  test("foreground checking and the first retry preserve P2P presentation without a warning", () => {
+    session.isChecking = () => true;
+    setSessionTransport("p2p");
+    for (const type of ["checking", "disconnected", "reconnecting"] as const) {
+      calls = [];
+      observeSessionEvent(pool, "A", session, { type }, eventPorts);
+      expect(calls).toEqual(["stop", "clear", "commitView"]);
+      expect(sessionTransport()).toBe("p2p");
+    }
+    session.isChecking = () => false;
+    calls = [];
+    observeSessionEvent(pool, "A", session, { type: "connected" }, eventPorts);
+    expect(calls).toEqual(["clear", "start", "commitView", "runtime"]);
+  });
+
   test("a latency RTT publication switching sessions cannot write the old event's transport", () => {
     stops.push(connectionStore.subscribe(() => {
       if (connectionStore.get().relayRttMs === 8 && liveSession() === session) {

@@ -199,6 +199,7 @@ export function SettingsContent({ withBack }: { withBack: boolean }) {
   const connected = computers.live?.isConnected() === true;
   const status = herdStatusOf({
     connected,
+    checking: computers.live?.isChecking?.() === true,
     networkOnline: connection.networkOnline,
     runtimeKind: runtime.runtimeKind,
     herdHost: runtime.herdHost,

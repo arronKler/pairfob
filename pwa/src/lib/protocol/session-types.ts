@@ -36,7 +36,7 @@ import type {
 } from "./workspace-media.ts";
 
 export interface SessionEvent {
-  type: "connected" | "disconnected" | "reconnecting" | "latency" | "poke" | "terminal" | "terminal_frame" | "terminal_closed";
+  type: "checking" | "connected" | "disconnected" | "reconnecting" | "latency" | "poke" | "terminal" | "terminal_frame" | "terminal_closed";
   code?: string;
   message?: string;
   rttMs?: number;
@@ -119,6 +119,8 @@ export type LiveSession = {
   terminalClose: (terminalId: string) => Promise<unknown>;
   onEvent: (listener: (event: SessionEvent) => void) => () => void;
   isConnected: () => boolean;
+  /** Existing transport is being verified or undergoing its first recovery attempt. */
+  isChecking?: () => boolean;
   switchTransport: (target: "auto" | "p2p" | "relay") => Promise<void>;
   /** `path` is a real network change; `probe` is foreground/visibility only. */
   reconnectNow: (reason?: ReconnectReason) => void;

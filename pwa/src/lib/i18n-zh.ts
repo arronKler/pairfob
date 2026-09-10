@@ -225,6 +225,7 @@ export const zh = {
   "chrome.back": "返回",
   "chrome.langAuto": "自动",
   "chrome.networkOffline": "手机没有网络 · 联网后自动恢复",
+  "chrome.checking": "正在恢复连接",
   "chrome.reconnecting": "连接中断，正在自动重连",
   "chrome.unverifiable": "无法确认 Herdr · 正在重试",
   "chrome.demo": "演示数据 · 不是你的电脑",

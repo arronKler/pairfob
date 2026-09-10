@@ -121,7 +121,7 @@ export function readBoardInput(): BoardModelInput {
     workspaceId: catalog.workspaceId,
     tabId: catalog.tabId,
     selectedPaneId: openPaneId(),
-    status: herdStatusModel({
+    status: herdStatusModel({ checking: liveSession()?.isChecking?.() === true,
       connected,
       networkOnline: online,
       runtimeKind: runtime.runtimeKind,

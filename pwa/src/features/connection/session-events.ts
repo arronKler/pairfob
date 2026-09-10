@@ -88,6 +88,13 @@ export function observeSessionEvent(
     }
     return;
   }
+  if (event.type === "checking" || ((event.type === "connected" || event.type === "disconnected" || event.type === "reconnecting") && session.isChecking?.())) {
+    ports.stopPolling();
+    if (!stillActive()) return;
+    ports.clearNotice();
+    if (stillActive()) ports.commitView();
+    return;
+  }
   if (event.type === "connected") {
     ports.clearNotice();
     if (!stillActive()) return;

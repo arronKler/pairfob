@@ -57,3 +57,10 @@ describe("connection runtime status model", () => {
     expect(canInterruptAgentWith("", "live")).toBeFalse();
   });
 });
+
+test("checking is neutral even with a stale live runtime and yields to network loss", () => {
+  expect(herdStatusOf({ ...input(), connected: false, checking: true }))
+    .toEqual({ tone: "pending", text: t("chrome.checking") });
+  expect(herdStatusOf({ ...input(), checking: true, networkOnline: false }).text)
+    .toBe(t("chrome.networkOffline"));
+});

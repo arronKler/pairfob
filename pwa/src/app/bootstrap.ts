@@ -198,10 +198,12 @@ function applyNetworkAvailability(available: boolean): void {
     return;
   }
   if (currentSessionTransport() === "p2p") preloadFullTerminalXterm();
-  if (changed || !liveSession()?.isConnected()) showStatus(t("net.restored"));
+  if (changed) showStatus(t("net.restored"));
   if (!changed) reconnectLiveSessions("probe");
-  startPolling();
-  void refreshRuntimeState();
+  if (liveSession()?.isConnected()) {
+    startPolling();
+    void refreshRuntimeState();
+  }
   commitBootView();
 }
 

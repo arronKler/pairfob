@@ -67,6 +67,8 @@ export class DirectSessionDriver {
   constructor(private readonly host: DirectSessionHost) {}
 
   dispose(): void {
+    this.activityVersion++;
+    this.probeAttempt = null;
     this.directAbort?.abort();
     this.directAbort = null;
     this.restartAbort?.abort();
@@ -144,6 +146,7 @@ export class DirectSessionDriver {
   probe(transport: SessionTransport, reason: ReconnectReason): void {
     if (this.hidden || pageHidden() || this.probeAttempt?.transport === transport) return;
     const version = this.activityVersion;
+    this.host.emit({ type: "checking" });
     const promise = this.runProbe(transport, reason, version);
     const attempt = { transport, promise };
     this.probeAttempt = attempt;
@@ -153,35 +156,22 @@ export class DirectSessionDriver {
   }
 
   private async runProbe(transport: SessionTransport, reason: ReconnectReason, version: number): Promise<void> {
-    if (transport.kind === "p2p") {
-      await this.probeDirect(transport, reason, version);
-      return;
+    const current = () => this.activityVersion === version && !this.hidden && !pageHidden() && this.host.getTransport() === transport;
+    if (transport.kind === "p2p" && reason === "path") {
+      const channel = transport.directChannel();
+      if (channel?.iceDisconnected()) await this.recoverDirectPath(transport);
+      else if (channel?.iceHealthy()) await this.maybeRestart(transport);
     }
-    await transport.rpc("Ping", { t_ms: Date.now() }, 8_000).then(
-      () => {
-        if (this.host.getTransport() === transport && transport.kind === "relay") this.startAutomaticDirectUpgrade(transport);
-      },
-      (error) => {
-        if (this.activityVersion === version && !this.hidden && !pageHidden() && this.host.getTransport() === transport && error instanceof ProtocolError && error.code === "timeout") {
-          transport.suspend(new ProtocolError("disconnected", "前台探测失败"));
-        }
-      },
-    );
-  }
-
-  private async probeDirect(transport: SessionTransport, reason: ReconnectReason, version: number): Promise<void> {
-    const channel = transport.directChannel();
-    if (reason === "path" && channel?.iceDisconnected()) {
-      await this.recoverDirectPath(transport);
-      return;
-    }
-    if (reason === "path" && channel?.iceHealthy()) await this.maybeRestart(transport);
-    if (version !== this.activityVersion || this.hidden || pageHidden() || this.host.getTransport() !== transport) return;
+    if (!current()) return;
     try {
-      await transport.rpc("Ping", { t_ms: Date.now() }, reason === "probe" ? DIRECT_RESUME_GRACE_MS : DIRECT_HEALTH_PING_MS);
+      const timeout = transport.kind === "p2p" && reason === "path" ? DIRECT_HEALTH_PING_MS : DIRECT_RESUME_GRACE_MS;
+      await transport.rpc("Ping", { t_ms: Date.now() }, timeout);
+      if (!current()) return;
+      this.host.emit({ type: "connected" });
+      if (current() && transport.kind === "relay") this.startAutomaticDirectUpgrade(transport);
     } catch (error) {
-      if (this.activityVersion === version && !this.hidden && !pageHidden() && this.host.getTransport() === transport && error instanceof ProtocolError && error.code === "timeout") {
-        transport.suspend(new ProtocolError("disconnected", "前台探测失败"));
+      if (current()) {
+        transport.suspend(error instanceof ProtocolError ? error : new ProtocolError("disconnected", "前台探测失败"));
       }
     }
   }
@@ -270,6 +260,7 @@ export class DirectSessionDriver {
       this.host.setTransport(direct.transport);
       direct.transport.onDisconnect((error) => this.host.onDisconnect(direct.transport, error));
       this.attachDirect(direct.transport);
+      this.host.emit({ type: "connected" });
       this.host.emit({ type: "latency", rttMs: direct.rttMs, transport: "p2p" });
       this.host.observe({ result: "connected", extra: iceGathering });
       this.clearDirectRetry();

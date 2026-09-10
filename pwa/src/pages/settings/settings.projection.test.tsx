@@ -176,3 +176,15 @@ test("persistent settings notice updates and clears through the mounted subscrip
   act(() => clearNotice());
   expect(appRoot().querySelector("[data-react-notice]")).toBeNull();
 });
+
+test("settings renders neutral recovery while the stored runtime still reports live", async () => {
+  mountSettingsLive();
+  await act(async () => {
+    attachLiveSession({ isConnected: () => false, isChecking: () => true } as never);
+    applyRuntimeIdentity({ herdHost: "Test Host", runtimeKind: "herdr" });
+    commitView();
+  });
+  expect(appRoot().textContent).toContain(t("chrome.checking"));
+  expect(appRoot().querySelector(".dot-pending")).not.toBeNull();
+  expect(appRoot().textContent).not.toContain(t("chrome.reconnecting"));
+});
