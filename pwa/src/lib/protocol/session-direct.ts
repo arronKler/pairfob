@@ -1,7 +1,8 @@
 import { parseNetworkMode, type NetworkMode } from "../network-mode.ts";
 import {
   DIRECT_HEALTH_PING_MS,
-  DIRECT_RESUME_GRACE_MS,
+  FOREGROUND_RECOVERY_MS,
+  RELAY_WARMUP_DELAY_MS,
   DIRECT_RESTART_MIN_INTERVAL_MS,
   directRetryDelay,
 } from "./direct-retry-policy.ts";
@@ -38,6 +39,8 @@ export type DirectSessionHost = {
   stopped: boolean;
   networkAvailable: boolean;
   networkMode: NetworkMode;
+  prepareRelay(): void;
+  cancelPreparedRelay(): void;
   getTransport(): SessionTransport | null;
   setTransport(transport: SessionTransport): void;
   beginSwitch(): TransportSwitchLease;
@@ -62,13 +65,14 @@ export class DirectSessionDriver {
   private lastRestartAt = 0;
   private hidden = pageHidden();
   private activityVersion = 0;
-  private probeAttempt: { transport: SessionTransport; promise: Promise<void> } | null = null;
+  private probeAttempt: { transport: SessionTransport; cancel(): void } | null = null;
   private unwatchIce: (() => void) | null = null;
 
   constructor(private readonly host: DirectSessionHost) {}
 
   dispose(): void {
     this.activityVersion++;
+    this.probeAttempt?.cancel();
     this.probeAttempt = null;
     this.directAbort?.abort();
     this.directAbort = null;
@@ -84,6 +88,7 @@ export class DirectSessionDriver {
     if (this.hidden === hidden) return;
     this.hidden = hidden;
     this.activityVersion++;
+    this.probeAttempt?.cancel();
     this.probeAttempt = null;
     if (hidden) this.clearDirectRetry();
   }
@@ -148,20 +153,37 @@ export class DirectSessionDriver {
   probe(transport: SessionTransport, reason: ReconnectReason): void {
     if (this.hidden || pageHidden() || this.probeAttempt?.transport === transport) return;
     const version = this.activityVersion;
-    this.host.emit({ type: "checking" });
-    const promise = this.runProbe(transport, reason, version);
-    const attempt = { transport, promise };
-    this.probeAttempt = attempt;
-    void promise.finally(() => {
+    let expired = false;
+    const current = () => !expired && this.activityVersion === version && !this.hidden && !pageHidden() && this.host.getTransport() === transport;
+    const warmup = globalThis.setTimeout(() => {
+      if (current()) this.host.prepareRelay();
+    }, RELAY_WARMUP_DELAY_MS);
+    const deadline = globalThis.setTimeout(() => {
+      if (current()) {
+        expired = true;
+        this.restartAbort?.abort();
+        transport.diagnose("probe_failed", { reason: "recovery_budget_exhausted", code: "timeout" });
+        transport.suspend(new ProtocolError("timeout", "前台恢复超时，正在重新连接", { reason: "recovery_budget_exhausted" }));
+      }
+      cancel();
+    }, FOREGROUND_RECOVERY_MS);
+    const cancel = () => {
+      expired = true;
+      clearTimeout(warmup);
+      clearTimeout(deadline);
       if (this.probeAttempt === attempt) this.probeAttempt = null;
-    });
+    };
+    const attempt = { transport, cancel };
+    this.probeAttempt = attempt;
+    // Publish ownership before notifying UI listeners, which may request another probe.
+    this.host.emit({ type: "checking" });
+    void this.runProbe(transport, reason, current).finally(cancel);
   }
 
-  private async runProbe(transport: SessionTransport, reason: ReconnectReason, version: number): Promise<void> {
-    const current = () => this.activityVersion === version && !this.hidden && !pageHidden() && this.host.getTransport() === transport;
+  private async runProbe(transport: SessionTransport, reason: ReconnectReason, current: () => boolean): Promise<void> {
     if (!current()) return;
     try {
-      const timeout = transport.kind === "p2p" && reason === "path" ? DIRECT_HEALTH_PING_MS : DIRECT_RESUME_GRACE_MS;
+      const timeout = DIRECT_HEALTH_PING_MS;
       transport.diagnose("probe_start", { reason });
       try {
         await transport.rpc("Ping", { t_ms: Date.now() }, timeout);
@@ -177,6 +199,7 @@ export class DirectSessionDriver {
         await transport.rpc("Ping", { t_ms: Date.now() }, DIRECT_HEALTH_PING_MS);
       }
       if (!current()) return;
+      this.host.cancelPreparedRelay();
       transport.diagnose("probe_success", { reason });
       this.host.emit({ type: "connected" });
       if (current() && transport.kind === "relay") this.startAutomaticDirectUpgrade(transport);

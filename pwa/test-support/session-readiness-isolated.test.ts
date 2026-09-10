@@ -26,8 +26,10 @@ class ProbeWire extends Wire {
 }
 let wire: ProbeWire;
 let failConnect = false;
+let socketOpens = 0;
 mock.module("../src/lib/protocol/frame-socket", () => ({
   ...sockets, openWS: async () => {
+    socketOpens++;
     if (failConnect) throw new ProtocolError("ws_open_failed", "fixture unavailable");
     return wire as never;
   },
@@ -56,6 +58,7 @@ async function connect() {
   return live;
 }
 beforeEach(() => {
+  socketOpens = 0;
   wire = new ProbeWire("relay", 1);
   failConnect = false;
   document.visibilityState = "visible";
@@ -153,3 +156,29 @@ test("a brief connection drop remains checking until the replacement epoch answe
   expect(session.isChecking?.()).toBe(false);
   expect(session.isConnected()).toBe(true);
 });
+
+
+test("silent foreground consumes the prepared relay once without replaying blocked mutations", async () => {
+  const session = await connect();
+  const old = wire;
+  old.hold = true;
+  visibility(true); visibility(false);
+  await settle();
+  wire = new ProbeWire("relay", 2);
+  wire.hold = true;
+  await expect(session.sendText("w1:p1", "must not replay")).rejects.toMatchObject({ code: "disconnected" });
+  await Bun.sleep(600);
+  expect(socketOpens).toBe(2);
+  expect(wire.requests).toHaveLength(0); // Warmup has not authenticated or sent RPCs.
+  const deadline = Date.now() + 3500;
+  while (wire.pending.length === 0 && Date.now() < deadline) await Bun.sleep(10);
+  expect(wire.pending).toHaveLength(1);
+  expect(socketOpens).toBe(2);
+  expect(session.isConnected()).toBe(false);
+  wire.confirm(); await settle();
+  expect(session.isConnected()).toBe(true);
+  expect(old.closed).toBe(true);
+  expect([...old.requests, ...wire.requests].every(r => r.op === "Ping")).toBe(true);
+  old.confirm(); await settle();
+  expect(session.isConnected()).toBe(true);
+}, 5000);

@@ -18,11 +18,14 @@ export type ConnectionDiagnostic = ConnectionDetails & {
   hidden?: boolean;
   pending_rpcs?: number;
   pong_wait_ms?: number;
+  connect_id?: number;
+  elapsed_ms?: number;
 };
 const KEY = "pairfob.connection-diagnostics.v1";
 const LIMIT = 200;
 const TTL = 24 * 60 * 60 * 1000;
 const TOKENS = new Set((
+  "connect_start warmup_start ws_open route_bound hello_verified session_established session_ready connect_failed warmup_cancelled view_committed recovery_budget_exhausted " +
   "transport_closed session_open session_close disconnect page_hidden page_visible probe_start probe_success probe_failed " +
   "local_close transport_upgrade foreground probe path foreground_probe_failed path_probe_failed " +
   "data_channel_closed data_channel_error send_queue_full send_failed send_not_open ice_failed ice_grace_expired " +
@@ -51,7 +54,7 @@ function sanitize(input: unknown, now: number): ConnectionDiagnostic | null {
   if (!out.event) return null;
   if (typeof source.pwa_asset === "string" && assetPattern.test(source.pwa_asset)) out.pwa_asset = source.pwa_asset;
   if (typeof source.route_id === "string" && /^[a-f0-9]{32}$/.test(source.route_id)) out.route_id = source.route_id;
-  for (const key of ["buffered_bytes", "ws_code", "pending_rpcs", "pong_wait_ms"]) {
+  for (const key of ["buffered_bytes", "ws_code", "pending_rpcs", "pong_wait_ms", "connect_id", "elapsed_ms"]) {
     const value = source[key];
     if (typeof value === "number" && Number.isFinite(value) && value >= 0) out[key] = Math.round(value);
   }

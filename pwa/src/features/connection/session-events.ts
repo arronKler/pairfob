@@ -4,6 +4,7 @@
  * Transport facts go through the connection domain. Snapshot/pane-read follow-up
  * is decided here and handed to ports; `#app` paint stays a shell adapter.
  */
+import { recordConnectionDiagnostic } from "../../lib/protocol/connection-diagnostics";
 import {
   noteP2PAttempt,
   noteRelayRtt,
@@ -100,6 +101,7 @@ export function observeSessionEvent(
     if (!stillActive()) return;
     ports.startPolling();
     ports.commitView();
+    recordConnectionDiagnostic({ event: "view_committed" });
     if (ports.documentVisible()) void ports.refreshRuntime();
     return;
   }

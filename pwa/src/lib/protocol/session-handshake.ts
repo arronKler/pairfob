@@ -22,6 +22,7 @@ export async function establishSessionEpoch(
   routeId: Uint8Array,
   pair: PairResult,
   protocol: MuxProtocol,
+  observe?: (stage: "hello_verified" | "session_established") => void,
 ): Promise<SessionEpoch> {
   const ephemeralSecret = x25519.utils.randomPrivateKey();
   const ephemeralPublic = x25519.getPublicKey(ephemeralSecret);
@@ -59,6 +60,7 @@ export async function establishSessionEpoch(
   );
   if (!sameBytes(proof(pair.psk, transcript), proofDaemon)) throw new ProtocolError("bad_proof", "daemon PSK 证明失败");
   if (!verifyEd25519(pair.daemonPk, transcript, signatureDaemon)) throw new ProtocolError("bad_signature", "daemon 签名失败");
+  observe?.("hello_verified");
   channel.send(jsonFrame(Typ.FWD, routeId, {
     v: 1,
     op: "DeviceHello3",
@@ -66,6 +68,7 @@ export async function establishSessionEpoch(
   }));
   const keys = sessionKeys(x25519.getSharedSecret(ephemeralSecret, ephemeralDaemon), pair.psk);
   await waitSessionEstablished(channel, routeId, protocol);
+  observe?.("session_established");
   return {
     routeId,
     c2s: new Direction(keys.c2s, DIR_C),

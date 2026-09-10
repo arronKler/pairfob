@@ -46,3 +46,11 @@ test("reload restores sanitized recent records and discards stale or malformed s
     else Reflect.deleteProperty(globalThis, "sessionStorage");
   }
 });
+
+test("handshake timings preserve only finite nonnegative numbers", () => {
+  recordConnectionDiagnostic({ event: "hello_verified", connect_id: 7, elapsed_ms: 125.3 });
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "hello_verified", connect_id: 7, elapsed_ms: 125 });
+  recordConnectionDiagnostic({ event: "session_ready", connect_id: -1, elapsed_ms: Infinity });
+  expect(connectionDiagnostics().at(-1)?.connect_id).toBeUndefined();
+  expect(connectionDiagnostics().at(-1)?.elapsed_ms).toBeUndefined();
+});

@@ -1,7 +1,6 @@
 import { pageHidden, watchPageVisibility } from "./page-activity.ts";
 import { parseAgentQuota } from "../agent-quota";
 import { validDaemonId, validDeviceId } from "../identifiers.ts";
-import { jsonFrame, Typ } from "./envelope.ts";
 import { fingerprint16 } from "./hello.ts";
 import { ProtocolError } from "./errors.ts";
 import {
@@ -35,19 +34,13 @@ import {
   type SwapPaneInput,
   type ZoomPaneInput,
 } from "../operations.ts";
-import {
-  envelopeError,
-  openWS,
-  relayOrigin,
-  send,
-  Z16,
-} from "./frame-socket.ts";
-import { helloClientBody, muxProtocolFromRelayURL, muxSubprotocol, sessionAttachBody, type MuxProtocol } from "./mux.ts";
+import { relayOrigin } from "./frame-socket.ts";
 import type { PairResult } from "./pair-ws.ts";
 import { reconnectDelay } from "./reconnect-policy.ts";
 import { parseNetworkMode, type NetworkMode } from "../network-mode.ts";
 import { DirectSessionDriver, type P2PAttemptObservation } from "./session-direct.ts";
-import { establishSessionEpoch } from "./session-handshake.ts";
+import { connectSession } from "./session-connect.ts";
+import { RelayWarmup } from "./relay-warmup.ts";
 import { isRecord } from "./session-message.ts";
 import {
   MEDIA_OPEN_RPC_TIMEOUT_MS,
@@ -91,37 +84,6 @@ export {
   validateEstablishedFWD,
 } from "./session-transport.ts";
 
-async function connectSession(
-  relayWS: string,
-  pair: PairResult,
-  emit: (event: SessionEvent) => void,
-  signal?: AbortSignal,
-): Promise<SessionTransport> {
-  const protocol = muxProtocolFromRelayURL(relayWS);
-  const socket = await openWS(relayWS, muxSubprotocol(protocol), signal);
-  const abort = () => socket.ws.close(1000, "connection cancelled");
-  signal?.addEventListener("abort", abort, { once: true });
-  try {
-    if (signal?.aborted) throw new ProtocolError("disconnected", "连接已取消");
-    send(socket.ws, jsonFrame(Typ.HELLO_CLIENT, Z16, helloClientBody(protocol)));
-    send(socket.ws, jsonFrame(Typ.SESSION_ATTACH, Z16, sessionAttachBody(protocol, pair.daemonId)));
-    const bound = await socket.next(8_000);
-    if (bound.typ === Typ.ERROR) throw envelopeError(bound);
-    if (bound.typ !== Typ.SESSION_BOUND) throw new ProtocolError("bad_message", `预期 SESSION_BOUND，实际 ${bound.typ}`);
-    const epoch = await establishSessionEpoch(socket, bound.routeId, pair, protocol);
-    const transport = new SessionTransport(socket, epoch.routeId, epoch.c2s, epoch.s2c, emit);
-    // The first AEAD RPC is sent only after the explicit control frame. Its
-    // response is still matched by id through the normal demultiplexer.
-    await transport.rpc("Ping", { t_ms: Date.now() }, 8_000);
-    return transport;
-  } catch (error) {
-    socket.ws.close(1000, "session handshake failed");
-    throw error;
-  } finally {
-    signal?.removeEventListener("abort", abort);
-  }
-}
-
 const TERMINAL_CODES = new Set(["revoked", "unpaired", "too_many_devices", "bad_proof", "bad_signature"]);
 const UNCERTAIN_MUTATION_TRANSPORT_CODES = new Set(["timeout", "disconnected", "heartbeat_timeout", "daemon_replaced"]);
 
@@ -162,6 +124,7 @@ class ReconnectingSession implements LiveSession {
   private readonly transportSwitch = new TransportSwitchBarrier();
   private deferredDisconnect: ProtocolError | null = null;
   private readonly direct: DirectSessionDriver;
+  private readonly relayWarmup: RelayWarmup;
   private unwatchVisibility: () => void = () => undefined;
   private readonly agentTraceRPC = new AgentTraceRPC((op, params) => this.readRPC(op, params));
 
@@ -171,9 +134,12 @@ class ReconnectingSession implements LiveSession {
     private readonly options: SessionOptions,
   ) {
     this.networkMode = parseNetworkMode(options.networkMode);
+    this.relayWarmup = new RelayWarmup(relayWS);
     const session = this;
     this.direct = new DirectSessionDriver({
       pair: this.pair,
+      prepareRelay: () => this.relayWarmup.start(),
+      cancelPreparedRelay: () => this.relayWarmup.cancel(),
       relayWS: this.relayWS,
       options: this.options,
       get stopped() { return session.stopped; },
@@ -197,6 +163,7 @@ class ReconnectingSession implements LiveSession {
     });
     this.unwatchVisibility = watchPageVisibility((hidden) => {
       this.direct.setPageHidden(hidden);
+      if (hidden) this.relayWarmup.cancel();
       if (hidden && this.transport) this.emit({ type: "checking" });
       if (hidden && this.reconnectTimer !== null) {
         clearTimeout(this.reconnectTimer);
@@ -245,6 +212,7 @@ class ReconnectingSession implements LiveSession {
     if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.direct.dispose();
+    this.relayWarmup.cancel();
     this.connectAbort?.abort();
     const transport = this.transport;
     if (transport) transport.suspend(new ProtocolError("disconnected", "手机网络已断开"));
@@ -394,6 +362,7 @@ class ReconnectingSession implements LiveSession {
   close = (): void => {
     this.unwatchVisibility();
     this.stopped = true;
+    this.relayWarmup.cancel();
     this.connectAbort?.abort();
     this.connectAbort = null;
     this.direct.dispose();
@@ -478,7 +447,7 @@ class ReconnectingSession implements LiveSession {
     this.connectAbort = controller;
     let transport: SessionTransport;
     try {
-      transport = await connectSession(this.relayWS, this.pair, (event) => this.emit(event), controller.signal);
+      transport = await connectSession(this.relayWS, this.pair, (event) => this.emit(event), controller.signal, this.relayWarmup);
     } finally {
       if (this.connectAbort === controller) this.connectAbort = null;
     }
@@ -509,6 +478,7 @@ class ReconnectingSession implements LiveSession {
     this.direct.dispose();
     if (TERMINAL_CODES.has(error.code) || error.code === "kicked") {
       this.stopped = true;
+      this.relayWarmup.cancel();
       this.unwatchVisibility();
       this.emit({ type: "terminal", code: error.code, message: error.message });
       return;

@@ -8,5 +8,5 @@ test("session readiness and mutation delivery through real encrypted transports"
     new Response(process.stdout).text(), new Response(process.stderr).text(), process.exited,
   ]);
   if (code !== 0) throw new Error(`${stdout}\n${stderr}`);
-  expect(stderr).toContain("6 pass");
+  expect(stderr).toContain("7 pass");
 }, 15_000);

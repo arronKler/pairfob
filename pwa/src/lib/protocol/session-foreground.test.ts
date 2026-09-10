@@ -100,7 +100,7 @@ function driverFixture() {
     suspend: (error: ProtocolError) => failures.push(error),
   } as unknown as SessionTransport;
   const events: string[] = [];
-  const host = { getTransport: () => session, emit: (event: { type: string }) => events.push(event.type) } as DirectSessionHost;
+  const host = { prepareRelay: () => undefined, cancelPreparedRelay: () => undefined, getTransport: () => session, emit: (event: { type: string }) => events.push(event.type) } as DirectSessionHost;
   const driver = new DirectSessionDriver(host);
   const visibility = () => driver.setPageHidden(page.visibilityState === "hidden");
   page.addEventListener("visibilitychange", visibility);
@@ -109,7 +109,7 @@ function driverFixture() {
 const settle = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
 
 describe("foreground P2P probes", () => {
-  test("duplicate resume events share one 8s probe even while ICE is disconnected", async () => {
+  test("duplicate resume events share one 3s probe even while ICE is disconnected", async () => {
     const f = driverFixture();
     page.show(true);
     f.driver.probe(f.session, "probe");
@@ -118,7 +118,7 @@ describe("foreground P2P probes", () => {
     f.driver.probe(f.session, "probe");
     f.driver.probe(f.session, "probe");
     expect(f.calls).toHaveLength(1);
-    expect(f.calls[0]!.timeout).toBe(8_000);
+    expect(f.calls[0]!.timeout).toBe(3_000);
     expect(f.events).toEqual(["checking"]);
     f.calls[0]!.resolve({});
     await settle();
@@ -402,4 +402,87 @@ test("a failed path probe joins an in-flight repair despite the restart throttle
     expect(f.events).toEqual(["checking", "connected"]);
     expect(f.failures).toHaveLength(0);
   } finally { f.driver.dispose(); finish("ok"); }
+});
+
+describe("bounded foreground recovery", () => {
+  function timedFixture() {
+    const timers = new Map<number, () => void>();
+    const timer = spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms: number) => {
+      timers.set(ms, fn); return ms;
+    }) as typeof setTimeout);
+    const clear = spyOn(globalThis, "clearTimeout").mockImplementation(((id: number) => { timers.delete(id); }) as typeof clearTimeout);
+    const f = driverFixture();
+    let warmed = 0, cancelled = 0;
+    Object.assign(f.host, { prepareRelay: () => { warmed++; }, cancelPreparedRelay: () => { cancelled++; } });
+    return { ...f, timers, warmed: () => warmed, cancelled: () => cancelled,
+      cleanup: () => { f.driver.dispose(); timer.mockRestore(); clear.mockRestore(); } };
+  }
+  test("healthy response cancels warmup before any extra socket opens", async () => {
+    const f = timedFixture();
+    try {
+      f.driver.probe(f.session, "probe");
+      f.calls[0]!.resolve({}); await settle();
+      expect(f.warmed()).toBe(0); expect(f.cancelled()).toBe(1);
+      expect(f.timers.size).toBe(0); expect(f.events.at(-1)).toBe("connected");
+    } finally { f.cleanup(); }
+  });
+  test("slow probe prepares once and discards backup after old connection recovers", async () => {
+    const f = timedFixture();
+    try {
+      f.driver.probe(f.session, "probe"); f.driver.probe(f.session, "path");
+      f.timers.get(500)!(); expect(f.warmed()).toBe(1);
+      f.calls[0]!.resolve({}); await settle();
+      expect(f.cancelled()).toBe(1); expect(f.failures).toHaveLength(0);
+    } finally { f.cleanup(); }
+  });
+  test("stalled ICE repair cannot hold input beyond the shared 4s budget", async () => {
+    const f = timedFixture();
+    let finish!: (result: "ok") => void;
+    const internals = f.driver as unknown as { maybeRestart(): Promise<"ok"> };
+    internals.maybeRestart = () => new Promise(resolve => { finish = resolve; });
+    try {
+      f.driver.probe(f.session, "path"); f.timers.get(500)!();
+      f.calls[0]!.reject(new ProtocolError("timeout", "probe failed")); await settle();
+      f.timers.get(4000)!(); await settle();
+      expect(f.failures).toHaveLength(1);
+      expect(f.failures[0]!.diagnostics?.reason).toBe("recovery_budget_exhausted");
+      expect(f.cancelled()).toBe(0);
+      finish("ok"); await settle();
+      expect(f.calls).toHaveLength(1); expect(f.events).toEqual(["checking"]);
+      expect(f.timers.size).toBe(0);
+    } finally { f.cleanup(); }
+  });
+  for (const action of ["hidden", "dispose"] as const) {
+    test(`${action} cancels deadlines and suppresses late success`, async () => {
+      const f = timedFixture();
+      try {
+        f.driver.probe(f.session, "probe");
+        if (action === "hidden") page.show(true); else f.driver.dispose();
+        expect(f.timers.size).toBe(0);
+        f.calls[0]!.resolve({}); await settle();
+        expect(f.warmed()).toBe(0); expect(f.failures).toHaveLength(0);
+        expect(f.events).toEqual(["checking"]);
+      } finally { f.cleanup(); }
+    });
+  }
+});
+
+
+test("a checking listener reentering recovery shares the already-owned probe", async () => {
+  const f = driverFixture();
+  let reentered = false;
+  const emit = f.host.emit;
+  f.host.emit = event => {
+    emit(event);
+    if (!reentered && event.type === "checking") {
+      reentered = true;
+      f.driver.probe(f.session, "path");
+    }
+  };
+  try {
+    f.driver.probe(f.session, "probe");
+    expect(f.calls).toHaveLength(1);
+    f.calls[0]!.resolve({}); await settle();
+    expect(f.events).toEqual(["checking", "connected"]);
+  } finally { f.driver.dispose(); }
 });

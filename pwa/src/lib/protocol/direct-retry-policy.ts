@@ -18,3 +18,8 @@ export function directRetryDelay(attempt: number, random = Math.random): number 
   const jitter = 0.8 + Math.min(1, Math.max(0, random())) * 0.4;
   return Math.min(DIRECT_RETRY_MAX_MS, Math.round(base * jitter));
 }
+
+/** Bound old-path recovery, not the subsequent relay handshake. Keep a prepared
+ * socket younger than the relay's 5s unauthenticated HELLO grace. */
+export const FOREGROUND_RECOVERY_MS = 4_000;
+export const RELAY_WARMUP_DELAY_MS = 500;
