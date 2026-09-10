@@ -340,3 +340,34 @@ test("a cold pane unmounted before its guarded microtask does not start an orpha
   await drain();
   expect(reads).toBe(0);
 });
+test("unreadable Pi transcript keeps a terminal exit after one successful send and can later recover", async () => {
+  let sends = 0;
+  let readable = false;
+  const snapshot = catalog(["p1"]);
+  snapshot.panes = snapshot.panes!.map(pane => ({ ...pane, agent: "pi", history_available: false }));
+  replaceAgentsFromSnapshot(snapshot);
+  applyTrace({ agentTraceItems: [], agentTraceNote: "", agentTracePending: "" });
+  setSession({
+    agentTrace: async () => {
+      if (!readable) throw new ProtocolError("transcript_unavailable");
+      return page("Recovered answer");
+    },
+    promptAgent: async () => { sends++; return { outcome: "applied" }; },
+  });
+  act(mount);
+  await act(async () => { await refreshAgentTrace(); });
+  expect(stream().textContent).toContain("当前无法读取此会话的记录");
+  expect(stream().querySelector(".agent-open-terminal")).not.toBeNull();
+  setComposeDraft("Run once");
+  await act(async () => { await submitAgentPrompt(); });
+  expect(sends).toBe(1);
+  expect(stream().querySelector(".agent-user-text")?.textContent).toBe("Run once");
+  expect(stream().textContent).toContain("不要因为这里没有显示而重复发送");
+  expect(stream().querySelector(".agent-run-status")).toBeNull();
+  expect(stream().querySelector(".agent-open-terminal")).not.toBeNull();
+  readable = true;
+  await act(async () => { await refreshAgentTrace(); });
+  expect(stream().textContent).toContain("Recovered answer");
+  expect(stream().querySelector(".agent-open-terminal")).toBeNull();
+  expect(sends).toBe(1);
+});

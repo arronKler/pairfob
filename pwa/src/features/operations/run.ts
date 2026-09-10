@@ -34,6 +34,7 @@ export type HerdOperationOptions<T> = {
   owner?: OperationOwner;
   capability?: OperationCapability;
   conflictMessage?: string;
+  unsupportedMessage?: string;
   after?: (result: T, owner: OperationOwner) => Promise<void>;
   reconcileWorktrees?: ListWorktreesInput;
   noticeScope?: NoticeScope;
@@ -90,8 +91,10 @@ export async function runHerdOperation<T>(
   } catch (error) {
     await ports.reconcile(owner.session, error, reconcileWorktrees, () => stillOwns(owner, ports));
     if (stillOwns(owner, ports)) {
-      const message = error instanceof ProtocolError && error.code === "conflict" && options.conflictMessage
-        ? options.conflictMessage : messageOf(error);
+      const override = error instanceof ProtocolError
+        ? ({ conflict: options.conflictMessage, unsupported: options.unsupportedMessage } as Record<string, string | undefined>)[error.code]
+        : undefined;
+      const message = override ?? messageOf(error);
       showError(message, noticeScope);
     }
     else clearPendingNotice();

@@ -115,3 +115,14 @@ test("error retry and scroll requests use the existing near-top and follow thres
   expect(older).toBe(1);
   expect(following).toEqual([false, true]);
 });
+
+test("unavailable history keeps its terminal action beside a pending prompt without fake activity", () => {
+  let exits = 0;
+  act(() => renderReact(<AgentStream items={[{ type: "user", text: "Already sent" }]} working
+    empty={{ kind: "unavailable", title: "Cannot read", sub: "See terminal" }} onTerminal={() => { exits++; }} />));
+  expect(appRoot().textContent).toContain("Already sent");
+  expect(appRoot().textContent).toContain("Cannot read");
+  expect(appRoot().querySelector(".agent-run-status")).toBeNull();
+  act(() => appRoot().querySelector<HTMLButtonElement>(".agent-open-terminal")!.click());
+  expect(exits).toBe(1);
+});

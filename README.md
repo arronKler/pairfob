@@ -31,7 +31,8 @@ The computer dials out — no inbound ports, no Tailscale.
 
 ## Install
 
-macOS or Linux. Herdr 0.7 or newer.
+macOS or Linux. Herdr 0.7 or newer. Closing a workspace from the phone requires
+Herdr 0.9.0 or newer: Pairfob refuses to close linked workspace groups implicitly.
 
 ```sh
 curl -fsSL https://pairfob.com/install.sh | sh

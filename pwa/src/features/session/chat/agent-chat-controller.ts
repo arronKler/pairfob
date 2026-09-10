@@ -148,7 +148,7 @@ export function emptySpec(working: boolean): AgentEmptySpec {
       running: t("trace.running"),
       reading: t("chat.readingProcess"),
       noChat: t("chat.noChat"),
-      willWrite: t("chat.willWrite"),
+      terminalHint: t("chat.terminalHint"),
       sendBelow: t("chat.sendBelow"),
       cantSend: t("chat.cantSend"),
     },
@@ -325,7 +325,7 @@ export async function refreshAgentTrace(older = false): Promise<boolean> {
         agentTraceSig: "",
         agentTraceTail: 0,
         agentTraceTruncated: false,
-        agentTraceNote: chatSnapshot().agentTracePending ? "" : traceUnavailableNote(),
+        agentTraceNote: traceUnavailableNote(),
       });
       if (retiredTrace(request, session, paneId)) return false;
       if (!patchAgentChat({ follow: true })) commitView();
@@ -399,6 +399,7 @@ function syncChatCompose(): void { publishAgentChatUI(); }
 export function chatDockNotice(): Notice | null {
   const fromApp = visibleNotice();
   if (fromApp) return fromApp;
+  if (chatSnapshot().agentTraceNote === traceUnavailableNote()) return null;
   if (!(chatSnapshot().agentTraceItems.length || chatSnapshot().agentTracePending) || !chatSnapshot().agentTraceNote) return null;
   return { text: chatSnapshot().agentTraceNote, tone: chatSnapshot().agentTraceLoadState === "error" ? "error" : "status" };
 }

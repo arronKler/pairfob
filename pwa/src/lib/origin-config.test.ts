@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ProtocolError } from "./protocol/client.ts";
-import { clientWsURL, loadOriginConfig, parseOriginConfig } from "./origin-config.ts";
+import { clientWsURL, loadOriginConfig, originConfigErrorIsRecoverable, parseOriginConfig } from "./origin-config.ts";
 
 describe("origin config", () => {
   test("parses protocol 2 only", () => {
@@ -32,6 +32,38 @@ describe("origin config", () => {
       expect(error).toBeInstanceOf(ProtocolError);
       expect((error as ProtocolError).code).toBe("bad_relay");
     }
+  });
+
+  test("an unavailable origin status is a recoverable bad_relay, not invalid config", async () => {
+    try {
+      await loadOriginConfig(async () => new Response("", { status: 503 }));
+      throw new Error("expected loadOriginConfig to reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ProtocolError);
+      expect((error as ProtocolError).code).toBe("bad_relay");
+      expect(originConfigErrorIsRecoverable(error)).toBeTrue();
+    }
+  });
+
+  test("a malformed body is invalid config and is not recoverable", async () => {
+    try {
+      await loadOriginConfig(async () => new Response("not json", { status: 200 }));
+      throw new Error("expected loadOriginConfig to reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ProtocolError);
+      expect((error as ProtocolError).code).toBe("bad_message");
+      expect(originConfigErrorIsRecoverable(error)).toBeFalse();
+    }
+  });
+
+  test("only transport failures and timeouts earn retry eligibility", () => {
+    expect(originConfigErrorIsRecoverable(new ProtocolError("bad_relay", "relay"))).toBeTrue();
+    expect(originConfigErrorIsRecoverable(new ProtocolError("timeout", "timed out"))).toBeTrue();
+    expect(originConfigErrorIsRecoverable(new ProtocolError("bad_message", "shape"))).toBeFalse();
+    expect(originConfigErrorIsRecoverable(new ProtocolError("bad_message", "version"))).toBeFalse();
+    expect(originConfigErrorIsRecoverable(new TypeError("Failed to fetch"))).toBeFalse();
+    expect(originConfigErrorIsRecoverable(null)).toBeFalse();
+    expect(originConfigErrorIsRecoverable(undefined)).toBeFalse();
   });
 
   test("ws URL is /v2/ws with role, daemon_id, and ticket", () => {

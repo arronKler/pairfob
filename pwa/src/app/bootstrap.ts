@@ -3,7 +3,7 @@ import { bindRippleSurface } from "../lib/dom";
 import { bindLegacyGestureBoundary } from "../lib/gesture-boundary";
 import { detectLang, initI18n, langPref, setLang, t } from "../lib/i18n";
 import { messageOf } from "../lib/notices";
-import { loadOriginConfig } from "../lib/origin-config";
+import { loadOriginConfig, originConfigErrorIsRecoverable } from "../lib/origin-config";
 import { track } from "../lib/telemetry";
 import { registerSessionView } from "../features/session/register";
 import { preloadFullTerminalXterm } from "../features/session/full-terminal/full-terminal-loader";
@@ -273,6 +273,8 @@ async function boot(generation: number): Promise<void> {
     applyOriginConfig(config);
   } catch (error) {
     if (generation !== bootGeneration) return;
+    // Keep the existing network lifecycle eligible to resume a failed config read.
+    bootBlockedByNetwork = originConfigErrorIsRecoverable(error);
     setPhase("connect");
     showError(messageOf(error), true);
     track("pwa_boot", { result: "bad_relay", extra: "connect" });

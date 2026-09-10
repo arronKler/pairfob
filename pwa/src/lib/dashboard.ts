@@ -293,18 +293,16 @@ export function tabIsSplit(agent: AgentCard | undefined, agents: AgentCard[]): b
   return tabSiblings(agent, agents).length > 1;
 }
 
-/** Snapshot has no zoomed flag. A pane much taller than its tab-mates is treated as filled. */
+/** Zoom toggles the tab; only its matching runtime layout can describe that state. */
 export function paneFillCopy(
   agent: AgentCard | undefined,
   agents: AgentCard[],
+  layouts: ReadonlyArray<{ workspaceId: string; tabId: string; zoomed: boolean }>,
 ): { menu: string; aria: string } | null {
   if (!agent || !tabIsSplit(agent, agents)) return null;
-  const mine = agent.viewportRows;
-  const others = tabSiblings(agent, agents)
-    .filter((item) => item.paneId !== agent.paneId)
-    .map((item) => item.viewportRows)
-    .filter((rows): rows is number => typeof rows === "number" && rows > 0);
-  const filled = Boolean(mine && others.length && mine >= Math.max(...others) * 1.5);
+  const layout = layouts.find(item => item.workspaceId === agent.workspaceId && item.tabId === agent.tabId);
+  if (!layout) return null;
+  const filled = layout.zoomed;
   if (filled) return { menu: t("fill.exit"), aria: t("fill.exitAria") };
   return { menu: t("fill.enter"), aria: t("fill.enterAria") };
 }

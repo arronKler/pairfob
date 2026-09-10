@@ -23,6 +23,12 @@ export function parseOriginConfig(value: unknown): OriginConfig {
   return { protocol: record.protocol, build: record.build, p2p: record.p2p === true };
 }
 
+/** Network failures may recover; invalid origin configuration must remain rejected. */
+export function originConfigErrorIsRecoverable(error: unknown): boolean {
+  if (!(error instanceof ProtocolError)) return false;
+  return error.code === "bad_relay" || error.code === "timeout";
+}
+
 export async function loadOriginConfig(fetchImpl: FetchLike = fetch): Promise<OriginConfig> {
   let response: Response;
   try {

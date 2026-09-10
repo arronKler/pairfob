@@ -5,7 +5,7 @@ const copy: AgentEmptyCopy = {
   running: "running",
   reading: "reading",
   noChat: "no chat",
-  willWrite: "will write",
+  terminalHint: "see terminal",
   sendBelow: "send below",
   cantSend: "cannot send",
 };
@@ -23,7 +23,7 @@ describe("agent chat empty spec", () => {
     })).toEqual({ kind: "loading", title: "reading" });
     expect(agentEmptySpec({
       working: false, loadState: "ready", note: "gone", unavailableNote: "gone", canSend: true, copy,
-    })).toEqual({ kind: "empty", title: "no chat", sub: "will write" });
+    })).toEqual({ kind: "unavailable", title: "gone", sub: "see terminal" });
     expect(agentEmptySpec({
       working: false, loadState: "ready", note: "hint", unavailableNote: "gone", canSend: true, copy,
     })).toEqual({ kind: "empty", title: "no chat", sub: "hint" });

@@ -139,6 +139,7 @@ type HerdOperationOptions<T> = {
   owner?: OperationOwner;
   capability?: Parameters<typeof capabilityEnabled>[0];
   conflictMessage?: string;
+  unsupportedMessage?: string;
   after?: (result: T, owner: OperationOwner) => Promise<void>;
   reconcileWorktrees?: ListWorktreesInput;
   noticeScope?: NoticeScope;
@@ -546,6 +547,8 @@ export async function closeWorkspace(agent: AgentCard | undefined = selectedAgen
   const siblings = workspaceSiblings(agent, [...dashboardStore.get().agents]);
   await runHerdOperation(t("op.closingWorkspace"), t("op.closedWorkspace"), () => session.closeWorkspace(workspaceId), {
     owner,
+    conflictMessage: t("err.closeWorkspaceConflict"),
+    unsupportedMessage: t("err.closeWorkspaceUnsupported"),
     after: async () => {
       for (const pane of siblings) forgetAgentTrace(pane.paneId);
       const open = openPaneId();

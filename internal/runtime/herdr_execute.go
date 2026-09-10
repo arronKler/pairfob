@@ -65,7 +65,7 @@ func (h *Herdr) Execute(ctx context.Context, session SessionRef, operationID str
 		if value.WorkspaceID == "" {
 			return notApplied(operationID, invalidFault("workspace.close", "workspace id is required"))
 		}
-		return h.closeMutation(ctx, session, operationID, "workspace.close", map[string]any{"workspace_id": value.WorkspaceID}, EntityRef{Kind: EntityWorkspace, ID: value.WorkspaceID})
+		return h.closeMutation(ctx, session, operationID, "workspace.close", map[string]any{"workspace_id": value.WorkspaceID, "close_group": false}, EntityRef{Kind: EntityWorkspace, ID: value.WorkspaceID})
 	case CreateConversationCommand:
 		return h.createConversation(ctx, session, operationID, value)
 	case CreateTabCommand:
@@ -193,7 +193,7 @@ func (h *Herdr) createConversation(ctx context.Context, session SessionRef, oper
 		{Kind: EntityPane, ID: created.RootPane.PaneID},
 	}, createdPaneClose{
 		Method: "workspace.close",
-		Params: map[string]any{"workspace_id": created.Workspace.WorkspaceID},
+		Params: map[string]any{"workspace_id": created.Workspace.WorkspaceID, "close_group": false},
 		Noun:   "workspace",
 	})
 }

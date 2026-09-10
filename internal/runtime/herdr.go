@@ -98,6 +98,11 @@ func (h *Herdr) call(ctx context.Context, session SessionRef, method string, par
 }
 
 func (h *Herdr) callWithTimeout(ctx context.Context, session SessionRef, method string, params any, mutating bool, timeout time.Duration) (json.RawMessage, error) {
+	if method == "workspace.close" {
+		if err := h.requireSingleWorkspaceClose(ctx, session); err != nil {
+			return nil, err
+		}
+	}
 	socket, err := h.socketFor(session)
 	if err != nil {
 		return nil, err
@@ -193,7 +198,7 @@ func herdrFault(operation, code, message string) error {
 		mapped = CodeNotReady
 	case strings.Contains(code, "invalid") || strings.Contains(code, "empty") || strings.Contains(code, "missing"):
 		mapped = CodeInvalid
-	case strings.Contains(code, "conflict") || strings.Contains(code, "taken") || strings.Contains(code, "already"):
+	case code == "workspace_group_close_required" || strings.Contains(code, "conflict") || strings.Contains(code, "taken") || strings.Contains(code, "already"):
 		mapped = CodeConflict
 	case strings.Contains(code, "timeout"):
 		mapped = CodeTimeout

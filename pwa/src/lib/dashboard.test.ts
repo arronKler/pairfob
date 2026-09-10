@@ -1,3 +1,4 @@
+import type { TabLayout } from "./layout";
 import { describe, expect, test } from "bun:test";
 import { agentDetailRows, agentMeta, agentTitle, canPromptAgent, choosePane, chromeName, herdSignature, mapSnapshotAgents, paneFillCopy, statusLabel, tabIsSplit, visibleTabLabel } from "./dashboard.ts";
 
@@ -44,11 +45,20 @@ describe("dashboard mapping", () => {
       ],
     });
     expect(tabIsSplit(agents[0], agents)).toBe(true);
-    expect(paneFillCopy(agents[0], agents)?.menu).toBe("铺满全屏");
+    const layout: TabLayout = { workspaceId: "w1", tabId: "t1", zoomed: false,
+      area: { x: 0, y: 0, width: 100, height: 40 }, focusedPaneId: "p1", panes: [] };
+    expect(paneFillCopy(agents[0], agents, [layout])?.menu).toBe("铺满全屏");
     agents[0].viewportRows = 48;
-    expect(paneFillCopy(agents[0], agents)?.menu).toBe("退出全屏");
+    expect(paneFillCopy(agents[0], agents, [layout])?.menu).toBe("铺满全屏");
+    agents[0].viewportRows = agents[1].viewportRows;
+    layout.zoomed = true;
+    expect(paneFillCopy(agents[0], agents, [layout])?.menu).toBe("退出全屏");
+    expect(paneFillCopy(agents[1], agents, [layout])?.menu).toBe("退出全屏");
+    expect(paneFillCopy(agents[0], agents, [])).toBeNull();
+    expect(paneFillCopy(agents[0], agents, [{ ...layout, tabId: "other" }])).toBeNull();
+    expect(paneFillCopy(agents[0], agents, [{ ...layout, workspaceId: "other" }])).toBeNull();
     expect(tabIsSplit(agents[0], [agents[0]])).toBe(false);
-    expect(paneFillCopy(agents[0], [agents[0]])).toBeNull();
+    expect(paneFillCopy(agents[0], [agents[0]], [layout])).toBeNull();
   });
 
   test("focused pane never overwrites a still-valid manual selection", () => {

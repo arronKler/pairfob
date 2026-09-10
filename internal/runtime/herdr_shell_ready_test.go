@@ -79,7 +79,7 @@ func TestCreatedShellInvalidReadCompensatesWithoutStartingAgent(t *testing.T) {
 		if request.Method == "pane.process_info" {
 			return shellProcessReply("wrong-pane", 42, 42)
 		}
-		return standardReply(request)
+		return closeVersionReply(request, "0.9.0")
 	})
 	receipt, err := NewHerdr(socket).Execute(context.Background(), DefaultSession(), "shell-invalid", CreateConversationCommand{CWD: "/repo", AgentKind: "codex"})
 	if err == nil || receipt.Outcome != OutcomeNotApplied {

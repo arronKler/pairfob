@@ -1,3 +1,4 @@
+import { boardLayouts } from "../../board/layout-store";
 import { composeLive } from "../compose-store";
 import { operationCapabilities } from "../../operations/capabilities-store";
 import { liveAgents, selectedAgent } from "../../dashboard/catalog-store";
@@ -40,7 +41,7 @@ export function openPaneMenu(): void {
   const selected = selectedAgent();
   const agents = [...liveAgents()];
   const split = tabIsSplit(selected, agents);
-  const fill = paneFillCopy(selected, agents);
+  const fill = paneFillCopy(selected, agents, boardLayouts());
   const currentMode = paneTermMode(openPaneId());
   const caps = operationCapabilities();
   const fontPx = termFontPx();

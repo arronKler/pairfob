@@ -80,19 +80,20 @@ function TraceTurn({ turn, live, kept, hooks, onCopy }: {
   </>;
 }
 
-function EmptyPanel({ spec, onRetry }: { spec: AgentEmptySpec; onRetry?: () => void }) {
+function EmptyPanel({ spec, onRetry, onTerminal }: { spec: AgentEmptySpec; onRetry?: () => void; onTerminal?: () => void }) {
   return <div className={`agent-empty agent-empty-${spec.kind}`} role={spec.kind === "error" ? "alert" : "status"}>
     {(spec.kind === "loading" || spec.kind === "working") && <Spinner />}
     <p className="agent-empty-title">{spec.title}</p>
     {spec.sub && <p className="agent-empty-sub">{spec.sub}</p>}
+    {spec.kind === "unavailable" && onTerminal && <Button className="btn btn-small agent-open-terminal" onClick={onTerminal}>{t("chat.openTerminal")}</Button>}
     {spec.kind === "error" && onRetry && <Button className="btn btn-small" onClick={onRetry}>{t("retry")}</Button>}
   </div>;
 }
 
-export function AgentStream({ items, working, empty, busy, kept, onRetry, onNeedOlder, onFollow, onCopyReply,
+export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerminal, onNeedOlder, onFollow, onCopyReply,
   toolDetail, onNeedToolDetail, truncated, older, streamRef, signature }: {
   items: AgentTraceItem[]; working: boolean; empty: AgentEmptySpec; busy?: boolean; kept?: DetailsState;
-  onRetry?: () => void; onNeedOlder?: () => void; onFollow?: (follow: boolean) => void; onCopyReply?: CopyReply;
+  onRetry?: () => void; onTerminal?: () => void; onNeedOlder?: () => void; onFollow?: (follow: boolean) => void; onCopyReply?: CopyReply;
   toolDetail?: ToolDetailHooks["view"]; onNeedToolDetail?: ToolDetailHooks["need"]; truncated?: boolean;
   older?: ReactNode; streamRef?: Ref<HTMLDivElement>; signature?: string;
 }) {
@@ -107,9 +108,9 @@ export function AgentStream({ items, working, empty, busy, kept, onRetry, onNeed
     }}>
     <div className="agent-stream-inner">
       {older}
-      {!items.length && <EmptyPanel spec={empty} onRetry={onRetry} />}
+      {(!items.length || empty.kind === "unavailable") && <EmptyPanel spec={empty} onRetry={onRetry} onTerminal={onTerminal} />}
       {truncated && items.length > 0 && <p className="agent-trace-limit">{t("chat.truncated")}</p>}
-      {turns.map((turn, index) => <TraceTurn key={`${turnKey(turn)}:${index}`} turn={turn} live={working && index === turns.length - 1}
+      {turns.map((turn, index) => <TraceTurn key={`${turnKey(turn)}:${index}`} turn={turn} live={working && empty.kind !== "unavailable" && index === turns.length - 1}
         kept={kept} hooks={hooks} onCopy={onCopyReply} />)}
     </div>
   </div>;

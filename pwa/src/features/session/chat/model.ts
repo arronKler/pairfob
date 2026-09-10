@@ -2,7 +2,7 @@
  * Pure agent-chat view helpers. Take explicit inputs; do not import state, paint, or DOM.
  */
 
-export type AgentEmptyKind = "loading" | "working" | "empty" | "error";
+export type AgentEmptyKind = "loading" | "working" | "empty" | "error" | "unavailable";
 export type AgentEmptySpec = { kind: AgentEmptyKind; title: string; sub?: string };
 export type AgentChatLoadState = "cold" | "loading" | "ready" | "error";
 
@@ -10,7 +10,7 @@ export type AgentEmptyCopy = {
   running: string;
   reading: string;
   noChat: string;
-  willWrite: string;
+  terminalHint: string;
   sendBelow: string;
   cantSend: string;
 };
@@ -26,6 +26,7 @@ export type AgentEmptyInput = {
 
 export function agentEmptySpec(input: AgentEmptyInput): AgentEmptySpec {
   const { working, loadState, note, unavailableNote, canSend, copy } = input;
+  if (note === unavailableNote) return { kind: "unavailable", title: note, sub: copy.terminalHint };
   if (loadState === "error" && note && note !== unavailableNote) {
     return { kind: "error", title: note };
   }
@@ -33,7 +34,6 @@ export function agentEmptySpec(input: AgentEmptyInput): AgentEmptySpec {
   if (loadState === "cold" || loadState === "loading") {
     return { kind: "loading", title: copy.reading };
   }
-  if (note === unavailableNote) return { kind: "empty", title: copy.noChat, sub: copy.willWrite };
   if (note) return { kind: "empty", title: copy.noChat, sub: note };
   return {
     kind: "empty",

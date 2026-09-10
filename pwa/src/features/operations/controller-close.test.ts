@@ -11,6 +11,9 @@ import { currentScreen, setScreen } from "../../app/navigation-store";
 import { selectPane, openPaneId, setFullTerminal, resetPaneView, resetObservationLifecycle } from "../session/session-store";
 import { cacheAgentTrace, cachedAgentTrace } from "../../lib/agent-trace-cache";
 import { resetGenerationsForTests } from "../connection/generations";
+import { ProtocolError } from "../../lib/protocol/errors";
+import { noticesStore } from "../../app/notices-store";
+import { t } from "../../lib/i18n";
 import { closePane, closeTab, closeWorkspace, createSelectedTab, renamePane } from "./controller";
 
 beforeEach(async () => {
@@ -198,6 +201,28 @@ describe("object mutations target the given pane", () => {
     expect(cachedAgentTrace("p1b")).toBeNull();
     expect(cachedAgentTrace("p2")?.note).toBe("p2");
   }));
+
+  for (const code of ["unsupported", "conflict"] as const) {
+    test(`workspace close ${code} explains the boundary without dropping panes or retrying`, async () => await act(async () => {
+      boot(p1, [p1b, p2]);
+      cache("p1");
+      cache("p1b");
+      let calls = 0;
+      attachLiveSession({
+        ...liveSession()!,
+        closeWorkspace: async () => { calls++; throw new ProtocolError(code); },
+      });
+      let done!: Promise<void>;
+      act(() => { done = closeWorkspace(p1); });
+      await confirmDanger();
+      await done;
+      expect(calls).toBe(1);
+      expect(openPaneId()).toBe("p1");
+      expect(cachedAgentTrace("p1")?.note).toBe("p1");
+      expect(cachedAgentTrace("p1b")?.note).toBe("p1b");
+      expect(noticesStore.get().notice?.text).toBe(t(code === "unsupported" ? "err.closeWorkspaceUnsupported" : "err.closeWorkspaceConflict"));
+    }));
+  }
 
   test("create tab uses the card workspace, not the open pane", async () => await act(async () => {
     boot(p1, [p2]);

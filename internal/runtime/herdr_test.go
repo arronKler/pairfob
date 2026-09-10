@@ -438,7 +438,7 @@ func TestCreateConversationCompensatesOnlyDefiniteAgentFailure(t *testing.T) {
 			closed <- struct{}{}
 			return scriptedReply{Result: map[string]any{"type": "ok"}}
 		default:
-			return standardReply(request)
+			return closeVersionReply(request, "0.9.0")
 		}
 	})
 	receipt, err := NewHerdr(socket).Execute(context.Background(), DefaultSession(), "op-compensate", CreateConversationCommand{CWD: "/repo", AgentKind: "codex"})

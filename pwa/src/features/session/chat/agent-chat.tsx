@@ -1,3 +1,4 @@
+import { openPaneId } from "../session-store";
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { followTrace, setTraceFollow } from "./trace-store";
 import { computersStore } from "../../computers/catalog-store";
@@ -7,7 +8,7 @@ import { chromeName, statusLabel } from "../../../lib/dashboard";
 import { t } from "../../../lib/i18n";
 import { canInterruptAgent } from "../../connection/runtime-status";
 import { loadToolDetail, toolDetailView } from "./agent-chat-detail";
-import { chatDockNotice, copyAgentReply, emptySpec, jumpToLatest, patchAgentChat, refreshAgentTrace,
+import { chatDockNotice, copyAgentReply, emptySpec, jumpToLatest, leaveAgentChat, patchAgentChat, refreshAgentTrace,
   streamSig, visibleItems } from "./agent-chat-controller";
 import { agentChatUIRevision, publishAgentChatUI, subscribeAgentChatUI } from "./agent-chat-ui";
 import type { SessionHandlers } from "../guided/view";
@@ -77,6 +78,7 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
       <AgentStream streamRef={stream} items={items} working={working} empty={emptySpec(working)}
         busy={chat.agentTraceBusy || (!chat.agentTraceItems.length && chat.agentTraceLoadState === "cold")}
         signature={streamSig(items, working)} truncated={chat.agentTraceTruncated}
+        onTerminal={() => { if (openPaneId() === paneId) leaveAgentChat(); }}
         onRetry={() => { if (!chat.agentTraceBusy) void refreshAgentTrace(); }}
         onNeedOlder={() => { if (chat.agentTraceNext && !chat.agentTraceBusy) void refreshAgentTrace(true); }}
         onFollow={follow => {
