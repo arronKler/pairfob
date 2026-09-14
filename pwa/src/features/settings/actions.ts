@@ -21,6 +21,7 @@ import { applyComposeDraft, bumpViewIncarnation, parkComposeView } from "../sess
 import { isDesk } from "../../app/viewport";
 import { acceptDaemonVersion, checkDaemonRelease, markDaemonConfigIncompatible } from "./daemon-update";
 import { refreshAgentQuota } from "../agent-quota/actions";
+import { loadHerdSessions } from "../herd-sessions/actions";
 
 /**
  * Settings controller — the feature's one connected adapter for settings reads,
@@ -75,6 +76,7 @@ export function openSettings(): void {
   commitView();
   track("pwa_settings");
   void refreshSettings();
+  void loadHerdSessions();
 }
 
 /**

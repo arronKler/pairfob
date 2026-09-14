@@ -47,6 +47,12 @@ export interface SessionEvent {
   transport?: "relay" | "p2p";
 }
 
+/** One Herdr session known to a daemon. name is null for the default session. */
+export interface HerdSessionSummary {
+  name: string | null;
+  running: boolean;
+}
+
 export interface DeviceSummary {
   device_id: string;
   label?: string;
@@ -73,6 +79,21 @@ export type LiveSession = {
   ) => Promise<unknown>;
   sendText: (paneId: string, text: string) => Promise<unknown>;
   listDevices: () => Promise<{ devices?: DeviceSummary[] }>;
+  /**
+   * Lists the Herdr sessions this daemon can see (the default session plus
+   * every named session, each with a running/stopped flag). Rejects with
+   * ProtocolError "unknown_op" against an old daemon and "unsupported"
+   * against a daemon that has not opted into multi-session support -
+   * callers should treat both as "no switcher here", not as failures.
+   */
+  listSessions?: () => Promise<{ sessions: HerdSessionSummary[] }>;
+  /**
+   * Selects which Herdr session subsequent session-scoped RPCs (Snapshot,
+   * PaneRead, terminal/pane mutations, worktrees, workspace browsing, ...)
+   * target. null selects the default session. Takes effect on the next
+   * call; it does not itself talk to the daemon.
+   */
+  setSession?: (name: string | null) => void;
   revokeDevice: (deviceId: string) => Promise<unknown>;
   pushSubscribe: (subscription: PushSubscriptionJSON) => Promise<unknown>;
   renamePane: (paneId: string, label: string | null) => Promise<unknown>;

@@ -190,6 +190,26 @@
       },
       "additionalProperties": false
     },
+    "sessionEntry": {
+      "type": "object",
+      "required": ["name", "running"],
+      "properties": {
+        "name": { "$ref": "#/$defs/session" },
+        "running": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "listSessionsResult": {
+      "type": "object",
+      "required": ["sessions"],
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sessionEntry" }
+        }
+      },
+      "additionalProperties": false
+    },
     "createdPaneResult": {
       "type": "object",
       "required": ["operation_id", "workspace_id", "tab_id", "pane_id", "outcome"],
@@ -783,6 +803,7 @@
             "PushSubscribe",
             "RevokeDevice",
             "ListDevices",
+            "ListSessions",
             "History",
             "AgentTrace",
             "AgentTraceSummary",
@@ -844,7 +865,7 @@
           }
         },
         {
-          "if": { "properties": { "op": { "enum": ["GetConfig", "ListDevices"] } } },
+          "if": { "properties": { "op": { "enum": ["GetConfig", "ListDevices", "ListSessions"] } } },
           "then": {
             "properties": {
               "params": { "type": "object", "maxProperties": 0 }

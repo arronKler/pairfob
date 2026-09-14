@@ -48,7 +48,7 @@ import {
   SessionTransport,
   TERMINAL_RPC_TIMEOUT_MS,
 } from "./session-transport.ts";
-import type { DeviceSummary, LiveSession, ReconnectReason, SessionEvent } from "./session-types.ts";
+import type { DeviceSummary, HerdSessionSummary, LiveSession, ReconnectReason, SessionEvent } from "./session-types.ts";
 import {
   parseGitBranches,
   parseGitDiff,
@@ -127,7 +127,10 @@ class ReconnectingSession implements LiveSession {
   private readonly direct: DirectSessionDriver;
   private readonly relayWarmup: RelayWarmup;
   private unwatchVisibility: () => void = () => undefined;
-  private readonly agentTraceRPC = new AgentTraceRPC((op, params) => this.readRPC(op, params));
+  /** null selects the default Herdr session; see setSession. */
+  private currentSessionName: string | null = null;
+  private readonly agentTraceRPC = new AgentTraceRPC((op, params) =>
+    this.readRPC(op, { ...params, session: this.currentSessionName }));
 
   private constructor(
     private readonly relayWS: string,
@@ -232,22 +235,27 @@ class ReconnectingSession implements LiveSession {
   daemonUpdateStatus = () => this.readRPC("DaemonUpdateStatus", {});
   daemonUpdate = (target: string) => this.trackedMutation("DaemonUpdate", { target });
   getConfig = () => this.readRPC("GetConfig", {}) as Promise<Record<string, unknown>>;
-  snapshot = () => this.readRPC("Snapshot", { session: null }) as Promise<Record<string, unknown>>;
+  snapshot = () => this.readRPC("Snapshot", { session: this.currentSessionName }) as Promise<Record<string, unknown>>;
   paneRead = (paneId: string, lines = 80, format: "ansi" | "text" = "ansi") =>
-    this.readRPC("PaneRead", { pane_id: paneId, source: "visible", format, lines }) as Promise<{ text: string; truncated?: boolean; hash?: string }>;
+    this.readRPC("PaneRead", { pane_id: paneId, source: "visible", format, lines, session: this.currentSessionName }) as Promise<{ text: string; truncated?: boolean; hash?: string }>;
   sendText = (paneId: string, text: string) => {
     if (fitOperationPrompt(text).truncated) return Promise.reject(new ProtocolError("too_large", "text exceeds 32 KiB"));
-    return this.trackedMutation("SendText", { pane_id: paneId, text, submit: false });
+    return this.trackedMutation("SendText", { pane_id: paneId, text, submit: false, session: this.currentSessionName });
   };
   sendKeys = (paneId: string, keys: string[], extra?: { intent?: "pad" | "dialog" | "submit"; expected_prompt?: string; expected_signature?: string }) =>
     this.trackedMutation("SendKeys", {
       pane_id: paneId,
       keys,
       intent: extra?.intent ?? "pad",
+      session: this.currentSessionName,
       ...(extra?.expected_prompt ? { expected_prompt: extra.expected_prompt } : {}),
       ...(extra?.expected_signature ? { expected_signature: extra.expected_signature } : {}),
     });
   listDevices = () => this.readRPC("ListDevices", {}) as Promise<{ devices?: DeviceSummary[] }>;
+  listSessions = () => this.readRPC("ListSessions", {}) as Promise<{ sessions: HerdSessionSummary[] }>;
+  setSession = (name: string | null): void => {
+    this.currentSessionName = name;
+  };
   revokeDevice = (deviceId: string) => this.trackedMutation("RevokeDevice", { device_id: deviceId });
   pushSubscribe = (subscription: PushSubscriptionJSON) => {
     const keys = subscription.keys || {};
@@ -258,12 +266,12 @@ class ReconnectingSession implements LiveSession {
       expirationTime: subscription.expirationTime ?? null,
     });
   };
-  renamePane = (paneId: string, label: string | null) => this.trackedMutation("RenamePane", { pane_id: paneId, label });
-  renameTab = (tabId: string, label: string) => this.trackedMutation("RenameTab", { tab_id: tabId, label });
-  renameWorkspace = (workspaceId: string, label: string) => this.trackedMutation("RenameWorkspace", { workspace_id: workspaceId, label });
-  closePane = (paneId: string) => this.trackedMutation("ClosePane", { pane_id: paneId });
-  closeTab = (tabId: string) => this.trackedMutation("CloseTab", { tab_id: tabId });
-  closeWorkspace = (workspaceId: string) => this.trackedMutation("CloseWorkspace", { workspace_id: workspaceId });
+  renamePane = (paneId: string, label: string | null) => this.trackedMutation("RenamePane", { pane_id: paneId, label, session: this.currentSessionName });
+  renameTab = (tabId: string, label: string) => this.trackedMutation("RenameTab", { tab_id: tabId, label, session: this.currentSessionName });
+  renameWorkspace = (workspaceId: string, label: string) => this.trackedMutation("RenameWorkspace", { workspace_id: workspaceId, label, session: this.currentSessionName });
+  closePane = (paneId: string) => this.trackedMutation("ClosePane", { pane_id: paneId, session: this.currentSessionName });
+  closeTab = (tabId: string) => this.trackedMutation("CloseTab", { tab_id: tabId, session: this.currentSessionName });
+  closeWorkspace = (workspaceId: string) => this.trackedMutation("CloseWorkspace", { workspace_id: workspaceId, session: this.currentSessionName });
   createConversation = (params: CreateConversationInput): Promise<CreateConversationResult> =>
     this.parsedMutation("CreateConversation", params, parseCreateConversationResult);
   createTab = (params: CreateTabInput): Promise<CreatedPaneResult> =>
@@ -275,27 +283,27 @@ class ReconnectingSession implements LiveSession {
     return this.parsedMutation("PromptAgent", params, parsePromptAgentResult);
   };
   history = (paneId: string, cursor: string | null = null, limit = 50) =>
-    this.readRPC("History", { pane_id: paneId, cursor, limit });
+    this.readRPC("History", { pane_id: paneId, cursor, limit, session: this.currentSessionName });
   agentTrace = async (paneId: string, cursor: string | null = null, limit = 50): Promise<AgentTracePage> =>
     this.agentTraceRPC.read(paneId, cursor, limit);
   agentTraceDetail = async (paneId: string, detailRef: string): Promise<AgentTraceDetail> =>
     this.agentTraceRPC.detail(paneId, detailRef);
-  listWorktrees = (params: ListWorktreesInput) => this.readRPC("ListWorktrees", params);
+  listWorktrees = (params: ListWorktreesInput) => this.readRPC("ListWorktrees", { ...params, session: this.currentSessionName });
   workspaceRename = (paneId: string, root: string, path: string, newName: string, size: number, modifiedMS: number, revision: string) =>
     this.parsedMutation("WorkspaceRename", { pane_id: paneId, root, path, new_name: newName, size, modified_ms: modifiedMS, revision }, parseWorkspaceMutation);
   workspaceDelete = (paneId: string, root: string, path: string, size: number, modifiedMS: number, revision: string) =>
     this.parsedMutation("WorkspaceDelete", { pane_id: paneId, root, path, size, modified_ms: modifiedMS, revision }, parseWorkspaceMutation);
-  workspaceOpen = async (paneId: string) => parseWorkspaceDescriptor(await this.readRPC("WorkspaceOpen", { pane_id: paneId }));
+  workspaceOpen = async (paneId: string) => parseWorkspaceDescriptor(await this.readRPC("WorkspaceOpen", { pane_id: paneId, session: this.currentSessionName }));
   workspaceList = async (paneId: string, path = "", cursor = "", limit = 120) =>
-    parseWorkspaceDirectory(await this.readRPC("WorkspaceList", { pane_id: paneId, path, cursor, limit }));
+    parseWorkspaceDirectory(await this.readRPC("WorkspaceList", { pane_id: paneId, path, cursor, limit, session: this.currentSessionName }));
   workspaceRead = async (paneId: string, path: string) =>
-    parseWorkspaceFile(await this.readRPC("WorkspaceRead", { pane_id: paneId, path }));
+    parseWorkspaceFile(await this.readRPC("WorkspaceRead", { pane_id: paneId, path, session: this.currentSessionName }));
   workspaceMediaOpen = async (paneId: string, path: string) => {
     const transport = await this.captureTransport();
     if (!transport) return Promise.reject(new ProtocolError("reconnecting", "连接正在恢复"));
     return parseWorkspaceMediaOpen(await transport.rpc(
       "WorkspaceMediaOpen",
-      { pane_id: paneId, path },
+      { pane_id: paneId, path, session: this.currentSessionName },
       MEDIA_OPEN_RPC_TIMEOUT_MS,
       undefined,
       (result) => {
@@ -319,10 +327,10 @@ class ReconnectingSession implements LiveSession {
     parseWorkspaceMediaChunk(await this.readRPC("WorkspaceMediaRead", { handle, offset, length }));
   workspaceMediaClose = async (handle: string) =>
     parseWorkspaceMediaClose(await this.readRPC("WorkspaceMediaClose", { handle }));
-  gitStatus = async (paneId: string) => parseGitStatus(await this.readRPC("GitStatus", { pane_id: paneId }));
+  gitStatus = async (paneId: string) => parseGitStatus(await this.readRPC("GitStatus", { pane_id: paneId, session: this.currentSessionName }));
   gitDiff = async (paneId: string, path: string, layer: GitLayer) =>
-    parseGitDiff(await this.readRPC("GitDiff", { pane_id: paneId, path, layer }));
-  gitBranches = async (paneId: string) => parseGitBranches(await this.readRPC("GitBranches", { pane_id: paneId }));
+    parseGitDiff(await this.readRPC("GitDiff", { pane_id: paneId, path, layer, session: this.currentSessionName }));
+  gitBranches = async (paneId: string) => parseGitBranches(await this.readRPC("GitBranches", { pane_id: paneId, session: this.currentSessionName }));
   createWorktree = (params: CreateWorktreeInput): Promise<CreateWorktreeResult> =>
     this.parsedMutation("CreateWorktree", params, parseCreateWorktreeResult);
   openWorktree = (params: OpenWorktreeInput): Promise<OpenWorktreeResult> =>
@@ -334,7 +342,10 @@ class ReconnectingSession implements LiveSession {
   zoomPane = (params: ZoomPaneInput): Promise<LayoutMutationResult> =>
     this.parsedMutation("ZoomPane", params, parseZoomPaneResult);
   terminalOpen = async (paneId: string, cols: number, rows: number, takeover = false): Promise<TerminalOpenResult> => {
-    const wire = withOperationID({ pane_id: paneId, cols, rows, takeover });
+    // TerminalInput/Resize/Scroll/Close that follow are keyed by the
+    // terminal_id this returns and do not take a session of their own -
+    // only the initial open needs one.
+    const wire = withOperationID({ pane_id: paneId, cols, rows, takeover, session: this.currentSessionName });
     return parseTerminalOpenResult(await this.terminalRPC("TerminalOpen", wire), paneId, wire.operation_id);
   };
   terminalInput = (terminalId: string, sequence: number, data: Uint8Array) =>
@@ -418,12 +429,21 @@ class ReconnectingSession implements LiveSession {
     return parseTerminalCommandResult(await this.terminalRPC(op, wire), wire.operation_id, terminalId, sequence);
   }
 
+  /**
+   * Every current caller (CreateConversation, CreateTab, SplitPane,
+   * PromptAgent, WorkspaceRename, WorkspaceDelete, CreateWorktree,
+   * OpenWorktree, ResizePane, SwapPane, ZoomPane) accepts a session param on
+   * the wire, so it is merged in here rather than at each call site. A
+   * future parsedMutation caller whose op does NOT accept session would
+   * need its own path instead of this one - the daemon's strict decoder
+   * rejects unrecognized params fields.
+   */
   private async parsedMutation<T>(
     op: string,
     params: object,
     parse: (value: unknown, expectedOperationID: string) => T,
   ): Promise<T> {
-    const wire = withOperationID(params);
+    const wire = withOperationID({ ...params, session: this.currentSessionName });
     return parse(await this.mutationRPC(op, wire), wire.operation_id);
   }
 
@@ -544,4 +564,4 @@ export async function sessionOverWS(relayWS: string, pair: PairResult, options: 
   return ReconnectingSession.create(relayWS, pair, options);
 }
 
-export type { DeviceSummary, LiveSession, SessionEvent } from "./session-types.ts";
+export type { DeviceSummary, HerdSessionSummary, LiveSession, SessionEvent } from "./session-types.ts";
