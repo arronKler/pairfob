@@ -20,7 +20,6 @@ import {
   subscribeFullTerminalKeyboard,
 } from "./full-terminal-input";
 import { useModifierScope } from "../keypad/modifier-scope";
-import { bindPadPress } from "../keypad/key-press";
 import {
   PRIMARY_KEYS,
   EXPANDED_KEYS,
@@ -53,25 +52,23 @@ function FullTerminalKeyboardButton({
   keyboard: FullTerminalControlsOptions["keyboard"];
 }) {
   const open = useSyncExternalStore(subscribeFullTerminalKeyboard, fullTerminalKeyboardOpen, fullTerminalKeyboardOpen);
-  const ref = useRef<HTMLButtonElement>(null);
   const keyboardRef = useRef(keyboard);
   keyboardRef.current = keyboard;
   useLayoutEffect(() => {
     notifyFullTerminalKeyboard(keyboardRef.current.isOpen());
-    const el = ref.current;
-    if (!el) return;
-    return bindPadPress(el, () => {
-      keyboardRef.current.toggle();
-      notifyFullTerminalKeyboard(keyboardRef.current.isOpen());
-    }).destroy;
   }, []);
-  return <button
-    ref={ref}
+  // Focus synchronously in the completed click. Focusing on pointerdown can
+  // race the remaining tap's default focus handling and iOS keyboard updates.
+  return <PadChromeButton
     type="button"
     className="full-terminal-kb"
     aria-pressed={open ? "true" : "false"}
     aria-label={open ? t("ft.kbHide") : t("ft.kbOpen")}
-  >{open ? t("ft.kbHide") : t("ft.kbType")}</button>;
+    onClick={() => {
+      keyboardRef.current.toggle();
+      notifyFullTerminalKeyboard(keyboardRef.current.isOpen());
+    }}
+  >{open ? t("ft.kbHide") : t("ft.kbType")}</PadChromeButton>;
 }
 
 function FullTerminalPadControls({

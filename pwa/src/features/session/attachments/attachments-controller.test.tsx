@@ -750,14 +750,18 @@ describe("pick review under concurrency", () => {
 
   test("two picks racing the port await both re-read the live queue before adopting", async () => {
     paintGuided();
-    // Both calls suspend at the port lookup; on resumption each re-reads the
-    // queue (post-await), so the second pick sees the first's adopted rows.
+    // Both calls suspend at the port lookup. Import resolution need not follow
+    // call order; whichever resumes last must see the other's adopted rows.
     setAttachmentTransferPort(null);
     const first = addPickedFiles(SCOPE, Array.from({ length: 5 }, (_, i) => file(`a${i}`, 1)));
     const second = addPickedFiles(SCOPE, [file("b", 1)]);
-    const [, secondRejections] = await act(async () => Promise.all([first, second]));
-    expect(queueSnapshot(KEY)?.items).toHaveLength(5);
-    expect(secondRejections[0]?.code).toBe("tooManyFiles");
+    const results = await act(async () => Promise.all([first, second]));
+    const accepted = queueSnapshot(KEY)!.items;
+    const rejected = results.flat();
+    expect(accepted).toHaveLength(5);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].code).toBe("tooManyFiles");
+    expect([...accepted, ...rejected].map((item) => item.name).sort()).toEqual(["a0", "a1", "a2", "a3", "a4", "b"]);
     setAttachmentTransferPort(port);
   });
 

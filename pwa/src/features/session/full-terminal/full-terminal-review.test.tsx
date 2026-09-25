@@ -175,7 +175,7 @@ describe("independent complete-terminal React review", () => {
     await act(() => boot(live, true));
     await until(() => getFullTerminalView().stage === "live", "live terminal");
     const button = app.querySelector<HTMLButtonElement>(".full-terminal-kb")!;
-    await act(() => pointer(button));
+    await act(() => button.click());
     expect(button.getAttribute("aria-pressed")).toBe("true");
     expect(app.querySelector(".full-terminal-host")?.classList.contains("kb-on")).toBeTrue();
     await act(() => sendFullTerminalScroll("down", 3, "wheel"));

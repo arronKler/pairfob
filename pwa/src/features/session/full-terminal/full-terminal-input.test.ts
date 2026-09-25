@@ -206,7 +206,7 @@ describe("complete-terminal pad chrome", () => {
     expect(kb.textContent).toBe("点这里输入");
     expect(kb.getAttribute("aria-pressed")).toBe("false");
     act(() => {
-      kb.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+      kb.click();
     });
     expect(open).toBe(true);
     expect(kb.textContent).toBe("收起键盘");

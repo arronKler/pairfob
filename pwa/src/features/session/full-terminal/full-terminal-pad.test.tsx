@@ -8,7 +8,7 @@ import { appRoot } from "../../../app/dom-root";
 import { keysExpanded, padKind, setKeysExpanded, setPadKind } from "../../settings/preferences-store";
 import { composeDraft, setComposeDraft, setComposeFocused, setComposeIME, setComposeLive } from "../compose-store";
 const { SLASH_COMMANDS } = await import("../../../lib/slash-commands");
-const { notifyFullTerminalKeyboard } = await import("./full-terminal-input");
+const { bindXtermKeyboard, notifyFullTerminalKeyboard } = await import("./full-terminal-input");
 const { clearModifiers, pressModifier, releaseModifier } = await import("../keypad/keypad");
 const { FullTerminalPad } = await import("./full-terminal-pad");
 const padSource = await Bun.file(new URL("./full-terminal-pad.tsx", import.meta.url)).text();
@@ -122,15 +122,61 @@ describe("React full-terminal pad", () => {
     const button = appRoot().querySelector(".full-terminal-kb") as HTMLButtonElement;
     expect(button.textContent).toBe("点这里输入");
     expect(button.getAttribute("aria-pressed")).toBe("false");
-    const view = appRoot().ownerDocument.defaultView!;
     await act(() => {
-      button.dispatchEvent(new view.PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+      button.click();
     });
     expect(kb.isOpen()).toBe(true);
     expect(button.textContent).toBe("收起键盘");
     await act(() => { kb.close(); notifyFullTerminalKeyboard(false); });
     expect(button.textContent).toBe("点这里输入");
     expect((appRoot().querySelector(".full-terminal-compose-form")) === null).toBeTrue();
+  });
+
+  test.each(["touch", "pen", "mouse"])("%s keyboard tap focuses only when the click completes", async (pointerType) => {
+    const host = document.createElement("div");
+    const field = document.createElement("textarea");
+    field.className = "xterm-helper-textarea";
+    host.append(field);
+    document.body.append(host);
+    const kb = bindXtermKeyboard(host, false);
+    try {
+      setComposeLive(true);
+      renderReact(createElement(FullTerminalPad, {
+        options: { sendKey: () => undefined, sendCompose: () => true, keyboard: kb, desk: false },
+      }));
+      const button = appRoot().querySelector<HTMLButtonElement>(".full-terminal-kb")!;
+      const view = document.defaultView!;
+      const dispatch = (type: string) => button.dispatchEvent(new view.PointerEvent(type, {
+        bubbles: true, cancelable: true, pointerId: 1, pointerType, button: 0, detail: type === "click" ? 1 : 0,
+      }));
+      // An interrupted touch/drag must neither focus nor claim the keyboard is open.
+      await act(() => { dispatch("pointerdown"); dispatch("pointercancel"); });
+      expect(kb.isOpen()).toBe(false);
+      expect(document.activeElement).not.toBe(field);
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+
+      await act(() => { dispatch("pointerdown"); dispatch("pointerup"); });
+      expect(kb.isOpen()).toBe(false);
+      expect(field.readOnly).toBe(true);
+      await act(() => {
+        dispatch("click");
+        // Focus must happen inside the click handler, without a timer/effect.
+        expect(document.activeElement).toBe(field);
+        expect(field.readOnly).toBe(false);
+      });
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+
+      await act(() => { dispatch("pointerdown"); dispatch("pointerup"); dispatch("click"); });
+      expect(kb.isOpen()).toBe(false);
+      expect(document.activeElement).not.toBe(field);
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+      // Keyboard/assistive activation remains supported without pointer events.
+      await act(() => { button.click(); });
+      expect(document.activeElement).toBe(field);
+    } finally {
+      kb.destroy();
+      host.remove();
+    }
   });
 
   test("unmount destroys pad press so a detached key cannot stay pressed", async () => {
