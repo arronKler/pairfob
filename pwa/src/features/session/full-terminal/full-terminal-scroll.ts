@@ -264,9 +264,14 @@ export function bindScrollHold(element: HTMLElement, fire: () => void): () => vo
     hold = null;
     tick = null;
   };
-  const onDown = (event: PointerEvent) => {
+  // A rail press is only a scroll command. Consume the complete gesture,
+  // including compatibility mouse events, so it cannot focus the terminal.
+  const consume = (event: Event) => {
     event.preventDefault();
     event.stopPropagation();
+  };
+  const onDown = (event: PointerEvent) => {
+    consume(event);
     fire();
     stop();
     hold = window.setTimeout(() => {
@@ -282,12 +287,15 @@ export function bindScrollHold(element: HTMLElement, fire: () => void): () => vo
     }, REPEAT_DELAY_MS);
   };
   const onClick = (event: MouseEvent) => {
+    consume(event);
     // Pointer activation already fired on pointerdown so the press can repeat.
     // Keyboard and programmatic button activation produce a zero-detail click.
     if (event.detail !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
     fire();
+  };
+  const onEnd = (event: Event) => {
+    consume(event);
+    stop();
   };
   const onKeyDown = (event: KeyboardEvent) => {
     // Some embedded browsers do not synthesize a click for Space on buttons.
@@ -303,17 +311,23 @@ export function bindScrollHold(element: HTMLElement, fire: () => void): () => vo
     fire();
   };
   const endTypes = ["pointerup", "pointercancel", "pointerleave", "lostpointercapture"] as const;
+  const touchEndTypes = ["touchend", "touchcancel"] as const;
+  const consumedTypes = ["touchstart", "mousedown", "mouseup"] as const;
   element.addEventListener("pointerdown", onDown);
   element.addEventListener("click", onClick);
   element.addEventListener("keydown", onKeyDown);
   element.addEventListener("keyup", onKeyUp);
-  for (const type of endTypes) element.addEventListener(type, stop);
+  for (const type of consumedTypes) element.addEventListener(type, consume, { passive: false });
+  for (const type of endTypes) element.addEventListener(type, onEnd);
+  for (const type of touchEndTypes) element.addEventListener(type, onEnd, { passive: false });
   return () => {
     stop();
     element.removeEventListener("pointerdown", onDown);
     element.removeEventListener("click", onClick);
     element.removeEventListener("keydown", onKeyDown);
     element.removeEventListener("keyup", onKeyUp);
-    for (const type of endTypes) element.removeEventListener(type, stop);
+    for (const type of consumedTypes) element.removeEventListener(type, consume);
+    for (const type of endTypes) element.removeEventListener(type, onEnd);
+    for (const type of touchEndTypes) element.removeEventListener(type, onEnd);
   };
 }

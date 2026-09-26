@@ -506,6 +506,44 @@ describe("complete-terminal remote scroll", () => {
     unmountReact();
   });
 
+  test("all four rail buttons consume touch and compatibility clicks without reaching the terminal", () => {
+    const calls: Call[] = [];
+    const rail = paintRail((direction, lines, source) => calls.push({ direction, lines, source }), () => 19);
+    const host = rail.parentElement!;
+    const escaped: string[] = [];
+    const record = (event: Event) => escaped.push(event.type);
+    const types = ["pointerdown", "touchstart", "pointerup", "touchend", "mousedown", "mouseup", "click"];
+    types.forEach((type) => host.addEventListener(type, record));
+    const stopHost = bindHostScroll(host, () => escaped.push("host scroll"), () => undefined);
+    try {
+      for (const button of rail.querySelectorAll("button")) {
+        // The icon, not the button itself, is the usual hit target on a phone.
+        const target = button.querySelector("svg")!;
+        const touch = touchPoint(1, 10, 10, target);
+        const events = [
+          pointer("pointerdown", 10, 10, "touch"),
+          touchEvent("touchstart", [touch]),
+          pointer("pointerup", 10, 10, "touch"),
+          touchEvent("touchend", [], [touch]),
+          ...["mousedown", "mouseup", "click"].map((type) =>
+            new MouseEvent(type, { bubbles: true, cancelable: true, detail: 1 })),
+        ];
+        act(() => events.forEach((event) => target.dispatchEvent(event)));
+        expect(events.every((event) => event.defaultPrevented)).toBeTrue();
+      }
+      expect(escaped).toEqual([]);
+      expect(calls).toEqual([
+        { direction: "up", lines: 3, source: "wheel" },
+        { direction: "up", lines: 19, source: "page_key" },
+        { direction: "down", lines: 19, source: "page_key" },
+        { direction: "down", lines: 3, source: "wheel" },
+      ]);
+    } finally {
+      stopHost();
+      types.forEach((type) => host.removeEventListener(type, record));
+    }
+  });
+
   test("bindScrollHold cancels repeat timers on dispose even while connected", async () => {
     const el = document.createElement("button");
     document.body.append(el);
