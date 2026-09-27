@@ -127,15 +127,16 @@ export function HerdScreen({
   }, [variant]);
   // Section headings stick right under the header, whatever its current height.
   // The height lives on the root, whose scroll padding keeps a focused row out
-  // from under the sticky header.
+  // from under the sticky header. The fractional box height is used: offsetHeight
+  // rounds, and a header at e.g. 97.6px would leave a hairline gap on the phone.
   useLayoutEffect(() => {
     const node = head.current;
     if (variant !== "page" || !node) return;
     const rootStyle = document.documentElement.style;
-    const apply = () => rootStyle.setProperty("--herd-head-h", `${node.offsetHeight}px`);
+    const apply = () => rootStyle.setProperty("--herd-head-h", `${node.getBoundingClientRect().height}px`);
     apply();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(apply);
-    observer?.observe(node);
+    observer?.observe(node, { box: "border-box" });
     return () => {
       observer?.disconnect();
       rootStyle.removeProperty("--herd-head-h");

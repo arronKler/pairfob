@@ -241,6 +241,10 @@ html:has(.herd-page) { scroll-padding-top: calc(var(--herd-head-h, 0px) + 64px);
   margin: 0;
   padding: var(--space-2) 0 6px;
   background: var(--bg);
+  /* On fractional-DPR phones the edges land between device pixels and rows
+     scrolling beneath bleed through: one pixel of page color above (hidden
+     under the header, z-index 4) and to each side closes those seams. */
+  box-shadow: 0 -1px 0 var(--bg), -1px 0 0 var(--bg), 1px 0 0 var(--bg);
 }
 
 /* A zero basis keeps the marks, + and ⋯ on the title's line in a narrow rail:
