@@ -17,6 +17,7 @@ telemetry.setTelemetrySender(() => {});
 const { startApplication, stopApplication, applicationIsRunning } = await import("./bootstrap");
 const { connectionStore, phase, setPhase, applyPairingFragment } = await import("../features/connection/connection-store");
 const { visibleNotice } = await import("./notices-store");
+const { connectionDiagnostics } = await import("../lib/protocol/connection-diagnostics");
 const { registerSessionOwnerPreparer } = await import("./frame");
 const { isAppMounted, unmountApp } = await import("./mount");
 const { appHost, releaseAppHost } = await import("./host");
@@ -219,6 +220,7 @@ describe("cold-start origin config recovery", () => {
     expect(phase()).toBe("boot");
     expect(document.querySelector(".connect-scan")).toBeNull();
     expect(document.querySelector(".boot-storage-recovery button")).not.toBeNull();
+    expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "boot_decision", phase: "boot", code: "storage_unavailable" });
 
     (globalThis as Record<string, unknown>).indexedDB = working;
     await act(async () => {
@@ -231,6 +233,7 @@ describe("cold-start origin config recovery", () => {
     // Only a successful empty read may decide that pairing is needed.
     expect(phase()).toBe("connect");
     expect(visibleNotice()).toBeNull();
+    expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "boot_decision", phase: "connect", code: "ok", usable_count: 0 });
   });
 
   test("storage recovery retries automatically and discards callbacks from a stopped lifetime", async () => {

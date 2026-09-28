@@ -54,3 +54,16 @@ test("handshake timings preserve only finite nonnegative numbers", () => {
   expect(connectionDiagnostics().at(-1)?.connect_id).toBeUndefined();
   expect(connectionDiagnostics().at(-1)?.elapsed_ms).toBeUndefined();
 });
+
+test("catalog and boot evidence survives the sanitizer without accepting arbitrary fields", () => {
+  recordConnectionDiagnostic({ event: "boot_decision", phase: "connect", previous_phase: "boot",
+    reason: "connect", code: "ok", usable_count: 0 });
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "boot_decision", phase: "connect",
+    previous_phase: "boot", reason: "connect", code: "ok", usable_count: 0 });
+  recordConnectionDiagnostic({ event: "catalog_read", stored_count: 3, usable_count: 1,
+    invalid_count: -1, other_origin_count: Infinity, phase: "private name", daemon_id: "secret" } as never);
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "catalog_read", stored_count: 3, usable_count: 1, phase: "other" });
+  expect(connectionDiagnostics().at(-1)?.invalid_count).toBeUndefined();
+  expect(connectionDiagnostics().at(-1)?.other_origin_count).toBeUndefined();
+  expect(JSON.stringify(connectionDiagnostics().at(-1))).not.toContain("secret");
+});

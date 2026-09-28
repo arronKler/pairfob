@@ -22,11 +22,20 @@ export type ConnectionDiagnostic = ConnectionDetails & {
   elapsed_ms?: number;
   recovery_id?: number;
   recovery_elapsed_ms?: number;
+  phase?: string;
+  previous_phase?: string;
+  stored_count?: number;
+  usable_count?: number;
+  invalid_count?: number;
+  other_origin_count?: number;
 };
 const KEY = "pairfob.connection-diagnostics.v1";
 const LIMIT = 200;
 const TTL = 24 * 60 * 60 * 1000;
 const TOKENS = new Set((
+  "catalog_read catalog_failed catalog_hint_failed credential_deleted credential_delete_failed phase_changed boot_decision network_lifecycle online " +
+  "boot connect pairing resuming live pick resume storage_unavailable bad_relay ok storage_error storage_timeout storage_security storage_unknown " +
+  "unpaired invalid_credential bad_proof bad_signature fp_mismatch " +
   "recovery_start recovery_ready recovery_cancelled ice_terminal foreground_transport_failed terminal_open_start terminal_open_ready terminal_first_frame " +
   "connect_start warmup_start ws_open route_bound hello_verified session_established session_ready connect_failed warmup_cancelled view_committed recovery_budget_exhausted " +
   "transport_closed session_open session_close disconnect page_hidden page_visible probe_start probe_success probe_failed " +
@@ -51,13 +60,14 @@ function sanitize(input: unknown, now: number): ConnectionDiagnostic | null {
   const source = input as Record<string, unknown>;
   if (typeof source.at !== "number" || !Number.isFinite(source.at) || source.at < now - TTL || source.at > now + 60_000) return null;
   const out: Record<string, unknown> = { at: source.at };
-  for (const key of ["event", "reason", "transport", "code", "ice_state", "peer_state", "channel_state"]) {
+  for (const key of ["event", "reason", "transport", "code", "ice_state", "peer_state", "channel_state", "phase", "previous_phase"]) {
     if (typeof source[key] === "string") out[key] = TOKENS.has(source[key]) ? source[key] : "other";
   }
   if (!out.event) return null;
   if (typeof source.pwa_asset === "string" && assetPattern.test(source.pwa_asset)) out.pwa_asset = source.pwa_asset;
   if (typeof source.route_id === "string" && /^[a-f0-9]{32}$/.test(source.route_id)) out.route_id = source.route_id;
-  for (const key of ["buffered_bytes", "ws_code", "pending_rpcs", "pong_wait_ms", "connect_id", "elapsed_ms", "recovery_id", "recovery_elapsed_ms"]) {
+  for (const key of ["buffered_bytes", "ws_code", "pending_rpcs", "pong_wait_ms", "connect_id", "elapsed_ms", "recovery_id", "recovery_elapsed_ms",
+    "stored_count", "usable_count", "invalid_count", "other_origin_count"]) {
     const value = source[key];
     if (typeof value === "number" && Number.isFinite(value) && value >= 0) out[key] = Math.round(value);
   }

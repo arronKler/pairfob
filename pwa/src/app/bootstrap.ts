@@ -46,6 +46,7 @@ import { isAgentChat, isFullTerminal, paneFollow, termSelect } from "../features
 import { resetTransitionState, takeTransition, withTransition } from "./transition";
 import { bindVisualViewport, releaseVisualViewport } from "./viewport";
 import { bindBootStorageRetry } from "./boot-actions";
+import { recordConnectionDiagnostic } from "../lib/protocol/connection-diagnostics";
 
 /**
  * Browser boot and lifecycle.
@@ -66,6 +67,13 @@ let running: (() => void) | null = null;
 let bootGeneration = 0;
 let storageRetryTimer: number | null = null;
 let storageRetryDelay = 1500;
+
+/** Preserve the boot decision across refresh without storing identity or keys. */
+function trackBoot(fields: { result: string; extra: string }): void {
+  track("pwa_boot", fields);
+  recordConnectionDiagnostic({ event: "boot_decision", code: fields.result, reason: fields.extra,
+    phase: currentPhase(), usable_count: computers().length });
+}
 
 function clearStorageRetry(): void {
   if (storageRetryTimer !== null) window.clearTimeout(storageRetryTimer);
@@ -206,6 +214,8 @@ function bindLanguageChange(signal: AbortSignal): void {
 }
 
 function applyNetworkAvailability(available: boolean): void {
+  recordConnectionDiagnostic({ event: "network_lifecycle", phase: currentPhase(),
+    hidden: document.visibilityState === "hidden", reason: available ? "online" : "offline" });
   const changed = setNetworkOnline(available);
   setLiveNetworkAvailable(available);
   if (!available) {
@@ -292,7 +302,7 @@ async function boot(generation: number): Promise<void> {
     bootBlockedByNetwork = true;
     setPhase("connect");
     showStatus(t("net.offlineContinue"), true);
-    track("pwa_boot", { result: "offline", extra: "connect" });
+    trackBoot({ result: "offline", extra: "connect" });
     if (generation === bootGeneration) commitBootView();
     return;
   }
@@ -310,7 +320,7 @@ async function boot(generation: number): Promise<void> {
     bootBlockedByNetwork = originConfigErrorIsRecoverable(error);
     setPhase("connect");
     showError(messageOf(error), true);
-    track("pwa_boot", { result: "bad_relay", extra: "connect" });
+    trackBoot({ result: "bad_relay", extra: "connect" });
     commitBootView();
     return;
   }
@@ -323,7 +333,7 @@ async function boot(generation: number): Promise<void> {
     // A suspended browser's storage service can fail independently of the
     // network. Never interpret that as an empty catalog or ask to pair again.
     setBootStorageBlocked(true);
-    track("pwa_boot", { result: "storage_unavailable", extra: "boot" });
+    trackBoot({ result: "storage_unavailable", extra: "boot" });
     if (document.visibilityState !== "hidden") {
       storageRetryTimer = window.setTimeout(() => {
         storageRetryTimer = null;
@@ -347,7 +357,7 @@ async function boot(generation: number): Promise<void> {
   }
   if (applyOriginPairingPolicy()) {
     setPhase(catalog.length ? "pick" : "connect");
-    track("pwa_boot", { result: "ok", extra: currentPhase() });
+    trackBoot({ result: "ok", extra: currentPhase() });
     commitBootView();
     return;
   }
@@ -355,25 +365,25 @@ async function boot(generation: number): Promise<void> {
   if (fragment) {
     setAddingComputer(catalog.length > 0);
     setPhase("connect");
-    track("pwa_boot", { result: "ok", extra: "pairing" });
+    trackBoot({ result: "ok", extra: "pairing" });
     commitBootView();
     await beginPairing(fragment.code);
     return;
   }
   if (!catalog.length) {
     setPhase("connect");
-    track("pwa_boot", { result: "ok", extra: "connect" });
+    trackBoot({ result: "ok", extra: "connect" });
     commitBootView();
     return;
   }
   const pair = pickResumeCredential([...catalog], notificationPair?.daemonId || lastUsedDaemon());
   if (!pair) {
     setPhase("pick");
-    track("pwa_boot", { result: "ok", extra: "pick" });
+    trackBoot({ result: "ok", extra: "pick" });
     commitBootView();
     return;
   }
-  track("pwa_boot", { result: "ok", extra: "resume" });
+  trackBoot({ result: "ok", extra: "resume" });
   await resumeComputer(pair);
   if (generation !== bootGeneration) return;
 }

@@ -3,6 +3,7 @@ import { validDaemonId, validDeviceId } from "./identifiers.ts";
 import { b64url, b64urlDecode } from "./protocol/bytes.ts";
 import type { PairResult } from "./protocol/client.ts";
 import { fingerprint16 } from "./protocol/hello.ts";
+import { recordConnectionDiagnostic } from "./protocol/connection-diagnostics";
 
 export interface StoredCredential {
   daemon_id: string;
@@ -28,6 +29,14 @@ function storageTimeout(): Error {
   const error = new Error("Credential storage did not respond");
   error.name = "TimeoutError";
   return error;
+}
+
+function storageFailureCode(error: unknown): string {
+  const name = error instanceof Error ? error.name : "";
+  if (name === "TimeoutError") return "storage_timeout";
+  if (name === "SecurityError") return "storage_security";
+  if (name === "UnknownError") return "storage_unknown";
+  return "storage_error";
 }
 
 export type CredentialCatalog = {
@@ -262,12 +271,17 @@ async function readCredentials(origin: string): Promise<PairResult[]> {
   const db = await openDatabase();
   try {
     const values = await readStore<unknown[]>(db, STORE, (store) => store.getAll());
+    let invalid = 0, otherOrigin = 0;
     const credentials = values
       .map((value) => {
         const stored = validateStoredCredential(value) || migrateLegacyCredential(value, origin);
-        return stored && stored.relay_origin === origin ? decodeCredential(stored) : null;
+        if (!stored) { invalid++; return null; }
+        if (stored.relay_origin !== origin) { otherOrigin++; return null; }
+        return decodeCredential(stored);
       })
       .filter((item): item is PairResult => item !== null);
+    recordConnectionDiagnostic({ event: "catalog_read", stored_count: values.length,
+      usable_count: credentials.length, invalid_count: invalid, other_origin_count: otherOrigin });
     for (const pair of credentials) {
       const raw = values.find((value) => (value as { daemon_id?: string })?.daemon_id === pair.daemonId);
       if (raw && !validateStoredCredential(raw)) {
@@ -281,9 +295,15 @@ async function readCredentials(origin: string): Promise<PairResult[]> {
 }
 
 export async function loadCatalog(origin: string): Promise<CredentialCatalog> {
-  const credentials = await readCredentials(origin);
+  const credentials = await readCredentials(origin).catch((error: unknown) => {
+    recordConnectionDiagnostic({ event: "catalog_failed", code: storageFailureCode(error) });
+    throw error;
+  });
   // This is only an ordering hint. Its failure must not hide validated keys.
-  const lastUsed = await readSetting(LAST_USED_KEY).catch(() => null);
+  const lastUsed = await readSetting(LAST_USED_KEY).catch((error: unknown) => {
+    recordConnectionDiagnostic({ event: "catalog_hint_failed", code: storageFailureCode(error) });
+    return null;
+  });
   return {
     credentials,
     lastUsedDaemonId: validDaemonId(lastUsed) ? lastUsed : null,
@@ -296,16 +316,22 @@ export async function loadCredential(origin: string): Promise<PairResult | null>
 }
 
 export async function deleteCredential(daemonId: string): Promise<void> {
-  const db = await openDatabase();
+  let db: IDBDatabase | undefined;
   try {
+    db = await openDatabase();
+    const opened = db;
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
+      const tx = opened.transaction(STORE, "readwrite");
       tx.objectStore(STORE).delete(daemonId);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error || new Error("credential delete failed"));
       tx.onabort = () => reject(tx.error || new Error("credential delete aborted"));
     });
+    recordConnectionDiagnostic({ event: "credential_deleted" });
+  } catch (error) {
+    recordConnectionDiagnostic({ event: "credential_delete_failed", code: storageFailureCode(error) });
+    throw error;
   } finally {
-    db.close();
+    db?.close();
   }
 }

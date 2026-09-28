@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { CREDENTIAL_READ_TIMEOUT_MS, encodeCredential, loadCatalog } from "./credentials";
 import { fingerprint16 } from "./protocol/hello";
+import { connectionDiagnostics } from "./protocol/connection-diagnostics";
 
 const pair = {
   daemonId: "d_0123456789abcdefabcd", deviceId: "dev_abcdefgh",
@@ -38,7 +39,7 @@ function request<T>(result: T) {
     onsuccess: null as (() => void) | null, onerror: null as (() => void) | null };
 }
 
-function install(mode: "ok" | "stalled-open" | "stalled-read" | "aborted-read" | "settings-error" | "read-error") {
+function install(mode: "ok" | "stalled-open" | "stalled-read" | "aborted-read" | "settings-error" | "read-error", values?: unknown[]) {
   const stored = encodeCredential(pair);
   let closed = 0, aborted = 0;
   const opens: ReturnType<typeof request<typeof db>>[] = [];
@@ -65,7 +66,7 @@ function install(mode: "ok" | "stalled-open" | "stalled-read" | "aborted-read" |
             });
             return req;
           };
-          return { getAll: () => read([stored]), get: () => read(pair.daemonId) };
+          return { getAll: () => read(values ?? [stored]), get: () => read(pair.daemonId) };
         },
       };
       return tx;
@@ -95,6 +96,7 @@ test("a last-used hint failure never hides the validated credential", async () =
   const storage = install("settings-error");
   expect(await loadCatalog(pair.relayOrigin)).toEqual({ credentials: [pair], lastUsedDaemonId: null });
   expect(storage.closed).toBe(2);
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "catalog_hint_failed", code: "storage_error" });
 });
 
 for (const mode of ["read-error", "aborted-read"] as const) {
@@ -104,6 +106,7 @@ for (const mode of ["read-error", "aborted-read"] as const) {
     expect(storage.closed).toBe(1);
     expect(storage.stored).toEqual(encodeCredential(pair));
     expect(timers.size).toBe(0);
+    expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "catalog_failed", code: "storage_error" });
   });
 }
 
@@ -114,6 +117,7 @@ test("a silent read times out, aborts its transaction and releases the connectio
   expect((await result).name).toBe("TimeoutError");
   expect(storage.aborted).toBe(1);
   expect(storage.closed).toBe(1);
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "catalog_failed", code: "storage_timeout" });
 });
 
 test("a late open after timeout is closed and cannot publish an empty catalog", async () => {
@@ -126,4 +130,21 @@ test("a late open after timeout is closed and cannot publish an empty catalog", 
   // A fresh open recovers without deleting or replacing any credential.
   install("ok");
   expect((await loadCatalog(pair.relayOrigin)).credentials).toEqual([pair]);
+});
+
+test("catalog diagnostics distinguish an empty database from filtered records without exposing identity", async () => {
+  install("ok", []);
+  expect((await loadCatalog(pair.relayOrigin)).credentials).toEqual([]);
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "catalog_read", stored_count: 0,
+    usable_count: 0, invalid_count: 0, other_origin_count: 0 });
+
+  const stored = encodeCredential(pair);
+  install("ok", [stored, { ...stored, fp: "invalid" }, { ...stored, relay_origin: "https://elsewhere.example" }]);
+  expect((await loadCatalog(pair.relayOrigin)).credentials).toEqual([pair]);
+  const diagnostic = connectionDiagnostics().at(-1);
+  expect(diagnostic).toMatchObject({ event: "catalog_read", stored_count: 3,
+    usable_count: 1, invalid_count: 1, other_origin_count: 1 });
+  for (const value of [pair.daemonId, pair.deviceId, stored.device_psk, stored.daemon_pk, pair.label, pair.relayOrigin]) {
+    expect(JSON.stringify(diagnostic)).not.toContain(value);
+  }
 });

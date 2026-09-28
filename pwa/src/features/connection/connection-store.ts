@@ -8,6 +8,7 @@ import { batch, createDomain, detach, immutableCopy } from "../../shared/model/d
 import { composeTransaction } from "../../shared/model/compose-transaction";
 import type { DomainEnvironment } from "../../shared/model/domain-environment";
 import { setPairCodeDraft } from "../pairing/form-store";
+import { recordConnectionDiagnostic } from "../../lib/protocol/connection-diagnostics";
 
 /**
  * App/connection domain: where the application is in its lifecycle and which
@@ -104,6 +105,7 @@ export function hydrateConnection(environment: DomainEnvironment): void {
 /** Boot phase. `boot`/`resuming` render the boot screen; `live` unlocks data. */
 export function setPhase(phase: Phase): void {
   if (read().phase === phase) return;
+  recordConnectionDiagnostic({ event: "phase_changed", previous_phase: read().phase, phase });
   // The page for a boot/connect/pick phase differs, so this is a composition
   // change: it publishes together with the composition it selects.
   composeTransaction([connectionStore], () => {
