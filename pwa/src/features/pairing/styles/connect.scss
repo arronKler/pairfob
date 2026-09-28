@@ -59,12 +59,16 @@
 .connect-lede.is-status { color: var(--accent); }
 
 .connect-install {
+  position: relative;
   display: inline;
   padding: 0;
   color: var(--accent);
   font: inherit;
   font-weight: 600;
 }
+
+/* An inline link in the lede: the hit area grows around the words, not the line box. */
+.connect-install::before { content: ""; position: absolute; inset: -11px -6px; }
 
 .connect-key {
   display: inline-block;

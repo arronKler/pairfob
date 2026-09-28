@@ -1,5 +1,5 @@
 import { CornerDownLeft, Square } from "lucide-react";
-import { useLayoutEffect, useRef, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { t } from "../../../lib/i18n";
 import { Button, Spinner } from "../../../shared/ui/primitives";
 import { useConnection, useRuntime } from "../../connection/hooks";
@@ -104,6 +104,30 @@ export function useSendKind({ paneId, hasText, live, submitting }: {
 export const LONG_PRESS_MS = 500;
 
 /**
+ * How long a stop button that just replaced a send stays inert. A quick second
+ * tap on 发送 must not land on 停止 and interrupt the prompt it just sent.
+ */
+export const STOP_ARM_MS = 700;
+
+/** False while a freshly swapped-in stop is still arming; true otherwise. */
+function useStopArmed(kind: SendKind): boolean {
+  const previous = useRef(kind);
+  const [armed, setArmed] = useState(true);
+  useLayoutEffect(() => {
+    const from = previous.current;
+    previous.current = kind;
+    if (kind !== "stop" || from === "stop" || from === "stopping" || from === "force") {
+      setArmed(true);
+      return;
+    }
+    setArmed(false);
+    const timer = window.setTimeout(() => setArmed(true), STOP_ARM_MS);
+    return () => window.clearTimeout(timer);
+  }, [kind]);
+  return armed || kind !== "stop";
+}
+
+/**
  * Pointer handling for the send button: keep compose focus (unless an IME must
  * commit), and a long press runs `onLongPress` and swallows the click that
  * follows it.
@@ -191,6 +215,8 @@ export function SendButton({ kind, percent, className, onSend, submitsForm = fal
   const ref = useRef<HTMLButtonElement>(null);
   useSendPointer(ref, longPressStops && kind === "send" && stopTarget ? () => startStop(stopTarget) : undefined);
   const { label, aria } = sendContent(kind, percent);
+  // A stop still arming keeps its look (no grey flash) and only ignores taps.
+  const armed = useStopArmed(kind);
   const inert = kind === "busy" || kind === "stopping";
   const submits = submitsForm && (kind === "send" || kind === "enter");
   return <Button
@@ -200,6 +226,7 @@ export function SendButton({ kind, percent, className, onSend, submitsForm = fal
     data-send-kind={kind}
     disabled={disabled || inert}
     aria-busy={inert || kind === "wait" ? "true" : undefined}
+    aria-disabled={armed ? undefined : true}
     aria-label={aria}
     onClick={submits ? undefined : (event) => {
       // The click re-renders this button (cancelling a wait turns it back into a
@@ -207,7 +234,7 @@ export function SendButton({ kind, percent, className, onSend, submitsForm = fal
       // the same tap would submit the form and start waiting again.
       event.preventDefault();
       if (kind === "wait") cancelSendWait();
-      else if (kind === "stop" && stopTarget) startStop(stopTarget);
+      else if (kind === "stop" && stopTarget) { if (armed) startStop(stopTarget); }
       else if (kind === "force") forceStop();
       else if (kind === "send" || kind === "enter") onSend();
     }}

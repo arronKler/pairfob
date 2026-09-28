@@ -256,7 +256,7 @@ describe("herd screen presentation", () => {
   test("the desktop rail top bar fires one narrow action per control and follows the model gates", () => {
     paint(model({ computerCount: 2 }), "rail");
     act(() => app().querySelector<HTMLButtonElement>(".topbar-create")!.click());
-    const links = () => [...app().querySelectorAll<HTMLButtonElement>(".topbar-actions .text-link")];
+    const links = () => [...app().querySelectorAll<HTMLButtonElement>(".rail-nav .text-link")];
     act(() => links()[0].click());
     act(() => links()[1].click());
     act(() => links()[2].click());
@@ -264,7 +264,7 @@ describe("herd screen presentation", () => {
     calls = [];
     paint(model({ createConversation: false, computerCount: 1, operationBusy: true }), "rail");
     expect(app().querySelector(".topbar-create")).toBeNull();
-    expect([...app().querySelectorAll(".topbar-actions button")]).toHaveLength(2);
+    expect([...app().querySelectorAll(".rail-nav button")]).toHaveLength(2);
   });
 
   test("the needs-you strip lists waiting rows first and opens a pane directly", () => {

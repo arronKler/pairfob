@@ -25,25 +25,32 @@ import { closeOpenSwipeRow } from "./swipe-row";
 const FOLD_PX = 120;
 const UNFOLD_PX = 12;
 
-function RailTopActions({ view, actions }: { view: HerdViewModel; actions: HerdActions }) {
+function RailCreate({ view, actions }: { view: HerdViewModel; actions: HerdActions }) {
+  if (!view.create) return null;
   return (
     <TopbarActions className="herd-topbar-actions">
-      {view.create && (
-        <Button
-          className="topbar-create"
-          onClick={actions.createConversation}
-          disabled={view.create.disabled}
-          aria-label={view.create.aria}
-        >
-          <Plus size={16} aria-hidden="true" />{view.create.label}
-        </Button>
-      )}
+      <Button
+        className="topbar-create"
+        onClick={actions.createConversation}
+        disabled={view.create.disabled}
+        aria-label={view.create.aria}
+      >
+        <Plus size={16} aria-hidden="true" />{view.create.label}
+      </Button>
+    </TopbarActions>
+  );
+}
+
+/** The rail's destinations on one row of their own, so none wraps under the brand. */
+function RailNav({ view, actions }: { view: HerdViewModel; actions: HerdActions }) {
+  return (
+    <nav className="rail-nav" aria-label={t("tabs.aria")}>
       {view.computers && (
         <Button className="text-link" onClick={actions.openComputers}>{view.computers.label}</Button>
       )}
       <Button className="text-link" onClick={actions.openBoard}>{view.board.label}</Button>
       <Button className="text-link" onClick={actions.openSettings}>{view.settings.label}</Button>
-    </TopbarActions>
+    </nav>
   );
 }
 
@@ -162,8 +169,9 @@ export function HerdScreen({
       <aside ref={bindRoot} className="rail">
         <div className="topbar herd-topbar">
           <Brand tone={view.status.tone} heading />
-          <RailTopActions view={view} actions={actions} />
+          <RailCreate view={view} actions={actions} />
         </div>
+        <RailNav view={view} actions={actions} />
         <p className="statusline">
           <StatusDot tone={view.status.tone} />
           <span className="statusline-text">{view.status.text}</span>

@@ -20,7 +20,7 @@
   padding: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: clamp(17rem, 22vw, 20rem) minmax(0, 1fr);
+  grid-template-columns: clamp(19.5rem, 25vw, 24rem) minmax(0, 1fr);
   background: var(--bg);
   color: var(--ink);
 }
@@ -38,9 +38,24 @@
 .rail .herd-list .herd-group:first-child .section-title,
 .rail .herd-list .herd-group:first-child .group-head { margin-top: 8px; }
 
+/* Brand and 新建 share the top row; the destinations get a row of their own. */
+.rail .herd-topbar { flex-wrap: nowrap; }
+.rail-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 2px -8px 0;
+}
+.rail-nav .text-link { padding-inline: 8px; }
+
 /* Pointer targets in the narrow rail: smaller heading tools leave the
-   workspace name room on the heading's single line. */
+   workspace name room on the heading's single line. The name keeps a floor so
+   the counts and tools can never squeeze it down to its first letter. */
 .rail .group-head .group-tool { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
+/* Wrapping is decided on the basis, so the name bids small and then grows. */
+.rail .group-head .group-title { flex: 1 1 5rem; min-width: min(5rem, 30%); }
+.rail .group-head .group-marks { gap: 2px; }
+.rail .group-head .group-mark { padding-inline: 3px; }
 
 .rail .empty-sub { margin: 4px 2px 0; }
 

@@ -20,6 +20,7 @@ const { withSlashCommand } = await import("../compose-keys");
 const { dropQueuedKeys, flushKeys } = await import("./keys");
 const { cancelStop, STOP_WATCH_MS } = await import("./session-stop");
 const { SessionCompose } = await import("./session-compose");
+const { STOP_ARM_MS } = await import("./compose-controls");
 
 const restorer = new WorkspaceSnapshotRestorer();
 let runtimeBefore = runtimeIdentity();
@@ -245,6 +246,37 @@ describe("send button", () => {
     expect(sentKeys).toEqual([["esc"]]);
     expect(sentText).toEqual([]);
     expect(composeDraft()).toBe("keep this draft");
+  });
+
+  test("a stop that just replaced 发送 ignores the next tap until it arms", async () => {
+    seed("working");
+    act(() => { setComposeDraft("sent a moment ago"); });
+    paint(true);
+    expect(sendButton().dataset.sendKind).toBe("send");
+    const realSetTimeout = window.setTimeout;
+    let arm: (() => void) | null = null;
+    window.setTimeout = ((run: () => void, ms?: number) => {
+      if (ms === STOP_ARM_MS) { arm = run; return 0; }
+      return realSetTimeout(run, ms);
+    }) as typeof window.setTimeout;
+    try {
+      // The draft empties once the prompt goes out; the same slot turns into 停止.
+      act(() => { setComposeDraft(""); });
+    } finally {
+      window.setTimeout = realSetTimeout;
+    }
+    expect(sendButton().dataset.sendKind).toBe("stop");
+    // Same look as any stop (not greyed out), but the tap is ignored until armed.
+    expect(sendButton().disabled).toBeFalse();
+    expect(sendButton().getAttribute("aria-disabled")).toBe("true");
+    act(() => { sendButton().click(); });
+    await act(async () => { await flushKeys(); });
+    expect(sentKeys).toEqual([]);
+    act(() => { arm!(); });
+    expect(sendButton().hasAttribute("aria-disabled")).toBeFalse();
+    act(() => { sendButton().click(); });
+    await act(async () => { await flushKeys(); });
+    expect(sentKeys).toEqual([["esc"]]);
   });
 
   test("live input never offers stop", () => {

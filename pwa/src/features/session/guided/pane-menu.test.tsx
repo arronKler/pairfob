@@ -181,7 +181,17 @@ test("closing confirms inside the sheet, warns while running, and then closes th
   attachLiveSession({ isConnected: () => true, closePane: async (paneId: string) => { closed.push(paneId); throw new Error("stop"); } } as never);
   act(openPaneMenu);
   const zone = () => document.querySelector(".menu-danger-zone")!;
-  act(() => zone().querySelector<HTMLButtonElement>(".menu-row")!.click());
+  const scrolled: Element[] = [];
+  const view = document.defaultView!;
+  const realScroll = view.Element.prototype.scrollIntoView;
+  view.Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this); };
+  try {
+    act(() => zone().querySelector<HTMLButtonElement>(".menu-row")!.click());
+  } finally {
+    view.Element.prototype.scrollIntoView = realScroll;
+  }
+  // The question opens at the foot of a tall sheet; it is brought on screen.
+  expect(scrolled).toEqual([zone().querySelector(".pane-confirm")!]);
   expect(sheetOpen()).toBeTrue();
   expect(document.querySelectorAll("dialog[open]")).toHaveLength(1);
   expect(zone().querySelector(".pane-confirm-subject")?.textContent).toContain("First");

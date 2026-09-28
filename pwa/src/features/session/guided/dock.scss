@@ -221,6 +221,16 @@ html[data-kb="open"] .dock { animation: dock-settle var(--dur-3) var(--ease-spri
 }
 .pad-kind-option:focus-visible, .pad-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
+/* The pagination row is drawn compact; each control's hit area reaches past its
+   drawn box (short of the key grid above) so a thumb does not need to aim. */
+.pad-kind-option, .pad-text-btn, .pad-page-dot { position: relative; }
+.pad-kind-option::before, .pad-text-btn::before, .pad-page-dot::before {
+  content: "";
+  position: absolute;
+  inset: -7px -2px;
+}
+.pad-text-btn::before { inset: -6px -8px; }
+
 .slash-cmd {
   min-height: 44px;
   padding: 0 var(--space-1);

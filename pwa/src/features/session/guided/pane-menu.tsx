@@ -1,5 +1,5 @@
 import { ChevronRight, Columns2, Copy, GitBranch, Info, LayoutGrid, Pencil, Plus, RotateCw, Trash2, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AgentInformation } from "./agent-information";
 import { PaneDisplaySettings, PaneModeSetting } from "./pane-menu-settings";
 import { NewTabPage, RenamePage, SplitPage } from "./pane-menu-pages";
@@ -83,9 +83,15 @@ function IdentityHead({ modal, agent, onCopied }: { modal: ActionSheetController
 function CloseZone({ modal, agent }: { modal: ActionSheetController; agent: AgentCard }) {
   const [asking, setAsking] = useState(false);
   const { listGroup } = usePreferences();
+  const confirm = useRef<HTMLDivElement>(null);
+  // The zone sits at the foot of a tall sheet: without this the question opens
+  // below the fold on a phone and the tap looks like it did nothing.
+  useLayoutEffect(() => {
+    if (asking) confirm.current?.scrollIntoView?.({ block: "nearest" });
+  }, [asking]);
   return <MenuGroup className="menu-danger-zone">
     <MenuRow icon={<Trash2 size={18} />} label={t("pm.closePane")} danger onClick={() => setAsking((value) => !value)} />
-    {asking && <div className="pane-confirm" role="group" aria-label={t("confirm.closePaneTitle")}>
+    {asking && <div ref={confirm} className="pane-confirm" role="group" aria-label={t("confirm.closePaneTitle")}>
       <div className="pane-confirm-subject">
         <AgentAvatar kind={agent.agent} status={agent.agent ? agent.status : undefined} />
         <span><b>{agentTitle(agent, listGroup)}</b>{agent.cwd ? <small>{agent.cwd}</small> : null}</span>

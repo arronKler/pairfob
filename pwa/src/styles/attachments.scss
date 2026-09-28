@@ -300,6 +300,9 @@
   font-weight: 600;
 }
 
+.attach-lead-btn { position: relative; }
+.attach-lead-btn::before { content: ""; position: absolute; inset: -6px -3px; }
+
 .attach-lead-btn.is-quiet {
   background: transparent;
   color: var(--muted);
