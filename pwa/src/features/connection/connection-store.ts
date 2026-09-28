@@ -19,6 +19,8 @@ export type Phase = "boot" | "connect" | "pairing" | "resuming" | "live" | "pick
 
 export type ConnectionRecord = {
   phase: Phase;
+  /** Saved computers could not be read; this is not an empty pairing catalog. */
+  bootStorageBlocked: boolean;
   originProtocol: MuxProtocol;
   p2pEnabled: boolean;
   /** Pairing intent captured from the URL fragment before boot decided a screen. */
@@ -55,6 +57,7 @@ export type ConnectionRecord = {
 export function initialConnection(): ConnectionRecord {
   return {
     phase: "boot",
+    bootStorageBlocked: false,
     originProtocol: 2,
     p2pEnabled: false,
     fragment: null,
@@ -106,12 +109,18 @@ export function setPhase(phase: Phase): void {
   composeTransaction([connectionStore], () => {
     stage((record) => {
       record.phase = phase;
+      if (phase !== "boot") record.bootStorageBlocked = false;
     });
   });
 }
 
 export function phase(): Phase {
   return read().phase;
+}
+
+export function setBootStorageBlocked(blocked: boolean): void {
+  if (read().bootStorageBlocked === blocked) return;
+  write((record) => { record.bootStorageBlocked = blocked; });
 }
 
 /** Adopt the origin configuration resolved during boot. */

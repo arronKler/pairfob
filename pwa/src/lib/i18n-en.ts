@@ -373,6 +373,8 @@ export const en: { [K in keyof typeof zh]: string } = {
   "computer.unnamed": "Unnamed computer",
 
   "boot.reading": "Reading this phone's credential…",
+  "boot.storageUnavailable": "Saved computers are temporarily unavailable in this browser.",
+  "boot.storageRetryHelp": "No need to pair again. Retrying automatically; you can also tap Retry. If this continues, close and reopen the browser app.",
   "boot.connecting": "Connecting back to {name}…",
   "boot.computer": "the computer",
   "net.offline": "This phone is offline. It resumes on the network.",

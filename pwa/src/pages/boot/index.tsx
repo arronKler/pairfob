@@ -3,6 +3,8 @@ import { t } from "../../lib/i18n";
 import { credential } from "../../features/computers/catalog-store";
 import { phase as currentPhase } from "../../features/connection/connection-store";
 import { Brand, Spinner } from "../../shared/ui/primitives";
+import { useConnection } from "../../features/connection/hooks";
+import { StorageRecovery } from "./storage-recovery";
 
 /**
  * Boot route.
@@ -13,7 +15,9 @@ import { Brand, Spinner } from "../../shared/ui/primitives";
  * canonical reads here are the values the page was composed for.
  */
 export function BootScreen() {
+  const { bootStorageBlocked } = useConnection();
   const current = credential();
+  if (bootStorageBlocked) return <div className="boot"><Brand /><StorageRecovery /></div>;
   return <div className="boot">
     <Brand /><Spinner />
     <p className="boot-text">{currentPhase() === "boot" ? t("boot.reading")

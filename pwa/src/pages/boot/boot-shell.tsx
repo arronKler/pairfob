@@ -11,6 +11,8 @@ import { Button, StatusDot } from "../../shared/ui/primitives";
 import type { PairResult } from "../../lib/protocol/client";
 import { ConnectionPathCard } from "./connection-path-card";
 import { UnreachableShell } from "./unreachable-shell";
+import { useConnection } from "../../features/connection/hooks";
+import { StorageRecovery } from "./storage-recovery";
 
 /**
  * The phone's boot and reconnect frame. It is the session list's own frame —
@@ -23,6 +25,8 @@ import { UnreachableShell } from "./unreachable-shell";
  * A retry started from the "cannot reach" page keeps that page up instead.
  */
 export function BootShell() {
+  const { bootStorageBlocked } = useConnection();
+  if (bootStorageBlocked) return <div className="page herd-page boot-shell"><StorageRecovery /></div>;
   const reading = currentPhase() === "boot";
   return !reading && retryingUnreachable() ? <UnreachableShell retrying /> : <BootFrame reading={reading} />;
 }

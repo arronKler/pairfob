@@ -376,6 +376,8 @@ export const zh = {
   "computer.unnamed": "未命名电脑",
 
   "boot.reading": "正在读取这台手机的凭证…",
+  "boot.storageUnavailable": "暂时无法读取浏览器中保存的电脑。",
+  "boot.storageRetryHelp": "无需重新配对，正在自动重试，也可以点下方重试。若一直无法恢复，请关闭浏览器应用后重新打开。",
   "boot.connecting": "正在连回{name}…",
   "boot.computer": "电脑",
   "net.offline": "手机当前没有网络，联网后会自动恢复。",

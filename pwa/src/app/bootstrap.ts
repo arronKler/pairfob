@@ -38,12 +38,14 @@ import {
   sessionTransport as currentSessionTransport,
   setNetworkOnline,
   setPhase,
+  setBootStorageBlocked,
 } from "../features/connection/connection-store";
 import { currentScreen } from "./navigation-store";
 import { clearNotice, showError, showStatus } from "./notices-store";
 import { isAgentChat, isFullTerminal, paneFollow, termSelect } from "../features/session/session-store";
 import { resetTransitionState, takeTransition, withTransition } from "./transition";
 import { bindVisualViewport, releaseVisualViewport } from "./viewport";
+import { bindBootStorageRetry } from "./boot-actions";
 
 /**
  * Browser boot and lifecycle.
@@ -62,6 +64,20 @@ import { bindVisualViewport, releaseVisualViewport } from "./viewport";
 let bootBlockedByNetwork = false;
 let running: (() => void) | null = null;
 let bootGeneration = 0;
+let storageRetryTimer: number | null = null;
+let storageRetryDelay = 1500;
+
+function clearStorageRetry(): void {
+  if (storageRetryTimer !== null) window.clearTimeout(storageRetryTimer);
+  storageRetryTimer = null;
+}
+
+/** Retry only a failed catalog read, never a pairing or a live-session mutation. */
+function retryBootStorage(): void {
+  if (!running || currentPhase() !== "boot" || !connectionStore.get().bootStorageBlocked
+    || !networkOnline() || document.visibilityState === "hidden") return;
+  void boot(bootGeneration);
+}
 
 /**
  * Direct boot commit.
@@ -94,6 +110,8 @@ export function startApplication(): () => void {
     if (running !== stop) return;
     running = null;
     bootGeneration += 1;
+    clearStorageRetry();
+    setBootStorageBlocked(false);
     page.abort();
     for (const release of releases) release();
     // Retire this lifetime's session-owner registration before the teardown
@@ -110,6 +128,8 @@ export function startApplication(): () => void {
   };
 
   running = stop;
+  storageRetryDelay = 1500;
+  releases.push(bindBootStorageRetry(() => retryBootStorage()));
   try {
     hydrateApplicationState();
     initI18n();
@@ -195,6 +215,7 @@ function applyNetworkAvailability(available: boolean): void {
     return;
   }
   if (currentPhase() !== "live" || document.visibilityState !== "visible") {
+    retryBootStorage();
     if (bootBlockedByNetwork && currentPhase() === "connect") void boot(bootGeneration);
     return;
   }
@@ -212,6 +233,7 @@ function bindNetworkLifecycle(signal: AbortSignal): void {
   document.addEventListener("visibilitychange", () => {
     handleFullTerminalVisibility(document.visibilityState === "hidden");
     if (document.visibilityState === "hidden") {
+      clearStorageRetry();
       retireAgentTraceRefreshes();
       stopPolling();
     } else applyNetworkAvailability(navigator.onLine !== false);
@@ -264,6 +286,8 @@ export function bindPaneKeys(signal: AbortSignal): void {
 
 async function boot(generation: number): Promise<void> {
   if (generation !== bootGeneration) return;
+  clearStorageRetry();
+  setBootStorageBlocked(false);
   if (!networkOnline()) {
     bootBlockedByNetwork = true;
     setPhase("connect");
@@ -296,12 +320,21 @@ async function boot(generation: number): Promise<void> {
     if (generation !== bootGeneration) return;
   } catch (error) {
     if (generation !== bootGeneration) return;
-    setPhase("connect");
-    showError(messageOf(error), true);
-    track("pwa_boot", { result: "connect", extra: "connect" });
+    // A suspended browser's storage service can fail independently of the
+    // network. Never interpret that as an empty catalog or ask to pair again.
+    setBootStorageBlocked(true);
+    track("pwa_boot", { result: "storage_unavailable", extra: "boot" });
+    if (document.visibilityState !== "hidden") {
+      storageRetryTimer = window.setTimeout(() => {
+        storageRetryTimer = null;
+        if (generation === bootGeneration) retryBootStorage();
+      }, storageRetryDelay);
+      storageRetryDelay = Math.min(storageRetryDelay * 2, 15000);
+    }
     commitBootView();
     return;
   }
+  storageRetryDelay = 1500;
   if (generation !== bootGeneration) return;
   const catalog = computers();
   const notificationTarget = connectionStore.get().notificationTarget;

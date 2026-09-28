@@ -22,6 +22,13 @@ const DB_VERSION = 2;
 const STORE = "credentials";
 const SETTINGS = "settings";
 const LAST_USED_KEY = "last_used_daemon_id";
+export const CREDENTIAL_READ_TIMEOUT_MS = 4000;
+
+function storageTimeout(): Error {
+  const error = new Error("Credential storage did not respond");
+  error.name = "TimeoutError";
+  return error;
+}
 
 export type CredentialCatalog = {
   credentials: PairResult[];
@@ -154,14 +161,51 @@ export function decodeCredential(stored: StoredCredential): PairResult {
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let settled = false;
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    };
+    const timer = setTimeout(() => fail(storageTimeout()), CREDENTIAL_READ_TIMEOUT_MS);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "daemon_id" });
       if (!db.objectStoreNames.contains(SETTINGS)) db.createObjectStore(SETTINGS);
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("IndexedDB open failed"));
-    request.onblocked = () => reject(new Error("IndexedDB upgrade blocked"));
+    request.onsuccess = () => {
+      const db = request.result;
+      // A timed-out/blocked open may still finish after a retry owns boot.
+      if (settled) { db.close(); return; }
+      settled = true;
+      clearTimeout(timer);
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    request.onerror = () => fail(request.error || new Error("IndexedDB open failed"));
+    request.onblocked = () => fail(new Error("IndexedDB upgrade blocked"));
+  });
+}
+
+/** Bound reads as well as open: a suspended storage process may emit no event. */
+function readStore<T>(db: IDBDatabase, name: string, read: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(name, "readonly");
+    const request = read(tx.objectStore(name));
+    const timer = setTimeout(() => {
+      reject(storageTimeout());
+      try { tx.abort(); } catch { /* already completed */ }
+    }, CREDENTIAL_READ_TIMEOUT_MS);
+    request.onsuccess = () => { clearTimeout(timer); resolve(request.result); };
+    const fail = () => {
+      clearTimeout(timer);
+      reject(tx.error || (request.readyState === "done" ? request.error : null)
+        || new Error("Credential storage read aborted"));
+    };
+    request.onerror = fail;
+    tx.onerror = fail;
+    tx.onabort = fail;
   });
 }
 
@@ -183,15 +227,8 @@ export async function saveCredential(pair: PairResult): Promise<void> {
 async function readSetting(key: string): Promise<unknown> {
   const db = await openDatabase();
   try {
-    return await new Promise<unknown>((resolve, reject) => {
-      if (!db.objectStoreNames.contains(SETTINGS)) {
-        resolve(undefined);
-        return;
-      }
-      const request = db.transaction(SETTINGS, "readonly").objectStore(SETTINGS).get(key);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("setting read failed"));
-    });
+    if (!db.objectStoreNames.contains(SETTINGS)) return undefined;
+    return await readStore(db, SETTINGS, (store) => store.get(key));
   } finally {
     db.close();
   }
@@ -224,11 +261,7 @@ export async function rememberLastUsed(daemonId: string): Promise<void> {
 async function readCredentials(origin: string): Promise<PairResult[]> {
   const db = await openDatabase();
   try {
-    const values = await new Promise<unknown[]>((resolve, reject) => {
-      const request = db.transaction(STORE, "readonly").objectStore(STORE).getAll();
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("credential read failed"));
-    });
+    const values = await readStore<unknown[]>(db, STORE, (store) => store.getAll());
     const credentials = values
       .map((value) => {
         const stored = validateStoredCredential(value) || migrateLegacyCredential(value, origin);
@@ -249,7 +282,8 @@ async function readCredentials(origin: string): Promise<PairResult[]> {
 
 export async function loadCatalog(origin: string): Promise<CredentialCatalog> {
   const credentials = await readCredentials(origin);
-  const lastUsed = await readSetting(LAST_USED_KEY);
+  // This is only an ordering hint. Its failure must not hide validated keys.
+  const lastUsed = await readSetting(LAST_USED_KEY).catch(() => null);
   return {
     credentials,
     lastUsedDaemonId: validDaemonId(lastUsed) ? lastUsed : null,

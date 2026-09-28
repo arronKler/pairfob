@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { act } from "react";
 import { happy, resetBoardTestDOM } from "../../test-support/dom";
 
@@ -206,6 +206,79 @@ afterEach(async () => {
 });
 
 describe("cold-start origin config recovery", () => {
+  for (const recovery of ["foreground", "button"] as const) test(`unavailable credential storage stays out of pairing and retries via ${recovery}`, async () => {
+    const working = globalThis.indexedDB;
+    (globalThis as Record<string, unknown>).indexedDB = {
+      open() { throw new DOMException("Connection to Indexed Database server lost", "UnknownError"); },
+    };
+    await act(async () => { startApplication(); });
+    await act(async () => {
+      fetchLog.resolveNext(validConfigResponse());
+      await flushMicrotasks();
+    });
+    expect(phase()).toBe("boot");
+    expect(document.querySelector(".connect-scan")).toBeNull();
+    expect(document.querySelector(".boot-storage-recovery button")).not.toBeNull();
+
+    (globalThis as Record<string, unknown>).indexedDB = working;
+    await act(async () => {
+      if (recovery === "foreground") dispatchRecoveryEvents();
+      else document.querySelector<HTMLButtonElement>(".boot-storage-recovery button")!.click();
+      await flushMicrotasks();
+    });
+    expect(fetchLog.count).toBe(2);
+    await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+    // Only a successful empty read may decide that pairing is needed.
+    expect(phase()).toBe("connect");
+    expect(visibleNotice()).toBeNull();
+  });
+
+  test("storage recovery retries automatically and discards callbacks from a stopped lifetime", async () => {
+    const working = globalThis.indexedDB;
+    (globalThis as Record<string, unknown>).indexedDB = {
+      open() { throw new Error("Storage service unavailable"); },
+    };
+    const retry: (() => void)[] = [];
+    const original = window.setTimeout.bind(window);
+    const timer = spyOn(window, "setTimeout").mockImplementation(((fn: () => void, delay: number, ...args: unknown[]) => {
+      if (delay === 1500 || delay === 3000) { retry.push(fn); return 987654; }
+      return original(fn, delay, ...args);
+    }) as typeof window.setTimeout);
+    try {
+      await act(async () => { startApplication(); });
+      await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+      expect(phase()).toBe("boot");
+      expect(retry).toHaveLength(1);
+      await act(async () => { retry[0](); await flushMicrotasks(); });
+      expect(fetchLog.count).toBe(2);
+      await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+      expect(retry).toHaveLength(2);
+      await act(async () => { stopApplication(); });
+      (globalThis as Record<string, unknown>).indexedDB = working;
+      await act(async () => { retry[1](); await flushMicrotasks(); });
+      expect(fetchLog.count).toBe(2);
+      expect(applicationIsRunning()).toBeFalse();
+    } finally { timer.mockRestore(); }
+  });
+
+  test("credential retry events cannot replace a newer pairing attempt", async () => {
+    (globalThis as Record<string, unknown>).indexedDB = {
+      open() { throw new Error("Storage service unavailable"); },
+    };
+    await act(async () => { startApplication(); });
+    await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+    expect(phase()).toBe("boot");
+    await act(async () => {
+      applyPairingFragment({ v: 2, pairRef: "0123456789abcdef", code: "ABCD1234" });
+      setPhase("pairing");
+      dispatchRecoveryEvents();
+      await flushMicrotasks();
+    });
+    expect(fetchLog.count).toBe(1);
+    expect(phase()).toBe("pairing");
+    expect(connectionStore.get().bootStorageBlocked).toBeFalse();
+  });
+
   test("a refused config read re-arms boot and an online event resumes it to a settled connect", async () => {
     await act(async () => { startApplication(); });
     expect(fetchLog.count).toBe(1);
