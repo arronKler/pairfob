@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { dirname, resolve } from "node:path";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -30,7 +32,12 @@ describe("settings lifecycle (isolated child process)", () => {
       const here = dirname(fileURLToPath(import.meta.url));
       const pwaRoot = resolve(here, "../../..");
       const target = resolve(pwaRoot, "test-support", "settings-lifecycle-isolated.test.ts");
-      const proc = Bun.spawn([process.execPath, "test", target, "--timeout", "20000"], {
+      // Per-case outcomes come from the child's JUnit report: bun stopped printing
+      // "(pass) title" lines when its output is not a terminal, so stdout cannot say.
+      const reportDir = await mkdtemp(join(tmpdir(), "settings-lifecycle-"));
+      const report = join(reportDir, "junit.xml");
+      const proc = Bun.spawn([process.execPath, "test", target, "--timeout", "20000",
+        "--reporter=junit", `--reporter-outfile=${report}`], {
         cwd: pwaRoot,
         stdout: "pipe",
         stderr: "pipe",
@@ -62,16 +69,18 @@ describe("settings lifecycle (isolated child process)", () => {
         if (exit !== 0) {
           throw new Error(`isolated settings lifecycle test exited ${exit}\n${stdout}\n${stderr}`);
         }
-        const combined = `${stdout}\n${stderr}`;
         // Explicit per-case outcomes (the original four titles) and the bun
-        // summary — extra evidence on top of the real exit code.
+        // summary — extra evidence on top of the real exit code. A passed case
+        // is a self-closed <testcase …/>: a failure or skip would nest an element.
+        const junit = await readFile(report, "utf8");
+        expect(junit).toMatch(/<testsuites [^>]*tests="4"[^>]*failures="0"[^>]*skipped="0"/);
         for (const title of [
           "persistent manual copy label follows language repaint",
           "compact later hides even if browser storage is unavailable",
           "persistent settings notice updates and clears through real subscription",
           "daemon release check updates the mounted subtree without repainting the app",
         ]) {
-          expect(combined).toContain(`(pass) ${title}`);
+          expect(junit).toMatch(new RegExp(`<testcase name="${title}"[^>]*/>`));
         }
         expect(stderr).toContain("4 pass");
         expect(stderr).toContain("0 fail");
@@ -84,6 +93,7 @@ describe("settings lifecycle (isolated child process)", () => {
           if (proc.kill(0)) { try { proc.kill("SIGKILL"); } catch { /* already gone */ } }
         } catch { /* signal 0 unsupported; the watchdog already bounds the child */ }
         await proc.exited.catch(() => undefined);
+        await rm(reportDir, { recursive: true, force: true });
       }
     },
     60_000,
