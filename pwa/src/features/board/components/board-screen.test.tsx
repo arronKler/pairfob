@@ -11,7 +11,7 @@ import { resetDashboard } from "../../dashboard/catalog-store";
 import { setScreen } from "../../../app/navigation-store";
 import { resetBoardCatalog } from "../layout-store";
 import { buildBoardViewModel, type BoardModelInput, type BoardViewModel } from "../model/board-view";
-import { BoardScreenView } from "./board-screen";
+import { BoardScreenView, BoardZoomControls } from "./board-screen";
 import type { BoardScreenActions } from "./board-screen";
 import type { BoardCanvasController } from "./board-canvas";
 
@@ -47,6 +47,7 @@ function model(overrides: Partial<BoardModelInput> = {}): BoardViewModel {
     selectedPaneId: "",
     status: { tone: "live", text: "已连接" },
     canCreateTab: true,
+    layoutCaps: { resize: true, swap: true, split: true, zoom: true },
     operationBusy: false,
     connected: true,
     ...overrides,
@@ -60,6 +61,8 @@ const actions: BoardScreenActions = {
   selectWorkspace: (id) => calls.push(`workspace:${id}`),
   selectTab: (id) => calls.push(`tab:${id}`),
   createTab: () => calls.push("createTab"),
+  quickCreate: () => calls.push("quickCreate"),
+  tabMenu: (id) => calls.push(`tabMenu:${id}`),
   fit: () => calls.push("fit"),
   zoom: (direction) => calls.push(`zoom:${direction}`),
 };
@@ -77,6 +80,13 @@ function controller(id = ""): BoardCanvasController {
     zoomAt: () => calls.push("zoomAt"),
     releaseScrollOnLeave: () => calls.push(`releaseScroll${id}`),
     shareTileOpening: () => calls.push(`share${id}`),
+    commitResize: async () => { calls.push("commitResize"); },
+    commitSwap: async () => { calls.push("commitSwap"); },
+    pickSplit: () => calls.push("pickSplit"),
+    layoutReason: () => "",
+    openResizeSheet: () => calls.push("openResizeSheet"),
+    toggleZoom: async () => { calls.push("toggleZoom"); },
+    paneAction: () => calls.push("paneAction"),
   };
 }
 
@@ -90,8 +100,8 @@ const settle = async () => {
 };
 
 function chip(label: string): HTMLButtonElement {
-  const found = [...appRoot().querySelectorAll<HTMLButtonElement>(".board-chip, .board-tab, .board-tab-new")]
-    .find((node) => node.textContent === label);
+  const found = [...appRoot().querySelectorAll<HTMLButtonElement>(".board-tab, .board-tab-new")]
+    .find((node) => node.textContent === label || node.getAttribute("aria-label") === label);
   if (!found) throw new Error(`missing chip ${label}: ${appRoot().textContent?.slice(0, 200)}`);
   return found;
 }
@@ -122,9 +132,11 @@ describe("board screen presentation", () => {
     resetBoardCatalog();
     paint(view);
     // The title is the selected workspace and its root; one rail holds its tabs.
-    expect(appRoot().querySelector(".board-ws-name")?.textContent).toBe("alpha");
-    expect(appRoot().querySelector(".board-ws-path")?.textContent).toBe("/work/alpha");
-    expect(appRoot().querySelector(".board-chip, .board-spaces")).toBeNull();
+    // The session list's host title: the workspace over its path.
+    expect(appRoot().querySelector(".board-title.host-title .board-title-name")?.textContent).toBe("alpha");
+    expect(appRoot().querySelector(".board-title-path")?.textContent).toBe("/work/alpha");
+    expect(appRoot().querySelector(".board-ws-mark, .board-chip, .board-spaces")).toBeNull();
+    expect(appRoot().querySelector(".board-tabs.seg.is-scroll")?.getAttribute("role")).toBe("tablist");
     expect([...appRoot().querySelectorAll(".board-tab")].map((node) => node.textContent)).toEqual([
       t("board.tabIndex", { n: 1 }), "logs",
     ]);
@@ -139,25 +151,35 @@ describe("board screen presentation", () => {
     act(() => appRoot().querySelector<HTMLButtonElement>(".board-chrome .back")!.click());
     act(() => chip("logs").click());
     act(() => chip(t("board.newTab")).click());
+    act(() => appRoot().querySelector<HTMLButtonElement>(".board-tab-menu")!.click());
     const zoom = [...appRoot().querySelectorAll<HTMLButtonElement>(".board-zoom button")];
     act(() => zoom[0].click());
     act(() => zoom[1].click());
     act(() => zoom[2].click());
     const lifecycle = ["transform", "bind", "unbind", "host", "releaseHost", "share"];
     expect(calls.filter((call) => !lifecycle.some((name) => call.startsWith(name))))
-      .toEqual(["back", "tab:w1:t2", "createTab", "zoom:1", "fit", "zoom:-1"]);
+      .toEqual(["back", "tab:w1:t2", "createTab", "tabMenu:w1:t1", "zoom:-1", "zoom:1", "fit"]);
   });
 
   test("the zoom controls keep their labels and the fit button its visible copy", () => {
     paint(model());
     const zoom = [...appRoot().querySelectorAll<HTMLButtonElement>(".board-zoom button")];
-    // The zoom stack floats over the canvas: in, fit, out from top to bottom.
+    // Out, in, fit: a bar on the desk; a phone shows only the fit pill (CSS).
     expect(appRoot().querySelector(".board-body > .board-zoom")?.getAttribute("aria-label")).toBe(t("board.zoomGroup"));
     expect(zoom.map((node) => node.getAttribute("aria-label")))
-      .toEqual([t("board.zoomIn"), t("board.fitAria"), t("board.zoomOut")]);
-    expect(zoom[1].textContent).toBe(t("board.fit"));
-    expect(zoom[2].querySelector("svg.lucide-minus")?.getAttribute("aria-hidden")).toBe("true");
-    expect(zoom[0].querySelector("svg.lucide-plus")?.getAttribute("aria-hidden")).toBe("true");
+      .toEqual([t("board.zoomOut"), t("board.zoomIn"), t("board.fitAria")]);
+    expect(zoom[2].textContent).toBe(t("board.fit"));
+    expect(zoom[0].querySelector("svg.lucide-minus")?.getAttribute("aria-hidden")).toBe("true");
+    expect(zoom[1].querySelector("svg.lucide-plus")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  test("the camera-following zoom control shows the scale and hides at the fit", () => {
+    const view = model();
+    act(() => renderReact(<BoardZoomControls percent={57} atFit={false} actions={actions} view={view} />));
+    expect(appRoot().querySelector(".board-zoom-pct")?.textContent).toBe("57%");
+    expect(appRoot().querySelector(".board-zoom")?.hasAttribute("data-at-fit")).toBe(false);
+    act(() => renderReact(<BoardZoomControls percent={20} atFit actions={actions} view={view} />));
+    expect(appRoot().querySelector(".board-zoom")?.hasAttribute("data-at-fit")).toBe(true);
   });
 
   test("new tab fails closed on capability, busy, connection and workspace", () => {
@@ -166,22 +188,23 @@ describe("board screen presentation", () => {
     paint(model({ operationBusy: true }));
     const busy = appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!;
     expect(busy.disabled).toBe(true);
-    expect(busy.textContent).toBe(t("home.creating"));
+    expect(busy.getAttribute("aria-label")).toBe(t("home.creating"));
     paint(model({ connected: false }));
     expect(appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!.disabled).toBe(true);
     paint(model({ workspaceId: "" }));
     expect(appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!.disabled).toBe(true);
     paint(model());
     expect(appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!.disabled).toBe(false);
-    expect(appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!.textContent).toBe(t("board.newTab"));
+    expect(appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!.getAttribute("aria-label")).toBe(t("board.newTab"));
   });
 
   test("an empty catalog explains itself and paints no stage", () => {
     paint(model({ workspaceList: [], tabList: [], layouts: [], agents: [], tabId: "" }));
-    expect(appRoot().querySelector(".board-ws-name")?.textContent).toBe(t("board.title"));
-    expect(appRoot().querySelector(".board-ws-path")).toBeNull();
+    expect(appRoot().querySelector(".board-title-name")?.textContent).toBe(t("board.title"));
+    expect(appRoot().querySelector(".board-title-path")).toBeNull();
     // Nothing to switch to and nothing to zoom: a plain title, no zoom controls.
-    expect(appRoot().querySelector("button.board-ws")).toBeNull();
+    expect(appRoot().querySelector("button.board-title")).toBeNull();
+    expect(appRoot().querySelector(".board-tab-menu")).toBeNull();
     expect(appRoot().querySelector(".board-zoom")).toBeNull();
     expect(appRoot().querySelector(".board-stage")).toBeNull();
     expect(appRoot().querySelector(".board-canvas .empty-title")?.textContent).toBe(t("board.emptyTitle"));
@@ -202,7 +225,7 @@ describe("board screen presentation", () => {
 
   test("the workspace title opens the switcher; picking another runs one narrow action", async () => {
     paint(model());
-    act(() => appRoot().querySelector<HTMLButtonElement>(".board-ws")!.click());
+    act(() => appRoot().querySelector<HTMLButtonElement>(".board-title")!.click());
     const rows = () => [...document.querySelectorAll<HTMLButtonElement>(".sheet-body .menu-choice")];
     expect(rows().map((row) => row.querySelector(".menu-choice-title")?.textContent?.trim())).toEqual(["alpha", "beta"]);
     expect(rows()[0].getAttribute("aria-current")).toBe("true");
@@ -226,15 +249,22 @@ describe("board screen presentation", () => {
       agents: [agent("w1:p1", "blocked"), { ...agent("w1:p2", "done"), tabId: "w1:t2" }],
     });
     paint(view);
-    expect([...appRoot().querySelectorAll(".board-tab")].map((node) => node.querySelector(".board-tab-dot")?.className ?? ""))
-      .toEqual(["board-tab-dot is-blocked", "board-tab-dot is-done"]);
+    expect([...appRoot().querySelectorAll(".board-tab")].map((node) => node.querySelector(".seg-dot")?.className ?? ""))
+      .toEqual(["seg-dot is-blocked", "seg-dot is-done"]);
     // The dot is visual; the tab also says it in words for screen readers.
     expect([...appRoot().querySelectorAll(".board-tab .sr-only")].map((node) => node.textContent))
       .toEqual([t("board.tabWaiting"), t("board.tabDone")]);
-    expect([...appRoot().querySelectorAll(".board-marks .group-mark")].map((node) => node.textContent))
+    expect([...appRoot().querySelectorAll(".board-title-line .board-mark")].map((node) => node.textContent))
       .toEqual([t("list.markBlocked", { count: "1" }), t("list.markDone", { count: "1" })]);
     paint(model({ agents: [agent("w1:p1", "blocked")], status: { tone: "warn", text: t("chrome.unverifiable") } }));
-    expect(appRoot().querySelector(".board-tab-dot, .board-marks .group-mark")).toBeNull();
+    expect(appRoot().querySelector(".seg-dot, .board-mark")).toBeNull();
+  });
+
+  test("a tab's menu opens from a right-click without selecting it", () => {
+    paint(model());
+    act(() => { chip("logs").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    expect(calls).toContain("tabMenu:w1:t2");
+    expect(calls).not.toContain("tab:w1:t2");
   });
 
   test("leaving the board asks the controller to release the remote scroll once", () => {

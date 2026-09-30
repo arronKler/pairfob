@@ -3,6 +3,7 @@ import type { DashboardAgentCard } from "../../../lib/dashboard";
 import { setLang, t } from "../../../lib/i18n";
 import type { BoardSpace, BoardTab, TabLayout } from "../../../lib/layout";
 import {
+  boardCanvasModel,
   boardTabAnchor,
   boardTabLabel,
   boardTiles,
@@ -38,6 +39,7 @@ function input(overrides: Partial<BoardModelInput> = {}): BoardModelInput {
     selectedPaneId: "",
     status: { tone: "live", text: "connected" },
     canCreateTab: false,
+    layoutCaps: { resize: true, swap: true, split: true, zoom: true },
     operationBusy: false,
     connected: true,
     ...overrides,
@@ -108,6 +110,23 @@ describe("board canvas tiles", () => {
       { paneId: "w1:p2", focused: true, rect: { x: 50, y: 0, width: 50, height: 40 } },
     ], { zoomed: true, focusedPaneId: "w1:p2" });
     expect(boardTiles(zoomed, [], "").map((tile) => tile.zoomed)).toEqual([false, true]);
+  });
+
+  test("a zoomed tab paints what herdr paints: the zoomed pane alone, filling the area", () => {
+    const zoomed = layout([
+      { paneId: "w1:p1", focused: false, rect: { x: 0, y: 0, width: 50, height: 40 } },
+      { paneId: "w1:p2", focused: true, rect: { x: 50, y: 0, width: 50, height: 40 } },
+    ], { zoomed: true, focusedPaneId: "w1:p2" });
+    const canvas = boardCanvasModel(input({ layouts: [zoomed], tabId: "w1:t1", workspaceId: "w1" }));
+    expect(canvas.zoomedPaneId).toBe("w1:p2");
+    expect(canvas.tiles.map((tile) => [tile.paneId, tile.box.width, tile.zoomed])).toEqual([["w1:p2", 800, true]]);
+    expect(canvas.zoomBanner).toEqual({ text: t("boardCanvas.zoomedBanner"), restore: t("boardMenu.restore") });
+    // A snapshot that lists only the visible pane resolves to it as well.
+    const onlyVisible = { ...zoomed, focusedPaneId: "", panes: [{ ...zoomed.panes[1], focused: false }] };
+    expect(boardCanvasModel(input({ layouts: [onlyVisible], tabId: "w1:t1", workspaceId: "w1" })).zoomedPaneId).toBe("w1:p2");
+    const split = boardCanvasModel(input({ layouts: [{ ...zoomed, zoomed: false }], tabId: "w1:t1", workspaceId: "w1" }));
+    expect(split.zoomedPaneId).toBe("");
+    expect(split.tiles).toHaveLength(2);
   });
 
   test("a pane the snapshot no longer reports still paints, without a pill", () => {

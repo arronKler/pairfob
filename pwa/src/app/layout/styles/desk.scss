@@ -47,6 +47,8 @@
   margin: 2px -8px 0;
 }
 .rail-nav .text-link { padding-inline: 8px; }
+/* The page beside the rail (the board) reads as the current destination. */
+.rail-nav .text-link.is-current { color: var(--ink); background: var(--surface); border-radius: var(--r-md); }
 
 /* Pointer targets in the narrow rail: smaller heading tools leave the
    workspace name room on the heading's single line. The name keeps a floor so
@@ -62,6 +64,10 @@
 .rail .herd-group-body { border-radius: var(--r-md); }
 
 .rail .card-main { padding: 8px 12px; }
+
+/* Rows in the tab the board beside the rail shows: a light wash, below the selection and waiting grounds. */
+.rail .card.in-board:not(.sel) .card-main { background-color: #141b26; }
+.rail .card.in-board.is-blocked:not(.sel) .card-main { background-color: #221f16; }
 
 .rail .card-name { font-size: var(--text-lead); }
 .rail .card-meta { font-size: var(--text-caption); }
@@ -91,6 +97,24 @@
   color: var(--ink);
   overflow-y: auto;
   padding: 22px 26px 40px;
+}
+
+/* The board fills the main column; the rail beside it carries status and the list. */
+.main-board { position: relative; background: var(--bg); color: var(--ink); }
+.main-board > .board-shell { flex: 1 1 auto; min-height: 0; }
+
+/* A pane opened from the board leads back to it from above the session. */
+.desk-return {
+  flex: none;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+  margin: 6px 10px 0;
+  padding: 0 10px 0 4px;
+  border-radius: var(--r-md);
+  font-weight: 620;
 }
 
 /* Settings scroll as a page; cards must retain their full content height. */

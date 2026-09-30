@@ -64,6 +64,9 @@ export type HerdModelInput = {
   createTab: boolean;
   /** Wall clock for the "changed n minutes ago" column. */
   now: number;
+  /** The board is the page beside the rail: its link is current and its tab's rows are marked. */
+  boardOpen?: boolean;
+  boardTabId?: string;
 };
 
 export type HerdCardView = {
@@ -167,7 +170,7 @@ export type HerdViewModel = {
   create: { label: string; aria: string; disabled: boolean } | null;
   /** Desktop rail links; the phone reaches these through the tab bar. */
   computers: { label: string } | null;
-  board: { label: string };
+  board: { label: string; current: boolean };
   settings: { label: string };
 };
 
@@ -178,11 +181,13 @@ export function herdCardClassName(input: {
   pinned: boolean;
   mark: StatusMark;
   dismissing: boolean;
+  /** The row sits in the tab the board beside the rail is showing. */
+  inBoard?: boolean;
 }): string {
   const attention = (input.mark ? (input.mark === "done" ? " ac-changed ac-done" : " ac-changed") : "")
     + (input.dismissing ? " attn-out" : "");
   return `card status-${input.status}${input.stale ? " unverifiable" : ""}${input.selected ? " sel" : ""}`
-    + `${input.pinned ? " pinned" : ""}${attention}`;
+    + `${input.pinned ? " pinned" : ""}${input.inBoard ? " in-board" : ""}${attention}`;
 }
 
 /** Loss of contact never claims a status: the known pill is replaced, not removed. */
@@ -327,6 +332,7 @@ function cardView(
       pinned,
       mark: input.attention.markOf(agent.paneId),
       dismissing: input.attention.isDismissing(agent.paneId),
+      inBoard: input.boardOpen === true && !!input.boardTabId && agent.tabId === input.boardTabId,
     }),
     index,
     title: identity.title,
@@ -424,7 +430,7 @@ export function buildHerdViewModel(input: HerdModelInput): HerdViewModel {
         }
       : null,
     computers: input.computerCount > 1 ? { label: t("home.computers") } : null,
-    board: { label: t("home.board") },
+    board: { label: t("home.board"), current: input.boardOpen === true },
     settings: { label: t("home.settings") },
   };
 }

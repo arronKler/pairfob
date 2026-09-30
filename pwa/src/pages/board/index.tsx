@@ -9,6 +9,7 @@ import { BoardScreenView } from "../../features/board/components/board-screen";
 import { buildBoardViewModel } from "../../features/board/model/board-view";
 import { createDomainUpdates, useDomainUpdates, type DomainWatch } from "../domain-updates";
 import { boardActions, boardCanvasController, readBoardInput } from "./board-bridge";
+import { BoardZoom } from "./zoom-control";
 import { useEffect, useSyncExternalStore } from "react";
 import { publishedLayout, subscribeLayout } from "../../app/layout-store";
 import { boardInteractionStore, clearBoardInteraction } from "../../features/board/interaction-store";
@@ -49,8 +50,12 @@ const updates = createDomainUpdates(watches);
 
 export function BoardPage() {
   useDomainUpdates(updates);
-  // A phone tab root leaves through the tab bar; elsewhere the board keeps back.
-  const tabRoot = useSyncExternalStore(subscribeLayout, () => publishedLayout()?.shell.tabs === true);
+  // A phone tab root leaves through the tab bar and the desk through its rail,
+  // which also carries the status line; elsewhere the board keeps back.
+  const embedded = useSyncExternalStore(subscribeLayout, () => {
+    const layout = publishedLayout();
+    return layout?.shell.tabs === true || layout?.deskPage === "board";
+  });
   const view = buildBoardViewModel(readBoardInput());
   const attention = boardInteractionStore.get();
   const sameTab = attention.tabId === view.canvas.tabId;
@@ -64,13 +69,14 @@ export function BoardPage() {
       view={view}
       actions={boardActions}
       controller={boardCanvasController}
-      showBack={!tabRoot}
+      showBack={!embedded}
+      zoomControl={<BoardZoom view={view} actions={boardActions} />}
+      notices={created ? <div className="notice notice-status board-created-notice" role="status" aria-label={t("boardMenu.created")}>
+        {/* The operation's own notice already says it was created; this only offers to open it. */}
+        <button type="button" onClick={() => { clearBoardInteraction(); boardCanvasController.openPane(created, null); }}>{t("boardMenu.openCreated")}</button>
+        <button type="button" aria-label={t("close")} onClick={clearBoardInteraction}>×</button>
+      </div> : null}
     />
-    {created && <div className="board-created-notice" role="status">
-      <span>{t("boardMenu.created")}</span>
-      <button type="button" onClick={() => { clearBoardInteraction(); boardCanvasController.openPane(created, null); }}>{t("boardMenu.openCreated")}</button>
-      <button type="button" aria-label={t("close")} onClick={clearBoardInteraction}>×</button>
-    </div>}
     </>
   );
 }

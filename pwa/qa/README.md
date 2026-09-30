@@ -56,7 +56,7 @@ For the renderer fixture, select `terminal-live`, wait for a recorded `terminalO
 
 Available scene families: boot/resuming; initial/manual/failed/add-computer pairing and computer approval; one/many computers; empty/populated/grouped/offline home; attention-rich, attention-rich-updated, attention-empty and attention-legacy task-state lists; responsive desktop empty/guided/chat; settings online/offline/devices/loading/error; quotas populated/loading/error; empty/populated board; workspace loading/root/nested/file/file-loading/changes/diff/diff-loading/error; guided draft/IME/expanded/slash/wrap/selection/row actions/attachment tray (P2P and relay); agent chat streaming/complete/draft/empty/loading/error/older plus Phase 2 long Pi, unread, recovery-refresh and narrow focused-compose scenes; terminal loading/error shell.
 
-The bun-side smoke (`pwa/test-support/qa-app-smoke.test.ts`) drives all 68 scenes through the same fixture actions: 66 render through the stable App — including `terminal-live` and `terminal-open-error`, which mount the real complete-terminal controller with a deterministic mock xterm loader (no WebGL/PTY) and assert the live/error stages, the actual pane id (`w1:p1`), frame injection and engine disposal at teardown — and 2 render the standalone shell fixture. It asserts teardown happens only AFTER each scene's assertions. `pwa/test-support/qa-fixture-api.test.ts` drives the actual `createFixtureAPI` the Vite page boots (six behavioral transition controls, including the shell-to-App root handoff and pairing reset). Those tests plus `pwa/test-support/phase2-chat-qa.test.ts` run automatically as `bun run test:qa`, and the QA types run as `bun run typecheck:qa`; `scripts/verify.sh` runs both gates alongside the production `bun test src`, typecheck and build. The existing captured visual baseline remains the earlier 224 screenshots. The expanded target is a 256-shot browser matrix (64 scenes × zh/en × mobile 390×844 / desktop 1280×900); those additional browser captures were not produced in this run, and the bun gates do not replace them.
+The bun-side smoke (`pwa/test-support/qa-app-smoke.test.ts`) drives all 75 scenes through the same fixture actions: 73 render through the stable App — including `terminal-live` and `terminal-open-error`, which mount the real complete-terminal controller with a deterministic mock xterm loader (no WebGL/PTY) and assert the live/error stages, the actual pane id (`w1:p1`), frame injection and engine disposal at teardown — and 2 render the standalone shell fixture. It asserts teardown happens only AFTER each scene's assertions. `pwa/test-support/qa-fixture-api.test.ts` drives the actual `createFixtureAPI` the Vite page boots (six behavioral transition controls, including the shell-to-App root handoff and pairing reset). Those tests plus `pwa/test-support/phase2-chat-qa.test.ts` run automatically as `bun run test:qa`, and the QA types run as `bun run typecheck:qa`; `scripts/verify.sh` runs both gates alongside the production `bun test src`, typecheck and build. The existing captured visual baseline remains the earlier 224 screenshots. The expanded target is a 256-shot browser matrix (64 scenes × zh/en × mobile 390×844 / desktop 1280×900); those additional browser captures were not produced in this run, and the bun gates do not replace them.
 
 Important gaps and limits:
 
@@ -67,11 +67,13 @@ Important gaps and limits:
 - When recording acceptance evidence, keep source/test, rendered fixture, live transport and physical-device results distinct.
 
 
-The `board` scene also supports context-menu layout feedback: split creates a
-new fixture pane, resize adjusts the initial horizontal pair, swap exchanges
-fixture rectangles, zoom/restoration changes visible fixture panes, and close
-removes the pane from its fixture layout. These deterministic mutations exercise
-PWA feedback and target identity; they do not validate Herdr layout semantics.
+The board scenes (`board`, `board-busy`, `board-zoomed`, `board-offline`) keep a
+split tree per tab (`qa/board-layout.ts`) and publish herdr-shaped `splits`.
+Split, resize, swap, zoom/restoration and close follow herdr 0.9's layout rules
+(resize moves the split on the pane's requested edge, else the opposite one,
+right/down by +amount and left/up by −amount, clamped to 0.1–0.9). They are a
+deterministic stand-in for PWA feedback and target identity, not a substitute
+for checking against a real Herdr.
 Use `hold("resizePane")`, `failNext("resizePane", "unknown_outcome")`, and
 `setConnected(false)` to check busy, ambiguous-result, and reconnect behavior.
 Long-press input must use real browser touch events; invoking the menu directly

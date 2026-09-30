@@ -22,102 +22,6 @@
   min-height: 0;
 }
 
-.board-chrome {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: calc(52px + env(safe-area-inset-top, 0px));
-  padding: env(safe-area-inset-top, 0px) 8px 0;
-  border-bottom: 1px solid var(--line);
-  background: rgba(10, 12, 16, 0.96);
-  flex: none;
-}
-
-.board-title {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  line-height: 1.2;
-}
-
-.board-name {
-  font-size: var(--text-subhead);
-  font-weight: 700;
-}
-
-.board-sub {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: var(--text-caption);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.board-ws {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 2px 6px;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-}
-
-.board-ws.is-static { cursor: default; }
-
-.board-ws-mark {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(110, 168, 254, 0.14);
-}
-
-.board-ws-text { min-width: 0; display: flex; flex-direction: column; }
-
-.board-ws-name {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--text-title);
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.board-ws-name svg { flex: none; color: var(--muted); }
-
-.board-ws-path {
-  font: 500 var(--text-caption) var(--mono);
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.board-marks { flex: none; display: inline-flex; gap: 6px; padding-right: 8px; }
-.board-marks .group-mark { min-height: 0; }
-
-.board-tab-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-left: 6px;
-  border-radius: 50%;
-  background: var(--ok);
-}
-
-.board-tab-dot.is-blocked { background: var(--warn); }
-
 .board-body {
   position: relative;
   display: flex;
@@ -126,269 +30,37 @@
   flex-direction: column;
 }
 
-/* Zoom floats over the canvas, bottom-right, where a thumb already rests. */
-.board-zoom {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--r-md);
-  background: rgba(26, 32, 41, 0.92);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-1);
-  overflow: hidden;
-}
-
-.board-zoom .icon-btn { color: var(--ink); }
-
-.board-zoom-fit {
-  min-height: 44px;
-  border: 0;
-  border-block: 1px solid var(--line);
-  background: none;
-  color: var(--ink);
-  font: 650 var(--text-caption) var(--font);
-  cursor: pointer;
-}
-
-.board-rail {
-  position: relative;
-  flex: none;
-  min-width: 0;
-}
-
-.board-spaces,
-.board-tabs {
-  display: flex;
-  gap: 8px;
-  padding: 4px 10px;
-  overflow-x: auto;
-  flex: none;
-  scrollbar-width: none;
-}
-
-.board-spaces::-webkit-scrollbar,
-.board-tabs::-webkit-scrollbar { display: none; }
-
-.board-tabs {
-  border-bottom: 1px solid var(--line);
-  padding-top: 0;
-}
-
-.board-rail.overflow::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 32px;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, var(--bg));
-}
-
-/*
-  44px of hit area, 32px of ink. The chip stays visually compact by keeping its
-  border on an inner box, so a rail of them does not turn into a wall of pills.
-  The padding is vertical only — that is where the 44px comes from. Horizontal
-  padding here would add to the flex gap and push the pills far apart, so the gap
-  alone decides how close they read.
-*/
-.board-chip,
-.board-tab,
-.board-tab-new {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 6px 0;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font-size: var(--text-caption);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.board-chip > span,
-.board-tab > span,
-.board-tab-new > span {
-  display: flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
-}
-
-.board-chip:active > span,
-.board-tab:active > span,
-.board-tab-new:active > span { background: var(--surface-2); }
-
-.board-chip.on > span,
-.board-tab.on > span {
-  background: rgba(110, 168, 254, 0.16);
-  border-color: rgba(110, 168, 254, 0.45);
-  color: var(--accent);
-}
-
-.board-tab-new { color: var(--accent); }
-
-.board-tab-new > span {
-  background: transparent;
-  border-style: dashed;
-}
-
-.board-canvas {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  touch-action: none;
-  background:
-    radial-gradient(circle at 1px 1px, rgba(233, 237, 243, 0.06) 1px, transparent 0) 0 0 / 22px 22px,
-    #07090d;
-}
-
-.board-stage {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform-origin: 0 0;
-  will-change: transform;
-}
-
-.board-pane {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  appearance: none;
-  -webkit-appearance: none;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-  touch-action: none;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--term-bg);
-  color: var(--term-ink);
-  text-align: left;
-  box-shadow: var(--shadow-1);
-}
-
-/* A tap must be felt before the pane finishes opening. */
-.board-pane {
-  transition: transform var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
-}
-
-.board-pane:active { transform: scale(0.985); }
-
-@media (prefers-reduced-motion: reduce) {
-  .board-pane:active { transform: none; }
-}
-
-.board-pane.sel {
-  border-color: rgba(110, 168, 254, 0.7);
-  box-shadow: 0 0 0 1px rgba(110, 168, 254, 0.35), var(--shadow-1);
-}
-
-/* A waiting tile reads like a waiting list row: amber edge and a warm header. */
-.board-pane.status-blocked {
-  border-color: rgba(255, 178, 36, 0.5);
-  box-shadow: inset 3px 0 0 var(--warn), var(--shadow-1);
-}
-
-.board-pane.sel.status-blocked {
-  border-color: rgba(110, 168, 254, 0.7);
-  box-shadow: inset 3px 0 0 var(--warn), 0 0 0 1px rgba(110, 168, 254, 0.35), var(--shadow-1);
-}
-
-.board-pane.status-blocked .board-pane-head {
-  background: linear-gradient(to bottom, rgba(40, 33, 14, 0.94), rgba(40, 33, 14, 0.3));
-}
-.board-pane.status-working { border-color: rgba(110, 168, 254, 0.4); }
-.board-pane.status-done { border-color: rgba(70, 214, 140, 0.4); }
-
-.board-pane-head {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 4px 6px;
-  background: linear-gradient(to bottom, rgba(7, 9, 13, 0.86), rgba(7, 9, 13, 0.18));
-  pointer-events: none;
-}
-
-.board-pane-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.62rem;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.board-pane-zoom {
-  margin-left: auto;
-  color: var(--warn);
-  font-size: 0.58rem;
-  font-weight: 650;
-}
-
-/* Cell is 8×16. Font size is calibrated in JS so 1ch == BOARD_CELL_W. */
-.board-pane-screen {
-  display: block;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  pointer-events: none;
-  font-family: var(--mono);
-  font-size: 13.333px;
-  line-height: 16px;
-  color: var(--term-ink);
-  background: var(--term-bg);
-  font-variant-ligatures: none;
-  font-kerning: none;
-}
-
-.board-pane-buffer {
-  overflow: hidden;
-  transform-origin: 0 0;
-}
-
-.board-pane-line {
-  display: flex;
-  flex-wrap: nowrap;
-  white-space: pre;
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-  height: 16px;
-  min-height: 16px;
-  line-height: 16px;
-}
-
-.board-pane-line > span {
-  display: block;
-  white-space: pre;
-  line-height: 16px;
-}
+/* Header, tab strip and zoom live in board-chrome.scss. */
+/* Canvas, screen and tiles live in board-canvas.scss. */
 
 .board-shell .statusline { margin: 6px 12px 0; }
-.board-shell .notice,
-.board-shell .banner { margin: 8px 12px 0; }
+
+/* Status, banners and operation notices float over the bottom of the canvas. */
+.board-float {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 68px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.board-float > * { pointer-events: auto; max-width: 100%; margin: 0; box-shadow: var(--shadow-2); }
+.board-float:empty { display: none; }
+.board-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--warn);
+  font-size: var(--text-secondary);
+  font-weight: 620;
+}
+.board-status.is-pending { color: var(--muted); }
+.board-body.is-stale .board-stage { filter: saturate(0.3) brightness(0.85); }

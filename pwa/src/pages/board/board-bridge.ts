@@ -22,6 +22,7 @@
  */
 import {
   boardStore,
+  clearBoardReturn,
   focusBoard,
   liveBoardCamera,
   liveBoardCatalog,
@@ -59,7 +60,7 @@ import type { BoardScreenActions } from "../../features/board/components/board-s
 import type { DashboardAgentCard } from "../../lib/dashboard";
 import type { BoardSpace, BoardTab, TabLayout } from "../../lib/layout";
 import { openPane, wakeLiveReads } from "../../features/connection/controller";
-import { openCreateSheet } from "../home/create-bridge";
+import { openCreateSheet, openQuickCreate } from "../home/create-bridge";
 import { leaveAgentChat } from "../../features/session/chat/agent-chat-controller";
 import { leaveFullTerminal } from "../../features/session/full-terminal/full-terminal";
 import { dropQueuedKeys } from "../../features/session/guided/keys";
@@ -69,6 +70,18 @@ import { herdLivenessModel, herdStatusModel } from "../../features/dashboard/mod
 import { releaseBoardScroll, schedulePanePreview, scrollBoardPane } from "./pane-scroll";
 import { refreshBoardPreviews } from "../../features/board/preview/refresh";
 import { openBoardPaneMenu } from "./pane-menu";
+import { boardInteractionStore, endBoardPlacement } from "../../features/board/interaction-store";
+import type { SplitDirection } from "../../lib/operations";
+import {
+  boardLayoutReason,
+  boardPaneAction,
+  commitBoardResize,
+  commitBoardSwap,
+  toggleBoardZoom,
+} from "./board-layout-ops";
+import { openBoardResizeSheet } from "./resize-sheet";
+import { openBoardSplitSheet } from "./split-sheet";
+import { openBoardTabMenu } from "./tab-menu";
 
 const NUDGE_ZOOM_FACTOR = 1.2;
 
@@ -131,6 +144,12 @@ export function readBoardInput(): BoardModelInput {
       liveness: herdLivenessModel({ connected, networkOnline: online, runtimeKind: runtime.runtimeKind }),
     }),
     canCreateTab: capabilityEnabled("create_tab"),
+    layoutCaps: {
+      resize: capabilityEnabled("resize_pane"),
+      swap: capabilityEnabled("swap_pane"),
+      split: capabilityEnabled("split_pane"),
+      zoom: capabilityEnabled("zoom_pane"),
+    },
     operationBusy: operationBusy(),
     connected,
   };
@@ -246,6 +265,11 @@ function canvasPorts(): BoardCanvasPorts {
     requestPanePreview: schedulePanePreview,
     openPane: (paneId, tile) => openBoardPane(paneId, tile),
     openMenu: showBoardPaneMenu,
+    // A long press lifts the tile; dropping it on a neighbour swaps them.
+    commitSwap: commitBoardSwap,
+    swapReason: () => boardLayoutReason("swap"),
+    placementActive: () => !!boardInteractionStore.get().placementKind,
+    endPlacement: endBoardPlacement,
   };
 }
 
@@ -268,8 +292,35 @@ export function revealBoardPane(paneId: string): void {
   applyBoardTransform(host.stage);
 }
 
+/** Placement picked a side; the split sheet asks what to start there. */
+export function pickBoardSplit(paneId: string, direction: SplitDirection): void {
+  openBoardSplitSheet(paneId, direction, revealBoardPane);
+}
+
+/**
+ * Where the camera sits against the whole-tab fit, for the zoom control. The
+ * stored `fitted` flag only says a fit happened once (pans keep it), so this
+ * measures the mounted canvas instead.
+ */
+export function boardZoomState(): { atFit: boolean; percent: number } {
+  const camera = readBoardCamera();
+  const percent = Math.round(camera.scale * 100);
+  if (!host.viewport || !host.layout || !host.viewport.clientWidth) return { atFit: true, percent };
+  const fit = fitCameraToViewport(host.viewport, host.layout);
+  const atFit = Math.abs(fit.scale - camera.scale) < 0.002 && Math.abs(fit.panX - camera.panX) < 1.5
+    && Math.abs(fit.panY - camera.panY) < 1.5;
+  return { atFit, percent };
+}
+
 export function createBoardCanvasController(): BoardCanvasController {
   return {
+    commitResize: commitBoardResize,
+    commitSwap: commitBoardSwap,
+    pickSplit: pickBoardSplit,
+    layoutReason: boardLayoutReason,
+    openResizeSheet: openBoardResizeSheet,
+    toggleZoom: toggleBoardZoom,
+    paneAction: boardPaneAction,
     openMenu: showBoardPaneMenu,
     applyTransform(stage) {
       applyBoardTransform(stage);
@@ -299,6 +350,8 @@ export function createBoardCanvasController(): BoardCanvasController {
 }
 
 export async function openBoard(from?: { workspaceId?: string; tabId?: string }): Promise<void> {
+  // Arriving on the board starts over: only the next tile it opens earns a way back.
+  clearBoardReturn();
   parkComposeView();
   if (isFullTerminal()) await leaveFullTerminal({ rememberGuided: false, paint: false });
   if (isAgentChat()) leaveAgentChat({ rememberGuided: false, paint: false });
@@ -364,6 +417,8 @@ export function boardScreenActions(): BoardScreenActions {
     selectWorkspace,
     selectTab,
     createTab: newTabInBoard,
+    quickCreate: openQuickCreate,
+    tabMenu: (tabId) => openBoardTabMenu(tabId, newTabInBoard),
     fit: fitCurrentBoard,
     zoom: nudgeBoardZoom,
   };
@@ -374,3 +429,4 @@ export const boardActions = boardScreenActions();
 export const boardCanvasController = createBoardCanvasController();
 
 export { releaseBoardScroll };
+export { boardLayoutReason, boardPaneAction, commitBoardResize, commitBoardSwap, openBoardResizeSheet, toggleBoardZoom };

@@ -41,5 +41,8 @@
 @use "./features/workspace/file-icons";
 @use "./features/workspace/workspace-pending";
 @use "./features/board/styles/board";
+@use "./features/board/styles/board-canvas";
 @use "./features/board/styles/pane-menu";
+@use "./features/board/styles/board-chrome";
+@use "./features/board/styles/board-overlays";
 @use "./styles/motion";

@@ -152,7 +152,7 @@ describe("board canvas binding through the page controller", () => {
     const view = buildBoardViewModel({
       workspaceList: [], tabList: [], agents: [agent("w1:p1")], layouts: [displayed],
       workspaceId: "w1", tabId: "w1:t1", selectedPaneId: "", status: { tone: "live", text: "" },
-      canCreateTab: false, operationBusy: false, connected: true,
+      canCreateTab: false, layoutCaps: { resize: true, swap: true, split: true, zoom: true }, operationBusy: false, connected: true,
     });
     renderReact(<BoardCanvasView canvas={view.canvas} controller={boardCanvasController} />);
     const viewport = appRoot().querySelector<HTMLElement>(".board-canvas")!;

@@ -38,12 +38,33 @@ describe("composition selection", () => {
     expect(computeLayout(input({ phase: "connect" })).lockScroll).toBeFalse();
   });
 
-  test("workspace and board win over the desk and the pane", () => {
+  test("the workspace wins over the desk and the pane; the phone board owns its screen", () => {
     expect(computeLayout(input({ screen: "workspace" })).mode).toBe("workspace");
     expect(computeLayout(input({ screen: "workspace", desk: true })).mode).toBe("workspace");
-    expect(computeLayout(input({ screen: "board", desk: true })).mode).toBe("board");
     expect(computeLayout(input({ screen: "workspace" })).shell.workspace).toBeTrue();
+    expect(computeLayout(input({ screen: "board" })).mode).toBe("board");
     expect(computeLayout(input({ screen: "board" })).shell.board).toBeTrue();
+  });
+
+  test("a wide board sits in the desk's main column beside the list", () => {
+    const board = computeLayout(input({ screen: "board", desk: true, hasSelectedPane: true }));
+    expect(board.mode).toBe("desk");
+    expect(board.deskPage).toBe("board");
+    expect(board.deskChild).toBeNull();
+    expect(board.shell.desk).toBeTrue();
+    expect(board.shell.board).toBeFalse();
+    expect(board.shell.tabs).toBeFalse();
+    expect(board.lockScroll).toBeTrue();
+    expect(board.key).not.toBe(computeLayout(input({ screen: "home", desk: true })).key);
+  });
+
+  test("a desk pane opened from the board leads back to it; the phone pane keeps its own back", () => {
+    expect(computeLayout(input({ screen: "pane", desk: true, hasSelectedPane: true, boardReturn: true })).deskReturn).toBe("board");
+    expect(computeLayout(input({ screen: "pane", desk: true, hasSelectedPane: true })).deskReturn).toBeNull();
+    expect(computeLayout(input({ screen: "pane", desk: true, hasSelectedPane: true, agentChat: true, boardReturn: true })).deskReturn)
+      .toBe("board");
+    expect(computeLayout(input({ screen: "pane", boardReturn: true })).deskReturn).toBeNull();
+    expect(computeLayout(input({ screen: "board", desk: true, boardReturn: true })).deskReturn).toBeNull();
   });
 
   test("the complete terminal takes the whole page, even on a wide layout", () => {
@@ -134,9 +155,10 @@ describe("phone tab roots", () => {
   });
 
   test("the tab flag is part of the composition identity", () => {
-    const tabs = computeLayout(input({ screen: "board" }));
-    const desk = computeLayout(input({ screen: "board", desk: true }));
-    expect(tabs.mode).toBe(desk.mode);
-    expect(tabs.key).not.toBe(desk.key);
+    // The wide board left the full-screen board mode; the phone and desktop boot share one.
+    const tabs = computeLayout(input({ phase: "resuming" }));
+    const plain = computeLayout(input({ phase: "resuming", desk: true }));
+    expect(tabs.mode).toBe(plain.mode);
+    expect(tabs.key).not.toBe(plain.key);
   });
 });

@@ -46,6 +46,8 @@ import { herdLivenessModel, herdStatusModel } from "../../features/dashboard/mod
 import { buildHerdViewModel, type HerdHostView, type HerdModelInput, type HerdStatus, type HerdViewModel } from "../../features/dashboard/model/herd-view";
 import { morphingPane } from "../../app/transition";
 import { openBoard } from "../board/board-bridge";
+import { boardStore, clearBoardReturn } from "../../features/board/layout-store";
+import { navigationStore } from "../../app/navigation-store";
 import { openListPaneMenu, openListWorkspaceMenu } from "./object-menu";
 
 /** Completion acknowledgement for a batch that just landed, while visible. */
@@ -177,6 +179,8 @@ export function readHerdInput(painted: HerdPaint): HerdModelInput {
     operationBusy: operationBusy(),
     computerCount: computers.computers.length,
     morphingPaneId: morphingPane(),
+    boardOpen: navigationStore.get().screen === "board",
+    boardTabId: boardStore.get().boardTabId,
   };
 }
 
@@ -226,6 +230,7 @@ export function herdActionPorts(): HerdActionPorts {
     // Read when the press lands: a hold that began while idle must still be
     // refused once a mutation is in flight or the session dropped.
     canOpenMenu: () => !operationBusy() && liveSession()?.isConnected() === true,
+    forgetBoardReturn: clearBoardReturn,
     toggleGroup: toggleHerdGroup,
     openBoard: () => {
       void openBoard();

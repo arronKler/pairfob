@@ -162,10 +162,11 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".board-canvas")).toMatch(/touch-action:\s*none/);
     expect(rule(".board-pane")).toMatch(/position:\s*absolute/);
     expect(rule(".board-pane")).toMatch(/touch-action:\s*none/);
-    // 44px of hit area around a 32px pill: the target grew, the rail did not.
-    expect(css).toMatch(/\.board-chip,\s*\.board-tab,\s*\.board-tab-new\s*\{[^}]*min-height:\s*44px/);
-    expect(css).toMatch(/\.board-chip > span,\s*\.board-tab > span,\s*\.board-tab-new > span\s*\{[^}]*min-height:\s*32px/);
-    expect(css).toMatch(/\.board-rail\.overflow::after\s*\{[^}]*pointer-events:\s*none/);
+    // The tabs are a scrollable segmented strip beside a square "+".
+    expect(rule(".seg.is-scroll")).toMatch(/overflow-x:\s*auto/);
+    expect(rule(".board-shell .board-tab-new")).toMatch(/width:\s*46px/);
+    expect(rule(".board-shell .board-tab-new")).toMatch(/height:\s*46px/);
+    expect(css).toMatch(/\.board-shell \.board-rail\.overflow \.board-tabs\s*\{[^}]*mask-image/);
     expect(rule(".board-pane-screen")).toMatch(/overflow:\s*hidden/);
     expect(rule(".board-pane-buffer")).toMatch(/transform-origin:\s*0 0/);
     expect(css).not.toMatch(/\.topbar-board\s*\{/);
@@ -255,12 +256,11 @@ describe("UI accessibility guardrails", () => {
     expect(phone).toMatch(/dialog\.modal:not\(\.sheet\)\s*>\s*form\s*\{[^}]*overflow-y:\s*auto/);
   });
 
-  test("board rail pills are spaced by the gap, not by padding on their hit area", () => {
-    // Horizontal padding on the 44px target adds to the gap on both sides, which
-    // is what spread the rail out.
-    expect(rule(".board-chip,\n.board-tab,\n.board-tab-new")).toMatch(/padding:\s*6px 0/);
-    expect(rule(".board-spaces,\n.board-tabs")).toMatch(/gap:\s*8px/);
-    expect(rule(".board-chip > span,\n.board-tab > span,\n.board-tab-new > span")).toMatch(/min-height:\s*32px/);
+  test("board tabs keep a 44px target without growing the strip", () => {
+    // 36px of ink inside a 4px-padded track; the target reaches into the padding.
+    expect(rule(".board-shell .board-tab")).toMatch(/min-height:\s*36px/);
+    expect(rule(".board-shell .board-tab::after")).toMatch(/inset:\s*-5px 0/);
+    expect(rule(".board-shell .board-rail")).toMatch(/gap:\s*var\(--space-2\)/);
   });
 
   test("compose is a growing textarea, not a single-line input", () => {

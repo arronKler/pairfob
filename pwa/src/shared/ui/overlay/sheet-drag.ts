@@ -134,6 +134,8 @@ export function bindSheetDrag({ dialog, form, scroller, close, detents }: SheetD
       const target = event.target as Element | null;
       // Typing in an operation dialog must not be interrupted by a drag.
       if (target?.closest?.("input, textarea, select")) return;
+      // Content with its own drag (a layout preview's dividers and lift) opts out.
+      if (target?.closest?.("[data-sheet-gesture]")) return;
       // A scrolled list keeps its own scroll; the sheet only follows from the top.
       const inScroller = scroller && target && scroller.contains(target);
       if (inScroller && scroller.scrollTop > 0) return;

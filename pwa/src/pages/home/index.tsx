@@ -6,6 +6,8 @@ import { dashboardStore } from "../../features/dashboard/catalog-store";
 import { preferencesStore } from "../../features/settings/preferences-store";
 import { runtimeStore } from "../../features/connection/runtime-store";
 import { sessionStore } from "../../features/session/session-store";
+import { boardStore, type BoardRecord } from "../../features/board/layout-store";
+import { navigationStore } from "../../app/navigation-store";
 import { createHerdActions } from "../../features/dashboard/actions";
 import { HerdScreen } from "../../features/dashboard/components/herd-screen";
 import { buildHerdViewModel, type HerdViewModel } from "../../features/dashboard/model/herd-view";
@@ -38,6 +40,10 @@ const watches: DomainWatch[] = [
   { store: computersStore },
   { store: runtimeStore },
   { store: sessionStore },
+  // The desk rail marks the board's tab and its own Board link. Keyed on the tab
+  // so camera writes at pointer speed never re-render the list.
+  { store: navigationStore, keyOf: (snapshot) => (snapshot as { screen: string }).screen },
+  { store: boardStore, keyOf: (snapshot) => (snapshot as BoardRecord).boardTabId },
 ];
 
 const updates = createDomainUpdates(watches);

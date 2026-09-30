@@ -6,6 +6,8 @@
   above the one primary button.
 */
 
+@use "./pane-layout-preview";
+
 /* --- Height follows content ---------------------------------------------------
    Short pages leave the pane visible above the sheet so in-place changes are
    seen landing; only pages whose content is long by nature grow tall. */
@@ -300,119 +302,6 @@
 
 .pane-precise > .create-input { margin-bottom: 4px; }
 
-/* --- Layout preview (layout page and split page) ------------------------------- */
-
-.pane-layout-preview {
-  position: relative;
-  width: 100%;
-  max-height: 14rem;
-  margin: 12px 0 0;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: #0e1218;
-  touch-action: pan-y;
-}
-
-.pane-layout-cell {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  padding: 3px;
-  border: 0;
-  background: none;
-  color: inherit;
-  transition: left var(--dur-3) var(--ease), top var(--dur-3) var(--ease),
-    width var(--dur-3) var(--ease), height var(--dur-3) var(--ease);
-}
-
-.pane-layout-preview.is-dragging .pane-layout-cell { transition: none; }
-
-.pane-layout-cell > span {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  padding: 0 4px;
-  border-radius: 7px;
-  background: var(--surface-2);
-  color: var(--muted);
-  font: 600 var(--text-caption) / 1.2 var(--mono);
-  text-align: center;
-}
-
-.pane-layout-cell b {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  font-weight: inherit;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.pane-layout-cell em {
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.8;
-}
-
-.pane-layout-cell.is-current > span {
-  background: rgba(110, 168, 254, 0.16);
-  box-shadow: inset 0 0 0 1.5px var(--accent);
-  color: var(--accent);
-}
-
-.pane-layout .pane-layout-cell.is-current { touch-action: none; user-select: none; -webkit-user-select: none; }
-
-.pane-layout-cell.is-lifted {
-  z-index: 2;
-  transition: none;
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.5));
-}
-
-.pane-layout-cell.is-other { cursor: pointer; }
-
-.pane-layout-cell.is-other:active > span { background: var(--line); }
-
-.pane-layout-cell.is-target > span { box-shadow: inset 0 0 0 1.5px var(--ink); color: var(--ink); }
-
-.pane-layout-cell.is-new > span {
-  background: rgba(110, 168, 254, 0.06);
-  box-shadow: none;
-  outline: 1.5px dashed var(--accent);
-  outline-offset: -1.5px;
-  color: var(--accent);
-}
-
-/* A 28px grab target centred on the edge; the visible line is 3px. */
-.pane-divider {
-  position: absolute;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  touch-action: none;
-  cursor: col-resize;
-}
-
-.pane-divider.is-v { width: 28px; margin-left: -14px; }
-
-.pane-divider.is-h { height: 28px; margin-top: -14px; cursor: row-resize; }
-
-.pane-divider::before {
-  content: "";
-  border-radius: 2px;
-  background: var(--accent);
-}
-
-.pane-divider.is-v::before { width: 3px; height: 40%; }
-
-.pane-divider.is-h::before { width: 40%; height: 3px; }
-
-.pane-divider:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: var(--r-sm); }
-
-.pane-divider[aria-disabled="true"] { opacity: 0.4; pointer-events: none; }
-
 .pane-split-plus {
   position: absolute;
   z-index: 3;
@@ -654,6 +543,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pane-layout-cell { transition: none; }
   .pane-skel { animation: none; }
 }

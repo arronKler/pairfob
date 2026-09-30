@@ -5,6 +5,7 @@ export const enShell: Record<keyof typeof zhShell, string> = {
   "tabs.aria": "Main navigation",
   "tabs.sessions": "Sessions",
   "tabs.board": "Board",
+  "desk.backToBoard": "Back to board",
   "tabs.settings": "Settings",
   "tabs.attentionAria": "{count} sessions need you",
   "tabs.updateAria": "Update available",

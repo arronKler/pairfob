@@ -6,6 +6,7 @@ import { zhSettingsV3 } from "./i18n-settings-v3";
 import { zhRowbarV2 } from "./i18n-rowbar-v2";
 import { zhAgentInfo } from "./i18n-zh-agent-info";
 import { zhBoardMenu } from "./i18n-board-menu";
+import { zhBoardCanvas } from "./i18n-board-canvas";
 import { zhDialogs } from "./i18n-dialogs";
 import { zhShell } from "./i18n-zh-shell";
 import { zhWorkspace } from "./i18n-zh-workspace.ts";
@@ -25,6 +26,7 @@ export const zh = {
   ...zhShell,
   ...zhAgentInfo,
   ...zhBoardMenu,
+  ...zhBoardCanvas,
   ...zhDialogs,
   "fileActions.rename": "重命名",
   "fileActions.delete": "删除文件",
@@ -277,7 +279,6 @@ export const zh = {
   "board.zoomOut": "缩小",
   "board.empty": "还没有可以放到画板上的会话。",
   "board.emptyTitle": "画板是空的",
-  "board.zoomed": "电脑上已铺满这一格",
   "board.workspaceAria": "切换工作区",
   "board.tabAria": "切换标签页",
   "board.paneAria": "打开 {title}",

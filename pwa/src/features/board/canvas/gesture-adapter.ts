@@ -8,11 +8,20 @@
  * reopening a pane. Everything stateful lives in `BoardCanvasPorts`, so this
  * module is independent of the application store implementation, and
  * disposing it retires every listener, frame and in-flight gesture.
+ *
+ * A long press lifts the tile when the ports can swap (see `lift-swap.ts`):
+ * releasing in place still opens the menu, dropping on a neighbour swaps.
+ * Presses on overlay controls (`[data-board-overlay]`: divider handles,
+ * placement ghosts) are theirs alone, so a divider drag never pans. The
+ * camera keys (0 fit, ⌘/Ctrl ± zoom) live here with the camera.
  */
 import type { TabLayout } from "../../../lib/layout";
+import type { LayoutDirection } from "../../../lib/operations";
 import { boardDragMode, boardScrollLines, BOARD_GESTURE_SLOP_PX } from "../model/gesture";
 import { panCamera, type BoardCamera } from "../model/camera";
-import { applyCameraTransform, fitCameraToViewport, zoomCameraAtPoint } from "./transform";
+import { swapTargets } from "../model/lift";
+import { startLift, type LiftSession } from "./lift-swap";
+import { applyCameraTransform, fitCameraToViewport, viewportCenter, zoomCameraAtPoint } from "./transform";
 
 export type BoardCanvasPorts = {
   readCamera(): BoardCamera;
@@ -30,11 +39,27 @@ export type BoardCanvasPorts = {
   requestPanePreview(paneId: string): void;
   openPane(paneId: string, tile?: HTMLElement): void;
   openMenu?(paneId: string, point: { x: number; y: number }, tile: HTMLElement): void;
+  /** Swap with a neighbour. Without it a long press opens the menu as before. */
+  commitSwap?(paneId: string, direction: LayoutDirection): Promise<void> | void;
+  /** Why a swap cannot run now; a non-empty reason also falls back to the menu. */
+  swapReason?(): string;
+  /**
+   * Placement mode (pick where a split goes / whom to swap with). While it is
+   * on, pan and pinch still work, but a tap anywhere but a ghost or target
+   * leaves placement instead of opening a pane, and a long press does nothing.
+   */
+  placementActive?(): boolean;
+  endPlacement?(): void;
 };
 
 export const BOARD_LONG_PRESS_MS = 500;
 
 const WHEEL_ZOOM_FACTOR = 1.08;
+const KEY_ZOOM_FACTOR = 1.2;
+
+function onOverlay(event: Event): boolean {
+  return event.target instanceof Element && !!event.target.closest("[data-board-overlay]");
+}
 
 function paneIdFromEvent(event: Event): string {
   const node = event.target instanceof Element ? event.target.closest(".board-pane") : null;
@@ -59,6 +84,12 @@ export function bindBoardCanvasGestures(
   });
 
   const pointers = new Map<number, { x: number; y: number }>();
+  /**
+   * Fingers that went down on an overlay control (a divider handle) while no
+   * canvas gesture ran. The control owns them alone; when a second finger lands
+   * on the canvas they join it as a pinch (the handle gives its drag up).
+   */
+  const overlayPointers = new Map<number, { x: number; y: number }>();
   let origin = { x: 0, y: 0 };
   let hitPane = "";
   let mode: "undecided" | "pan" | "scroll" | "pinch" = "undecided";
@@ -68,7 +99,9 @@ export function bindBoardCanvasGestures(
   let held = false;
   let syntheticClick = false;
   let longPress: ReturnType<typeof setTimeout> | undefined;
+  let lift: { session: LiftSession; paneId: string; tile: HTMLElement } | null = null;
   const cancelLongPress = () => { clearTimeout(longPress); longPress = undefined; };
+  const dropLift = () => { lift?.session.cancel(); lift = null; };
 
   const point = (event: PointerEvent) => ({ x: event.clientX, y: event.clientY });
 
@@ -94,6 +127,8 @@ export function bindBoardCanvasGestures(
 
   const onDown = (event: PointerEvent) => {
     if (retired) return;
+    if (!pointers.size && onOverlay(event)) { overlayPointers.set(event.pointerId, point(event)); return; }
+    if (lift) { dropLift(); held = true; }
     if (event.button === 2) { held = false; moved = false; cancelLongPress(); return; }
     if (event.button !== 0) return;
     if (!pointers.size && event.target instanceof Element && event.target.closest(".board-pane-more")) {
@@ -103,6 +138,8 @@ export function bindBoardCanvasGestures(
     if (held && pointers.size) return;
     held = false;
     const next = point(event);
+    for (const [id, at] of overlayPointers) pointers.set(id, at);
+    overlayPointers.clear();
     pointers.set(event.pointerId, next);
     origin = next;
     hitPane = paneIdFromEvent(event);
@@ -121,19 +158,28 @@ export function bindBoardCanvasGestures(
       mode = "pinch";
       hitPane = "";
     }
-    if (pointers.size === 1 && hitPane && ports.openMenu && event.pointerType !== "mouse") {
+    if (pointers.size === 1 && hitPane && ports.openMenu && event.pointerType !== "mouse" && !ports.placementActive?.()) {
       const tile = (event.target as Element).closest<HTMLElement>(".board-pane");
       if (tile) longPress = setTimeout(() => {
         if (retired || moved || pointers.size !== 1 || !tile.isConnected) return;
         held = true;
         moved = true;
-        ports.openMenu!(hitPane, origin, tile);
+        const targets = ports.commitSwap && !ports.swapReason?.() ? swapTargets(layout, hitPane) : new Map();
+        if (!targets.size) { ports.openMenu!(hitPane, origin, tile); return; }
+        lift = { session: startLift(viewport, tile, hitPane, targets, origin, BOARD_GESTURE_SLOP_PX), paneId: hitPane, tile };
       }, BOARD_LONG_PRESS_MS);
     }
     if (event.pointerType === "touch" || event.pointerType === "pen") event.preventDefault();
   };
 
   const onMove = (event: PointerEvent) => {
+    if (overlayPointers.has(event.pointerId)) { overlayPointers.set(event.pointerId, point(event)); return; }
+    if (lift && pointers.has(event.pointerId)) {
+      pointers.set(event.pointerId, point(event));
+      lift.session.move(point(event));
+      event.preventDefault();
+      return;
+    }
     if (retired || held || !pointers.has(event.pointerId)) return;
     const prev = pointers.get(event.pointerId)!;
     const next = point(event);
@@ -182,11 +228,26 @@ export function bindBoardCanvasGestures(
   };
 
   const end = (event: PointerEvent) => {
+    overlayPointers.delete(event.pointerId);
     if (retired || !pointers.has(event.pointerId)) return;
     cancelLongPress();
     pointers.delete(event.pointerId);
+    if (lift) {
+      const { session, paneId, tile } = lift;
+      lift = null;
+      const result = session.finish();
+      if (result.target && result.direction) void ports.commitSwap?.(paneId, result.direction);
+      else if (!result.moved && tile.isConnected) ports.openMenu?.(paneId, origin, tile);
+      event.preventDefault();
+      return;
+    }
     if (pointers.size < 2) pinch = 0;
     if (pointers.size === 0) {
+      // In placement a tap only leaves placement; the ghosts and targets are overlays of their own.
+      if (!moved && !held && ports.placementActive?.()) {
+        ports.endPlacement?.();
+        moved = true;
+      }
       // A gesture that never moved is a tap: hand it to the tile it started on.
       if (!moved && !held && hitPane) {
         for (const tile of viewport.querySelectorAll<HTMLButtonElement>(".board-pane")) {
@@ -205,8 +266,10 @@ export function bindBoardCanvasGestures(
   };
 
   const cancel = (event: PointerEvent) => {
+    overlayPointers.delete(event.pointerId);
     if (!pointers.has(event.pointerId)) return;
     cancelLongPress();
+    dropLift();
     pointers.clear();
     hitPane = "";
     moved = true;
@@ -231,6 +294,24 @@ export function bindBoardCanvasGestures(
     }
     event.preventDefault();
     zoomAt(event.clientX, event.clientY, ports.readCamera().scale * wheelFactor(event.deltaY));
+  };
+
+  /** Camera keys; the pane keys (select, swap, resize…) are the overlay's. */
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (retired || event.defaultPrevented || event.altKey) return;
+    const modified = event.metaKey || event.ctrlKey;
+    if (!modified && !event.shiftKey && event.key === "0") {
+      writeCamera(fitCameraToViewport(viewport, layout));
+    } else if (modified && (event.key === "=" || event.key === "+")) {
+      const center = viewportCenter(viewport);
+      zoomAt(center.x, center.y, ports.readCamera().scale * KEY_ZOOM_FACTOR);
+    } else if (modified && event.key === "-") {
+      const center = viewportCenter(viewport);
+      zoomAt(center.x, center.y, ports.readCamera().scale / KEY_ZOOM_FACTOR);
+    } else {
+      return;
+    }
+    event.preventDefault();
   };
 
   const onClick = (event: MouseEvent) => {
@@ -262,10 +343,12 @@ export function bindBoardCanvasGestures(
   viewport.addEventListener("wheel", onWheel, { passive: false });
   viewport.addEventListener("click", onClick, true);
   viewport.addEventListener("contextmenu", onContextMenu, true);
+  viewport.addEventListener("keydown", onKeyDown);
 
   return () => {
     retired = true;
     cancelLongPress();
+    dropLift();
     for (const id of pointers.keys()) {
       if (viewport.hasPointerCapture?.(id)) viewport.releasePointerCapture(id);
     }
@@ -279,6 +362,7 @@ export function bindBoardCanvasGestures(
     viewport.removeEventListener("wheel", onWheel);
     viewport.removeEventListener("click", onClick, true);
     viewport.removeEventListener("contextmenu", onContextMenu, true);
+    viewport.removeEventListener("keydown", onKeyDown);
   };
 }
 

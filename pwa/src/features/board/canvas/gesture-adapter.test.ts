@@ -43,7 +43,7 @@ function ports(camera: BoardCamera, record: Recorded, applied = true): BoardCanv
   };
 }
 
-function harness(camera = boardCamera(1, 0, 0, true), applied = true) {
+function harness(camera = boardCamera(1, 0, 0, true), applied = true, extra: Partial<BoardCanvasPorts> = {}) {
   const record = recorded();
   const viewport = document.createElement("div");
   viewport.className = "board-canvas";
@@ -58,7 +58,7 @@ function harness(camera = boardCamera(1, 0, 0, true), applied = true) {
   stage.append(tile);
   viewport.append(stage);
   document.body.append(viewport);
-  const stop = bindBoardCanvasGestures(viewport, stage, layout, ports(camera, record, applied));
+  const stop = bindBoardCanvasGestures(viewport, stage, layout, { ...ports(camera, record, applied), ...extra });
   return { record, viewport, stage, tile, stop, camera };
 }
 
@@ -100,7 +100,7 @@ const microtasks = async () => {
 
 beforeEach(resetBoardTestDOM);
 afterEach(() => {
-  document.body.replaceChildren();
+  for (const node of [...document.body.children]) if (node.id !== "app") node.remove();
 });
 
 describe("board canvas gesture adapter", () => {
@@ -125,6 +125,26 @@ describe("board canvas gesture adapter", () => {
     retired.stop();
     await settle();
     expect(retired.record.cameras).toEqual([]);
+  });
+
+  test("in placement a tap only leaves placement, while a drag still pans", () => {
+    let active = true;
+    let ended = 0;
+    const { tile, record, stop } = harness(undefined, true, {
+      placementActive: () => active,
+      endPlacement: () => { ended += 1; active = false; },
+    });
+    pointer(tile, "pointerdown", { x: 10, y: 10 });
+    pointer(tile, "pointerup", { x: 10, y: 10 });
+    expect(ended).toBe(1);
+    expect(record.clicks).toBe(0);
+    active = true;
+    pointer(tile, "pointerdown", { x: 10, y: 10 });
+    pointer(tile, "pointermove", { x: 60, y: 12 });
+    pointer(tile, "pointerup", { x: 60, y: 12 });
+    expect(record.cameras.length).toBeGreaterThan(0);
+    expect(ended).toBe(1);
+    stop();
   });
 
   test("a drag past the slop pans by the travelled delta and suppresses the click", async () => {

@@ -26,7 +26,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  document.body.replaceChildren();
+  for (const node of [...document.body.children]) if (node.id !== "app") node.remove();
 });
 
 describe("board rail visibility", () => {
@@ -56,46 +56,42 @@ describe("board rail visibility", () => {
     expect(rail.classList.contains("overflow")).toBe(false);
   });
 
-  test("only a selected chip is revealed", () => {
+  test("only the selected tab is revealed", () => {
     const root = element("board-shell");
-    const plain = element("board-chip");
-    const on = spyScroll(element("board-chip on"));
+    const plain = element("board-tab");
+    const on = spyScroll(element("board-tab on"));
     root.append(plain, on);
     document.body.append(root);
     revealSelection(root);
-    expect(revealed).toEqual(["board-chip on"]);
+    expect(revealed).toEqual(["board-tab on"]);
   });
 
   test("measuring happens on a frame, and disposing cancels it", async () => {
     const root = element("board-shell");
-    const spaceRail = element("board-rail");
-    const spaces = element("board-spaces", { scrollWidth: 500, clientWidth: 100 });
     const tabRail = element("board-rail");
-    const tabs = element("board-tabs", { scrollWidth: 50, clientWidth: 100 });
+    const tabs = element("board-tabs", { scrollWidth: 500, clientWidth: 100 });
     const chip = spyScroll(element("board-tab on"));
-    root.append(spaceRail, tabRail, chip);
-    spaceRail.append(spaces);
+    root.append(tabRail, chip);
     tabRail.append(tabs);
     document.body.append(root);
 
-    const cancel = scheduleRailVisibility({ root, spaceRail, spaces, tabRail, tabs });
-    expect(spaceRail.classList.contains("overflow")).toBe(false);
-    await settle();
-    expect(spaceRail.classList.contains("overflow")).toBe(true);
+    const cancel = scheduleRailVisibility({ root, tabRail, tabs });
     expect(tabRail.classList.contains("overflow")).toBe(false);
+    await settle();
+    expect(tabRail.classList.contains("overflow")).toBe(true);
     expect(revealed).toEqual(["board-tab on"]);
 
-    spaceRail.classList.remove("overflow");
-    const cancelled = scheduleRailVisibility({ root, spaceRail, spaces, tabRail, tabs });
+    tabRail.classList.remove("overflow");
+    const cancelled = scheduleRailVisibility({ root, tabRail, tabs });
     cancelled();
     await settle();
-    expect(spaceRail.classList.contains("overflow")).toBe(false);
+    expect(tabRail.classList.contains("overflow")).toBe(false);
     expect(revealed).toEqual(["board-tab on"]);
     cancel();
   });
 
   test("a screen that has not mounted its rails measures nothing", async () => {
-    const cancel = scheduleRailVisibility({ root: null, spaceRail: null, spaces: null, tabRail: null, tabs: null });
+    const cancel = scheduleRailVisibility({ root: null, tabRail: null, tabs: null });
     await settle();
     expect(revealed).toEqual([]);
     cancel();

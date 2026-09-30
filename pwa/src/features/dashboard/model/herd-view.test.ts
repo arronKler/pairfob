@@ -199,8 +199,20 @@ describe("herd chrome gates", () => {
     expect(buildHerdViewModel(input()).computers).toBeNull();
     expect(buildHerdViewModel(input({ computerCount: 2 })).computers).toEqual({ label: t("home.computers") });
     const view = buildHerdViewModel(input());
-    expect(view.board).toEqual({ label: t("home.board") });
+    expect(view.board).toEqual({ label: t("home.board"), current: false });
     expect(view.settings).toEqual({ label: t("home.settings") });
+  });
+
+  test("the board beside the rail makes its link current and marks its tab's rows", () => {
+    const agents = [agent("w1:p1", "w1", "idle", { tabId: "w1:t1" }), agent("w1:p2", "w1", "idle", { tabId: "w1:t2" })];
+    const view = buildHerdViewModel(input({ agents, boardOpen: true, boardTabId: "w1:t1" }));
+    expect(view.board.current).toBeTrue();
+    const cards = view.groups.flatMap((group) => group.cards);
+    expect(cards.find((card) => card.paneId === "w1:p1")?.className).toContain(" in-board");
+    expect(cards.find((card) => card.paneId === "w1:p2")?.className).not.toContain("in-board");
+    // Without the board on screen no row is marked, whatever tab the board last showed.
+    const closed = buildHerdViewModel(input({ agents, boardOpen: false, boardTabId: "w1:t1" }));
+    expect(closed.groups.flatMap((group) => group.cards).some((card) => card.className.includes("in-board"))).toBeFalse();
   });
 
   test("an empty herd explains itself and gates its action on busy state", () => {

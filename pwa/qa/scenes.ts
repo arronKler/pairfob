@@ -92,6 +92,8 @@ export const scenes: FixtureScene[] = [
   { name: "board", description: "Weighted split layout with ANSI previews" },
   { name: "board-empty", description: "Board without workspaces" },
   { name: "board-busy", description: "Busy computer board: multi-pane tabs with per-pane previews" },
+  { name: "board-zoomed", description: "Busy board whose first tab is zoomed on the computer" },
+  { name: "board-offline", description: "Busy board while reconnecting: read-only layout" },
   { name: "workspace-loading", description: "Cold directory skeleton" },
   { name: "workspace-files", description: "Root file browser" },
   { name: "workspace-directory", description: "Nested directory breadcrumbs" },
@@ -130,7 +132,7 @@ export const scenes: FixtureScene[] = [
 
 const AGENT_KINDS = ["codex", "claude", "grok", "pi"];
 
-const BUSY_SCENES = new Set(["home-busy", "board-busy"]);
+const BUSY_SCENES = new Set(["home-busy", "board-busy", "board-zoomed", "board-offline"]);
 
 /** The computer a scene talks to: busy scenes bring their own snapshot and screens. */
 export function sceneSource(name: string): SessionSource {
@@ -321,7 +323,7 @@ export async function applyScene(name: string, session: FixtureSession): Promise
   if (name === "attention-empty") replaceAgentsFromSnapshot({ ...data.snapshot(), panes: data.snapshot().panes?.filter((pane) => pane.agent_status !== "unknown") });
   if (name === "attention-legacy") replaceAgentsFromSnapshot(data.snapshot());
   if (name === "home-grouped") { setListGroup("space"); togglePanePin("w1:p3"); }
-  if (name === "home-offline" || name === "settings-offline") { setNetworkOnline(false); session.setConnected(false); }
+  if (name === "home-offline" || name === "settings-offline" || name === "board-offline") { setNetworkOnline(false); session.setConnected(false); }
   if (name.startsWith("settings")) {
     setScreen("settings");
     if (name === "settings-devices") applyDeviceList(data.devices());
@@ -338,6 +340,21 @@ export async function applyScene(name: string, session: FixtureSession): Promise
   if (name.startsWith("board")) {
     setScreen("board");
     const focus = (BUSY_SCENES.has(name) ? busySnapshot() : data.snapshot()).focused;
+    if (name === "board-zoomed") {
+      // Zoom the fixture computer itself, so a refresh or a restore behaves like herdr.
+      // A harness whose computer is not the busy one gets the same picture patched in.
+      const own = await session.live.snapshot();
+      if ((own.panes as Array<{ pane_id: string }> | undefined)?.some((pane) => pane.pane_id === "b1:p2")) {
+        await session.live.zoomPane({ pane_id: "b1:p2", mode: "on" });
+        replaceAgentsFromSnapshot(await session.live.snapshot());
+      } else {
+        type WireLayout = { tab_id: string };
+        const zoomed = busySnapshot();
+        zoomed.layouts = (zoomed.layouts as Array<WireLayout & { panes: Array<{ pane_id: string }> }>).map((layout) => layout.tab_id !== "b1:t1" ? layout
+          : { ...layout, zoomed: true, focused_pane_id: "b1:p2", panes: layout.panes.map((pane) => ({ ...pane, focused: pane.pane_id === "b1:p2" })) });
+        replaceAgentsFromSnapshot(zoomed);
+      }
+    }
     if (focus) focusBoard(focus.workspace_id ?? "", focus.tab_id ?? "");
     await refreshBoardPreviews();
   }

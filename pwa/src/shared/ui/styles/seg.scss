@@ -66,4 +66,27 @@
   .seg:not(:has(> .seg-item:nth-child(-n+5):last-child)) > .seg-item.on { background: var(--bg); }
 
   .seg-item:disabled { opacity: 0.45; }
+
+  /*
+    A strip of named choices that can outgrow its bar (the board's tabs): it
+    scrolls sideways, each item keeps its own width, and the choice is painted
+    on the item because the sliding indicator assumes equal widths.
+  */
+  .seg.is-scroll { overflow-x: auto; scrollbar-width: none; margin: 0; }
+  .seg.is-scroll::-webkit-scrollbar { display: none; }
+  .seg.is-scroll::before { display: none; }
+  .seg.is-scroll > .seg-item {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    white-space: nowrap;
+    transition: background var(--dur-2) var(--ease), color var(--dur-2) var(--ease);
+  }
+  .seg.is-scroll > .seg-item.on { background: var(--bg); }
+
+  /* Attention on a choice: amber waits on the reader, green finished unseen. */
+  .seg-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .seg-dot.is-blocked { background: var(--warn); }
 }

@@ -1,0 +1,239 @@
+/* --- Board canvas overlays ---------------------------------------------------------
+   Divider handles, the drag bubble, placement ghosts and the lift/drop marks the
+   gesture adapter sets on tiles. Everything here lives in stage coordinates and
+   is multiplied by --board-control-scale (1 / camera scale, written with the
+   stage transform) so knobs, hit areas and labels keep their screen size.
+   ------------------------------------------------------------------------------ */
+
+/* 28px of touch target, a thin line and a 4×22 knob that is always there: a phone
+   has no hover, so an invisible divider would never be found. */
+.board-divider {
+  --board-divider-hit: 28px;
+  --s: var(--board-control-scale, 1);
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  outline: none;
+}
+
+@media (pointer: fine) {
+  .board-divider { --board-divider-hit: 10px; }
+}
+
+.board-divider.is-v {
+  width: calc(var(--board-divider-hit) * var(--s));
+  transform: translateX(-50%);
+  cursor: col-resize;
+}
+
+.board-divider.is-h {
+  height: calc(var(--board-divider-hit) * var(--s));
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+
+.board-divider::before {
+  content: "";
+  position: absolute;
+  background: transparent;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.board-divider.is-v::before { top: 0; bottom: 0; left: 50%; width: calc(2px * var(--s)); transform: translateX(-50%); }
+.board-divider.is-h::before { left: 0; right: 0; top: 50%; height: calc(2px * var(--s)); transform: translateY(-50%); }
+
+.board-divider-knob {
+  position: relative;
+  width: 4px;
+  height: 22px;
+  border-radius: 3px;
+  background: #5d6878;
+  box-shadow: 0 0 0 3px var(--bg);
+  transform: scale(var(--s));
+  transition: background var(--dur-1) var(--ease);
+}
+
+.board-divider.is-h .board-divider-knob { width: 22px; height: 4px; }
+
+.board-divider:hover::before,
+.board-divider:focus-visible::before,
+.board-divider.is-active::before,
+.board-divider.is-pending::before { background: var(--accent); }
+
+.board-divider:hover .board-divider-knob,
+.board-divider:focus-visible .board-divider-knob,
+.board-divider.is-active .board-divider-knob { background: var(--accent); }
+
+.board-divider.is-pending .board-divider-knob {
+  background: var(--accent);
+  animation: board-divider-pending 0.8s ease-in-out infinite alternate;
+}
+
+.board-divider.is-locked { cursor: not-allowed; }
+.board-divider.is-locked::before { background: transparent; }
+.board-divider.is-locked .board-divider-knob { background: #3a424f; }
+.board-divider.is-hidden { visibility: hidden; pointer-events: none; }
+
+@keyframes board-divider-pending { to { opacity: 0.35; } }
+
+/* Drawn in the viewport, over the stage, at the finger. */
+.board-drag-bubble,
+.board-canvas-hint {
+  position: absolute;
+  z-index: 9;
+  max-width: calc(100% - 24px);
+  padding: 4px 9px;
+  border-radius: var(--r-sm);
+  font: 700 var(--text-caption) var(--font);
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 18px));
+  box-shadow: var(--shadow-1);
+}
+
+.board-drag-bubble { background: var(--accent); color: var(--accent-ink); }
+.board-canvas-hint { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line-strong); }
+
+/* --- Lift to swap (attributes set by canvas/lift-swap.ts) ---------------------- */
+
+.board-pane[data-board-lift] {
+  z-index: 6;
+  translate: var(--board-lift-x, 0) var(--board-lift-y, 0);
+  scale: 0.96;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6), inset 0 0 0 calc(2px * var(--board-control-scale, 1)) var(--accent);
+  pointer-events: none;
+  transition: scale var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+}
+
+.board-pane[data-board-drop] { box-shadow: inset 0 0 0 calc(2px * var(--board-control-scale, 1)) var(--accent); }
+
+/* The label sits on live terminal text, so it is a solid pill (like placement targets). */
+.board-pane[data-board-drop]::after {
+  content: attr(data-board-drop-label);
+  position: absolute;
+  /* The tile's own ::after (its seam) fills the tile; this one is a centred pill. */
+  inset: auto;
+  width: auto;
+  height: auto;
+  border: 0;
+  box-shadow: none;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  padding: calc(6px * var(--board-control-scale, 1)) calc(12px * var(--board-control-scale, 1));
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 700 calc(13px * var(--board-control-scale, 1)) var(--font);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.board-pane[data-board-drop-over] { background-color: rgba(110, 168, 254, 0.18); }
+.board-pane[data-board-drop-over]::after { background: var(--ink); color: var(--bg); }
+.board-pane[data-board-dim] { opacity: 0.32; }
+
+/* Desk key selection (canvas/keyboard.ts): dashed, so it never reads as the computer's focus. */
+.board-pane[data-board-selected] {
+  outline: calc(2px * var(--board-control-scale, 1)) dashed var(--accent);
+  outline-offset: calc(-4px * var(--board-control-scale, 1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-pane[data-board-lift] { transition: none; }
+  .board-divider.is-pending .board-divider-knob { animation: none; }
+}
+
+/* --- Placement mode ------------------------------------------------------------- */
+
+.board-place-dim {
+  position: absolute;
+  z-index: 5;
+  background: rgba(10, 12, 16, 0.62);
+  pointer-events: none;
+}
+
+.board-place-self {
+  position: absolute;
+  z-index: 5;
+  box-shadow: inset 0 0 0 calc(2px * var(--board-control-scale, 1)) var(--accent);
+  pointer-events: none;
+}
+
+.board-place-ghost,
+.board-place-target {
+  position: absolute;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: calc(1.5px * var(--board-control-scale, 1)) dashed var(--accent);
+  background: rgba(110, 168, 254, 0.13);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.board-place-target { border-style: solid; background: rgba(110, 168, 254, 0.16); }
+
+.board-place-ghost > span,
+.board-place-target > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 700 13px var(--font);
+  white-space: nowrap;
+  transform: scale(var(--board-control-scale, 1));
+}
+
+/* A target sits on live terminal text: its label is a solid pill so it stays legible. */
+.board-place-target > span {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.board-place-ghost:active,
+.board-place-target:active { background: rgba(110, 168, 254, 0.28); }
+
+.board-place-banner {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 20px);
+  min-height: 40px;
+  padding: 0 4px 0 14px;
+  border-radius: var(--r-md);
+  background: rgba(26, 32, 41, 0.95);
+  box-shadow: var(--shadow-1);
+  font: 600 var(--text-secondary) var(--font);
+  color: var(--ink);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.board-place-banner span { overflow: hidden; text-overflow: ellipsis; }
+
+.board-place-banner button {
+  flex: none;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--accent);
+  font: 700 var(--text-secondary) var(--font);
+  cursor: pointer;
+}

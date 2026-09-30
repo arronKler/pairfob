@@ -8,6 +8,9 @@ import { appRoot } from "../../../app/dom-root";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { boardCanvasModel, type BoardCanvasModel } from "../model/board-view";
 import { BoardCanvasView, type BoardCanvasController } from "./board-canvas";
+import { setLayoutDraft } from "../model/draft-store";
+import { applyTileLevels } from "../canvas/transform";
+import { publishPreview, clearBoardPreviews } from "../preview/store";
 
 function layout(panes: Array<{ paneId: string; rect: { x: number; y: number; width: number; height: number } }>,
   extra: Partial<TabLayout> = {}): TabLayout {
@@ -37,10 +40,12 @@ function canvas(layoutValue: TabLayout | null, agents: DashboardAgentCard[] = [a
     workspaceList: [], tabList: [], agents, layouts: layoutValue ? [layoutValue] : [],
     workspaceId: "w1", tabId: layoutValue?.tabId ?? "", selectedPaneId: "",
     status: { tone: "live", text: "" }, canCreateTab: false, operationBusy: false, connected: true,
+    layoutCaps: { resize: true, swap: true, split: true, zoom: true },
   });
 }
 
 type Host = { viewport: HTMLElement | null; stage: HTMLElement | null; layout: TabLayout | null };
+let zoomReason = "";
 
 function harness(id = "") {
   const calls: string[] = [];
@@ -65,6 +70,13 @@ function harness(id = "") {
     zoomAt: (_viewport, _stage, x, y, scale) => calls.push(`zoomAt:${x}:${y}:${scale}`),
     releaseScrollOnLeave: () => calls.push(`releaseScroll${id}`),
     shareTileOpening: (paneId) => calls.push(`share:${paneId}`),
+    commitResize: async (request) => { calls.push(`resize:${request.pane_id}:${request.direction}`); },
+    commitSwap: async (paneId, direction) => { calls.push(`swap:${paneId}:${direction}`); },
+    pickSplit: (paneId, direction) => calls.push(`split:${paneId}:${direction}`),
+    layoutReason: (kind) => (kind === "zoom" ? zoomReason : ""),
+    openResizeSheet: (paneId) => calls.push(`resizeSheet:${paneId}`),
+    toggleZoom: async (paneId, mode) => { calls.push(`zoom:${paneId}:${mode}`); },
+    paneAction: (paneId, action) => calls.push(`${action}:${paneId}`),
   };
   return { calls, hosts, boundLayouts, controller, bound: () => bound, disposed: () => disposed };
 }
@@ -76,10 +88,12 @@ function paint(model: BoardCanvasModel, controller: BoardCanvasController): void
 beforeEach(async () => {
   await resetBoardTestDOM();
   setLang("zh");
+  zoomReason = "";
 });
 
 afterEach(() => {
   act(() => unmountReact());
+  setLayoutDraft(null);
 });
 
 describe("board canvas lifecycle", () => {
@@ -182,17 +196,91 @@ describe("board canvas lifecycle", () => {
     expect(rig.calls.filter((call) => call.startsWith("share"))).toEqual(["share:w1:p1", "share:w1:p2"]);
   });
 
-  test("the tile keeps pane identity, status pill and preview cell size", () => {
+  test("the tile keeps pane identity, status word and preview cell size", () => {
     const rig = harness();
     paint(canvas(splitTab, [agent("w1:p1", { status: "working" }), agent("w1:p2")]), rig.controller);
     const tiles = [...appRoot().querySelectorAll<HTMLElement>(".board-pane")];
     expect(tiles.map((tile) => tile.dataset.paneId)).toEqual(["w1:p1", "w1:p2"]);
     expect(tiles[0].className).toBe("board-pane status-working focused");
-    expect(tiles[0].querySelector(".pill-working")?.textContent).toBe(t("status.working"));
+    expect(tiles[0].querySelector(".board-pane-title .board-pane-word.is-working")?.textContent).toBe(t("status.working"));
     expect(tiles[0].getAttribute("aria-label")).toBe(t("board.paneAria", { title: "w1:p1" }));
     expect(tiles[0].style.width).toBe("480px");
     expect(tiles[1].style.left).toBe("480px");
     expect(appRoot().querySelectorAll(".board-pane-screen")).toHaveLength(2);
     expect(appRoot().querySelector(".board-stage")?.getAttribute("style")).toContain("width: 800px");
+  });
+
+  test("the title bar carries mark, status dot, name, status word and the in-bar ⋯", () => {
+    const rig = harness();
+    paint(canvas(splitTab, [agent("w1:p1", { status: "blocked" }), agent("w1:p2", { hasAgent: false, agent: "" })]), rig.controller);
+    const [agentTile, shellTile] = [...appRoot().querySelectorAll<HTMLElement>(".board-pane")];
+    const bar = agentTile.querySelector(".board-pane-title")!;
+    expect(bar.querySelector(".agent-avatar")).not.toBeNull();
+    expect(bar.querySelector(".board-pane-dot.is-blocked")).not.toBeNull();
+    expect(bar.querySelector(".board-pane-more")?.getAttribute("aria-label")).toBe(t("boardMenu.more", { title: "w1:p1" }));
+    // A plain terminal shows its name in mono, with no agent state at all.
+    const shellBar = shellTile.querySelector(".board-pane-title")!;
+    expect(shellBar.querySelector(".board-pane-name.is-terminal")).not.toBeNull();
+    expect(shellBar.querySelector(".board-pane-dot, .board-pane-word")).toBeNull();
+    act(() => bar.querySelector<HTMLButtonElement>(".board-pane-more")!.click());
+    expect(rig.calls.filter((call) => call.startsWith("open"))).toEqual([]);
+  });
+
+  test("each tile draws the level its on-screen size allows", () => {
+    const rig = harness();
+    paint(canvas(splitTab, [agent("w1:p1"), agent("w1:p2")]), rig.controller);
+    const stage = appRoot().querySelector<HTMLElement>(".board-stage")!;
+    const levels = () => [...stage.querySelectorAll<HTMLElement>(".board-pane")].map((tile) => tile.dataset.level);
+    // 480×640 and 320×640 stage px.
+    applyTileLevels(stage, 1);
+    expect(levels()).toEqual(["live", "live"]);
+    applyTileLevels(stage, 0.4);
+    expect(levels()).toEqual(["card", "card"]);
+    applyTileLevels(stage, 0.25);
+    expect(levels()).toEqual(["card", "mark"]);
+  });
+
+  test("a status card shows the pane's last non-empty lines", () => {
+    clearBoardPreviews();
+    publishPreview("w1:p1", { text: "one\n\ntwo  \n\u001b[32mthree\u001b[0m\n\n", hash: "h" });
+    const rig = harness();
+    paint(canvas(oneTab), rig.controller);
+    const lines = [...appRoot().querySelectorAll(".board-pane-card-line")].map((line) => line.textContent);
+    expect(lines).toEqual(["one", "two", "three"]);
+    clearBoardPreviews();
+  });
+
+  test("a zoomed tab draws the zoomed pane alone and offers the way back", () => {
+    const rig = harness();
+    const zoomed = { ...splitTab, zoomed: true, focusedPaneId: "w1:p2" };
+    paint(canvas(zoomed, [agent("w1:p1"), agent("w1:p2")]), rig.controller);
+    const tiles = [...appRoot().querySelectorAll<HTMLElement>(".board-pane")];
+    expect(tiles.map((tile) => [tile.dataset.paneId, tile.style.width])).toEqual([["w1:p2", "800px"]]);
+    const banner = appRoot().querySelector(".board-zoom-banner")!;
+    // Presses on it must reach its button, not start a canvas gesture.
+    expect(banner.hasAttribute("data-board-overlay")).toBeTrue();
+    expect(banner.textContent).toContain(t("boardCanvas.zoomedBanner"));
+    act(() => banner.querySelector<HTMLButtonElement>("button")!.click());
+    expect(rig.calls).toContain("zoom:w1:p2:off");
+    zoomReason = t("boardMenu.offline");
+    paint(canvas(zoomed, [agent("w1:p1"), agent("w1:p2")]), rig.controller);
+    expect(appRoot().querySelector<HTMLButtonElement>(".board-zoom-banner button")!.disabled).toBeTrue();
+    paint(canvas(splitTab, [agent("w1:p1"), agent("w1:p2")]), rig.controller);
+    expect(appRoot().querySelector(".board-zoom-banner")).toBeNull();
+  });
+
+  test("a divider draft re-lays the tiles live and leaves the bound layout alone", () => {
+    const rig = harness();
+    const split = { ...splitTab, splits: [{ id: "root", direction: "right" as const, ratio: 0.6, rect: splitTab.area }] };
+    paint(canvas(split, [agent("w1:p1"), agent("w1:p2")]), rig.controller);
+    act(() => setLayoutDraft({ tabId: "w1:t1", splitId: "root", ratio: 0.7, pending: false }));
+    const tiles = [...appRoot().querySelectorAll<HTMLElement>(".board-pane")];
+    expect(tiles.map((tile) => [tile.style.left, tile.style.width])).toEqual([["0px", "560px"], ["560px", "240px"]]);
+    expect(rig.bound()).toBe(1);
+    // Another tab's draft never moves this one.
+    act(() => setLayoutDraft({ tabId: "w1:t9", splitId: "root", ratio: 0.3, pending: false }));
+    expect(appRoot().querySelector<HTMLElement>(".board-pane")!.style.width).toBe("480px");
+    act(() => setLayoutDraft(null));
+    expect(appRoot().querySelector<HTMLElement>(".board-pane")!.style.width).toBe("480px");
   });
 });

@@ -175,7 +175,8 @@ export function captureBoardProjection(): () => void {
       // without erasing readonly or weakening BoardRecord. Each restored value
       // stays detached plain data with separate identity.
       record.layouts = detach(
-        captured.layouts.map((l) => ({ ...l, area: { ...l.area }, panes: l.panes.map((p) => ({ ...p, rect: { ...p.rect } })) })),
+        captured.layouts.map(({ splits, ...l }) => ({ ...l, area: { ...l.area }, panes: l.panes.map((p) => ({ ...p, rect: { ...p.rect } })),
+          ...(splits ? { splits: splits.map((split) => ({ ...split, rect: { ...split.rect } })) } : {}) })),
       );
       record.workspaceList = detach(captured.workspaceList.map((x) => ({ ...x })));
       record.tabList = detach(captured.tabList.map((x) => ({ ...x })));

@@ -1,3 +1,10 @@
+/* --- Board pane menu and its sheets ---------------------------------------------
+   The pane menu, resize and split sheets are ordinary action sheets; only the
+   few board-specific pieces live here: the tile's open target, the sheets'
+   footer lines and the created-split notice. The tile's own title bar, ⋯ and
+   menu-target mark belong to the canvas styles.
+   ------------------------------------------------------------------------------ */
+
 .board-pane { -webkit-touch-callout: none; user-select: none; }
 .board-pane-open {
   position: absolute;
@@ -9,85 +16,15 @@
   cursor: pointer;
 }
 .board-pane-open:focus-visible { outline: 3px solid var(--accent); outline-offset: -4px; }
-.board-pane-more {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 3;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: rgba(7, 9, 13, 0.88);
-  color: var(--ink);
-  font-size: 24px;
-  line-height: 1;
-  transform: scale(var(--board-control-scale, 1));
-  transform-origin: top right;
-  cursor: pointer;
-}
-.board-pane-head { padding-right: calc(46px * var(--board-control-scale, 1)); }
-.board-pane[data-board-menu-target] {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 2px var(--accent);
-}
-.board-menu-overlay {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  max-height: none;
-  margin: 0;
-  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
-    max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  overflow: hidden;
-  overscroll-behavior: contain;
-}
-.board-menu-overlay::backdrop { background: rgba(0, 0, 0, 0.12); }
-.board-context-menu {
-  position: absolute;
-  width: 280px;
-  padding: 6px;
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
-  background: var(--surface);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  overflow: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-}
-.board-menu-heading { display: grid; gap: 4px; padding: 10px 10px 12px; }
-.board-menu-heading strong { font-size: 15px; overflow-wrap: anywhere; }
-.board-menu-heading span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.board-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 44px;
-  padding: 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: 15px;
-  text-align: left;
-  cursor: pointer;
-}
-.board-menu-item span { flex: 1; }
-.board-menu-item svg { flex: none; }
-.board-menu-item:hover:not(:disabled), .board-menu-item:focus-visible { background: var(--surface-2); }
-.board-menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.board-menu-item.divided { border-top: 1px solid var(--line); margin-top: 4px; border-radius: 0 0 8px 8px; }
-.board-menu-item.danger { color: var(--danger, #ff7b86); }
-.board-menu-item:disabled { opacity: 0.45; cursor: default; }
-.board-menu-hint, .board-menu-notice { margin: 8px 10px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+
+.board-sheet .menu-section-title:first-child { margin-top: 2px; }
+.board-sheet-note:empty { display: none; }
+.board-sheet-note { margin: 10px 2px 0; font-size: var(--text-secondary); line-height: 1.5; color: var(--muted); }
+.board-sheet-done { width: 100%; margin-top: var(--space-4); }
+.board-resize .menu-setting-label small { display: block; margin-top: 2px; font-weight: 400; color: var(--muted); }
+.board-resize .menu-stepper-value { min-width: 64px; font-variant-numeric: tabular-nums; }
+
+/* The legacy split form (operations/operation-forms) still draws its preview. */
 .board-split-preview { display: flex; gap: 4px; height: 100px; margin-bottom: 12px; }
 .board-split-preview.down { flex-direction: column; }
 .board-split-preview span {
@@ -102,23 +39,30 @@
   font-size: 12px;
 }
 .board-split-preview span:last-child { border-style: dashed; border-color: var(--accent); color: var(--accent); }
-.board-created-notice {
-  position: fixed;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%);
+
+/* A new split stays on the board; the app notice look offers to open it (in .board-float). */
+.notice.board-created-notice {
   display: flex;
   align-items: center;
-  gap: 10px;
-  max-width: calc(100% - 24px);
+  gap: 6px;
   width: max-content;
-  padding: 4px 8px 4px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 2px 4px;
   background: var(--surface);
+  color: var(--ink);
   box-shadow: var(--shadow-1);
-  font-size: 13px;
-  z-index: 5;
+  font-size: var(--text-body);
 }
-.board-created-notice button { min-height: 44px; border: 0; background: transparent; color: var(--accent); font: inherit; }
-.board-created-notice button:last-child { min-width: 44px; }
+.board-created-notice button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.board-created-notice button:last-child { min-width: 44px; color: var(--muted); }
+.board-sheet-note.is-error { color: var(--error); }

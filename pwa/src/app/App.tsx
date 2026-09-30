@@ -79,7 +79,9 @@ export function pageFor(layout: ShellLayout, frame: FrameSnapshot): ReactNode {
     case "home":
       return <HomePage />;
     case "desk":
-      return <DeskShell deskPage={layout.deskPage}>{deskChild(layout, frame)}</DeskShell>;
+      return <DeskShell deskPage={layout.deskPage} onReturn={layout.deskReturn === "board" ? handlers.onBack : undefined}>
+        {deskChild(layout, frame)}
+      </DeskShell>;
     case "chat":
       return <AgentChatPane includeBack handlers={handlers} />;
     case "pane":

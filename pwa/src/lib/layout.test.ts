@@ -70,6 +70,28 @@ describe("tab layout mapping", () => {
     expect(boxes[1].width).toBe(40 * BOARD_CELL_W);
   });
 
+  test("keeps herdr's split tree when the daemon forwards it, dropping malformed entries", () => {
+    const [layout] = parseSnapshotLayouts({
+      layouts: [{
+        workspace_id: "w1", tab_id: "w1:t1", area: { x: 0, y: 0, width: 100, height: 40 },
+        panes: [
+          { pane_id: "w1:p1", rect: { x: 0, y: 0, width: 60, height: 40 } },
+          { pane_id: "w1:p2", rect: { x: 60, y: 0, width: 40, height: 40 } },
+        ],
+        splits: [
+          { id: "split_0_root", direction: "right", ratio: 0.6, rect: { x: 0, y: 0, width: 100, height: 40 } },
+          { id: "bad_dir", direction: "left", ratio: 0.5, rect: { x: 0, y: 0, width: 100, height: 40 } },
+          { id: "bad_ratio", direction: "down", ratio: 1, rect: { x: 0, y: 0, width: 100, height: 40 } },
+          { direction: "down", ratio: 0.5, rect: { x: 0, y: 0, width: 100, height: 40 } },
+        ],
+      }],
+    });
+    expect(layout.splits).toEqual([{ id: "split_0_root", direction: "right", ratio: 0.6, rect: { x: 0, y: 0, width: 100, height: 40 } }]);
+    const [older] = parseSnapshotLayouts({ layouts: [{ workspace_id: "w1", tab_id: "w1:t1", area: { x: 0, y: 0, width: 10, height: 4 },
+      panes: [{ pane_id: "w1:p1", rect: { x: 0, y: 0, width: 10, height: 4 } }] }] });
+    expect(older.splits).toBeUndefined();
+  });
+
   test("a stacked split keeps the TUI cell occupancy after subtracting the tab origin", () => {
     const layouts = parseSnapshotLayouts({
       layouts: [

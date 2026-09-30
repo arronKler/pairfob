@@ -3,6 +3,7 @@ export const zhShell = {
   "tabs.aria": "主导航",
   "tabs.sessions": "会话",
   "tabs.board": "画板",
+  "desk.backToBoard": "返回画板",
   "tabs.settings": "设置",
   "tabs.attentionAria": "{count} 个会话需要你处理",
   "tabs.updateAria": "有可用更新",

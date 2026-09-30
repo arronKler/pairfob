@@ -36,6 +36,8 @@ export type HerdActionPorts = {
   openQuickCreate(): void;
   /** The create sheet on a new workspace in `dir` (never creates by itself). */
   openCreateInDir(dir: string): void;
+  /** A pane opened from the list did not come from the board: back must not lead there. */
+  forgetBoardReturn?(): void;
 };
 
 export type HerdActions = {
@@ -67,6 +69,7 @@ export type HerdActions = {
 export function createHerdActions(ports: HerdActionPorts): HerdActions {
   return {
     openPaneFromCard(paneId, title) {
+      ports.forgetBoardReturn?.();
       void openPane(paneId, title);
     },
     openPaneMenu(agent) {
@@ -99,6 +102,7 @@ export function createHerdActions(ports: HerdActionPorts): HerdActions {
       ports.openGroupModeMenu();
     },
     openAttention(paneId, source) {
+      ports.forgetBoardReturn?.();
       void openPane(paneId, source);
     },
     revealAttention() {

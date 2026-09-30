@@ -6,6 +6,7 @@ import { enSettingsV3 } from "./i18n-settings-v3";
 import { enRowbarV2 } from "./i18n-rowbar-v2";
 import { enAgentInfo } from "./i18n-en-agent-info";
 import { enBoardMenu } from "./i18n-board-menu";
+import { enBoardCanvas } from "./i18n-board-canvas";
 import { enDialogs } from "./i18n-dialogs";
 import { enShell } from "./i18n-en-shell";
 import { enWorkspace } from "./i18n-en-workspace.ts";
@@ -22,6 +23,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   ...enShell,
   ...enAgentInfo,
   ...enBoardMenu,
+  ...enBoardCanvas,
   ...enDialogs,
   "fileActions.rename": "Rename",
   "fileActions.delete": "Delete file",
@@ -274,7 +276,6 @@ export const en: { [K in keyof typeof zh]: string } = {
   "board.zoomOut": "Zoom out",
   "board.empty": "No sessions to place on the board yet.",
   "board.emptyTitle": "The board is empty",
-  "board.zoomed": "Filled on the computer",
   "board.workspaceAria": "Switch workspace",
   "board.tabAria": "Switch tab",
   "board.paneAria": "Open {title}",

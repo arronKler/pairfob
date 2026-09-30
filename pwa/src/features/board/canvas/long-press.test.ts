@@ -8,7 +8,7 @@ const layout: TabLayout = { workspaceId: "w1", tabId: "t1", zoomed: false, focus
   area: { x: 0, y: 0, width: 80, height: 24 }, panes: [{ paneId: "p1", focused: true, rect: { x: 0, y: 0, width: 80, height: 24 } }] };
 const releases: Array<() => void> = [];
 beforeEach(resetBoardTestDOM);
-afterEach(() => { releases.splice(0).forEach(release => release()); document.body.replaceChildren(); });
+afterEach(() => { releases.splice(0).forEach(release => release()); for (const node of [...document.body.children]) if (node.id !== "app") node.remove(); });
 const wait = () => new Promise(resolve => setTimeout(resolve, BOARD_LONG_PRESS_MS + 30));
 
 function setup() {

@@ -32,6 +32,8 @@ export type BoardModelInput = {
   selectedPaneId: string;
   status: HerdStatus;
   canCreateTab: boolean;
+  /** The advertised layout capabilities; absent keys mean the daemon cannot. */
+  layoutCaps: { resize: boolean; swap: boolean; split: boolean; zoom: boolean };
   operationBusy: boolean;
   connected: boolean;
 };
@@ -58,8 +60,9 @@ export type BoardTileView = {
   title: string;
   aria: string;
   status: string;
-  /** The advertised agent kind; empty for a plain terminal, which carries no pill. */
+  /** The advertised agent kind; empty for a plain terminal, which carries no status word. */
   agentKind: string;
+  /** The status word the title bar shows, colored like the session rows; "" for a plain terminal. */
   pill: string;
   selected: boolean;
   zoomed: boolean;
@@ -77,8 +80,16 @@ export type BoardCanvasModel = {
   tiles: BoardTileView[];
   emptyTitle: string;
   emptySub: string;
-  zoomedLabel: string;
   canvasAria: string;
+  /** The pane herdr is showing alone ("在电脑上铺满"); "" when the tab is split. */
+  zoomedPaneId: string;
+  /** Canvas banner while zoomed: what the computer shows and how to restore the split. */
+  zoomBanner: { text: string; restore: string };
+  /**
+   * Divider handles show only when the computer advertises resize_pane and the
+   * layout is herdr's own, never for a stand-in built from the pane list.
+   */
+  canResize: boolean;
 };
 
 export type BoardViewModel = {
@@ -159,9 +170,27 @@ export function boardTiles(
   });
 }
 
+/**
+ * What herdr draws: a zoomed tab shows its zoomed pane alone, filling the area.
+ * The zoomed pane is the focused one (herdr zooms the focused pane); a snapshot
+ * that reports only the visible pane resolves to that pane as well.
+ */
+export function visibleTabLayout(layout: TabLayout): { layout: TabLayout; zoomedPaneId: string } {
+  if (!layout.zoomed) return { layout, zoomedPaneId: "" };
+  const pane = layout.panes.find((item) => item.paneId === layout.focusedPaneId)
+    ?? layout.panes.find((item) => item.focused) ?? layout.panes[0];
+  if (!pane) return { layout, zoomedPaneId: "" };
+  return {
+    layout: { ...layout, panes: [{ ...pane, focused: true, rect: { ...layout.area } }] },
+    zoomedPaneId: pane.paneId,
+  };
+}
+
 export function boardCanvasModel(input: BoardModelInput): BoardCanvasModel {
   const agents = [...input.agents] as DashboardAgentCard[];
-  const layout = layoutForTab(input.tabId, [...input.layouts] as TabLayout[], agents);
+  const resolved = layoutForTab(input.tabId, [...input.layouts] as TabLayout[], agents);
+  const visible = resolved ? visibleTabLayout(resolved) : null;
+  const layout = visible?.layout ?? null;
   return {
     signature: JSON.stringify(layout),
     tabId: input.tabId,
@@ -170,8 +199,10 @@ export function boardCanvasModel(input: BoardModelInput): BoardCanvasModel {
     tiles: layout ? boardTiles(layout, agents, input.selectedPaneId) : [],
     emptyTitle: t("board.emptyTitle"),
     emptySub: t("board.empty"),
-    zoomedLabel: t("board.zoomed"),
     canvasAria: t("board.canvasAria"),
+    zoomedPaneId: visible?.zoomedPaneId ?? "",
+    canResize: input.layoutCaps.resize && input.layouts.some((item) => item.tabId === input.tabId),
+    zoomBanner: { text: t("boardCanvas.zoomedBanner"), restore: t("boardMenu.restore") },
   };
 }
 

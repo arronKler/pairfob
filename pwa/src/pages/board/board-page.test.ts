@@ -26,7 +26,7 @@ const settleSheet = async () => {
 
 /** The workspace switcher lives behind the board title. */
 function openWorkspaces(): HTMLButtonElement[] {
-  act(() => appRoot().querySelector<HTMLButtonElement>(".board-ws")!.click());
+  act(() => appRoot().querySelector<HTMLButtonElement>(".board-title")!.click());
   return [...document.querySelectorAll<HTMLButtonElement>(".sheet-body .menu-choice")];
 }
 
@@ -142,10 +142,10 @@ describe("react board screen", () => {
     expect((panes[0] as HTMLElement).style.width).toBe("480px");
     expect((panes[1] as HTMLElement).style.left).toBe("480px");
     // The title names the selected workspace; the others are one tap away.
-    expect(app.querySelector(".board-ws-name")?.textContent).toBe("alpha");
+    expect(app.querySelector(".board-title-name")?.textContent).toBe("alpha");
     expect(openWorkspaces().map(workspaceTitle)).toEqual(["alpha", "beta"]);
     act(closeTestDialogs);
-    expect(app.querySelector(".board-tab-new")?.textContent).toContain("新建标签页");
+    expect(app.querySelector(".board-tab-new")?.getAttribute("aria-label")).toBe("新建标签页");
     expect(app.querySelectorAll(".board-pane-screen")).toHaveLength(2);
     expect(app.querySelectorAll(".board-pane")[0].getAttribute("data-pane-id")).toBe("w1:p1");
     expect(app.querySelector(".board-pane")?.hasAttribute("data-react-board-preview")).toBe(true);

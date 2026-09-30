@@ -387,12 +387,15 @@ test("layout page previews the tab and keeps the daemon edge directions for each
   const divider = document.querySelector<HTMLElement>(".pane-divider.is-v")!;
   expect(divider.getAttribute("aria-valuenow")).toBe("50");
   await act(async () => { divider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 0)); });
-  expect(calls.at(-1)).toMatchObject({ pane_id: "p1", direction: "right", amount: 0.15 });
+  // herdr's own step: a split's ratio moves 0.05 (board/model/divider.ts covers every side).
+  expect(calls.at(-1)).toMatchObject({ pane_id: "p1", direction: "right", amount: 0.05 });
   expect(document.querySelector(".pane-precise .pane-layout-resize .menu-stepper-value")?.textContent).toBe(t("layout.share", { n: 50 }));
   expect(byLabel(t("form.swapLeft")).disabled).toBeTrue();
-  for (const [label, direction] of [["form.wider", "right"], ["form.narrower", "left"]] as const) {
+  // Moving the divider left names the pane whose left edge it is, so herdr can
+  // never fall back to another split.
+  for (const [label, pane_id, direction] of [["form.wider", "p1", "right"], ["form.narrower", "p2", "left"]] as const) {
     await act(async () => { byLabel(t(label)).click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    expect(calls.at(-1)).toMatchObject({ pane_id: "p1", direction, amount: 0.15 });
+    expect(calls.at(-1)).toMatchObject({ pane_id, direction, amount: 0.05 });
   }
   await act(async () => { byLabel(t("form.swapRight")).click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
   expect(calls.at(-1)).toMatchObject({ pane_id: "p1", direction: "right" });
@@ -401,6 +404,57 @@ test("layout page previews the tab and keeps the daemon edge directions for each
   try {
     expect(byLabel(t("form.wider")).disabled).toBeTrue();
     expect(document.querySelector(".pane-layout-status")?.textContent).toBe(t("boardMenu.offline"));
+  } finally { act(() => setNetworkOnline(true)); }
+});
+
+test("layout page draws every herdr divider like the board and moves a neighbour's split the herdr way", async () => {
+  applyCapabilities({ ...NO_OPERATION_CAPABILITIES, resize_pane: true, swap_pane: true }, []);
+  const panes = [card("p1"), card("p2", { label: "Review", status: "blocked" }), card("p3", { label: "Dev" })];
+  seedAgents(panes);
+  // p1 | p2 over p3, in herdr's own shape: the right column's split is not p1's.
+  projectSnapshot({ workspaces: [{ workspace_id: "w1", label: "One", cwd: "/one" }], tabs: [{ tab_id: "t1", workspace_id: "w1", label: "main" }],
+    panes, layouts: [{ workspace_id: "w1", tab_id: "t1", zoomed: false, focused_pane_id: "p2", area: { x: 0, y: 0, width: 200, height: 80 },
+      panes: [{ pane_id: "p1", focused: false, rect: { x: 0, y: 0, width: 100, height: 80 } },
+        { pane_id: "p2", focused: true, rect: { x: 100, y: 0, width: 100, height: 40 } },
+        { pane_id: "p3", focused: false, rect: { x: 100, y: 40, width: 100, height: 40 } }],
+      splits: [{ id: "split_root", direction: "right", ratio: 0.5, rect: { x: 0, y: 0, width: 200, height: 80 } },
+        { id: "split_1", direction: "down", ratio: 0.5, rect: { x: 100, y: 0, width: 100, height: 80 } }] }] } as never,
+  dashboardStore.get().agents as never);
+  const calls: Array<Record<string, unknown>> = [];
+  attachLiveSession({ isConnected: () => true, resizePane: async (input: Record<string, unknown>) => { calls.push(input); throw new Error("stop"); } } as never);
+  act(openPaneMenu);
+  act(() => pageRow(t("pm.layout")).click());
+  const preview = document.querySelector<HTMLElement>(".pane-layout-preview")!;
+  preview.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 80, right: 200, bottom: 80, x: 0, y: 0, toJSON() {} }) as DOMRect;
+  expect([...document.querySelectorAll(".pane-divider")].map(node => node.getAttribute("data-split-id"))).toEqual(["split_root", "split_1"]);
+  expect(document.querySelector(".pane-layout-cell.is-blocked")?.textContent).toBe("Review");
+  expect(document.querySelector(".pane-layout-cell.is-focused")?.textContent).toBe("Review");
+  const inner = document.querySelector<HTMLElement>('.pane-divider[data-split-id="split_1"]')!;
+  expect(inner.getAttribute("aria-valuetext")).toBe(t("boardCanvas.dragRows", { first: "40", second: "40", share: "50" }));
+  const pointer = (type: string, clientY: number) => new PointerEvent(type, { bubbles: true, pointerId: 7, button: 0, clientX: 150, clientY });
+  // Pressing a hair below the line must not jump it (herdr's grab offset).
+  act(() => { inner.dispatchEvent(pointer("pointerdown", 41)); });
+  expect(document.querySelector(".pane-layout-bubble")?.textContent).toBe(t("boardCanvas.dragRows", { first: "40", second: "40", share: "50" }));
+  act(() => { inner.dispatchEvent(pointer("pointermove", 31)); });
+  expect(document.querySelector(".pane-layout-bubble")?.textContent).toBe(t("boardCanvas.dragRows", { first: "30", second: "50", share: "38" }));
+  await act(async () => { inner.dispatchEvent(pointer("pointerup", 31)); await new Promise((resolve) => setTimeout(resolve, 0)); });
+  // Moving the line up names the pane whose top edge it is, so herdr cannot pick another split.
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({ pane_id: "p3", direction: "up" });
+  expect(calls[0].amount as number).toBeCloseTo(0.125, 9);
+  expect(document.querySelector(".pane-layout-bubble")).toBeNull();
+  // The request failed: once it settled nothing is left drawn as in flight.
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(document.querySelector(".pane-divider.is-pending")).toBeNull();
+  // Offline arrives mid-drag: the release sends nothing and leaves no picture of a resize.
+  const again = () => document.querySelector<HTMLElement>('.pane-divider[data-split-id="split_1"]')!;
+  act(() => { again().dispatchEvent(pointer("pointerdown", 40)); });
+  act(() => { again().dispatchEvent(pointer("pointermove", 30)); });
+  act(() => setNetworkOnline(false));
+  try {
+    await act(async () => { again().dispatchEvent(pointer("pointerup", 30)); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(calls).toHaveLength(1);
+    expect(document.querySelector(".pane-divider.is-pending, .pane-divider.is-active")).toBeNull();
   } finally { act(() => setNetworkOnline(true)); }
 });
 

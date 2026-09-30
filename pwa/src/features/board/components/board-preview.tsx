@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
+import { memo, useCallback, useLayoutEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
 import { lineFillBackground, spanCss } from "../../../lib/ansi";
 import { ansiPreviewModel } from "../preview/model";
 import { applyBoardPreviewFont, fitPreviewBuffer } from "../preview/font";
@@ -12,7 +12,9 @@ import { boardPreviewSnapshot, subscribeBoardPreviews } from "../preview/store";
  * fresh board paint measured nothing on the mounted font, only an in-place
  * preview reply may re-measure it.
  */
-export function BoardAnsiPreview({
+export const BoardAnsiPreview = memo(BoardAnsiPreviewView);
+
+function BoardAnsiPreviewView({
   paneId,
   cols,
   rows,
@@ -61,3 +63,30 @@ export function BoardAnsiPreview({
     </span>
   );
 }
+
+/** Lines a status card keeps: enough to fill the tallest card; CSS clips from the top. */
+export const BOARD_CARD_LINES = 12;
+
+/** The last non-empty lines of a preview, as plain text. */
+export function cardLines(text: string, count = BOARD_CARD_LINES): string[] {
+  return ansiPreviewModel(text).lines.map((line) => line.text.replace(/\s+$/, "")).filter(Boolean).slice(-count);
+}
+
+/**
+ * The status card body: the pane's last output lines in fixed UI type, shown
+ * while terminal glyphs would be too small to read (see model/tile-level).
+ * Subscribes to the same preview store, so a read repaints only this card.
+ */
+export const BoardCardLines = memo(function BoardCardLines({ paneId }: { paneId: string }) {
+  const snapshot = useCallback(() => boardPreviewSnapshot(paneId), [paneId]);
+  const preview = useSyncExternalStore(subscribeBoardPreviews, snapshot);
+  const lines = cardLines(preview?.text || "");
+  return (
+    <span className="board-pane-card" aria-hidden="true">
+      {/* Top-aligned while it fits; once it overflows the oldest lines clip away at the top. */}
+      <span className="board-pane-card-lines">
+        {lines.map((line, index) => <span key={index} className="board-pane-card-line">{line}</span>)}
+      </span>
+    </span>
+  );
+});

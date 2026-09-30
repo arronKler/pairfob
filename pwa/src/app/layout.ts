@@ -26,8 +26,10 @@ export type LayoutMode =
   | "pane"
   | "home";
 
-/** What the desk main column shows: a settings-family page, a pane, or nothing. */
-export type DeskPage = "settings" | "quota" | "computers" | null;
+/** What the desk main column shows: a settings-family page, the board, a pane, or nothing. */
+export type DeskPage = "settings" | "quota" | "computers" | "board" | null;
+/** Where the desk's pane leads back to: the board it was opened from, or nowhere. */
+export type DeskReturn = "board" | null;
 export type DeskChild = "chat" | "session" | null;
 
 export type LayoutInput = {
@@ -47,6 +49,8 @@ export type LayoutInput = {
   hasSelectedPane: boolean;
   termFontPx: number;
   operationBusy: boolean;
+  /** The open pane was opened from the board, so leaving it goes back there. */
+  boardReturn?: boolean;
 };
 
 export type ShellFlags = {
@@ -66,6 +70,8 @@ export type LayoutDescriptor = {
   mode: LayoutMode;
   deskPage: DeskPage;
   deskChild: DeskChild;
+  /** The desk pane's way back; the phone pane keeps its own back button. */
+  deskReturn: DeskReturn;
   shell: ShellFlags;
   /** html/body scroll lock: the application owns the whole viewport. */
   lockScroll: boolean;
@@ -80,14 +86,17 @@ export function computeLayout(input: LayoutInput): LayoutDescriptor {
   const live = input.phase === "live";
   const booting = input.phase === "boot" || input.phase === "resuming";
   const workspace = live && input.screen === "workspace";
-  const board = live && input.screen === "board";
-  const desk = live && input.desk && !input.fullTerminal && !workspace && !board;
+  // The phone board owns the whole screen; the wide board sits in the desk's
+  // main column beside the list, like any other desk page.
+  const board = live && input.screen === "board" && !input.desk;
+  const desk = live && input.desk && !input.fullTerminal && !workspace;
   const session = live && input.screen === "pane" && (!desk || input.fullTerminal);
   const deskPage: DeskPage = desk && (input.screen === "settings" || input.screen === "quota"
-    || input.screen === "computers") ? input.screen : null;
+    || input.screen === "computers" || input.screen === "board") ? input.screen : null;
   const deskChild: DeskChild = desk && !deskPage && input.hasSelectedPane
     ? input.agentChat ? "chat" : "session"
     : null;
+  const deskReturn: DeskReturn = deskChild && input.boardReturn === true ? "board" : null;
 
   // The phone boots and reconnects inside the list's own frame (header,
   // placeholder rows, tab bar) so nothing jumps when the session goes live.
@@ -112,6 +121,7 @@ export function computeLayout(input: LayoutInput): LayoutDescriptor {
     mode,
     deskPage,
     deskChild,
+    deskReturn,
     shell: { session, desk, workspace, board, booting: splash, tabs, unreachable },
     lockScroll: session || desk || workspace || board || splash,
     termFontPx: input.termFontPx,
@@ -128,6 +138,7 @@ export function layoutsEqual(left: LayoutDescriptor | null | undefined, right: L
     && left.mode === right.mode
     && left.deskPage === right.deskPage
     && left.deskChild === right.deskChild
+    && left.deskReturn === right.deskReturn
     && left.termFontPx === right.termFontPx
     && left.termLineHeightPx === right.termLineHeightPx
     && left.operationBusy === right.operationBusy

@@ -3,6 +3,12 @@ import type { AgentCard } from "./ranking.ts";
 
 export type LayoutRect = { x: number; y: number; width: number; height: number };
 
+/**
+ * One herdr split: `ratio` is the first child's share of `rect`, which herdr
+ * stores as a float and draws as `round(length × ratio)` whole cells.
+ */
+export type LayoutSplit = { id: string; direction: "right" | "down"; ratio: number; rect: LayoutRect };
+
 export type TabLayout = {
   workspaceId: string;
   tabId: string;
@@ -10,6 +16,8 @@ export type TabLayout = {
   area: LayoutRect;
   focusedPaneId: string;
   panes: Array<{ paneId: string; focused: boolean; rect: LayoutRect }>;
+  /** Present when the daemon forwards herdr's split tree; older daemons omit it. */
+  splits?: LayoutSplit[];
 };
 
 /** Structural read view of a tab layout for pure consumers (terminal fit). */
@@ -20,6 +28,7 @@ export type TabLayoutView = {
   area: LayoutRect;
   focusedPaneId: string;
   panes: ReadonlyArray<{ paneId: string; focused: boolean; rect: LayoutRect }>;
+  splits?: ReadonlyArray<LayoutSplit>;
 };
 
 export type PaneBox = {
@@ -60,6 +69,22 @@ function rect(value: unknown): LayoutRect | null {
   return { x, y, width, height };
 }
 
+/** Read-only split parse: anything malformed is dropped, never guessed. */
+function parseSplits(value: unknown): LayoutSplit[] {
+  if (!Array.isArray(value)) return [];
+  const out: LayoutSplit[] = [];
+  for (const split of value) {
+    if (!isRecord(split)) continue;
+    const id = typeof split.id === "string" && split.id.length > 0 && split.id.length <= 256 ? split.id : "";
+    const direction = split.direction === "right" || split.direction === "down" ? split.direction : null;
+    const ratio = Number(split.ratio);
+    const splitRect = rect(split.rect);
+    if (!id || !direction || !splitRect || !Number.isFinite(ratio) || ratio <= 0 || ratio >= 1) continue;
+    out.push({ id, direction, ratio, rect: splitRect });
+  }
+  return out;
+}
+
 export function parseSnapshotLayouts(snapshot: SnapshotWire | { layouts?: unknown }): TabLayout[] {
   const raw = (snapshot as { layouts?: unknown }).layouts;
   if (!Array.isArray(raw)) return [];
@@ -81,6 +106,7 @@ export function parseSnapshotLayouts(snapshot: SnapshotWire | { layouts?: unknow
       }
     }
     if (!panes.length) continue;
+    const splits = parseSplits(item.splits);
     out.push({
       workspaceId,
       tabId,
@@ -88,6 +114,7 @@ export function parseSnapshotLayouts(snapshot: SnapshotWire | { layouts?: unknow
       area,
       focusedPaneId: resourceId(item.focused_pane_id),
       panes,
+      ...(splits.length ? { splits } : {}),
     });
   }
   return out;
@@ -102,6 +129,7 @@ export function layoutSignature(layouts: TabLayout[]): string {
       layout.focusedPaneId,
       layout.area,
       layout.panes.map((pane) => [pane.paneId, pane.focused, pane.rect]),
+      (layout.splits ?? []).map((split) => [split.id, split.direction, split.ratio, split.rect]),
     ]),
   );
 }

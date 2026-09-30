@@ -9,6 +9,7 @@ import { isAgentChat, isFullTerminal, openPaneId, sessionStore } from "../featur
 import { computers, computersStore } from "../features/computers/catalog-store";
 import { connectFailure } from "../features/connection/connection-store";
 import { unreachableHop } from "../features/connection/connection-path";
+import { boardReturn, boardStore } from "../features/board/layout-store";
 
 /**
  * The layout input, read from the domains that own it.
@@ -28,6 +29,7 @@ export function currentLayoutInput(): LayoutInput {
     termFontPx: termFontPx(),
     operationBusy: operationBusy(),
     unreachable: computers().length === 1 && unreachableHop(connectFailure()) !== null,
+    boardReturn: boardReturn(),
   };
 }
 
@@ -50,6 +52,7 @@ export function publishedLayoutInput(): LayoutInput {
     operationBusy: capabilitiesStore.get().operationBusy,
     unreachable: computersStore.get().computers.length === 1
       && unreachableHop(connectionStore.get().connectFailure) !== null,
+    boardReturn: boardStore.get().boardReturn,
   };
 }
 

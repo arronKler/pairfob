@@ -1,4 +1,4 @@
-import { happy, resetChatDOM } from "../../../test-support/chat-dom";
+import { resetChatDOM } from "../../../test-support/chat-dom";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { WorkspaceSnapshotRestorer } from "../../../test-support/workspace-snapshot-restore";
 import { act } from "react";
@@ -21,6 +21,7 @@ import { setLang, t } from "../../lib/i18n";
 import { NO_OPERATION_CAPABILITIES } from "../../lib/operations";
 import { ProtocolError } from "../../lib/protocol/errors";
 import { openBoardPaneMenu } from "./pane-menu";
+import { pickBoardSplit } from "./board-bridge";
 import type { SnapshotWire } from "../../lib/dashboard";
 
 const caps = { ...NO_OPERATION_CAPABILITIES, split_pane: true, resize_pane: true, swap_pane: true, zoom_pane: true };
@@ -78,78 +79,129 @@ async function open() {
   return { finished };
 }
 async function click(label: string) {
-  const button = [...document.querySelectorAll<HTMLButtonElement>("dialog button")].find(button => button.textContent?.trim() === label);
+  const button = [...document.querySelectorAll<HTMLButtonElement>("dialog button")].find(button =>
+    (button.querySelector(".menu-choice-title")?.textContent ?? button.textContent)?.trim() === label);
   if (!button) throw new Error(`Button not found: ${label}`);
   await act(async () => { button.click(); await Promise.resolve(); });
 }
-async function submit() {
-  const form = document.querySelector("dialog form")!;
-  await act(async () => { form.dispatchEvent(new happy.Event("submit", { bubbles: true, cancelable: true })); });
+
+const rows = () => [...document.querySelectorAll<HTMLButtonElement>("dialog .menu-choice")];
+const row = (label: string) => rows().find(button => button.querySelector(".menu-choice-title")?.textContent === label);
+async function stepper(label: string) {
+  const button = document.querySelector<HTMLButtonElement>(`dialog button[aria-label="${label}"]`);
+  if (!button) throw new Error(`Stepper not found: ${label}`);
+  await act(async () => { button.click(); await Promise.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+}
+async function splitSheet(direction: "right" | "down") {
+  await act(async () => { pickBoardSplit("p2", direction); await Promise.resolve(); });
+  expect(document.querySelector("dialog.board-split-sheet")).not.toBeNull();
 }
 
-test("split targets the pressed pane while preserving the current session and board", async () => {
+test("the menu groups this session, its layout and management, with the pane named in the head", async () => {
+  await open();
+  expect([...document.querySelectorAll("dialog .menu-section-title")].map(node => node.textContent))
+    .toEqual([t("boardMenu.groupPane"), t("boardMenu.groupLayout"), t("boardMenu.groupManage")]);
+  expect(rows().map(button => button.querySelector(".menu-choice-title")?.textContent)).toEqual([
+    t("boardMenu.open"), t("boardMenu.rename"), t("boardMenu.split"), t("boardMenu.resize"), t("boardMenu.swapPick"),
+    t("boardMenu.maximize"), t("boardMenu.close"),
+  ]);
+  expect(document.querySelector("dialog .sheet-subtitle")?.textContent).toContain(t("boardMenu.positionH", { h: t("boardMenu.h.right") }));
+  expect(document.querySelector(".board-context-menu, .board-menu-overlay")).toBeNull();
+});
+
+test("split starts placement on the canvas; the picked side splits the pressed pane and stays on the board", async () => {
   const { finished } = await open();
-  await click(t("boardMenu.down"));
-  expect(document.querySelector(".board-split-preview.down")?.textContent).toContain("p2");
-  await submit(); await act(async () => { await finished; });
+  await click(t("boardMenu.split")); await act(async () => { await finished; });
+  expect(boardInteractionStore.get()).toMatchObject({ placementKind: "split", placementPaneId: "p2", tabId: "t1" });
+  await splitSheet("down");
+  expect(document.querySelector("dialog .create-summary")?.textContent)
+    .toBe(t("boardMenu.splitSummaryDown", { title: "p2", kind: t("create.terminal") }));
+  await click(t("boardMenu.splitSubmit"));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
   expect(calls).toEqual([{ method: "split", value: { pane_id: "p2", direction: "down", ratio: 0.5, cwd: "/tmp/demo" } }]);
   expect(openPaneId()).toBe("p1"); expect(currentScreen()).toBe("board");
   expect(boardInteractionStore.get().createdPaneId).toBe("p3");
 });
 
-test("resize stays open, acts on p2 and rechecks capabilities before another command", async () => {
-  await open(); await click(t("boardMenu.resize")); await click(t("form.wider"));
-  expect(calls).toEqual([{ method: "resize", value: { pane_id: "p2", direction: "right", amount: 0.15 } }]);
-  expect(document.querySelector("dialog")?.textContent).toContain(t("boardMenu.done"));
-  await act(async () => applyCapabilities(NO_OPERATION_CAPABILITIES, []));
-  expect(document.querySelector("dialog")?.textContent).not.toContain(t("form.wider"));
-  expect(calls).toHaveLength(1);
+test("swap starts the neighbour pick on the canvas instead of a list of directions", async () => {
+  const { finished } = await open();
+  await click(t("boardMenu.swapPick")); await act(async () => { await finished; });
+  expect(boardInteractionStore.get()).toMatchObject({ placementKind: "swap", placementPaneId: "p2" });
+  expect(calls).toEqual([]);
 });
 
-test("changing tabs closes the menu and invalidates a pending split form even if the tab returns", async () => {
+test("resize steps move this pane's own divider the way herdr applies it, and recheck capabilities", async () => {
+  const { finished } = await open(); await click(t("boardMenu.resize")); await act(async () => { await finished; });
+  expect(document.querySelector("dialog.board-resize-sheet")).not.toBeNull();
+  expect(document.querySelector("dialog .menu-setting-label small")?.textContent)
+    .toBe(t("boardMenu.dividerSide", { side: t("boardMenu.side.left"), n: 50 }));
+  // p2 is the right-hand pane: wider moves the divider left, naming the pane whose left edge it is.
+  await stepper(t("form.wider"));
+  expect(calls).toEqual([{ method: "resize", value: { pane_id: "p2", direction: "left", amount: 0.05 } }]);
+  await stepper(t("form.narrower"));
+  expect(calls.at(-1)).toEqual({ method: "resize", value: { pane_id: "p1", direction: "right", amount: 0.05 } });
+  expect(document.querySelector("dialog")?.textContent).toContain(t("boardMenu.done"));
+  expect(document.querySelector<HTMLButtonElement>(`dialog button[aria-label="${t("form.taller")}"]`)!.disabled).toBe(true);
+  await act(async () => applyCapabilities(NO_OPERATION_CAPABILITIES, []));
+  expect(document.querySelector<HTMLButtonElement>(`dialog button[aria-label="${t("form.wider")}"]`)!.disabled).toBe(true);
+  expect(calls).toHaveLength(2);
+});
+
+test("changing tabs closes the menu and retires a pending split sheet even if the tab returns", async () => {
   let opened = await open();
   await act(async () => { selectBoardTab("t2"); await Promise.resolve(); });
   await opened.finished;
   expect(document.querySelector("dialog")).toBeNull();
   await act(async () => selectBoardTab("t1"));
-  opened = await open(); await click(t("boardMenu.right"));
+  opened = await open(); await click(t("boardMenu.split")); await act(async () => { await opened.finished; });
+  await splitSheet("right");
   act(() => { selectBoardTab("t2"); selectBoardTab("t1"); });
-  await submit(); await act(async () => { await opened.finished; });
+  await click(t("boardMenu.splitSubmit"));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
   expect(calls).toEqual([]);
 });
 
-test("unknown outcome refreshes without repeating the mutation and keeps the panel usable", async () => {
+test("unknown outcome refreshes without repeating the step and keeps the sheet usable", async () => {
   failure = true;
-  await open(); await click(t("boardMenu.resize")); await click(t("form.wider"));
+  const { finished } = await open(); await click(t("boardMenu.resize")); await act(async () => { await finished; });
+  await stepper(t("form.wider"));
   expect(calls).toHaveLength(1);
   expect(document.querySelector("dialog")?.textContent).toContain(t("boardMenu.done"));
   expect(document.querySelectorAll("dialog button:disabled").length).toBeLessThan(document.querySelectorAll("dialog button").length);
 });
 
-test("disconnect disables menu commands and closing the target externally retires the menu", async () => {
+test("disconnect disables menu commands with the reason and closing the target externally retires the menu", async () => {
   const { finished } = await open();
   connected = false;
   await act(async () => setNetworkOnline(false));
-  expect([...document.querySelectorAll<HTMLButtonElement>('dialog [role="menuitem"]')].every(button => button.disabled)).toBe(true);
-  expect(document.querySelector("dialog")?.textContent).toContain(t("boardMenu.offline"));
+  expect(rows().every(button => button.disabled)).toBe(true);
+  expect(row(t("boardMenu.close"))?.querySelector(".menu-choice-detail")?.textContent).toBe(t("boardMenu.offline"));
   snapshot.panes = snapshot.panes?.filter(pane => pane.pane_id !== "p2");
   await act(async () => { replaceAgentsFromSnapshot(snapshot); await Promise.resolve(); });
   await finished;
   expect(document.querySelector("dialog")).toBeNull(); expect(calls).toEqual([]);
 });
 
+test("a maximized tab keeps sizing visible with the reason and offers restore", async () => {
+  snapshot.layouts![0].zoomed = true;
+  replaceAgentsFromSnapshot(snapshot); act(() => focusBoard("w1", "t1"));
+  await open();
+  expect(row(t("boardMenu.resize"))?.disabled).toBe(true);
+  expect(row(t("boardMenu.resize"))?.querySelector(".menu-choice-detail")?.textContent).toBe(t("boardMenu.zoomedReason"));
+  expect(row(t("boardMenu.restore"))?.disabled).toBe(false);
+});
 
 test("split preserves a fitted custom camera and an in-flight result cannot pull the reader back to its tab", async () => {
   act(() => setBoardCamera({ scale: 1.8, panX: -75, panY: 40 }, true));
-  let opened = await open(); await click(t("boardMenu.right")); await submit();
-  await act(async () => { await opened.finished; });
+  await splitSheet("right"); await click(t("boardMenu.splitSubmit"));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
   expect(liveBoardCamera()).toMatchObject({ scale: 1.8, panX: -75, panY: 40, fitted: true });
   let release!: () => void;
   splitWait = new Promise<void>(resolve => { release = resolve; });
-  opened = await open(); await click(t("boardMenu.down")); await submit();
+  await splitSheet("down"); await click(t("boardMenu.splitSubmit"));
   expect(calls).toHaveLength(2);
   await act(async () => selectBoardTab("t2"));
-  await act(async () => { release(); await opened.finished; });
+  await act(async () => { release(); await new Promise(resolve => setTimeout(resolve, 0)); });
   expect(liveBoardCatalog().tabId).toBe("t2");
   expect(boardInteractionStore.get().createdPaneId).toBe("");
 });

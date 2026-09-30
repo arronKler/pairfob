@@ -1,45 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, type CSSProperties, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
 import { Button, EmptyState, AgentAvatar } from "../../../shared/ui/primitives";
-import type { PaneBox, TabLayout } from "../../../lib/layout";
+import { paneBoxes, type PaneBox, type TabLayout } from "../../../lib/layout";
 import { tileFillScale } from "../model/camera";
+import { layoutDraft, subscribeLayoutDraft } from "../model/draft-store";
+import { layoutWithSplitRatio } from "../model/layout-draft";
 import type { BoardCanvasModel, BoardTileView } from "../model/board-view";
-import { BoardAnsiPreview } from "./board-preview";
+import { BoardAnsiPreview, BoardCardLines } from "./board-preview";
+import { BoardCanvasOverlays } from "./canvas-overlays";
 import { t } from "../../../lib/i18n";
 
-/**
- * Canvas lifecycle the page hands down.
- *
- * The component owns refs and effects; every read or write of the camera, the
- * bound layout and the remote session goes through this interface, so the
- * gesture adapter stays free of application state and the page can retire it.
- */
-export type BoardCanvasController = {
-  applyTransform(stage: HTMLElement): void;
-  /**
-   * Bind the layout this canvas actually displays. The adapter must not resolve
-   * a different one: the fit, the scroll grids and the tiles all come from it.
-   */
-  bindGestures(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout): () => void;
-  /**
-   * Register the mounted canvas as the toolbar's target, with the layout it is
-   * showing, so a fit measures what the reader sees.
-   */
-  registerHost(viewport: HTMLElement | null, stage: HTMLElement | null, layout: TabLayout | null): void;
-  releaseHost(): void;
-  openPane(paneId: string, tile: HTMLElement | null): void;
-  openMenu?(paneId: string, point: { x: number; y: number }, tile: HTMLElement): void;
-  zoomAt(
-    viewport: HTMLElement,
-    stage: HTMLElement,
-    clientX: number,
-    clientY: number,
-    nextScale: number,
-  ): void;
-  /** Retire the remote scroll controller and any pending thumbnail read. */
-  releaseScrollOnLeave(): void;
-  /** A tile the incoming pane expands out of shares its view-transition name. */
-  shareTileOpening(paneId: string, tile: HTMLElement | null): void;
-};
+import type { BoardCanvasController } from "./canvas-controller";
+export type { BoardCanvasController, BoardLayoutKind } from "./canvas-controller";
 
 function tileStyle(box: PaneBox): CSSProperties {
   return {
@@ -54,7 +25,7 @@ function tileStyle(box: PaneBox): CSSProperties {
 
 function BoardPaneTile({
   tile,
-  zoomedLabel,
+  box,
   controller,
   viewportRef,
   stageRef,
@@ -62,7 +33,8 @@ function BoardPaneTile({
   highlighted,
 }: {
   tile: BoardTileView;
-  zoomedLabel: string;
+  /** Where the tile sits now: the snapshot box, or the live divider draft. */
+  box: PaneBox;
   controller: BoardCanvasController;
   viewportRef: RefObject<HTMLDivElement | null>;
   stageRef: RefObject<HTMLDivElement | null>;
@@ -88,7 +60,7 @@ function BoardPaneTile({
       data-board-menu-target={highlighted || undefined}
       data-react-board-preview=""
       aria-label={tile.aria}
-      style={tileStyle(tile.box)}
+      style={tileStyle(box)}
       onContextMenu={(event) => {
         event.preventDefault(); event.stopPropagation();
         menu(event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : undefined);
@@ -115,22 +87,43 @@ function BoardPaneTile({
           stage,
           spot.left + spot.width / 2,
           spot.top + spot.height / 2,
-          tileFillScale(frame.width, frame.height, tile.box.width, tile.box.height),
+          tileFillScale(frame.width, frame.height, box.width, box.height),
         );
       }}
     >
       <Button className="board-pane-open" aria-label={tile.aria} />
-      <Button className="board-pane-more" aria-label={t("boardMenu.more", { title: tile.title })}
-        aria-haspopup="menu" onClick={(event) => { event.stopPropagation(); menu(); }}>⋯</Button>
-      <span className="board-pane-head">
-        {/* A plain terminal has no agent state: its tile shows the output only. */}
-        {tile.agentKind ? <span className={`agent-dot agent-${tile.status}`} /> : null}
-        <AgentAvatar kind={tile.agentKind} size="sm" />
-        <span className="board-pane-name">{tile.title}</span>
-        {tile.pill ? <span className={`pill pill-${tile.status}`}>{tile.pill}</span> : null}
-        {tile.zoomed ? <span className="board-pane-zoom">{zoomedLabel}</span> : null}
-      </span>
+      {/* Three layers; the data-level transform.ts writes picks one (model/tile-level). */}
       <BoardAnsiPreview paneId={tile.paneId} cols={tile.cols} rows={tile.rows} paint={previewPaint} />
+      <BoardCardLines paneId={tile.paneId} />
+      <span className="board-pane-mark" aria-hidden="true">
+        <AgentAvatar kind={tile.agentKind} size="sm" />
+        {tile.agentKind ? <span className={`board-pane-dot is-${tile.status}`} /> : null}
+      </span>
+      {/* herdr's border title, at a fixed on-screen size whatever the zoom. */}
+      <span className="board-pane-title">
+        <AgentAvatar kind={tile.agentKind} size="sm" />
+        {/* A plain terminal has no agent state: no dot, no status word. */}
+        {tile.agentKind ? <span className={`board-pane-dot is-${tile.status}`} /> : null}
+        <span className={`board-pane-name${tile.agentKind ? "" : " is-terminal"}`}>{tile.title}</span>
+        {tile.pill ? <span className={`board-pane-word is-${tile.status}`}>{tile.pill}</span> : null}
+        <Button className="board-pane-more" aria-label={t("boardMenu.more", { title: tile.title })}
+          aria-haspopup="menu" onClick={(event) => { event.stopPropagation(); menu(); }}>⋯</Button>
+      </span>
+    </div>
+  );
+}
+
+/** herdr shows one pane alone: say so on the canvas and offer the way back. */
+function ZoomBanner({ canvas, controller }: { canvas: BoardCanvasModel; controller: BoardCanvasController }) {
+  const reason = controller.layoutReason("zoom");
+  // An overlay control: the gesture adapter leaves presses on it alone, or its capture would swallow the click.
+  return (
+    <div className="board-zoom-banner" role="status" data-board-overlay="">
+      <span>{canvas.zoomBanner.text}</span>
+      <Button disabled={!!reason} title={reason || undefined}
+        onClick={() => { void controller.toggleZoom(canvas.zoomedPaneId, "off"); }}>
+        {canvas.zoomBanner.restore}
+      </Button>
     </div>
   );
 }
@@ -142,8 +135,14 @@ export function BoardCanvasView({
   canvas: BoardCanvasModel;
   controller: BoardCanvasController;
 }) {
-  // A fresh token per canvas render: see BoardAnsiPreview's font timing.
-  const previewPaint = {};
+  // A fresh token per canvas model: see BoardAnsiPreview's font timing. A
+  // draft-only render keeps it, so dragging a divider never re-measures fonts.
+  const previewPaint = useMemo(() => ({}), [canvas]);
+  const draft = useSyncExternalStore(subscribeLayoutDraft, layoutDraft);
+  const boxes = useMemo(() => {
+    if (!draft || !canvas.layout || draft.tabId !== canvas.tabId) return null;
+    return new Map(paneBoxes(layoutWithSplitRatio(canvas.layout, draft.splitId, draft.ratio)).map((box) => [box.paneId, box]));
+  }, [draft, canvas]);
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   // Host registration and gesture binding are owned per setup: when the canvas
@@ -179,7 +178,7 @@ export function BoardCanvasView({
             <BoardPaneTile
               key={tile.paneId}
               tile={tile}
-              zoomedLabel={canvas.zoomedLabel}
+              box={boxes?.get(tile.paneId) ?? tile.box}
               controller={controller}
               viewportRef={viewportRef}
               stageRef={stageRef}
@@ -187,8 +186,10 @@ export function BoardCanvasView({
               highlighted={canvas.highlightedPaneId === tile.paneId}
             />
           ))}
+          <BoardCanvasOverlays canvas={canvas} controller={controller} viewportRef={viewportRef} stageRef={stageRef} />
         </div>
       )}
+      {canvas.layout && canvas.zoomedPaneId ? <ZoomBanner canvas={canvas} controller={controller} /> : null}
     </div>
   );
 }

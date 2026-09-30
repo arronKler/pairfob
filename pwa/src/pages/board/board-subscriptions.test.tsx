@@ -159,7 +159,7 @@ describe("mounted board updates from typed domain actions", () => {
   test("selecting a tab and a workspace repaints nothing and updates everything", async () => {
     boot();
     expect(selected(".board-tab.on")).toBe(t("board.tabIndex", { n: 1 }));
-    expect(selected(".board-ws-name")).toBe("alpha");
+    expect(selected(".board-title-name")).toBe("alpha");
     expect(appRoot().querySelectorAll(".board-pane")).toHaveLength(1);
 
     await select(() => selectTab("w1:t2"));
@@ -169,7 +169,7 @@ describe("mounted board updates from typed domain actions", () => {
     expect(requested).toBe(0);
 
     await select(() => selectWorkspace("w2"));
-    expect(selected(".board-ws-name")).toBe("beta");
+    expect(selected(".board-title-name")).toBe("beta");
     expect(selected(".board-tab.on")).toBe("review");
     expect(selected(".board-pane-name")).toBe("beta-one");
     expect(committed).toBe(0);
@@ -233,11 +233,11 @@ describe("mounted board updates from typed domain actions", () => {
 
   test("a board-only catalog publication updates the rendered workspace label", async () => {
     boot();
-    expect(selected(".board-ws-name")).toBe("alpha");
+    expect(selected(".board-title-name")).toBe("alpha");
     const next = snapshot("w1:t1", "w1");
     next.workspaces[0].label = "Renamed workspace";
     act(() => projectSnapshot(next, [...dashboardStore.get().agents]));
-    expect(selected(".board-ws-name")).toBe("Renamed workspace");
+    expect(selected(".board-title-name")).toBe("Renamed workspace");
     expect(committed).toBe(0);
     expect(requested).toBe(0);
   });

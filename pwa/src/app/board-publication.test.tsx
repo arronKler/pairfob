@@ -76,7 +76,7 @@ describe("stable App board seam", () => {
       replaceAgentsFromSnapshot({ workspaces: [{ workspace_id: "w1", label: "Renamed", cwd: "/r" }] });
     });
     expect(boardStore.get().workspaceList.map((space) => space.label)).toEqual(["Renamed"]);
-    expect(appRoot().querySelector(".board-ws-name")?.textContent).toBe("Renamed");
+    expect(appRoot().querySelector(".board-title-name")?.textContent).toBe("Renamed");
   });
 
   test("a second commit without new writes does not re-publish board or runtime stores", async () => {
@@ -116,7 +116,7 @@ describe("stable App board seam", () => {
       });
       // The commit flushed the held catalog exactly once and rendered the chip.
       expect(boardStore.get().workspaceList.map((space) => space.label)).toEqual(["Held New"]);
-      expect(appRoot().querySelector(".board-ws-name")?.textContent).toBe("Held New");
+      expect(appRoot().querySelector(".board-title-name")?.textContent).toBe("Held New");
       expect(notices).toBe(1);
     } finally {
       release();

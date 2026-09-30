@@ -48,7 +48,8 @@ function RailNav({ view, actions }: { view: HerdViewModel; actions: HerdActions 
       {view.computers && (
         <Button className="text-link" onClick={actions.openComputers}>{view.computers.label}</Button>
       )}
-      <Button className="text-link" onClick={actions.openBoard}>{view.board.label}</Button>
+      <Button className={`text-link${view.board.current ? " is-current" : ""}`} aria-current={view.board.current ? "page" : undefined}
+        onClick={actions.openBoard}>{view.board.label}</Button>
       <Button className="text-link" onClick={actions.openSettings}>{view.settings.label}</Button>
     </nav>
   );

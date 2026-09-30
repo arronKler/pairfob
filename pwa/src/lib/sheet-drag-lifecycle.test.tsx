@@ -75,3 +75,32 @@ test("dispose before the opening microtask cannot leave a stale sheet-open class
   dialog.close();
   dialog.remove();
 });
+
+test("content with its own drag (data-sheet-gesture) never moves or closes the sheet", async () => {
+  const dialog = document.createElement("dialog");
+  const form = document.createElement("form");
+  const preview = document.createElement("div");
+  preview.dataset.sheetGesture = "";
+  const divider = document.createElement("span");
+  preview.append(divider);
+  form.append(preview);
+  dialog.append(form);
+  document.body.append(dialog);
+  dialog.showModal();
+  let closes = 0;
+  const dispose = bindSheetDrag({ dialog, form, close: () => { closes++; } });
+  await Promise.resolve();
+  for (const [kind, y, at] of [["touchstart", 0, 0], ["touchmove", 240, 100], ["touchend", 240, 110]] as const) {
+    const event = new happy.Event(kind, { bubbles: true, cancelable: true });
+    Object.defineProperties(event, { touches: { value: kind === "touchend" ? [] : [{ clientX: 20, clientY: y }] }, timeStamp: { value: at } });
+    divider.dispatchEvent(event as unknown as Event);
+  }
+  expect(form.classList.contains("is-sheet-dragging")).toBeFalse();
+  expect(form.classList.contains("is-sheet-closing")).toBeFalse();
+  expect(form.style.transform).toBe("");
+  await new Promise(resolve => setTimeout(resolve, 450));
+  expect(closes).toBe(0);
+  dispose();
+  dialog.close();
+  dialog.remove();
+});

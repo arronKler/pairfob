@@ -1,0 +1,198 @@
+/*
+  Layout preview (layout page and split page): the tab drawn the way the board
+  draws it — gapless cells on one screen frame, a slim title strip per cell and
+  herdr's dividers as handles with the board's knob.
+*/
+
+.pane-layout-preview {
+  position: relative;
+  width: 100%;
+  max-height: 14rem;
+  margin: 12px 0 0;
+  border-radius: 2px;
+  /* The frame shows through as the 1px seams between cells, like herdr's borders. */
+  background: #262d39;
+  box-shadow: 0 0 0 1px #262d39;
+  touch-action: pan-y;
+}
+
+.pane-layout-cell {
+  position: absolute;
+  display: block;
+  padding: 0.5px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  transition: left var(--dur-3) var(--ease), top var(--dur-3) var(--ease),
+    width var(--dur-3) var(--ease), height var(--dur-3) var(--ease);
+}
+
+.pane-layout-preview.is-dragging .pane-layout-cell { transition: none; }
+
+.pane-layout-cell > span {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--term-bg);
+  color: var(--muted);
+}
+
+/* The title strip: board tile grammar at preview size. */
+.pane-layout-cell b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  min-width: 0;
+  max-width: 100%;
+  height: 18px;
+  padding: 0 6px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background: #141922;
+  font: 600 var(--text-caption) / 18px var(--font);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pane-layout-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4b5361;
+}
+
+.pane-layout-dot.is-working { background: var(--accent); }
+.pane-layout-dot.is-blocked { background: var(--warn); }
+.pane-layout-dot.is-done { background: var(--ok); }
+
+.pane-layout-cell em {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.pane-layout-cell.is-blocked b {
+  background: #1c1a13;
+  color: var(--warn);
+  box-shadow: inset 0 2px 0 var(--warn);
+}
+
+/* The computer's focused pane, as the board marks it. */
+.pane-layout-cell.is-focused > span { box-shadow: inset 0 0 0 1px rgba(110, 168, 254, 0.55); }
+
+.pane-layout-cell.is-current > span {
+  background: rgba(110, 168, 254, 0.1);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.pane-layout-cell.is-current b { color: var(--accent); }
+
+.pane-layout .pane-layout-cell.is-current { touch-action: none; user-select: none; -webkit-user-select: none; }
+
+.pane-layout-cell.is-lifted {
+  z-index: 2;
+  transition: none;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.5));
+}
+
+.pane-layout-cell.is-other { cursor: pointer; }
+
+.pane-layout-cell.is-other:active > span { background: var(--surface-2); }
+
+.pane-layout-cell.is-target > span { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(110, 168, 254, 0.14); }
+
+.pane-layout-cell.is-new > span {
+  background: rgba(110, 168, 254, 0.06);
+  box-shadow: none;
+  outline: 1.5px dashed var(--accent);
+  outline-offset: -1.5px;
+  color: var(--accent);
+}
+
+/* --- Dividers: the board's handle. 28px to grab, a line that lights up, a 4×22 knob. */
+
+.pane-divider {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  cursor: col-resize;
+}
+
+.pane-divider.is-v { width: 28px; margin-left: -14px; }
+
+.pane-divider.is-h { height: 28px; margin-top: -14px; cursor: row-resize; }
+
+.pane-divider::before {
+  content: "";
+  position: absolute;
+  background: transparent;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.pane-divider.is-v::before { top: 0; bottom: 0; left: calc(50% - 1px); width: 2px; }
+
+.pane-divider.is-h::before { left: 0; right: 0; top: calc(50% - 1px); height: 2px; }
+
+.pane-divider-knob {
+  width: 4px;
+  height: 22px;
+  border-radius: 3px;
+  background: #5d6878;
+  box-shadow: 0 0 0 3px #262d39;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.pane-divider.is-h .pane-divider-knob { width: 22px; height: 4px; }
+
+.pane-divider:hover::before,
+.pane-divider:focus-visible::before,
+.pane-divider.is-active::before,
+.pane-divider.is-pending::before { background: var(--accent); }
+
+.pane-divider:hover .pane-divider-knob,
+.pane-divider:focus-visible .pane-divider-knob,
+.pane-divider.is-active .pane-divider-knob { background: var(--accent); }
+
+.pane-divider:focus-visible { outline: 2px solid var(--accent); outline-offset: -8px; border-radius: 6px; }
+
+/* Offline or busy: the line stays visible but lets taps reach the cells beside it. */
+.pane-divider[aria-disabled="true"] { cursor: not-allowed; pointer-events: none; }
+.pane-divider[aria-disabled="true"] .pane-divider-knob { background: #3a424f; }
+.pane-divider[aria-disabled="true"]:hover::before { background: transparent; }
+
+/* After the disabled rules: a pending line is also busy, and must still read as in flight. */
+.pane-divider.is-pending .pane-divider-knob {
+  background: var(--accent);
+  animation: pane-divider-pending 0.8s ease-in-out infinite alternate;
+}
+
+.pane-divider.is-hidden { visibility: hidden; pointer-events: none; }
+
+@keyframes pane-divider-pending { to { opacity: 0.35; } }
+
+.pane-layout-bubble {
+  position: absolute;
+  z-index: 4;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 700 var(--text-caption) / 1.3 var(--font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -140%);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-layout-cell { transition: none; }
+  .pane-divider.is-pending .pane-divider-knob { animation: none; }
+}
