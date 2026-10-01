@@ -17,6 +17,8 @@ import { chooseHerdSession } from "./actions";
 import { loadHerdSessions } from "./load";
 import { HerdSessionSwitch } from "./herd-session-row";
 import { herdSessionList } from "./store";
+import { adoptIncoming, attachmentScopeKey, resetAttachmentQueues, setRuntimeAbort } from "../session/attachments/attachments-store";
+import { resetAttachmentRecovery } from "../session/attachments/attachments-recovery";
 
 /**
  * Regression coverage for the review of the first multi-session attempt
@@ -88,6 +90,8 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  resetAttachmentRecovery();
+  resetAttachmentQueues();
   unmountReact();
   for (const daemonId of daemonIds) closeComputerSession(daemonId);
   attachLiveSession(null);
@@ -272,4 +276,124 @@ describe("the Sessions tab offers the switch without a Settings visit", () => {
     renderReact(createElement(HerdSessionSwitch));
     expect(pill()).toBeNull();
   });
+});
+
+test("a committed attachment is absent from another Herdr session's equal pane ID", async () => {
+  const { resetAttachmentQueues, attachmentScopeKey, adoptIncoming, patchItem } = await import("../session/attachments/attachments-store");
+  const { currentAttachmentScope, scopeMatches } = await import("../session/attachments/attachments-context");
+  const { sendAttachmentsState } = await import("../session/attachments/attachments-send");
+  resetAttachmentQueues();
+  await connectBoth();
+  setScreen("pane");
+  selectPane("w1:p1");
+  const oldScope = currentAttachmentScope()!;
+  const key = attachmentScopeKey(oldScope);
+  const file = new File(["private attachment"], "private.txt", { type: "text/plain" });
+  const localId = adoptIncoming(key, oldScope, [file])[0]!;
+  patchItem(key, localId, { status: "committed", path: "/tmp/default/.pairfob/attachments/private.txt" });
+  expect(sendAttachmentsState().readyPaths).toEqual(["/tmp/default/.pairfob/attachments/private.txt"]);
+  await switchHerdSession("work");
+  setScreen("pane");
+  selectPane("w1:p1");
+  expect(scopeMatches(oldScope)).toBe(false);
+  expect(sendAttachmentsState().readyPaths).toEqual([]);
+});
+
+test("retrying an old failed worktree never mutates the newly selected Herdr session", async () => {
+  const { createWorktreeFrom } = await import("../operations/controller");
+  const { worktreeJobs, retryWorktreeJob, dismissWorktreeJob } = await import("../../lib/worktree-jobs");
+  for (const job of [...worktreeJobs()]) dismissWorktreeJob(job.id);
+  const { created } = await connectBoth();
+  const a = created.get(daemonIds[0])!;
+  await switchHerdSession("work");
+  const targets: (string | null)[] = [];
+  a.createWorktree = async () => { targets.push(a.herdSession!()); throw new Error("create failed"); };
+  expect(createWorktreeFrom({ workspace_id: "w1", branch: "test-branch" })).toBe(true);
+  await flush();
+  const job = worktreeJobs()[0]!;
+  expect(job.status).toBe("failed");
+  await switchHerdSession("other");
+  try {
+    retryWorktreeJob(job.id);
+    await flush();
+    expect(targets).toEqual(["work"]);
+    await switchHerdSession("work");
+    retryWorktreeJob(job.id);
+    await flush();
+    expect(targets).toEqual(["work", "work"]);
+  } finally { dismissWorktreeJob(job.id); }
+});
+
+test("a late worktree result cannot open the same pane ID in another Herdr session", async () => {
+  const { createWorktreeFrom } = await import("../operations/controller");
+  const { worktreeJobs, dismissWorktreeJob } = await import("../../lib/worktree-jobs");
+  for (const job of [...worktreeJobs()]) dismissWorktreeJob(job.id);
+  const { created } = await connectBoth();
+  const a = created.get(daemonIds[0])!;
+  await switchHerdSession("work");
+  let resolveWorktree!: (value: never) => void;
+  a.createWorktree = () => new Promise((resolve) => { resolveWorktree = resolve; });
+  const opened: (string | null)[] = [];
+  a.paneRead = async () => { opened.push(a.herdSession!()); return { text: "other pane", hash: "hash" }; };
+  expect(createWorktreeFrom({ workspace_id: "w1", branch: "test-branch" })).toBe(true);
+  await flush();
+  await switchHerdSession("other");
+  resolveWorktree({ pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1" } as never);
+  for (let i=0; i<50; i++) await Promise.resolve();
+  expect(opened).toEqual([]);
+});
+
+test("switching away and back preserves a previously read completion", async () => {
+  const { acknowledgePaneCompletion } = await import("../dashboard/catalog-store");
+  const { created } = await connectBoth();
+  const a = created.get(daemonIds[0])!;
+  a.snapshot = async () => ({ session: a.herdSession!() ?? "default", panes: [{ pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1", agent: "codex", agent_status: "done", cwd: "/tmp/one", state_change_seq: 1 }] });
+  await switchHerdSession("work");
+  expect(acknowledgePaneCompletion("w1:p1")).toBe(true);
+  expect(dashboardStore.get().agents[0]?.status).toBe("idle");
+  await switchHerdSession("other");
+  await switchHerdSession("work");
+  expect(dashboardStore.get().agents[0]?.status).toBe("idle");
+});
+
+test("a session switch aborts old uploads before their shared RPC target moves", async () => {
+  const { created } = await connectBoth();
+  const a = created.get(daemonIds[0])!;
+  await switchHerdSession("work");
+  const scope = { daemonId: daemonIds[0], herdSession: "work", paneId: "w1:p1" };
+  const key = attachmentScopeKey(scope);
+  const [localId] = adoptIncoming(key, scope, [new File(["bytes"], "queued.bin")]);
+  const abort = new AbortController();
+  setRuntimeAbort(key, localId, abort);
+  const select = a.selectHerdSession!;
+  a.selectHerdSession = (name) => {
+    expect(abort.signal.aborted).toBe(true);
+    select(name);
+  };
+  await switchHerdSession("other");
+  expect(a.herdSession!()).toBe("other");
+});
+
+test("worktree reconciliation cannot issue a later list against a different Herdr session", async () => {
+  const { createWorktreeFrom } = await import("../operations/controller");
+  const { worktreeJobs, dismissWorktreeJob } = await import("../../lib/worktree-jobs");
+  const { ProtocolError } = await import("../../lib/protocol/client");
+  for (const job of [...worktreeJobs()]) dismissWorktreeJob(job.id);
+  const { created } = await connectBoth();
+  const a = created.get(daemonIds[0])!;
+  await switchHerdSession("work");
+  let resolveSnapshot!: (value: Record<string, unknown>) => void;
+  a.snapshot = () => a.herdSession!() === "work"
+    ? new Promise(resolve => { resolveSnapshot = resolve; })
+    : Promise.resolve(panesFor(a.herdSession!()));
+  const listed: (string | null)[] = [];
+  a.listWorktrees = async () => { listed.push(a.herdSession!()); return { worktrees: [] }; };
+  a.createWorktree = async () => { throw new ProtocolError("unknown_outcome", "uncertain"); };
+  expect(createWorktreeFrom({ workspace_id: "w1" })).toBe(true);
+  await flush();
+  await switchHerdSession("other");
+  resolveSnapshot(panesFor("work"));
+  await flush();
+  try { expect(listed).toEqual([]); }
+  finally { for (const job of [...worktreeJobs()]) dismissWorktreeJob(job.id); }
 });

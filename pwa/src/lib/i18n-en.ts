@@ -157,6 +157,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "err.copyDenied": "The browser did not allow copy.",
   "err.paneGone": "That session is gone.",
   "err.worktreeNoTarget": "That worktree has no path or branch to open.",
+  "err.worktreeSessionChanged": "This worktree task belongs to another Herdr session. Switch back to retry.",
   "err.tabNameEmpty": "Tab name cannot be empty.",
   "err.workspaceNameEmpty": "Workspace name cannot be empty.",
   "err.computerConnect": "Could not reach that computer",

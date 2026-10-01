@@ -36,6 +36,7 @@ import {
   backend,
   persistAttachmentCheckpoint,
   registerAttachmentScope,
+  restoreAttachmentScope,
   requestRowDelete,
   resetAttachmentRecovery,
   scheduleAttachmentPersist,
@@ -171,6 +172,35 @@ afterEach(() => {
   attachLiveSession(null);
   setCredential(null);
   setPhase("connect");
+});
+
+test("named-session journal save, restore and delete keep the default session's records", async () => {
+  const defaultId = adoptBin(scopeD1, binFile("default.bin"));
+  await __settleAttachmentRecovery();
+  let herd: string | null = "work";
+  attachLiveSession({ herdSession: () => herd } as unknown as LiveSession);
+  const workScope: AttachmentScope = { ...scopeD1, herdSession: "work" };
+  const workKey = attachmentScopeKey(workScope);
+  registerAttachmentScope(workScope);
+  const workId = adoptBin(workScope, binFile("work.bin"));
+  await __settleAttachmentRecovery();
+  expect(fake.records.has(`d1|p1|${defaultId}`)).toBe(true);
+  expect(fake.records.has(`d1:herd:work|p1|${workId}`)).toBe(true);
+
+  resetAttachmentRecovery();
+  resetAttachmentQueues();
+  setAttachmentJournalBackend(fake);
+  herd = "other";
+  expect(await restoreAttachmentScope({ ...scopeD1, herdSession: "other" })).toBe(0);
+  herd = "work";
+  expect(await restoreAttachmentScope(workScope)).toBe(1);
+  expect(queueSnapshot(workKey)?.items.map(item => item.name)).toEqual(["work.bin"]);
+  herd = null;
+  expect(await restoreAttachmentScope(scopeD1)).toBe(1);
+  expect(queueSnapshot(keyD1)?.items.map(item => item.name)).toEqual(["default.bin"]);
+  await requestRowDelete(workScope, workId);
+  expect(fake.records.has(`d1:herd:work|p1|${workId}`)).toBe(false);
+  expect(fake.records.has(`d1|p1|${defaultId}`)).toBe(true);
 });
 
 describe("ordered save / delete", () => {

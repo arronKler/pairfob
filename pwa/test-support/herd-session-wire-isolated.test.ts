@@ -24,6 +24,7 @@ const { sessionOverWS } = await import("../src/lib/protocol/session-ws") as {
 type Live = {
   close(): void;
   getConfig(): Promise<Record<string, unknown>>;
+  workspaceMediaOpen(paneId: string, path: string): Promise<unknown>;
   snapshot(): Promise<unknown>;
   paneRead(paneId: string): Promise<unknown>;
   sendText(paneId: string, text: string): Promise<unknown>;
@@ -133,4 +134,14 @@ test("ListSessions results are validated strictly", () => withSession(async (liv
     relay.reply(await nextRequest("ListSessions", index + 1), result);
     await expect(pending).rejects.toThrow();
   }
+}));
+
+
+test("a media open keeps the Herdr session selected when issued", () => withSession(async (live) => {
+  live.selectHerdSession("work");
+  const pending = live.workspaceMediaOpen("w1:p1", "image.png");
+  void pending.catch(() => undefined);
+  live.selectHerdSession("other");
+  const request = await nextRequest("WorkspaceMediaOpen");
+  expect(request.params.session).toBe("work");
 }));

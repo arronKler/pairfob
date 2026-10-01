@@ -386,11 +386,12 @@ class ReconnectingSession implements LiveSession {
   workspaceRead = async (paneId: string, path: string) =>
     parseWorkspaceFile(await this.readRPC("WorkspaceRead", { pane_id: paneId, path }));
   workspaceMediaOpen = async (paneId: string, path: string) => {
+    const params = scopeHerdSession("WorkspaceMediaOpen", { pane_id: paneId, path }, this.herdSessionName);
     const transport = await this.captureTransport();
     if (!transport) return Promise.reject(new ProtocolError("reconnecting", "连接正在恢复"));
     return parseWorkspaceMediaOpen(await transport.rpc(
       "WorkspaceMediaOpen",
-      scopeHerdSession("WorkspaceMediaOpen", { pane_id: paneId, path }, this.herdSessionName),
+      params,
       MEDIA_OPEN_RPC_TIMEOUT_MS,
       undefined,
       (result) => {

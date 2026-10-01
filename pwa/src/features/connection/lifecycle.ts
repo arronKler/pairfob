@@ -60,6 +60,7 @@ import {
 } from "./generations";
 import type { LifecyclePorts } from "./ports";
 import { retireHerdView, retireLiveDomains, type RetirementPorts } from "./retirement";
+import { pauseAttachmentTransfers } from "../session/attachments/attachments-store";
 
 export type LifecycleContext = {
   pool: ComputerSessions;
@@ -168,12 +169,14 @@ export async function switchHerdSession(name: string | null, ctx: LifecycleConte
   ctx.retirement.bumpViewIncarnation();
   ctx.retirement.clearAgentTraceCache();
   ctx.retirement.clearBoardPreviews();
+  pauseAttachmentTransfers(currentDaemonId(), session.herdSession());
   session.selectHerdSession(name);
   const screen = currentScreen();
   batch(() => {
     retireHerdView();
     // Pane-scoped preferences are keyed by Herdr session; load the target's.
     adoptDaemonPreferences();
+    reloadCompletionSeen();
     beginIdentityRead();
     // A pane or its files belong to the old session; settings and the board stay.
     if (screen === "pane" || screen === "workspace") setScreen("home");

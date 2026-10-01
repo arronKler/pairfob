@@ -59,6 +59,7 @@ import type {
   AttachmentItem,
   AttachmentScope,
 } from "./attach-model";
+import { attachmentStorageId } from "./attach-model";
 import {
   attachmentsStore,
   attachmentScopeKey,
@@ -339,7 +340,7 @@ function buildPut(scope: AttachmentScope, localId: string): BuiltPut {
   const checkpoint = runtimeCheckpoint(key, localId) ?? undefined;
   const record: AttachmentJournalRecord = {
     version: 1,
-    daemonId,
+    daemonId: attachmentStorageId(scope),
     paneId: scope.paneId,
     localId,
     updatedAt: Date.now(),
@@ -488,7 +489,7 @@ async function executeDelete(
 ): Promise<void> {
   const daemonId = scope.daemonId;
   try {
-    await journalBackend.remove(daemonId as string, scope.paneId, localId);
+    await journalBackend.remove(attachmentStorageId(scope), scope.paneId, localId);
   } catch {
     // The local row is already gone; surface the failed cleanup honestly in
     // the pane notice instead of dropping the rejection on the floor, but
@@ -614,7 +615,7 @@ export async function restoreAttachmentScope(scope: AttachmentScope): Promise<nu
   if (!session || !scopeMatches(scope) || !uploadFileEnabled()) return 0;
   let records: AttachmentJournalRecord[];
   try {
-    records = await journalBackend.list(daemonId, scope.paneId);
+    records = await journalBackend.list(attachmentStorageId(scope), scope.paneId);
   } catch {
     // Missing/blocked storage or a read failure: nothing to restore. SAVE
     // failures (if the user uploads) still produce the visible warning.
@@ -626,9 +627,9 @@ export async function restoreAttachmentScope(scope: AttachmentScope): Promise<nu
   if (!scopeMatches(scope) || liveSession() !== session || !uploadFileEnabled()) return 0;
   let restored = 0;
   for (const record of records) {
-    if (record.daemonId !== daemonId || record.paneId !== scope.paneId) continue;
+    if (record.daemonId !== attachmentStorageId(scope) || record.paneId !== scope.paneId) continue;
     if (tombstones.has(rowId(key, record.localId))) continue;
-    if (!restoreAttachmentRecord(record)) continue;
+    if (!restoreAttachmentRecord(record, scope)) continue;
     restored += 1;
     // The restored bytes ARE the durable state: remember their signature so a
     // subscription publish does not immediately rewrite the same Blobs.

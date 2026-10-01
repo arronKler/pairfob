@@ -37,6 +37,11 @@ export function validHerdSessionName(name: string): boolean {
   return HERD_SESSION_NAME.test(name) && name !== "." && name !== "..";
 }
 
+/** Preserve default storage keys; named sessions have a distinct local namespace. */
+export function herdSessionScope(daemonId: string, session: string | null): string {
+  return session === null ? daemonId : `${daemonId}:herd:${session}`;
+}
+
 /** Params for `op` targeting `session`; the connection's selection is the one authority. */
 export function scopeHerdSession(op: string, params: unknown, session: string | null): unknown {
   if (session === null || !HERD_SESSION_SCOPED_OPS.has(op)) return params;
