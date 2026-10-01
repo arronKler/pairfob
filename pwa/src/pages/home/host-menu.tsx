@@ -1,5 +1,5 @@
-import { Monitor, Plus, RefreshCw, SlidersHorizontal } from "lucide-react";
-import { beginAddComputer, switchComputer } from "../../features/computers/actions";
+import { Monitor, Plus, RefreshCw, Server, SlidersHorizontal } from "lucide-react";
+import { beginAddComputer, machineLinks, openComputers, switchComputer } from "../../features/computers/actions";
 import { computersStore, currentDaemonId } from "../../features/computers/catalog-store";
 import { reconnectLiveSessions } from "../../features/connection/controller";
 import { openSettingsSection } from "../../features/settings/actions";
@@ -11,7 +11,8 @@ import type { HerdHostView } from "../../features/dashboard/model/herd-view";
 /**
  * The computer panel behind the phone header title. It replaces the old top
  * bar's Computers link and status line: which computer, how it is reached, a
- * retry while contact is lost, switching, connection details and adding one.
+ * retry while contact is lost, switching, connection details, adding one, and
+ * the machines this computer reaches when it can link them.
  */
 export function openHostMenu(host: HerdHostView): void {
   const current = currentDaemonId();
@@ -36,6 +37,10 @@ export function openHostMenu(host: HerdHostView): void {
         action={() => openSettingsSection("connection")} />
       <MenuChoice modal={modal} icon={<Plus size={18} aria-hidden="true" />} title={t("host.add")}
         action={beginAddComputer} />
+      {machineLinks.view().machines.length ? (
+        <MenuChoice modal={modal} icon={<Server size={18} aria-hidden="true" />} title={t("machines.menu", { host: host.name })}
+          action={openComputers} />
+      ) : null}
     </>
   ), { subtitle: host.line });
 }

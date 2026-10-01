@@ -1,11 +1,11 @@
 import { clearPairingFragment } from "../connection/connection-store";
 import {
-  computers, currentDaemonId, liveSession, setAddingComputer,
+  computers, computersStore, currentDaemonId, liveSession, setAddingComputer,
   setComputers, setCredential,
 } from "./catalog-store";
 import type { ComputersRecord } from "./catalog-store";
 import type { SessionRecord } from "../session/session-store";
-import { phase, setPhase } from "../connection/connection-store";
+import { originProtocol, phase, setPhase, wsURL } from "../connection/connection-store";
 import type { ConnectionRecord } from "../connection/connection-store";
 import { currentScreen, goToScreen, setComputersFrom, setScreen } from "../../app/navigation-store";
 import type { NavigationRecord } from "../../app/navigation-store";
@@ -18,9 +18,11 @@ import { bindSessionOwnerFromLive } from "../../features/session/bind-live";
 import { commitView } from "../../app/host";
 import { applyComposeDraft, bumpViewIncarnation, parkComposeView } from "../session/drafts/compose-drafts";
 import { computerTitle } from "../../lib/computer-catalog";
-import { deleteCredential } from "../../lib/credentials";
+import { deleteCredential, saveCredential } from "../../lib/credentials";
 import { t } from "../../lib/i18n";
-import { ProtocolError, type PairResult } from "../../lib/protocol/client";
+import { fragmentUsableOnOrigin, parsePairingFragment } from "../../lib/pairing-input";
+import { pairOverWS, ProtocolError, type PairResult } from "../../lib/protocol/client";
+import { friendlyDeviceLabel } from "../../lib/ui-model";
 import { track } from "../../lib/telemetry";
 import {
   closeComputerSession, establish, landAfterDisconnect, refreshFromSession, reloadComputers,
@@ -31,6 +33,8 @@ import { forgetDaemonAttachments } from "../session/attachments/attachments-reco
 import { retirePairingWork } from "../pairing/work";
 import type { ComputersBackTarget, ComputersViewInput } from "./model";
 import { advanceComputersFlow, computersFlowId } from "./work";
+import { createMachineLinks } from "./machine-link";
+import { capabilitiesStore, capabilityEnabled } from "../operations/capabilities-store";
 
 /**
  * Computer controller — the feature's one connected adapter.
@@ -246,3 +250,58 @@ export async function forgetComputer(daemonId: string): Promise<void> {
     showStatus(t("computers.forgot"));
   });
 }
+
+/**
+ * A relayed link is trusted no further than a scanned one: it must be this
+ * page's own `/pair` link and name its daemon and fingerprint, which the
+ * handshake then checks.
+ */
+export async function pairFromMachineLink(pairUrl: string, signal: AbortSignal): Promise<PairResult> {
+  let url: URL;
+  try {
+    url = new URL(pairUrl);
+  } catch {
+    throw new ProtocolError("bad_link");
+  }
+  const fragment = url.origin === location.origin && url.pathname === "/pair" ? parsePairingFragment(url.hash) : null;
+  if (!fragment?.daemonId || !fragment.fingerprint || !fragmentUsableOnOrigin(fragment, originProtocol())) {
+    throw new ProtocolError("bad_link");
+  }
+  return pairOverWS(wsURL({ daemonId: fragment.daemonId }), { pair_ref: fragment.pairRef }, fragment.code, {
+    protocol: originProtocol(),
+    expectedDaemonId: fragment.daemonId,
+    expectedFingerprint: fragment.fingerprint,
+    label: friendlyDeviceLabel(navigator.userAgent),
+    signal,
+  });
+}
+
+/** Machine links for the connected computer: its session, this device's catalog. */
+export const machineLinks = createMachineLinks({
+  session: liveSession,
+  hostId: currentDaemonId,
+  enabled: () => capabilityEnabled("link_machine"),
+  confirmInstall: label => askConfirm({
+    title: t("machines.installTitle"), subject: { name: label }, message: t("machines.installEffect"),
+    confirmLabel: t("machines.install"), tone: "primary",
+  }),
+  pair: pairFromMachineLink,
+  save: saveCredential,
+  reload: () => reloadComputers(),
+  announce: label => showStatus(t("machines.addedToast", { name: label })),
+  delay: ms => new Promise(resolve => setTimeout(resolve, ms)),
+});
+
+// List once per computer that advertises linking, so the phone's computer
+// panel can offer its machines before the Computers page is ever opened. The
+// grant and the connected computer are published by different domains, in
+// either order, so both are watched.
+let machinesListedFor = "";
+function listMachinesForOwner(): void {
+  const owner = capabilityEnabled("link_machine") && liveSession() ? currentDaemonId() ?? "" : "";
+  if (owner === machinesListedFor) return;
+  machinesListedFor = owner;
+  void machineLinks.refresh();
+}
+capabilitiesStore.subscribe(listMachinesForOwner);
+computersStore.subscribe(listMachinesForOwner);

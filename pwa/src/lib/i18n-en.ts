@@ -8,6 +8,7 @@ import { enAgentInfo } from "./i18n-en-agent-info";
 import { enBoardMenu } from "./i18n-board-menu";
 import { enBoardCanvas } from "./i18n-board-canvas";
 import { enDialogs } from "./i18n-dialogs";
+import { enMachines } from "./i18n-machines";
 import { enShell } from "./i18n-en-shell";
 import { enWorkspace } from "./i18n-en-workspace.ts";
 import type { zh } from "./i18n-zh.ts";
@@ -25,6 +26,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   ...enBoardMenu,
   ...enBoardCanvas,
   ...enDialogs,
+  ...enMachines,
   "fileActions.rename": "Rename",
   "fileActions.delete": "Delete file",
   "fileActions.invalidName": "Enter a valid filename without path separators. It cannot be ., .. or .git.",

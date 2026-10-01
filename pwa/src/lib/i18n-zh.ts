@@ -8,6 +8,7 @@ import { zhAgentInfo } from "./i18n-zh-agent-info";
 import { zhBoardMenu } from "./i18n-board-menu";
 import { zhBoardCanvas } from "./i18n-board-canvas";
 import { zhDialogs } from "./i18n-dialogs";
+import { zhMachines } from "./i18n-machines";
 import { zhShell } from "./i18n-zh-shell";
 import { zhWorkspace } from "./i18n-zh-workspace.ts";
 
@@ -28,6 +29,7 @@ export const zh = {
   ...zhBoardMenu,
   ...zhBoardCanvas,
   ...zhDialogs,
+  ...zhMachines,
   "fileActions.rename": "重命名",
   "fileActions.delete": "删除文件",
   "fileActions.invalidName": "请输入有效文件名，不能包含路径分隔符，也不能是 .、.. 或 .git。",

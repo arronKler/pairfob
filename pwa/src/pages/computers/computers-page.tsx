@@ -2,9 +2,12 @@ import { useComputers } from "../../features/computers/hooks";
 import { useConnection } from "../../features/connection/hooks";
 import { useNavigation } from "../../app/domain-hooks";
 import { useSession } from "../../features/session/hooks";
-import { beginAddComputer, computersPageInput, forgetComputer, leaveComputers, switchComputer } from "../../features/computers/actions";
+import { beginAddComputer, computersPageInput, forgetComputer, leaveComputers, machineLinks, switchComputer } from "../../features/computers/actions";
 import { ComputerListView } from "../../features/computers/computer-list-view";
 import { computersViewModel } from "../../features/computers/model";
+import { MachineLinkSection } from "../../features/computers/machine-link-view";
+import { useCapabilities } from "../../features/operations/hooks";
+import { computerTitle } from "../../lib/computer-catalog";
 import { AppNotice } from "../../app/notice";
 import { ManualUpdateHelp } from "../../features/settings/daemon-update-view";
 import { isDesk } from "../../app/viewport";
@@ -33,6 +36,22 @@ function useComputersView(withBack: boolean) {
   return computersViewModel(computersPageInput(withBack, isDesk(), { connection, computers, navigation, session }));
 }
 
+/** Machines the connected computer reaches; only an established session can list them. */
+function ConnectedMachines() {
+  const computers = useComputers();
+  const capabilities = useCapabilities();
+  const host = computers.credential;
+  return (
+    <MachineLinkSection
+      links={machineLinks}
+      enabled={capabilities.operationCapabilities.link_machine}
+      hostId={host?.daemonId ?? null}
+      hostTitle={host ? computerTitle(host) : ""}
+      pairedTitles={new Map(computers.computers.map(pair => [pair.daemonId, computerTitle(pair)]))}
+    />
+  );
+}
+
 export function ComputersContent({ withBack }: { withBack: boolean }) {
   const view = useComputersView(withBack);
   return (
@@ -43,7 +62,7 @@ export function ComputersContent({ withBack }: { withBack: boolean }) {
       onAdd={beginAddComputer}
       onBack={() => leaveComputers(view.backTarget)}
       notice={<AppNotice />}
-      footer={view.showManualUpdateHelp ? <ManualUpdateHelp /> : null}
+      footer={withBack ? <ConnectedMachines /> : view.showManualUpdateHelp ? <ManualUpdateHelp /> : null}
     />
   );
 }
