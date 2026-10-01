@@ -29,6 +29,8 @@ export function MachineLinkSection({ links, enabled, hostId, hostTitle, pairedTi
 }) {
   const view = useSyncExternalStore(links.subscribe, links.view, links.view);
   useEffect(() => {
+    // A failure belongs to the visit that saw it; coming back starts clean.
+    links.dismissFailure();
     void links.refresh();
   }, [links, enabled, hostId]);
   if (!enabled || !view.machines.length) return null;

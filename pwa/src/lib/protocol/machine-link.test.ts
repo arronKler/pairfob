@@ -36,6 +36,7 @@ describe("machine link results", () => {
       operationId: base.operation_id, machineId: "m1", phase: "offering", pairUrl: "https://pairfob.com/pair#c=7K3M9H2P",
     });
     expect(parseMachineLink({ ...base, phase: "failed", error: "unreachable" }).error).toBe("unreachable");
+    expect(parseMachineLink({ ...base, phase: "failed", error: "rate_limited" }).error).toBe("rate_limited");
     for (const bad of [
       { ...base, phase: "paired", pair_url: "https://pairfob.com/pair#c=7K3M9H2P" },
       { ...base, phase: "offering", pair_url: "x".repeat(513) },

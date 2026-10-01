@@ -147,6 +147,18 @@ func TestCancellingAMachineLinkJobDeniesTheRemoteSlot(t *testing.T) {
 	}
 }
 
+func TestMachineLinkJobNamesTheEnrollQuota(t *testing.T) {
+	machine, remote := newFakeMachine(t, false)
+	machine.mark(t, "quota")
+	service := testLinkService(t, remote, buildMachine)
+	if _, err := service.Start("dev_owner", "op_aaaaaaaaaaaaaaaa", buildMachine.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if status := waitLinkPhase(t, service, "dev_owner", "failed"); status.Error != "rate_limited" {
+		t.Fatalf("status = %+v", status)
+	}
+}
+
 func TestMachineLinkJobReportsFailureCodes(t *testing.T) {
 	_, remote := newFakeMachine(t, true)
 	if err := os.WriteFile(remote.ssh, []byte("#!/bin/sh\necho 'Permission denied (publickey).' >&2\nexit 255\n"), 0o755); err != nil {

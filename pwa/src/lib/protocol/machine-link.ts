@@ -4,7 +4,7 @@ export const MACHINE_STATES = ["available", "disabled", "session_unsupported"] a
 export const MACHINE_LINK_PHASES = ["idle", "checking", "needs_install", "installing", "offering", "paired", "failed"] as const;
 export const MACHINE_LINK_ERRORS = [
   "unreachable", "unsupported", "disabled", "session_unsupported", "not_running",
-  "install_failed", "cancelled", "expired", "internal",
+  "install_failed", "rate_limited", "cancelled", "expired", "internal",
 ] as const;
 
 export type MachineState = typeof MACHINE_STATES[number];

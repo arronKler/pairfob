@@ -191,7 +191,9 @@ func (l machineLinker) ready(ctx context.Context, machine runtime.Machine) error
 	if !probe.supported() {
 		return linkErrorf("unsupported", "%s runs %s; Pairfob supports Linux and macOS", label, probe.OS)
 	}
-	if probe.needsInstall() {
+	// A Pairfob that is present but not running is usually an install that
+	// stopped before enrolling; the installer is also its repair.
+	if probe.needsInstall() || !probe.Running {
 		ok, err := l.confirm(label)
 		if err != nil {
 			return err
@@ -205,6 +207,11 @@ func (l machineLinker) ready(ctx context.Context, machine runtime.Machine) error
 		if err := l.remote.install(ctx, machine.Target, l.install, l.out); err != nil {
 			if errors.Is(err, errMachineUnreachable) {
 				return machineReachError(label, machine, err)
+			}
+			// The machine's own enroll reports the origin's per-address quota;
+			// installing by hand would hit the same wall, so name it.
+			if strings.Contains(err.Error(), enrollNotice("rate_limited")) {
+				return linkErrorf("rate_limited", "%s could not be set up: %s", label, enrollNotice("rate_limited"))
 			}
 			return linkErrorf("install_failed", "installing Pairfob on %s did not finish: %w", label, err)
 		}

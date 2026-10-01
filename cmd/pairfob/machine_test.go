@@ -53,6 +53,11 @@ echo "$*" >> "$FAKE_MACHINE/curl"
 while [ "$1" != "-o" ]; do shift; done
 cat > "$2" <<'INSTALL'
 echo "$PAIRFOB_DOWNLOAD_BASE $*" >> "$FAKE_MACHINE/installs"
+if [ -e "$FAKE_MACHINE/quota" ]; then
+  echo "2026/10/01 11:43:26 this network has set up too many computers today. Try again tomorrow." >&2
+  echo "2026/10/01 11:43:26 exit status 1" >&2
+  exit 1
+fi
 cp "$FAKE_MACHINE/pairfob.new" "$FAKE_MACHINE/bin/pairfob"
 rm -f "$FAKE_MACHINE/old"
 echo "installed"
@@ -172,7 +177,6 @@ func TestMachineLinkRefusesMachinesItCannotServe(t *testing.T) {
 	}{
 		"disabled":      {machine: runtime.Machine{ID: "m", Label: "Build machine", Target: "workbox", Session: "default"}, want: "disabled in Herdr"},
 		"named session": {machine: runtime.Machine{ID: "m", Label: "Build machine", Target: "workbox", Session: "agents", Enabled: true}, want: "only the default session"},
-		"not running":   {machine: buildMachine, mark: "stopped", want: "is not running"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -189,6 +193,20 @@ func TestMachineLinkRefusesMachinesItCannotServe(t *testing.T) {
 				t.Fatal("installed on a machine it refused")
 			}
 		})
+	}
+}
+
+func TestMachineLinkRepairsAStoppedPairfobOnlyAfterConfirmation(t *testing.T) {
+	machine, remote := newFakeMachine(t, true)
+	machine.mark(t, "stopped")
+	linker, _, _ := testLinker(remote, false, buildMachine)
+	if err := linker.link(context.Background(), "Build machine"); err == nil || !strings.Contains(err.Error(), "Run again with --install") || machine.read("installs") != "" {
+		t.Fatalf("err = %v, installs = %q", err, machine.read("installs"))
+	}
+	// The installer ran and Pairfob still does not answer: say so, do not loop.
+	linker, _, _ = testLinker(remote, true, buildMachine)
+	if err := linker.link(context.Background(), "Build machine"); err == nil || !strings.Contains(err.Error(), "is not running") || machine.read("installs") == "" {
+		t.Fatalf("err = %v, installs = %q", err, machine.read("installs"))
 	}
 }
 

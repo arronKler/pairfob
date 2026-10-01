@@ -34,11 +34,11 @@ machine keeps its own daemon identity and keys; this computer never holds them.
 | --- | --- |
 | `idle` | No job has run. `operation_id` and `machine_id` are empty. |
 | `checking` | Probing the machine over SSH. |
-| `needs_install` | Pairfob is missing or too old there, and the request did not carry `install: true`. Nothing was changed. The PWA asks the user, then sends a new `LinkMachine` with a fresh `operation_id` and `install: true`. |
+| `needs_install` | Pairfob is missing, too old, or not running there, and the request did not carry `install: true`. Nothing was changed. The PWA asks the user, then sends a new `LinkMachine` with a fresh `operation_id` and `install: true`. |
 | `installing` | Running the official installer on the machine. |
 | `offering` | `pair_url` holds the machine's pairing link. |
 | `paired` | The machine accepted the device that proved the code. |
-| `failed` | `error` is one of `unreachable`, `unsupported`, `disabled`, `session_unsupported`, `not_running`, `install_failed`, `cancelled`, `expired`, `internal`. |
+| `failed` | `error` is one of `unreachable`, `unsupported`, `disabled`, `session_unsupported`, `not_running`, `install_failed`, `rate_limited`, `cancelled`, `expired`, `internal`. |
 
 `pair_url` is the same `/pair#…` link a QR code carries, including the one-use
 code. It is returned only to the device that started the job and only while
