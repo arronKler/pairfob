@@ -1,7 +1,7 @@
 const buckets = new Map<string, number[]>();
 
 export const LIMITS = {
-  enrollIP: { n: 5, windowMs: 60 * 60 * 1000 },
+  enrollIP: { n: 10, windowMs: 60 * 60 * 1000 },
   intentIP: { n: 10, windowMs: 10 * 60 * 1000 },
   sessionIP: { n: 60, windowMs: 60 * 1000 },
   eventsIP: { n: 60, windowMs: 60 * 1000 },
