@@ -29,6 +29,16 @@ export {
 } from "./mux.ts";
 export { openWS } from "./frame-socket.ts";
 export {
+  parseMachineLink,
+  parseMachineList,
+  validMachineId,
+  type MachineLinkError,
+  type MachineLinkPhase,
+  type MachineLinkStatus,
+  type MachineState,
+  type MachineSummary,
+} from "./machine-link.ts";
+export {
   confirmationTagMatches,
   normalizeDeviceLabel,
   normalizePairInput,

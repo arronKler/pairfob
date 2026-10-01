@@ -290,6 +290,14 @@ func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
 		e.rpcUpdate(s, id, params, false)
 	case "DaemonUpdate":
 		e.rpcUpdate(s, id, params, true)
+	case "ListMachines":
+		go e.rpcListMachines(s, id, params)
+	case "LinkMachineStatus":
+		e.rpcLinkMachineStatus(s, id, params)
+	case "LinkMachine":
+		go e.rpcLinkMachine(s, id, params)
+	case "LinkMachineCancel":
+		e.rpcLinkMachineCancel(s, id, params)
 	case "GetConfig":
 		e.rpcGetConfig(s, id, params)
 	case "Snapshot":

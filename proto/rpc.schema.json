@@ -165,7 +165,8 @@
         "rename_file": { "type": "boolean" },
         "delete_file": { "type": "boolean" },
         "upload_file": { "type": "boolean" },
-        "upload_file_v2": { "type": "boolean" }
+        "upload_file_v2": { "type": "boolean" },
+        "link_machine": { "type": "boolean" }
       },
       "additionalProperties": false
     },
@@ -177,6 +178,38 @@
         "phase": {"enum": ["idle", "downloading", "restarting", "verifying", "complete", "failed", "rolled_back"]},
         "target": {"type": "string", "maxLength": 64},
         "operation_id": {"type": "string", "maxLength": 131}
+      },
+      "additionalProperties": false
+    },
+    "machineId": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$"},
+    "machineItem": {
+      "type": "object",
+      "required": ["id", "label", "state"],
+      "properties": {
+        "id": {"$ref": "#/$defs/machineId"},
+        "label": {"type": "string", "maxLength": 128},
+        "state": {"enum": ["available", "disabled", "session_unsupported"]},
+        "daemon_id": {"type": "string", "pattern": "^d_[0-9a-f]{20}$"}
+      },
+      "additionalProperties": false
+    },
+    "listMachinesResult": {
+      "type": "object",
+      "required": ["machines"],
+      "properties": {
+        "machines": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/machineItem"}}
+      },
+      "additionalProperties": false
+    },
+    "machineLinkResult": {
+      "type": "object",
+      "required": ["operation_id", "machine_id", "phase"],
+      "properties": {
+        "operation_id": {"type": "string", "maxLength": 131},
+        "machine_id": {"type": "string", "maxLength": 128},
+        "phase": {"enum": ["idle", "checking", "needs_install", "installing", "offering", "paired", "failed"]},
+        "pair_url": {"type": "string", "maxLength": 512},
+        "error": {"enum": ["unreachable", "unsupported", "disabled", "session_unsupported", "not_running", "install_failed", "cancelled", "expired", "internal"]}
       },
       "additionalProperties": false
     },
@@ -953,7 +986,11 @@
             "TerminalClose",
             "TransportOffer",
             "TransportCommit",
-            "TransportRestart"
+            "TransportRestart",
+            "ListMachines",
+            "LinkMachine",
+            "LinkMachineStatus",
+            "LinkMachineCancel"
           ]
         },
         "params": { "type": "object" }
@@ -961,6 +998,10 @@
       "allOf": [
         {"if": {"properties": {"op": {"const": "DaemonUpdateStatus"}}}, "then": {"properties": {"params": {"type": "object", "additionalProperties": false}}}},
         {"if": {"properties": {"op": {"const": "DaemonUpdate"}}}, "then": {"properties": {"params": {"type": "object", "required": ["operation_id", "target"], "properties": {"operation_id": {"$ref": "#/$defs/operationId"}, "target": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^v?[0-9]+([.-][0-9]+){1,3}$"}}, "additionalProperties": false}}}},
+        {"if": {"properties": {"op": {"const": "ListMachines"}}}, "then": {"properties": {"params": {"type": "object", "additionalProperties": false}}}},
+        {"if": {"properties": {"op": {"const": "LinkMachineStatus"}}}, "then": {"properties": {"params": {"type": "object", "additionalProperties": false}}}},
+        {"if": {"properties": {"op": {"const": "LinkMachine"}}}, "then": {"properties": {"params": {"type": "object", "required": ["operation_id", "machine_id"], "properties": {"operation_id": {"$ref": "#/$defs/operationId"}, "machine_id": {"$ref": "#/$defs/machineId"}, "install": {"type": "boolean"}}, "additionalProperties": false}}}},
+        {"if": {"properties": {"op": {"const": "LinkMachineCancel"}}}, "then": {"properties": {"params": {"type": "object", "required": ["operation_id"], "properties": {"operation_id": {"$ref": "#/$defs/operationId"}}, "additionalProperties": false}}}},
         {"if": {"properties": {"op": {"const": "AgentInspect"}}}, "then": {"properties": {"params": {"type": "object", "required": ["pane_id"], "properties": {"pane_id": {"$ref": "#/$defs/paneId"}, "session": {"$ref": "#/$defs/session"}}, "additionalProperties": false}}}},
         {"if": {"properties": {"op": {"const": "AgentQuota"}}}, "then": {"properties": {"params": {"type": "object", "additionalProperties": false}}}},
         {

@@ -55,6 +55,9 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 		// closed roots) is complete and the backend suite passes, so
 		// advertise true to let clients select the 128 KiB V2 upload path.
 		"upload_file_v2": describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		// link_machine: this computer can list machines it already reaches
+		// and relay their pairing offers.
+		"link_machine": e.machineLinkAvailable(),
 	}
 	agentKinds := make([]string, 0, len(descriptor.AgentKinds))
 	for _, kind := range descriptor.AgentKinds {

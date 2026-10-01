@@ -1,6 +1,7 @@
 import type { RecoveryClock } from "./recovery-diagnostics";
 import type { AgentInspection } from "../agent-inspect";
 import type { AgentQuota } from "../agent-quota";
+import type { MachineLinkStatus, MachineSummary } from "./machine-link.ts";
 import type {
   AgentTracePage,
   AgentTraceDetail,
@@ -72,6 +73,10 @@ export type LiveSession = {
   agentQuota: () => Promise<AgentQuota[]>;
   daemonUpdateStatus?: () => Promise<unknown>;
   daemonUpdate?: (target: string) => Promise<unknown>;
+  listMachines?: () => Promise<MachineSummary[]>;
+  linkMachineStatus?: () => Promise<MachineLinkStatus>;
+  linkMachine?: (machineId: string, install: boolean) => Promise<MachineLinkStatus>;
+  linkMachineCancel?: (operationId: string) => Promise<MachineLinkStatus>;
   getConfig: () => Promise<Record<string, unknown>>;
   snapshot: () => Promise<Record<string, unknown>>;
   paneRead: (paneId: string, lines?: number, format?: "ansi" | "text") => Promise<{ text: string; truncated?: boolean; hash?: string }>;

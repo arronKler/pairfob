@@ -87,6 +87,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
 		"TransportOffer", "TransportCommit", "TransportRestart",
+		"ListMachines", "LinkMachine", "LinkMachineStatus", "LinkMachineCancel",
 	}
 	if got := schema.Defs["request"].Properties["op"].Enum; !slices.Equal(got, wantOps) {
 		t.Fatalf("RPC op surface\n got: %q\nwant: %q", got, wantOps)
@@ -120,6 +121,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace", "CreateConversation", "CreateTab", "SplitPane",
 		"PromptAgent", "CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane", "WorkspaceRename", "WorkspaceDelete",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
+		"LinkMachine", "LinkMachineCancel",
 	} {
 		if !slices.Contains(paramsByOp[op].Required, "operation_id") {
 			t.Errorf("mutation %s does not require operation_id", op)
@@ -258,7 +260,20 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"create_conversation", "create_tab", "split_pane", "prompt_agent", "history",
 		"list_worktrees", "create_worktree", "open_worktree", "resize_pane", "swap_pane", "zoom_pane",
 	}
-	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2"), capabilities)
+	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "link_machine"), capabilities)
+
+	// Machine linking names machines by opaque ID only: no SSH target, host,
+	// or path may be added to these objects.
+	requireExactObject(t, schema.Defs, "listMachinesResult", []string{"machines"})
+	requireExactObjectFields(t, schema.Defs, "machineItem", []string{"id", "label", "state", "daemon_id"}, []string{"id", "label", "state"})
+	requireExactObjectFields(t, schema.Defs, "machineLinkResult", []string{"operation_id", "machine_id", "phase", "pair_url", "error"}, []string{"operation_id", "machine_id", "phase"})
+	requireExactObjectFields(t, paramsByOp, "LinkMachine", []string{"operation_id", "machine_id", "install"}, []string{"operation_id", "machine_id"})
+	requireExactObject(t, paramsByOp, "LinkMachineCancel", []string{"operation_id"})
+	for _, op := range []string{"ListMachines", "LinkMachineStatus"} {
+		if params := paramsByOp[op]; len(params.Properties) != 0 || params.AdditionalProperties == nil || *params.AdditionalProperties {
+			t.Errorf("%s must reject all parameters", op)
+		}
+	}
 
 	// Stage-2 V2 upload surface: the dedicated state def reports the V2 chunk
 	// bound, and the V2 write carries the larger base64 payload bound. The

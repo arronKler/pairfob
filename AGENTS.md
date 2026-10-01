@@ -102,6 +102,9 @@ package can express that duty.
 - The `GetConfig.capabilities` keys are the authority for showing and
   allowing operations; do not invent aggregate aliases. `rename_file` and
   `delete_file` advertise workspace file mutations; absence on older daemons means false.
+- `link_machine` advertises machine linking (`proto/machine-link.md`). A linked
+  machine keeps its own daemon identity; never proxy its panes or hold its keys
+  on the linking computer, and never send an SSH target to a paired device.
 - Paths and cwd must land in a live snapshot root or `PAIRFOB_ALLOWED_ROOTS`;
   failures fail closed.
 - The product loop is not a terminal emulator: read the rendered pane, send

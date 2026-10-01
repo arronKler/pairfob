@@ -4,6 +4,7 @@ import { pageHidden, watchPageVisibility } from "./page-activity.ts";
 import { parseAgentQuota } from "../agent-quota";
 import { validDaemonId, validDeviceId } from "../identifiers.ts";
 import { fingerprint16 } from "./hello.ts";
+import { parseMachineLink, parseMachineList } from "./machine-link.ts";
 import { ProtocolError } from "./errors.ts";
 import {
   parseCreateConversationResult,
@@ -278,6 +279,12 @@ class ReconnectingSession implements LiveSession {
   agentQuota = async () => parseAgentQuota(await this.readRPC("AgentQuota", {}, 12_000));
   daemonUpdateStatus = () => this.readRPC("DaemonUpdateStatus", {});
   daemonUpdate = (target: string) => this.trackedMutation("DaemonUpdate", { target });
+  listMachines = async () => parseMachineList(await this.readRPC("ListMachines", {}, 12_000));
+  linkMachineStatus = async () => parseMachineLink(await this.readRPC("LinkMachineStatus", {}));
+  linkMachine = async (machineId: string, install: boolean) =>
+    parseMachineLink(await this.trackedMutation("LinkMachine", { machine_id: machineId, install }));
+  linkMachineCancel = async (operationId: string) =>
+    parseMachineLink(await this.readRPC("LinkMachineCancel", { operation_id: operationId }));
   getConfig = async (): Promise<Record<string, unknown>> => {
     const requestToken = ++this.configRequest;
     // Fail closed from the instant a refresh starts: the capability is only

@@ -18,6 +18,7 @@ export const OPERATION_CAPABILITY_KEYS = [
   "delete_file",
   "upload_file",
   "upload_file_v2",
+  "link_machine",
 ] as const;
 
 export type OperationCapability = typeof OPERATION_CAPABILITY_KEYS[number];
@@ -40,6 +41,7 @@ export const NO_OPERATION_CAPABILITIES: OperationCapabilities = {
   delete_file: false,
   upload_file: false,
   upload_file_v2: false,
+  link_machine: false,
 };
 
 export const OPERATION_INPUT_LIMITS = {
@@ -354,7 +356,7 @@ export function parseRuntimeOperationsConfig(value: unknown): RuntimeOperationsC
 	const rawCapabilities = isRecord(config.capabilities) ? config.capabilities : {};
 	const capabilities = { ...NO_OPERATION_CAPABILITIES };
 	const capabilityKeys = Object.keys(rawCapabilities);
-	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2"]);
+	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "link_machine"]);
 	const capabilitiesValid = capabilityKeys.every((key) => (OPERATION_CAPABILITY_KEYS as readonly string[]).includes(key))
 		&& OPERATION_CAPABILITY_KEYS.every((key) => typeof rawCapabilities[key] === "boolean"
       || (optionalCapabilities.has(key) && !(key in rawCapabilities)));

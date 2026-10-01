@@ -126,6 +126,9 @@ func runDaemon(store *state.Store, sock string) error {
 	defer eng.CloseUploads()
 	eng.Build = version
 	eng.Updater = newRemoteUpdater(store.Dir)
+	if getenv("PAIRFOB_MACHINE_LINK", "1") != "0" {
+		eng.Machines = newMachineLinkService(rt, store.Dir, machineInstallFromEnv(), log.Printf)
+	}
 	if getenv("PAIRFOB_P2P", "1") != "0" {
 		eng.Direct = newWebRTCAcceptor()
 	}
