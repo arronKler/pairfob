@@ -1,4 +1,5 @@
 import { liveSession } from "../computers/catalog-store";
+import type { HerdSessionSummary } from "../../lib/protocol/session-types";
 import { beginHerdSessionRead, herdSessionReadIsCurrent, setHerdSessionList } from "./store";
 
 /**
@@ -15,7 +16,7 @@ export async function loadHerdSessions(): Promise<void> {
   const session = liveSession();
   if (!session?.listHerdSessions || !session.isConnected()) return;
   const token = beginHerdSessionRead(session);
-  let sessions: Awaited<ReturnType<NonNullable<typeof session.listHerdSessions>>> | null;
+  let sessions: HerdSessionSummary[] | null;
   try {
     sessions = await session.listHerdSessions();
   } catch {

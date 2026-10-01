@@ -61,7 +61,8 @@ func (h *Herdr) Sessions(ctx context.Context) ([]SessionInfo, error) {
 	for i, name := range names {
 		sessions[i+1] = SessionInfo{Name: name, Running: running[i+1]}
 	}
-	sort.Slice(sessions[1:], func(i, j int) bool { return sessions[1:][i].Name < sessions[1:][j].Name })
+	named := sessions[1:]
+	sort.Slice(named, func(i, j int) bool { return named[i].Name < named[j].Name })
 	return sessions, nil
 }
 

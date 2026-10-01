@@ -52,9 +52,11 @@ import {
   cancelEstablish,
   catalogRequestIsCurrent,
   establishAttemptIsCurrent,
+  herdSwitchIsCurrent,
   liveView,
   nextCatalogRequest,
   nextEstablishAttempt,
+  nextHerdSwitch,
 } from "./generations";
 import type { LifecyclePorts } from "./ports";
 import { retireHerdView, retireLiveDomains, type RetirementPorts } from "./retirement";
@@ -141,8 +143,6 @@ export function clearLiveConnection(ctx: LifecycleContext, expected: LiveSession
   batch(() => retireLiveDomains());
 }
 
-let herdSwitchSerial = 0;
-
 /**
  * Retarget the live connection at another Herdr session on the same daemon.
  *
@@ -156,9 +156,9 @@ let herdSwitchSerial = 0;
 export async function switchHerdSession(name: string | null, ctx: LifecycleContext): Promise<boolean> {
   const session = liveSession();
   if (!session?.selectHerdSession || !session.herdSession || session.herdSession() === name) return false;
-  const serial = ++herdSwitchSerial;
+  const serial = nextHerdSwitch();
   const viewVersion = liveView();
-  const owned = () => herdSwitchSerial === serial && liveSession() === session && liveView() === viewVersion;
+  const owned = () => herdSwitchIsCurrent(serial) && liveSession() === session && liveView() === viewVersion;
   ctx.ports.captureComposeDraft();
   if (ctx.ports.isFullTerminal()) await ctx.ports.leaveFullTerminal();
   else ctx.ports.disposeFullTerminal();

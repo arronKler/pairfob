@@ -12,7 +12,7 @@
  * daemons are unaffected.
  */
 import { ProtocolError } from "./errors.ts";
-import { isRecord } from "./session-message.ts";
+import { exactKeys, isRecord } from "./session-message.ts";
 import type { HerdSessionSummary } from "./session-types.ts";
 
 export const HERD_SESSION_SCOPED_OPS: ReadonlySet<string> = new Set([
@@ -51,10 +51,10 @@ export function scopeHerdSession(op: string, params: unknown, session: string | 
  */
 export function parseHerdSessions(result: unknown): HerdSessionSummary[] {
   const bad = () => new ProtocolError("bad_message", "ListSessions 响应与协议不一致");
-  if (!isRecord(result) || Object.keys(result).join() !== "sessions" || !Array.isArray(result.sessions)) throw bad();
+  if (!isRecord(result) || !exactKeys(result, ["sessions"]) || !Array.isArray(result.sessions)) throw bad();
   const seen = new Set<string>();
   const sessions = result.sessions.map((entry: unknown): HerdSessionSummary => {
-    if (!isRecord(entry) || Object.keys(entry).sort().join() !== "name,running" || typeof entry.running !== "boolean") throw bad();
+    if (!isRecord(entry) || !exactKeys(entry, ["name", "running"]) || typeof entry.running !== "boolean") throw bad();
     const name = entry.name;
     if (name !== null && (typeof name !== "string" || !validHerdSessionName(name))) throw bad();
     const key = name ?? "";
