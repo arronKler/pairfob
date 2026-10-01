@@ -1,8 +1,10 @@
 /* --- Board canvas ----------------------------------------------------------------
    The tab as herdr draws it: one screen, panes edge to edge with shared seams,
-   each pane's title in a bar at a fixed on-screen size. The stage is scaled by
-   the camera; `--board-control-scale` (1 / scale, set by canvas/transform.ts)
-   keeps seams, the title bar and card type the same size at every zoom.
+   each pane's title in a bar. The stage is scaled by the camera, so the pane
+   screens shrink and grow with it like herdr's miniature. canvas/transform.ts
+   sets `--board-control-scale` (1 / scale: seams and rings keep their on-screen
+   width) and `--board-chrome-scale` (title bars: fixed on screen from the fit
+   up, shrinking with the board below the fit).
    ------------------------------------------------------------------------------ */
 
 .board-canvas {
@@ -74,7 +76,7 @@
 .board-pane.sel::after { box-shadow: inset 0 0 0 calc(2px * var(--board-control-scale, 1)) rgba(110, 168, 254, 0.7); }
 .board-pane[data-board-menu-target]::after { box-shadow: inset 0 0 0 calc(2px * var(--board-control-scale, 1)) var(--accent); }
 
-/* --- Title bar: herdr's border title, 24px on screen at any zoom ------------- */
+/* --- Title bar: herdr's border title; 24px on screen from the fit up, shrinking with the board below it */
 
 .board-pane-title {
   position: absolute;
@@ -85,10 +87,10 @@
   align-items: center;
   gap: 6px;
   box-sizing: border-box;
-  width: calc(100% / var(--board-control-scale, 1));
+  width: calc(100% / var(--board-chrome-scale, 1));
   height: 24px;
   padding: 0 0 0 7px;
-  transform: scale(var(--board-control-scale, 1));
+  transform: scale(var(--board-chrome-scale, 1));
   transform-origin: 0 0;
   border-bottom: 1px solid var(--line);
   background: #141922;
@@ -155,9 +157,9 @@
 
 .board-pane.status-blocked .board-pane-name { color: #ffd98a; }
 
-/* --- Content layers: one shows, picked by data-level (model/tile-level) ------ */
+/* --- Pane screen: scales with the stage at every zoom -------------------------- */
 
-/* Live: the ANSI screen. Cell is 8×16; font size is calibrated in JS so 1ch == BOARD_CELL_W. */
+/* The ANSI screen. Cell is 8×16; font size is calibrated in JS so 1ch == BOARD_CELL_W. */
 .board-pane-screen {
   position: absolute;
   inset: 0;
@@ -195,61 +197,6 @@
   white-space: pre;
   line-height: 16px;
 }
-
-/* Card: the last output lines in fixed UI type below the title bar. */
-.board-pane-card {
-  position: absolute;
-  top: calc(24px * var(--board-control-scale, 1));
-  right: 0;
-  bottom: 0;
-  left: 0;
-  display: none;
-  flex-direction: column;
-  overflow: hidden;
-  padding: calc(5px * var(--board-control-scale, 1)) calc(8px * var(--board-control-scale, 1));
-  background: var(--term-bg);
-  color: var(--term-ink);
-  font-family: var(--mono);
-  font-size: calc(10.5px * var(--board-control-scale, 1));
-  line-height: calc(14px * var(--board-control-scale, 1));
-  pointer-events: none;
-}
-
-.board-pane-card-lines {
-  display: flex;
-  flex: 0 1 auto;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.board-pane-card-line {
-  flex: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: pre;
-}
-
-/* Mark: the agent alone, centred, at its on-screen size. */
-.board-pane-mark {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  transform: translate(-50%, -50%) scale(var(--board-control-scale, 1));
-  pointer-events: none;
-}
-
-.board-pane[data-level="card"] .board-pane-screen,
-.board-pane[data-level="mark"] .board-pane-screen { visibility: hidden; }
-.board-pane[data-level="card"] .board-pane-card { display: flex; }
-.board-pane[data-level="mark"] { background: #10141b; }
-.board-pane[data-level="mark"] .board-pane-title { display: none; }
-.board-pane[data-level="mark"] .board-pane-mark { display: flex; }
 
 /* --- Zoomed on the computer ---------------------------------------------------- */
 

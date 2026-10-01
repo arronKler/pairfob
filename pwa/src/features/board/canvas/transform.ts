@@ -5,29 +5,28 @@
  * into a style write. Reading the camera and persisting the next one stay with
  * the caller, so this module never touches application state.
  */
-import type { TabLayout } from "../../../lib/layout";
+import { fitBoardCamera, type TabLayout } from "../../../lib/layout";
 import { boardStageSize, cameraTransform, fitCamera, zoomCameraAt, type BoardCamera } from "../model/camera";
-import { tileLevel } from "../model/tile-level";
 
 export function applyCameraTransform(stage: HTMLElement, camera: BoardCamera): void {
   stage.style.transform = cameraTransform(camera);
+  // Pane screens scale with the stage like herdr's own miniature. Controls
+  // (handles, hints) counter-scale to keep their on-screen size at any zoom.
   stage.style.setProperty("--board-control-scale", String(1 / Math.max(0.01, camera.scale)));
-  applyTileLevels(stage, camera.scale);
+  // Pane chrome (title bars) stays readable from the fit upwards, but below the
+  // fit it shrinks with the screens, so zooming out never buries them under bars.
+  const fit = fitScale(stage);
+  const basis = fit > 0 ? Math.max(camera.scale, fit) : camera.scale;
+  stage.style.setProperty("--board-chrome-scale", String(1 / Math.max(0.01, basis)));
 }
 
-/**
- * What each tile draws follows its on-screen size (see model/tile-level). The
- * camera moves at pointer speed without a React render, so the level is a data
- * attribute written here; React never renders it, so a commit cannot undo it,
- * and every commit repaints the transform, which labels freshly mounted tiles.
- */
-export function applyTileLevels(stage: HTMLElement, scale: number): void {
-  for (const tile of stage.querySelectorAll<HTMLElement>(".board-pane")) {
-    const width = parseFloat(tile.style.width) || tile.offsetWidth;
-    const height = parseFloat(tile.style.height) || tile.offsetHeight;
-    const level = tileLevel(width, height, scale);
-    if (tile.dataset.level !== level) tile.dataset.level = level;
-  }
+/** The scale that fits the whole stage in its viewport, or 0 when it cannot be measured. */
+function fitScale(stage: HTMLElement): number {
+  const viewport = stage.parentElement;
+  const width = parseFloat(stage.style.width);
+  const height = parseFloat(stage.style.height);
+  if (!viewport || !(width > 0) || !(height > 0) || viewport.clientWidth <= 0 || viewport.clientHeight <= 0) return 0;
+  return fitBoardCamera(viewport.clientWidth, viewport.clientHeight, width, height).scale;
 }
 
 /** Fit the whole tab into the viewport; the result is a fitted camera. */

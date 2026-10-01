@@ -9,7 +9,8 @@ import { renderReact, unmountReact } from "../../../../test-support/react-harnes
 import { boardCanvasModel, type BoardCanvasModel } from "../model/board-view";
 import { BoardCanvasView, type BoardCanvasController } from "./board-canvas";
 import { setLayoutDraft } from "../model/draft-store";
-import { applyTileLevels } from "../canvas/transform";
+import { applyCameraTransform } from "../canvas/transform";
+import { boardCamera } from "../model/camera";
 import { publishPreview, clearBoardPreviews } from "../preview/store";
 
 function layout(panes: Array<{ paneId: string; rect: { x: number; y: number; width: number; height: number } }>,
@@ -226,27 +227,20 @@ describe("board canvas lifecycle", () => {
     expect(rig.calls.filter((call) => call.startsWith("open"))).toEqual([]);
   });
 
-  test("each tile draws the level its on-screen size allows", () => {
-    const rig = harness();
-    paint(canvas(splitTab, [agent("w1:p1"), agent("w1:p2")]), rig.controller);
-    const stage = appRoot().querySelector<HTMLElement>(".board-stage")!;
-    const levels = () => [...stage.querySelectorAll<HTMLElement>(".board-pane")].map((tile) => tile.dataset.level);
-    // 480×640 and 320×640 stage px.
-    applyTileLevels(stage, 1);
-    expect(levels()).toEqual(["live", "live"]);
-    applyTileLevels(stage, 0.4);
-    expect(levels()).toEqual(["card", "card"]);
-    applyTileLevels(stage, 0.25);
-    expect(levels()).toEqual(["card", "mark"]);
-  });
-
-  test("a status card shows the pane's last non-empty lines", () => {
+  test("at any zoom a tile shows its real screen, scaled with the stage, never a stand-in", () => {
     clearBoardPreviews();
-    publishPreview("w1:p1", { text: "one\n\ntwo  \n\u001b[32mthree\u001b[0m\n\n", hash: "h" });
+    publishPreview("w1:p1", { text: "one\ntwo\nthree", hash: "h" });
     const rig = harness();
     paint(canvas(oneTab), rig.controller);
-    const lines = [...appRoot().querySelectorAll(".board-pane-card-line")].map((line) => line.textContent);
-    expect(lines).toEqual(["one", "two", "three"]);
+    const stage = appRoot().querySelector<HTMLElement>(".board-stage")!;
+    for (const scale of [1, 0.25, 0.12]) {
+      applyCameraTransform(stage, boardCamera(scale, 0, 0, false));
+      // The screen lives inside the stage, so the camera's scale is what shrinks it.
+      expect(stage.style.transform).toContain(`scale(${scale})`);
+      const screen = stage.querySelector<HTMLElement>(".board-pane .board-pane-screen")!;
+      expect(screen.textContent).toContain("three");
+      expect(stage.querySelector(".board-pane-card, .board-pane-mark, [data-level]")).toBeNull();
+    }
     clearBoardPreviews();
   });
 

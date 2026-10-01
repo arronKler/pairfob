@@ -227,6 +227,12 @@
 .herd-page .herd-list .herd-group:first-child .group-head,
 .herd-page .herd-list .herd-group:first-child > .section-title { margin-top: 0; padding-top: 0; }
 
+/* A notice or banner between the header and the list brings its own gap:
+   flush against that first heading, the heading's seam cover (below) would
+   paint over the box's bottom border. */
+.herd-page > .notice,
+.herd-page > .banner { margin-bottom: var(--space-2); }
+
 /* Focus and in-page scrolling keep a row clear of the sticky header and the
    heading stuck beneath it. */
 html:has(.herd-page) { scroll-padding-top: calc(var(--herd-head-h, 0px) + 64px); }

@@ -5,7 +5,7 @@ import { tileFillScale } from "../model/camera";
 import { layoutDraft, subscribeLayoutDraft } from "../model/draft-store";
 import { layoutWithSplitRatio } from "../model/layout-draft";
 import type { BoardCanvasModel, BoardTileView } from "../model/board-view";
-import { BoardAnsiPreview, BoardCardLines } from "./board-preview";
+import { BoardAnsiPreview } from "./board-preview";
 import { BoardCanvasOverlays } from "./canvas-overlays";
 import { t } from "../../../lib/i18n";
 
@@ -92,13 +92,8 @@ function BoardPaneTile({
       }}
     >
       <Button className="board-pane-open" aria-label={tile.aria} />
-      {/* Three layers; the data-level transform.ts writes picks one (model/tile-level). */}
+      {/* The pane's real screen, scaled with the camera at every zoom. */}
       <BoardAnsiPreview paneId={tile.paneId} cols={tile.cols} rows={tile.rows} paint={previewPaint} />
-      <BoardCardLines paneId={tile.paneId} />
-      <span className="board-pane-mark" aria-hidden="true">
-        <AgentAvatar kind={tile.agentKind} size="sm" />
-        {tile.agentKind ? <span className={`board-pane-dot is-${tile.status}`} /> : null}
-      </span>
       {/* herdr's border title, at a fixed on-screen size whatever the zoom. */}
       <span className="board-pane-title">
         <AgentAvatar kind={tile.agentKind} size="sm" />

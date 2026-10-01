@@ -203,6 +203,13 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".sheet-fact-path")).toMatch(/word-break:\s*break-all/);
   });
 
+  test("a notice above the phone list stays clear of the first sticky heading", () => {
+    // The first heading has no top spacing and covers one pixel above itself,
+    // so a box right above it must bring the gap or lose its bottom border.
+    expect(css).toMatch(/\.herd-page \.group-head,\s*\.herd-page \.herd-group > \.section-title\s*\{[^}]*box-shadow:\s*0 -1px 0 var\(--bg\)/);
+    expect(css).toMatch(/\.herd-page > \.notice,\s*\.herd-page > \.banner\s*\{[^}]*margin-bottom:\s*var\(--space-2\)/);
+  });
+
   test("the boot screen centers its copy; the connect page pins its actions to the floor", () => {
     expect(rule("#app.boot-screen")).toMatch(/position:\s*fixed/);
     expect(rule("#app.boot-screen")).toMatch(/top:\s*0/);
