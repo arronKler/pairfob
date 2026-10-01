@@ -47,6 +47,9 @@
   margin: 2px -8px 0;
 }
 .rail-nav .text-link { padding-inline: 8px; }
+/* The Herdr-session switch closes the row: icon and name, the name truncating. */
+.rail-nav .herd-session-switch { gap: 4px; min-width: 0; margin-left: auto; }
+.rail-nav .herd-session-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The page beside the rail (the board) reads as the current destination. */
 .rail-nav .text-link.is-current { color: var(--ink); background: var(--surface); border-radius: var(--r-md); }
 

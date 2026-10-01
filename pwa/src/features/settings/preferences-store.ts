@@ -4,7 +4,7 @@ import { parseListGroup, parsePinnedAt, prunePinnedAt, togglePinnedAt, touchPane
 import { parseTermMode, TERM_MODE_OPTIONS, type TermMode } from "../../lib/terminal-mode";
 import { batch, createDomain, detach } from "../../shared/model/domain-store";
 import type { DomainEnvironment } from "../../shared/model/domain-environment";
-import { daemonId as connectedDaemonId } from "../computers/catalog-store";
+import { daemonId as connectedDaemonId, currentHerdSession } from "../computers/catalog-store";
 
 /**
  * Preferences domain: device-local choices about how a terminal, a list or an
@@ -244,9 +244,14 @@ export function hydratePreferences(environment: DomainEnvironment): void {
   });
 }
 
-/** Per-daemon storage keys: a choice about one computer never leaks to another. */
+/**
+ * Per-daemon storage keys: a choice about one computer never leaks to another.
+ * Pane ids repeat across Herdr sessions, so a named session gets its own keys;
+ * the default session keeps the keys it always had.
+ */
 function daemonScope(): string {
-  return connectedDaemonId();
+  const herdSession = currentHerdSession();
+  return herdSession === null ? connectedDaemonId() : `${connectedDaemonId()}:herd:${herdSession}`;
 }
 
 export function paneTouchedKey(): string {
@@ -269,7 +274,7 @@ function paneComposeLiveKey(): string {
   return `${PANE_COMPOSE_LIVE_KEY}:${daemonScope()}`;
 }
 
-/** Reload every daemon-scoped map after the credential changes. */
+/** Reload every daemon-scoped map after the credential or Herdr session changes. */
 export function adoptDaemonPreferences(): void {
   write((record) => {
     record.paneTouched = loadPaneTouched();

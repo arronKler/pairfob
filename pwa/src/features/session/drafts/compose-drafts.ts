@@ -1,7 +1,7 @@
 import { setOperationBusy, operationBusy } from "../../operations/capabilities-store";
 import { setTraceNote } from "../chat/trace-store";
 import { composeDraft, composeIME, setComposeDraft } from "../compose-store";
-import { currentDaemonId, liveSession } from "../../computers/catalog-store";
+import { currentDaemonId, currentHerdSession, liveSession } from "../../computers/catalog-store";
 import { phase } from "../../connection/connection-store";
 import { currentScreen, setScreen } from "../../../app/navigation-store";
 import { isAgentChat, isFullTerminal, openPaneId } from "../session-store";
@@ -59,6 +59,7 @@ export function currentComposeDraftScope(): ComposeDraftScope | null {
   if (!mode) return null;
   return {
     daemonId: currentDaemonId(),
+    herdSession: currentHerdSession(),
     paneId: openPaneId(),
     mode,
   };
@@ -208,7 +209,8 @@ export function promptRequestIsLive(owner: PromptRequestOwner): boolean {
 }
 
 export function promptRequestOwnsComputer(owner: PromptRequestOwner): boolean {
-  return liveSession() === owner.session && currentDaemonId() === owner.draftScope.daemonId;
+  return liveSession() === owner.session && currentDaemonId() === owner.draftScope.daemonId &&
+    currentHerdSession() === (owner.draftScope.herdSession ?? null);
 }
 
 function ownsStoredAttempt(owner: PromptRequestOwner): boolean {

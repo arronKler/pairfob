@@ -25,14 +25,17 @@ func (e *Engine) rpcPing(s *sess, id string, params json.RawMessage) {
 	e.reply(s, id, map[string]any{"t_echo_ms": *p.Tms})
 }
 
+// rpcGetConfig describes the Herdr session the client targets. session is
+// optional: omitted or null keeps the default socket, so an older PWA's `{}`
+// is unchanged. The response shape does not depend on it.
 func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
-	var p struct{}
-	if badParams(params, &p) {
+	var p sessionParam
+	if badParams(params, &p) || invalidSession(p.Session) {
 		e.replyErr(s, id, "unknown_op", "invalid params")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-	descriptor, describeErr := e.RT.Describe(ctx, runtime.DefaultSession())
+	descriptor, describeErr := e.RT.Describe(ctx, runtimeSession(p.Session))
 	cancel()
 	capabilities := map[string]bool{
 		"create_conversation": descriptor.Supports(runtime.FeatureCreateConversation),

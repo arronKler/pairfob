@@ -64,6 +64,7 @@ import {
   reconnectLiveSessions as reconnectPool,
   reloadComputers as reloadComputerCatalog,
   setLiveNetworkAvailable as setPoolNetwork,
+  switchHerdSession as retargetHerdSession,
   syncInactiveTransportMode as syncPoolTransport,
 } from "./lifecycle";
 import type { RetirementPorts } from "./retirement";
@@ -85,6 +86,7 @@ import { preloadFullTerminalXterm } from "../session/full-terminal/full-terminal
 import { resolvedPaneTermMode } from "../session/term-mode";
 import { guidedScrollController } from "../session/guided/guided-scroll";
 import { navigateWithTransition, nextTransition, queuedKind, transitionFor } from "../../app/transition";
+import { loadHerdSessions } from "../herd-sessions/load";
 
 export { retireAgentTraceRefreshes };
 
@@ -197,6 +199,11 @@ export function clearLiveConnection(): void {
   retireLiveConnection(lifecycle);
 }
 
+/** Retarget the live connection at another Herdr session on the same daemon. */
+export function switchHerdSession(name: string | null): Promise<boolean> {
+  return retargetHerdSession(name, lifecycle);
+}
+
 export function closeComputerSession(daemonId: string): void {
   retireComputerSession(daemonId, lifecycle);
 }
@@ -272,6 +279,9 @@ const runtimePorts = {
 };
 
 export async function refreshRuntimeState(): Promise<void> {
+  // The Sessions tab shows the Herdr-session switch without visiting Settings,
+  // so every runtime refresh (connect, reconnect, foreground, switch) re-reads it.
+  void loadHerdSessions();
   await observeRuntimeState(runtimePorts);
 }
 

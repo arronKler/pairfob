@@ -20,6 +20,7 @@ description: 安装、登记、路径根、推送。不要设 PAIRFOB_JOIN_TOKEN
 | --- | --- | --- |
 | `PAIRFOB_STATE_DIR` | `~/.config/pairfob` | 身份、设备、日志 |
 | `PAIRFOB_ALLOWED_ROOTS` | 用户 Home | 网页路径允许的根。显式设置会替换 Home |
+| `PAIRFOB_MULTI_SESSION` | 关 | `1` 时手机可在设置里列出并切换命名 Herdr 会话（`herdr --session <name>`）。此时 Pairfob 不再替你启动 Herdr；通知仍只来自默认会话 |
 
 ## 安装
 

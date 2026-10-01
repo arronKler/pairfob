@@ -19,4 +19,9 @@ describe("notice scope", () => {
     expect(sameNoticeScope(paneScope, { ...paneScope, daemonId: "daemon-b" })).toBe(false);
     expect(sameNoticeScope(paneScope, { ...paneScope, phase: "resuming" })).toBe(false);
   });
+
+  test("does not follow a Herdr-session switch on the same computer", () => {
+    expect(sameNoticeScope(paneScope, { ...paneScope, herdSession: null })).toBe(true);
+    expect(sameNoticeScope(paneScope, { ...paneScope, herdSession: "work" })).toBe(false);
+  });
 });
