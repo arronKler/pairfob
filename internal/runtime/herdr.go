@@ -22,6 +22,7 @@ type Herdr struct {
 	TerminalBinary string
 	launchServer   herdrServerLauncher
 	lookupBinary   func(string) (string, error)
+	runCLI         func(context.Context, string, ...string) ([]byte, error)
 	bootstrapPoll  time.Duration
 }
 

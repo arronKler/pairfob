@@ -18,6 +18,7 @@ type Fake struct {
 	Snap       Snapshot
 	Worktrees  []Worktree
 	AgentKinds []AgentKind
+	Machines   []Machine
 	next       int
 }
 
@@ -121,6 +122,8 @@ func (f *Fake) Observe(ctx context.Context, session SessionRef, query Query) (Vi
 		}, nil
 	case HistoryQuery:
 		return nil, unsupported("history", "history reader is not configured")
+	case MachineListQuery:
+		return MachineListView{Machines: append([]Machine(nil), f.Machines...)}, nil
 	default:
 		return nil, unsupported("observe", "unknown runtime query")
 	}

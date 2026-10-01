@@ -27,6 +27,8 @@ func pairCommand(args []string, sock string) error {
 			return errors.New("usage: pairfob pair new")
 		}
 		return pairNewCommand(sock)
+	case "offer":
+		return pairOfferCommand(args[1:], sock)
 	case "status":
 		if len(args) != 1 {
 			return errors.New("usage: pairfob pair status")

@@ -342,6 +342,8 @@ func (h *Herdr) Observe(ctx context.Context, session SessionRef, query Query) (V
 		return h.listWorktrees(ctx, session, value)
 	case HistoryQuery:
 		return nil, unsupported("history", "history reader is not configured")
+	case MachineListQuery:
+		return h.listMachines(ctx)
 	default:
 		return nil, unsupported("observe", "unknown runtime query")
 	}

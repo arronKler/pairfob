@@ -14,6 +14,7 @@ const commandUsage = `Pairfob — this computer, on another device.
   pairfob pair              Pair a phone, tablet, or another computer
   pairfob list              What's paired
   pairfob forget N          Unpair
+  pairfob machine link NAME Pair with a machine Herdr reaches over SSH
   pairfob update            Install the latest version
   pairfob doctor            Check this computer
   pairfob setup             Check, install if requested, and start Herdr
@@ -41,6 +42,8 @@ func runCommand(args []string, sock string) error {
 		return enrollCommand(args[1:], sock)
 	case "pair":
 		return pairCommand(args[1:], sock)
+	case "machine", "machines":
+		return machineCommand(args[1:])
 	case "list":
 		return printPhones(sock)
 	case "forget", "unpair":
