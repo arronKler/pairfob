@@ -7,7 +7,7 @@ import { t } from "../../lib/i18n";
 import type { HerdSessionSummary, LiveSession, PairResult, SessionEvent } from "../../lib/protocol/client";
 import { closeComputerSession, establish, refreshRuntimeState, refreshSnapshot, switchHerdSession } from "../connection/controller";
 import { attachLiveSession, currentHerdSession, liveSession, setCredential } from "../computers/catalog-store";
-import { setNetworkOnline, setPhase } from "../connection/connection-store";
+import { capturePairingFragment, clearNotificationTarget, setNetworkOnline, setPhase } from "../connection/connection-store";
 import { dashboardStore } from "../dashboard/catalog-store";
 import { capabilityEnabled, advertisedAgentKinds } from "../operations/capabilities-store";
 import { resetObservationLifecycle, resetPaneView, selectPane, setFullTerminal } from "../session/session-store";
@@ -97,6 +97,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  clearNotificationTarget();
   resetTelemetry();
   if (beaconBefore) Object.defineProperty(happy.navigator, "sendBeacon", beaconBefore);
   else Reflect.deleteProperty(happy.navigator, "sendBeacon");
@@ -432,4 +433,29 @@ test("worktree reconciliation cannot issue a later list against a different Herd
   await flush();
   try { expect(listed).toEqual([]); }
   finally { for (const job of [...worktreeJobs()]) dismissWorktreeJob(job.id); }
+});
+
+test("a notification snapshot switches the real controller to default before opening a repeated pane id", async () => {
+  const notificationDaemon = "d_9123456789abcdef0123";
+  const a = fakeSession();
+  await establish(pair(notificationDaemon), async () => a);
+  await switchHerdSession("work");
+  const opened: (string | null)[] = [];
+  a.paneRead = async () => { opened.push(a.herdSession!()); return { text: "default pane", hash: "hash" }; };
+  const locationBefore = globalThis.location;
+  const historyBefore = globalThis.history;
+  try {
+    Object.assign(globalThis, {
+      location: { hash: `#notify=1&d=${notificationDaemon}&pane=w1:p1`, pathname: "/pair", search: "" },
+      history: { replaceState() {} },
+    });
+    capturePairingFragment();
+    await refreshSnapshot();
+    expect(currentHerdSession()).toBeNull();
+    expect(opened.length).toBeGreaterThan(0);
+    expect(opened.every(name => name === null)).toBe(true);
+  } finally {
+    closeComputerSession(notificationDaemon);
+    Object.assign(globalThis, { location: locationBefore, history: historyBefore });
+  }
 });

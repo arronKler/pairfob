@@ -386,7 +386,8 @@ const snapshotPorts = {
   networkOnline,
   documentVisible: () => document.visibilityState === "visible",
   isDesk,
-  openPendingNotification,
+  openPendingNotification: (open: (paneId: string) => Promise<void>) =>
+    openPendingNotification(open, () => switchHerdSession(null)),
   openPane,
   abandonOpenPane,
   syncFullTerminalChrome,
