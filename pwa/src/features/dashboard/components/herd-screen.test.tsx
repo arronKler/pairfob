@@ -14,6 +14,7 @@ import { replaceAgentsFromSnapshot } from "../catalog-store";
 import { attachLiveSession } from "../../computers/catalog-store";
 import { setHerdSessionList } from "../../herd-sessions/store";
 import type { LiveSession } from "../../../lib/protocol/session-types";
+import { HerdSessionRow } from "../../herd-sessions/herd-session-row";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import type { HerdActions } from "../actions";
 
@@ -406,5 +407,29 @@ describe("the Herdr-session switch on the Sessions tab", () => {
     expect(switchText()).toBe("personal");
     paint(model(), "rail");
     expect(app().querySelector(".rail-nav .herd-session-switch")).not.toBeNull();
+  });
+
+  test("phone, rail and Settings share the running-or-selected visibility rule", () => {
+    for (const scenario of [
+    { name: "default only", current: null, named: false, running: false, visible: false },
+    { name: "a stopped named server", current: null, named: true, running: false, visible: false },
+    { name: "a running named server", current: null, named: true, running: true, visible: true },
+    { name: "the selected named server has stopped", current: "personal", named: true, running: false, visible: true },
+    ]) {
+      const live = { herdSession: () => scenario.current } as unknown as LiveSession;
+      act(() => {
+        attachLiveSession(live);
+        setHerdSessionList(live, [
+          { name: null, running: true },
+          ...(scenario.named ? [{ name: "personal", running: scenario.running }] : []),
+        ]);
+      });
+      paint(model());
+      expect(app().querySelector(".herd-session-switch") !== null).toBe(scenario.visible);
+      paint(model(), "rail");
+      expect(app().querySelector(".herd-session-switch") !== null).toBe(scenario.visible);
+      act(() => renderReact(<HerdSessionRow />));
+      expect(app().querySelector("button") !== null).toBe(scenario.visible);
+    }
   });
 });

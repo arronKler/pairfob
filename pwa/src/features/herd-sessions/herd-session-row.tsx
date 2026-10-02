@@ -12,6 +12,10 @@ function herdSessionLabel(name: string | null): string {
   return name ?? t("set.herdSessionDefault");
 }
 
+function hasHerdSessionChoice(sessions: readonly HerdSessionSummary[], current: string | null): boolean {
+  return current !== null || sessions.some(session => session.name !== null && session.running);
+}
+
 function openHerdSessionSheet(sessions: readonly HerdSessionSummary[], current: string | null): void {
   showActionSheet(t("set.herdSessionTitle"), (modal) => <>
     {sessions.map(({ name, running }) => (
@@ -37,7 +41,7 @@ function useHerdSessionChoice(): { session: LiveSession | null; list: HerdSessio
 /** The Herdr-session row under the Settings computer panel. */
 export function HerdSessionRow() {
   const { session, list, current } = useHerdSessionChoice();
-  if (!session || !list) return null;
+  if (!session || !list || !hasHerdSessionChoice(list.sessions, current)) return null;
   return <SetNavItem label={t("set.herdSession")} value={herdSessionLabel(current)}
     onClick={() => openHerdSessionSheet(list.sessions, current)} />;
 }
@@ -48,7 +52,7 @@ export function HerdSessionRow() {
  */
 export function HerdSessionSwitch({ className }: { className?: string }) {
   const { session, list, current } = useHerdSessionChoice();
-  if (!session || !list) return null;
+  if (!session || !list || !hasHerdSessionChoice(list.sessions, current)) return null;
   const label = herdSessionLabel(current);
   return (
     <Button className={className ? `herd-session-switch ${className}` : "herd-session-switch"} aria-haspopup="dialog"

@@ -187,7 +187,7 @@ A lost phone that can still open Pairfob can also unpair other devices from Sett
 
 ## Named Herdr sessions
 
-If you run more than one Herdr server on the computer (`herdr --session <name>`), the phone can switch between them. The current Herdr session shows as a pill in the Sessions header (in the left rail on a wide screen), and as **Herdr session** in Settings. Tap either to pick another; the list marks which ones are running.
+If you run more than one Herdr server on the computer (`herdr --session <name>`), the phone can switch between them. When a named session is running or you have one selected, the current Herdr session shows as a pill in the Sessions header (in the left rail on a wide screen), and as **Herdr session** in Settings. The switch stays available if the selected named server stops, so you can return to Default. Tap either to pick another; the list marks which ones are running.
 
 This is off by default, and updating the app does not turn it on. Enable it once on the computer, in the same shell you would normally install from:
 
