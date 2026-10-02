@@ -5,8 +5,12 @@
  * into a style write. Reading the camera and persisting the next one stay with
  * the caller, so this module never touches application state.
  */
-import { fitBoardCamera, type TabLayout } from "../../../lib/layout";
+import { BOARD_CELL_H, fitBoardCamera, type TabLayout } from "../../../lib/layout";
 import { boardStageSize, cameraTransform, fitCamera, zoomCameraAt, type BoardCamera } from "../model/camera";
+
+/** Title bar height on screen: herdr's one border row, kept between these two. */
+export const BOARD_TITLE_MIN_PX = 14;
+export const BOARD_TITLE_MAX_PX = 24;
 
 export function applyCameraTransform(stage: HTMLElement, camera: BoardCamera): void {
   stage.style.transform = cameraTransform(camera);
@@ -18,6 +22,10 @@ export function applyCameraTransform(stage: HTMLElement, camera: BoardCamera): v
   const fit = fitScale(stage);
   const basis = fit > 0 ? Math.max(camera.scale, fit) : camera.scale;
   stage.style.setProperty("--board-chrome-scale", String(1 / Math.max(0.01, basis)));
+  // The bar is herdr's border row: one terminal row tall, so it covers as little
+  // of the screen under it as it can, but never unreadably thin or oversized.
+  const title = Math.min(BOARD_TITLE_MAX_PX, Math.max(BOARD_TITLE_MIN_PX, BOARD_CELL_H * basis));
+  stage.style.setProperty("--board-title-h", `${title}px`);
 }
 
 /** The scale that fits the whole stage in its viewport, or 0 when it cannot be measured. */

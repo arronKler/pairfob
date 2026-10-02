@@ -2,7 +2,7 @@ import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { fitBoardCamera } from "../../../lib/layout";
 import { boardCamera } from "../model/camera";
-import { applyCameraTransform } from "./transform";
+import { applyCameraTransform, BOARD_TITLE_MAX_PX, BOARD_TITLE_MIN_PX } from "./transform";
 
 beforeEach(resetBoardTestDOM);
 afterEach(() => { for (const node of [...document.body.children]) if (node.id !== "app") node.remove(); });
@@ -38,4 +38,22 @@ test("a stage that cannot be measured keeps the plain counter-scale", () => {
   const stage = rig(0, 0);
   applyCameraTransform(stage, boardCamera(0.2, 0, 0, false));
   expect(read(stage, "--board-chrome-scale")).toBeCloseTo(5, 6);
+});
+
+test("the title bar is one terminal row tall, kept between 14 and 24px on screen", () => {
+  const stage = rig(390, 500);
+  const fit = fitBoardCamera(390, 500, 1600, 640).scale;
+  const title = () => parseFloat(stage.style.getPropertyValue("--board-title-h"));
+  // At the fit a terminal row is about 3px on a phone: the bar takes the floor, not 24px.
+  applyCameraTransform(stage, boardCamera(fit, 0, 0, true));
+  expect(title()).toBe(Math.max(BOARD_TITLE_MIN_PX, 16 * fit));
+  // Zoomed in until a row is 20px: the bar is exactly one row.
+  applyCameraTransform(stage, boardCamera(1.25, 0, 0, false));
+  expect(title()).toBeCloseTo(20, 6);
+  // Further in it stops at 24px.
+  applyCameraTransform(stage, boardCamera(3, 0, 0, false));
+  expect(title()).toBe(BOARD_TITLE_MAX_PX);
+  // Below the fit the bar keeps its fit size and shrinks with the board (chrome scale).
+  applyCameraTransform(stage, boardCamera(fit / 2, 0, 0, false));
+  expect(title()).toBe(Math.max(BOARD_TITLE_MIN_PX, 16 * fit));
 });

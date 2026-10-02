@@ -39,7 +39,7 @@ export const zhPaneMenuV2 = {
   "pm.saving": "正在保存…",
   "pm.layoutHint": "拖动分隔线调整大小 · 长按「这一格」拖到别的格子上交换 · 点其他格切过去",
   "pm.layoutZoomHint": "铺满时电脑上只显示这一格。",
-  "pm.board": "在看板中查看",
+  "pm.board": "在画板中查看",
   "pm.precise": "精确调整",
   "pm.single": "这个标签页只有一格",
   "pm.swapNoNeighbor": "只能和紧挨着的格子交换。",

@@ -101,9 +101,11 @@ function BoardPaneTile({
         {tile.agentKind ? <span className={`board-pane-dot is-${tile.status}`} /> : null}
         <span className={`board-pane-name${tile.agentKind ? "" : " is-terminal"}`}>{tile.title}</span>
         {tile.pill ? <span className={`board-pane-word is-${tile.status}`}>{tile.pill}</span> : null}
-        <Button className="board-pane-more" aria-label={t("boardMenu.more", { title: tile.title })}
-          aria-haspopup="menu" onClick={(event) => { event.stopPropagation(); menu(); }}>⋯</Button>
       </span>
+      {/* Its own layer at the bar's right end, above the divider strips that run
+          along the pane's edges, so a tap on it is never taken for a divider. */}
+      <Button className="board-pane-more" aria-label={t("boardMenu.more", { title: tile.title })}
+        aria-haspopup="menu" onClick={(event) => { event.stopPropagation(); menu(); }}>⋯</Button>
     </div>
   );
 }

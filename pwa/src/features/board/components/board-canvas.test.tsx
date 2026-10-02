@@ -211,19 +211,22 @@ describe("board canvas lifecycle", () => {
     expect(appRoot().querySelector(".board-stage")?.getAttribute("style")).toContain("width: 800px");
   });
 
-  test("the title bar carries mark, status dot, name, status word and the in-bar ⋯", () => {
+  test("the title bar carries mark, status dot, name and status word; the ⋯ sits on its own layer", () => {
     const rig = harness();
     paint(canvas(splitTab, [agent("w1:p1", { status: "blocked" }), agent("w1:p2", { hasAgent: false, agent: "" })]), rig.controller);
     const [agentTile, shellTile] = [...appRoot().querySelectorAll<HTMLElement>(".board-pane")];
     const bar = agentTile.querySelector(".board-pane-title")!;
     expect(bar.querySelector(".agent-avatar")).not.toBeNull();
     expect(bar.querySelector(".board-pane-dot.is-blocked")).not.toBeNull();
-    expect(bar.querySelector(".board-pane-more")?.getAttribute("aria-label")).toBe(t("boardMenu.more", { title: "w1:p1" }));
+    // A direct child of the tile, so it can stack above the divider strips along the pane's edge.
+    const more = agentTile.querySelector<HTMLButtonElement>(":scope > .board-pane-more")!;
+    expect(more.getAttribute("aria-label")).toBe(t("boardMenu.more", { title: "w1:p1" }));
+    expect(bar.querySelector(".board-pane-more")).toBeNull();
     // A plain terminal shows its name in mono, with no agent state at all.
     const shellBar = shellTile.querySelector(".board-pane-title")!;
     expect(shellBar.querySelector(".board-pane-name.is-terminal")).not.toBeNull();
     expect(shellBar.querySelector(".board-pane-dot, .board-pane-word")).toBeNull();
-    act(() => bar.querySelector<HTMLButtonElement>(".board-pane-more")!.click());
+    act(() => more.click());
     expect(rig.calls.filter((call) => call.startsWith("open"))).toEqual([]);
   });
 
