@@ -58,7 +58,14 @@
   transition: background var(--dur-1) var(--ease);
 }
 
-.board-divider.is-h .board-divider-knob { width: 22px; height: 4px; }
+/* The pane below a horizontal seam starts with its title bar, so the knob sits just
+   above the seam, on the upper screen, instead of over the name. */
+.board-divider.is-h .board-divider-knob {
+  width: 22px;
+  height: 4px;
+  box-shadow: 0 0 0 2px var(--term-bg);
+  transform: translateY(calc(-5px * var(--s))) scale(var(--s));
+}
 
 .board-divider:hover::before,
 .board-divider:focus-visible::before,
