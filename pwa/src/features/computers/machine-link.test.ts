@@ -57,6 +57,17 @@ describe("machine linking", () => {
     expect(links.view()).toMatchObject({ busy: null, failure: null });
   });
 
+  test("the row knows its daemon as soon as pairing lands, before the computer's list returns", async () => {
+    let releaseList: () => void = () => undefined;
+    const { links, world } = harness({ first: [offering] });
+    await links.refresh();
+    // Hold every later ListMachines open: the row must not wait for it.
+    (world.session as unknown as { listMachines: unknown }).listMachines = () => new Promise<never[]>(resolve => { releaseList = () => resolve([]); });
+    await links.link("m1");
+    expect(links.view().machines).toEqual([{ ...BUILD, daemonId: PAIR.daemonId }]);
+    releaseList();
+  });
+
   test("installs only after the user agrees, with a second single request", async () => {
     const declined = harness({ first: [step("needs_install")], install: [offering] }, { confirmInstall: async () => false });
     await declined.links.refresh();

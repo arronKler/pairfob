@@ -137,7 +137,12 @@ export function createMachineLinks(ports: MachineLinkPorts) {
       await ports.reload();
       if (!owned()) return;
       operation = null;
-      publish({ busy: null });
+      // Mark the row now: the computer's refreshed list is a round trip away,
+      // and until it lands the row would offer Add again.
+      publish({
+        busy: null,
+        machines: view.machines.map(item => item.id === machineId ? { ...item, daemonId: pair.daemonId } : item),
+      });
       ports.announce(machine.label);
       void refresh();
     } catch (error) {
