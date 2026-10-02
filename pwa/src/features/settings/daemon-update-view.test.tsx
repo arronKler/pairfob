@@ -9,9 +9,9 @@ const { setCredential, attachLiveSession } = await import("../computers/catalog-
 const { currentDaemonId } = await import("../computers/catalog-store");
 const { setScreen, currentScreen } = await import("../../app/navigation-store");
 const {
-  acceptDaemonVersion, daemonVersion, refreshDaemonUpdate, startDaemonUpdate, checkDaemonRelease,
+  acceptDaemonVersion, daemonVersion, refreshDaemonUpdate, startDaemonUpdate, checkDaemonRelease, markDaemonConfigIncompatible,
 } = await import("./daemon-update");
-const { DaemonUpdate, ManualUpdateHelp } = await import("./daemon-update-view");
+const { DaemonUpdate, DaemonUpdateRow, ManualUpdateHelp } = await import("./daemon-update-view");
 const { setLang, t } = await import("../../lib/i18n");
 const { operationCapabilities } = await import("../operations/capabilities-store");
 const { pushEnabled } = await import("../connection/runtime-store");
@@ -222,7 +222,7 @@ test("visible pages check periodically and foreground resumes status reads witho
   expect(statuses).toBe(paused);
 });
 
-test("real config ingestion preserves old-daemon guidance while capabilities fail closed", async () => {
+test("real config ingestion distinguishes legacy builds from rejected configs while capabilities fail closed", async () => {
   const { refreshHerdConfig } = await import("../connection/controller");
   for (const config of [null, [], { build: "0.1.0" }, { build: "1.0.0", protocol: 1 }]) {
     connect({ getConfig: async () => config as Record<string, unknown>, daemonUpdateStatus: async () => idle });
@@ -236,9 +236,67 @@ test("real config ingestion preserves old-daemon guidance while capabilities fai
     // The detailed marker is true and the same host carries no legacy marker.
     expect(host!.querySelector(".daemon-update-host")?.getAttribute("data-react-daemon-detailed")).toBe("true");
     expect(host!.querySelector(".daemon-update-host")?.hasAttribute("data-daemon-update")).toBe(false);
-    expect(host!.textContent).toContain("pairfob update");
+    if (config && "build" in config && config.build === "0.1.0") {
+      expect(host!.textContent).toContain("pairfob update");
+      expect(host!.textContent).not.toContain(t("update.reload"));
+    } else {
+      expect(host!.textContent).toContain(t("update.incompatibleNote"));
+      expect(host!.textContent).toContain(t("update.reload"));
+      expect(host!.textContent).not.toContain("pairfob update");
+      expect(host!.textContent).not.toContain(t("update.needManual"));
+    }
     expect([...host!.querySelectorAll("button")].some(b => b.textContent === "更新电脑端")).toBeFalse();
   }
+});
+
+test("a current computer with a rejected config directs every update surface to page recovery", async () => {
+  let writes = 0;
+  connect({ daemonUpdateStatus: async () => idle, daemonUpdate: async () => { writes++; return idle; } }, "1.1.0");
+  await act(async () => { await refreshDaemonUpdate(); });
+  act(() => markDaemonConfigIncompatible());
+  for (const language of ["zh", "en"] as const) {
+    act(() => setLang(language));
+    render(createElement(DaemonUpdateRow));
+    expect(host!.textContent).toContain(t("update.incompatibleTitle"));
+    paintDaemon();
+    expect(host!.textContent).toContain(t("update.incompatibleTitle"));
+    expect(host!.textContent).toContain(t("update.viewCompatibility"));
+    expect(host!.textContent).not.toContain(t("update.legacyTitle"));
+    paintDaemon(true);
+    expect(host!.textContent).toContain("1.1.0");
+    expect(host!.textContent).toContain(t("update.incompatibleNote"));
+    expect(host!.textContent).not.toContain(t("update.latest"));
+    expect(host!.textContent).not.toContain(t("update.needManual"));
+  }
+  await act(async () => { await startDaemonUpdate(); });
+  expect(writes).toBe(0);
+  // A release-fetch failure must not hide an independently known config issue.
+  globalThis.fetch = (async () => { throw new Error("offline"); }) as typeof fetch;
+  await act(async () => { await checkDaemonRelease(true); });
+  expect(host!.textContent).toContain(t("update.incompatibleNote"));
+});
+
+test("page refresh stays on screen after a network failure and allows a retry", async () => {
+  connect({ daemonUpdateStatus: async () => idle }, "1.1.0");
+  await act(async () => { await refreshDaemonUpdate(); });
+  act(() => markDaemonConfigIncompatible());
+  paintDaemon(true);
+  let reads = 0;
+  let reject!: (error: Error) => void;
+  globalThis.fetch = (() => { reads++; return new Promise((_, fail) => { reject = fail; }); }) as typeof fetch;
+  const refresh = host!.querySelector<HTMLButtonElement>(".page-refresh button")!;
+  const url = window.location.href;
+  act(() => { refresh.click(); refresh.click(); });
+  expect(reads).toBe(1);
+  expect(refresh.disabled).toBeTrue();
+  expect(refresh.textContent).toBe(t("update.reloading"));
+  await act(async () => { reject(new Error("offline")); });
+  expect(window.location.href).toBe(url);
+  expect(refresh.disabled).toBeFalse();
+  expect(host!.querySelector('[role="alert"]')?.textContent).toBe(t("update.reloadFailed"));
+  act(() => refresh.click());
+  expect(reads).toBe(2);
+  await act(async () => { reject(new Error("offline")); });
 });
 
 test("offline settings and computer help offer manual upgrade without claiming a new version", () => {
