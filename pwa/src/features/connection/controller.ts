@@ -272,16 +272,17 @@ const runtimePorts = {
   markDaemonConfigIncompatible,
   saveCredential,
   reloadComputers,
-  refreshFromSession: () => refreshFromSession(),
+  // Runtime observation invokes this only after its GetConfig answer is owned.
+  refreshFromSession: async () => {
+    void loadHerdSessions();
+    await refreshFromSession();
+  },
   commitView,
   currentLive: liveSession,
   currentCredential: () => computersStore.get().credential,
 };
 
 export async function refreshRuntimeState(): Promise<void> {
-  // The Sessions tab shows the Herdr-session switch without visiting Settings,
-  // so every runtime refresh (connect, reconnect, foreground, switch) re-reads it.
-  void loadHerdSessions();
   await observeRuntimeState(runtimePorts);
 }
 

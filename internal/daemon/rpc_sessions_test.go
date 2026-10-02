@@ -149,3 +149,28 @@ func TestGetConfigDescribesSelectedSession(t *testing.T) {
 		}
 	}
 }
+
+// The PWA shows the switch only when GetConfig advertises list_sessions, so
+// the key follows the opt-in alone. In particular it must stay true while the
+// default Herdr server is down (no socket here at all), or a user whose only
+// running server is a named one could never reach it.
+func TestGetConfigAdvertisesListSessionsWithTheOptIn(t *testing.T) {
+	for _, multi := range []bool{false, true} {
+		root := t.TempDir()
+		h := runtime.NewHerdr(filepath.Join(root, "herdr.sock"))
+		h.ConfigRoot = root
+		h.Multi = multi
+		_, client := runtimeRPCClient(t, h)
+		raw, err := client.RPC("GetConfig", map[string]any{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		config := decodeResult(t, raw)
+		if config["runtime"] != "offline" {
+			t.Fatalf("default server must be down in this fixture: %s", raw)
+		}
+		if got := config["capabilities"].(map[string]any)["list_sessions"]; got != multi {
+			t.Fatalf("multi=%v: list_sessions=%v: %s", multi, got, raw)
+		}
+	}
+}

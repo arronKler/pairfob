@@ -260,7 +260,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"create_conversation", "create_tab", "split_pane", "prompt_agent", "history",
 		"list_worktrees", "create_worktree", "open_worktree", "resize_pane", "swap_pane", "zoom_pane",
 	}
-	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "link_machine"), capabilities)
+	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine"), capabilities)
 
 	// Machine linking names machines by opaque ID only: no SSH target, host,
 	// or path may be added to these objects.

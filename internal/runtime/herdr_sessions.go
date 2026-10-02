@@ -16,6 +16,10 @@ const sessionProbeTimeout = 250 * time.Millisecond
 // implements it: the Fake runtime models a single session and has no
 // sibling sessions to report, the same way it has no TerminalOpener.
 type SessionLister interface {
+	// SessionsEnabled reports, without I/O, whether Sessions may succeed. It
+	// backs GetConfig's list_sessions capability, which must not depend on
+	// the default session being reachable.
+	SessionsEnabled() bool
 	Sessions(ctx context.Context) ([]SessionInfo, error)
 }
 
@@ -26,6 +30,9 @@ type SessionInfo struct {
 	Name    string
 	Running bool
 }
+
+// SessionsEnabled is the multi-session opt-in; see Sessions.
+func (h *Herdr) SessionsEnabled() bool { return h.Multi }
 
 // Sessions lists the default session plus every named session under
 // ConfigRoot/sessions, each probed for a live socket. It requires Multi:

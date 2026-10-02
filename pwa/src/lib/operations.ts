@@ -9,6 +9,7 @@ export const OPERATION_CAPABILITY_KEYS = [
   "agent_inspect",
   "history",
   "list_worktrees",
+  "list_sessions",
   "create_worktree",
   "open_worktree",
   "resize_pane",
@@ -32,6 +33,7 @@ export const NO_OPERATION_CAPABILITIES: OperationCapabilities = {
   agent_inspect: false,
   history: false,
   list_worktrees: false,
+  list_sessions: false,
   create_worktree: false,
   open_worktree: false,
   resize_pane: false,
@@ -356,7 +358,7 @@ export function parseRuntimeOperationsConfig(value: unknown): RuntimeOperationsC
 	const rawCapabilities = isRecord(config.capabilities) ? config.capabilities : {};
 	const capabilities = { ...NO_OPERATION_CAPABILITIES };
 	const capabilityKeys = Object.keys(rawCapabilities);
-	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "link_machine"]);
+	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine"]);
 	const capabilitiesValid = capabilityKeys.every((key) => (OPERATION_CAPABILITY_KEYS as readonly string[]).includes(key))
 		&& OPERATION_CAPABILITY_KEYS.every((key) => typeof rawCapabilities[key] === "boolean"
       || (optionalCapabilities.has(key) && !(key in rawCapabilities)));

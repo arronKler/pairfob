@@ -1,4 +1,5 @@
 import { liveSession } from "../computers/catalog-store";
+import { capabilityEnabled } from "../operations/capabilities-store";
 import type { HerdSessionSummary } from "../../lib/protocol/session-types";
 import { beginHerdSessionRead, herdSessionReadIsCurrent, setHerdSessionList } from "./store";
 
@@ -7,15 +8,19 @@ import { beginHerdSessionRead, herdSessionReadIsCurrent, setHerdSessionList } fr
  * controller can run it after every runtime refresh (connect, reconnect,
  * foreground, switch) without importing the switch action back.
  *
- * Discovery is quiet: an old daemon (`unknown_op`), a daemon without
- * PAIRFOB_MULTI_SESSION (`unsupported`) and a transient failure all hide the
- * switcher until the next read. Both outcomes publish only if this read is still
- * the newest one on the connection it started on.
+ * GetConfig's list_sessions grant is authoritative; absent or false clears
+ * this connection's list without probing. A transient failure also hides it
+ * until the next read. Only the newest read on its connection may publish.
  */
 export async function loadHerdSessions(): Promise<void> {
   const session = liveSession();
-  if (!session?.listHerdSessions || !session.isConnected()) return;
+  if (!session) return;
   const token = beginHerdSessionRead(session);
+  if (!capabilityEnabled("list_sessions") || !session.listHerdSessions) {
+    setHerdSessionList(session, null);
+    return;
+  }
+  if (!session.isConnected()) return;
   let sessions: HerdSessionSummary[] | null;
   try {
     sessions = await session.listHerdSessions();

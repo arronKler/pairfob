@@ -13,7 +13,8 @@ import (
 // case and replies unknown_op. A daemon whose runtime does not implement
 // SessionLister (the Fake dev runtime, or Herdr with multi-session not
 // enabled) replies unsupported. Both are expected, quiet ways to say "no
-// switcher here" rather than errors.
+// switcher here" rather than errors. GetConfig's list_sessions capability
+// tells a current PWA in advance, so it never has to probe.
 func (e *Engine) rpcListSessions(s *sess, id string, params json.RawMessage) {
 	var p struct{}
 	if badParams(params, &p) {
@@ -41,4 +42,12 @@ func (e *Engine) rpcListSessions(s *sess, id string, params json.RawMessage) {
 		out = append(out, map[string]any{"name": name, "running": si.Running})
 	}
 	e.reply(s, id, map[string]any{"sessions": out})
+}
+
+// sessionsListable backs the list_sessions capability. It is independent of
+// Describe: with the default session stopped and a named one running, the
+// switch must stay reachable.
+func (e *Engine) sessionsListable() bool {
+	lister, ok := e.RT.(runtime.SessionLister)
+	return ok && lister.SessionsEnabled()
 }

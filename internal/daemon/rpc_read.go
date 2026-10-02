@@ -45,6 +45,7 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 		"agent_inspect":       descriptor.Supports(runtime.FeatureAgentInspect),
 		"history":             describeErr == nil && (e.Journal != nil || descriptor.Supports(runtime.FeaturePaneRead)),
 		"list_worktrees":      descriptor.Supports(runtime.FeatureWorktreeList),
+		"list_sessions":       e.sessionsListable(),
 		"create_worktree":     descriptor.Supports(runtime.FeatureWorktreeCreate),
 		"open_worktree":       descriptor.Supports(runtime.FeatureWorktreeOpen),
 		"resize_pane":         descriptor.Supports(runtime.FeatureLayoutResize),

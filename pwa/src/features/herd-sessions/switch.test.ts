@@ -5,7 +5,7 @@ import { createElement, renderReact, unmountReact } from "../../../test-support/
 import { appRoot } from "../../app/dom-root";
 import { t } from "../../lib/i18n";
 import type { HerdSessionSummary, LiveSession, PairResult, SessionEvent } from "../../lib/protocol/client";
-import { closeComputerSession, establish, refreshSnapshot, switchHerdSession } from "../connection/controller";
+import { closeComputerSession, establish, refreshRuntimeState, refreshSnapshot, switchHerdSession } from "../connection/controller";
 import { attachLiveSession, currentHerdSession, liveSession, setCredential } from "../computers/catalog-store";
 import { setNetworkOnline, setPhase } from "../connection/connection-store";
 import { dashboardStore } from "../dashboard/catalog-store";
@@ -13,12 +13,12 @@ import { capabilityEnabled, advertisedAgentKinds } from "../operations/capabilit
 import { resetObservationLifecycle, resetPaneView, selectPane, setFullTerminal } from "../session/session-store";
 import { setScreen } from "../../app/navigation-store";
 import { resetGenerationsForTests } from "../connection/generations";
-import { chooseHerdSession } from "./actions";
 import { loadHerdSessions } from "./load";
 import { HerdSessionSwitch } from "./herd-session-row";
 import { herdSessionList } from "./store";
 import { adoptIncoming, attachmentScopeKey, resetAttachmentQueues, setRuntimeAbort } from "../session/attachments/attachments-store";
 import { resetAttachmentRecovery } from "../session/attachments/attachments-recovery";
+import { resetTelemetry } from "../../lib/telemetry";
 
 /**
  * Regression coverage for the review of the first multi-session attempt
@@ -30,6 +30,7 @@ import { resetAttachmentRecovery } from "../session/attachments/attachments-reco
 type FakeSession = LiveSession & {
   emit: (event: SessionEvent) => void;
   configs: (string | null)[];
+  listReads: number;
 };
 
 function pair(daemonId: string): PairResult {
@@ -46,6 +47,7 @@ function configFor(herd: string | null): Record<string, unknown> {
     "create_conversation", "create_tab", "split_pane", "prompt_agent", "history",
     "list_worktrees", "create_worktree", "open_worktree", "resize_pane", "swap_pane", "zoom_pane",
   ]) capabilities[key] = herd !== null;
+  capabilities.list_sessions = true;
   return {
     protocol: 1, build: "v1.0.0", daemon_id: "d_aaaaaaaaaaaaaaaaaaaa", hostname: "herdbox",
     runtime: herd === null ? "offline" : "herdr", vapid_public: "", submit_keys: ["Enter"], idle_pause_ms: 5000,
@@ -62,6 +64,7 @@ function fakeSession(sessions: HerdSessionSummary[] = [{ name: null, running: fa
   let herd: string | null = null;
   const session = {
     configs: [] as (string | null)[],
+    listReads: 0,
     close: () => undefined,
     isConnected: () => true,
     setNetworkAvailable: () => undefined,
@@ -74,22 +77,29 @@ function fakeSession(sessions: HerdSessionSummary[] = [{ name: null, running: fa
     snapshot: async () => panesFor(herd),
     herdSession: () => herd,
     selectHerdSession: (name: string | null) => { herd = name; },
-    listHerdSessions: async () => sessions,
+    listHerdSessions: async () => { session.listReads++; return sessions; },
   } as unknown as FakeSession;
   return session;
 }
 
 const daemonIds = ["herd_switch_a", "herd_switch_b"];
 const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+let beaconBefore: PropertyDescriptor | undefined;
 
 beforeEach(async () => {
   await resetBoardTestDOM();
   happy.happyDOM.setWindowSize({ width: 390, height: 844 });
   resetGenerationsForTests();
   setNetworkOnline(true);
+  beaconBefore = Object.getOwnPropertyDescriptor(happy.navigator, "sendBeacon");
+  Object.defineProperty(happy.navigator, "sendBeacon", { configurable: true, value: () => true });
+  resetTelemetry();
 });
 
 afterEach(() => {
+  resetTelemetry();
+  if (beaconBefore) Object.defineProperty(happy.navigator, "sendBeacon", beaconBefore);
+  else Reflect.deleteProperty(happy.navigator, "sendBeacon");
   resetAttachmentRecovery();
   resetAttachmentQueues();
   unmountReact();
@@ -232,15 +242,6 @@ describe("list reads are owned by their connection and request", () => {
     expect(herdSessionList(a)?.sessions.map((s) => s.name)).toEqual([null, "new"]);
   });
 
-  test("a daemon without the op hides the switcher quietly", async () => {
-    const { created } = await connectBoth();
-    const a = created.get(daemonIds[0])!;
-    a.listHerdSessions = async () => { throw new Error("unknown_op"); };
-    await loadHerdSessions();
-    expect(herdSessionList(a)).toBeUndefined();
-    await chooseHerdSession("work");
-    expect(a.herdSession!()).toBe("work");
-  });
 });
 
 describe("the Sessions tab offers the switch without a Settings visit", () => {
@@ -265,16 +266,51 @@ describe("the Sessions tab offers the switch without a Settings visit", () => {
     expect(pill()?.textContent).toBe("work");
   });
 
-  test("an old or opted-out daemon shows no switch", async () => {
-    const connect = async () => {
-      const session = fakeSession();
-      session.listHerdSessions = async () => { throw new Error("unknown_op"); };
-      return session;
-    };
-    await establish(pair(daemonIds[0]), connect);
-    await flush();
+  for (const advertised of [false, undefined]) {
+    test(`list_sessions=${advertised}: no discovery RPC or switcher`, async () => {
+      const a = fakeSession();
+      a.getConfig = async () => {
+        const config = configFor(null);
+        const capabilities = config.capabilities as Record<string, boolean>;
+        if (advertised === undefined) delete capabilities.list_sessions;
+        else capabilities.list_sessions = advertised;
+        return config;
+      };
+      await establish(pair(daemonIds[0]), async () => a);
+      await loadHerdSessions();
+      expect(a.listReads).toBe(0);
+      expect(herdSessionList(a)).toBeUndefined();
+      renderReact(createElement(HerdSessionSwitch));
+      expect(pill()).toBeNull();
+    });
+  }
+
+  test("an offline default still advertises discovery and reads once after each config refresh", async () => {
+    const { created } = await connectBoth();
+    const a = created.get(daemonIds[0])!;
+    expect(capabilityEnabled("create_tab")).toBe(false);
+    expect(capabilityEnabled("list_sessions")).toBe(true);
+    expect(a.listReads).toBe(1);
     renderReact(createElement(HerdSessionSwitch));
-    expect(pill()).toBeNull();
+    expect(pill()).not.toBeNull();
+    await act(async () => { await refreshRuntimeState(); await flush(); });
+    expect(a.listReads).toBe(2);
+  });
+
+  test("a switch keeps the cached choices until the target's config answers", async () => {
+    const { created } = await connectBoth();
+    const a = created.get(daemonIds[0])!;
+    renderReact(createElement(HerdSessionSwitch));
+    let answer!: (config: Record<string, unknown>) => void;
+    a.getConfig = () => new Promise(resolve => { answer = resolve; });
+    let switching!: Promise<boolean>;
+    act(() => { switching = switchHerdSession("work"); });
+    await act(async () => { await flush(); });
+    expect(pill()).not.toBeNull();
+    const config = configFor("work");
+    (config.capabilities as Record<string, boolean>).list_sessions = false;
+    await act(async () => { answer(config); await switching; await flush(); });
+    expect(herdSessionList(a)).toBeUndefined();
   });
 });
 

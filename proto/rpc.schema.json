@@ -157,6 +157,7 @@
         "agent_inspect": { "type": "boolean" },
         "history": { "type": "boolean" },
         "list_worktrees": { "type": "boolean" },
+        "list_sessions": { "type": "boolean" },
         "create_worktree": { "type": "boolean" },
         "open_worktree": { "type": "boolean" },
         "resize_pane": { "type": "boolean" },
