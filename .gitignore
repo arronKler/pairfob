@@ -29,6 +29,7 @@ ui-review/
 .herd-swarm/
 .herd-dispatch/
 .field-guide/
+.claude/
 
 # secrets and env (keep *.example)
 .wrangler
