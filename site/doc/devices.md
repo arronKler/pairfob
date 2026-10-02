@@ -74,6 +74,25 @@ A computer that is asleep or offline stays on the list. Pairfob does not delete 
 
 **Forget** on a row only drops the credential in this browser. The computer still lists this device until you `forget` it there or **Unpair** it under Settings → Paired devices. **Unpair this phone** still only affects the current computer pairing.
 
+## Machines Herdr reaches over SSH
+
+If Herdr on a paired computer has saved SSH machines (`herdr machine add`), the phone can add each one without a pairing code.
+
+1. Connect to that computer and open **Computers**
+2. Under **Machines … reaches**, tap **Add** on a machine
+3. If Pairfob is missing there, confirm **Install**. The computer installs and starts it over its own SSH connection
+
+The machine then joins the computer list and you connect to it like any other computer. It keeps its own identity and keys; the first computer only relays a one-use pairing link and is not needed afterwards.
+
+What to expect:
+
+- One tap per machine, and each phone adds machines for itself
+- The computer must reach the machine with `ssh` that needs no password or prompt
+- Machines run Linux or macOS and use Herdr's default session
+- Both the computer and the machine need Pairfob 1.3.0 or later. Update the computer with `pairfob update`
+
+From the computer's terminal, `pairfob machine list` shows the same machines and `pairfob machine link NAME` prints that machine's pairing code here.
+
 ## Another window
 
 A second Pairfob page on the same paired phone may tell the old window that another window took over. Distinct **devices** can stay connected together; multiple windows of one device steal the session.

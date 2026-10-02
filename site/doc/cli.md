@@ -33,6 +33,8 @@ pairfob help
 
 `forget` also accepts a device name; collisions require the index. `unpair` is an alias of `forget`.
 
+`pairfob machine list` shows the SSH machines Herdr has saved on this computer, and `pairfob machine link NAME` pairs a device with one of them. See [Machines Herdr reaches over SSH](/devices).
+
 
 ## setup
 

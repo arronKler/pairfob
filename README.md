@@ -93,7 +93,9 @@ pairfob service status      # login service: start / stop / restart / install / 
 ```
 
 A second computer runs the same installer; pair it from the phone with
-**Settings → Add another computer**. Everything else: [Computer commands](https://pairfob.com/doc/cli).
+**Settings → Add another computer**. Machines that Herdr already reaches over
+SSH can be added from the phone's **Computers** page without a pairing code.
+Everything else: [Computer commands](https://pairfob.com/doc/cli).
 
 ## How it works
 

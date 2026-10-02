@@ -33,6 +33,8 @@ pairfob help
 
 `forget` 也可以写设备名；重名时必须用序号。`unpair` 是 `forget` 的别名。
 
+`pairfob machine list` 列出这台电脑上 Herdr 保存的 SSH 机器，`pairfob machine link 名字` 让设备和其中一台配对。见 [Herdr 通过 SSH 连接的机器](/zh/devices)。
+
 
 ## setup
 

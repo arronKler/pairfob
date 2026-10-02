@@ -84,7 +84,8 @@ pairfob service status      # 登录服务：start / stop / restart / install / 
 ```
 
 第二台电脑运行同一个安装脚本，然后在手机上用 **设置 → 添加另一台电脑**
-配对。其他命令见 [电脑上的命令](https://pairfob.com/doc/zh/cli)。
+配对。Herdr 已经通过 SSH 连接的机器，可以在手机的 **电脑** 页里直接添加，不用配对码。
+其他命令见 [电脑上的命令](https://pairfob.com/doc/zh/cli)。
 
 ## 工作原理
 
