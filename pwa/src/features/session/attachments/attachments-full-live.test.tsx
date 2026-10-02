@@ -1,6 +1,6 @@
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { resetBoardTestDOM } from "../../../../test-support/dom";
+import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { appRoot } from "../../../app/dom-root";
@@ -21,6 +21,7 @@ import {
   setAttachmentTransferPort,
   startUpload,
 } from "./attachments-controller";
+import { resetAttachmentPicker } from "./attach-picker";
 import { insertPaths } from "./attachments-insertion";
 import { resetAttachmentQueues, attachmentScopeKey, queueSnapshot } from "./attachments-store";
 import type { AttachmentTransferOptions, AttachmentTransferPort, UploadStateLike } from "./attach-model";
@@ -87,6 +88,7 @@ beforeEach(async () => {
 afterEach(async () => {
   closeTestDialogs();
   unmountReact();
+  resetAttachmentPicker();
   setAttachmentTransferPort(null);
   attachLiveSession(null);
   setCredential(null);
@@ -124,12 +126,20 @@ describe("full terminal live mode attachment entry", () => {
 
   test("opens the system picker directly from live mode (no intermediate sheet)", () => {
     paintPad();
-    const inputs = appRoot().querySelectorAll<HTMLInputElement>('.full-terminal-live-actions input[type="file"]');
+    // The input is page-owned (attach-picker), so the open is observed on the class.
+    const proto = happy.HTMLInputElement.prototype as unknown as HTMLInputElement;
+    const own = Object.getOwnPropertyDescriptor(proto, "click");
+    let opened = 0;
+    proto.click = function (this: HTMLInputElement) { if (this.type === "file") opened += 1; };
+    try {
+      act(() => appRoot().querySelector<HTMLButtonElement>(".full-terminal-live-actions .attach-btn")!.click());
+    } finally {
+      if (own) Object.defineProperty(proto, "click", own);
+      else delete (proto as { click?: unknown }).click;
+    }
+    const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
     expect(inputs).toHaveLength(1);
     expect(inputs[0].multiple).toBe(true);
-    let opened = 0;
-    inputs[0].click = () => { opened += 1; };
-    act(() => appRoot().querySelector<HTMLButtonElement>(".full-terminal-live-actions .attach-btn")!.click());
     expect(opened).toBe(1);
     expect(document.querySelector("dialog")).toBeNull();
   });

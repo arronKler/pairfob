@@ -28,9 +28,12 @@
   height: 20px;
 }
 
-/* The one file input behind 📎: the OS draws its own photo / camera / files menu. */
+/* The one file input behind 📎: the OS draws its own photo / camera / files menu.
+   It sits on <body> (see attach-picker), pinned so it never adds scroll extent. */
 .attach-native-input {
-  position: absolute;
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   margin: -1px;
