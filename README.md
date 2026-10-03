@@ -49,7 +49,7 @@ binary on first use. See [`plugin/herdr/`](plugin/herdr/README.md).
   computer supports them.
 - **Several computers, several devices.** One phone can switch between
   computers; each computer can have several paired devices. Named Herdr
-  sessions (`herdr --session <name>`) are opt-in; see
+  sessions (`herdr --session <name>`) are on by default; see
   [Named Herdr sessions](https://pairfob.com/doc/app#named-herdr-sessions).
 - **Keep an eye on quota.** Subscription allowance for Codex, Claude Code,
   Copilot, Cursor, Grok and more, collected on the computer.
