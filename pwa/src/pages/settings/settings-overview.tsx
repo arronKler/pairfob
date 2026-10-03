@@ -1,5 +1,6 @@
 import { openComputers } from "../../features/computers/actions";
 import { DaemonUpdateRow } from "../../features/settings/daemon-update-view";
+import { HerdSessionRow } from "../../features/herd-sessions/herd-session-row";
 import { LanguageControl } from "../../features/settings/language";
 import { setSettingsSection } from "../../features/settings/settings-section";
 import { t } from "../../lib/i18n";
@@ -33,6 +34,7 @@ export function SettingsOverview({ input }: { input: SettingsOverviewInput }) {
     <>
       <ComputerPanel name={input.computerName} link={input.link} onOpen={() => setSettingsSection("connection")}>
         <DaemonUpdateRow />
+        <HerdSessionRow />
         <SetNavItem label={t("settings.switchComputer")} value={t("settings.countUnit", { n: String(input.computerCount) })}
           onClick={openComputers} />
       </ComputerPanel>

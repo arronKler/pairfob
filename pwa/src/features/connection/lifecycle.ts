@@ -52,12 +52,15 @@ import {
   cancelEstablish,
   catalogRequestIsCurrent,
   establishAttemptIsCurrent,
+  herdSwitchIsCurrent,
   liveView,
   nextCatalogRequest,
   nextEstablishAttempt,
+  nextHerdSwitch,
 } from "./generations";
 import type { LifecyclePorts } from "./ports";
-import { retireLiveDomains, type RetirementPorts } from "./retirement";
+import { retireHerdView, retireLiveDomains, type RetirementPorts } from "./retirement";
+import { pauseAttachmentTransfers } from "../session/attachments/attachments-store";
 
 export type LifecycleContext = {
   pool: ComputerSessions;
@@ -139,6 +142,51 @@ export function clearLiveConnection(ctx: LifecycleContext, expected: LiveSession
   ctx.retirement.clearAgentTraceCache();
   ctx.retirement.clearBoardPreviews();
   batch(() => retireLiveDomains());
+}
+
+/**
+ * Retarget the live connection at another Herdr session on the same daemon.
+ *
+ * No re-pairing: the connection and its transport stay. Everything else is the
+ * same complete transition a computer switch makes: in-flight reads lose their
+ * view generation before the selection moves, the old session's panes, board,
+ * capabilities and pane-scoped caches retire in one batch, and the target's
+ * config (capabilities, agent kinds) is read again before its snapshot. Returns
+ * false when a newer switch, establish or disconnect took over.
+ */
+export async function switchHerdSession(name: string | null, ctx: LifecycleContext): Promise<boolean> {
+  const session = liveSession();
+  if (!session?.selectHerdSession || !session.herdSession || session.herdSession() === name) return false;
+  const serial = nextHerdSwitch();
+  const viewVersion = liveView();
+  const owned = () => herdSwitchIsCurrent(serial) && liveSession() === session && liveView() === viewVersion;
+  ctx.ports.captureComposeDraft();
+  if (ctx.ports.isFullTerminal()) await ctx.ports.leaveFullTerminal();
+  else ctx.ports.disposeFullTerminal();
+  if (!owned()) return false;
+  parkSession(ctx.ports);
+  invalidateReads(ctx.ports);
+  ctx.retirement.bumpViewIncarnation();
+  ctx.retirement.clearAgentTraceCache();
+  ctx.retirement.clearBoardPreviews();
+  pauseAttachmentTransfers(currentDaemonId(), session.herdSession());
+  session.selectHerdSession(name);
+  const screen = currentScreen();
+  batch(() => {
+    retireHerdView();
+    // Pane-scoped preferences are keyed by Herdr session; load the target's.
+    adoptDaemonPreferences();
+    reloadCompletionSeen();
+    beginIdentityRead();
+    // A pane or its files belong to the old session; settings and the board stay.
+    if (screen === "pane" || screen === "workspace") setScreen("home");
+  });
+  ctx.ports.track("pwa_switch_herd_session");
+  ctx.ports.commitView();
+  if (liveSession() !== session) return false;
+  ctx.ports.startPolling();
+  await ctx.ports.refreshRuntime();
+  return liveSession() === session;
 }
 
 export function closeComputerSession(daemonId: string, ctx: LifecycleContext): void {

@@ -22,18 +22,17 @@ import { resolveNotificationTarget } from "../../lib/notification-target";
  * shows its gone-notice once a newer intent or a replacement owner exists. The
  * newer consumption owns its own pane/notice; clearing does not mint an intent.
  */
-export async function openPendingNotification(openPane: (paneId: string) => Promise<void>): Promise<boolean> {
+export async function openPendingNotification(
+  openPane: (paneId: string) => Promise<void>,
+  switchToDefault: () => Promise<boolean>,
+): Promise<boolean> {
   const target = notificationTarget();
   if (!target) return false;
   const generation = notificationGeneration();
   const ownerDaemonId = currentDaemonId();
   const ownerSession = liveSession();
-  const resolution = resolveNotificationTarget(
-    target,
-    ownerDaemonId ?? undefined,
-    liveAgents().map((agent) => agent.paneId),
-  );
-  if (resolution.kind === "wait") return false;
+  if (ownerDaemonId !== target.daemonId) return false;
+  const ownerHerdSession = ownerSession?.herdSession?.() ?? null;
   const captured: NotificationTarget = { daemonId: target.daemonId, paneId: target.paneId };
   // True while this consumption is still the newest intent for the owner it
   // captured. A newer deep link — even a same-computer replacement — advances
@@ -41,7 +40,19 @@ export async function openPendingNotification(openPane: (paneId: string) => Prom
   const stillCurrent = () =>
     notificationGeneration() === generation &&
     currentDaemonId() === captured.daemonId &&
-    liveSession() === ownerSession;
+    liveSession() === ownerSession &&
+    (ownerSession?.herdSession?.() ?? null) === ownerHerdSession;
+  if (ownerHerdSession !== null) {
+    // Push names default-session panes. Keep the intent untouched: the fresh
+    // default snapshot consumes whichever generation is current after switching.
+    if (stillCurrent()) await switchToDefault();
+    return true;
+  }
+  const resolution = resolveNotificationTarget(
+    target,
+    ownerDaemonId ?? undefined,
+    liveAgents().map((agent) => agent.paneId),
+  );
   clearNotificationTarget();
   if (!stillCurrent()) return true;
   if (resolution.kind === "missing") {

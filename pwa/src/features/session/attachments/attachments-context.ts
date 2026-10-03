@@ -14,7 +14,7 @@
  * so existing module imports are unchanged. This module also wires the
  * extracted image-edit module's port loader, avoiding a controller↔edit cycle.
  */
-import { currentDaemonId, liveSession } from "../../computers/catalog-store";
+import { currentDaemonId, currentHerdSession, liveSession } from "../../computers/catalog-store";
 import { phase, connectionStore } from "../../connection/connection-store";
 import { capabilityEnabled } from "../../operations/capabilities-store";
 import { openPaneId } from "../session-store";
@@ -34,7 +34,8 @@ export function uploadFileEnabled(): boolean {
 export function currentAttachmentScope(): AttachmentScope | null {
   const paneId = openPaneId();
   if (phase() !== "live" || !paneId || !liveSession()) return null;
-  return { daemonId: currentDaemonId(), paneId };
+  const herdSession = currentHerdSession();
+  return { daemonId: currentDaemonId(), paneId, ...(herdSession === null ? {} : { herdSession }) };
 }
 
 /** The attach affordance exists only with a live, authorized, capable session. */
@@ -51,6 +52,7 @@ export function scopeMatches(scope: AttachmentScope): boolean {
   return phase() === "live"
     && openPaneId() === scope.paneId
     && currentDaemonId() === scope.daemonId
+    && currentHerdSession() === (scope.herdSession ?? null)
     && liveSession() !== null;
 }
 

@@ -124,6 +124,11 @@ export function currentDaemonId(): string | null {
   return read().credential?.daemonId ?? null;
 }
 
+/** The Herdr session the live connection targets; null is the default (or no connection). */
+export function currentHerdSession(): string | null {
+  return read().live?.herdSession?.() ?? null;
+}
+
 export function currentDeviceId(): string | null {
   return read().credential?.deviceId ?? null;
 }

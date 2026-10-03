@@ -60,7 +60,8 @@ import {
   SessionTransport,
   TERMINAL_RPC_TIMEOUT_MS,
 } from "./session-transport.ts";
-import type { DeviceSummary, LiveSession, ReconnectReason, SessionEvent } from "./session-types.ts";
+import type { DeviceSummary, HerdSessionSummary, LiveSession, ReconnectReason, SessionEvent } from "./session-types.ts";
+import { parseHerdSessions, scopeHerdSession, validHerdSessionName } from "./herd-sessions.ts";
 import {
   parseGitBranches,
   parseGitDiff,
@@ -148,6 +149,9 @@ class ReconnectingSession implements LiveSession {
   private readonly relayWarmup: RelayWarmup;
   private unwatchVisibility: () => void = () => undefined;
   private readonly agentTraceRPC = new AgentTraceRPC((op, params) => this.readRPC(op, params), () => this.traceMarkers);
+  // The Herdr session this connection targets; null is the default socket.
+  // It belongs to this connection, so a pooled computer keeps its own choice.
+  private herdSessionName: string | null = null;
   // upload_file_v2 is learned ONLY from a successful GetConfig and cleared on
   // every transport-epoch loss (disconnect, transport switch, close). Method
   // presence never implies the capability. configRequest is a monotonic token,
@@ -293,6 +297,7 @@ class ReconnectingSession implements LiveSession {
     parseMachineLink(await this.readRPC("LinkMachineCancel", { operation_id: operationId }));
   getConfig = async (): Promise<Record<string, unknown>> => {
     const requestToken = ++this.configRequest;
+    const params = scopeHerdSession("GetConfig", {}, this.herdSessionName);
     // Fail closed from the instant a refresh starts: the capability is only
     // restored by a valid reply that is still the latest request on the same
     // transport epoch.
@@ -300,7 +305,7 @@ class ReconnectingSession implements LiveSession {
     const transport = await this.captureTransport();
     if (!transport) throw new ProtocolError("reconnecting", "连接正在恢复");
     try {
-      const result = await transport.rpc("GetConfig", {}) as Record<string, unknown>;
+      const result = await transport.rpc("GetConfig", params) as Record<string, unknown>;
       if (
         requestToken === this.configRequest &&
         transport === this.transport &&
@@ -335,6 +340,16 @@ class ReconnectingSession implements LiveSession {
       ...(extra?.expected_signature ? { expected_signature: extra.expected_signature } : {}),
     });
   listDevices = () => this.readRPC("ListDevices", {}) as Promise<{ devices?: DeviceSummary[] }>;
+  listHerdSessions = async (): Promise<HerdSessionSummary[]> => parseHerdSessions(await this.readRPC("ListSessions", {}));
+  herdSession = (): string | null => this.herdSessionName;
+  selectHerdSession = (name: string | null): void => {
+    if (name !== null && !validHerdSessionName(name)) throw new ProtocolError("invalid_argument", "invalid Herdr session name");
+    if (name === this.herdSessionName) return;
+    this.herdSessionName = name;
+    // Capabilities learned from the previous session's GetConfig no longer apply.
+    this.uploadV2 = false;
+    this.configRequest++;
+  };
   revokeDevice = (deviceId: string) => this.trackedMutation("RevokeDevice", { device_id: deviceId });
   pushSubscribe = (subscription: PushSubscriptionJSON) => {
     const keys = subscription.keys || {};
@@ -378,11 +393,12 @@ class ReconnectingSession implements LiveSession {
   workspaceRead = async (paneId: string, path: string) =>
     parseWorkspaceFile(await this.readRPC("WorkspaceRead", { pane_id: paneId, path }));
   workspaceMediaOpen = async (paneId: string, path: string) => {
+    const params = scopeHerdSession("WorkspaceMediaOpen", { pane_id: paneId, path }, this.herdSessionName);
     const transport = await this.captureTransport();
     if (!transport) return Promise.reject(new ProtocolError("reconnecting", "连接正在恢复"));
     return parseWorkspaceMediaOpen(await transport.rpc(
       "WorkspaceMediaOpen",
-      { pane_id: paneId, path },
+      params,
       MEDIA_OPEN_RPC_TIMEOUT_MS,
       undefined,
       (result) => {
@@ -492,13 +508,17 @@ class ReconnectingSession implements LiveSession {
   };
 
   private async readRPC(op: string, params: unknown, timeoutMs?: number): Promise<unknown> {
+    // Scope at call time, before any await: a switch while this waits for a
+    // transport must not retarget a read the caller issued for the old session.
+    const scoped = scopeHerdSession(op, params, this.herdSessionName);
     const transport = await this.captureTransport();
     if (!transport) return Promise.reject(new ProtocolError("reconnecting", "连接正在恢复"));
-    return transport.rpc(op, params, timeoutMs);
+    return transport.rpc(op, scoped, timeoutMs);
   }
 
   /** Capture one transport; mutation RPCs are never replayed on another socket. */
-  private async mutationRPC(op: string, params: unknown): Promise<unknown> {
+  private async mutationRPC(op: string, unscoped: unknown): Promise<unknown> {
+    const params = scopeHerdSession(op, unscoped, this.herdSessionName);
     if (!isUploadMutation(op)) {
       const transport = this.checking ? null : await this.captureTransport();
       if (!transport || this.checking) return Promise.reject(new ProtocolError("disconnected", "连接已断开；为避免重复输入，本次操作未发送"));
@@ -560,7 +580,8 @@ class ReconnectingSession implements LiveSession {
     return { ok: true, transport: captured.transport };
   }
 
-  private async terminalRPC(op: string, params: unknown): Promise<unknown> {
+  private async terminalRPC(op: string, unscoped: unknown): Promise<unknown> {
+    const params = scopeHerdSession(op, unscoped, this.herdSessionName);
     // Background cleanup releases a controller on the existing epoch once.
     // Input/open/resize remain blocked until the connection is confirmed.
     const cleanup = op === "TerminalClose";
@@ -739,4 +760,4 @@ export async function sessionOverWS(relayWS: string, pair: PairResult, options: 
   return ReconnectingSession.create(relayWS, pair, options);
 }
 
-export type { DeviceSummary, LiveSession, SessionEvent } from "./session-types.ts";
+export type { DeviceSummary, HerdSessionSummary, LiveSession, SessionEvent } from "./session-types.ts";

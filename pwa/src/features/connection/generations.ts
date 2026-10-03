@@ -15,6 +15,7 @@ let herdConfigRequest = 0;
 let establishAttempt = 0;
 let paneNavigationSerial = 0;
 let catalogRequest = 0;
+let herdSwitchSerial = 0;
 
 export function liveView(): number {
   return liveViewVersion;
@@ -75,6 +76,15 @@ export function catalogRequestIsCurrent(request: number): boolean {
   return request === catalogRequest;
 }
 
+export function nextHerdSwitch(): number {
+  herdSwitchSerial += 1;
+  return herdSwitchSerial;
+}
+
+export function herdSwitchIsCurrent(serial: number): boolean {
+  return serial === herdSwitchSerial;
+}
+
 /** Test seam: start from generation zero so a suite does not inherit another. */
 export function resetGenerationsForTests(): void {
   liveViewVersion = 0;
@@ -82,4 +92,5 @@ export function resetGenerationsForTests(): void {
   establishAttempt = 0;
   paneNavigationSerial = 0;
   catalogRequest = 0;
+  herdSwitchSerial = 0;
 }

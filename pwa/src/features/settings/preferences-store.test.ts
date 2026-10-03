@@ -6,7 +6,7 @@ const { preferencesStore, paneTermMode, setPaneTermMode, paneComposeLive, setPan
   setDefaultTermMode, setTermFont, setTermGrid, setKeysExpanded, setPadKind, rememberPane, applyHerdTouches, togglePanePin,
   prunePanePreferences, prunePanePins, adoptDaemonPreferences, clampTermFont, termLineHeightPx, saveListGroup,
   setListGroup, TERM_FONT_MAX, TERM_FONT_MIN } = await import("./preferences-store");
-const { computersStore, setCredential } = await import("../computers/catalog-store");
+const { attachLiveSession, computersStore, liveSession, setCredential } = await import("../computers/catalog-store");
 
 function credential(daemonId: string): PairResult {
   return {
@@ -124,6 +124,32 @@ describe("per-pane preferences", () => {
     setCredential(credential("d_aaaaaaaaaaaaaaaaaaaa"));
     adoptDaemonPreferences();
     expect(paneTermMode("p1")).toBe("full");
+  });
+
+  test("a named Herdr session keeps its own pane choices; the default keeps the old keys", () => {
+    // Herdr numbers panes per session, so "p1" in "work" is a different pane.
+    let herd: string | null = null;
+    const live = { herdSession: () => herd } as unknown as NonNullable<ReturnType<typeof liveSession>>;
+    const previousLive = liveSession();
+    setCredential(credential("d_aaaaaaaaaaaaaaaaaaaa"));
+    attachLiveSession(live);
+    try {
+      adoptDaemonPreferences();
+      setPaneTermMode("p1", "full");
+      expect(localStorage.getItem("pairfob:paneTermMode:d_aaaaaaaaaaaaaaaaaaaa")).toBe('{"p1":"full"}');
+
+      herd = "work";
+      adoptDaemonPreferences();
+      expect(paneTermMode("p1")).toBe(preferencesStore.get().defaultTermMode);
+      setPaneTermMode("p1", "agent");
+      expect(localStorage.getItem("pairfob:paneTermMode:d_aaaaaaaaaaaaaaaaaaaa:herd:work")).toBe('{"p1":"agent"}');
+
+      herd = null;
+      adoptDaemonPreferences();
+      expect(paneTermMode("p1")).toBe("full");
+    } finally {
+      attachLiveSession(previousLive);
+    }
   });
 
   test("pruning drops dead panes and keeps every live choice", () => {

@@ -11,7 +11,8 @@ import {
 import { noteCompletionAcknowledged } from "../../lib/herd-attention";
 import { batch, createDomain, detach } from "../../shared/model/domain-store";
 import { projectSnapshot } from "../board/layout-store";
-import { currentDaemonId, currentDeviceId } from "../computers/catalog-store";
+import { currentDaemonId, currentDeviceId, currentHerdSession } from "../computers/catalog-store";
+import { herdSessionScope } from "../../lib/protocol/herd-sessions";
 import { prunePanePins, prunePanePreferences } from "../settings/preferences-store";
 import { openPaneId } from "../session/session-store";
 
@@ -57,9 +58,9 @@ export const dashboardStore = dashboardDomain.store;
 const { read, write, writeIf } = dashboardDomain.controller;
 
 
-/** Per daemon and device: a completion acknowledged on one phone stays noted there. */
+/** Per daemon, Herdr session and device; the default retains its original key. */
 function completionSeenKey(): string {
-  return `${COMPLETION_SEEN_KEY}:${currentDaemonId() || "anon"}:${currentDeviceId() || "anon"}`;
+  return `${COMPLETION_SEEN_KEY}:${herdSessionScope(currentDaemonId() || "anon", currentHerdSession())}:${currentDeviceId() || "anon"}`;
 }
 
 export function saveCompletionSeen(): void {

@@ -33,7 +33,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function exactKeys(value: Record<string, unknown>, required: string[], optional: string[] = []): boolean {
+export function exactKeys(value: Record<string, unknown>, required: string[], optional: string[] = []): boolean {
   const allowed = new Set([...required, ...optional]);
   return required.every((key) => Object.prototype.hasOwnProperty.call(value, key))
     && Object.keys(value).every((key) => allowed.has(key));

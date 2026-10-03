@@ -465,23 +465,28 @@ export function deleteAttachmentRecord(
 }
 
 /**
- * Delete every pane's rows for exactly one daemon; other daemons stay.
+ * Delete every pane's rows for one daemon, including named Herdr namespaces.
+ * Default tuple keys and the v1 record format stay unchanged.
  * `clearDaemonAttachmentRecords` remains as a compatibility alias.
  */
 export function clearAttachmentRecords(daemonId: string): Promise<void> {
   return serialize(() => {
     validateJournalId(daemonId, "daemonId");
     return withDatabase((db) => runTransaction<void>(db, "readwrite", (store, control) => {
-      const request = store.openCursor(daemonKeyRange(daemonId));
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (!cursor) {
-          control.finish(undefined);
-          return;
-        }
-        cursor.delete();
-        cursor.continue();
+      const prefix = `${daemonId}:herd:`;
+      const ranges = [daemonKeyRange(daemonId), IDBKeyRange.bound([prefix], [`${prefix}\uffff`])];
+      const clearNextRange = () => {
+        const range = ranges.shift();
+        if (!range) { control.finish(undefined); return; }
+        const request = store.openCursor(range);
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) { clearNextRange(); return; }
+          cursor.delete();
+          cursor.continue();
+        };
       };
+      clearNextRange();
     }));
   });
 }

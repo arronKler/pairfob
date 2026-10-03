@@ -55,6 +55,12 @@ export interface SessionEvent {
   transport?: "relay" | "p2p";
 }
 
+/** One Herdr session a daemon can address. name is null for the default session. */
+export interface HerdSessionSummary {
+  name: string | null;
+  running: boolean;
+}
+
 export interface DeviceSummary {
   device_id: string;
   label?: string;
@@ -87,6 +93,19 @@ export type LiveSession = {
   ) => Promise<unknown>;
   sendText: (paneId: string, text: string) => Promise<unknown>;
   listDevices: () => Promise<{ devices?: DeviceSummary[] }>;
+  /**
+   * Herdr sessions this daemon can address. Rejects with "unknown_op" on a
+   * daemon that predates ListSessions and "unsupported" when the daemon has not
+   * opted into PAIRFOB_MULTI_SESSION; both mean "no switcher here".
+   */
+  listHerdSessions?: () => Promise<HerdSessionSummary[]>;
+  /** The Herdr session this connection targets; null is the default. */
+  herdSession?: () => string | null;
+  /**
+   * Retarget session-scoped RPCs issued from now on. Calls already issued keep
+   * their target, so callers must retire the old session's view themselves.
+   */
+  selectHerdSession?: (name: string | null) => void;
   revokeDevice: (deviceId: string) => Promise<unknown>;
   pushSubscribe: (subscription: PushSubscriptionJSON) => Promise<unknown>;
   renamePane: (paneId: string, label: string | null) => Promise<unknown>;

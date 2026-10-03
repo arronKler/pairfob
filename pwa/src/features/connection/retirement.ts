@@ -43,6 +43,15 @@ export function retireLiveDomains(): void {
   setSessionTransport("relay");
   noteP2PAttempt(null);
   setTransportSwitching(false);
+  retireHerdView();
+}
+
+/**
+ * Everything one Herdr session's snapshot produced, without the connection
+ * itself. A Herdr-session switch keeps the connection and transport facts but
+ * must drop this whole view: pane ids repeat across sessions.
+ */
+export function retireHerdView(): void {
   // Capabilities fail closed: an absent advertisement is a refused operation.
   clearCapabilities();
   setOperationBusy(false);

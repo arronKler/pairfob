@@ -1,7 +1,7 @@
 import { sameNoticeScope, type NoticeScope } from "../lib/notice-scope";
 import { createDomain } from "../shared/model/domain-store";
 import { connectionStore, phase } from "../features/connection/connection-store";
-import { computersStore, currentDaemonId } from "../features/computers/catalog-store";
+import { computersStore, currentDaemonId, currentHerdSession } from "../features/computers/catalog-store";
 import { currentScreen, navigationStore } from "./navigation-store";
 import { openPaneId, sessionStore } from "../features/session/session-store";
 
@@ -43,6 +43,7 @@ export function captureNoticeScope(): NoticeScope {
     phase: phase(),
     screen: currentScreen(),
     daemonId: currentDaemonId(),
+    herdSession: currentHerdSession(),
     paneId: openPaneId(),
   });
 }

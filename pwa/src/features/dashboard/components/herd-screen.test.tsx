@@ -11,6 +11,10 @@ import { setOperationBusy } from "../../operations/capabilities-store";
 import { preferencesStore } from "../../settings/preferences-store";
 import { selectPane } from "../../session/session-store";
 import { replaceAgentsFromSnapshot } from "../catalog-store";
+import { attachLiveSession } from "../../computers/catalog-store";
+import { setHerdSessionList } from "../../herd-sessions/store";
+import type { LiveSession } from "../../../lib/protocol/session-types";
+import { HerdSessionRow } from "../../herd-sessions/herd-session-row";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import type { HerdActions } from "../actions";
 
@@ -114,6 +118,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   act(() => unmountReact());
+  attachLiveSession(null);
   clearNotice();
 });
 
@@ -382,5 +387,49 @@ describe("herd screen presentation", () => {
     expect(app().querySelector(".done-count")?.textContent).toBe(t("home.doneCount", { count: "2" }));
     paint(model({ agents: [agent("p1", "alpha", "idle")] }), "rail");
     expect(app().querySelector(".done-count")).toBeNull();
+  });
+});
+
+describe("the Herdr-session switch on the Sessions tab", () => {
+  // The switch reads the live connection, not the view model, so the fixture is
+  // a connection that names its selection plus the list a daemon would return.
+  function liveWithSessions(selected: string | null): void {
+    const live = { herdSession: () => selected } as unknown as LiveSession;
+    attachLiveSession(live);
+    setHerdSessionList(live, [{ name: null, running: true }, { name: "personal", running: true }]);
+  }
+  const switchText = () => app().querySelector(".herd-session-switch")?.textContent ?? null;
+
+  test("the phone header and the desktop rail both carry it, naming the selection", () => {
+    liveWithSessions("personal");
+    paint(model());
+    expect(app().querySelector(".herd-head .herd-session-switch")).not.toBeNull();
+    expect(switchText()).toBe("personal");
+    paint(model(), "rail");
+    expect(app().querySelector(".rail-nav .herd-session-switch")).not.toBeNull();
+  });
+
+  test("phone, rail and Settings share the running-or-selected visibility rule", () => {
+    for (const scenario of [
+    { name: "default only", current: null, named: false, running: false, visible: false },
+    { name: "a stopped named server", current: null, named: true, running: false, visible: false },
+    { name: "a running named server", current: null, named: true, running: true, visible: true },
+    { name: "the selected named server has stopped", current: "personal", named: true, running: false, visible: true },
+    ]) {
+      const live = { herdSession: () => scenario.current } as unknown as LiveSession;
+      act(() => {
+        attachLiveSession(live);
+        setHerdSessionList(live, [
+          { name: null, running: true },
+          ...(scenario.named ? [{ name: "personal", running: scenario.running }] : []),
+        ]);
+      });
+      paint(model());
+      expect(app().querySelector(".herd-session-switch") !== null).toBe(scenario.visible);
+      paint(model(), "rail");
+      expect(app().querySelector(".herd-session-switch") !== null).toBe(scenario.visible);
+      act(() => renderReact(<HerdSessionRow />));
+      expect(app().querySelector("button") !== null).toBe(scenario.visible);
+    }
   });
 });
