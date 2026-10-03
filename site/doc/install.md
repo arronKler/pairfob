@@ -26,7 +26,7 @@ curl -fsSL https://pairfob.com/install.sh | sh -s -- --install-herdr --non-inter
 
 `--non-interactive` never prompts and fails when Herdr is missing unless `--install-herdr` is also set. `--skip-herdr-check` installs Pairfob without claiming session readiness. `--no-service` still checks Herdr; for offline preparation use `--no-service --no-enroll --skip-herdr-check`.
 
-Later, run `pairfob setup` to check and start Herdr, or `pairfob setup --install-herdr` to install a missing dependency. `pairfob doctor` only diagnoses; it never installs or starts anything. Incompatible protocols, startup failures, and invalid `HERDR_BIN` or socket settings must be resolved before continuing. Existing Herdr sessions are never automatically upgraded or restarted. With `PAIRFOB_HERDR_AUTOSTART=0` or multi-session mode, start the configured Herdr server yourself.
+Later, run `pairfob setup` to check and start Herdr, or `pairfob setup --install-herdr` to install a missing dependency. `pairfob doctor` only diagnoses; it never installs or starts anything. Incompatible protocols, startup failures, and invalid `HERDR_BIN` or socket settings must be resolved before continuing. Existing Herdr sessions are never automatically upgraded or restarted. Pairfob starts only the default server; with `PAIRFOB_HERDR_AUTOSTART=0`, start the configured Herdr server yourself. See [Named Herdr sessions](/app#named-herdr-sessions) for the autostart limits.
 
 ## What the script does
 

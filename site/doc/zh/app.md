@@ -197,7 +197,7 @@ PAIRFOB_MULTI_SESSION=1 pairfob service install
 
 目前的限制：
 
-- 这个模式下 Pairfob 不再替你启动 Herdr。默认服务和每个命名服务都要自己启动，电脑重启后也一样
+- Pairfob 只会自动启动配置的默认服务，命名服务需要自行启动。只使用命名会话时，电脑重启后会多出一个空的默认服务；设置 `PAIRFOB_HERDR_AUTOSTART=0` 可关闭自动启动
 - 通知只来自默认 Herdr 会话
 - 不支持这个功能的旧版电脑端不显示切换入口
 

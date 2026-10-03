@@ -20,7 +20,7 @@ Operator-facing variables only. Leave unspecified variables unset. Do not put se
 | --- | --- | --- |
 | `PAIRFOB_STATE_DIR` | `~/.config/pairfob` | Identity, devices, logs |
 | `PAIRFOB_ALLOWED_ROOTS` | user Home | Allowed roots for web paths. Setting it replaces Home |
-| `PAIRFOB_MULTI_SESSION` | off | `1` lets the phone list and switch to named Herdr sessions (`herdr --session <name>`) from the Sessions header and Settings. Pairfob then no longer starts Herdr for you. Notifications still come from the default session only. See [Named Herdr sessions](/app#named-herdr-sessions) |
+| `PAIRFOB_MULTI_SESSION` | off | `1` lets the phone list and switch to named Herdr sessions (`herdr --session <name>`) from the Sessions header and Settings. Pairfob still starts only the default server. Notifications still come from the default session only. See [Named Herdr sessions](/app#named-herdr-sessions) |
 
 ## Install
 

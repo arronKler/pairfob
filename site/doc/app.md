@@ -199,7 +199,7 @@ PAIRFOB_MULTI_SESSION=1 pairfob service install
 
 Current limits:
 
-- Pairfob no longer starts Herdr for you in this mode. Start the default server and each named one yourself, and again after a reboot
+- Pairfob starts only the default server at the configured socket; start named servers yourself. If you use only named sessions, a reboot leaves an empty default server unless you set `PAIRFOB_HERDR_AUTOSTART=0`
 - Notifications come from the default Herdr session only
 - Older computers without this support show no switch
 
