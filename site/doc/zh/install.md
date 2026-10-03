@@ -26,7 +26,7 @@ curl -fsSL https://pairfob.com/install.sh | sh -s -- --install-herdr --non-inter
 
 `--non-interactive` 禁止询问；缺少 Herdr 且没有 `--install-herdr` 时失败退出。`--skip-herdr-check` 可用于仅安装或离线准备，但不会显示会话已就绪。`--no-service` 不代表跳过 Herdr 检查；离线拷贝使用 `--no-service --no-enroll --skip-herdr-check`。
 
-安装后可运行 `pairfob setup` 再检查并启动 Herdr，或 `pairfob setup --install-herdr` 补齐缺少的依赖。`pairfob doctor` 只诊断，不安装、不启动。旧协议、启动失败、无效的 `HERDR_BIN` 或 socket 配置都需要修复后再继续；不会自动升级或重启已有 Herdr 会话。设置 `PAIRFOB_HERDR_AUTOSTART=0` 或多会话模式时，需要自行启动配置的 Herdr 服务。
+安装后可运行 `pairfob setup` 再检查并启动 Herdr，或 `pairfob setup --install-herdr` 补齐缺少的依赖。`pairfob doctor` 只诊断，不安装、不启动。旧协议、启动失败、无效的 `HERDR_BIN` 或 socket 配置都需要修复后再继续；不会自动升级或重启已有 Herdr 会话。Pairfob 只自动启动默认服务；设置 `PAIRFOB_HERDR_AUTOSTART=0` 时，需要自行启动配置的 Herdr 服务。自动启动的限制见 [命名 Herdr 会话](/zh/app#命名-herdr-会话)。
 
 ## 脚本实际做了什么
 

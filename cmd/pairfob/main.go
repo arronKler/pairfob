@@ -82,7 +82,7 @@ func runDaemon(store *state.Store, sock string) error {
 		log.Printf("runtime herdr_offline: %v", rtErr)
 		rt = runtime.NewOffline(rtErr)
 	} else {
-		go prepareRuntimeAvailability(rt, source, herdrAutostartEnabled(devFake, multiSession))
+		go prepareRuntimeAvailability(rt, source, herdrAutostartEnabled(devFake))
 	}
 
 	stored, err := store.LoadRelay()
@@ -210,8 +210,8 @@ func prepareRuntimeAvailability(rt runtime.Runtime, source string, autostart boo
 	log.Printf("runtime %s proto=%d", source, descriptor.Protocol)
 }
 
-func herdrAutostartEnabled(devFake, multiSession bool) bool {
-	return !devFake && !multiSession && getenv("PAIRFOB_HERDR_AUTOSTART", "1") != "0"
+func herdrAutostartEnabled(devFake bool) bool {
+	return !devFake && getenv("PAIRFOB_HERDR_AUTOSTART", "1") != "0"
 }
 
 func offerPairingOnStart(_ int, explicitCode string) bool {

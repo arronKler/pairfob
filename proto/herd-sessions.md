@@ -63,4 +63,5 @@ to default before resolving the pane against a fresh snapshot. The intent
 stays pending across that transition; a newer notification or a replacement
 connection owns the eventual resolution.
 
-Multi-session remains opt-in and retains the existing autostart policy.
+Multi-session remains opt-in. Autostart starts only the default server at the
+configured socket, never a named server.
