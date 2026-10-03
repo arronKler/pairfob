@@ -195,7 +195,7 @@ description: 列表、点进会话、系统键盘，以及等你时如何确认�
 PAIRFOB_MULTI_SESSION=0 pairfob service install
 ```
 
-`service install` 会按当前 shell 的环境变量重写用户服务，所以安装时设过的其他变量（例如 `HERDR_SOCKET_PATH`）也要一起导出，否则会丢失。之后这个设置在重启和 `pairfob update` 后都保留。
+`service install` 会按当前 shell 的环境变量重写用户服务，所以安装时设过的其他变量（例如 `HERDR_SOCKET_PATH`）也要一起导出，否则会丢失。之后这个设置在重启和 `pairfob update` 后都保留。要重新开启，不带它再运行一次 `pairfob service install`。
 
 目前的限制：
 

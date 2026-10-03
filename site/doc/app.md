@@ -197,7 +197,7 @@ To turn it off, run this on the computer, in the same shell you would normally i
 PAIRFOB_MULTI_SESSION=0 pairfob service install
 ```
 
-`service install` rewrites the user service from the current shell's environment, so also export any other variable you set at install time (for example `HERDR_SOCKET_PATH`), or it is dropped. The setting then survives restarts and `pairfob update`.
+`service install` rewrites the user service from the current shell's environment, so also export any other variable you set at install time (for example `HERDR_SOCKET_PATH`), or it is dropped. The setting then survives restarts and `pairfob update`. To turn it back on, run `pairfob service install` again without it.
 
 Current limits:
 
