@@ -86,7 +86,7 @@ func gatherHealth(sock string) (health, error) {
 			h.Phones = len(live)
 		}
 	}
-	rt, _, rtErr := runtime.Open(false, getenv("PAIRFOB_MULTI_SESSION", "") == "1")
+	rt, _, rtErr := runtime.Open(false, herdrMultiSessionEnabled())
 	h.HerdrNote = "unavailable — check the configured Herdr socket"
 	if rtErr == nil {
 		check := checkHerdrInstallation(rt.(*runtime.Herdr))
