@@ -151,8 +151,8 @@ function PaneMenu({ modal, agent, full, chat }: MenuContext) {
     <p className="pane-menu-status" role="status">{status || (!chat ? t("pm.copyHint") : "")}</p>
     {!chat && <h3 className="pane-group-title">{t("pm.groupDisplay")}</h3>}
     <PaneDisplaySettings modal={modal} full={full} chat={chat} />
-    <h3 className="pane-group-title">{t("pm.groupSession")}</h3>
-    <MenuGroup label={t("pm.groupSession")}>
+    <h3 className="pane-group-title">{t("pm.groupPane")}</h3>
+    <MenuGroup label={t("pm.groupPane")}>
       {full && <MenuRow icon={<RotateCw size={18} />} label={t("pane.reconnect")} modal={modal} action={retryFullTerminal} />}
       {agent && <PageRow icon={<LayoutGrid size={18} />} label={t("pm.layout")} value={layoutValue}
         onClick={() => pushPage(nav, "layout", t("pm.layout"), () => <PaneLayoutPage modal={modal} agent={agent} />)} />}

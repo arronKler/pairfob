@@ -1,4 +1,4 @@
-/** Compose field, send/stop button and multiline copy (session page v2). Chinese is the source; English must cover the same keys. */
+/** Compose field, send/stop button and multiline copy (pane page v2). Chinese is the source; English must cover the same keys. */
 export const zhComposeV2 = {
   "compose2.lines": "{n} 行",
   "compose2.unfoldAria": "展开草稿（{n} 行）",
@@ -13,7 +13,7 @@ export const zhComposeV2 = {
   "compose2.forceAria": "强制停止当前任务",
   "compose2.stopped": "已停止",
   "compose2.stillRunning": "仍在运行，可以强制停止",
-  "compose2.stopFailed": "没有停下，可以在 ⋯ 菜单里关闭会话",
+  "compose2.stopFailed": "没有停下，可以在 ⋯ 菜单里关闭窗格",
   "compose2.issueBlocked": "{n} 个附件没传完",
   "compose2.issueP2P": "需要直连才能上传",
   "compose2.issueRetry": "重试",
@@ -47,7 +47,7 @@ export const enComposeV2: { [K in keyof typeof zhComposeV2]: string } = {
   "compose2.forceAria": "Force stop the current task",
   "compose2.stopped": "Stopped",
   "compose2.stillRunning": "Still running. You can force stop",
-  "compose2.stopFailed": "It did not stop. You can close the session from the ⋯ menu",
+  "compose2.stopFailed": "It did not stop. You can close the pane from the ⋯ menu",
   "compose2.issueBlocked": "Not finished uploading: {n}",
   "compose2.issueP2P": "Uploads need a direct connection",
   "compose2.issueRetry": "Retry",

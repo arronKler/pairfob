@@ -60,7 +60,7 @@ export function TabBar({ mode }: { mode: LayoutMode }) {
   // Before the session is live, any count would be left over from a previous one.
   const count = locked ? 0 : attention;
   const tabs: Array<{ id: TabId; label: string; icon: typeof MessageSquare; badge?: string; dot?: boolean; aria?: string }> = [
-    { id: "sessions", label: t("tabs.sessions"), icon: MessageSquare,
+    { id: "sessions", label: t("tabs.panes"), icon: MessageSquare,
       badge: count > 0 ? String(count) : undefined,
       aria: count > 0 ? t("tabs.attentionAria", { count: String(count) }) : undefined },
     { id: "board", label: t("tabs.board"), icon: LayoutDashboard },

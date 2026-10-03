@@ -16,7 +16,7 @@ export type BoardScreenActions = {
   back(): void;
   selectWorkspace(workspaceId: string): void;
   selectTab(tabId: string): void;
-  /** "+": the shared "新建会话" sheet on the board's workspace. */
+  /** "+": the shared "新建窗格" sheet on the board's workspace. */
   createTab(): void;
   /** A hold on "+": recent combinations in one step, like the home create button. */
   quickCreate(): void;

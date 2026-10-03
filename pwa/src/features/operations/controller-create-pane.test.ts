@@ -130,7 +130,7 @@ describe("a created pane opens through the normal pane-open path", () => {
     await created;
     expect(calls).toBe(1);
     expect(currentScreen()).toBe("home");
-    expect(app().textContent).toContain("创建会话失败");
+    expect(app().textContent).toContain("创建窗格失败");
     expect(app().textContent).not.toContain("画面已经变化");
   }));
 

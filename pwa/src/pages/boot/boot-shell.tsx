@@ -40,7 +40,7 @@ function BootFrame({ reading }: { reading: boolean }) {
     : t("boot.connectingLine");
   return (
     <div className="page herd-page boot-shell">
-      <h1 className="sr-only">{t("tabs.sessions")}</h1>
+      <h1 className="sr-only">{t("tabs.panes")}</h1>
       <header className="herd-head">
         <div className="herd-head-row">
           <div className={`host-title ${slow ? "is-warn" : "is-pending"}`} role="status">
