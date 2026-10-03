@@ -1,7 +1,6 @@
 package journal
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -422,36 +421,43 @@ func readPage(path string, ref Ref, offset, limit int, parse func([]byte) (Messa
 	}
 
 	page := Page{Messages: make([]Message, 0, limit)}
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64<<10), maxTranscriptLine)
 	position := offset
 	scannedBytes := 0
 	pageBytes := 0
 	more := false
-	for scanner.Scan() {
+	overBudget := false
+	err = forEachLine(file, maxTraceLine, func(line []byte, lineBytes int, oversized bool) bool {
 		lineStart := position
-		lineBytes := len(scanner.Bytes()) + 1
 		position += lineBytes
 		scannedBytes += lineBytes
 		if scannedBytes > maxScanBytes {
-			return Page{}, errors.New("transcript scan exceeds per-request bound")
+			overBudget = true
+			return false
 		}
-		message, ok := parse(scanner.Bytes())
+		if oversized {
+			page.Truncated = true
+			return true
+		}
+		message, ok := parse(line)
 		if !ok {
-			continue
+			return true
 		}
 		message, page.Truncated = clipMessage(message, page.Truncated)
 		size := messageSize(message)
 		if len(page.Messages) >= limit || (len(page.Messages) > 0 && pageBytes+size > maxPageItemsBytes) {
 			more = true
 			position = lineStart
-			break
+			return false
 		}
 		pageBytes += size
 		page.Messages = append(page.Messages, message)
-	}
-	if err := scanner.Err(); err != nil {
+		return true
+	})
+	if err != nil {
 		return Page{}, err
+	}
+	if overBudget {
+		return Page{}, errors.New("transcript scan exceeds per-request bound")
 	}
 	if more {
 		next := encodeCursor(ref, position)
@@ -501,8 +507,15 @@ func parseCodex(line []byte) (Message, bool) {
 	}
 	parts := make([]string, 0, len(item.Payload.Content))
 	for _, content := range item.Payload.Content {
-		if (content.Type == "input_text" || content.Type == "output_text") && content.Text != "" {
-			parts = append(parts, content.Text)
+		if content.Type != "input_text" && content.Type != "output_text" {
+			continue
+		}
+		text := content.Text
+		if item.Payload.Role == "user" {
+			text = visibleCodexUserText(text)
+		}
+		if text != "" {
+			parts = append(parts, text)
 		}
 	}
 	if len(parts) == 0 {
@@ -513,17 +526,25 @@ func parseCodex(line []byte) (Message, bool) {
 
 func parseClaude(line []byte) (Message, bool) {
 	var item struct {
+		claudeRecordFlags
 		Type    string `json:"type"`
 		Message struct {
 			Role    string          `json:"role"`
+			Model   string          `json:"model"`
 			Content json.RawMessage `json:"content"`
 		} `json:"message"`
 	}
 	if json.Unmarshal(line, &item) != nil || (item.Type != "user" && item.Type != "assistant") || item.Message.Role != item.Type {
 		return Message{}, false
 	}
+	if item.hidden() || item.Message.Model == claudeSyntheticModel {
+		return Message{}, false
+	}
 	var text string
 	if json.Unmarshal(item.Message.Content, &text) == nil {
+		if item.Type == "user" {
+			text = visibleClaudeUserText(text)
+		}
 		if text == "" {
 			return Message{}, false
 		}
@@ -541,7 +562,13 @@ func parseClaude(line []byte) (Message, bool) {
 	for _, block := range blocks {
 		switch {
 		case block.Type == "text" && block.Text != "":
-			parts = append(parts, block.Text)
+			text := block.Text
+			if item.Type == "user" {
+				text = visibleClaudeUserText(text)
+			}
+			if text != "" {
+				parts = append(parts, text)
+			}
 		case item.Type == "assistant" && block.Type == "tool_use" && toolName.MatchString(block.Name):
 			parts = append(parts, "工具 · "+block.Name)
 		}
@@ -562,22 +589,28 @@ func parseGrok(line []byte) (Message, bool) {
 					Type string `json:"type"`
 					Text string `json:"text"`
 				} `json:"content"`
+				Meta json.RawMessage `json:"_meta"`
 			} `json:"update"`
 		} `json:"params"`
 	}
 	if json.Unmarshal(line, &update) != nil || update.Method != "session/update" || update.Params.Update.Content.Type != "text" || update.Params.Update.Content.Text == "" {
 		return Message{}, false
 	}
+	text := update.Params.Update.Content.Text
 	role := ""
 	switch update.Params.Update.SessionUpdate {
 	case "user_message_chunk":
 		role = "user"
+		text = visibleGrokUserText(text, update.Params.Update.Meta)
 	case "agent_message_chunk":
 		role = "assistant"
 	default:
 		return Message{}, false
 	}
-	return Message{Role: role, Text: update.Params.Update.Content.Text}, true
+	if text == "" {
+		return Message{}, false
+	}
+	return Message{Role: role, Text: text}, true
 }
 
 func refFingerprint(ref Ref) string {

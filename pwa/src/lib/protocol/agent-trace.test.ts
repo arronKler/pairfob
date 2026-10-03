@@ -44,4 +44,18 @@ describe("AgentTrace rolling RPC", () => {
     expect(await reader.detail("p1", "d1")).toEqual({ detailRef: "d1", input: "secret", output: "private", truncated: false });
     expect(calls).toEqual(["AgentTraceSummary", "AgentTraceDetail"]);
   });
+
+  test("asks for markers only while the daemon advertises trace_markers", async () => {
+    const sent: Record<string, unknown>[] = [];
+    let advertised = false;
+    const reader = new AgentTraceRPC(async (_op, params) => {
+      sent.push(params);
+      return { items: [], next_cursor: null, truncated: false };
+    }, () => advertised);
+    await reader.read("p1");
+    advertised = true;
+    await reader.read("p1");
+    expect(sent.map((params) => "markers" in params)).toEqual([false, true]);
+    expect(sent[1].markers).toBe(true);
+  });
 });

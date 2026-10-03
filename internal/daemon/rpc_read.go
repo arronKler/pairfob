@@ -58,6 +58,9 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 		// link_machine: this computer can list machines it already reaches
 		// and relay their pairing offers.
 		"link_machine": e.machineLinkAvailable(),
+		// trace_markers: AgentTrace/AgentTraceSummary accept markers:true and
+		// then return command, compaction and interrupt items.
+		"trace_markers": describeErr == nil && e.Journal != nil,
 	}
 	agentKinds := make([]string, 0, len(descriptor.AgentKinds))
 	for _, kind := range descriptor.AgentKinds {
@@ -208,6 +211,7 @@ func (e *Engine) rpcAgentTrace(s *sess, id string, params json.RawMessage) {
 		PaneID  string  `json:"pane_id"`
 		Cursor  *string `json:"cursor"`
 		Limit   *int    `json:"limit"`
+		Markers *bool   `json:"markers"`
 	}
 	if badParams(params, &p) || !validID(p.PaneID) || invalidSession(p.Session) || (p.Cursor != nil && utf8.RuneCountInString(*p.Cursor) > 1024) || (p.Limit != nil && (*p.Limit < 1 || *p.Limit > 200)) {
 		e.replyErr(s, id, "invalid_argument", "invalid agent trace params")
@@ -221,7 +225,7 @@ func (e *Engine) rpcAgentTrace(s *sess, id string, params json.RawMessage) {
 	if p.Limit != nil {
 		limit = *p.Limit
 	}
-	page, err := e.Journal.ReadTrace(ref, p.Cursor, limit)
+	page, err := e.Journal.ReadTraceWith(ref, p.Cursor, limit, journal.TraceOptions{Markers: p.Markers != nil && *p.Markers})
 	if err != nil {
 		e.replyAgentTraceError(s, id, err, "agent trace could not be read")
 		return
@@ -235,6 +239,7 @@ func (e *Engine) rpcAgentTraceSummary(s *sess, id string, params json.RawMessage
 		PaneID  string  `json:"pane_id"`
 		Cursor  *string `json:"cursor"`
 		Limit   *int    `json:"limit"`
+		Markers *bool   `json:"markers"`
 	}
 	if badParams(params, &p) || !validID(p.PaneID) || invalidSession(p.Session) || (p.Cursor != nil && utf8.RuneCountInString(*p.Cursor) > 1024) || (p.Limit != nil && (*p.Limit < 1 || *p.Limit > 200)) {
 		e.replyErr(s, id, "invalid_argument", "invalid agent trace summary params")
@@ -248,7 +253,7 @@ func (e *Engine) rpcAgentTraceSummary(s *sess, id string, params json.RawMessage
 	if p.Limit != nil {
 		limit = *p.Limit
 	}
-	page, err := e.Journal.ReadTraceSummary(ref, p.Cursor, limit)
+	page, err := e.Journal.ReadTraceSummaryWith(ref, p.Cursor, limit, journal.TraceOptions{Markers: p.Markers != nil && *p.Markers})
 	if err != nil {
 		e.replyAgentTraceError(s, id, err, "agent trace summary could not be read")
 		return

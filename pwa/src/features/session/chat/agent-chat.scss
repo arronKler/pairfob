@@ -134,6 +134,54 @@
   overflow-wrap: anywhere;
 }
 
+// A slash or shell command reads as something typed at the CLI, not a prompt.
+.agent-command {
+  align-self: flex-end;
+  max-width: 92%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+}
+
+.agent-command-icon {
+  flex: none;
+}
+
+.agent-command-text {
+  font: 400 0.8rem/1.4 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agent-marker {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.agent-marker-interrupt {
+  align-self: flex-start;
+}
+
+.agent-marker-compaction {
+  align-self: stretch;
+
+  &::before,
+  &::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--line);
+  }
+}
+
 .agent-assistant {
   align-self: stretch;
   min-width: 0;

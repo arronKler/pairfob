@@ -1,9 +1,9 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ChevronsDownUp, CircleSlash, SquareTerminal } from "lucide-react";
 import { Fragment, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import { groupAgentTurns, groupAgentTurnBlocks, processTitle, replyText, turnKey,
   type AgentTurn, type AgentTurnBlock } from "../../../lib/agent-trace-view";
-import type { AgentTraceItem } from "../../../lib/operations";
+import { isTraceMarker, type AgentTraceItem } from "../../../lib/operations";
 import { t } from "../../../lib/i18n";
 import type { AgentEmptySpec, DetailsState } from "./agent-chat-stream";
 import { AgentDetails } from "./agent-details";
@@ -32,6 +32,28 @@ function AssistantReply({ items, final, live, anchor, part, onCopy }: {
       <Button className="agent-reply-copy" aria-label={t("chat.copyReplyAria")} onClick={() => void onCopy(text)}>{t("chat.copyReply")}</Button>
     </div>}
   </article>;
+}
+
+function TurnHead({ item, anchor }: { item: AgentTraceItem; anchor: TraceAnchor }) {
+  const text = item.text || "";
+  if (item.type === "command") {
+    return <article className="agent-command" {...anchorData(anchor, "user")} aria-label={t("trace.commandAria", { cmd: text })}>
+      <SquareTerminal className="agent-command-icon" size={14} aria-hidden="true" />
+      <code className="agent-command-text">{text}</code>
+    </article>;
+  }
+  return <article className="agent-user" {...anchorData(anchor, "user")}><div className="agent-user-text">{text}</div></article>;
+}
+
+/** Compaction and interrupt are timeline facts, not steps: they never fold. */
+function TraceMarkers({ items }: { items: AgentTraceItem[] }) {
+  return <>{items.map((item, index) => item.type === "compaction"
+    ? <div key={index} className="agent-marker agent-marker-compaction" role="note">
+      <ChevronsDownUp size={14} aria-hidden="true" /><span>{t("trace.compacted")}</span>
+    </div>
+    : <div key={index} className="agent-marker agent-marker-interrupt" role="note">
+      <CircleSlash size={14} aria-hidden="true" /><span>{t("trace.interrupted")}</span>
+    </div>)}</>;
 }
 
 function ProcessCard({ turn, items, blockIndex, live, anchor, kept, hooks }: {
@@ -76,23 +98,37 @@ function ProcessFold({ turn, blocks, anchor, kept, hooks, onCopy }: {
 function TraceTurn({ turn, live, anchor, kept, hooks, onCopy }: {
   turn: AgentTurn; live: boolean; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks; onCopy?: CopyReply;
 }) {
-  const blocks = groupAgentTurnBlocks(turn.items);
+  const all = groupAgentTurnBlocks(turn.items);
+  // A trailing interrupt or compaction follows the reply instead of hiding it.
+  let end = all.length;
+  while (end > 0 && all[end - 1].type === "marker") end -= 1;
+  const blocks = all.slice(0, end);
+  const steps = turn.items.filter((item) => !isTraceMarker(item.type)).length;
+  const trailing = all.slice(end).flatMap((block) => block.items);
   const finalReply = !live && blocks.at(-1)?.type === "reply" ? blocks.length - 1 : -1;
+  // Markers before a final reply stay outside the collapsed fold.
+  const folded = finalReply > 0 ? blocks.slice(0, finalReply) : [];
+  const foldSteps = folded.filter((block) => block.type !== "marker");
+  const foldMarkers = folded.filter((block) => block.type === "marker").flatMap((block) => block.items);
   let lastProcess = -1;
   for (const [index, block] of blocks.entries()) if (block.type === "process") lastProcess = index;
   return <>
-    {turn.user && <article className="agent-user" {...anchorData(anchor, "user")}><div className="agent-user-text">{turn.user.text || ""}</div></article>}
-    {finalReply > 0 && <ProcessFold turn={turn} blocks={blocks.slice(0, finalReply)} anchor={anchor}
+    {turn.user && <TurnHead item={turn.user} anchor={anchor} />}
+    {foldSteps.length > 0 && <ProcessFold turn={turn} blocks={foldSteps} anchor={anchor}
       kept={kept} hooks={hooks} onCopy={onCopy} />}
+    {foldMarkers.length > 0 && <TraceMarkers items={foldMarkers} />}
     {finalReply >= 0 ? <AssistantReply items={blocks[finalReply].items} final live={live}
       anchor={anchor} part={`reply:${finalReply}`} onCopy={onCopy} />
-      : blocks.map((block, index) => block.type === "process"
+      : blocks.map((block, index) => block.type === "marker"
+        ? <TraceMarkers key={`marker:${index}`} items={block.items} />
+        : block.type === "process"
         ? <ProcessCard key={`process:${index}`} turn={turn} items={block.items} blockIndex={index}
           live={live && index === lastProcess} anchor={anchor} kept={kept} hooks={hooks} />
         : <AssistantReply key={`reply:${index}`} items={block.items} final={false} live={live}
           anchor={anchor} part={`reply:${index}`} onCopy={onCopy} />)}
+    {trailing.length > 0 && <TraceMarkers items={trailing} />}
     {live && <div className="agent-run-status" role="status" aria-live="polite">
-      <Spinner /><span>{turn.items.length ? t("trace.runningSteps", { n: turn.items.length }) : t("chat.runningEllipsis")}</span>
+      <Spinner /><span>{steps ? t("trace.runningSteps", { n: steps }) : t("chat.runningEllipsis")}</span>
     </div>}
   </>;
 }
@@ -143,7 +179,7 @@ export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerm
       {turns.map((turn, index) => {
         const anchor = turnAnchor(turn, index, turns);
         return <TraceTurn key={`${turnKey(turn)}:${index}`} turn={turn} anchor={anchor}
-          live={working && empty.kind !== "unavailable" && index === turns.length - 1}
+          live={working && empty.kind !== "unavailable" && index === turns.length - 1 && turn.items.at(-1)?.type !== "interrupt"}
           kept={kept} hooks={hooks} onCopy={onCopyReply} />;
       })}
     </div>

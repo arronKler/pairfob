@@ -61,7 +61,7 @@ func TestTraceReadsNewestTurnPastWholeFileScanBound(t *testing.T) {
 		t.Fatal("large transcript did not expose an older cursor")
 	}
 	_, stats, err := readTracePage(path,
-		Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}, 0, 20, parseCodexTrace,
+		Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}, 0, 20, parseCodexTrace, TraceOptions{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +152,7 @@ func BenchmarkReadTraceLargeTail(b *testing.B) {
 
 	b.Run("cold_tail", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			page, stats, readErr := readTracePage(path, ref, 0, 200, parseCodexTrace)
+			page, stats, readErr := readTracePage(path, ref, 0, 200, parseCodexTrace, TraceOptions{})
 			if readErr != nil || len(page.Items) != 2 || stats.ScannedBytes > traceInitialReadBytes {
 				b.Fatalf("page=%+v stats=%+v err=%v", page, stats, readErr)
 			}

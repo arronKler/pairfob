@@ -1,16 +1,35 @@
 import { t } from "./i18n.ts";
-import type { AgentTraceItem } from "./operations";
+import { isTraceMarker, type AgentTraceItem } from "./operations";
 
 export type AgentTurn = {
+  /** The typed prompt or command that opened the turn. */
   user?: AgentTraceItem;
   /** Source-ordered events after the user message. Never bucket by kind here. */
   items: AgentTraceItem[];
 };
 
 export type AgentTurnBlock = {
-  type: "process" | "reply";
+  type: "process" | "reply" | "marker";
   items: AgentTraceItem[];
 };
+
+/** A typed prompt or a slash/shell command: something the user sent. */
+export function isTurnHead(item: AgentTraceItem): boolean {
+  return item.type === "user" || item.type === "command";
+}
+
+/**
+ * The daemon reports commands in their typed form ("! git status",
+ * "/model opus"); a phone may have sent "!git status" or extra spaces.
+ */
+export function submittedText(text: string): string {
+  const trimmed = text.trim();
+  const shell = /^!\s*([\s\S]+)$/.exec(trimmed);
+  if (shell) return `! ${shell[1].trim()}`;
+  const slash = /^(\/[^\s/]+)\s+([\s\S]+)$/.exec(trimmed);
+  if (slash) return `${slash[1]} ${slash[2].trim()}`;
+  return trimmed;
+}
 
 const PATH_KEYS = ["path", "file_path", "file", "target_file", "filename", "targetFile"];
 const COMMAND_KEYS = ["command", "cmd", "script"];
@@ -29,21 +48,31 @@ export function groupAgentTurns(items: readonly AgentTraceItem[]): AgentTurn[] {
     return current;
   };
   for (const item of items) {
-    if (item.type === "user") {
+    if (isTurnHead(item)) {
       current = { user: item, items: [] };
       turns.push(current);
       continue;
     }
     take().items.push(item);
   }
+  for (const turn of turns) turn.items = settleInterruptedTools(turn.items);
   return turns;
+}
+
+/** A tool cut off by an interrupt never reports output; it is not still running. */
+function settleInterruptedTools(items: AgentTraceItem[]): AgentTraceItem[] {
+  const last = items.map((item) => item.type).lastIndexOf("interrupt");
+  if (last < 0) return items;
+  return items.map((item, index) => index < last && item.type === "tool" && toolState(item) === "running"
+    ? { ...item, toolState: "error" }
+    : item);
 }
 
 /** Preserve source order while coalescing only adjacent UI duties. */
 export function groupAgentTurnBlocks(items: AgentTraceItem[]): AgentTurnBlock[] {
   const blocks: AgentTurnBlock[] = [];
   for (const item of items) {
-    const type: AgentTurnBlock["type"] = item.type === "assistant" ? "reply" : "process";
+    const type: AgentTurnBlock["type"] = item.type === "assistant" ? "reply" : isTraceMarker(item.type) ? "marker" : "process";
     const last = blocks[blocks.length - 1];
     if (last?.type === type) last.items.push(item);
     else blocks.push({ type, items: [item] });
@@ -65,12 +94,13 @@ export type AgentTraceMerge = {
 /** Tail pages may repeat their owning user as context; keep that user at the source position once. */
 export function mergeAgentTraceSegments(earlier: readonly AgentTraceItem[], later: readonly AgentTraceItem[]): AgentTraceMerge {
   const head = later[0];
-  if (head?.type === "user") {
+  if (head && isTurnHead(head)) {
     for (let index = earlier.length - 1; index >= 0; index -= 1) {
       const item = earlier[index];
-      if (item.type !== "user") continue;
-      const priorTail = earlier.slice(index + 1);
-      if (item.text === head.text && priorTail.at(-1)?.type !== "assistant") {
+      if (!isTurnHead(item)) continue;
+      // A trailing interrupt/compaction does not hide the reply that ended the turn.
+      const priorTail = earlier.slice(index + 1).filter((prior) => !isTraceMarker(prior.type));
+      if (item.type === head.type && item.text === head.text && priorTail.at(-1)?.type !== "assistant") {
         return { items: [...earlier, ...later.slice(1)], overlap: 1 };
       }
       break;
@@ -87,7 +117,8 @@ export function firstTurnNeedsUser(items: readonly AgentTraceItem[], nextCursor:
 
 export function turnKey(turn: AgentTurn): string {
   const user = turn.user?.text || "";
-  const userPart = turn.user ? `u:${user.length}:${user.slice(0, 48)}` : "u:none";
+  const head = turn.user?.type === "command" ? "c" : "u";
+  const userPart = turn.user ? `${head}:${user.length}:${user.slice(0, 48)}` : "u:none";
   const first = turn.items[0];
   if (first) {
     return `${userPart}:s:${first.type}:${first.name || ""}:${(first.input || "").slice(0, 24)}`;

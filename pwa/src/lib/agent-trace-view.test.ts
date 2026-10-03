@@ -3,7 +3,9 @@ import {
   firstTurnNeedsUser,
   groupAgentTurns,
   groupAgentTurnBlocks,
+  isTurnHead,
   mergeAgentTraceSegments,
+  submittedText,
   processTitle,
   replyText,
   stepSummary,
@@ -145,5 +147,49 @@ describe("turnKey", () => {
     };
     expect(turnKey(turn)).toContain("inspect this");
     expect(turnKey(turn)).toContain("Read");
+  });
+});
+
+describe("commands and markers", () => {
+  test("a command opens a turn and markers stay separate blocks in source order", () => {
+    const turns = groupAgentTurns([
+      { type: "command", text: "/compact" },
+      { type: "compaction" },
+      { type: "user", text: "continue" },
+      { type: "tool", name: "Read", input: "{}", output: "ok" },
+      { type: "interrupt" },
+    ]);
+    expect(turns.map((turn) => turn.user?.type)).toEqual(["command", "user"]);
+    expect(groupAgentTurnBlocks(turns[1].items).map((block) => block.type)).toEqual(["process", "marker"]);
+    expect(isTurnHead({ type: "interrupt" })).toBeFalse();
+    expect(turnKey(turns[0])).not.toBe(turnKey({ user: { type: "user", text: "/compact" }, items: [{ type: "compaction" }] }));
+  });
+
+  test("a repeated command head merges only with the same kind", () => {
+    const earlier = [{ type: "command" as const, text: "/review" }];
+    expect(mergeAgentTraceSegments(earlier, [{ type: "command", text: "/review" }, { type: "assistant", text: "ok" }]).overlap).toBe(1);
+    expect(mergeAgentTraceSegments(earlier, [{ type: "user", text: "/review" }]).overlap).toBe(0);
+  });
+});
+
+describe("interrupted turns", () => {
+  test("a retry after an interrupted reply is a new turn across a page boundary", () => {
+    const earlier = [{ type: "user" as const, text: "continue" }, { type: "assistant" as const, text: "partial" }, { type: "interrupt" as const }];
+    expect(mergeAgentTraceSegments(earlier, [{ type: "user", text: "continue" }, { type: "assistant", text: "done" }]).overlap).toBe(0);
+  });
+
+  test("tools cut off by an interrupt stop reading as running", () => {
+    const [turn] = groupAgentTurns([
+      { type: "user", text: "go" },
+      { type: "tool", name: "Bash", input: "sleep 100" },
+      { type: "interrupt" },
+    ]);
+    expect(toolState(turn.items[0])).toBe("error");
+  });
+
+  test("typed and transcript forms of a command compare equal", () => {
+    expect(submittedText("!git status")).toBe("! git status");
+    expect(submittedText("  /model   opus ")).toBe("/model opus");
+    expect(submittedText("/Users/me/a.png look")).toBe("/Users/me/a.png look");
   });
 });

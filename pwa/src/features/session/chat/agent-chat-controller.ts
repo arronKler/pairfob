@@ -29,7 +29,7 @@ import { appRoot } from "../../../app/dom-root";
 import { haptic } from "../../../lib/dom";
 import { canPromptAgent } from "../../../lib/dashboard";
 import { t } from "../../../lib/i18n";
-import { firstTurnNeedsUser, mergeAgentTraceSegments } from "../../../lib/agent-trace-view";
+import { firstTurnNeedsUser, isTurnHead, mergeAgentTraceSegments, submittedText } from "../../../lib/agent-trace-view";
 import {
   agentTraceDetailRevision,
   cacheAgentTrace,
@@ -37,7 +37,7 @@ import {
   cacheAgentTraceViewport,
   type AgentTraceViewport,
 } from "../../../lib/agent-trace-cache";
-import type { AgentTraceItem, AgentTracePage } from "../../../lib/operations";
+import { isTraceMarker, type AgentTraceItem, type AgentTracePage } from "../../../lib/operations";
 import { ProtocolError } from "../../../lib/protocol/errors";
 import { messageOf } from "../../../lib/notices";
 import { track } from "../../../lib/telemetry";
@@ -265,10 +265,10 @@ export function sizeChatCompose(field: HTMLTextAreaElement): void {
 }
 
 function absorbPending(items: readonly AgentTraceItem[]): void {
-  const pending = chatSnapshot().agentTracePending.trim();
+  const pending = submittedText(chatSnapshot().agentTracePending);
   if (!pending) return;
   const boundary = pendingBoundary(items);
-  if (items.slice(boundary).some((item) => item.type === "user" && item.text === pending)) {
+  if (items.slice(boundary).some((item) => isTurnHead(item) && submittedText(item.text || "") === pending)) {
     const progress = chatSnapshot().promptProgress;
     if (progress) applyTrace({ promptProgress: { ...progress, phase: "recorded" } });
     clearPendingTurn();
@@ -290,14 +290,21 @@ function traceSegmentsOverlap(before: readonly AgentTraceItem[], after: readonly
   for (let left = 0; left < before.length; left += 1) {
     for (let right = 0; right < after.length; right += 1) {
       let count = 0;
+      let agentEvent = false;
+      let marker = false;
       while (
         left + count < before.length && right + count < after.length &&
         sameTracePosition(before[left + count], after[right + count])
-      ) count += 1;
-      // One repeated prompt is ambiguous after a branch/reset. Two adjacent
-      // events, or one matching non-user event, prove continuity strongly
-      // enough to retain the separately loaded prefix.
-      if (count >= 2 || (count === 1 && before[left].type !== "user")) return true;
+      ) {
+        const item = before[left + count];
+        agentEvent ||= !isTurnHead(item) && !isTraceMarker(item.type);
+        marker ||= isTraceMarker(item.type);
+        count += 1;
+      }
+      // Repeated prompts and textless markers ("/compact" then a compaction)
+      // recur after a branch/reset. A matching agent event, or two adjacent
+      // prompts, prove continuity strongly enough to keep the loaded prefix.
+      if (agentEvent || (count >= 2 && !marker)) return true;
     }
   }
   return false;

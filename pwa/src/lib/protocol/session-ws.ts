@@ -16,6 +16,7 @@ import {
   parseSplitPaneResult,
   parseSwapPaneResult,
   parseZoomPaneResult,
+  advertisesTraceMarkers,
   advertisesUploadV2,
   fitOperationPrompt,
   withOperationID,
@@ -146,13 +147,18 @@ class ReconnectingSession implements LiveSession {
   private readonly direct: DirectSessionDriver;
   private readonly relayWarmup: RelayWarmup;
   private unwatchVisibility: () => void = () => undefined;
-  private readonly agentTraceRPC = new AgentTraceRPC((op, params) => this.readRPC(op, params));
+  private readonly agentTraceRPC = new AgentTraceRPC((op, params) => this.readRPC(op, params), () => this.traceMarkers);
   // upload_file_v2 is learned ONLY from a successful GetConfig and cleared on
   // every transport-epoch loss (disconnect, transport switch, close). Method
   // presence never implies the capability. configRequest is a monotonic token,
   // bumped at every GetConfig start and every epoch loss, so a stale reply can
   // never install a capability over a newer request or newer transport epoch.
   private uploadV2 = false;
+  // trace_markers describes the paired daemon, not a transport epoch: it only
+  // changes when a GetConfig reply lands, so trace reads never flip vocabulary
+  // while a refresh is in flight. A downgraded daemon is re-learned on the
+  // reconnect GetConfig; until it lands, trace polls fail and retry.
+  private traceMarkers = false;
   private configRequest = 0;
   // Bumped synchronously at every switch begin, so an upload paused in a probe
   // wait is invalidated even by a switch that fails and returns the same
@@ -302,6 +308,7 @@ class ReconnectingSession implements LiveSession {
         !this.checking
       ) {
         this.uploadV2 = advertisesUploadV2(result);
+        this.traceMarkers = advertisesTraceMarkers(result);
       }
       // Guard failure assigns nothing: a newer result/epoch must survive.
       return result;

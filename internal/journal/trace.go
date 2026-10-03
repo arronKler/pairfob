@@ -184,27 +184,6 @@ func flattenToolContentAt(raw json.RawMessage, fallback bool) string {
 	return compactJSON(raw)
 }
 
-func visibleUserText(text string) string {
-	parts := strings.Split(text, "\n\n")
-	kept := make([]string, 0, len(parts))
-	for _, part := range parts {
-		s := strings.TrimSpace(part)
-		switch {
-		case s == "":
-			continue
-		case strings.HasPrefix(s, "<environment_context>"),
-			strings.HasPrefix(s, "<user_instructions>"),
-			strings.HasPrefix(s, "<developer_instructions>"),
-			strings.HasPrefix(s, "<INSTRUCTIONS>"),
-			strings.HasPrefix(s, "# AGENTS.md instructions"):
-			continue
-		default:
-			kept = append(kept, part)
-		}
-	}
-	return strings.TrimSpace(strings.Join(kept, "\n\n"))
-}
-
 func grokToolName(title, metaName, kind string) string {
 	for _, name := range []string{metaName, kind} {
 		if toolName.MatchString(name) {
@@ -255,6 +234,7 @@ func parseCodexTrace(line []byte) []parsedEvent {
 		Payload struct {
 			Type      string          `json:"type"`
 			Role      string          `json:"role"`
+			Reason    string          `json:"reason"`
 			Name      string          `json:"name"`
 			CallID    string          `json:"call_id"`
 			Arguments json.RawMessage `json:"arguments"`
@@ -270,7 +250,20 @@ func parseCodexTrace(line []byte) []parsedEvent {
 			} `json:"summary"`
 		} `json:"payload"`
 	}
-	if json.Unmarshal(line, &item) != nil || item.Type != "response_item" {
+	if json.Unmarshal(line, &item) != nil {
+		return nil
+	}
+	switch {
+	case item.Type == "compacted":
+		return []parsedEvent{{Event: Event{Type: EventCompaction}}}
+	case item.Type == "event_msg" && item.Payload.Type == "turn_aborted":
+		// Only a user cancel is an interrupt; "replaced" and "review_ended"
+		// end a turn the user moved past on purpose.
+		if item.Payload.Reason != "interrupted" {
+			return nil
+		}
+		return []parsedEvent{{Event: Event{Type: EventInterrupt}}}
+	case item.Type != "response_item":
 		return nil
 	}
 	switch item.Payload.Type {
@@ -331,7 +324,7 @@ func parseCodexTrace(line []byte) []parsedEvent {
 			}
 			text := content.Text
 			if item.Payload.Role == "user" {
-				text = visibleUserText(text)
+				text = visibleCodexUserText(text)
 			}
 			if text != "" {
 				parts = append(parts, text)
@@ -355,17 +348,35 @@ func parseCodexTrace(line []byte) []parsedEvent {
 
 func parseClaudeTrace(line []byte) []parsedEvent {
 	var item struct {
+		claudeRecordFlags
 		Type    string `json:"type"`
+		Subtype string `json:"subtype"`
 		Message struct {
 			Role    string          `json:"role"`
+			Model   string          `json:"model"`
 			Content json.RawMessage `json:"content"`
 		} `json:"message"`
 	}
-	if json.Unmarshal(line, &item) != nil || (item.Type != "user" && item.Type != "assistant") || item.Message.Role != item.Type {
+	if json.Unmarshal(line, &item) != nil {
+		return nil
+	}
+	if item.Type == "system" && item.Subtype == "compact_boundary" && !item.IsSidechain {
+		return []parsedEvent{{Event: Event{Type: EventCompaction}}}
+	}
+	if (item.Type != "user" && item.Type != "assistant") || item.Message.Role != item.Type {
+		return nil
+	}
+	if item.hidden() || item.Message.Model == claudeSyntheticModel {
 		return nil
 	}
 	var text string
 	if json.Unmarshal(item.Message.Content, &text) == nil {
+		if item.Type == "user" {
+			if event, ok := claudeUserEvent(text); ok {
+				return []parsedEvent{{Event: event}}
+			}
+			return nil
+		}
 		if text == "" {
 			return nil
 		}
@@ -390,14 +401,18 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 		case block.Type == "thinking" && block.Thinking != "":
 			out = append(out, parsedEvent{Event: Event{Type: "thinking", Text: block.Thinking}})
 		case block.Type == "text" && block.Text != "":
-			out = append(out, parsedEvent{Event: Event{Type: item.Type, Text: block.Text}})
+			if item.Type != "user" {
+				out = append(out, parsedEvent{Event: Event{Type: item.Type, Text: block.Text}})
+			} else if event, ok := claudeUserEvent(block.Text); ok {
+				out = append(out, parsedEvent{Event: event})
+			}
 		case item.Type == "assistant" && block.Type == "tool_use" && toolName.MatchString(block.Name):
 			out = append(out, parsedEvent{
 				Event: Event{Type: "tool", Name: block.Name, Input: compactJSON(block.Input)},
 				call:  block.ID,
 			})
 		case item.Type == "user" && block.Type == "tool_result":
-			output := flattenToolContent(block.Content)
+			output := visibleClaudeToolOutput(flattenToolContent(block.Content))
 			if output == "" {
 				continue
 			}
@@ -426,6 +441,7 @@ func parseGrokTrace(line []byte) []parsedEvent {
 				RawOutput     json.RawMessage `json:"rawOutput"`
 				Content       json.RawMessage `json:"content"`
 				Meta          json.RawMessage `json:"_meta"`
+				StopReason    string          `json:"stop_reason"`
 			} `json:"update"`
 		} `json:"params"`
 	}
@@ -434,8 +450,13 @@ func parseGrokTrace(line []byte) []parsedEvent {
 	}
 	u := update.Params.Update
 	switch u.SessionUpdate {
+	case "turn_completed":
+		if u.StopReason != "cancelled" {
+			return nil
+		}
+		return []parsedEvent{{Event: Event{Type: EventInterrupt}}}
 	case "user_message_chunk":
-		text := grokChunkText(u.Content)
+		text := visibleGrokUserText(grokChunkText(u.Content), u.Meta)
 		if text == "" {
 			return nil
 		}

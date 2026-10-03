@@ -178,3 +178,33 @@ func TestAgentTraceRejectsUntrustedBinding(t *testing.T) {
 		t.Fatalf("unbound pane leaked a trace: %v", err)
 	}
 }
+
+func TestAgentTraceMarkersAreOptIn(t *testing.T) {
+	root := t.TempDir()
+	sessionID := "session_12345678"
+	transcript := filepath.Join(root, "sessions", "2026", "10", "03", "rollout-"+sessionID+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lines := `{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"go"}]}}` + "\n" +
+		`{"type":"event_msg","payload":{"type":"turn_aborted","reason":"interrupted"}}` + "\n"
+	if err := os.WriteFile(transcript, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := runtime.NewFake()
+	fake.Snap.Panes[0].Agent = "codex"
+	fake.Snap.Panes[0].AgentSession = &runtime.AgentSessionRef{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: sessionID}
+	engine, client := runtimeRPCClient(t, fake)
+	engine.Journal = &journal.Reader{CodexRoot: root}
+
+	for _, op := range []string{"AgentTrace", "AgentTraceSummary"} {
+		legacy, err := client.RPC(op, map[string]any{"pane_id": "w0:p1", "limit": 20})
+		if err != nil || strings.Contains(string(legacy), "interrupt") {
+			t.Fatalf("%s legacy=%s err=%v", op, legacy, err)
+		}
+		marked, err := client.RPC(op, map[string]any{"pane_id": "w0:p1", "limit": 20, "markers": true})
+		if err != nil || !strings.Contains(string(marked), `{"type":"interrupt"}`) {
+			t.Fatalf("%s marked=%s err=%v", op, marked, err)
+		}
+	}
+}

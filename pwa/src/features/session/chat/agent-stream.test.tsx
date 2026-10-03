@@ -130,3 +130,25 @@ test("unavailable history keeps its terminal action beside a pending prompt with
   act(() => appRoot().querySelector<HTMLButtonElement>(".agent-open-terminal")!.click());
   expect(exits).toBe(1);
 });
+
+test("commands render as chips and markers stay visible after the final reply", () => {
+  act(() => renderReact(<AgentStream items={[
+    { type: "command", text: "/clear" },
+    { type: "user", text: "fix it" },
+    { type: "tool", name: "Read", input: "{}", output: "ok" },
+    { type: "compaction" },
+    { type: "assistant", text: "partial" },
+    { type: "interrupt" },
+  ]} working={false} empty={empty} />));
+  const command = appRoot().querySelector(".agent-command")!;
+  expect(command.querySelector(".agent-command-text")?.textContent).toBe("/clear");
+  expect(command.getAttribute("aria-label")).toBe(t("trace.commandAria", { cmd: "/clear" }));
+  expect(appRoot().querySelectorAll(".agent-user")).toHaveLength(1);
+  expect(appRoot().querySelector(".agent-md")?.textContent).toContain("partial");
+  expect(appRoot().querySelector(".agent-reply-fold-title")?.textContent).toBe(t("trace.nSteps", { n: 1 }));
+  const markers = [...appRoot().querySelectorAll(".agent-marker")].map((node) => node.textContent);
+  expect(markers).toEqual([t("trace.compacted"), t("trace.interrupted")]);
+  expect(appRoot().querySelector(".agent-reply-fold .agent-marker")).toBeNull();
+  expect(appRoot().querySelector(".agent-stream-inner > .agent-marker-compaction")).not.toBeNull();
+  expect(appRoot().querySelector(".agent-stream-inner > .agent-marker-interrupt")).not.toBeNull();
+});

@@ -532,6 +532,9 @@ export const zh = {
   "trace.failedTool": "失败",
   "trace.runningSteps": "正在执行 · {n} 步",
   "trace.nSteps": "执行过程 · {n} 步",
+  "trace.compacted": "上下文已压缩",
+  "trace.interrupted": "已中断",
+  "trace.commandAria": "命令 {cmd}",
 
   "key.up": "上箭头",
   "key.down": "下箭头",

@@ -649,3 +649,24 @@ test("a same session and pane remount during nested follow does not scroll the r
   expect(appRoot().querySelector(".agent-stream") === next).toBeTrue();
   expect(next?.scrollTop).toBe(140);
 });
+test("a recurring command and marker pair does not prove a changed tail continues the prefix", async () => {
+  const compacted = [{ type: "command" as const, text: "/compact" }, { type: "compaction" as const }];
+  applyTrace({
+    agentTraceItems: [{ type: "user", text: "old prefix" }, { type: "assistant", text: "old answer" }, ...compacted],
+    agentTraceTail: 2,
+    agentTraceSig: JSON.stringify(compacted),
+    agentTraceNext: "older",
+  });
+  withLive({ agentTrace: async () => ({ items: [...compacted, { type: "user", text: "new branch" }], nextCursor: "new-older", truncated: false }) });
+  await act(async () => mount());
+  await act(async () => { await refreshAgentTrace(); });
+  expect(chatSnapshot().agentTraceItems.map((item) => item.text ?? item.type)).toEqual(["/compact", "compaction", "new branch"]);
+});
+
+test("a shell command sent from the phone is absorbed by its typed-form transcript record", async () => {
+  applyTrace({ agentTracePending: "!git status", agentTracePendingBase: [] });
+  withLive({ agentTrace: async () => ({ items: [{ type: "command", text: "! git status" }, { type: "assistant", text: "clean" }], nextCursor: null, truncated: false }) });
+  await act(async () => mount());
+  await act(async () => { await refreshAgentTrace(); });
+  expect(chatSnapshot().agentTracePending).toBe("");
+});

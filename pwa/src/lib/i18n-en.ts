@@ -529,6 +529,9 @@ export const en: { [K in keyof typeof zh]: string } = {
   "trace.failedTool": "failed",
   "trace.runningSteps": "Running · {n} steps",
   "trace.nSteps": "Run · {n} steps",
+  "trace.compacted": "Context compacted",
+  "trace.interrupted": "Interrupted",
+  "trace.commandAria": "Command {cmd}",
 
   "key.up": "Up arrow",
   "key.down": "Down arrow",

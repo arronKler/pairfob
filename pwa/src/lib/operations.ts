@@ -19,6 +19,7 @@ export const OPERATION_CAPABILITY_KEYS = [
   "upload_file",
   "upload_file_v2",
   "link_machine",
+  "trace_markers",
 ] as const;
 
 export type OperationCapability = typeof OPERATION_CAPABILITY_KEYS[number];
@@ -42,6 +43,7 @@ export const NO_OPERATION_CAPABILITIES: OperationCapabilities = {
   upload_file: false,
   upload_file_v2: false,
   link_machine: false,
+  trace_markers: false,
 };
 
 export const OPERATION_INPUT_LIMITS = {
@@ -58,6 +60,11 @@ export const OPERATION_INPUT_LIMITS = {
 export function fitOperationPrompt(value: string): { text: string; truncated: boolean } {
   const text = truncateUTF8Bytes(value, OPERATION_INPUT_LIMITS.prompt);
   return { text, truncated: text !== value };
+}
+
+/** Whether a raw GetConfig response lets AgentTrace return command and marker items. */
+export function advertisesTraceMarkers(config: unknown): boolean {
+  return isRecord(config) && isRecord(config.capabilities) && config.capabilities.trace_markers === true;
 }
 
 /** Whether a raw GetConfig response advertises the V2 upload capability (131072-byte chunks). */
@@ -155,7 +162,9 @@ export type HistoryPage = {
   truncated: boolean;
 };
 
-export type AgentTraceType = "user" | "thinking" | "tool" | "assistant";
+export type AgentTraceType = "user" | "thinking" | "tool" | "assistant" | "command" | AgentTraceMarker;
+/** Textless timeline markers, returned only when the client opts in (proto/agent-trace-markers.md). */
+export type AgentTraceMarker = "compaction" | "interrupt";
 export type AgentTraceItem = {
   type: AgentTraceType;
   text?: string;
@@ -356,7 +365,7 @@ export function parseRuntimeOperationsConfig(value: unknown): RuntimeOperationsC
 	const rawCapabilities = isRecord(config.capabilities) ? config.capabilities : {};
 	const capabilities = { ...NO_OPERATION_CAPABILITIES };
 	const capabilityKeys = Object.keys(rawCapabilities);
-	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "link_machine"]);
+	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "link_machine", "trace_markers"]);
 	const capabilitiesValid = capabilityKeys.every((key) => (OPERATION_CAPABILITY_KEYS as readonly string[]).includes(key))
 		&& OPERATION_CAPABILITY_KEYS.every((key) => typeof rawCapabilities[key] === "boolean"
       || (optionalCapabilities.has(key) && !(key in rawCapabilities)));
@@ -409,7 +418,11 @@ export function parseHistoryPage(value: unknown): HistoryPage {
   return { items: items as HistoryItem[], nextCursor: cursor, truncated: result.truncated };
 }
 
-const TRACE_TYPES = new Set<AgentTraceType>(["user", "thinking", "tool", "assistant"]);
+const TRACE_TYPES = new Set<AgentTraceType>(["user", "thinking", "tool", "assistant", "command", "compaction", "interrupt"]);
+
+export function isTraceMarker(type: AgentTraceType): type is AgentTraceMarker {
+  return type === "compaction" || type === "interrupt";
+}
 const TRACE_KEYS = new Set(["type", "text", "name", "input", "output"]);
 
 function optionalClipped(result: Record<string, unknown>, key: string): string | undefined {
@@ -432,8 +445,9 @@ function itemTrace(value: unknown): AgentTraceItem | null {
     if (!name) return null;
     return { type, name, ...(text ? { text } : {}), ...(input ? { input } : {}), ...(output ? { output } : {}) };
   }
-  if (!text) return null;
   if (name || input || output) return null;
+  if (isTraceMarker(type)) return text ? null : { type };
+  if (!text) return null;
   return { type, text };
 }
 
@@ -462,6 +476,7 @@ function itemTraceSummary(value: unknown): AgentTraceItem | null {
   }
   if (Object.keys(value).some((key) => !["type", "text"].includes(key))) return null;
   const text = optionalClipped(value, "text");
+  if (isTraceMarker(type)) return text ? null : { type };
   return text ? { type, text } : null;
 }
 

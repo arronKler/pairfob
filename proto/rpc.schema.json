@@ -166,7 +166,8 @@
         "delete_file": { "type": "boolean" },
         "upload_file": { "type": "boolean" },
         "upload_file_v2": { "type": "boolean" },
-        "link_machine": { "type": "boolean" }
+        "link_machine": { "type": "boolean" },
+        "trace_markers": { "type": "boolean" }
       },
       "additionalProperties": false
     },
@@ -320,7 +321,7 @@
       "type": "object",
       "required": ["type"],
       "properties": {
-        "type": { "enum": ["user", "thinking", "tool", "assistant"] },
+        "type": { "enum": ["user", "thinking", "tool", "assistant", "command", "compaction", "interrupt"] },
         "text": { "type": "string", "minLength": 1, "maxLength": 131072 },
         "name": { "type": "string", "minLength": 1, "maxLength": 128 },
         "input": { "type": "string", "minLength": 1, "maxLength": 131072 },
@@ -346,7 +347,7 @@
       "type": "object",
       "required": ["type"],
       "properties": {
-        "type": { "enum": ["user", "thinking", "tool", "assistant"] },
+        "type": { "enum": ["user", "thinking", "tool", "assistant", "command", "compaction", "interrupt"] },
         "text": { "type": "string", "minLength": 1, "maxLength": 131072 },
         "name": { "type": "string", "minLength": 1, "maxLength": 128 },
         "state": { "enum": ["running", "done", "error"] },
@@ -1172,7 +1173,8 @@
                   "pane_id": { "$ref": "#/$defs/paneId" },
                   "session": { "$ref": "#/$defs/session" },
                   "cursor": { "type": ["string", "null"], "maxLength": 1024 },
-                  "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+                  "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+                  "markers": { "type": "boolean" }
                 },
                 "additionalProperties": false
               }
@@ -1190,7 +1192,8 @@
                   "pane_id": { "$ref": "#/$defs/paneId" },
                   "session": { "$ref": "#/$defs/session" },
                   "cursor": { "type": ["string", "null"], "maxLength": 1024 },
-                  "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+                  "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+                  "markers": { "type": "boolean" }
                 },
                 "additionalProperties": false
               }

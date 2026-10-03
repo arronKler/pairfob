@@ -1,7 +1,6 @@
 package journal
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
@@ -113,25 +112,32 @@ func (r *Reader) ReadTraceDetail(ref Ref, detailRef string) (TraceDetail, error)
 	}
 
 	parse := traceParserFor(ref)
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64<<10), maxTranscriptLine)
 	var target *parsedEvent
 	scanned := 0
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		scanned += len(line) + 1
+	skipped, conflict := false, false
+	err = forEachLine(file, maxTraceLine, func(line []byte, lineSize int, oversized bool) bool {
+		scanned += lineSize
 		if scanned > maxScanBytes {
-			break
+			return false
+		}
+		if oversized {
+			// The locator's own record is never oversized; a later one may be
+			// this tool's output, which then stays missing.
+			conflict = target == nil
+			skipped = skipped || (target != nil && placeholderOutput(target.Output))
+			return target != nil
 		}
 		events := parse(line)
 		start := 0
 		if target == nil {
 			if locator.ordinal >= len(events) {
-				return TraceDetail{}, ErrCursorConflict
+				conflict = true
+				return false
 			}
 			selected := events[locator.ordinal]
 			if selected.Type != "tool" || selected.outputOnly || selected.Name == "" || traceDetailStatic(selected) != locator.static {
-				return TraceDetail{}, ErrCursorConflict
+				conflict = true
+				return false
 			}
 			target = &selected
 			start = locator.ordinal + 1
@@ -144,14 +150,15 @@ func (r *Reader) ReadTraceDetail(ref Ref, detailRef string) (TraceDetail, error)
 				target.Output = event.Output
 			}
 		}
-	}
-	if err := scanner.Err(); err != nil {
+		return true
+	})
+	if err != nil {
 		return TraceDetail{}, err
 	}
-	if target == nil {
+	if conflict || target == nil {
 		return TraceDetail{}, ErrCursorConflict
 	}
-	item, truncated := clipEvent(target.Event, scanned > maxScanBytes)
+	item, truncated := clipEvent(target.Event, scanned > maxScanBytes || skipped)
 	return TraceDetail{
 		DetailRef: detailRef, Text: item.Text, Input: item.Input, Output: item.Output, Truncated: truncated,
 	}, nil

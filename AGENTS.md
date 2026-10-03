@@ -129,6 +129,7 @@ repository gate after every local edit or merely because a task is ending.
 | Documentation or copy-only edit | Check the diff, links and affected rendering as relevant; no unrelated code suites. |
 | Local implementation iteration | Run affected module tests and relevant type/format checks. For shared code, include its affected consumers. |
 | UI behavior or layout change | Add focused browser checks for the changed interaction or viewport; fixtures, live transport and physical-device acceptance are distinct. |
+| Agent transcript adapter (`internal/journal`) or an agent CLI upgrade | Run `PAIRFOB_SCAN_LOCAL_TRANSCRIPTS=1 go test ./internal/journal -run LocalTranscripts -v` on a machine with real Claude Code / Codex / Grok / Pi sessions; a hit is injected context leaking into chat. |
 | PWA UI-only production release | Run `PAIRFOB_PACK_DL=1 ./scripts/verify.sh --pwa-only <verified-release-commit>` against a trustworthy baseline in the current checkout. |
 | Backend, protocol, cross-module contract or release-tooling delivery | Run the full `./scripts/verify.sh` once on the final candidate before handoff/merge/release. Use focused checks during iteration. |
 | Production release outside the guarded PWA-only scope, or without a trustworthy baseline | Run the full gate on the final release candidate. |

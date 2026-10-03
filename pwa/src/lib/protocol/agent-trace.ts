@@ -13,10 +13,11 @@ type ReadRPC = (op: string, params: Record<string, unknown>) => Promise<unknown>
 export class AgentTraceRPC {
   private summarySupport: "unknown" | "yes" | "no" = "unknown";
 
-  constructor(private readonly rpc: ReadRPC) {}
+  /** markers reflects GetConfig.capabilities.trace_markers on the current transport. */
+  constructor(private readonly rpc: ReadRPC, private readonly markers: () => boolean = () => false) {}
 
   async read(paneId: string, cursor: string | null = null, limit = 50): Promise<AgentTracePage> {
-    const params = { pane_id: paneId, cursor, limit };
+    const params = { pane_id: paneId, cursor, limit, ...(this.markers() ? { markers: true } : {}) };
     if (this.summarySupport !== "no") {
       try {
         const page = parseAgentTraceSummaryPage(await this.rpc("AgentTraceSummary", params));

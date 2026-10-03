@@ -17,6 +17,7 @@ import {
   parsePromptAgentResult,
   parseResizePaneResult,
   parseRuntimeOperationsConfig,
+  advertisesTraceMarkers,
   parseSplitPaneResult,
   parseSwapPaneResult,
   parseWorktrees,
@@ -96,6 +97,16 @@ describe("runtime operation config", () => {
       upload_file: true,
       upload_file_v2: true,
     });
+  });
+
+  test("trace_markers is optional for daemons that predate trace markers", () => {
+    const { trace_markers, ...older } = NO_OPERATION_CAPABILITIES;
+    expect(parseRuntimeOperationsConfig(config(older)).capabilities.trace_markers).toBeFalse();
+    expect(parseRuntimeOperationsConfig(config({ ...older, trace_markers: true })).capabilities.trace_markers).toBeTrue();
+    expect(() => parseRuntimeOperationsConfig(config({ ...older, trace_markers: "yes" }))).toThrow();
+    expect(advertisesTraceMarkers({ capabilities: { trace_markers: true } })).toBeTrue();
+    expect(advertisesTraceMarkers({ capabilities: { trace_markers: 1 } })).toBeFalse();
+    expect(advertisesTraceMarkers(null)).toBeFalse();
   });
 
   test("recognizes every advertised capability", () => {
@@ -249,6 +260,19 @@ describe("safe read normalization", () => {
     expectBadMessage(() => parseAgentTracePage({ items: [{ type: "tool" }], next_cursor: null, truncated: false }));
     expectBadMessage(() => parseAgentTracePage({ items: [{ type: "system", text: "no" }], next_cursor: null, truncated: false }));
     expectBadMessage(() => parseAgentTracePage({ items: [{ type: "user", text: "x", extra: true }], next_cursor: null, truncated: false }));
+  });
+
+  test("accepts opt-in command and textless marker items in both trace shapes", () => {
+    const items = [
+      { type: "command", text: "/clear" },
+      { type: "interrupt" },
+      { type: "compaction" },
+    ];
+    for (const parse of [parseAgentTracePage, parseAgentTraceSummaryPage]) {
+      expect(parse({ items, next_cursor: null, truncated: false }).items).toEqual(items);
+      expectBadMessage(() => parse({ items: [{ type: "command" }], next_cursor: null, truncated: false }));
+      expectBadMessage(() => parse({ items: [{ type: "interrupt", text: "injected" }], next_cursor: null, truncated: false }));
+    }
   });
 
   test("keeps AgentTraceSummary tool bodies off the wire and binds detail replies", () => {

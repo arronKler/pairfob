@@ -209,7 +209,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	}
 	for _, op := range []string{"AgentTrace", "AgentTraceSummary"} {
 		params := paramsByOp[op]
-		if got, want := sortedPropertyNames(params.Properties), []string{"cursor", "limit", "pane_id", "session"}; !slices.Equal(got, want) || !slices.Equal(params.Required, []string{"pane_id"}) {
+		if got, want := sortedPropertyNames(params.Properties), []string{"cursor", "limit", "markers", "pane_id", "session"}; !slices.Equal(got, want) || !slices.Equal(params.Required, []string{"pane_id"}) {
 			t.Errorf("%s params fields=%q required=%q", op, got, params.Required)
 		}
 		if params.AdditionalProperties == nil || *params.AdditionalProperties {
@@ -260,7 +260,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"create_conversation", "create_tab", "split_pane", "prompt_agent", "history",
 		"list_worktrees", "create_worktree", "open_worktree", "resize_pane", "swap_pane", "zoom_pane",
 	}
-	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "link_machine"), capabilities)
+	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "link_machine", "trace_markers"), capabilities)
 
 	// Machine linking names machines by opaque ID only: no SSH target, host,
 	// or path may be added to these objects.
@@ -432,13 +432,15 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	if got := schema.Defs["historyResult"].Properties["items"].Items.Ref; got != "#/$defs/historyItem" {
 		t.Errorf("history items ref = %q", got)
 	}
-	if got := schema.Defs["agentTraceItem"].Properties["type"].Enum; !slices.Equal(got, []string{"user", "thinking", "tool", "assistant"}) {
+	// command, compaction and interrupt are opt-in via params.markers.
+	traceTypes := []string{"user", "thinking", "tool", "assistant", "command", "compaction", "interrupt"}
+	if got := schema.Defs["agentTraceItem"].Properties["type"].Enum; !slices.Equal(got, traceTypes) {
 		t.Errorf("agent trace type enum = %q", got)
 	}
 	if got := schema.Defs["agentTraceResult"].Properties["items"].Items.Ref; got != "#/$defs/agentTraceItem" {
 		t.Errorf("agent trace items ref = %q", got)
 	}
-	if got := schema.Defs["agentTraceSummaryItem"].Properties["type"].Enum; !slices.Equal(got, []string{"user", "thinking", "tool", "assistant"}) {
+	if got := schema.Defs["agentTraceSummaryItem"].Properties["type"].Enum; !slices.Equal(got, traceTypes) {
 		t.Errorf("agent trace summary type enum = %q", got)
 	}
 	if got := schema.Defs["agentTraceSummaryItem"].Properties["state"].Enum; !slices.Equal(got, []string{"running", "done", "error"}) {

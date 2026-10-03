@@ -75,6 +75,7 @@ type piMessage struct {
 	ToolCallID string          `json:"toolCallId"`
 	ToolName   string          `json:"toolName"`
 	IsError    bool            `json:"isError"`
+	StopReason string          `json:"stopReason"`
 }
 
 type piBlock struct {
@@ -462,6 +463,8 @@ func piEvents(session *piSession) []parsedEvent {
 			out = append(out, event)
 		}
 		switch entry.Type {
+		case "compaction":
+			add(parsedEvent{Event: Event{Type: EventCompaction}})
 		case "custom_message":
 			if text := piText(entry.Content); entry.Display && text != "" {
 				add(parsedEvent{Event: Event{Type: "assistant", Text: "[Extension] " + text}})
@@ -497,6 +500,9 @@ func piEvents(session *piSession) []parsedEvent {
 							tools[block.ID] = len(out) - 1
 						}
 					}
+				}
+				if msg.StopReason == "aborted" {
+					add(parsedEvent{Event: Event{Type: EventInterrupt}})
 				}
 			case "toolResult":
 				if index, ok := tools[msg.ToolCallID]; ok {
@@ -628,7 +634,7 @@ func (r *Reader) readPiHistory(ref Ref, cursor *string, limit int) (Page, error)
 	return page, nil
 }
 
-func (r *Reader) readPiTrace(ref Ref, cursor *string, limit int) (TracePage, error) {
+func (r *Reader) readPiTrace(ref Ref, cursor *string, limit int, options TraceOptions) (TracePage, error) {
 	s, err := r.loadPiSession(ref, true)
 	if err != nil {
 		return TracePage{}, err
@@ -637,7 +643,12 @@ func (r *Reader) readPiTrace(ref Ref, cursor *string, limit int) (TracePage, err
 	if err != nil {
 		return TracePage{}, err
 	}
-	events := piEvents(s)
+	var events []parsedEvent
+	for _, event := range piEvents(s) {
+		if event, keep := options.adapt(event); keep {
+			events = append(events, event)
+		}
+	}
 	end := len(events)
 	if decoded != nil {
 		end = -1

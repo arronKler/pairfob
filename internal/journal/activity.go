@@ -151,6 +151,8 @@ func activityLine(agent string, line []byte) bool {
 		if agent == "codex" && event.Type == "user" && codexContextMessage(line) {
 			continue
 		}
+		// Commands and markers are not task evidence: a command that starts
+		// work is followed by assistant or tool events, which are.
 		switch event.Type {
 		case "user", "assistant", "thinking", "tool":
 			return true

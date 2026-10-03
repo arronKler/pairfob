@@ -1,7 +1,6 @@
 package journal
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"io"
@@ -23,8 +22,9 @@ type traceReadStats struct {
 }
 
 type traceCacheKey struct {
-	path  string
-	limit int
+	path    string
+	limit   int
+	options TraceOptions
 }
 
 type traceCacheEntry struct {
@@ -40,10 +40,16 @@ type traceWindow struct {
 	pageBytes int
 	older     bool
 	truncated bool
-	orphan    *parsedEvent
+	// skipped records a record too large to decode; its content is missing.
+	skipped bool
+	orphan  *parsedEvent
 }
 
 func (r *Reader) ReadTrace(ref Ref, cursor *string, limit int) (TracePage, error) {
+	return r.ReadTraceWith(ref, cursor, limit, TraceOptions{})
+}
+
+func (r *Reader) ReadTraceWith(ref Ref, cursor *string, limit int, options TraceOptions) (TracePage, error) {
 	if !r.Supports(ref) {
 		return TracePage{}, ErrUnavailable
 	}
@@ -54,7 +60,7 @@ func (r *Reader) ReadTrace(ref Ref, cursor *string, limit int) (TracePage, error
 		return TracePage{}, errors.New("invalid history limit")
 	}
 	if ref.Agent == "pi" {
-		return r.readPiTrace(ref, cursor, limit)
+		return r.readPiTrace(ref, cursor, limit, options)
 	}
 	end, err := decodeCursor(ref, cursor)
 	if err != nil {
@@ -71,20 +77,25 @@ func (r *Reader) ReadTrace(ref Ref, cursor *string, limit int) (TracePage, error
 	case "claude":
 		parse = parseClaudeTrace
 	}
+	key := traceCacheKey{path: path, limit: limit, options: options}
 	if cursor == nil {
-		if page, ok := r.cachedTracePage(path, limit); ok {
+		if page, ok := r.cachedTracePage(key); ok {
 			return page, nil
 		}
 	}
-	page, stats, err := readTracePage(path, ref, end, limit, parse)
+	page, stats, err := readTracePage(path, ref, end, limit, parse, options)
 	if err == nil && cursor == nil {
-		r.cacheTracePage(path, limit, stats, page)
+		r.cacheTracePage(key, stats, page)
 	}
 	return page, err
 }
 
 func (r *Reader) ReadTraceSummary(ref Ref, cursor *string, limit int) (TraceSummaryPage, error) {
-	page, err := r.ReadTrace(ref, cursor, limit)
+	return r.ReadTraceSummaryWith(ref, cursor, limit, TraceOptions{})
+}
+
+func (r *Reader) ReadTraceSummaryWith(ref Ref, cursor *string, limit int, options TraceOptions) (TraceSummaryPage, error) {
+	page, err := r.ReadTraceWith(ref, cursor, limit, options)
 	if err != nil {
 		return TraceSummaryPage{}, err
 	}
@@ -101,22 +112,22 @@ func (r *Reader) ReadTraceSummary(ref Ref, cursor *string, limit int) (TraceSumm
 	return TraceSummaryPage{Items: items, NextCursor: page.NextCursor, Truncated: page.SummaryTruncated}, nil
 }
 
-func (r *Reader) cachedTracePage(path string, limit int) (TracePage, bool) {
-	info, err := os.Stat(path)
+func (r *Reader) cachedTracePage(key traceCacheKey) (TracePage, bool) {
+	info, err := os.Stat(key.path)
 	if err != nil {
 		return TracePage{}, false
 	}
 	r.traceMu.Lock()
 	defer r.traceMu.Unlock()
-	entry, ok := r.traceCache[traceCacheKey{path: path, limit: limit}]
+	entry, ok := r.traceCache[key]
 	if !ok || entry.size != info.Size() || entry.modified != info.ModTime().UnixNano() {
 		return TracePage{}, false
 	}
 	return cloneTracePage(entry.page), true
 }
 
-func (r *Reader) cacheTracePage(path string, limit int, stats traceReadStats, page TracePage) {
-	info, err := os.Stat(path)
+func (r *Reader) cacheTracePage(key traceCacheKey, stats traceReadStats, page TracePage) {
+	info, err := os.Stat(key.path)
 	if err != nil || info.Size() != stats.FileBytes || info.ModTime().UnixNano() != stats.Modified {
 		return
 	}
@@ -125,7 +136,7 @@ func (r *Reader) cacheTracePage(path string, limit int, stats traceReadStats, pa
 	if r.traceCache == nil || len(r.traceCache) >= maxTraceCacheEntries {
 		r.traceCache = make(map[traceCacheKey]traceCacheEntry)
 	}
-	r.traceCache[traceCacheKey{path: path, limit: limit}] = traceCacheEntry{
+	r.traceCache[key] = traceCacheEntry{
 		size: info.Size(), modified: info.ModTime().UnixNano(), page: cloneTracePage(page),
 	}
 }
@@ -141,7 +152,7 @@ func cloneTracePage(page TracePage) TracePage {
 	return copyPage
 }
 
-func readTracePage(path string, ref Ref, end, limit int, parse traceParser) (TracePage, traceReadStats, error) {
+func readTracePage(path string, ref Ref, end, limit int, parse traceParser, options TraceOptions) (TracePage, traceReadStats, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return TracePage{}, traceReadStats{}, err
@@ -193,7 +204,7 @@ func readTracePage(path string, ref Ref, end, limit int, parse traceParser) (Tra
 			view = view[newline+1:]
 			alignedStart += newline + 1
 		}
-		window, err = parseTraceWindow(view, alignedStart, limit, parse)
+		window, err = parseTraceWindow(view, alignedStart, limit, parse, options)
 		if err != nil {
 			return TracePage{}, stats, err
 		}
@@ -207,14 +218,14 @@ func readTracePage(path string, ref Ref, end, limit int, parse traceParser) (Tra
 	return page, stats, nil
 }
 
-func parseTraceWindow(data []byte, base, limit int, parse traceParser) (traceWindow, error) {
+func parseTraceWindow(data []byte, base, limit int, parse traceParser, options TraceOptions) (traceWindow, error) {
 	window := traceWindow{items: make([]parsedEvent, 0, limit), starts: make([]int, 0, limit), limit: limit}
 	dropFront := func() {
 		if len(window.items) == 0 {
 			return
 		}
 		window.older = true
-		if window.items[0].Type == "user" {
+		if turnHead(window.items[0].Type) {
 			copy := window.items[0]
 			window.orphan = &copy
 		}
@@ -223,13 +234,19 @@ func parseTraceWindow(data []byte, base, limit int, parse traceParser) (traceWin
 		window.starts = window.starts[1:]
 	}
 
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 64<<10), maxTranscriptLine)
 	position := base
-	for scanner.Scan() {
+	err := forEachLine(bytes.NewReader(data), maxTraceLine, func(line []byte, lineSize int, oversized bool) bool {
 		lineStart := position
-		position += len(scanner.Bytes()) + 1
-		for ordinal, event := range parse(scanner.Bytes()) {
+		position += lineSize
+		if oversized {
+			window.skipped = true
+			return true
+		}
+		for ordinal, event := range parse(line) {
+			event, keep := options.adapt(event)
+			if !keep {
+				continue
+			}
 			event.lineStart = lineStart
 			event.sourceOrdinal = ordinal
 			if event.outputOnly {
@@ -276,8 +293,9 @@ func parseTraceWindow(data []byte, base, limit int, parse traceParser) (traceWin
 			window.starts = append(window.starts, lineStart)
 			window.pageBytes += size
 		}
-	}
-	return window, scanner.Err()
+		return true
+	})
+	return window, err
 }
 
 func traceWindowComplete(window traceWindow, atStart bool) bool {
@@ -287,7 +305,7 @@ func traceWindowComplete(window traceWindow, atStart bool) bool {
 	if len(window.items) == 0 {
 		return false
 	}
-	return window.items[0].Type == "user" || window.orphan != nil || window.older
+	return turnHead(window.items[0].Type) || window.orphan != nil || window.older
 }
 
 func (window *traceWindow) page(ref Ref, scanStart int, limited bool) TracePage {
@@ -299,9 +317,10 @@ func (window *traceWindow) page(ref Ref, scanStart int, limited bool) TracePage 
 		}
 	}
 	page := TracePage{
-		Items: make([]Event, 0, len(window.items)+1), Truncated: window.truncated || limited, SummaryTruncated: limited,
+		Items: make([]Event, 0, len(window.items)+1), Truncated: window.truncated || window.skipped || limited,
+		SummaryTruncated: window.skipped || limited,
 	}
-	if window.orphan != nil && len(window.items) < window.limit && (len(window.items) == 0 || window.items[0].Type != "user") && window.pageBytes+eventSize(window.orphan.Event) <= maxTraceItemsBytes {
+	if window.orphan != nil && len(window.items) < window.limit && (len(window.items) == 0 || !turnHead(window.items[0].Type)) && window.pageBytes+eventSize(window.orphan.Event) <= maxTraceItemsBytes {
 		page.Items = append(page.Items, window.orphan.Event)
 		page.SummaryTruncated = page.SummaryTruncated || window.orphan.SummaryTruncated
 	}

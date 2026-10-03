@@ -145,6 +145,22 @@ export function phase2ConversationTrace(): AgentTraceItem[] {
   return turns;
 }
 
+/** Opt-in trace markers (proto/agent-trace-markers.md) around ordinary turns. */
+export function markerTrace(): AgentTraceItem[] {
+  return [
+    { type: "command", text: "/clear" },
+    { type: "user", text: "Why does the PWA jump to the pairing screen after Chrome resumes?" },
+    { type: "thinking", text: "Tracing boot recovery and stored credential reads." },
+    { type: "tool", name: "Read", input: '{"path":"src/app/bootstrap.ts"}', output: "Read 120 lines.", toolState: "done", detailRef: "qa-marker-read" },
+    { type: "compaction" },
+    { type: "assistant", text: "Boot treats a transient storage failure as **no saved computers**." },
+    { type: "user", text: "Rewrite the whole boot flow." },
+    { type: "tool", name: "Bash", input: "bun test src/app", toolState: "running", detailRef: "qa-marker-bash" },
+    { type: "interrupt" },
+    { type: "command", text: "/model opus" },
+  ];
+}
+
 export function trace(): AgentTraceItem[] {
   return [
     { type: "user", text: "Check the mobile workspace layout and preserve the existing interactions." },
