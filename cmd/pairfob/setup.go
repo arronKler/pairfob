@@ -25,7 +25,7 @@ func setupCommand(args []string) error {
 			return errors.New("usage: pairfob setup [--install-herdr] [--non-interactive]")
 		}
 	}
-	rt, _, err := runtime.Open(false, getenv("PAIRFOB_MULTI_SESSION", "") == "1")
+	rt, _, err := runtime.Open(false, herdrMultiSessionEnabled())
 	if err != nil {
 		return err
 	}

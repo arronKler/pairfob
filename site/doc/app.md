@@ -189,13 +189,15 @@ A lost phone that can still open Pairfob can also unpair other devices from Sett
 
 If you run more than one Herdr server on the computer (`herdr --session <name>`), the phone can switch between them. When a named session is running or you have one selected, the current Herdr session shows as a pill in the Sessions header (in the left rail on a wide screen), and as **Herdr session** in Settings. The switch stays available if the selected named server stops, so you can return to Default. Tap either to pick another; the list marks which ones are running.
 
-This is off by default, and updating the app does not turn it on. Enable it once on the computer, in the same shell you would normally install from:
+Named sessions are enabled by default. If `HERDR_SOCKET_PATH` is set and `PAIRFOB_MULTI_SESSION` is unset or empty, multi-session stays off. Set `PAIRFOB_MULTI_SESSION=1` to enable it with a pinned socket. Other non-empty values keep it off.
+
+To turn it off, run this on the computer, in the same shell you would normally install from:
 
 ```sh
-PAIRFOB_MULTI_SESSION=1 pairfob service install
+PAIRFOB_MULTI_SESSION=0 pairfob service install
 ```
 
-`service install` rewrites the user service from the current shell's environment, so also export any other variable you set at install time (for example `HERDR_SOCKET_PATH`), or it is dropped. The setting then survives restarts and `pairfob update`. To turn it off, run `pairfob service install` again without it.
+`service install` rewrites the user service from the current shell's environment, so also export any other variable you set at install time (for example `HERDR_SOCKET_PATH`), or it is dropped. The setting then survives restarts and `pairfob update`. To turn it back on, run `pairfob service install` again without it.
 
 Current limits:
 
