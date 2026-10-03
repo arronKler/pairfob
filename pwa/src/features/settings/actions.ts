@@ -18,6 +18,7 @@ import { applyComposeDraft, bumpViewIncarnation, parkComposeView } from "../sess
 import { isDesk } from "../../app/viewport";
 import { acceptDaemonVersion, checkDaemonRelease, markDaemonConfigIncompatible } from "./daemon-update";
 import { refreshAgentQuota } from "../agent-quota/actions";
+import { loadHerdSessions } from "../herd-sessions/load";
 import { setSettingsSection, type SettingsSection } from "./settings-section";
 
 /**
@@ -87,6 +88,7 @@ async function hasLocalPushSubscription(): Promise<boolean> {
 export async function refreshSettings(): Promise<void> {
   void checkDaemonRelease();
   void refreshAgentQuota();
+  void loadHerdSessions();
   const session = liveSession();
   const request = beginSettingsRead();
   if (!session || !settingsReadStillOwned(request, session)) {

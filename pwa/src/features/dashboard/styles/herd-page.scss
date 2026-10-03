@@ -91,7 +91,9 @@
 .herd-head.is-folded .host-title-name { transform: scale(0.76); }
 .herd-head.is-folded .host-title-line { max-height: 0; opacity: 0; }
 
-.herd-mode {
+/* The Herdr-session switch shares the grouping button's pill. */
+.herd-mode,
+.herd-head .herd-session-switch {
   flex: none;
   min-height: 44px;
   display: inline-flex;
@@ -106,7 +108,12 @@
   cursor: pointer;
 }
 
-.herd-mode svg { color: var(--muted); }
+.herd-mode svg,
+.herd-head .herd-session-switch svg { color: var(--muted); }
+
+/* A long session name yields to the computer title. */
+.herd-head .herd-session-switch { max-width: 40%; }
+.herd-head .herd-session-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Folded shortcut back to the strip: fades and slides in from the right. */
 .herd-attn-pill {

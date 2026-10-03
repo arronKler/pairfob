@@ -4,8 +4,6 @@
  * submits a form, and never truncates. Split from the orchestration controller
  * so each duty stays small and readable.
  */
-import { currentDaemonId, liveSession } from "../../computers/catalog-store";
-import { phase } from "../../connection/connection-store";
 import { isFullTerminal, openPaneId } from "../session-store";
 import { composeDraft, composeLive, setComposeDraft } from "../compose-store";
 import { composeField, setComposeLive as setGuidedComposeLive } from "../guided/compose";
@@ -16,6 +14,8 @@ import {
   currentViewIncarnation,
 } from "../drafts/compose-drafts";
 import type { ComposeDraftScope } from "../../../lib/compose-draft-scope";
+import { sameComposeDraftScope } from "../../../lib/compose-draft-scope";
+import { scopeMatches as scopeLive } from "./attachments-context";
 import { hasOpenDialog, haptic } from "../../../lib/dom";
 import { attachT } from "./attach-copy";
 import {
@@ -31,14 +31,6 @@ import {
   queueSnapshot,
   setQueueNotice,
 } from "./attachments-store";
-
-/** The pane that owns this queue is still the live, authorized pane. */
-function scopeLive(scope: AttachmentScope): boolean {
-  return phase() === "live"
-    && openPaneId() === scope.paneId
-    && currentDaemonId() === scope.daemonId
-    && liveSession() !== null;
-}
 
 type InsertionView = {
   scope: ComposeDraftScope;
@@ -58,9 +50,7 @@ function captureInsertionView(): InsertionView | null {
 function insertionViewStillLive(view: InsertionView): boolean {
   const current = currentComposeDraftScope();
   return current !== null
-    && current.daemonId === view.scope.daemonId
-    && current.paneId === view.scope.paneId
-    && current.mode === view.scope.mode
+    && sameComposeDraftScope(current, view.scope)
     && currentViewIncarnation() === view.incarnation;
 }
 
@@ -111,7 +101,8 @@ export async function insertPaths(scope: AttachmentScope, localIds?: readonly st
   // Synchronous claim before the first await.
   if (insertLocks.has(key)) return false;
   const view = captureInsertionView();
-  if (!view || view.scope.paneId !== scope.paneId || view.scope.daemonId !== scope.daemonId) {
+  if (!view || view.scope.paneId !== scope.paneId || view.scope.daemonId !== scope.daemonId
+      || (view.scope.herdSession ?? null) !== (scope.herdSession ?? null)) {
     setQueueNotice(key, attachT("err.insertScope"));
     return false;
   }

@@ -7,11 +7,12 @@
  * table keyed by the same local id. That keeps the published snapshot deep
  * frozen while uploads continue after the sheet closes.
  *
- * Queues are scoped by (daemon id, pane id): switching panes or modes never
+ * Queues are scoped by (daemon id, Herdr session, pane id): switching panes or modes never
  * mutates another pane's list, and mode switches inside one pane share it.
  */
 import { createDomain } from "../../../shared/model/domain-store";
 import {
+  attachmentStorageId,
   isImageMeta,
   isPhotoOrigin,
   metaFromFile,
@@ -32,7 +33,7 @@ import type { AttachmentJournalRecord } from "../../../lib/attachment-journal-co
 export type { AttachmentScope } from "./attach-model";
 
 export function attachmentScopeKey(scope: AttachmentScope): string {
-  return `${scope.daemonId ?? ""} ${scope.paneId}`;
+  return `${attachmentStorageId(scope)} ${scope.paneId}`;
 }
 
 type AttachmentsRecord = {
@@ -679,6 +680,13 @@ export function abortAttachment(key: string, localId: string): void {
   runtimeAbort(key, localId)?.abort();
 }
 
+/** Stop old-target follow-ups before retargeting the shared connection. */
+export function pauseAttachmentTransfers(daemonId: string | null, herdSession: string | null): void {
+  for (const row of runtime.values()) {
+    if (row.scope.daemonId === daemonId && (row.scope.herdSession ?? null) === herdSession) row.abort?.abort();
+  }
+}
+
 /**
  * Reconstruct one validated journal record into the live queue after a
  * reload. This ONLY restores store/runtime state: it never starts an upload,
@@ -700,9 +708,11 @@ export function abortAttachment(key: string, localId: string): void {
  * from a compressed upload. The thumbnail is regenerated from the source —
  * no object URL for source/upload is ever created.
  */
-export function restoreAttachmentRecord(record: AttachmentJournalRecord): boolean {
+export function restoreAttachmentRecord(record: AttachmentJournalRecord, scope: AttachmentScope = {
+  daemonId: record.daemonId, paneId: record.paneId,
+}): boolean {
   if (record.version !== 1) return false;
-  const scope: AttachmentScope = { daemonId: record.daemonId, paneId: record.paneId };
+  if (record.daemonId !== attachmentStorageId(scope) || record.paneId !== scope.paneId) return false;
   const key = attachmentScopeKey(scope);
   const { localId } = record;
   if (record.item.localId !== localId) return false;

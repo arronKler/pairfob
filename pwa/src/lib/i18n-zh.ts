@@ -160,6 +160,7 @@ export const zh = {
   "err.copyDenied": "浏览器没有允许复制。",
   "err.paneGone": "这个会话已经不在了。",
   "err.worktreeNoTarget": "这个 Worktree 没有可打开的路径或分支。",
+  "err.worktreeSessionChanged": "这个 Worktree 任务属于另一个 Herdr 会话，请切回原会话后重试。",
   "err.tabNameEmpty": "标签页名不能为空。",
   "err.workspaceNameEmpty": "工作区名不能为空。",
   "err.computerConnect": "无法连上这台电脑",

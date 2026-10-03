@@ -16,6 +16,7 @@ import { clearAgentTraceCache, forgetAgentTrace } from "../../lib/agent-trace-ca
 import { type NoticeScope } from "../../lib/notice-scope";
 import {
   OPERATION_INPUT_LIMITS,
+  reconcileMutationFailure,
   openWorktreeFromSummary,
   worktreeScope,
   type CreateConversationInput,
@@ -51,7 +52,7 @@ import { currentScreen, leavePaneScreen } from "../../app/navigation-store";
 import { applyDeviceList } from "../connection/runtime-store";
 import { isFullTerminal, openPaneId, selectPane, sessionStore } from "../session/session-store";
 import { landAfterDisconnect, openPane, openPaneWithOwner, refreshFromSession, refreshPane } from "../connection/controller";
-import { reconcileAmbiguousMutation } from "../connection/mutations";
+import { reconcileAmbiguousMutation, refreshSnapshotOnly } from "../connection/mutations";
 import { commitView } from "../../app/host";
 import { promptLockHeld } from "../session/drafts/state-drafts";
 import { captureNoticeScope, noticeScopeIsCurrent, noticesStore, showError, showStatus } from "../../app/notices-store";
@@ -220,21 +221,30 @@ async function selectCreatedPane(result: { pane_id?: string; workspace_id?: stri
  * RPC), and a late result is ignored.
  */
 function worktreeJobDriver(session: LiveSession, scope: ListWorktreesInput): WorktreeJobDriver {
+  const herdSession = session.herdSession?.() ?? null;
+  const sameTarget = () => (session.herdSession?.() ?? null) === herdSession;
+  const ownsTarget = () => liveSession() === session && sameTarget();
   return {
-    create: (input) => session.createWorktree(input),
-    // The job outlives the dialog, so every later effect re-checks the session:
-    // a computer switch mid-create must not open a pane from the old herd.
+    create: async (input) => {
+      if (!sameTarget()) throw new ProtocolError("conflict", t("err.worktreeSessionChanged"));
+      return session.createWorktree(input);
+    },
+    // The job outlives the dialog: effects must still own both the connection
+    // and its original Herdr target after every awaited step.
     refresh: async () => {
-      if (liveSession() === session) await refreshFromSession();
+      if (ownsTarget()) await refreshFromSession();
     },
     openPane: async (paneId) => {
-      if (liveSession() === session) await openPane(paneId);
+      if (ownsTarget()) await openPane(paneId);
     },
-    reconcile: (error) => reconcileAmbiguousMutation(session, error, scope),
+    reconcile: (error) => reconcileMutationFailure(error, {
+      snapshot: async () => { if (ownsTarget()) await refreshSnapshotOnly(session, ownsTarget); },
+      listWorktrees: async () => { if (ownsTarget()) await session.listWorktrees(scope); },
+    }).then(() => undefined),
     messageOf,
     repaint: commitView,
     succeeded: () => {
-      if (liveSession() === session) showStatus(t("op.createdWorktree"));
+      if (ownsTarget()) showStatus(t("op.createdWorktree"));
     },
   };
 }

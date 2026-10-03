@@ -157,6 +157,7 @@
         "agent_inspect": { "type": "boolean" },
         "history": { "type": "boolean" },
         "list_worktrees": { "type": "boolean" },
+        "list_sessions": { "type": "boolean" },
         "create_worktree": { "type": "boolean" },
         "open_worktree": { "type": "boolean" },
         "resize_pane": { "type": "boolean" },
@@ -252,6 +253,26 @@
           "items": { "$ref": "#/$defs/agentKind" }
         },
         "capabilities": { "$ref": "#/$defs/capabilities" }
+      },
+      "additionalProperties": false
+    },
+    "sessionEntry": {
+      "type": "object",
+      "required": ["name", "running"],
+      "properties": {
+        "name": { "$ref": "#/$defs/session" },
+        "running": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "listSessionsResult": {
+      "type": "object",
+      "required": ["sessions"],
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sessionEntry" }
+        }
       },
       "additionalProperties": false
     },
@@ -938,6 +959,7 @@
             "PushSubscribe",
             "RevokeDevice",
             "ListDevices",
+            "ListSessions",
             "History",
             "AgentTrace",
             "AgentTraceSummary",
@@ -1018,10 +1040,22 @@
           }
         },
         {
-          "if": { "properties": { "op": { "enum": ["GetConfig", "ListDevices"] } } },
+          "if": { "properties": { "op": { "enum": ["ListDevices", "ListSessions"] } } },
           "then": {
             "properties": {
               "params": { "type": "object", "maxProperties": 0 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "GetConfig" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "properties": { "session": { "$ref": "#/$defs/session" } },
+                "additionalProperties": false
+              }
             }
           }
         },

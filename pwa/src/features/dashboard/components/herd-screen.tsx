@@ -9,6 +9,7 @@ import { preferencesStore, setListGroupCollapsed } from "../../settings/preferen
 // connection feature's own pure banner component.
 import { AppNotice } from "../../../app/notice";
 import { HerdBanners } from "../../../features/connection/herd-banners";
+import { HerdSessionSwitch } from "../../herd-sessions/herd-session-row";
 import { CompletionCount, CreateFab, GroupModeButton } from "./herd-controls";
 import type { HerdActions } from "../actions";
 import type { HerdViewModel } from "../model/herd-view";
@@ -51,6 +52,7 @@ function RailNav({ view, actions }: { view: HerdViewModel; actions: HerdActions 
       <Button className={`text-link${view.board.current ? " is-current" : ""}`} aria-current={view.board.current ? "page" : undefined}
         onClick={actions.openBoard}>{view.board.label}</Button>
       <Button className="text-link" onClick={actions.openSettings}>{view.settings.label}</Button>
+      <HerdSessionSwitch className="text-link" />
     </nav>
   );
 }
@@ -204,6 +206,7 @@ export function HerdScreen({
               {t("list.needsYou", { count: String(view.attention.length) })}
             </Button>
           ) : null}
+          <HerdSessionSwitch />
           {view.groups.length ? <GroupModeButton mode={view.listGroup} onOpen={actions.openGroupModeMenu} /> : null}
         </div>
         <AttentionStrip items={view.attention} onOpen={actions.openAttention} hidden={folded} />

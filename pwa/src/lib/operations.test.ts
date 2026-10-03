@@ -98,6 +98,17 @@ describe("runtime operation config", () => {
     });
   });
 
+  test("list_sessions is optional, accepts only booleans and remains available offline", () => {
+    const legacy: Record<string, unknown> = { ...NO_OPERATION_CAPABILITIES };
+    delete legacy.list_sessions;
+    expect(parseRuntimeOperationsConfig(config(legacy)).capabilities.list_sessions).toBe(false);
+    expect(parseRuntimeOperationsConfig({ ...config({ ...legacy, list_sessions: true }), runtime: "offline" })
+      .capabilities.list_sessions).toBe(true);
+    for (const invalid of ["true", 1, null]) {
+      expect(() => parseRuntimeOperationsConfig(config({ ...legacy, list_sessions: invalid }))).toThrow();
+    }
+  });
+
   test("recognizes every advertised capability", () => {
     const all = Object.fromEntries(Object.keys(NO_OPERATION_CAPABILITIES).map((key) => [key, true]));
 		expect(parseRuntimeOperationsConfig(config(all))).toEqual({

@@ -408,3 +408,20 @@ async function captureSeedRecord(file: File = binFile("seed.bin")): Promise<Atta
   if (!record) throw new Error("seed record was not persisted");
   return record;
 }
+
+test("a delayed journal list cannot restore into another Herdr session on the same connection", async () => {
+  const record = await captureSeedRecord();
+  resetAttachmentRecovery();
+  resetAttachmentQueues();
+  setAttachmentJournalBackend(fake);
+  fake.records.set(recordKey(record), record);
+  let herd: string | null = null;
+  attachLiveSession({ herdSession: () => herd } as unknown as LiveSession);
+  fake.listGate = gate();
+  const pending = restoreAttachmentScope(scopeD1);
+  await __pumpAttachmentRecovery();
+  herd = "work";
+  fake.listGate.resolve();
+  expect(await pending).toBe(0);
+  expect(queueSnapshot(keyD1)?.items ?? []).toEqual([]);
+});

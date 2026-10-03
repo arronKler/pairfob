@@ -6,6 +6,7 @@
 import { utf8ByteLength } from "../../../lib/text-budget";
 import { OPERATION_INPUT_LIMITS } from "../../../lib/operations";
 import { ProtocolError } from "../../../lib/protocol/errors";
+import { herdSessionScope } from "../../../lib/protocol/herd-sessions";
 
 /** Upload limit numbers shared with the transfer module. */
 export type AttachmentLimits = {
@@ -60,7 +61,14 @@ export type AttachmentTransferStage = Exclude<AttachmentTransferPhase, "queued" 
 export type AttachmentScope = {
   daemonId: string | null;
   paneId: string;
+  /** Omitted or null keeps the default session's queue and journal keys. */
+  herdSession?: string | null;
 };
+
+/** Journal v1 keeps its tuple format; only named sessions namespace its daemon slot. */
+export function attachmentStorageId(scope: AttachmentScope): string {
+  return herdSessionScope(scope.daemonId ?? "", scope.herdSession ?? null);
+}
 
 export type AttachmentStatus =
   | "queued"

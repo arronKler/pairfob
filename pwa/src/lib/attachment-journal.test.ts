@@ -81,6 +81,15 @@ function expectThrows(action: () => unknown): unknown {
 }
 
 describe("journal codec file round-trip", () => {
+  test("a named-session namespace round-trips through the unchanged v1 tuple format", () => {
+    const record = makeRecord({ daemonId: "d_aaaaaaaaaaaaaaaaaaaa:herd:work" });
+    const stored = encodeAttachmentRecord(record);
+    expect(stored.version).toBe(1);
+    expect(stored.key).toEqual([record.daemonId, record.paneId, record.localId]);
+    expect(decodeAttachmentRecord(stored)?.daemonId).toBe(record.daemonId);
+    expect(encodeAttachmentRecord(makeRecord()).key).toEqual(["daemon-1", "pane-1", "att_1"]);
+  });
+
   test("preserves name, type, lastModified and exact bytes for a same-file row", async () => {
     const file = makeFile("photo draft.bin", [10, 20, 30, 40], "image/png");
     const record = makeRecord({

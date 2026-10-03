@@ -31,6 +31,7 @@ const credential = (id: string) => ({
 
 const originalLocation = globalThis.location;
 const originalHistory = globalThis.history;
+const alreadyDefault = async (): Promise<boolean> => { throw new Error("must not switch an already-default session"); };
 
 /**
  * Foreign preimages of the fields the notification cases actually mutate,
@@ -104,7 +105,7 @@ test("an ordinary notification opens its own computer's pane", async () => {
   const calls: string[] = [];
   const handled = await openPendingNotification(async (paneId) => {
     calls.push(`${currentDaemonId()}:${paneId}`);
-  });
+  }, alreadyDefault);
   expect(handled).toBeTrue();
   expect(calls).toEqual([`${scanDaemonId}:p1`]);
   expect(notificationTarget()).toBeNull();
@@ -113,7 +114,7 @@ test("an ordinary notification opens its own computer's pane", async () => {
 test("a notification whose computer is not current waits without consuming", async () => {
   captureNotify("d_bbbbbbbbbbbbbbbbbbbb", "p1");
   let opened = false;
-  const handled = await openPendingNotification(async () => { opened = true; });
+  const handled = await openPendingNotification(async () => { opened = true; }, alreadyDefault);
   expect(handled).toBeFalse();
   expect(opened).toBeFalse();
   expect(notificationTarget()?.daemonId).toBe("d_bbbbbbbbbbbbbbbbbbbb");
@@ -133,7 +134,7 @@ test("a notification retired on the clear publication never opens a pane under t
   try {
     const handled = await openPendingNotification(async (paneId) => {
       calls.push(`${currentDaemonId()}:${paneId}`);
-    });
+    }, alreadyDefault);
     expect(handled).toBeTrue();
     expect(fired).toBeTrue();
     expect(calls).toEqual([]);
@@ -147,7 +148,7 @@ test("a missing pane for the still-current computer navigates home with a notice
   captureNotify(scanDaemonId, "gone");
   const handled = await openPendingNotification(async () => {
     throw new Error("must not open a pane that no longer exists");
-  });
+  }, alreadyDefault);
   expect(handled).toBeTrue();
   expect(currentScreen()).toBe("home");
 });
@@ -172,7 +173,7 @@ test("a newer deep link captured during consumption replaces the old intent: the
     captureNotify("d_bbbbbbbbbbbbbbbbbbbb", "p2");
   });
   try {
-    const handled = await openPendingNotification(open);
+    const handled = await openPendingNotification(open, alreadyDefault);
     expect(handled).toBeTrue();
     expect(fired).toBeTrue();
     expect(calls).toEqual([]);
@@ -200,10 +201,10 @@ test("a nested newer same-owner notification wins: only the newer pane dispatche
     if (fired || notificationTarget()) return;
     fired = true;
     captureNotify(scanDaemonId, "p2");
-    nested = openPendingNotification(open);
+    nested = openPendingNotification(open, alreadyDefault);
   });
   try {
-    const handled = await openPendingNotification(open);
+    const handled = await openPendingNotification(open, alreadyDefault);
     await nested;
     expect(handled).toBeTrue();
     expect(fired).toBeTrue();
@@ -233,7 +234,7 @@ test("the missing-navigation publication cannot overwrite a replacement owner's 
   try {
     const handled = await openPendingNotification(async () => {
       throw new Error("a missing pane must never dispatch");
-    });
+    }, alreadyDefault);
     expect(handled).toBeTrue();
     expect(fired).toBeTrue();
     expect(currentScreen()).toBe("settings");
@@ -241,4 +242,81 @@ test("the missing-navigation publication cannot overwrite a replacement owner's 
   } finally {
     stop();
   }
+});
+
+test("a notification sharing a named pane id opens only the default pane after switching", async () => {
+  let herd: string | null = "work";
+  attachLiveSession({ isConnected: () => true, herdSession: () => herd } as never);
+  applySnapshot({ session: "work", panes: [{ pane_id: "p1", workspace_id: "work" }] });
+  captureNotify(scanDaemonId, "p1");
+  const calls: string[] = [];
+  const open = async (paneId: string) => { calls.push(`open:${herd ?? "default"}:${paneId}`); };
+  const switchDefault = async () => {
+    calls.push("switch");
+    expect(notificationTarget()?.paneId).toBe("p1");
+    herd = null;
+    applySnapshot({ session: "default", panes: [{ pane_id: "p1", workspace_id: "default" }] });
+    await openPendingNotification(open, switchDefault);
+    return true;
+  };
+  expect(await openPendingNotification(open, switchDefault)).toBe(true);
+  expect(calls).toEqual(["switch", "open:default:p1"]);
+  expect(notificationTarget()).toBeNull();
+});
+
+test("a pane missing from default reports gone only after leaving the named session", async () => {
+  let herd: string | null = "work";
+  attachLiveSession({ isConnected: () => true, herdSession: () => herd } as never);
+  applySnapshot({ session: "work", panes: [{ pane_id: "p1", workspace_id: "work" }] });
+  clearNotice();
+  captureNotify(scanDaemonId, "p1");
+  let switched = false;
+  const open = async () => { throw new Error("default has no target pane"); };
+  const switchDefault = async () => {
+    switched = true;
+    expect(notificationTarget()?.paneId).toBe("p1");
+    expect(visibleNotice()).toBeNull();
+    herd = null;
+    applySnapshot({ session: "default", panes: [] });
+    await openPendingNotification(open, switchDefault);
+    return true;
+  };
+  await openPendingNotification(open, switchDefault);
+  expect(switched).toBe(true);
+  expect(visibleNotice()?.text).toBe((await import("../../lib/i18n")).t("err.notifyGone"));
+});
+
+test("a newer notification captured during the default switch owns the eventual pane", async () => {
+  let herd: string | null = "work";
+  attachLiveSession({ isConnected: () => true, herdSession: () => herd } as never);
+  applySnapshot({ session: "work", panes: [{ pane_id: "p1", workspace_id: "work" }] });
+  captureNotify(scanDaemonId, "p1");
+  let finishSwitch!: () => void;
+  const barrier = new Promise<void>(resolve => { finishSwitch = resolve; });
+  const opened: string[] = [];
+  const open = async (paneId: string) => { opened.push(`${herd ?? "default"}:${paneId}`); };
+  const switchDefault = async () => {
+    await barrier;
+    herd = null;
+    applySnapshot({ session: "default", panes: [{ pane_id: "p1", workspace_id: "default" }, { pane_id: "p2", workspace_id: "default" }] });
+    await openPendingNotification(open, switchDefault);
+    return true;
+  };
+  const pending = openPendingNotification(open, switchDefault);
+  captureNotify(scanDaemonId, "p2");
+  finishSwitch();
+  await pending;
+  expect(opened).toEqual(["default:p2"]);
+  expect(notificationTarget()).toBeNull();
+});
+
+test("a superseded default switch leaves the intent pending without resolving or looping", async () => {
+  attachLiveSession({ isConnected: () => true, herdSession: () => "work" } as never);
+  captureNotify(scanDaemonId, "p1");
+  let switches = 0;
+  const opened: string[] = [];
+  await openPendingNotification(async paneId => { opened.push(paneId); }, async () => { switches++; return false; });
+  expect(switches).toBe(1);
+  expect(opened).toEqual([]);
+  expect(notificationTarget()?.paneId).toBe("p1");
 });

@@ -1,5 +1,11 @@
 /** Settings v3: the computer panel, inline defaults, notification steps, the computer page and quota meters. Chinese is the source; English must cover the same keys. */
 export const zhSettingsV3 = {
+  "set.herdSession": "Herdr 会话",
+  "set.herdSessionDefault": "默认",
+  "set.herdSessionTitle": "切换 Herdr 会话",
+  "set.herdSessionRunning": "运行中",
+  "set.herdSessionStopped": "未运行",
+  "set.herdSessionAria": "Herdr 会话：{name}",
   "set.linkPhone": "这台手机",
   "set.linkComputer": "电脑",
   "set.linkOff": "未连接",
@@ -69,6 +75,12 @@ export const zhSettingsV3 = {
 };
 
 export const enSettingsV3: { [K in keyof typeof zhSettingsV3]: string } = {
+  "set.herdSession": "Herdr session",
+  "set.herdSessionDefault": "Default",
+  "set.herdSessionTitle": "Switch Herdr session",
+  "set.herdSessionRunning": "Running",
+  "set.herdSessionStopped": "Not running",
+  "set.herdSessionAria": "Herdr session: {name}",
   "set.linkPhone": "This phone",
   "set.linkComputer": "Computer",
   "set.linkOff": "Not connected",
