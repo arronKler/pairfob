@@ -21,6 +21,16 @@ const { connectionDiagnostics } = await import("../lib/protocol/connection-diagn
 const { registerSessionOwnerPreparer } = await import("./frame");
 const { isAppMounted, unmountApp } = await import("./mount");
 const { appHost, releaseAppHost } = await import("./host");
+const { encodeCredential, SAVED_COUNT_KEY } = await import("../lib/credentials");
+const { fingerprint16 } = await import("../lib/protocol/hello");
+
+/** A saved computer on this origin; boot resumes it once config is read. */
+const savedPair = {
+  daemonId: "d_0123456789abcdefabcd", deviceId: "dev_abcdefgh",
+  psk: new Uint8Array(32).fill(7), daemonPk: new Uint8Array(32).fill(2),
+  fp: fingerprint16(new Uint8Array(32).fill(2)), relayOrigin: "https://pairfob.com",
+  label: "Test phone", createdAt: 123,
+};
 
 /** A real config response the origin would serve on the fixed v2 protocol. */
 function validConfigResponse(): Response {
@@ -85,9 +95,9 @@ async function flushMicrotasks(): Promise<void> {
  * happy-dom ships no IndexedDB; the shim covers exactly the reads boot makes
  * (open/onsuccess, GET all credentials, GET one setting) with empty stores.
  */
-function installIndexedDBShim(): void {
+function installIndexedDBShim(credentials: unknown[] = []): void {
   const stores = new Map<string, Map<string, unknown>>([
-    ["credentials", new Map()],
+    ["credentials", new Map(credentials.map((value, index) => [String(index), value]))],
     ["settings", new Map()],
   ]);
   const db = {
@@ -185,6 +195,7 @@ beforeEach(async () => {
   originalOnline = Object.getOwnPropertyDescriptor(navigator, "onLine");
   originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+  localStorage.removeItem(SAVED_COUNT_KEY);
   installIndexedDBShim();
   fetchLog = installConfigFetch();
   originalFetch = globalThis.fetch;
@@ -201,6 +212,7 @@ afterEach(async () => {
   if (globalThis.fetch !== originalFetch) globalThis.fetch = originalFetch;
   if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
   else delete (globalThis as Record<string, unknown>).indexedDB;
+  localStorage.removeItem(SAVED_COUNT_KEY);
   if (originalOnline) Object.defineProperty(navigator, "onLine", originalOnline);
   else delete (navigator as unknown as Record<string, unknown>).onLine;
   telemetry.resetTelemetry();
@@ -219,13 +231,13 @@ describe("cold-start origin config recovery", () => {
     });
     expect(phase()).toBe("boot");
     expect(document.querySelector(".connect-scan")).toBeNull();
-    expect(document.querySelector(".boot-storage-recovery button")).not.toBeNull();
+    expect(document.querySelector(".boot-recovery button")).not.toBeNull();
     expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "boot_decision", phase: "boot", code: "storage_unavailable" });
 
     (globalThis as Record<string, unknown>).indexedDB = working;
     await act(async () => {
       if (recovery === "foreground") dispatchRecoveryEvents();
-      else document.querySelector<HTMLButtonElement>(".boot-storage-recovery button")!.click();
+      else document.querySelector<HTMLButtonElement>(".boot-recovery button")!.click();
       await flushMicrotasks();
     });
     expect(fetchLog.count).toBe(2);
@@ -279,7 +291,7 @@ describe("cold-start origin config recovery", () => {
     });
     expect(fetchLog.count).toBe(1);
     expect(phase()).toBe("pairing");
-    expect(connectionStore.get().bootStorageBlocked).toBeFalse();
+    expect(connectionStore.get().bootBlocked).toBeNull();
   });
 
   test("a refused config read re-arms boot and an online event resumes it to a settled connect", async () => {
@@ -443,5 +455,101 @@ describe("cold-start origin config recovery", () => {
     expect(fetchLog.count).toBe(1);
     expect(phase()).toBe("pairing");
     expect(connectionStore.get()?.fragment).not.toBeNull();
+  });
+});
+
+describe("saved computers never fall through to pairing", () => {
+  function captureRetryTimers(): { retry: Array<() => void>; restore: () => void } {
+    const retry: Array<() => void> = [];
+    const original = window.setTimeout.bind(window);
+    const timer = spyOn(window, "setTimeout").mockImplementation(((fn: () => void, delay: number, ...args: unknown[]) => {
+      if (delay === 1500 || delay === 3000) { retry.push(fn); return 987654; }
+      return original(fn, delay, ...args);
+    }) as typeof window.setTimeout);
+    return { retry, restore: () => timer.mockRestore() };
+  }
+
+  test("an unreachable origin holds boot with saved computers and retries automatically", async () => {
+    installIndexedDBShim([encodeCredential(savedPair)]);
+    const timers = captureRetryTimers();
+    try {
+      await act(async () => { startApplication(); });
+      await act(async () => { fetchLog.rejectNext(new TypeError("Failed to fetch")); await flushMicrotasks(); });
+      expect(phase()).toBe("boot");
+      expect(document.querySelector(".connect-scan")).toBeNull();
+      expect(document.querySelector(".boot-recovery")?.getAttribute("data-block")).toBe("origin");
+      expect(document.querySelector(".boot-pair-anyway")).toBeNull();
+      expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "boot_decision", code: "bad_relay", reason: "boot" });
+      expect(timers.retry).toHaveLength(1);
+
+      await act(async () => { timers.retry[0](); await flushMicrotasks(); });
+      expect(fetchLog.count).toBe(2);
+      await act(async () => { fetchLog.resolveNext(new Response("", { status: 503 })); await flushMicrotasks(); });
+      expect(phase()).toBe("boot");
+      expect(timers.retry).toHaveLength(2);
+
+      await act(async () => { timers.retry[1](); await flushMicrotasks(); });
+      await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+      expect(connectionStore.get().bootBlocked).toBeNull();
+      expect(connectionDiagnostics().some((item) => item.event === "boot_decision" && item.code === "ok" && item.reason === "resume")).toBeTrue();
+    } finally { timers.restore(); }
+  });
+
+  test("an invalid origin config still reports on the connect page", async () => {
+    installIndexedDBShim([encodeCredential(savedPair)]);
+    await act(async () => { startApplication(); });
+    await act(async () => { fetchLog.resolveNext(Response.json({ protocol: 1, build: "legacy" })); await flushMicrotasks(); });
+    expect(phase()).toBe("connect");
+    expect(visibleNotice()?.tone).toBe("error");
+  });
+
+  test("an offline start with saved computers holds boot until the network returns", async () => {
+    installIndexedDBShim([encodeCredential(savedPair)]);
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    const timers = captureRetryTimers();
+    try {
+      await act(async () => { startApplication(); await flushMicrotasks(); });
+      expect(fetchLog.count).toBe(0);
+      expect(phase()).toBe("boot");
+      expect(document.querySelector(".boot-recovery")?.getAttribute("data-block")).toBe("offline");
+      // Nothing can succeed offline, so the hold does not poll.
+      expect(timers.retry).toHaveLength(0);
+
+      Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+      await act(async () => { window.dispatchEvent(new happy.Event("online")); await flushMicrotasks(); });
+      expect(fetchLog.count).toBe(1);
+    } finally { timers.restore(); }
+  });
+
+  test("tapping retry re-reads reachability the browser never announced", async () => {
+    installIndexedDBShim([encodeCredential(savedPair)]);
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    await act(async () => { startApplication(); await flushMicrotasks(); });
+    expect(document.querySelector(".boot-recovery")?.getAttribute("data-block")).toBe("offline");
+    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>(".boot-recovery .btn")!.click();
+      await flushMicrotasks();
+    });
+    expect(fetchLog.count).toBe(1);
+  });
+
+  test("an empty store where computers were saved holds boot; pairing again is an explicit choice", async () => {
+    localStorage.setItem(SAVED_COUNT_KEY, "2");
+    await act(async () => { startApplication(); });
+    await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+    expect(phase()).toBe("boot");
+    expect(document.querySelector(".connect-scan")).toBeNull();
+    expect(document.querySelector(".boot-recovery")?.getAttribute("data-block")).toBe("storage");
+    expect(connectionDiagnostics().some((item) => item.event === "catalog_failed" && item.code === "storage_empty")).toBeTrue();
+
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>(".boot-pair-anyway")!.click();
+      await flushMicrotasks();
+    });
+    expect(fetchLog.count).toBe(2);
+    await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+    expect(phase()).toBe("connect");
+    expect(localStorage.getItem(SAVED_COUNT_KEY)).toBeNull();
   });
 });

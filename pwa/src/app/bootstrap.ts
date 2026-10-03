@@ -38,14 +38,17 @@ import {
   sessionTransport as currentSessionTransport,
   setNetworkOnline,
   setPhase,
-  setBootStorageBlocked,
+  setBootBlocked,
+  type BootBlock,
 } from "../features/connection/connection-store";
 import { currentScreen } from "./navigation-store";
 import { clearNotice, showError, showStatus } from "./notices-store";
 import { isAgentChat, isFullTerminal, paneFollow, termSelect } from "../features/session/session-store";
 import { resetTransitionState, takeTransition, withTransition } from "./transition";
 import { bindVisualViewport, releaseVisualViewport } from "./viewport";
-import { bindBootStorageRetry } from "./boot-actions";
+import { bindBootRecovery } from "./boot-actions";
+import { forgetSavedComputerCount } from "../lib/credentials";
+import type { OriginConfig } from "../lib/origin-config";
 import { recordConnectionDiagnostic } from "../lib/protocol/connection-diagnostics";
 
 /**
@@ -65,8 +68,8 @@ import { recordConnectionDiagnostic } from "../lib/protocol/connection-diagnosti
 let bootBlockedByNetwork = false;
 let running: (() => void) | null = null;
 let bootGeneration = 0;
-let storageRetryTimer: number | null = null;
-let storageRetryDelay = 1500;
+let bootRetryTimer: number | null = null;
+let bootRetryDelay = 1500;
 
 /** Preserve the boot decision across refresh without storing identity or keys. */
 function trackBoot(fields: { result: string; extra: string }): void {
@@ -75,16 +78,51 @@ function trackBoot(fields: { result: string; extra: string }): void {
     phase: currentPhase(), usable_count: computers().length });
 }
 
-function clearStorageRetry(): void {
-  if (storageRetryTimer !== null) window.clearTimeout(storageRetryTimer);
-  storageRetryTimer = null;
+function clearBootRetry(): void {
+  if (bootRetryTimer !== null) window.clearTimeout(bootRetryTimer);
+  bootRetryTimer = null;
 }
 
-/** Retry only a failed catalog read, never a pairing or a live-session mutation. */
-function retryBootStorage(): void {
-  if (!running || currentPhase() !== "boot" || !connectionStore.get().bootStorageBlocked
-    || !networkOnline() || document.visibilityState === "hidden") return;
+/**
+ * Retry only a held boot (catalog or origin config read), never a pairing or a
+ * live-session mutation. A tap re-reads the browser's reachability first: the
+ * offline hold otherwise waits for an `online` event that may never come.
+ */
+function retryBlockedBoot(manual = false): void {
+  if (!running || currentPhase() !== "boot" || !connectionStore.get().bootBlocked
+    || document.visibilityState === "hidden") return;
+  if (manual && navigator.onLine !== false && !networkOnline()) setNetworkOnline(true);
   void boot(bootGeneration);
+}
+
+/** Pairing again is the reader's explicit choice, never a storage fallback. */
+function pairDespiteSavedComputers(): void {
+  if (!running || currentPhase() !== "boot" || connectionStore.get().bootBlocked !== "storage") return;
+  forgetSavedComputerCount();
+  void boot(bootGeneration);
+}
+
+/**
+ * Hold boot on a recoverable failure while saved computers exist. Storage and
+ * origin holds retry with backoff while visible; the offline hold resumes on
+ * the network lifecycle, since nothing can succeed before it is back.
+ */
+function holdBoot(block: BootBlock, generation: number): void {
+  setBootBlocked(block);
+  if (block !== "offline" && document.visibilityState !== "hidden") {
+    bootRetryTimer = window.setTimeout(() => {
+      bootRetryTimer = null;
+      if (generation === bootGeneration) retryBlockedBoot();
+    }, bootRetryDelay);
+    bootRetryDelay = Math.min(bootRetryDelay * 2, 15000);
+  }
+  commitBootView();
+}
+
+type ConfigRead = { ok: true; config: OriginConfig } | { ok: false; error: unknown };
+
+function readOriginConfig(): Promise<ConfigRead> {
+  return loadOriginConfig().then((config) => ({ ok: true as const, config }), (error: unknown) => ({ ok: false as const, error }));
 }
 
 /**
@@ -118,8 +156,8 @@ export function startApplication(): () => void {
     if (running !== stop) return;
     running = null;
     bootGeneration += 1;
-    clearStorageRetry();
-    setBootStorageBlocked(false);
+    clearBootRetry();
+    setBootBlocked(null);
     page.abort();
     for (const release of releases) release();
     // Retire this lifetime's session-owner registration before the teardown
@@ -136,8 +174,8 @@ export function startApplication(): () => void {
   };
 
   running = stop;
-  storageRetryDelay = 1500;
-  releases.push(bindBootStorageRetry(() => retryBootStorage()));
+  bootRetryDelay = 1500;
+  releases.push(bindBootRecovery({ retry: () => retryBlockedBoot(true), pairAnyway: pairDespiteSavedComputers }));
   try {
     hydrateApplicationState();
     initI18n();
@@ -225,7 +263,7 @@ function applyNetworkAvailability(available: boolean): void {
     return;
   }
   if (currentPhase() !== "live" || document.visibilityState !== "visible") {
-    retryBootStorage();
+    retryBlockedBoot();
     if (bootBlockedByNetwork && currentPhase() === "connect") void boot(bootGeneration);
     return;
   }
@@ -243,7 +281,7 @@ function bindNetworkLifecycle(signal: AbortSignal): void {
   document.addEventListener("visibilitychange", () => {
     handleFullTerminalVisibility(document.visibilityState === "hidden");
     if (document.visibilityState === "hidden") {
-      clearStorageRetry();
+      clearBootRetry();
       retireAgentTraceRefreshes();
       stopPolling();
     } else applyNetworkAvailability(navigator.onLine !== false);
@@ -296,55 +334,57 @@ export function bindPaneKeys(signal: AbortSignal): void {
 
 async function boot(generation: number): Promise<void> {
   if (generation !== bootGeneration) return;
-  clearStorageRetry();
-  setBootStorageBlocked(false);
-  if (!networkOnline()) {
-    bootBlockedByNetwork = true;
-    setPhase("connect");
-    showStatus(t("net.offlineContinue"), true);
-    trackBoot({ result: "offline", extra: "connect" });
-    if (generation === bootGeneration) commitBootView();
-    return;
-  }
+  clearBootRetry();
+  setBootBlocked(null);
   bootBlockedByNetwork = false;
   clearNotice();
   setPhase("boot");
   commitBootView();
-  try {
-    const config = await loadOriginConfig();
-    if (generation !== bootGeneration) return;
-    applyOriginConfig(config);
-  } catch (error) {
-    if (generation !== bootGeneration) return;
-    // Keep the existing network lifecycle eligible to resume a failed config read.
-    bootBlockedByNetwork = originConfigErrorIsRecoverable(error);
-    setPhase("connect");
-    showError(messageOf(error), true);
-    trackBoot({ result: "bad_relay", extra: "connect" });
-    commitBootView();
-    return;
-  }
-  if (generation !== bootGeneration) return;
+  // The catalog is local: read it beside the origin config, so a network
+  // failure can never hide saved computers behind the pairing page.
+  const configRead = networkOnline() ? readOriginConfig() : null;
   try {
     await reloadComputers(() => generation === bootGeneration);
     if (generation !== bootGeneration) return;
-  } catch (error) {
+  } catch {
     if (generation !== bootGeneration) return;
     // A suspended browser's storage service can fail independently of the
     // network. Never interpret that as an empty catalog or ask to pair again.
-    setBootStorageBlocked(true);
     trackBoot({ result: "storage_unavailable", extra: "boot" });
-    if (document.visibilityState !== "hidden") {
-      storageRetryTimer = window.setTimeout(() => {
-        storageRetryTimer = null;
-        if (generation === bootGeneration) retryBootStorage();
-      }, storageRetryDelay);
-      storageRetryDelay = Math.min(storageRetryDelay * 2, 15000);
+    holdBoot("storage", generation);
+    return;
+  }
+  const saved = computers().length > 0;
+  if (!configRead) {
+    trackBoot({ result: "offline", extra: saved ? "boot" : "connect" });
+    if (saved) {
+      holdBoot("offline", generation);
+      return;
     }
+    bootBlockedByNetwork = true;
+    setPhase("connect");
+    showStatus(t("net.offlineContinue"), true);
     commitBootView();
     return;
   }
-  storageRetryDelay = 1500;
+  const read = await configRead;
+  if (generation !== bootGeneration) return;
+  if (!read.ok) {
+    // Keep the existing network lifecycle eligible to resume a failed config read.
+    const recoverable = originConfigErrorIsRecoverable(read.error);
+    trackBoot({ result: "bad_relay", extra: saved && recoverable ? "boot" : "connect" });
+    if (saved && recoverable) {
+      holdBoot("origin", generation);
+      return;
+    }
+    bootBlockedByNetwork = recoverable;
+    setPhase("connect");
+    showError(messageOf(read.error), true);
+    commitBootView();
+    return;
+  }
+  applyOriginConfig(read.config);
+  bootRetryDelay = 1500;
   if (generation !== bootGeneration) return;
   const catalog = computers();
   const notificationTarget = connectionStore.get().notificationTarget;

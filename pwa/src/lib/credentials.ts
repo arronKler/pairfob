@@ -24,6 +24,12 @@ const STORE = "credentials";
 const SETTINGS = "settings";
 const LAST_USED_KEY = "last_used_daemon_id";
 export const CREDENTIAL_READ_TIMEOUT_MS = 4000;
+/**
+ * How many credential records this browser last saw, kept beside IndexedDB.
+ * A suspended Android browser can answer a read with an empty store; the
+ * count tells that apart from a browser that never paired. Only a number.
+ */
+export const SAVED_COUNT_KEY = "pairfob.saved-computers.v1";
 
 function storageTimeout(): Error {
   const error = new Error("Credential storage did not respond");
@@ -31,9 +37,40 @@ function storageTimeout(): Error {
   return error;
 }
 
+function storageEmpty(): Error {
+  const error = new Error("Credential storage returned no saved computers");
+  error.name = "EmptyCatalogError";
+  return error;
+}
+
+export function savedComputerCount(): number {
+  try {
+    const value = Number(localStorage.getItem(SAVED_COUNT_KEY));
+    return Number.isSafeInteger(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function rememberSavedCount(count: number): void {
+  try {
+    if (count > 0) localStorage.setItem(SAVED_COUNT_KEY, String(count));
+    else localStorage.removeItem(SAVED_COUNT_KEY);
+  } catch {
+    // A stale positive count would hold boot on a store that is really empty.
+    try { localStorage.removeItem(SAVED_COUNT_KEY); } catch { /* storage unavailable */ }
+  }
+}
+
+/** The reader chose to pair again although saved computers were expected. */
+export function forgetSavedComputerCount(): void {
+  rememberSavedCount(0);
+}
+
 function storageFailureCode(error: unknown): string {
   const name = error instanceof Error ? error.name : "";
   if (name === "TimeoutError") return "storage_timeout";
+  if (name === "EmptyCatalogError") return "storage_empty";
   if (name === "SecurityError") return "storage_security";
   if (name === "UnknownError") return "storage_unknown";
   return "storage_error";
@@ -223,8 +260,10 @@ export async function saveCredential(pair: PairResult): Promise<void> {
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put(encodeCredential(pair));
-      tx.oncomplete = () => resolve();
+      const store = tx.objectStore(STORE);
+      store.put(encodeCredential(pair));
+      const count = store.count();
+      tx.oncomplete = () => { rememberSavedCount(count.result); resolve(); };
       tx.onerror = () => reject(tx.error || new Error("credential write failed"));
       tx.onabort = () => reject(tx.error || new Error("credential write aborted"));
     });
@@ -282,6 +321,10 @@ async function readCredentials(origin: string): Promise<PairResult[]> {
       .filter((item): item is PairResult => item !== null);
     recordConnectionDiagnostic({ event: "catalog_read", stored_count: values.length,
       usable_count: credentials.length, invalid_count: invalid, other_origin_count: otherOrigin });
+    // Only this browser's own save/delete lowers the count, so an empty answer
+    // while computers are expected is a storage failure, not an empty catalog.
+    if (!values.length && savedComputerCount() > 0) throw storageEmpty();
+    if (values.length) rememberSavedCount(values.length);
     for (const pair of credentials) {
       const raw = values.find((value) => (value as { daemon_id?: string })?.daemon_id === pair.daemonId);
       if (raw && !validateStoredCredential(raw)) {
@@ -322,8 +365,10 @@ export async function deleteCredential(daemonId: string): Promise<void> {
     const opened = db;
     await new Promise<void>((resolve, reject) => {
       const tx = opened.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).delete(daemonId);
-      tx.oncomplete = () => resolve();
+      const store = tx.objectStore(STORE);
+      store.delete(daemonId);
+      const count = store.count();
+      tx.oncomplete = () => { rememberSavedCount(count.result); resolve(); };
       tx.onerror = () => reject(tx.error || new Error("credential delete failed"));
       tx.onabort = () => reject(tx.error || new Error("credential delete aborted"));
     });

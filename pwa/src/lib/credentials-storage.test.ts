@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { CREDENTIAL_READ_TIMEOUT_MS, encodeCredential, loadCatalog } from "./credentials";
+import {
+  CREDENTIAL_READ_TIMEOUT_MS, SAVED_COUNT_KEY, deleteCredential, encodeCredential, forgetSavedComputerCount,
+  loadCatalog, saveCredential, savedComputerCount,
+} from "./credentials";
 import { fingerprint16 } from "./protocol/hello";
 import { connectionDiagnostics } from "./protocol/connection-diagnostics";
 
@@ -10,11 +13,24 @@ const pair = {
   label: "Test phone", createdAt: 123,
 };
 let original: PropertyDescriptor | undefined;
+let originalStorage: PropertyDescriptor | undefined;
 const timers = new Map<number, () => void>();
 let timeout: ReturnType<typeof spyOn>;
 let clear: ReturnType<typeof spyOn>;
 
+/** This file runs without a DOM; the saved-computer count needs only a key/value store. */
+function installLocalStorage(): void {
+  const values = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, String(value)); },
+    removeItem: (key: string) => { values.delete(key); },
+  } });
+}
+
 beforeEach(() => {
+  originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  installLocalStorage();
   original = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   let serial = 0;
   timeout = spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms: number) => {
@@ -29,6 +45,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (originalStorage) Object.defineProperty(globalThis, "localStorage", originalStorage);
+  else delete (globalThis as Record<string, unknown>).localStorage;
   timeout.mockRestore(); clear.mockRestore(); timers.clear();
   if (original) Object.defineProperty(globalThis, "indexedDB", original);
   else delete (globalThis as Record<string, unknown>).indexedDB;
@@ -147,4 +165,56 @@ test("catalog diagnostics distinguish an empty database from filtered records wi
   for (const value of [pair.daemonId, pair.deviceId, stored.device_psk, stored.daemon_pk, pair.label, pair.relayOrigin]) {
     expect(JSON.stringify(diagnostic)).not.toContain(value);
   }
+});
+
+test("an empty store after computers were seen is a storage failure, not an empty catalog", async () => {
+  install("ok");
+  await loadCatalog(pair.relayOrigin);
+  expect(savedComputerCount()).toBe(1);
+
+  install("ok", []);
+  const error = await loadCatalog(pair.relayOrigin).catch((reason) => reason);
+  expect(error.name).toBe("EmptyCatalogError");
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "catalog_failed", code: "storage_empty" });
+  expect(savedComputerCount()).toBe(1);
+
+  forgetSavedComputerCount();
+  expect((await loadCatalog(pair.relayOrigin)).credentials).toEqual([]);
+});
+
+/** A write transaction whose store reports `after` records once it commits. */
+function installWritable(after: number) {
+  Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: {
+    open() {
+      const db = {
+        objectStoreNames: { contains: () => true },
+        onversionchange: null as (() => void) | null,
+        close() {},
+        transaction() {
+          const tx = { oncomplete: null as (() => void) | null, onerror: null, onabort: null,
+            objectStore: () => ({
+              put: () => {},
+              delete: () => {},
+              count: () => ({ result: after }),
+            }) };
+          queueMicrotask(() => tx.oncomplete?.());
+          return tx;
+        },
+      };
+      const req = request(db);
+      queueMicrotask(() => req.onsuccess?.());
+      return req;
+    },
+  } });
+}
+
+test("saving and deleting keep the saved-computer count in step with the store", async () => {
+  installWritable(2);
+  await saveCredential(pair);
+  expect(savedComputerCount()).toBe(2);
+
+  installWritable(0);
+  await deleteCredential(pair.daemonId);
+  expect(savedComputerCount()).toBe(0);
+  expect(localStorage.getItem(SAVED_COUNT_KEY)).toBeNull();
 });

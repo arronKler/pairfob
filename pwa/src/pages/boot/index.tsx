@@ -4,7 +4,7 @@ import { credential } from "../../features/computers/catalog-store";
 import { phase as currentPhase } from "../../features/connection/connection-store";
 import { Brand, Spinner } from "../../shared/ui/primitives";
 import { useConnection } from "../../features/connection/hooks";
-import { StorageRecovery } from "./storage-recovery";
+import { BootRecovery } from "./boot-recovery";
 
 /**
  * Boot route.
@@ -15,9 +15,9 @@ import { StorageRecovery } from "./storage-recovery";
  * canonical reads here are the values the page was composed for.
  */
 export function BootScreen() {
-  const { bootStorageBlocked } = useConnection();
+  const { bootBlocked } = useConnection();
   const current = credential();
-  if (bootStorageBlocked) return <div className="boot"><Brand /><StorageRecovery /></div>;
+  if (bootBlocked) return <div className="boot"><Brand /><BootRecovery block={bootBlocked} /></div>;
   return <div className="boot">
     <Brand /><Spinner />
     <p className="boot-text">{currentPhase() === "boot" ? t("boot.reading")

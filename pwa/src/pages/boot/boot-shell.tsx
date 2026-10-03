@@ -12,7 +12,7 @@ import type { PairResult } from "../../lib/protocol/client";
 import { ConnectionPathCard } from "./connection-path-card";
 import { UnreachableShell } from "./unreachable-shell";
 import { useConnection } from "../../features/connection/hooks";
-import { StorageRecovery } from "./storage-recovery";
+import { BootRecovery } from "./boot-recovery";
 
 /**
  * The phone's boot and reconnect frame. It is the session list's own frame —
@@ -25,8 +25,8 @@ import { StorageRecovery } from "./storage-recovery";
  * A retry started from the "cannot reach" page keeps that page up instead.
  */
 export function BootShell() {
-  const { bootStorageBlocked } = useConnection();
-  if (bootStorageBlocked) return <div className="page herd-page boot-shell"><StorageRecovery /></div>;
+  const { bootBlocked } = useConnection();
+  if (bootBlocked) return <div className="page herd-page boot-shell"><BootRecovery block={bootBlocked} /></div>;
   const reading = currentPhase() === "boot";
   return !reading && retryingUnreachable() ? <UnreachableShell retrying /> : <BootFrame reading={reading} />;
 }

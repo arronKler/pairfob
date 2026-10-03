@@ -1,11 +1,22 @@
 /** The boot page requests recovery without importing the application bootstrap. */
-let retryStorage: (() => void) | null = null;
+export type BootRecoveryActions = {
+  /** Read the catalog and origin config again. */
+  retry: () => void;
+  /** The reader chose to pair again although saved computers were expected. */
+  pairAnyway: () => void;
+};
 
-export function bindBootStorageRetry(retry: () => void): () => void {
-  retryStorage = retry;
-  return () => { if (retryStorage === retry) retryStorage = null; };
+let actions: BootRecoveryActions | null = null;
+
+export function bindBootRecovery(next: BootRecoveryActions): () => void {
+  actions = next;
+  return () => { if (actions === next) actions = null; };
 }
 
-export function requestBootStorageRetry(): void {
-  retryStorage?.();
+export function requestBootRetry(): void {
+  actions?.retry();
+}
+
+export function requestBootPairAnyway(): void {
+  actions?.pairAnyway();
 }

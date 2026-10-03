@@ -36,7 +36,7 @@
 
   .boot .wordmark { font-size: 1.9rem; }
 
-  .boot-storage-recovery {
+  .boot-recovery {
     margin: 24px auto;
     max-width: 24rem;
     padding: 18px;
@@ -45,7 +45,12 @@
     text-align: center;
   }
 
-  .boot-storage-recovery p + p { color: var(--muted); }
+  .boot-recovery p + p { color: var(--muted); }
+
+  .boot-recovery .boot-pair-anyway {
+    display: block;
+    margin: 12px auto 0;
+  }
 
   .boot-text {
     margin: 0;

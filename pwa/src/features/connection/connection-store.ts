@@ -18,10 +18,17 @@ import { recordConnectionDiagnostic } from "../../lib/protocol/connection-diagno
  */
 export type Phase = "boot" | "connect" | "pairing" | "resuming" | "live" | "pick";
 
+/**
+ * Why boot is holding with saved computers instead of deciding a screen:
+ * the catalog could not be read, the origin config could not be read, or the
+ * browser reports no network. None of these is a request to pair again.
+ */
+export type BootBlock = "storage" | "origin" | "offline";
+
 export type ConnectionRecord = {
   phase: Phase;
-  /** Saved computers could not be read; this is not an empty pairing catalog. */
-  bootStorageBlocked: boolean;
+  /** Boot is holding on a recoverable failure; never an empty pairing catalog. */
+  bootBlocked: BootBlock | null;
   originProtocol: MuxProtocol;
   p2pEnabled: boolean;
   /** Pairing intent captured from the URL fragment before boot decided a screen. */
@@ -58,7 +65,7 @@ export type ConnectionRecord = {
 export function initialConnection(): ConnectionRecord {
   return {
     phase: "boot",
-    bootStorageBlocked: false,
+    bootBlocked: null,
     originProtocol: 2,
     p2pEnabled: false,
     fragment: null,
@@ -111,7 +118,7 @@ export function setPhase(phase: Phase): void {
   composeTransaction([connectionStore], () => {
     stage((record) => {
       record.phase = phase;
-      if (phase !== "boot") record.bootStorageBlocked = false;
+      if (phase !== "boot") record.bootBlocked = null;
     });
   });
 }
@@ -120,9 +127,9 @@ export function phase(): Phase {
   return read().phase;
 }
 
-export function setBootStorageBlocked(blocked: boolean): void {
-  if (read().bootStorageBlocked === blocked) return;
-  write((record) => { record.bootStorageBlocked = blocked; });
+export function setBootBlocked(blocked: BootBlock | null): void {
+  if (read().bootBlocked === blocked) return;
+  write((record) => { record.bootBlocked = blocked; });
 }
 
 /** Adopt the origin configuration resolved during boot. */
