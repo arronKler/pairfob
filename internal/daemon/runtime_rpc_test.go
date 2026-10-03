@@ -236,7 +236,7 @@ func TestGetConfigTracksRecoveringRuntimeAvailability(t *testing.T) {
 	}
 	offline := decodeResult(t, offlineRaw)
 	offlineCapabilities := offline["capabilities"].(map[string]any)
-	if offline["runtime"] != "offline" || len(offlineCapabilities) != 18 {
+	if offline["runtime"] != "offline" || len(offlineCapabilities) != 19 {
 		t.Fatalf("offline config did not fail closed: %s", offlineRaw)
 	}
 	for capability, available := range offlineCapabilities {
