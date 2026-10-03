@@ -3,7 +3,7 @@ import { bindRippleSurface, hasOpenDialog } from "../lib/dom";
 import { bindLegacyGestureBoundary } from "../lib/gesture-boundary";
 import { detectLang, initI18n, langPref, setLang, t } from "../lib/i18n";
 import { messageOf } from "../lib/notices";
-import { loadOriginConfig, originConfigErrorIsRecoverable } from "../lib/origin-config";
+import { loadOriginConfig, originConfigErrorIsRecoverable, probeOrigin } from "../lib/origin-config";
 import { track } from "../lib/telemetry";
 import { registerSessionView } from "../features/session/register";
 import { preloadFullTerminalXterm } from "../features/session/full-terminal/full-terminal-loader";
@@ -47,6 +47,7 @@ import { isAgentChat, isFullTerminal, paneFollow, termSelect } from "../features
 import { resetTransitionState, takeTransition, withTransition } from "./transition";
 import { bindVisualViewport, releaseVisualViewport } from "./viewport";
 import { bindBootRecovery } from "./boot-actions";
+import { createReachability, type Reachability } from "./reachability";
 import { forgetSavedComputerCount } from "../lib/credentials";
 import type { OriginConfig } from "../lib/origin-config";
 import { recordConnectionDiagnostic } from "../lib/protocol/connection-diagnostics";
@@ -70,6 +71,7 @@ let running: (() => void) | null = null;
 let bootGeneration = 0;
 let bootRetryTimer: number | null = null;
 let bootRetryDelay = 1500;
+let reachability: Reachability | null = null;
 
 /** Preserve the boot decision across refresh without storing identity or keys. */
 function trackBoot(fields: { result: string; extra: string }): void {
@@ -85,14 +87,19 @@ function clearBootRetry(): void {
 
 /**
  * Retry only a held boot (catalog or origin config read), never a pairing or a
- * live-session mutation. A tap re-reads the browser's reachability first: the
- * offline hold otherwise waits for an `online` event that may never come.
+ * live-session mutation. The retry is itself a real origin read, so it never
+ * depends on the browser's offline hint.
  */
-function retryBlockedBoot(manual = false): void {
+function retryBlockedBoot(): void {
   if (!running || currentPhase() !== "boot" || !connectionStore.get().bootBlocked
     || document.visibilityState === "hidden") return;
-  if (manual && navigator.onLine !== false && !networkOnline()) setNetworkOnline(true);
   void boot(bootGeneration);
+}
+
+/** The browser said offline, yet the origin answered. */
+function recordStaleOfflineHint(): void {
+  recordConnectionDiagnostic({ event: "network_lifecycle", phase: currentPhase(),
+    hidden: document.visibilityState === "hidden", reason: "online_hint_stale" });
 }
 
 /** Pairing again is the reader's explicit choice, never a storage fallback. */
@@ -103,13 +110,13 @@ function pairDespiteSavedComputers(): void {
 }
 
 /**
- * Hold boot on a recoverable failure while saved computers exist. Storage and
- * origin holds retry with backoff while visible; the offline hold resumes on
- * the network lifecycle, since nothing can succeed before it is back.
+ * Hold boot on a recoverable failure while saved computers exist and retry with
+ * backoff while visible. The offline hold retries too: the browser's `online`
+ * event is not guaranteed to arrive.
  */
 function holdBoot(block: BootBlock, generation: number): void {
   setBootBlocked(block);
-  if (block !== "offline" && document.visibilityState !== "hidden") {
+  if (document.visibilityState !== "hidden") {
     bootRetryTimer = window.setTimeout(() => {
       bootRetryTimer = null;
       if (generation === bootGeneration) retryBlockedBoot();
@@ -175,7 +182,7 @@ export function startApplication(): () => void {
 
   running = stop;
   bootRetryDelay = 1500;
-  releases.push(bindBootRecovery({ retry: () => retryBlockedBoot(true), pairAnyway: pairDespiteSavedComputers }));
+  releases.push(bindBootRecovery({ retry: retryBlockedBoot, pairAnyway: pairDespiteSavedComputers }));
   try {
     hydrateApplicationState();
     initI18n();
@@ -278,17 +285,33 @@ function applyNetworkAvailability(available: boolean): void {
 }
 
 function bindNetworkLifecycle(signal: AbortSignal): void {
+  // Browser network signals are hints; the reachability owner confirms an
+  // offline hint with a real origin read before it gates network work.
+  const owner = createReachability({
+    probe: () => probeOrigin(),
+    apply: applyNetworkAvailability,
+    browserOnline: () => navigator.onLine !== false,
+    visible: () => document.visibilityState === "visible",
+    onStaleOfflineHint: recordStaleOfflineHint,
+  });
+  reachability = owner;
+  signal.addEventListener("abort", () => {
+    owner.release();
+    if (reachability === owner) reachability = null;
+  }, { once: true });
+
   document.addEventListener("visibilitychange", () => {
     handleFullTerminalVisibility(document.visibilityState === "hidden");
     if (document.visibilityState === "hidden") {
       clearBootRetry();
+      owner.pause();
       retireAgentTraceRefreshes();
       stopPolling();
-    } else applyNetworkAvailability(navigator.onLine !== false);
+    } else owner.report();
   }, { signal });
 
-  window.addEventListener("online", () => applyNetworkAvailability(true), { signal });
-  window.addEventListener("offline", () => applyNetworkAvailability(false), { signal });
+  window.addEventListener("online", () => owner.report(), { signal });
+  window.addEventListener("offline", () => owner.report(), { signal });
 
   const connection = (navigator as Navigator & { connection?: EventTarget; mozConnection?: EventTarget; webkitConnection?: EventTarget }).connection
     ?? (navigator as Navigator & { mozConnection?: EventTarget }).mozConnection
@@ -298,7 +321,7 @@ function bindNetworkLifecycle(signal: AbortSignal): void {
   }, { signal } as AddEventListenerOptions);
 
   window.addEventListener("pageshow", () => {
-    if (document.visibilityState === "visible") applyNetworkAvailability(navigator.onLine !== false);
+    if (document.visibilityState === "visible") owner.report();
   }, { signal });
 }
 
@@ -341,8 +364,9 @@ async function boot(generation: number): Promise<void> {
   setPhase("boot");
   commitBootView();
   // The catalog is local: read it beside the origin config, so a network
-  // failure can never hide saved computers behind the pairing page.
-  const configRead = networkOnline() ? readOriginConfig() : null;
+  // failure can never hide saved computers behind the pairing page. The config
+  // read always runs: it, not the browser's offline hint, decides reachability.
+  const configRead = readOriginConfig();
   try {
     await reloadComputers(() => generation === bootGeneration);
     if (generation !== bootGeneration) return;
@@ -355,23 +379,25 @@ async function boot(generation: number): Promise<void> {
     return;
   }
   const saved = computers().length > 0;
-  if (!configRead) {
-    trackBoot({ result: "offline", extra: saved ? "boot" : "connect" });
-    if (saved) {
-      holdBoot("offline", generation);
-      return;
-    }
-    bootBlockedByNetwork = true;
-    setPhase("connect");
-    showStatus(t("net.offlineContinue"), true);
-    commitBootView();
-    return;
-  }
   const read = await configRead;
   if (generation !== bootGeneration) return;
   if (!read.ok) {
     // Keep the existing network lifecycle eligible to resume a failed config read.
     const recoverable = originConfigErrorIsRecoverable(read.error);
+    if (recoverable && !networkOnline()) {
+      trackBoot({ result: "offline", extra: saved ? "boot" : "connect" });
+      if (saved) {
+        holdBoot("offline", generation);
+        return;
+      }
+      bootBlockedByNetwork = true;
+      setPhase("connect");
+      showStatus(t("net.offlineContinue"), true);
+      commitBootView();
+      // Keep confirming: the browser's `online` event may never arrive.
+      reachability?.report();
+      return;
+    }
     trackBoot({ result: "bad_relay", extra: saved && recoverable ? "boot" : "connect" });
     if (saved && recoverable) {
       holdBoot("origin", generation);
@@ -382,6 +408,11 @@ async function boot(generation: number): Promise<void> {
     showError(messageOf(read.error), true);
     commitBootView();
     return;
+  }
+  if (!networkOnline()) {
+    recordStaleOfflineHint();
+    setNetworkOnline(true);
+    setLiveNetworkAvailable(true);
   }
   applyOriginConfig(read.config);
   bootRetryDelay = 1500;

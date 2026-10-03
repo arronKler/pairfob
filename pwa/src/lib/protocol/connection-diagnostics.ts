@@ -34,7 +34,7 @@ const LIMIT = 200;
 const TTL = 24 * 60 * 60 * 1000;
 const TOKENS = new Set((
   "catalog_read catalog_failed catalog_hint_failed credential_deleted credential_delete_failed phase_changed boot_decision network_lifecycle online " +
-  "boot connect pairing resuming live pick resume storage_unavailable bad_relay ok storage_error storage_timeout storage_security storage_unknown storage_empty " +
+  "boot connect pairing resuming live pick resume storage_unavailable bad_relay ok storage_error storage_timeout storage_security storage_unknown storage_empty online_hint_stale " +
   "unpaired invalid_credential bad_proof bad_signature fp_mismatch " +
   "recovery_start recovery_ready recovery_cancelled ice_terminal foreground_transport_failed terminal_open_start terminal_open_ready terminal_first_frame " +
   "connect_start warmup_start ws_open route_bound hello_verified session_established session_ready connect_failed warmup_cancelled view_committed recovery_budget_exhausted " +

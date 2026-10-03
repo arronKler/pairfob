@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ProtocolError } from "./protocol/client.ts";
-import { clientWsURL, loadOriginConfig, originConfigErrorIsRecoverable, parseOriginConfig } from "./origin-config.ts";
+import { clientWsURL, loadOriginConfig, originConfigErrorIsRecoverable, parseOriginConfig, probeOrigin } from "./origin-config.ts";
 
 describe("origin config", () => {
   test("parses protocol 2 only", () => {
@@ -79,4 +79,10 @@ describe("origin config", () => {
     expect(clientWsURL(2, site)).not.toContain("/v1/ws");
     expect(clientWsURL(2, site, { daemonId: "d_0123456789abcdefabcd" })).not.toContain("pair_loc");
   });
+});
+
+test("the origin probe answers reachability from a real read, never throwing", async () => {
+  expect(await probeOrigin(async () => Response.json({ protocol: 2, build: "x" }))).toBe(true);
+  expect(await probeOrigin(async () => new Response("", { status: 503 }))).toBe(false);
+  expect(await probeOrigin(async () => { throw new TypeError("Failed to fetch"); })).toBe(false);
 });

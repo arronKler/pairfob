@@ -46,6 +46,22 @@ export async function loadOriginConfig(fetchImpl: FetchLike = fetch): Promise<Or
   }
 }
 
+export const ORIGIN_PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * One real request to the origin. Whether the phone can reach Pairfob is
+ * decided here, not by `navigator.onLine`: Android Chrome can keep reporting
+ * offline after a return from the background while requests still succeed.
+ */
+export async function probeOrigin(fetchImpl: FetchLike = fetch): Promise<boolean> {
+  try {
+    const response = await fetchWithTimeout(fetchImpl, "/api/config", { cache: "no-store" }, { timeoutMs: ORIGIN_PROBE_TIMEOUT_MS });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Same-origin PWA WS. Origin config is pairfob.v2 only; never `/v1/ws`. */
 export function clientWsURL(
   protocol: MuxProtocol,

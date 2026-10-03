@@ -373,28 +373,23 @@ describe("cold-start origin config recovery", () => {
     expect(visibleNotice()?.tone).toBe("error");
   });
 
-  test("an offline cold start reads no config and an online event resumes boot", async () => {
+  test("an offline hint still reads config, and a later real read resumes without an online event", async () => {
     Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
     await act(async () => { startApplication(); });
-    // Offline gate: no config request, the offlineContinue promise is shown.
-    expect(fetchLog.count).toBe(0);
+    // The hint never gates the read: boot asks the origin anyway.
+    expect(fetchLog.count).toBe(1);
+    await act(async () => { fetchLog.rejectNext(new TypeError("Failed to fetch")); await flushMicrotasks(); });
     expect(phase()).toBe("connect");
     expect(connectionStore.get().networkOnline).toBe(false);
     expect(visibleNotice()?.tone).toBe("status");
 
-    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
-    await act(async () => {
-      window.dispatchEvent(new happy.Event("online"));
-      await flushMicrotasks();
-    });
-    expect(fetchLog.count).toBe(1);
-
-    await act(async () => {
-      fetchLog.resolveNext(validConfigResponse());
-      await flushMicrotasks();
-    });
-    expect(fetchLog.count).toBe(1);
+    // The browser never fires `online`; the reachability probe confirms instead.
+    expect(fetchLog.count).toBe(2);
+    await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+    expect(fetchLog.count).toBe(3);
+    await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
     expect(phase()).toBe("connect");
+    expect(connectionStore.get().networkOnline).toBe(true);
     expect(visibleNotice()).toBeNull();
   });
 
@@ -503,35 +498,46 @@ describe("saved computers never fall through to pairing", () => {
     expect(visibleNotice()?.tone).toBe("error");
   });
 
-  test("an offline start with saved computers holds boot until the network returns", async () => {
+  test("a stuck offline hint with a reachable origin resumes saved computers", async () => {
+    installIndexedDBShim([encodeCredential(savedPair)]);
+    // Android Chrome after a return from the background: onLine stays false.
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    await act(async () => { startApplication(); });
+    expect(fetchLog.count).toBe(1);
+    await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+    expect(document.querySelector(".boot-recovery")).toBeNull();
+    expect(document.querySelector(".connect-scan")).toBeNull();
+    expect(connectionStore.get().networkOnline).toBe(true);
+    expect(connectionDiagnostics().some((item) => item.event === "network_lifecycle" && item.reason === "online_hint_stale")).toBeTrue();
+    expect(connectionDiagnostics().some((item) => item.event === "boot_decision" && item.code === "ok" && item.reason === "resume")).toBeTrue();
+  });
+
+  test("an offline hold retries automatically and on tap while the hint stays offline", async () => {
     installIndexedDBShim([encodeCredential(savedPair)]);
     Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
     const timers = captureRetryTimers();
     try {
-      await act(async () => { startApplication(); await flushMicrotasks(); });
-      expect(fetchLog.count).toBe(0);
+      await act(async () => { startApplication(); });
+      await act(async () => { fetchLog.rejectNext(new TypeError("Failed to fetch")); await flushMicrotasks(); });
       expect(phase()).toBe("boot");
       expect(document.querySelector(".boot-recovery")?.getAttribute("data-block")).toBe("offline");
-      // Nothing can succeed offline, so the hold does not poll.
-      expect(timers.retry).toHaveLength(0);
+      expect(timers.retry).toHaveLength(1);
 
-      Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
-      await act(async () => { window.dispatchEvent(new happy.Event("online")); await flushMicrotasks(); });
-      expect(fetchLog.count).toBe(1);
+      await act(async () => { timers.retry[0](); await flushMicrotasks(); });
+      expect(fetchLog.count).toBe(2);
+      await act(async () => { fetchLog.rejectNext(new TypeError("Failed to fetch")); await flushMicrotasks(); });
+      expect(document.querySelector(".boot-recovery")?.getAttribute("data-block")).toBe("offline");
+
+      // The hint still says offline; a tap is a real read regardless.
+      await act(async () => {
+        document.querySelector<HTMLButtonElement>(".boot-recovery .btn")!.click();
+        await flushMicrotasks();
+      });
+      expect(fetchLog.count).toBe(3);
+      await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
+      expect(connectionStore.get().bootBlocked).toBeNull();
+      expect(connectionStore.get().networkOnline).toBe(true);
     } finally { timers.restore(); }
-  });
-
-  test("tapping retry re-reads reachability the browser never announced", async () => {
-    installIndexedDBShim([encodeCredential(savedPair)]);
-    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
-    await act(async () => { startApplication(); await flushMicrotasks(); });
-    expect(document.querySelector(".boot-recovery")?.getAttribute("data-block")).toBe("offline");
-    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>(".boot-recovery .btn")!.click();
-      await flushMicrotasks();
-    });
-    expect(fetchLog.count).toBe(1);
   });
 
   test("an empty store where computers were saved holds boot; pairing again is an explicit choice", async () => {

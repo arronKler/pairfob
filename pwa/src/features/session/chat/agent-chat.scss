@@ -499,6 +499,20 @@
   .agent-reply-copy:hover { color: var(--ink); }
 }
 
+// Delivery status for the last prompt, on the stream's gutter above compose.
+.agent-progress {
+  flex: none;
+  margin: 0;
+  padding: 6px 14px 0;
+  color: var(--muted);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.agent-progress.is-attention {
+  color: var(--warn);
+}
+
 .agent-compose-hint {
   margin: 6px 2px 0;
   color: var(--warn);

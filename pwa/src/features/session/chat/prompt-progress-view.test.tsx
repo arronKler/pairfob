@@ -40,3 +40,14 @@ test("an unobserved start shows a conservative hint and does not offer automatic
   expect(appRoot().textContent).toContain("尚未观察到处理开始");
   expect(appRoot().querySelector("button")).toBeNull();
 });
+test("confirmations clear once the stream shows them; attention states stay and are marked", async () => {
+  const progress = createPromptProgress(selectedAgent()!);
+  act(() => applyTrace({ promptProgress: { ...progress, phase: "recorded" } }));
+  renderReact(<PromptProgressView confirmMs={10} />);
+  expect(appRoot().querySelector("[data-prompt-progress]")?.className).toBe("agent-progress");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
+  expect(appRoot().querySelector("[data-prompt-progress]")).toBeNull();
+  act(() => applyTrace({ promptProgress: { ...progress, phase: "unknown" } }));
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
+  expect(appRoot().querySelector("[data-prompt-progress]")?.className).toBe("agent-progress is-attention");
+});
