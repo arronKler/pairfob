@@ -61,6 +61,42 @@ func TestEnsureHerdrServerStartsAndWaitsForLiveAPI(t *testing.T) {
 	}
 }
 
+func TestEnsureHerdrServerMultiSessionStartsOnlyDefaultSocket(t *testing.T) {
+	socket := shortTestSocket(t)
+	herdr := NewHerdr(socket)
+	herdr.Multi = true
+	herdr.ConfigRoot = t.TempDir()
+	herdr.TerminalBinary = writeTerminalFixture(t, "exit 0\n")
+	herdr.bootstrapPoll = time.Millisecond
+	namedDir := filepath.Join(herdr.ConfigRoot, "sessions", "work")
+	if err := os.MkdirAll(namedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	namedSocket := filepath.Join(namedDir, "herdr.sock")
+	var launches []string
+	herdr.launchServer = func(_ context.Context, _, _, requestedSocket string) (<-chan error, error) {
+		launches = append(launches, requestedSocket)
+		if requestedSocket != socket {
+			t.Fatalf("autostart socket=%q, want default %q; named socket=%q", requestedSocket, socket, namedSocket)
+		}
+		startScriptedHerdrAt(t, socket, standardReply)
+		return make(chan error), nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	availability, err := herdr.EnsureServer(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !availability.Started || availability.Descriptor.Protocol != 19 || len(launches) != 1 {
+		t.Fatalf("availability=%+v launches=%v", availability, launches)
+	}
+	if _, err := os.Stat(namedSocket); !os.IsNotExist(err) {
+		t.Fatalf("named socket should remain absent: %v", err)
+	}
+}
+
 func TestEnsureHerdrServerDoesNotReplaceListeningInvalidAPI(t *testing.T) {
 	socket := shortTestSocket(t)
 	listener, err := net.Listen("unix", socket)

@@ -31,7 +31,7 @@ func setupCommand(args []string) error {
 	}
 	h := rt.(*runtime.Herdr)
 	return setupHerdr(h, install, herdrSetupActions{
-		autostart: herdrAutostartEnabled(false, h.Multi),
+		autostart: herdrAutostartEnabled(false),
 		confirm:   func() bool { return !nonInteractive && confirmHerdrInstall() },
 		install:   installHerdr,
 	}, os.Stdout)
