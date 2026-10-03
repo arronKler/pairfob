@@ -30,6 +30,7 @@ type claudeRecordFlags struct {
 	IsSidechain               bool `json:"isSidechain"`
 	IsCompactSummary          bool `json:"isCompactSummary"`
 	IsVisibleInTranscriptOnly bool `json:"isVisibleInTranscriptOnly"`
+	IsAPIErrorMessage         bool `json:"isApiErrorMessage"`
 }
 
 func (f claudeRecordFlags) hidden() bool {
@@ -39,6 +40,13 @@ func (f claudeRecordFlags) hidden() bool {
 // claudeSyntheticModel labels placeholder assistant records such as
 // "No response requested." that Claude Code writes without a model call.
 const claudeSyntheticModel = "<synthetic>"
+
+// syntheticPlaceholder reports a synthetic record to drop. Claude Code also
+// writes API errors and rate-limit notices as synthetic assistant records;
+// those explain why a turn stopped, so they stay visible.
+func (f claudeRecordFlags) syntheticPlaceholder(model string) bool {
+	return model == claudeSyntheticModel && !f.IsAPIErrorMessage
+}
 
 // visibleCodexUserText drops the context Codex submits as user input. Codex
 // sends each injection as its own leading block (an AGENTS.md heading, then
@@ -118,6 +126,52 @@ func claudeUserEvent(text string) (Event, bool) {
 		return Event{Type: EventInterrupt}, true
 	}
 	return Event{Type: "user", Text: text}, true
+}
+
+// claudeShellEvents handles the records Claude Code writes for a "!" shell
+// command: the typed command becomes a command item plus a Bash step, and the
+// following stdout/stderr record becomes that step's output, so the result is
+// readable instead of dropped with the other injected text.
+func claudeShellEvents(text string) ([]parsedEvent, bool) {
+	if input, ok := leadingTaggedBody(text, "bash-input"); ok {
+		if input = strings.TrimSpace(input); input == "" {
+			return nil, true
+		}
+		arguments, _ := json.Marshal(map[string]string{"command": input})
+		return []parsedEvent{
+			{Event: Event{Type: EventCommand, Text: "! " + input}},
+			{Event: Event{Type: "tool", Name: "Bash", Input: string(arguments)}, call: claudeShellCall},
+		}, true
+	}
+	if !startsWithTag(text, "bash-stdout", "bash-stderr") {
+		return nil, false
+	}
+	// Claude Code writes both streams on one line: <bash-stdout>…</bash-stdout><bash-stderr>…</bash-stderr>.
+	stdout := inlineTagBody(text, "bash-stdout")
+	stderr := inlineTagBody(text, "bash-stderr")
+	output := strings.TrimSpace(strings.Join([]string{strings.TrimSpace(stdout), strings.TrimSpace(stderr)}, "\n"))
+	state := "done"
+	if strings.TrimSpace(stdout) == "" && strings.TrimSpace(stderr) != "" {
+		state = "error"
+	}
+	if output == "" {
+		output = "(no output)"
+	}
+	return []parsedEvent{{Event: Event{Type: "tool", Output: output, State: state}, call: claudeShellCall, outputOnly: true}}, true
+}
+
+// claudeShellCall pairs a "!" command's output with its own step. Agent tools
+// always carry their own ids, so the output never lands on one of them; with
+// the command on an older page the output is simply dropped.
+const claudeShellCall = "claude-shell"
+
+func inlineTagBody(text, tag string) string {
+	_, rest, ok := strings.Cut(text, "<"+tag+">")
+	if !ok {
+		return ""
+	}
+	body, _, _ := strings.Cut(rest, "</"+tag+">")
+	return body
 }
 
 // visibleClaudeUserText is the History form: commands read as typed text and

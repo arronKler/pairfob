@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"pairfob/internal/journal"
 	"pairfob/internal/runtime"
@@ -206,5 +207,81 @@ func TestAgentTraceMarkersAreOptIn(t *testing.T) {
 		if err != nil || !strings.Contains(string(marked), `{"type":"interrupt"}`) {
 			t.Fatalf("%s marked=%s err=%v", op, marked, err)
 		}
+	}
+}
+
+func TestAgentTraceSummaryLabelsAreOptIn(t *testing.T) {
+	root := t.TempDir()
+	sessionID := "session_12345678"
+	transcript := filepath.Join(root, "sessions", "2026", "10", "03", "rollout-"+sessionID+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lines := `{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"go"}]}}` + "\n" +
+		`{"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"c1","arguments":"{\"cmd\":\"go test ./...\"}"}}` + "\n" +
+		`{"type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"Chunk ID: a\nProcess exited with code 1\nOutput:\nFAIL"}}` + "\n"
+	if err := os.WriteFile(transcript, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := runtime.NewFake()
+	fake.Snap.Panes[0].Agent = "codex"
+	fake.Snap.Panes[0].AgentSession = &runtime.AgentSessionRef{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: sessionID}
+	engine, client := runtimeRPCClient(t, fake)
+	engine.Journal = &journal.Reader{CodexRoot: root}
+
+	plain, err := client.RPC("AgentTraceSummary", map[string]any{"pane_id": "w0:p1", "limit": 20})
+	if err != nil || strings.Contains(string(plain), `"label"`) || !strings.Contains(string(plain), `"state":"error"`) {
+		t.Fatalf("plain=%s err=%v", plain, err)
+	}
+	labelled, err := client.RPC("AgentTraceSummary", map[string]any{"pane_id": "w0:p1", "limit": 20, "labels": true})
+	if err != nil || !strings.Contains(string(labelled), `"label":"go test ./..."`) {
+		t.Fatalf("labelled=%s err=%v", labelled, err)
+	}
+	both, err := client.RPC("AgentTraceSummary", map[string]any{"pane_id": "w0:p1", "limit": 20, "labels": true, "markers": true})
+	if err != nil || !strings.Contains(string(both), `"label":"go test ./..."`) {
+		t.Fatalf("labels with markers=%s err=%v", both, err)
+	}
+	if raw, err := client.RPC("AgentTrace", map[string]any{"pane_id": "w0:p1", "limit": 20, "labels": true}); err == nil || err.Error() != "invalid_argument" {
+		t.Fatalf("AgentTrace accepted labels: %s err=%v", raw, err)
+	}
+}
+
+func TestAgentTraceSummaryTimesAreOptIn(t *testing.T) {
+	root := t.TempDir()
+	sessionID := "session_12345678"
+	transcript := filepath.Join(root, "sessions", "2026", "10", "03", "rollout-"+sessionID+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lines := `{"timestamp":"2026-09-29T10:40:18.042Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"go"}]}}` + "\n" +
+		`{"timestamp":"2026-09-29T10:42:00.639Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"c1","arguments":"{\"cmd\":\"ls\"}"}}` + "\n" +
+		`{"timestamp":"2026-09-29T10:42:00.949Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"ok"}}` + "\n" +
+		`{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}}` + "\n"
+	if err := os.WriteFile(transcript, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := runtime.NewFake()
+	fake.Snap.Panes[0].Agent = "codex"
+	fake.Snap.Panes[0].AgentSession = &runtime.AgentSessionRef{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: sessionID}
+	engine, client := runtimeRPCClient(t, fake)
+	engine.Journal = &journal.Reader{CodexRoot: root}
+
+	plain, err := client.RPC("AgentTraceSummary", map[string]any{"pane_id": "w0:p1", "limit": 20})
+	if err != nil || strings.Contains(string(plain), `"at"`) || strings.Contains(string(plain), `"now"`) {
+		t.Fatalf("plain=%s err=%v", plain, err)
+	}
+	timed, err := client.RPC("AgentTraceSummary", map[string]any{"pane_id": "w0:p1", "limit": 20, "times": true, "labels": true, "markers": true})
+	if err != nil || !strings.Contains(string(timed), `"at":1790678418042`) || !strings.Contains(string(timed), `"at":1790678520639`) || strings.Count(string(timed), `"at"`) != 2 {
+		t.Fatalf("timed=%s err=%v", timed, err)
+	}
+	// The reply carries this computer's clock so the phone can measure against it.
+	if now, _ := decodeResult(t, timed)["now"].(float64); now < float64(time.Now().Add(-time.Minute).UnixMilli()) {
+		t.Fatalf("timed reply lacks a current now: %s", timed)
+	}
+	if raw, err := client.RPC("AgentTrace", map[string]any{"pane_id": "w0:p1", "limit": 20, "times": true}); err == nil || err.Error() != "invalid_argument" {
+		t.Fatalf("AgentTrace accepted times: %s err=%v", raw, err)
+	}
+	if raw, err := client.RPC("AgentTraceSummary", map[string]any{"pane_id": "w0:p1", "times": "yes"}); err == nil || err.Error() != "invalid_argument" {
+		t.Fatalf("non-boolean times accepted: %s err=%v", raw, err)
 	}
 }

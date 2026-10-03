@@ -12,6 +12,7 @@ import (
 
 type schemaNode struct {
 	Ref                  string                `json:"$ref"`
+	Type                 any                   `json:"type"`
 	Const                any                   `json:"const"`
 	Enum                 []string              `json:"enum"`
 	Required             []string              `json:"required"`
@@ -24,6 +25,7 @@ type schemaNode struct {
 	AdditionalProperties *bool                 `json:"additionalProperties"`
 	MaxLength            int                   `json:"maxLength"`
 	MinLength            int                   `json:"minLength"`
+	Minimum              *float64              `json:"minimum"`
 }
 
 func sortedPropertyNames(properties map[string]schemaNode) []string {
@@ -207,9 +209,14 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 			t.Errorf("%s params must reject additional properties", op)
 		}
 	}
-	for _, op := range []string{"AgentTrace", "AgentTraceSummary"} {
+	// labels and times are opt-in on the summary only; the full trace carries
+	// input instead.
+	for op, want := range map[string][]string{
+		"AgentTrace":        {"cursor", "limit", "markers", "pane_id", "session"},
+		"AgentTraceSummary": {"cursor", "labels", "limit", "markers", "pane_id", "session", "times"},
+	} {
 		params := paramsByOp[op]
-		if got, want := sortedPropertyNames(params.Properties), []string{"cursor", "limit", "markers", "pane_id", "session"}; !slices.Equal(got, want) || !slices.Equal(params.Required, []string{"pane_id"}) {
+		if got := sortedPropertyNames(params.Properties); !slices.Equal(got, want) || !slices.Equal(params.Required, []string{"pane_id"}) {
 			t.Errorf("%s params fields=%q required=%q", op, got, params.Required)
 		}
 		if params.AdditionalProperties == nil || *params.AdditionalProperties {
@@ -260,7 +267,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"create_conversation", "create_tab", "split_pane", "prompt_agent", "history",
 		"list_worktrees", "create_worktree", "open_worktree", "resize_pane", "swap_pane", "zoom_pane",
 	}
-	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers"), capabilities)
+	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers", "trace_labels", "trace_times"), capabilities)
 
 	// Machine linking names machines by opaque ID only: no SSH target, host,
 	// or path may be added to these objects.
@@ -325,10 +332,13 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	)
 	requireExactObject(t, schema.Defs, "agentTraceResult", []string{"items", "next_cursor", "truncated"})
 	requireExactObjectFields(t, schema.Defs, "agentTraceSummaryItem",
-		[]string{"type", "text", "name", "state", "detail_ref"},
+		[]string{"type", "text", "name", "state", "detail_ref", "label", "at"},
 		[]string{"type"},
 	)
-	requireExactObject(t, schema.Defs, "agentTraceSummaryResult", []string{"items", "next_cursor", "truncated"})
+	requireExactObjectFields(t, schema.Defs, "agentTraceSummaryResult",
+		[]string{"items", "next_cursor", "truncated", "now"},
+		[]string{"items", "next_cursor", "truncated"},
+	)
 	requireExactObjectFields(t, schema.Defs, "agentTraceDetailResult",
 		[]string{"detail_ref", "text", "input", "output", "truncated"},
 		[]string{"detail_ref", "truncated"},
@@ -445,6 +455,14 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	}
 	if got := schema.Defs["agentTraceSummaryItem"].Properties["state"].Enum; !slices.Equal(got, []string{"running", "done", "error"}) {
 		t.Errorf("agent trace summary state enum = %q", got)
+	}
+	// label is opt-in via params.labels; see proto/agent-trace-labels.md.
+	if label := schema.Defs["agentTraceSummaryItem"].Properties["label"]; label.MinLength != 1 || label.MaxLength != 160 {
+		t.Errorf("agent trace summary label length = %d..%d", label.MinLength, label.MaxLength)
+	}
+	// at is opt-in via params.times; see proto/agent-trace-times.md.
+	if at := schema.Defs["agentTraceSummaryItem"].Properties["at"]; at.Type != "integer" || at.Minimum == nil || *at.Minimum != 0 {
+		t.Errorf("agent trace summary at = %v minimum %v", at.Type, at.Minimum)
 	}
 	if got := schema.Defs["agentTraceSummaryResult"].Properties["items"].Items.Ref; got != "#/$defs/agentTraceSummaryItem" {
 		t.Errorf("agent trace summary items ref = %q", got)

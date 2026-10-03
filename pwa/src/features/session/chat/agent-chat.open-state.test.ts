@@ -68,12 +68,12 @@ beforeEach(async () => {
  * cards the reader had expanded.
  */
 describe("agent-chat keeps expanded steps while older pages load", () => {
-  test("an open tool card survives prepended history", async () => await act(async () => {
+  test("an open step card survives prepended history", async () => await act(async () => {
     bootIdleChat();
-    const tool = app.querySelector("details.agent-tool");
-    if (!(tool instanceof happy.HTMLDetailsElement)) throw new Error("missing tool card");
-    tool.open = true;
-    expect(app.querySelector("details.agent-tool")?.hasAttribute("open")).toBe(true);
+    const card = app.querySelector("details.work-card");
+    if (!(card instanceof happy.HTMLDetailsElement)) throw new Error("missing step card");
+    card.open = true;
+    expect(app.querySelector("details.work-card")?.hasAttribute("open")).toBe(true);
 
     applyTrace({
       agentTraceItems: [
@@ -84,17 +84,17 @@ describe("agent-chat keeps expanded steps while older pages load", () => {
     });
     expect(patchAgentChat({ older: true, top: 0, height: 40 })).toBe(true);
 
-    const next = app.querySelector("details.agent-tool");
-    if (!(next instanceof happy.HTMLDetailsElement)) throw new Error("tool card vanished");
+    const next = app.querySelector("details.work-card");
+    if (!(next instanceof happy.HTMLDetailsElement)) throw new Error("step card vanished");
     expect(next.open).toBe(true);
   }));
 
-  test("a finished turn collapses the run and keeps the markdown reply visible", async () => await act(async () => {
+  test("a finished turn collapses its card and keeps the markdown reply visible", async () => await act(async () => {
     bootIdleChat();
-    const process = app.querySelector("details.agent-process");
-    if (!(process instanceof happy.HTMLDetailsElement)) throw new Error("missing process");
-    expect(process.open).toBe(false);
-    expect(process.textContent).toContain("执行过程");
+    const card = app.querySelector("details.work-card");
+    if (!(card instanceof happy.HTMLDetailsElement)) throw new Error("missing step card");
+    expect(card.open).toBe(false);
+    expect(card.querySelector(".work-title")?.textContent).toBeTruthy();
     expect(app.querySelector(".agent-md strong")?.textContent).toBe("fine");
   }));
 
@@ -105,18 +105,19 @@ describe("agent-chat keeps expanded steps while older pages load", () => {
       panes: [{ pane_id: "p1", workspace_id: "w1", agent: "codex", agent_status: "working" }],
     }));
     expect(patchAgentChat({ follow: true })).toBe(true);
-    const live = app.querySelector("details.agent-process");
-    if (!(live instanceof happy.HTMLDetailsElement)) throw new Error("missing live process");
+    const live = app.querySelector("details.work-card");
+    if (!(live instanceof happy.HTMLDetailsElement)) throw new Error("missing live card");
     expect(live.open).toBe(true);
-    expect(live.querySelector(".agent-process-summary")?.textContent).toBe("正在执行");
+    // Live, or unconfirmed when this harness has no connection; never done.
+    expect(["work-card is-running", "work-card is-stale"]).toContain(live.className);
 
     act(() => applySnapshot({
       workspaces: [{ workspace_id: "w1", label: "demo", cwd: "/tmp/demo" }],
       panes: [{ pane_id: "p1", workspace_id: "w1", agent: "codex", agent_status: "idle" }],
     }));
     expect(patchAgentChat({ follow: true })).toBe(true);
-    const done = app.querySelector("details.agent-process");
-    if (!(done instanceof happy.HTMLDetailsElement)) throw new Error("missing done process");
+    const done = app.querySelector("details.work-card");
+    if (!(done instanceof happy.HTMLDetailsElement)) throw new Error("missing done card");
     expect(done.open).toBe(false);
     expect(app.querySelector(".agent-md strong")?.textContent).toBe("fine");
   }));

@@ -2,9 +2,11 @@ package journal
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
+	"slices"
 )
 
 const (
@@ -103,13 +105,49 @@ func (r *Reader) ReadTraceSummaryWith(ref Ref, cursor *string, limit int, option
 	for _, item := range page.Items {
 		if item.Type == "tool" {
 			items = append(items, TraceSummaryItem{
-				Type: item.Type, Name: item.Name, State: traceToolState(item), DetailRef: item.DetailRef,
+				Type: item.Type, Name: item.Name, State: traceToolState(item), DetailRef: item.DetailRef, Label: item.Label, At: item.At,
 			})
 			continue
 		}
-		items = append(items, TraceSummaryItem{Type: item.Type, Text: item.Text})
+		items = append(items, TraceSummaryItem{Type: item.Type, Text: item.Text, At: item.At})
 	}
+	fitSummaryExtras(items)
 	return TraceSummaryPage{Items: items, NextCursor: page.NextCursor, Truncated: page.SummaryTruncated}, nil
+}
+
+// fitSummaryExtras keeps a summary with opt-in labels and times inside the
+// page budget. Neither counts toward the full trace page it was cut from (labels
+// come from unclipped input), so pages, cursors and detail refs match every
+// view; when the extras overflow, the oldest labels go first, then the oldest
+// times.
+func fitSummaryExtras(items []TraceSummaryItem) {
+	if !slices.ContainsFunc(items, func(item TraceSummaryItem) bool { return item.Label != "" || item.At != 0 }) {
+		return
+	}
+	total := 0
+	for _, item := range items {
+		total += summaryItemSize(item)
+	}
+	drops := []func(*TraceSummaryItem) bool{
+		func(item *TraceSummaryItem) bool { dropped := item.Label != ""; item.Label = ""; return dropped },
+		func(item *TraceSummaryItem) bool { dropped := item.At != 0; item.At = 0; return dropped },
+	}
+	for _, drop := range drops {
+		for i := 0; i < len(items) && total > maxTraceItemsBytes; i++ {
+			before := summaryItemSize(items[i])
+			if drop(&items[i]) {
+				total -= before - summaryItemSize(items[i])
+			}
+		}
+	}
+}
+
+func summaryItemSize(item TraceSummaryItem) int {
+	encoded, err := json.Marshal(item)
+	if err != nil {
+		return maxTraceItemsBytes + 1
+	}
+	return len(encoded) + 1
 }
 
 func (r *Reader) cachedTracePage(key traceCacheKey) (TracePage, bool) {
@@ -253,7 +291,7 @@ func parseTraceWindow(data []byte, base, limit int, parse traceParser, options T
 				if item, attached := outputTarget(window.items, event.call, event.Output); attached {
 					if item != nil {
 						window.pageBytes -= eventSize(item.Event)
-						item.Output = event.Output
+						attachOutput(item, event)
 						item.Event, item.DetailTruncated = clipEvent(item.Event, item.DetailTruncated)
 						item.Event, item.DetailTruncated = clipEventToLimit(item.Event, maxTraceItemsBytes-window.pageBytes, item.DetailTruncated)
 						window.truncated = window.truncated || item.DetailTruncated

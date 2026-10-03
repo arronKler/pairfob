@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 )
 
 // Event is one step on the agent execution timeline.
@@ -15,6 +16,8 @@ type Event struct {
 	Output           string `json:"output,omitempty"`
 	DetailRef        string `json:"-"`
 	State            string `json:"-"`
+	Label            string `json:"-"`
+	At               int64  `json:"-"`
 	DetailTruncated  bool   `json:"-"`
 	SummaryTruncated bool   `json:"-"`
 }
@@ -32,6 +35,8 @@ type TraceSummaryItem struct {
 	Name      string `json:"name,omitempty"`
 	State     string `json:"state,omitempty"`
 	DetailRef string `json:"detail_ref,omitempty"`
+	Label     string `json:"label,omitempty"`
+	At        int64  `json:"at,omitempty"`
 }
 
 type TraceSummaryPage struct {
@@ -80,14 +85,18 @@ func clipEvent(ev Event, truncated bool) (Event, bool) {
 func clipEventToLimit(ev Event, limit int, truncated bool) (Event, bool) {
 	ev.Text, truncated = clip(ev.Text, maxMessageBytes, truncated)
 	ev.Input, truncated = clip(ev.Input, maxMessageBytes, truncated)
-	ev.Output, truncated = clip(ev.Output, maxMessageBytes, truncated)
+	ev.Output, truncated = clipHeadTail(ev.Output, maxMessageBytes, truncated)
 	for eventSize(ev) > limit {
 		field := largestEventField(&ev)
 		if field == nil {
 			break
 		}
 		before := eventSize(ev)
-		*field = shrinkEventField(*field)
+		if field == &ev.Output {
+			*field = shrinkHeadTail(*field)
+		} else {
+			*field = shrinkEventField(*field)
+		}
 		// Keep the loop strictly decreasing even if JSON escaping rules change.
 		if eventSize(ev) >= before {
 			*field = ""
@@ -107,6 +116,47 @@ func shrinkEventField(value string) string {
 	}
 	clipped, _ := clip(value, target-len("…"), false)
 	return clipped
+}
+
+// toolOutputGap marks the bytes removed from the middle of a tool output.
+const toolOutputGap = "\n…\n"
+
+// clipHeadTail is clip for tool output: command results and test summaries
+// sit at the end, so it keeps a head and a tail around toolOutputGap. The
+// result is never longer than clip's prefix plus its ellipsis.
+func clipHeadTail(text string, limit int, already bool) (string, bool) {
+	if len(text) <= limit {
+		return text, already
+	}
+	keep := limit + len("…") - len(toolOutputGap)
+	if keep < 2 {
+		return clip(text, limit, already)
+	}
+	return headTail(text, keep), true
+}
+
+// shrinkHeadTail halves a tool output the way shrinkEventField halves a
+// prefix-clipped field, budgeting the gap marker into the half.
+func shrinkHeadTail(value string) string {
+	keep := len(value)/2 - len(toolOutputGap)
+	if keep < 2 {
+		return ""
+	}
+	return headTail(value, keep)
+}
+
+// headTail keeps at most keep bytes of text, split between its start and its
+// end on UTF-8 boundaries, joined by toolOutputGap.
+func headTail(text string, keep int) string {
+	head := keep / 2
+	for head > 0 && !utf8.RuneStart(text[head]) {
+		head--
+	}
+	tail := len(text) - (keep - head)
+	for tail < len(text) && !utf8.RuneStart(text[tail]) {
+		tail++
+	}
+	return text[:head] + toolOutputGap + text[tail:]
 }
 
 func largestEventField(ev *Event) *string {
@@ -228,10 +278,13 @@ func outputTarget(window []parsedEvent, call, output string) (*parsedEvent, bool
 	return nil, false
 }
 
-func parseCodexTrace(line []byte) []parsedEvent {
+// The parsers name their result so one deferred stampEvents dates every
+// return path with the record's own timestamp.
+func parseCodexTrace(line []byte) (events []parsedEvent) {
 	var item struct {
-		Type    string `json:"type"`
-		Payload struct {
+		Type      string          `json:"type"`
+		Timestamp json.RawMessage `json:"timestamp"`
+		Payload   struct {
 			Type      string          `json:"type"`
 			Role      string          `json:"role"`
 			Reason    string          `json:"reason"`
@@ -253,6 +306,7 @@ func parseCodexTrace(line []byte) []parsedEvent {
 	if json.Unmarshal(line, &item) != nil {
 		return nil
 	}
+	defer func() { stampEvents(events, item.Timestamp) }()
 	switch {
 	case item.Type == "compacted":
 		return []parsedEvent{{Event: Event{Type: EventCompaction}}}
@@ -285,7 +339,7 @@ func parseCodexTrace(line []byte) []parsedEvent {
 			return nil
 		}
 		return []parsedEvent{{
-			Event:      Event{Type: "tool", Output: output},
+			Event:      Event{Type: "tool", Output: output, State: codexOutputState(output)},
 			call:       item.Payload.CallID,
 			outputOnly: true,
 		}}
@@ -346,12 +400,13 @@ func parseCodexTrace(line []byte) []parsedEvent {
 	}
 }
 
-func parseClaudeTrace(line []byte) []parsedEvent {
+func parseClaudeTrace(line []byte) (events []parsedEvent) {
 	var item struct {
 		claudeRecordFlags
-		Type    string `json:"type"`
-		Subtype string `json:"subtype"`
-		Message struct {
+		Type      string          `json:"type"`
+		Subtype   string          `json:"subtype"`
+		Timestamp json.RawMessage `json:"timestamp"`
+		Message   struct {
 			Role    string          `json:"role"`
 			Model   string          `json:"model"`
 			Content json.RawMessage `json:"content"`
@@ -360,18 +415,22 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 	if json.Unmarshal(line, &item) != nil {
 		return nil
 	}
+	defer func() { stampEvents(events, item.Timestamp) }()
 	if item.Type == "system" && item.Subtype == "compact_boundary" && !item.IsSidechain {
 		return []parsedEvent{{Event: Event{Type: EventCompaction}}}
 	}
 	if (item.Type != "user" && item.Type != "assistant") || item.Message.Role != item.Type {
 		return nil
 	}
-	if item.hidden() || item.Message.Model == claudeSyntheticModel {
+	if item.hidden() || item.syntheticPlaceholder(item.Message.Model) {
 		return nil
 	}
 	var text string
 	if json.Unmarshal(item.Message.Content, &text) == nil {
 		if item.Type == "user" {
+			if events, ok := claudeShellEvents(text); ok {
+				return events
+			}
 			if event, ok := claudeUserEvent(text); ok {
 				return []parsedEvent{{Event: event}}
 			}
@@ -389,6 +448,7 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 		Name      string          `json:"name"`
 		ID        string          `json:"id"`
 		ToolUseID string          `json:"tool_use_id"`
+		IsError   bool            `json:"is_error"`
 		Input     json.RawMessage `json:"input"`
 		Content   json.RawMessage `json:"content"`
 	}
@@ -403,6 +463,8 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 		case block.Type == "text" && block.Text != "":
 			if item.Type != "user" {
 				out = append(out, parsedEvent{Event: Event{Type: item.Type, Text: block.Text}})
+			} else if events, ok := claudeShellEvents(block.Text); ok {
+				out = append(out, events...)
 			} else if event, ok := claudeUserEvent(block.Text); ok {
 				out = append(out, parsedEvent{Event: event})
 			}
@@ -416,8 +478,12 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 			if output == "" {
 				continue
 			}
+			state := "done"
+			if block.IsError {
+				state = "error"
+			}
 			out = append(out, parsedEvent{
-				Event:      Event{Type: "tool", Output: output},
+				Event:      Event{Type: "tool", Output: output, State: state},
 				call:       block.ToolUseID,
 				outputOnly: true,
 			})
@@ -426,10 +492,16 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 	return out
 }
 
-func parseGrokTrace(line []byte) []parsedEvent {
+func parseGrokTrace(line []byte) (events []parsedEvent) {
 	var update struct {
-		Method string `json:"method"`
-		Params struct {
+		// Timestamp is the write time in epoch seconds; the agent's own clock
+		// in params._meta.agentTimestampMs is preferred for its precision.
+		Timestamp json.RawMessage `json:"timestamp"`
+		Method    string          `json:"method"`
+		Params    struct {
+			Meta struct {
+				AgentTimestampMs json.RawMessage `json:"agentTimestampMs"`
+			} `json:"_meta"`
 			Update struct {
 				SessionUpdate string          `json:"sessionUpdate"`
 				MessageID     string          `json:"messageId"`
@@ -445,9 +517,12 @@ func parseGrokTrace(line []byte) []parsedEvent {
 			} `json:"update"`
 		} `json:"params"`
 	}
-	if json.Unmarshal(line, &update) != nil || update.Method != "session/update" {
+	// Grok writes its own lifecycle events (turn_completed and friends) as
+	// "_x.ai/session/update"; the ACP stream proper is "session/update".
+	if json.Unmarshal(line, &update) != nil || (update.Method != "session/update" && update.Method != "_x.ai/session/update") {
 		return nil
 	}
+	defer func() { stampEvents(events, update.Params.Meta.AgentTimestampMs, update.Timestamp) }()
 	u := update.Params.Update
 	switch u.SessionUpdate {
 	case "turn_completed":
@@ -495,8 +570,16 @@ func parseGrokTrace(line []byte) []parsedEvent {
 		if output == "" {
 			return nil
 		}
+		// The status Grok records is the outcome, whatever text came with it.
+		state := ""
+		switch u.Status {
+		case "failed":
+			state = "error"
+		case "completed":
+			state = "done"
+		}
 		return []parsedEvent{{
-			Event:      Event{Type: "tool", Name: grokToolName(u.Title, grokMetaName(u.Meta), u.Kind), Output: output},
+			Event:      Event{Type: "tool", Name: grokToolName(u.Title, grokMetaName(u.Meta), u.Kind), Output: output, State: state},
 			call:       u.ToolCallID,
 			outputOnly: true,
 		}}

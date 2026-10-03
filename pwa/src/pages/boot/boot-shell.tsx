@@ -62,13 +62,16 @@ function BootFrame({ reading }: { reading: boolean }) {
 
 /** The wait so far, once it is slow; re-read every second from the recorded stages. */
 function useSlowConnect(active: boolean): { hop: PathHop; seconds: number } | null {
-  const [now, setNow] = useState(() => Date.now());
+  // The interval only repaints; each render reads the clock, so a new connect
+  // attempt is never measured against a time kept from an earlier one.
+  const [, tick] = useState(0);
   useEffect(() => {
     if (!active) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    const timer = window.setInterval(() => tick((count) => count + 1), 1000);
     return () => window.clearInterval(timer);
   }, [active]);
   if (!active) return null;
+  const now = Date.now();
   const wait = connectionWait();
   if (!wait || now - wait.since < SLOW_CONNECT_MS) return null;
   return { hop: wait.hop, seconds: Math.floor((now - wait.since) / 1000) };

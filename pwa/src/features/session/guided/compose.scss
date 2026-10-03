@@ -60,8 +60,12 @@
 .compose-field.is-folded > textarea {
   height: calc(2lh + 22px) !important;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(#000 55%, transparent);
-  mask-image: linear-gradient(#000 55%, transparent);
+  /* Clipping stops at the border box, so the third line would peek through the
+     bottom padding: the fade reaches transparent before that padding starts.
+     The right padding keeps text clear of the "N 行" tag. */
+  padding-right: 44px;
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 1lh - 11px), transparent calc(100% - 11px));
+  mask-image: linear-gradient(#000 calc(100% - 1lh - 11px), transparent calc(100% - 11px));
 }
 
 .compose-unfold {

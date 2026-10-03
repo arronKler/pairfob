@@ -25,16 +25,30 @@ afterEach(() => {
   appRoot().replaceChildren();
 });
 
-describe("workspace chrome entry", () => {
-  test("is available by default before more", () => {
-    renderReact(createElement(SessionActions, {
-      onWorkspace: () => undefined,
-      onMenu: () => undefined,
-    }));
+const handlers = (toggles: string[], chat = true) => ({
+  onBack: () => undefined, onWorkspace: () => undefined, onMenu: () => undefined,
+  onToggleView: () => { toggles.push("toggle"); }, chatAvailable: () => chat,
+});
+
+describe("session chrome actions", () => {
+  test("an agent pane offers the chat toggle before more; files are not a header slot", () => {
+    const toggles: string[] = [];
+    renderReact(createElement(SessionActions, { agent: { paneId: "p1", hasAgent: true, agent: "claude" } as never, handlers: handlers(toggles) }));
     const cluster = appRoot().querySelector(".chrome-actions")!;
-    expect(cluster.querySelector(".icon-workspace")?.getAttribute("aria-label")).toBe(t("workspace.open"));
-    expect(cluster.querySelectorAll("button")).toHaveLength(2);
-    expect(cluster.firstElementChild?.classList.contains("icon-workspace")).toBeTrue();
+    expect([...cluster.querySelectorAll("button")].map((button) => button.className)).toEqual(["icon-btn icon-view", "icon-btn icon-more"]);
+    expect(cluster.querySelector(".icon-view")?.getAttribute("aria-label")).toBe(t("head.toChat"));
+    act(() => cluster.querySelector<HTMLButtonElement>(".icon-view")!.click());
+    expect(toggles).toEqual(["toggle"]);
+    expect(cluster.querySelector(".icon-workspace")).toBeNull();
     expect(cluster.querySelector(".icon-stop")).toBeNull();
+  });
+
+  test("an agent without a readable transcript keeps a disabled toggle; a shell has none", () => {
+    renderReact(createElement(SessionActions, { agent: { paneId: "p1", hasAgent: true, agent: "opencode" } as never, handlers: handlers([], false) }));
+    const toggle = appRoot().querySelector<HTMLButtonElement>(".icon-view")!;
+    expect(toggle.disabled).toBeTrue();
+    expect(toggle.getAttribute("aria-label")).toBe(t("head.chatOff"));
+    renderReact(createElement(SessionActions, { agent: { paneId: "p2", hasAgent: false } as never, handlers: handlers([]) }));
+    expect(appRoot().querySelectorAll(".chrome-actions button")).toHaveLength(1);
   });
 });

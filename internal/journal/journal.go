@@ -537,7 +537,7 @@ func parseClaude(line []byte) (Message, bool) {
 	if json.Unmarshal(line, &item) != nil || (item.Type != "user" && item.Type != "assistant") || item.Message.Role != item.Type {
 		return Message{}, false
 	}
-	if item.hidden() || item.Message.Model == claudeSyntheticModel {
+	if item.hidden() || item.syntheticPlaceholder(item.Message.Model) {
 		return Message{}, false
 	}
 	var text string

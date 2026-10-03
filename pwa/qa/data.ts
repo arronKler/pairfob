@@ -14,6 +14,7 @@ import {
   type WorkspaceMediaOpen,
 } from "../src/lib/protocol/workspace-media";
 import { FIXED_NOW } from "./environment";
+import { CODEX_APPROVAL_SCREEN } from "../src/lib/terminal-dialog.fixtures";
 
 export const REVISION = "a".repeat(64);
 export const PANE = "w1:p1";
@@ -136,13 +137,26 @@ export function phase2ConversationTrace(): AgentTraceItem[] {
     turns.push(
       { type: "user", text: `Turn ${turn}: inspect the conversation recovery path without replaying any mutation.` },
       { type: "thinking", text: `Checking owner generation, scroll position, and transcript tail for turn ${turn}.` },
-      { type: "tool", name: "Read", input: `{"path":"src/chat/turn-${turn}.ts"}`, output: `Read ${20 + turn} lines. Owner and revision are stable.`, toolState: "done", detailRef: `qa-read-${turn}` },
+      { type: "tool", name: "Read", input: `{"path":"src/chat/turn-${turn}.ts"}`, output: `Read ${20 + turn} lines. Owner and revision are stable.`, toolState: "done", detailRef: `qa-read-${turn}`, label: `src/chat/turn-${turn}.ts` },
     );
-    if (turn === 4) turns.push({ type: "tool", name: "Bash", input: "bun test chat", output: "error: expected one refresh, received zero", toolState: "error", detailRef: "qa-tool-error" });
-    if (turn === 7) turns.push({ type: "tool", name: "Read", input: "{\"path\":\"empty.txt\"}", output: "", toolState: "done", detailRef: "qa-empty-output" });
+    if (turn === 4) turns.push({ type: "tool", name: "Bash", input: "bun test chat", output: "error: expected one refresh, received zero", toolState: "error", detailRef: "qa-tool-error", label: "bun test chat" });
+    if (turn === 7) turns.push({ type: "tool", name: "Read", input: "{\"path\":\"empty.txt\"}", output: "", toolState: "done", detailRef: "qa-empty-output", label: "empty.txt" });
     turns.push({ type: "assistant", text: `Turn ${turn} complete. The transcript remains attached to the same Pi session${turn === 12 ? ".\n\nFinal check: foreground recovery refreshes reads only and does not resend the prompt." : "."}` });
   }
   return turns;
+}
+
+const TURN_START = FIXED_NOW - 600_000;
+
+/** A real Codex approval prompt (captured from v0.159.2) as the pane shows it while the agent waits. */
+export const NEEDS_YOU_SCREEN = CODEX_APPROVAL_SCREEN;
+
+/** A turn paused on that prompt: the pending tool is the command it wants to run. */
+export function needsYouTrace(): AgentTraceItem[] {
+  return [
+    { type: "user", text: "Create an empty file named hello.txt in this folder with the shell command touch hello.txt" },
+    { type: "tool", name: "exec_command", label: "touch hello.txt", toolState: "running", detailRef: "qa-needs-touch" },
+  ];
 }
 
 /** Opt-in trace markers (proto/agent-trace-markers.md) around ordinary turns. */
@@ -151,11 +165,11 @@ export function markerTrace(): AgentTraceItem[] {
     { type: "command", text: "/clear" },
     { type: "user", text: "Why does the PWA jump to the pairing screen after Chrome resumes?" },
     { type: "thinking", text: "Tracing boot recovery and stored credential reads." },
-    { type: "tool", name: "Read", input: '{"path":"src/app/bootstrap.ts"}', output: "Read 120 lines.", toolState: "done", detailRef: "qa-marker-read" },
+    { type: "tool", name: "Read", input: '{"path":"src/app/bootstrap.ts"}', output: "Read 120 lines.", toolState: "done", detailRef: "qa-marker-read", label: "pwa/src/app/bootstrap.ts" },
     { type: "compaction" },
     { type: "assistant", text: "Boot treats a transient storage failure as **no saved computers**." },
     { type: "user", text: "Rewrite the whole boot flow." },
-    { type: "tool", name: "Bash", input: "bun test src/app", toolState: "running", detailRef: "qa-marker-bash" },
+    { type: "tool", name: "Bash", input: "bun test src/app", toolState: "running", detailRef: "qa-marker-bash", label: "bun test src/app" },
     { type: "interrupt" },
     { type: "command", text: "/model opus" },
   ];
@@ -163,13 +177,14 @@ export function markerTrace(): AgentTraceItem[] {
 
 export function trace(): AgentTraceItem[] {
   return [
-    { type: "user", text: "Check the mobile workspace layout and preserve the existing interactions." },
-    { type: "thinking", text: "I will inspect the component boundaries, focus ownership, and responsive styles." },
-    { type: "tool", name: "Read", input: '{"path":"src/app.ts"}', output: "Read 48 lines. The current layout uses a stable compose field." },
-    { type: "assistant", text: "The layout is ready.\n\n- Preserved the keyboard and selection.\n- Kept **all existing controls** available.\n\n```ts\nexport const ready = true;\n```\n\n[Read the project](https://pairfob.com)" },
+    // The finished turn carries record times (trace_times); the live one below does not.
+    { type: "user", text: "Check the mobile workspace layout and preserve the existing interactions.", at: TURN_START },
+    { type: "thinking", text: "I will inspect the component boundaries, focus ownership, and responsive styles.", at: TURN_START + 2_000 },
+    { type: "tool", name: "Read", input: '{"path":"src/app.ts"}', output: "Read 48 lines. The current layout uses a stable compose field.", label: "src/app.ts", at: TURN_START + 9_000 },
+    { type: "assistant", at: TURN_START + 72_000, text: "The layout is ready.\n\n- Preserved the keyboard and selection.\n- Kept **all existing controls** available.\n\n```ts\nexport const ready = true;\n```\n\n[Read the project](https://pairfob.com)" },
     { type: "user", text: "Please also check the narrow phone view." },
     { type: "thinking", text: "Checking the 320 px layout, button targets, and horizontal overflow." },
-    { type: "tool", name: "Browser", text: "Inspecting the viewport and touch targets." },
+    { type: "tool", name: "Browser", text: "Inspecting the viewport and touch targets.", label: "localhost:5173 · 320px" },
   ];
 }
 

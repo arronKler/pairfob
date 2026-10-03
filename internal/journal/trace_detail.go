@@ -9,21 +9,6 @@ import (
 	"strings"
 )
 
-func traceToolState(item Event) string {
-	if item.State == "done" || item.State == "error" {
-		return item.State
-	}
-	if item.Output == "" {
-		return "running"
-	}
-	switch strings.ToLower(strings.TrimSpace(item.Output)) {
-	case "失败", "failed", "error", "errored":
-		return "error"
-	default:
-		return "done"
-	}
-}
-
 func traceDetailStatic(event parsedEvent) string {
 	sum := sha256.Sum256([]byte(event.Name + "\x00" + event.call))
 	return base64.RawURLEncoding.EncodeToString(sum[:8])
@@ -147,7 +132,7 @@ func (r *Reader) ReadTraceDetail(ref Ref, detailRef string) (TraceDetail, error)
 				continue
 			}
 			if item, attached := outputTarget([]parsedEvent{*target}, event.call, event.Output); attached && item != nil {
-				target.Output = event.Output
+				attachOutput(target, event)
 			}
 		}
 		return true

@@ -44,7 +44,7 @@ export type OpenPanePorts = {
   disposeGuidedScroll(): void;
   leaveFullTerminal(): Promise<{ from: number; to: number } | null>;
   restoreAgentTrace(paneId: string): void;
-  canEnterAgentChat(agent: { paneId: string; historyAvailable?: boolean; hasAgent?: boolean } | undefined): boolean;
+  canEnterAgentChat(agent: { paneId: string; historyAvailable?: boolean; hasAgent?: boolean; agent?: string } | undefined): boolean;
   resolvedTermMode(mode: ReturnType<typeof paneTermMode>): "full" | "agent" | "guided";
   queuedKind(): string;
   nextTransition(kind: string, paneId: string): void;

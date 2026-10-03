@@ -35,6 +35,9 @@ export type SessionHandlers = {
   onBack: () => void;
   onMenu: () => void;
   onWorkspace: () => void;
+  /** Chat ↔ terminal for an agent pane; chat only where its transcript is readable. */
+  onToggleView: () => void;
+  chatAvailable: (agent: { historyAvailable?: boolean; hasAgent?: boolean; agent?: string }) => boolean;
 };
 
 /** Outcome of an in-place terminal patch. */

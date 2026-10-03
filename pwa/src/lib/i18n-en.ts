@@ -1,3 +1,4 @@
+import { enChatWork } from "./i18n-chat-work";
 import { enComposeV2 } from "./i18n-compose-v2";
 import { enKeypadV2 } from "./i18n-keypad-v2";
 import { enChromeV2 } from "./i18n-chrome-v2";
@@ -17,6 +18,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   ...enComposeV2,
   ...enKeypadV2,
   ...enChromeV2,
+  ...enChatWork,
   ...enPaneMenuV2,
   ...enSettingsV3,
   ...enRowbarV2,
@@ -688,7 +690,6 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chat.limit": "Each message is at most 32 KiB. The sendable prefix is kept.",
   "chat.placeholder": "Message the agent",
   "chat.waitingConfirm": "The agent is waiting for you in the terminal.",
-  "chat.goConfirm": "Go confirm",
   "chat.newReply": "new reply",
   "chat.params": "Input",
   "chat.result": "Output",

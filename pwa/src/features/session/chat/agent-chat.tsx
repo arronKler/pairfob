@@ -1,4 +1,4 @@
-import { PromptProgressView } from "./prompt-progress-view";
+import { PromptProgressView, usePromptProgressNote } from "./prompt-progress-view";
 import { ArrowDown } from "lucide-react";
 import { openPaneId } from "../session-store";
 import { useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
@@ -7,13 +7,16 @@ import { computersStore } from "../../computers/catalog-store";
 import { useChat, useSession } from "../hooks";
 import { useDashboard } from "../../dashboard/hooks";
 import { t } from "../../../lib/i18n";
-import { loadToolDetail, toolDetailView } from "./agent-chat-detail";
+import { capabilityEnabled } from "../../operations/capabilities-store";
+import { useStatusUnverifiable } from "../guided/session-chrome";
+import { openStepSheet } from "./step-sheet";
 import { chatDockNotice, copyAgentReply, currentAgentTraceOwnerKey, emptySpec, jumpToLatest, leaveAgentChat,
-  patchAgentChat, refreshAgentTrace, rememberAgentViewport, restoreAgentViewport, streamSig, visibleItems,
+  refreshAgentTrace, rememberAgentViewport, restoreAgentViewport, streamSig, visibleItems,
 } from "./agent-chat-controller";
 import { agentChatUIRevision, publishAgentChatUI, subscribeAgentChatUI } from "./agent-chat-ui";
 import type { SessionHandlers } from "../guided/view";
-import { commitView } from "../../../app/host";
+import type { AgentTraceItem } from "../../../lib/operations";
+import { turnEntries, type TurnRef } from "../../../lib/agent-trace-steps";
 import { agentFromDashboardSnapshot } from "../agents";
 import { sessionOwner } from "../identity";
 import { subscribeVisibleNotice, visibleNotice } from "../../../app/notices-store";
@@ -43,13 +46,23 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   const reading = useRef({ follow: chat.agentTraceFollow, unread: chat.agentTraceUnread });
   reading.current = { follow: chat.agentTraceFollow, unread: chat.agentTraceUnread };
   const paneId = sessionSnap.paneId;
-  const working = agentFromDashboardSnapshot(useDashboard(), paneId)?.status === "working";
+  const status = agentFromDashboardSnapshot(useDashboard(), paneId)?.status;
+  // A blocked agent is still inside its turn: the card stays live and says it waits on you.
+  const working = status === "working" || status === "blocked";
+  const stale = useStatusUnverifiable();
+  // trace_labels comes with real Claude/Codex failure states; before it, "done" only means "ended".
+  const verified = capabilityEnabled("trace_labels");
+  const progress = usePromptProgressNote();
   const items = visibleItems();
   const notice = chatDockNotice();
-  const needDetail = useCallback((detailRef: string) => {
-    if (!paneId) return;
-    loadToolDetail(paneId, detailRef, () => { if (!patchAgentChat()) commitView(); });
-  }, [paneId]);
+  // Steps that arrived since the reader scrolled away, for the jump button.
+  const seen = useRef(items.length);
+  if (chat.agentTraceFollow) seen.current = items.length;
+  const newSteps = items.slice(Math.min(seen.current, items.length)).filter((item) => item.type === "tool").length;
+  const openStep = useCallback((item: AgentTraceItem, steps: AgentTraceItem[], turn: TurnRef) => {
+    // The sheet re-finds its turn on every trace update, so running steps finish in place.
+    if (paneId) openStepSheet(paneId, item, verified, steps, () => turnEntries(visibleItems(), turn));
+  }, [paneId, verified]);
   useLayoutEffect(() => {
     const element = stream.current;
     const ownerKey = currentAgentTraceOwnerKey();
@@ -71,7 +84,9 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
     <AgentChatChrome includeBack={includeBack} handlers={handlers} />
     {notice && <Feedback value={notice} appNotice />}
     <div className="agent-stream-wrap">
-      <AgentStream streamRef={stream} items={items} working={working} empty={emptySpec(working)}
+      <AgentStream streamRef={stream} items={items} working={working} waiting={status === "blocked"} stale={stale}
+        verified={verified} progress={progress} follow={chat.agentTraceFollow} hasOlder={chat.agentTraceNext !== null}
+        empty={emptySpec(working)}
         busy={chat.agentTraceBusy || (!chat.agentTraceItems.length && chat.agentTraceLoadState === "cold")}
         signature={streamSig(items, working)} truncated={chat.agentTraceTruncated}
         onTerminal={() => { if (openPaneId() === paneId) leaveAgentChat(); }}
@@ -83,12 +98,12 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
           publishAgentChatUI();
           rememberAgentViewport(element, paneId);
         }}
-        onCopyReply={copyAgentReply} toolDetail={item => paneId && item.detailRef ? toolDetailView(paneId, item.detailRef) : { status: "ready" }}
-        onNeedToolDetail={needDetail} older={<Button className="btn btn-small agent-older" hidden={!chat.agentTraceNext}
+        onCopyReply={copyAgentReply} onOpenStep={openStep} onAnswered={() => void refreshAgentTrace()} older={<Button className="btn btn-small agent-older" hidden={!chat.agentTraceNext}
           disabled={!chat.agentTraceNext || chat.agentTraceBusy} onClick={() => {
             if (chat.agentTraceNext && !chat.agentTraceBusy) void refreshAgentTrace(true);
           }}>{chat.agentTraceBusy && chat.agentTraceNext ? t("chat.readingOlder") : t("hist.loadEarlier")}</Button>} />
-      <Button className="agent-jump" hidden={chat.agentTraceFollow || !chat.agentTraceUnread} onClick={jumpToLatest}><ArrowDown size={16} aria-hidden="true" />{t("chat.newReply")}</Button>
+      <Button className="agent-jump" hidden={chat.agentTraceFollow || !chat.agentTraceUnread} onClick={jumpToLatest}><ArrowDown size={16} aria-hidden="true" />{working && newSteps ? t("chat.newSteps", { n: newSteps })
+        : t(working ? "chat.newProgress" : "chat.newReply")}</Button>
     </div>
     <PromptProgressView />
     <AgentCompose />

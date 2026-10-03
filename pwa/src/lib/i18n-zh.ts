@@ -1,3 +1,4 @@
+import { zhChatWork } from "./i18n-chat-work";
 import { zhComposeV2 } from "./i18n-compose-v2";
 import { zhKeypadV2 } from "./i18n-keypad-v2";
 import { zhChromeV2 } from "./i18n-chrome-v2";
@@ -20,6 +21,7 @@ export const zh = {
   ...zhComposeV2,
   ...zhKeypadV2,
   ...zhChromeV2,
+  ...zhChatWork,
   ...zhPaneMenuV2,
   ...zhSettingsV3,
   ...zhRowbarV2,
@@ -691,7 +693,6 @@ export const zh = {
   "chat.limit": "单条消息最多 32 KiB，已保留可发送的前半部分。",
   "chat.placeholder": "给 Agent 发消息",
   "chat.waitingConfirm": "Agent 在终端里等你确认。",
-  "chat.goConfirm": "去确认",
   "chat.newReply": "新回复",
   "chat.params": "参数",
   "chat.result": "结果",

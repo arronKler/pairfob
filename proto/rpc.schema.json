@@ -168,7 +168,9 @@
         "upload_file": { "type": "boolean" },
         "upload_file_v2": { "type": "boolean" },
         "link_machine": { "type": "boolean" },
-        "trace_markers": { "type": "boolean" }
+        "trace_markers": { "type": "boolean" },
+        "trace_labels": { "type": "boolean" },
+        "trace_times": { "type": "boolean" }
       },
       "additionalProperties": false
     },
@@ -372,7 +374,9 @@
         "text": { "type": "string", "minLength": 1, "maxLength": 131072 },
         "name": { "type": "string", "minLength": 1, "maxLength": 128 },
         "state": { "enum": ["running", "done", "error"] },
-        "detail_ref": { "type": "string", "minLength": 1, "maxLength": 1024 }
+        "detail_ref": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "at": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },
@@ -386,7 +390,8 @@
           "items": { "$ref": "#/$defs/agentTraceSummaryItem" }
         },
         "next_cursor": { "type": ["string", "null"], "maxLength": 1024 },
-        "truncated": { "type": "boolean" }
+        "truncated": { "type": "boolean" },
+        "now": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },
@@ -1227,7 +1232,9 @@
                   "session": { "$ref": "#/$defs/session" },
                   "cursor": { "type": ["string", "null"], "maxLength": 1024 },
                   "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
-                  "markers": { "type": "boolean" }
+                  "markers": { "type": "boolean" },
+                  "labels": { "type": "boolean" },
+                  "times": { "type": "boolean" }
                 },
                 "additionalProperties": false
               }

@@ -1,4 +1,4 @@
-import { Ellipsis, FolderOpen } from "lucide-react";
+import { Ellipsis, MessageSquareText, SquareTerminal } from "lucide-react";
 import { t } from "../../../lib/i18n";
 import type { DashboardAgentCard } from "../../../lib/dashboard";
 import type { Immutable } from "../../../shared/model/domain-store";
@@ -9,6 +9,7 @@ import { useConnection, useRuntime } from "../../connection/hooks";
 import { operationBusy } from "../../operations/capabilities-store";
 import { herdLiveness } from "../../connection/runtime-status";
 import type { SessionHandlers } from "./view";
+import { useSession } from "../hooks";
 import { AgentAvatar, BackButton, Button } from "../../../shared/ui/primitives";
 
 /**
@@ -24,16 +25,32 @@ export function useStatusUnverifiable(): boolean {
 }
 
 /**
- * Shared trailing actions for guided, terminal and agent chat chrome. Always the
- * same two targets: stopping a task lives on the send button, so nothing here
- * appears or disappears with the agent's status.
+ * One tap between the chat and terminal views of an agent pane. Leaving chat
+ * picks Auto, which resolves to the complete terminal or the control view.
+ * Agents without a readable transcript keep the button, disabled, so the
+ * header does not shift between panes.
  */
-export function SessionActions({ onWorkspace, onMenu }: { onWorkspace: () => void; onMenu: () => void }) {
+function ViewToggle({ agent, handlers }: { agent: Immutable<DashboardAgentCard> | undefined; handlers: SessionHandlers }) {
+  const chat = useSession().agentChat;
+  if (!agent?.hasAgent) return null;
+  const available = chat || handlers.chatAvailable(agent);
+  const label = t(chat ? "head.toTerminal" : available ? "head.toChat" : "head.chatOff");
+  return <Button className="icon-btn icon-view" aria-label={label} title={label} disabled={!available || operationBusy()}
+    onClick={handlers.onToggleView}>
+    {chat ? <SquareTerminal size={20} aria-hidden="true" /> : <MessageSquareText size={20} aria-hidden="true" />}
+  </Button>;
+}
+
+/**
+ * Shared trailing actions for guided, terminal and agent chat chrome: the view
+ * toggle and the session menu (files live in the menu). Stopping a task lives
+ * on the send button, so nothing here appears or disappears with the agent's status.
+ */
+export function SessionActions({ agent, handlers }: { agent?: Immutable<DashboardAgentCard>; handlers: SessionHandlers }) {
   return <div className="chrome-actions">
-    <Button className="icon-btn icon-workspace" aria-label={t("workspace.open")} title={t("workspace.open")}
-      onClick={onWorkspace}><FolderOpen size={20} aria-hidden="true" /></Button>
+    <ViewToggle agent={agent} handlers={handlers} />
     <Button className="icon-btn icon-more" aria-label={t("pane.menuTitle")} disabled={operationBusy()}
-      onClick={onMenu}><Ellipsis size={20} aria-hidden="true" /></Button>
+      onClick={handlers.onMenu}><Ellipsis size={20} aria-hidden="true" /></Button>
   </div>;
 }
 
@@ -87,7 +104,7 @@ export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, c
         </span> : null}
       </span>
     </div>
-    <SessionActions onWorkspace={handlers.onWorkspace} onMenu={handlers.onMenu} />
+    <SessionActions agent={agent} handlers={handlers} />
   </header>;
 }
 

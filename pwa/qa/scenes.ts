@@ -121,6 +121,7 @@ export const scenes: FixtureScene[] = [
   { name: "chat-error", description: "Failed history with retry" },
   { name: "chat-older", description: "Older-history control and truncation notice" },
   { name: "chat-markers", description: "Slash command chip, context compaction divider and interrupted turn" },
+  { name: "chat-needs-you", description: "Agent waiting on a terminal approval answered from the chat" },
   { name: "chat-pi-long", description: "Long Pi transcript with tool success, error, and empty output" },
   { name: "chat-pi-unread", description: "Long Pi transcript scrolled away from the tail with unread updates" },
   { name: "chat-pi-recovery", description: "Long Pi transcript ready for disconnect, reconnect, and foreground actions" },
@@ -137,6 +138,7 @@ const BUSY_SCENES = new Set(["home-busy", "board-busy", "board-zoomed", "board-o
 
 /** The computer a scene talks to: busy scenes bring their own snapshot and screens. */
 export function sceneSource(name: string): SessionSource {
+  if (name === "chat-needs-you") return { snapshot: blockedFocusedSnapshot, paneText: () => data.NEEDS_YOU_SCREEN };
   return BUSY_SCENES.has(name) ? { snapshot: busySnapshot, paneText: busyPaneText, agentKinds: BUSY_AGENT_KINDS } : {};
 }
 
@@ -162,14 +164,16 @@ function chatPane(): void {
   applyTrace({ agentTraceItems: data.trace(), agentTraceTail: data.trace().length, agentTraceLoadState: "ready", agentTraceSig: "qa-fixture" });
 }
 
-/** The herd/board fixture snapshot with the focused pane reported idle. */
-function idleFocusedSnapshot(): ReturnType<typeof data.snapshot> {
+/** The herd/board fixture snapshot with the focused pane in another status. */
+function focusedSnapshot(status: string): ReturnType<typeof data.snapshot> {
   const base = data.snapshot();
   return {
     ...base,
-    panes: (base.panes ?? []).map((entry) => entry.pane_id === base.focused?.pane_id ? { ...entry, agent_status: "idle" } : entry),
+    panes: (base.panes ?? []).map((entry) => entry.pane_id === base.focused?.pane_id ? { ...entry, agent_status: status } : entry),
   };
 }
+const idleFocusedSnapshot = () => focusedSnapshot("idle");
+const blockedFocusedSnapshot = () => focusedSnapshot("blocked");
 
 /**
  * Return every domain to the QA fixture baseline. Idempotent and subscription-
@@ -414,6 +418,12 @@ export async function applyScene(name: string, session: FixtureSession): Promise
     if (name === "chat-loading") { setTraceLoadState("loading"); setTraceBusy(true); }
     if (name === "chat-error") { setTraceLoadState("error"); setTraceNote(t("chat.detailFailed")); }
     if (name === "chat-older") applyTrace({ agentTraceNext: "qa:older", agentTraceTruncated: true });
+    if (name === "chat-needs-you") {
+      replaceAgentsFromSnapshot(blockedFocusedSnapshot());
+      const trace = data.needsYouTrace();
+      session.setTrace(trace);
+      applyTrace({ agentTraceItems: trace, agentTraceTail: trace.length, agentTraceLoadState: "ready", agentTraceSig: JSON.stringify(trace) });
+    }
     if (name === "chat-markers") {
       replaceAgentsFromSnapshot(idleFocusedSnapshot());
       const trace = data.markerTrace();

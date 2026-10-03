@@ -10,7 +10,7 @@ import {
 } from "../compose-store";
 import { liveSession } from "../../computers/catalog-store";
 import { openPaneId } from "../session-store";
-import { useCompose, useSession } from "../hooks";
+import { useChat, useCompose, useSession } from "../hooks";
 import { useDashboard } from "../../dashboard/hooks";
 import { currentViewIncarnation } from "../drafts/compose-drafts";
 import { agentFromDashboardSnapshot } from "../agents";
@@ -91,6 +91,7 @@ export function AgentCompose() {
   const allowed = canSend();
   const busy = operationBusy();
   const compose = useCompose();
+  const follow = useChat().agentTraceFollow;
   const draft = compose.composeDraft;
   const paneId = useSession().paneId;
   const selected = agentFromDashboardSnapshot(useDashboard(), paneId);
@@ -159,9 +160,10 @@ export function AgentCompose() {
   }, []);
   useLayoutEffect(() => () => { resetSendGate(); cancelStop(); }, [paneId]);
   return <div className="dock agent-dock">
-    {selected?.status === "blocked" && <div className="agent-confirm">
+    {/* The needs-you card sits in the latest turn; this entry covers a reader scrolled away from it. */}
+    {selected?.status === "blocked" && !follow && <div className="agent-confirm">
       <p className="agent-confirm-copy">{t("chat.waitingConfirm")}</p>
-      <Button className="btn btn-small" onClick={() => leaveAgentChat()}>{t("chat.goConfirm")}</Button>
+      <Button className="btn btn-small" onClick={() => leaveAgentChat()}>{t("needs.go")}</Button>
     </div>}
     <AttachmentTray compact={keyboardOpen} />
     <form className="dock-form" onSubmit={event => { event.preventDefault(); void submitAgentMessage(); }}>
@@ -169,7 +171,8 @@ export function AgentCompose() {
       <ComposeFrame field={input} draft={draft} live={false} focused={compose.composeFocused} foldable={phone}
         onResize={() => { if (input.current) sizeField(input.current); }}>
         <textarea ref={input} rows={1} enterKeyHint={phone ? phoneEnterKeyHint() : "send"} maxLength={OPERATION_INPUT_LIMITS.prompt}
-          placeholder={t(allowed ? "chat.placeholder" : "chat.cantSend")} disabled={!allowed || busy} />
+          placeholder={t(!allowed ? "chat.cantSend" : selected?.status === "working" ? "chat.placeholderWorking" : "chat.placeholder")}
+          disabled={!allowed || busy} />
       </ComposeFrame>
       <div className="send-slot">
         <SendIssuePopover attachments={send.attachments} />

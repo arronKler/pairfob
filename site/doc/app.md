@@ -61,18 +61,18 @@ Chrome:
 
 - Left: back to the list (phone). The back control shows a count when other sessions need you
 - Center: agent icon, name and status. It is display-only; switch sessions from the list or with the edge swipe
-- Right: **Browse files and changes**, then `···` **Session actions** (how this view looks and types, this pane's name, close this pane)
+- Right: the switch between chat and terminal (Agent sessions only; greyed when this Agent has no readable transcript), then `···` **Session actions** (how this view looks and types, **Browse files and changes**, this pane's name, close this pane)
 
 Stopping a working agent lives on the button beside the compose field; see **Control** below.
 
-The four choices are at the top of `···` under **Mode**. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **Settings**.
+The four choices are at the top of `···` under **Mode**; the switch in the header goes between chat and terminal in one tap. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **Settings**.
 
 | Mode | What it is |
 | --- | --- |
 | **Auto** | Chooses when the session opens: Terminal on P2P with WebGL2 unless Save-Data is on, otherwise Control |
 | **Control** | View the terminal and operate the session with the system keyboard and keypad |
 | **Terminal** | A real terminal. Use for vim or a full-screen TUI. On a phone the default is an 80-column view you pan sideways; **Fit screen** resizes the computer to the phone width. Vertical pan still scrolls remotely |
-| **Chat** | Message the Agent (this is where you send a task; it is not a `···` menu item). The run collapses after the reply |
+| **Chat** | Message the Agent (this is where you send a task; it is not a `···` menu item). Each turn's work sits in one step card: open while it runs, one result line after. Available for Claude Code, Codex, Grok and Pi sessions |
 
 In **Control**:
 
@@ -89,13 +89,13 @@ In **Control**:
 - Long lines can wrap or not
 - The first keypad row is Esc, arrows and Backspace. `···` expands it; switch between **Keys** and **Commands**. Keys has two pages, **Control** (Ctrl, Alt, Shift, Cmd, Tab, Shift+Tab, Enter, Ctrl+C and more) and **Select & edit**; Commands holds the agent's slash commands (such as `/clear`, typed into the terminal; Pairfob does not interpret them) and your own saved commands, which you can add, edit and reorder
 
-When **Chat** shows **Needs you**, tap **Go confirm** to switch to **Control** and read the terminal prompt. Check the operation and current selection before confirming. You can also switch to **Terminal** through `···` → **Mode** when needed.
+When the Agent waits on you in **Chat**, the turn shows a **Needs your confirmation** card with the prompt from the terminal. When that prompt is a numbered list (Claude Code and Codex approvals), pick an option on the card and tap **Send choice**: before sending, the computer checks that the terminal screen has not changed; if it has, the card reads it again and asks you to choose again. Nothing is resent on its own. Other prompts show the last lines of the terminal. **Handle in terminal** always switches to **Control**; check the operation and current selection before confirming.
 
 The computer and phone operate the same terminal dialog. Once either confirms it, the other sees the updated state. If the prompt is missing on the phone, handle it on the computer and report the phone's mode, Agent / extension versions, and a redacted recording.
 
 ## Files and changes
 
-The folder control in the session chrome is not the Worktree menu. It opens this pane's workspace, with the current branch and how many commits it is ahead at the top:
+**Browse files and changes** under `···` → **Session** is not the Worktree menu. It opens this pane's workspace, with the current branch and how many commits it is ahead at the top:
 
 - **Files** — directory listing and a text preview
 - **Changes** — uncommitted git status in **Staged Changes** and **Changes**; tap a file for the diff
@@ -161,9 +161,9 @@ Tap the session chrome `···`. Missing items are not drawn. **Rename tab**, **
 | Mode | Auto, Control, Terminal (vim / TUI), Chat |
 | Tiles | Copy screen, New tab, Split, Rename |
 | Input and display | Input: Compose / Live (Control), Larger text / Smaller text, Wrap long lines (Control), Fit width to screen (Terminal) |
-| Session | Layout (drag dividers to resize, long-press this pane to swap it, zoom), Worktree (list, new, open), Agent info, Close session |
+| Session | Browse files and changes, Layout (drag dividers to resize, long-press this pane to swap it, zoom), Worktree (list, new, open), Agent info, Close session |
 
-**Chat** groups thinking and tools into a collapsible run that closes once the reply is in. Expand the run to see arguments and results. **Copy reply** sits on a finished answer. **Load earlier** pulls older turns when the thread is long.
+**Chat** puts a turn's thinking and tools in one step card. Its header leads with the result: waiting on you, which command failed, which files changed, how many steps and how long. It is open with the latest steps while the turn runs and one line afterwards; long turns can filter to failed or edited steps. Tap a step for its command or arguments and output, copy them, and move with **Previous** / **Next**. A finished answer has **Copy**, each code block its own **Copy code**. **Load earlier** pulls older turns when the thread is long.
 
 The web surface does not offer arbitrary shell, deleting worktrees, or yanking the computer window to the front.
 

@@ -6,6 +6,7 @@ import {
   type AgentTracePage,
 } from "../operations";
 import { ProtocolError } from "./errors";
+import { noteDaemonClock } from "../agent-trace-clock";
 
 type ReadRPC = (op: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -13,14 +14,18 @@ type ReadRPC = (op: string, params: Record<string, unknown>) => Promise<unknown>
 export class AgentTraceRPC {
   private summarySupport: "unknown" | "yes" | "no" = "unknown";
 
-  /** markers reflects GetConfig.capabilities.trace_markers on the current transport. */
-  constructor(private readonly rpc: ReadRPC, private readonly markers: () => boolean = () => false) {}
+  /** markers / labels / times reflect GetConfig.capabilities.trace_markers / trace_labels / trace_times. */
+  constructor(private readonly rpc: ReadRPC, private readonly markers: () => boolean = () => false,
+    private readonly labels: () => boolean = () => false, private readonly times: () => boolean = () => false) {}
 
   async read(paneId: string, cursor: string | null = null, limit = 50): Promise<AgentTracePage> {
     const params = { pane_id: paneId, cursor, limit, ...(this.markers() ? { markers: true } : {}) };
     if (this.summarySupport !== "no") {
       try {
-        const page = parseAgentTraceSummaryPage(await this.rpc("AgentTraceSummary", params));
+        // labels and times exist only on the summary read.
+        const summary = { ...params, ...(this.labels() ? { labels: true } : {}), ...(this.times() ? { times: true } : {}) };
+        const page = parseAgentTraceSummaryPage(await this.rpc("AgentTraceSummary", summary));
+        if (page.now !== undefined) noteDaemonClock(page.now);
         this.summarySupport = "yes";
         return page;
       } catch (error) {

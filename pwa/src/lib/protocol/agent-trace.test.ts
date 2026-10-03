@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { AgentTraceRPC } from "./agent-trace";
 import { ProtocolError } from "./errors";
+import { daemonNow, noteDaemonClock } from "../agent-trace-clock";
 
 const legacyPage = {
   items: [{ type: "tool", name: "Read", input: '{"path":"secret"}', output: "private" }],
@@ -57,5 +58,41 @@ describe("AgentTrace rolling RPC", () => {
     await reader.read("p1");
     expect(sent.map((params) => "markers" in params)).toEqual([false, true]);
     expect(sent[1].markers).toBe(true);
+  });
+
+  test("asks for labels only on the summary read and only while advertised", async () => {
+    const sent: Array<[string, Record<string, unknown>]> = [];
+    let labels = false;
+    const reader = new AgentTraceRPC(async (op, params) => {
+      sent.push([op, params]);
+      if (op === "AgentTraceSummary" && sent.length === 3) throw new ProtocolError("unknown_op", op);
+      return { items: [], next_cursor: null, truncated: false };
+    }, () => true, () => labels);
+    await reader.read("p1");
+    labels = true;
+    await reader.read("p1");
+    await reader.read("p1");
+    expect(sent.map(([op, params]) => [op, "labels" in params])).toEqual([
+      ["AgentTraceSummary", false], ["AgentTraceSummary", true], ["AgentTraceSummary", true], ["AgentTrace", false],
+    ]);
+  });
+
+  test("asks for record times on the summary read only while advertised", async () => {
+    const sent: Record<string, unknown>[] = [];
+    let times = false;
+    const reader = new AgentTraceRPC(async (_op, params) => { sent.push(params); return { items: [], next_cursor: null, truncated: false }; },
+      () => false, () => false, () => times);
+    await reader.read("p1");
+    times = true;
+    await reader.read("p1");
+    expect(sent.map((params) => params.times)).toEqual([undefined, true]);
+  });
+
+  test("a timed reply records the computer's clock for elapsed time", async () => {
+    const reader = new AgentTraceRPC(async () => ({ items: [], next_cursor: null, truncated: false, now: Date.now() + 120_000 }),
+      () => false, () => false, () => true);
+    await reader.read("p1");
+    expect(Math.round((daemonNow() - Date.now()) / 1000)).toBe(120);
+    noteDaemonClock(Date.now());
   });
 });

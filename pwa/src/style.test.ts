@@ -104,13 +104,12 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("interactive touch controls keep a 44px target", () => {
-    for (const selector of [".connect-manual", ".pair-paste", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".computer-add", ".set-nav", ".set-action", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-state-retry", ".full-terminal-kb", ".agent-step-summary", ".agent-process-summary", ".agent-older", ".agent-reply-copy", ".slash-cmd"]) {
+    for (const selector of [".connect-manual", ".pair-paste", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".computer-add", ".set-nav", ".set-action", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-state-retry", ".full-terminal-kb", ".work-head", ".work-step", ".work-earlier", ".agent-user-more", ".step-copy", ".agent-older", ".agent-reply-copy", ".slash-cmd"]) {
       const match = rule(selector).match(/min-height:\s*(\d+)px/);
       expect(match, selector).not.toBeNull();
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);
     }
     expect(rule(".text-link")).toMatch(/min-width:\s*44px/);
-    expect(rule(".agent-detail-retry")).toMatch(/min-height:\s*44px/);
   });
 
   test("new-output chip sits on the left so it does not cover the TUI page rail", () => {
@@ -397,10 +396,10 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".agent-trace-limit")).toMatch(/color:\s*var\(--muted\)/);
     expect(rule(".agent-trace-limit")).not.toMatch(/position:\s*(sticky|fixed|absolute)/);
     expect(rule(".agent-empty")).toMatch(/justify-content:\s*center/);
-    expect(rule(".agent-thinking-preview")).toMatch(/flex:\s*1 1 auto/);
-    expect(rule(".agent-thinking-preview")).toMatch(/overflow:\s*hidden/);
-    expect(rule(".agent-thinking-preview")).toMatch(/text-overflow:\s*ellipsis/);
-    expect(rule(".agent-thinking-preview")).toMatch(/white-space:\s*nowrap/);
+    expect(rule(".work-step-text")).toMatch(/flex:\s*1 1 auto/);
+    expect(rule(".work-step-text")).toMatch(/overflow:\s*hidden/);
+    expect(rule(".work-step-text")).toMatch(/text-overflow:\s*ellipsis/);
+    expect(rule(".work-step-text")).toMatch(/white-space:\s*nowrap/);
     expect(rule(".agent-empty")).toMatch(/align-items:\s*center/);
     expect(rule(".agent-stream-inner")).toMatch(/min-height:\s*100%/);
   });

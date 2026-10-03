@@ -196,15 +196,14 @@ describe("agent-chat remembers its mode per pane", () => {
   test("renders thinking, tools, and the final reply", async () => await act(async () => {
     bootAgentChat();
     expect(app.querySelector(".agent-chat-root")).toBeTruthy();
-    expect(app.querySelector(".agent-process")).toBeTruthy();
-    expect(app.querySelector(".agent-thinking")).toBeTruthy();
-    expect(app.querySelector(".agent-thinking-preview")?.textContent).toBe("I will read it");
-    expect(app.querySelector(".agent-tool")).toBeTruthy();
+    expect(app.querySelector("details.work-card")).toBeTruthy();
+    expect(app.querySelector(".work-step.is-think .work-step-text")?.textContent).toBe("I will read it");
+    expect(app.querySelector(".work-step.is-read")).toBeTruthy();
     expect(app.querySelector(".agent-assistant")?.textContent).toContain("looks fine");
     expect(app.querySelector(".agent-user")?.textContent).toContain("inspect this");
     expect(app.querySelector(".agent-user-role")).toBeNull();
     expect(app.querySelector(".agent-user-text")?.textContent).toBe("inspect this");
-    expect(app.querySelector(".agent-process-summary")?.textContent).toContain("正在执行");
+    expect(app.querySelector("details.work-card")?.hasAttribute("open")).toBe(true);
     expect(app.querySelector(".agent-stream-inner")).toBeTruthy();
     const title = app.querySelector(".agent-chat-root .chrome-title");
     expect(title).toBeTruthy();
@@ -419,12 +418,12 @@ describe("agent-chat remembers its mode per pane", () => {
     ] });
     expect(patchAgentChat({ follow: true })).toBe(true);
 
-    const fold = app.querySelector(".agent-reply-fold");
-    const preamble = fold?.querySelector(".agent-assistant-intermediate");
-    const tool = fold?.querySelector(".agent-tool");
+    const fold = app.querySelector("details.work-card");
+    const preamble = fold?.querySelector(".work-note");
+    const tool = fold?.querySelector(".work-step.is-read");
     const final = app.querySelector(".agent-assistant-final");
     if (!(fold instanceof HTMLElement) || !(preamble instanceof HTMLElement) || !(tool instanceof HTMLElement) || !(final instanceof HTMLElement)) {
-      throw new Error("missing chronological reply fold");
+      throw new Error("missing chronological step card");
     }
     expect(preamble.textContent).toContain("I will inspect it first.");
     expect(tool.textContent).toContain("Read a.ts");
@@ -441,10 +440,10 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(patchAgentChat({ follow: true })).toBe(true);
 
     const pending = [...app.querySelectorAll<HTMLElement>(".agent-user")].at(-1);
-    const work = [...app.querySelectorAll<HTMLElement>(".agent-thinking")].at(-1);
+    const work = [...app.querySelectorAll<HTMLElement>(".work-step.is-think")].at(-1);
     if (!pending || !work) throw new Error("missing optimistic turn");
     expect(pending.textContent).toContain("new question");
-    expect(work.textContent).toContain("思考");
+    expect(work.textContent).toContain("new work already arrived");
     expect(Boolean(pending.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   }));
 
@@ -458,14 +457,15 @@ describe("agent-chat remembers its mode per pane", () => {
       { type: "tool", name: "Third", output: "失败" },
     ] });
     expect(patchAgentChat({ follow: true })).toBe(true);
-    expect([...app.querySelectorAll(".agent-tool-state")].map((item) => item.getAttribute("aria-label"))).toEqual([
-      "执行中",
-      "完成",
-      "失败",
+    // Without trace_labels a finished step only "ended": success is not claimed.
+    expect([...app.querySelectorAll(".work-step")].map((item) => item.className)).toEqual([
+      "work-step is-other is-running",
+      "work-step is-other is-ended",
+      "work-step is-other is-error",
     ]);
   }));
 
-  test("loads tool bodies only after expansion and reuses the loaded detail", async () => await act(async () => {
+  test("loads tool bodies only when the step sheet opens and reuses the loaded detail", async () => await act(async () => {
     bootAgentChat();
     let reads = 0;
     let finish: ((detail: { detailRef: string; input: string; output: string; truncated: true }) => void) | undefined;
@@ -482,33 +482,30 @@ describe("agent-chat remembers its mode per pane", () => {
     });
     expect(patchAgentChat({ follow: true })).toBe(true);
     expect(reads).toBe(0);
-    expect(app.textContent).not.toContain("/secret/a.ts");
+    expect(document.body.textContent).not.toContain("/secret/a.ts");
 
-    const tool = app.querySelector(".agent-tool");
-    if (!(tool instanceof HTMLDetailsElement)) throw new Error("missing lazy tool card");
-    tool.open = true;
-    tool.dispatchEvent(new happy.Event("toggle"));
+    click(".work-step.is-read");
+    await Promise.resolve();
     expect(reads).toBe(1);
-    expect(app.textContent).toContain("正在加载详情");
+    const sheet = () => document.querySelector("dialog.step-sheet");
+    expect(sheet()?.textContent).toContain("正在加载详情");
 
     finish?.({ detailRef: "detail-1", input: '{"path":"/secret/a.ts"}', output: "private body", truncated: true });
     await Promise.resolve();
     await Promise.resolve();
-    expect(app.textContent).toContain("/secret/a.ts");
-    expect(app.textContent).toContain("private body");
-    expect(app.querySelector(".agent-tool .agent-detail-limit")?.textContent).toContain("部分较长内容已省略");
+    expect(sheet()?.textContent).toContain("/secret/a.ts");
+    expect(sheet()?.textContent).toContain("private body");
+    expect(sheet()?.querySelector(".step-note")).toBeTruthy();
     expect(app.querySelector(".agent-trace-limit")).toBeNull();
 
-    const painted = app.querySelector(".agent-tool");
-    if (!(painted instanceof HTMLDetailsElement)) throw new Error("missing repainted tool card");
-    painted.open = false;
-    painted.dispatchEvent(new happy.Event("toggle"));
-    painted.open = true;
-    painted.dispatchEvent(new happy.Event("toggle"));
+    closeTestDialogs();
+    click(".work-step.is-read");
+    await Promise.resolve();
     expect(reads).toBe(1);
+    closeTestDialogs();
   }));
 
-  test("keeps a failed detail read inside the tool card and retries on demand", async () => await act(async () => {
+  test("keeps a failed detail read inside the step sheet and retries on demand", async () => await act(async () => {
     bootAgentChat();
     let reads = 0;
     setTrace({ agentTraceItems: [{ type: "tool", name: "Read", toolState: "done", detailRef: "detail-retry" }] });
@@ -521,19 +518,16 @@ describe("agent-chat remembers its mode per pane", () => {
       },
     });
     expect(patchAgentChat({ follow: true })).toBe(true);
-    const tool = app.querySelector(".agent-tool");
-    if (!(tool instanceof HTMLDetailsElement)) throw new Error("missing lazy tool card");
-    tool.open = true;
-    tool.dispatchEvent(new happy.Event("toggle"));
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(app.querySelector(".agent-detail-error")).toBeTruthy();
+    click(".work-step.is-read");
+    for (let tick = 0; tick < 6; tick += 1) await Promise.resolve();
+    const sheet = () => document.querySelector("dialog.step-sheet");
+    expect(sheet()?.querySelector(".agent-detail-error")).toBeTruthy();
     expect(app.querySelector(".agent-chat-root > [data-app-notice]")).toBeNull();
-    click(".agent-detail-retry");
-    await Promise.resolve();
-    await Promise.resolve();
+    sheet()?.querySelector<HTMLButtonElement>(".agent-detail-error button")?.click();
+    for (let tick = 0; tick < 6; tick += 1) await Promise.resolve();
     expect(reads).toBe(2);
-    expect(app.textContent).toContain("loaded after retry");
+    expect(sheet()?.textContent).toContain("loaded after retry");
+    closeTestDialogs();
   }));
 
   test("copies only the completed final reply", async () => await act(async () => {
@@ -684,10 +678,16 @@ describe("agent-chat remembers its mode per pane", () => {
     bootAgentChat();
     setAgents([{ ...(selectedAgent() ?? { paneId: "p1" }), status: "blocked" }]);
     paintPane();
-    expect(app.querySelector(".agent-stream .agent-confirm")).toBeNull();
+    // At the latest message the turn's own card is the way out; the dock entry
+    // only appears for a reader scrolled away from it.
+    expect(app.querySelector(".agent-stream .needs-card")).toBeTruthy();
+    expect(app.querySelector(".agent-confirm")).toBeNull();
+    applyTrace({ agentTraceFollow: false });
+    paintPane();
     expect(app.querySelector(".agent-confirm")?.textContent).toContain("等你确认");
     const go = app.querySelector(".agent-confirm button");
-    if (!(go instanceof HTMLButtonElement)) throw new Error("missing 去确认");
+    if (!(go instanceof HTMLButtonElement)) throw new Error("missing 去终端处理");
+    expect(go.textContent).toBe("去终端处理");
     go.click();
     expect(isAgentChat()).toBe(false);
     expect(paneTermMode("p1")).toBe("guided");
@@ -749,7 +749,7 @@ describe("agent-chat remembers its mode per pane", () => {
     closeTestDialogs();
   }));
 
-  test("new turns while scrolled up offer ↓ 新回复", async () => await act(async () => {
+  test("new output while scrolled up offers the jump (新进展 while the agent works)", async () => await act(async () => {
     bootAgentChat();
     applyTrace({
       agentTraceFollow: false,
@@ -758,9 +758,9 @@ describe("agent-chat remembers its mode per pane", () => {
     });
     expect(patchAgentChat({ follow: false })).toBe(true);
     const jump = app.querySelector(".agent-jump");
-    if (!(jump instanceof HTMLButtonElement)) throw new Error("missing 新回复");
+    if (!(jump instanceof HTMLButtonElement)) throw new Error("missing jump");
     expect(jump.hidden).toBe(false);
-    expect(jump.textContent).toContain("新回复");
+    expect(jump.textContent).toContain("有新进展");
     jump.click();
     expect(trace().agentTraceFollow).toBe(true);
     expect(trace().agentTraceUnread).toBe(false);

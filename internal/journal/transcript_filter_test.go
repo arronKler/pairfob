@@ -76,6 +76,7 @@ func TestClaudeTraceShowsOnlyTypedPromptsAndAgentOutput(t *testing.T) {
 		{Type: "user", Text: "why does it reconnect?"},
 		{Type: "tool", Name: "Read", Input: `{"file_path":"/tmp/a"}`, Output: "file body"},
 		{Type: "user", Text: "! git status"},
+		{Type: "tool", Name: "Bash", Input: `{"command":"git status"}`, Output: "clean"},
 		{Type: "user", Text: "/model opus"},
 		{Type: "assistant", Text: "Because the session expired."},
 	}
@@ -215,5 +216,44 @@ func TestClaudeReminderOnlyToolResultStillCompletes(t *testing.T) {
 	}
 	if got := visibleClaudeToolOutput("body\n\n<system-reminder>x</system-reminder>"); got != "body" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestClaudeAPIErrorsStayVisibleButPlaceholdersDoNot(t *testing.T) {
+	root := t.TempDir()
+	id := "12345678-abcd-4321-abcd-1234567890ab"
+	synthetic := func(text string, flags map[string]any) map[string]any {
+		line := map[string]any{"type": "assistant", "message": map[string]any{
+			"role": "assistant", "model": "<synthetic>", "content": []map[string]any{{"type": "text", "text": text}},
+		}}
+		for key, value := range flags {
+			line[key] = value
+		}
+		return line
+	}
+	writeLines(t, filepath.Join(root, "projects", "-tmp-pairfob", id+".jsonl"),
+		claudeUser("continue", nil),
+		synthetic("API Error: 529 Overloaded", map[string]any{"isApiErrorMessage": true, "error": "unknown"}),
+		synthetic("No response requested.", nil),
+		synthetic("Claude AI usage limit reached|1760000000", map[string]any{"isApiErrorMessage": true}),
+	)
+	reader, ref := &Reader{ClaudeRoot: root}, Ref{Source: "herdr:claude", Agent: "claude", Kind: "id", Value: id}
+	trace, err := reader.ReadTrace(ref, nil, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := traceShape(trace.Items); got != "user:continue|assistant:API Error: 529 Overloaded|assistant:Claude AI usage limit reached|1760000000" {
+		t.Fatalf("trace=%q", got)
+	}
+	history, err := reader.Read(ref, nil, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	texts := make([]string, 0, len(history.Messages))
+	for _, message := range history.Messages {
+		texts = append(texts, message.Role+":"+message.Text)
+	}
+	if got := strings.Join(texts, "|"); got != "user:continue|assistant:API Error: 529 Overloaded|assistant:Claude AI usage limit reached|1760000000" {
+		t.Fatalf("history=%q", got)
 	}
 }

@@ -33,6 +33,8 @@ const handlers: SessionHandlers = {
   onBack: () => { back++; },
   onMenu: () => { menu++; },
   onWorkspace: () => { inspect++; },
+  onToggleView: () => undefined,
+  chatAvailable: () => true,
 };
 
 function paint(includeBack = true): void {
@@ -175,20 +177,21 @@ describe("pane header keeps status surfaces in step", () => {
     expect(viewSource).not.toContain("更多操作");
     expect(viewSource).not.toContain("full-terminal-retry");
     expect(viewSource).not.toContain("退出完整终端");
-    expect(chromeSource).toContain("handlers.onWorkspace");
+    expect(chromeSource).toContain("handlers.onToggleView");
     expect(chromeSource).toContain("handlers.onMenu");
   });
 
-  test("workspace inspection is a first-class trailing action before more", () => {
+  test("the chat/terminal toggle is the trailing action before more; files live in the menu", () => {
     paint();
     expect([...appRoot().querySelectorAll(".chrome-actions button")].map((button) => button.className))
-      .toEqual(["icon-btn icon-workspace", "icon-btn icon-more"]);
-    expect(appRoot().querySelector(".icon-workspace")?.getAttribute("aria-label")).toBe(t("workspace.open"));
+      .toEqual(["icon-btn icon-view", "icon-btn icon-more"]);
+    expect(appRoot().querySelector(".icon-view")?.getAttribute("aria-label")).toBe(t("head.toChat"));
+    expect(appRoot().querySelector(".icon-workspace")).toBeNull();
     expect(chromeSource).not.toContain("labEnabled");
-    const workspace = chromeSource.indexOf("icon-workspace");
+    const toggle = chromeSource.indexOf("icon-view");
     const menu = chromeSource.indexOf("icon-more");
-    expect(workspace).toBeGreaterThan(-1);
-    expect(menu).toBeGreaterThan(workspace);
+    expect(toggle).toBeGreaterThan(-1);
+    expect(menu).toBeGreaterThan(toggle);
   });
 
   test("in-place pane reads keep the terminal Enter control in sync", () => {

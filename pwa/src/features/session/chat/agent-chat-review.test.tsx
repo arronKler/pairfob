@@ -1,3 +1,4 @@
+import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { happy, resetTestDOM } from "../../../../test-support/boot-dom";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
@@ -139,7 +140,7 @@ test("a new session reusing the pane id cannot keep the preceding session's comp
   expect(field() === previous).toBeFalse();
 });
 
-test("a new pane does not inherit the previous pane's expanded tools or lazy detail request", async () => {
+test("a new pane does not inherit the previous pane's expanded card or lazy detail request", async () => {
   const requested: string[] = [];
   setSession({ agentTraceDetail: async (paneId: string, detailRef: string) => {
     requested.push(`${paneId}:${detailRef}`);
@@ -152,20 +153,20 @@ test("a new pane does not inherit the previous pane's expanded tools or lazy det
   applyTrace({ agentTraceItems: items("first-detail") });
   act(mount);
   act(() => {
-    appRoot().querySelector<HTMLDetailsElement>(".agent-reply-fold")!.open = true;
-    appRoot().querySelector<HTMLDetailsElement>(".agent-tool")!.open = true;
+    appRoot().querySelector<HTMLDetailsElement>("details.work-card")!.open = true;
+    appRoot().querySelector<HTMLButtonElement>(".work-step.is-read")!.click();
   });
   await drain();
   expect(requested).toEqual(["p1:first-detail"]);
+  closeTestDialogs();
   act(() => {
     switchComposeView(() => { selectPane("p2"); });
     applyTrace({ agentTraceItems: items("second-detail") });
     mount();
   });
   await drain();
-  expect({ foldOpen: appRoot().querySelector<HTMLDetailsElement>(".agent-reply-fold")!.open,
-    toolOpen: appRoot().querySelector<HTMLDetailsElement>(".agent-tool")!.open, requested })
-    .toEqual({ foldOpen: false, toolOpen: false, requested: ["p1:first-detail"] });
+  expect({ cardOpen: appRoot().querySelector<HTMLDetailsElement>("details.work-card")!.open, requested })
+    .toEqual({ cardOpen: false, requested: ["p1:first-detail"] });
 });
 
 test("older-page publication anchors against committed React content and keeps the stream node", async () => {
@@ -274,7 +275,7 @@ async function imeEnterCase(): Promise<void> {
   expect(input.value).toBe("拼音 in progress");
   expect([input.selectionStart, input.selectionEnd]).toEqual([2, 5]);
   expect(composeDraft()).toBe("Committed");
-  expect(appRoot().querySelector(".agent-confirm")).not.toBeNull();
+  expect(appRoot().querySelector(".needs-card")).not.toBeNull();
   expect(appRoot().querySelector("[data-app-notice]")?.textContent).toBe("Notice while composing");
   act(() => {
     input.value = "Confirmed text";
@@ -304,7 +305,7 @@ test("the detached composer releases every input/composition/key listener", () =
   expect(submits).toBe(0);
 });
 
-test("late tool detail growth preserves the first visible message anchor", async () => {
+test("a step's detail opens in a sheet and never moves the reading position", async () => {
   const detail = deferred<{ detailRef: string; output: string; truncated: false }>();
   setSession({ agentTraceDetail: () => detail.promise });
   applyTrace({ agentTraceItems: [
@@ -315,26 +316,18 @@ test("late tool detail growth preserves the first visible message anchor", async
   ], agentTraceFollow: false });
   act(mount);
   const viewport = stream();
-  const visible = [...viewport.querySelectorAll<HTMLElement>("[data-trace-anchor]")]
-    .find((node) => node.textContent === "Visible")!;
-  viewport.getBoundingClientRect = () => ({ top: 100, bottom: 500, left: 0, right: 300,
-    width: 300, height: 400, x: 0, y: 100, toJSON() {} });
-  for (const node of viewport.querySelectorAll<HTMLElement>("[data-trace-anchor]")) {
-    node.getBoundingClientRect = () => {
-      const top = node === visible ? (appRoot().textContent?.includes("expanded detail") ? 330 : 130) : 20;
-      return { top, bottom: top + 60, left: 0, right: 300, width: 300, height: 60, x: 0, y: top, toJSON() {} };
-    };
-  }
   viewport.scrollTop = 400;
-  const tool = viewport.querySelector<HTMLDetailsElement>(".agent-tool")!;
-  await act(async () => { tool.open = true; tool.dispatchEvent(new happy.Event("toggle")); });
+  await act(async () => { viewport.querySelector<HTMLButtonElement>(".work-step.is-read")!.click(); await Promise.resolve(); });
   await act(async () => {
     detail.resolve({ detailRef: "detail-grow", output: "expanded detail", truncated: false });
     await detail.promise;
     await Promise.resolve();
   });
-  expect(viewport.scrollTop).toBe(600);
+  expect(document.querySelector("dialog.step-sheet")?.textContent).toContain("expanded detail");
+  expect(viewport.textContent).not.toContain("expanded detail");
+  expect(viewport.scrollTop).toBe(400);
   expect(chatSnapshot().agentTraceFollow).toBeFalse();
+  closeTestDialogs();
 });
 
 test("an old prompt failure restores only its saved draft and cannot release a newer prompt lock", async () => {

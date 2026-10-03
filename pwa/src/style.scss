@@ -16,6 +16,7 @@
 @use "./features/session/guided/key-flight";
 @use "./features/session/full-terminal/full-terminal";
 @use "./features/session/chat/agent-chat";
+@use "./features/session/chat/work-card";
 @use "./styles/attachments";
 @use "./features/session/guided/row-actions";
 @use "./features/session/guided/dock";

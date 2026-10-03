@@ -21,6 +21,8 @@ export const OPERATION_CAPABILITY_KEYS = [
   "upload_file_v2",
   "link_machine",
   "trace_markers",
+  "trace_labels",
+  "trace_times",
 ] as const;
 
 export type OperationCapability = typeof OPERATION_CAPABILITY_KEYS[number];
@@ -46,6 +48,8 @@ export const NO_OPERATION_CAPABILITIES: OperationCapabilities = {
   upload_file_v2: false,
   link_machine: false,
   trace_markers: false,
+  trace_labels: false,
+  trace_times: false,
 };
 
 export const OPERATION_INPUT_LIMITS = {
@@ -62,6 +66,16 @@ export const OPERATION_INPUT_LIMITS = {
 export function fitOperationPrompt(value: string): { text: string; truncated: boolean } {
   const text = truncateUTF8Bytes(value, OPERATION_INPUT_LIMITS.prompt);
   return { text, truncated: text !== value };
+}
+
+/** Whether a raw GetConfig response lets AgentTraceSummary stamp items with their record time. */
+export function advertisesTraceTimes(config: unknown): boolean {
+  return isRecord(config) && isRecord(config.capabilities) && config.capabilities.trace_times === true;
+}
+
+/** Whether a raw GetConfig response lets AgentTraceSummary label tool steps and report real failures. */
+export function advertisesTraceLabels(config: unknown): boolean {
+  return isRecord(config) && isRecord(config.capabilities) && config.capabilities.trace_labels === true;
 }
 
 /** Whether a raw GetConfig response lets AgentTrace return command and marker items. */
@@ -175,11 +189,19 @@ export type AgentTraceItem = {
   output?: string;
   toolState?: "running" | "done" | "error";
   detailRef?: string;
+  /** Short target the daemon derived from the tool input (path, command line, query); proto/agent-trace-labels.md. */
+  label?: string;
+  /** Milliseconds since the epoch of the transcript record; proto/agent-trace-times.md. */
+  at?: number;
+  /** The phone's own prompt, shown until the transcript records it. Never on the wire. */
+  pending?: boolean;
 };
 export type AgentTracePage = {
   items: AgentTraceItem[];
   nextCursor: string | null;
   truncated: boolean;
+  /** The computer's clock at reply time, with `times` (proto/agent-trace-times.md). */
+  now?: number;
 };
 export type AgentTraceDetail = {
   detailRef: string;
@@ -367,7 +389,7 @@ export function parseRuntimeOperationsConfig(value: unknown): RuntimeOperationsC
 	const rawCapabilities = isRecord(config.capabilities) ? config.capabilities : {};
 	const capabilities = { ...NO_OPERATION_CAPABILITIES };
 	const capabilityKeys = Object.keys(rawCapabilities);
-	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers"]);
+	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers", "trace_labels", "trace_times"]);
 	const capabilitiesValid = capabilityKeys.every((key) => (OPERATION_CAPABILITY_KEYS as readonly string[]).includes(key))
 		&& OPERATION_CAPABILITY_KEYS.every((key) => typeof rawCapabilities[key] === "boolean"
       || (optionalCapabilities.has(key) && !(key in rawCapabilities)));
@@ -465,33 +487,48 @@ export function parseAgentTracePage(value: unknown): AgentTracePage {
   return { items: items as AgentTraceItem[], nextCursor: cursor, truncated: result.truncated };
 }
 
+/** Absent → undefined; present but not a non-negative integer → null (reject). */
+function traceTime(value: Record<string, unknown>, key: "at" | "now" = "at"): number | undefined | null {
+  if (!(key in value)) return undefined;
+  return Number.isSafeInteger(value[key]) && (value[key] as number) >= 0 ? value[key] as number : null;
+}
+
 function itemTraceSummary(value: unknown): AgentTraceItem | null {
   if (!isRecord(value) || typeof value.type !== "string" || !TRACE_TYPES.has(value.type as AgentTraceType)) return null;
   const type = value.type as AgentTraceType;
   if (type === "tool") {
-    if (Object.keys(value).some((key) => !["type", "name", "state", "detail_ref"].includes(key))) return null;
+    if (Object.keys(value).some((key) => !["type", "name", "state", "detail_ref", "label", "at"].includes(key))) return null;
     const name = optionalClipped(value, "name");
     const detailRef = optionalClipped(value, "detail_ref");
+    const label = optionalClipped(value, "label");
     const state = value.state;
     if (!name || !detailRef || detailRef.length > 1024 || (state !== "running" && state !== "done" && state !== "error")) return null;
-    return { type, name, toolState: state, detailRef };
+    if (label !== undefined && Array.from(label).length > 160) return null;
+    const at = traceTime(value);
+    if (at === null) return null;
+    return { type, name, toolState: state, detailRef, ...(label ? { label } : {}), ...(at !== undefined ? { at } : {}) };
   }
-  if (Object.keys(value).some((key) => !["type", "text"].includes(key))) return null;
+  if (Object.keys(value).some((key) => !["type", "text", "at"].includes(key))) return null;
   const text = optionalClipped(value, "text");
-  if (isTraceMarker(type)) return text ? null : { type };
-  return text ? { type, text } : null;
+  const at = traceTime(value);
+  if (at === null) return null;
+  const stamp = at !== undefined ? { at } : {};
+  if (isTraceMarker(type)) return text ? null : { type, ...stamp };
+  return text ? { type, text, ...stamp } : null;
 }
 
 export function parseAgentTraceSummaryPage(value: unknown): AgentTracePage {
   const result = resultRecord(value, "AgentTraceSummary");
-  exactKeys(result, ["items", "next_cursor", "truncated"]);
+  exactKeys(result, ["items", "next_cursor", "truncated"], ["items", "next_cursor", "truncated", "now"]);
+  const now = traceTime(result, "now");
+  if (now === null) badResult("AgentTraceSummary 响应 now 非法");
   if (!Array.isArray(result.items) || result.items.length > 200) badResult("AgentTraceSummary 响应 items 非法");
   const items = result.items.map((item) => itemTraceSummary(item));
   if (items.some((item) => item === null)) badResult("AgentTraceSummary 响应包含非法记录");
   const cursor = result.next_cursor;
   if (cursor !== null && (typeof cursor !== "string" || cursor.length > 1024)) badResult("AgentTraceSummary 响应 next_cursor 非法");
   if (typeof result.truncated !== "boolean") badResult("AgentTraceSummary 响应 truncated 非法");
-  return { items: items as AgentTraceItem[], nextCursor: cursor, truncated: result.truncated };
+  return { items: items as AgentTraceItem[], nextCursor: cursor, truncated: result.truncated, ...(now !== undefined ? { now } : {}) };
 }
 
 export function parseAgentTraceDetail(value: unknown, expectedRef?: string): AgentTraceDetail {

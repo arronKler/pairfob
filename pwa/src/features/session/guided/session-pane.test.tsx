@@ -25,6 +25,8 @@ let back = 0, menu = 0, inspect = 0;
 const handlers = {
   onBack: () => { back++; }, onMenu: () => { menu++; },
   onWorkspace: () => { inspect++; },
+  onToggleView: () => { inspect++; },
+  chatAvailable: () => true,
 };
 const parts = {
   Terminal: ({ model }: { model: PaneModel }) => <div data-testid="buffer">{model.texts.join("\n")}</div>,
@@ -143,13 +145,13 @@ test("header actions and busy gating remain available in the expected order", ()
   act(() => {
     appRoot().querySelector<HTMLButtonElement>(".back")!.click();
     appRoot().querySelector<HTMLElement>(".chrome-title")!.click();
-    appRoot().querySelector<HTMLButtonElement>(".icon-workspace")!.click();
+    appRoot().querySelector<HTMLButtonElement>(".icon-view")!.click();
     appRoot().querySelector<HTMLButtonElement>(".icon-more")!.click();
   });
   // The identity is display-only; the trailing pair never changes with status.
   expect([back, inspect, menu]).toEqual([1, 1, 1]);
   expect([...appRoot().querySelectorAll(".chrome-actions button")].map(button => button.className))
-    .toEqual(["icon-btn icon-workspace", "icon-btn icon-more"]);
+    .toEqual(["icon-btn icon-view", "icon-btn icon-more"]);
   act(() => { setOperationBusy(true); notifySessionUI(); });
   expect(appRoot().querySelector<HTMLButtonElement>(".icon-more")!.disabled).toBeTrue();
   paint(false);

@@ -325,13 +325,19 @@ export function visibleItems(): AgentTraceItem[] {
   const boundary = pendingBoundary(chatSnapshot().agentTraceItems);
   return [
     ...chatSnapshot().agentTraceItems.slice(0, boundary),
-    { type: "user", text: pending },
+    { type: "user", text: pending, pending: true },
     ...chatSnapshot().agentTraceItems.slice(boundary),
   ];
 }
 
-export function canEnterAgentChat(agent: { historyAvailable?: boolean; hasAgent?: boolean } | null | undefined = selectedAgent()): boolean {
-  return Boolean(agent && capabilityEnabled("history") && (agent.historyAvailable || agent.hasAgent));
+/** Agents whose transcripts the daemon reads (internal/journal). A new session may not have written one yet. */
+const CHAT_AGENT_KINDS = new Set(["claude", "codex", "grok", "pi"]);
+
+export function canEnterAgentChat(
+  agent: { historyAvailable?: boolean; hasAgent?: boolean; agent?: string } | null | undefined = selectedAgent(),
+): boolean {
+  return Boolean(agent && capabilityEnabled("history")
+    && (agent.historyAvailable || (agent.hasAgent && CHAT_AGENT_KINDS.has(agent.agent ?? ""))));
 }
 
 export function canSend(agent = selectedAgent()): boolean {
@@ -570,11 +576,11 @@ export function leaveAgentChat(opts?: { rememberGuided?: boolean; paint?: boolea
   if (opts?.paint !== false) commitView();
 }
 
-export async function copyAgentReply(text: string): Promise<void> {
+export async function copyAgentReply(text: string, what: "reply" | "code" = "reply"): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
     haptic(6);
-    showStatus(t("chat.copiedReply"));
+    showStatus(t(what === "code" ? "chat.copiedCode" : "chat.copiedReply"));
   } catch {
     showError(t("err.copyDenied"));
   }

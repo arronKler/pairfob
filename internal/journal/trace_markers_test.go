@@ -41,10 +41,10 @@ func TestClaudeTraceMarkersAreOptIn(t *testing.T) {
 		claudeUser("<bash-input>git status</bash-input>", nil),
 	)
 	legacy, marked := readBothViews(t, &Reader{ClaudeRoot: root}, Ref{Source: "herdr:claude", Agent: "claude", Kind: "id", Value: id})
-	if legacy != "user:/clear|user:fix it|assistant:working|user:! git status" {
+	if legacy != "user:/clear|user:fix it|assistant:working|user:! git status|tool" {
 		t.Fatalf("legacy=%q", legacy)
 	}
-	if marked != "command:/clear|user:fix it|assistant:working|interrupt|compaction|command:! git status" {
+	if marked != "command:/clear|user:fix it|assistant:working|interrupt|compaction|command:! git status|tool" {
 		t.Fatalf("marked=%q", marked)
 	}
 }
@@ -70,7 +70,12 @@ func TestGrokTraceHidesSelfSubmittedPromptsAndMarksCancel(t *testing.T) {
 	root := t.TempDir()
 	id := "grok_session_1"
 	update := func(value map[string]any) map[string]any {
-		return map[string]any{"method": "session/update", "params": map[string]any{"update": value}}
+		method := "session/update"
+		if value["sessionUpdate"] == "turn_completed" {
+			// Real Grok transcripts carry lifecycle events under its vendor method.
+			method = "_x.ai/session/update"
+		}
+		return map[string]any{"method": method, "params": map[string]any{"update": value}}
 	}
 	writeLines(t, filepath.Join(root, "sessions", "%2Ftmp", id, "updates.jsonl"),
 		update(map[string]any{"sessionUpdate": "user_message_chunk", "content": map[string]any{"type": "text", "text": "hi"}, "_meta": map[string]any{"promptIndex": 0}}),
@@ -140,5 +145,63 @@ func TestCommandsAndMarkersAreNotTaskActivity(t *testing.T) {
 		if activityLine("claude", encoded) {
 			t.Fatalf("counted as task evidence: %s", encoded)
 		}
+	}
+}
+
+func TestClaudeShellCommandKeepsItsOutputAsAStep(t *testing.T) {
+	root := t.TempDir()
+	id := "12345678-abcd-4321-abcd-1234567890ab"
+	writeLines(t, filepath.Join(root, "projects", "-tmp-pairfob", id+".jsonl"),
+		claudeUser("<bash-input>git status</bash-input>", nil),
+		claudeUser("<bash-stdout>On branch main\nnothing to commit</bash-stdout><bash-stderr></bash-stderr>", nil),
+		claudeUser("<bash-input>nope</bash-input>", nil),
+		claudeUser("<bash-stdout></bash-stdout><bash-stderr>zsh: command not found: nope</bash-stderr>", nil),
+	)
+	reader := &Reader{ClaudeRoot: root}
+	ref := Ref{Source: "herdr:claude", Agent: "claude", Kind: "id", Value: id}
+	page, err := reader.ReadTraceSummaryWith(ref, nil, 20, TraceOptions{Markers: true, Labels: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shape []string
+	for _, item := range page.Items {
+		shape = append(shape, strings.TrimSuffix(item.Type+":"+item.Text+item.Label+":"+item.State, ":"))
+	}
+	want := "command:! git status|tool:git status:done|command:! nope|tool:nope:error"
+	if got := strings.Join(shape, "|"); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	detail, err := reader.ReadTraceDetail(ref, page.Items[1].DetailRef)
+	if err != nil || detail.Output != "On branch main\nnothing to commit" {
+		t.Fatalf("detail=%+v err=%v", detail, err)
+	}
+	// History keeps the typed form only.
+	history, err := reader.Read(ref, nil, 20)
+	if err != nil || len(history.Messages) != 2 || history.Messages[0].Text != "! git status" {
+		t.Fatalf("history=%+v err=%v", history, err)
+	}
+}
+
+func TestClaudeShellOutputNeverAttachesToAnAgentTool(t *testing.T) {
+	root := t.TempDir()
+	id := "12345678-abcd-4321-abcd-1234567890ab"
+	writeLines(t, filepath.Join(root, "projects", "-tmp-pairfob", id+".jsonl"),
+		claudeUser("go", nil),
+		map[string]any{"type": "assistant", "message": map[string]any{"role": "assistant", "content": []map[string]any{
+			{"type": "tool_use", "id": "toolu_1", "name": "Bash", "input": map[string]any{"command": "sleep 100"}},
+		}}},
+		// The "!" input fell on an older page: only its output is in this window.
+		claudeUser("<bash-stdout>hello</bash-stdout><bash-stderr></bash-stderr>", nil),
+	)
+	page, err := (&Reader{ClaudeRoot: root}).ReadTraceSummaryWith(Ref{Source: "herdr:claude", Agent: "claude", Kind: "id", Value: id}, nil, 20, TraceOptions{Markers: true})
+	if err != nil || len(page.Items) != 2 || page.Items[1].State != "running" {
+		t.Fatalf("page=%+v err=%v", page, err)
+	}
+}
+
+func TestGrokFailedStatusIsAnErrorEvenWithText(t *testing.T) {
+	ev := parseGrokTrace([]byte(`{"method":"session/update","params":{"update":{"sessionUpdate":"tool_call_update","toolCallId":"c1","status":"failed","content":{"type":"text","text":"permission denied"}}}}`))
+	if len(ev) != 1 || ev[0].State != "error" || ev[0].Output != "permission denied" {
+		t.Fatalf("events=%+v", ev)
 	}
 }

@@ -44,7 +44,7 @@ const layers: LayerPolicy[] = [
     allowedModules: ["lib/i18n", "lib/i18n-en", "lib/i18n-zh", "lib/i18n-en-plurals",
       "lib/i18n-en-workspace", "lib/i18n-zh-workspace", "lib/i18n-en-shell", "lib/i18n-zh-shell", "lib/i18n-en-agent-info", "lib/i18n-zh-agent-info", "lib/i18n-board-menu", "lib/i18n-board-canvas", "lib/i18n-dialogs", "lib/i18n-machines",
       "lib/i18n-compose-v2", "lib/i18n-keypad-v2", "lib/i18n-chrome-v2", "lib/i18n-pane-menu-v2", "lib/i18n-rowbar-v2",
-      "lib/i18n-settings-v3"],
+      "lib/i18n-settings-v3", "lib/i18n-chat-work"],
     prohibitedModules: applicationModules,
     prohibitedRoots: ["ui/", "pages/", "app/", "features/", "lib/protocol/"],
   },

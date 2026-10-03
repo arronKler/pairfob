@@ -61,7 +61,7 @@ Details and errors: [Pairing](/pair).
 
 Herdr sessions appear in the Pairfob list. Tapping a card opens that session on the computer, not a copy.
 
-When the status is **Needs you**, the prompt stays in the terminal. Pairfob **does not blindly send Enter**. Use the keypad's ↑/↓ to choose, then Enter. In **Chat**, tap **Go confirm** to switch to Control. The compose box uses the system keyboard, including dictation and autocorrect. What you send lands in that session on the computer.
+When the status is **Needs you**, the prompt stays in the terminal. Pairfob **does not blindly send Enter**. Use the keypad's ↑/↓ to choose, then Enter. In **Chat**, a numbered prompt can be answered on the **Needs your confirmation** card (the terminal screen is checked before sending), or tap **Handle in terminal** to switch to Control. The compose box uses the system keyboard, including dictation and autocorrect. What you send lands in that session on the computer.
 
 UI: [Using the app](/app). Leaving and sitting down: [Leave and return](/continue).
 

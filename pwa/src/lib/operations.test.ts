@@ -17,6 +17,7 @@ import {
   parsePromptAgentResult,
   parseResizePaneResult,
   parseRuntimeOperationsConfig,
+  advertisesTraceLabels,
   advertisesTraceMarkers,
   parseSplitPaneResult,
   parseSwapPaneResult,
@@ -107,6 +108,8 @@ describe("runtime operation config", () => {
     expect(advertisesTraceMarkers({ capabilities: { trace_markers: true } })).toBeTrue();
     expect(advertisesTraceMarkers({ capabilities: { trace_markers: 1 } })).toBeFalse();
     expect(advertisesTraceMarkers(null)).toBeFalse();
+    expect(advertisesTraceLabels({ capabilities: { trace_labels: true } })).toBeTrue();
+    expect(advertisesTraceLabels({ capabilities: { trace_markers: true } })).toBeFalse();
   });
 
   test("list_sessions is optional, accepts only booleans and remains available offline", () => {
@@ -284,6 +287,32 @@ describe("safe read normalization", () => {
       expectBadMessage(() => parse({ items: [{ type: "command" }], next_cursor: null, truncated: false }));
       expectBadMessage(() => parse({ items: [{ type: "interrupt", text: "injected" }], next_cursor: null, truncated: false }));
     }
+  });
+
+  test("a summary tool may carry a one-line label of at most 160 characters", () => {
+    const base = { type: "tool", name: "Read", state: "done", detail_ref: "d1" };
+    expect(parseAgentTraceSummaryPage({ items: [{ ...base, label: "src/a.ts" }], next_cursor: null, truncated: false }).items)
+      .toEqual([{ type: "tool", name: "Read", toolState: "done", detailRef: "d1", label: "src/a.ts" }]);
+    expectBadMessage(() => parseAgentTraceSummaryPage({ items: [{ ...base, label: "x".repeat(161) }], next_cursor: null, truncated: false }));
+    expectBadMessage(() => parseAgentTraceSummaryPage({ items: [{ ...base, label: "" }], next_cursor: null, truncated: false }));
+  });
+
+  test("summary items may carry a non-negative integer record time", () => {
+    const page = parseAgentTraceSummaryPage({ items: [
+      { type: "user", text: "go", at: 1791023688977 },
+      { type: "tool", name: "Read", state: "done", detail_ref: "d1", at: 1791023718674 },
+      { type: "compaction", at: 1791023735252 },
+    ], next_cursor: null, truncated: false });
+    expect(page.items.map((item) => item.at)).toEqual([1791023688977, 1791023718674, 1791023735252]);
+    for (const at of [-1, 1.5, "1791023688977"]) {
+      expectBadMessage(() => parseAgentTraceSummaryPage({ items: [{ type: "user", text: "go", at }], next_cursor: null, truncated: false }));
+    }
+  });
+
+  test("a timed summary page carries the computer's clock", () => {
+    expect(parseAgentTraceSummaryPage({ items: [], next_cursor: null, truncated: false, now: 1791023688977 }).now).toBe(1791023688977);
+    expect(parseAgentTraceSummaryPage({ items: [], next_cursor: null, truncated: false }).now).toBeUndefined();
+    expectBadMessage(() => parseAgentTraceSummaryPage({ items: [], next_cursor: null, truncated: false, now: "soon" }));
   });
 
   test("keeps AgentTraceSummary tool bodies off the wire and binds detail replies", () => {

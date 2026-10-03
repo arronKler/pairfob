@@ -65,6 +65,12 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 		// trace_markers: AgentTrace/AgentTraceSummary accept markers:true and
 		// then return command, compaction and interrupt items.
 		"trace_markers": describeErr == nil && e.Journal != nil,
+		// trace_labels: AgentTraceSummary accepts labels:true and then may
+		// add a one-line label to tool items.
+		"trace_labels": describeErr == nil && e.Journal != nil,
+		// trace_times: AgentTraceSummary accepts times:true and then may add
+		// each item's transcript record time (epoch ms) as at.
+		"trace_times": describeErr == nil && e.Journal != nil,
 	}
 	agentKinds := make([]string, 0, len(descriptor.AgentKinds))
 	for _, kind := range descriptor.AgentKinds {
@@ -244,6 +250,8 @@ func (e *Engine) rpcAgentTraceSummary(s *sess, id string, params json.RawMessage
 		Cursor  *string `json:"cursor"`
 		Limit   *int    `json:"limit"`
 		Markers *bool   `json:"markers"`
+		Labels  *bool   `json:"labels"`
+		Times   *bool   `json:"times"`
 	}
 	if badParams(params, &p) || !validID(p.PaneID) || invalidSession(p.Session) || (p.Cursor != nil && utf8.RuneCountInString(*p.Cursor) > 1024) || (p.Limit != nil && (*p.Limit < 1 || *p.Limit > 200)) {
 		e.replyErr(s, id, "invalid_argument", "invalid agent trace summary params")
@@ -257,12 +265,21 @@ func (e *Engine) rpcAgentTraceSummary(s *sess, id string, params json.RawMessage
 	if p.Limit != nil {
 		limit = *p.Limit
 	}
-	page, err := e.Journal.ReadTraceSummaryWith(ref, p.Cursor, limit, journal.TraceOptions{Markers: p.Markers != nil && *p.Markers})
+	options := journal.TraceOptions{
+		Markers: p.Markers != nil && *p.Markers, Labels: p.Labels != nil && *p.Labels, Times: p.Times != nil && *p.Times,
+	}
+	page, err := e.Journal.ReadTraceSummaryWith(ref, p.Cursor, limit, options)
 	if err != nil {
 		e.replyAgentTraceError(s, id, err, "agent trace summary could not be read")
 		return
 	}
-	e.reply(s, id, map[string]any{"items": page.Items, "next_cursor": page.NextCursor, "truncated": page.Truncated})
+	reply := map[string]any{"items": page.Items, "next_cursor": page.NextCursor, "truncated": page.Truncated}
+	if options.Times {
+		// This computer's clock, so the phone can measure elapsed time against
+		// the same clock that stamped the records (proto/agent-trace-times.md).
+		reply["now"] = time.Now().UnixMilli()
+	}
+	e.reply(s, id, reply)
 }
 
 func (e *Engine) rpcAgentTraceDetail(s *sess, id string, params json.RawMessage) {

@@ -61,6 +61,7 @@ type piEntry struct {
 	CustomType string          `json:"customType"`
 	Content    json.RawMessage `json:"content"`
 	Display    bool            `json:"display"`
+	Timestamp  json.RawMessage `json:"timestamp"`
 }
 
 type piHeader struct {
@@ -459,6 +460,7 @@ func piEvents(session *piSession) []parsedEvent {
 		add := func(event parsedEvent) {
 			event.lineStart = ordinal
 			event.sourceOrdinal = eventOrdinal
+			event.At = recordTime(entry.Timestamp)
 			eventOrdinal++
 			out = append(out, event)
 		}

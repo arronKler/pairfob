@@ -1,3 +1,4 @@
+import type { SessionHandlers } from "../guided/view";
 import { useSyncExternalStore } from "react";
 import { useSession } from "../hooks";
 import { t } from "../../../lib/i18n";
@@ -16,6 +17,8 @@ export type FullTerminalScreenProps = {
   onBack: () => void;
   onWorkspace: () => void;
   onMenu: () => void;
+  onToggleView: SessionHandlers["onToggleView"];
+  chatAvailable: SessionHandlers["chatAvailable"];
   onRetry: () => void;
   scroll: RemoteScroll;
   pageLines: () => number;
@@ -40,7 +43,7 @@ export function FullTerminalScreen(props: FullTerminalScreenProps) {
   return <FullTerminalBody key={view.owner} view={view} {...props} />;
 }
 
-function FullTerminalBody({ view, onBack, onWorkspace, onMenu, onRetry, scroll, pageLines, controls, engineActive }: FullTerminalScreenProps & { view: FullTerminalViewSnapshot }) {
+function FullTerminalBody({ view, onBack, onWorkspace, onMenu, onToggleView, chatAvailable, onRetry, scroll, pageLines, controls, engineActive }: FullTerminalScreenProps & { view: FullTerminalViewSnapshot }) {
   // The fallback follows the session domain's frozen snapshot: the terminal
   // shell is active exactly while the session domain says the complete
   // terminal is mounted.
@@ -52,7 +55,7 @@ function FullTerminalBody({ view, onBack, onWorkspace, onMenu, onRetry, scroll, 
   return (
     <div className="pane-root full-terminal-root" data-pane-id={view.paneId} data-terminal-owner={view.owner} data-react-full-terminal="">
       <SessionIdentity agent={selected} fallbackTitle={view.title || t("title.terminal")} includeBack
-        handlers={{ onBack, onWorkspace, onMenu }} className="full-terminal-chrome" />
+        handlers={{ onBack, onWorkspace, onMenu, onToggleView, chatAvailable }} className="full-terminal-chrome" />
       <FullTerminalHost
         paneId={view.paneId}
         active={active}

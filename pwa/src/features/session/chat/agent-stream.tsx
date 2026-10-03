@@ -1,19 +1,52 @@
-import { ChevronRight, ChevronsDownUp, CircleSlash, SquareTerminal } from "lucide-react";
-import { Fragment, type ReactNode, type Ref } from "react";
+import { useLayoutEffect, useRef, type MouseEvent, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
-import { groupAgentTurns, groupAgentTurnBlocks, processTitle, replyText, turnKey,
-  type AgentTurn, type AgentTurnBlock } from "../../../lib/agent-trace-view";
-import { isTraceMarker, type AgentTraceItem } from "../../../lib/operations";
+import { groupAgentTurns, replyText, turnKey, type AgentTurn } from "../../../lib/agent-trace-view";
+import { pendingAsk, splitTurn, stepObject, turnOutcome, turnSpan, type TurnRef } from "../../../lib/agent-trace-steps";
+import type { AgentTraceItem } from "../../../lib/operations";
 import { t } from "../../../lib/i18n";
 import type { AgentEmptySpec, DetailsState } from "./agent-chat-stream";
-import { AgentDetails } from "./agent-details";
-import { AgentStep, type ToolDetailHooks } from "./agent-process";
 import { Button, Spinner } from "../../../shared/ui/primitives";
+import { CompactionDivider, PendingCard, ReplyActions, TurnHead, type TraceAnchorData } from "./turn-parts";
+import { NeedsYouCard } from "./needs-you";
+import { WorkCard } from "./work-card";
 
-type CopyReply = (text: string) => void | Promise<void>;
+type CopyReply = (text: string, what?: "reply" | "code") => void | Promise<void>;
+
+/**
+ * Give each code block in a sanitized reply its own copy button. The reply's
+ * HTML is not React-managed, so the buttons are added after it is set and
+ * handled by one delegated click.
+ */
+function useCodeCopy(html: string, onCopy?: CopyReply) {
+  const root = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = root.current;
+    if (!node || !onCopy) return;
+    for (const pre of node.querySelectorAll("pre")) {
+      if (pre.parentElement?.classList.contains("md-code")) continue;
+      const frame = node.ownerDocument.createElement("div");
+      frame.className = "md-code";
+      const button = node.ownerDocument.createElement("button");
+      button.type = "button";
+      button.className = "md-copy";
+      button.textContent = t("reply.copyCode");
+      pre.replaceWith(frame);
+      frame.append(pre, button);
+    }
+  }, [html, onCopy]);
+  const onClick = (event: MouseEvent<HTMLDivElement>) => {
+    const button = (event.target as Element).closest?.(".md-copy");
+    const code = button?.parentElement?.querySelector("pre");
+    if (button && code && onCopy) void onCopy(code.textContent ?? "", "code");
+  };
+  return { root, onClick };
+}
 type TraceAnchor = { key: string; ordinal: number; ordinalFromEnd: number };
+/** A step tapped in a card: the card's steps and where to find the turn again. */
+export type OpenStep = (item: AgentTraceItem, steps: AgentTraceItem[], turn: TurnRef) => void;
+export type PromptProgressNote = { message: string; attention: boolean; settled: boolean };
 
-function anchorData(anchor: TraceAnchor, part: string) {
+function anchorData(anchor: TraceAnchor, part: string): TraceAnchorData {
   return {
     "data-trace-anchor": `${anchor.key}:${part}`,
     "data-trace-ordinal": anchor.ordinal,
@@ -21,115 +54,60 @@ function anchorData(anchor: TraceAnchor, part: string) {
   };
 }
 
-function AssistantReply({ items, final, live, anchor, part, onCopy }: {
-  items: AgentTraceItem[]; final: boolean; live: boolean; anchor: TraceAnchor; part: string; onCopy?: CopyReply;
+function AssistantReply({ items, final, anchor, part, onCopy, onTerminal }: {
+  items: AgentTraceItem[]; final: boolean; anchor: TraceAnchor; part: string; onCopy?: CopyReply; onTerminal?: () => void;
 }) {
   const text = replyText(items);
+  const html = renderMarkdown(text);
+  const code = useCodeCopy(html, final ? onCopy : undefined);
   return <article {...anchorData(anchor, part)} className={`agent-assistant${final ? " agent-assistant-final" : " agent-assistant-intermediate"}`}>
     {/* The existing Markdown parser returns sanitized allowlisted HTML. */}
-    <div className="agent-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
-    {final && !live && onCopy && text && <div className="agent-reply-actions">
-      <Button className="agent-reply-copy" aria-label={t("chat.copyReplyAria")} onClick={() => void onCopy(text)}>{t("chat.copyReply")}</Button>
-    </div>}
+    <div ref={code.root} className="agent-md" onClick={code.onClick} dangerouslySetInnerHTML={{ __html: html }} />
+    {final && <ReplyActions text={text} onCopy={onCopy} onTerminal={onTerminal} />}
   </article>;
 }
 
-function TurnHead({ item, anchor }: { item: AgentTraceItem; anchor: TraceAnchor }) {
-  const text = item.text || "";
-  if (item.type === "command") {
-    return <article className="agent-command" {...anchorData(anchor, "user")} aria-label={t("trace.commandAria", { cmd: text })}>
-      <SquareTerminal className="agent-command-icon" size={14} aria-hidden="true" />
-      <code className="agent-command-text">{text}</code>
-    </article>;
+
+/**
+ * The card's saved open/closed choice key. Repeated prompts share a turn key,
+ * so the first tool tells their cards apart when older history is prepended.
+ */
+function workKey(turn: AgentTurn): string {
+  const tool = turn.items.find((item) => item.type === "tool");
+  const signature = tool ? `${tool.name || ""}:${(tool.label || tool.input || "").slice(0, 24)}` : "";
+  return `w:${turnKey(turn)}:${signature}`;
+}
+
+type TurnState = {
+  live: boolean; waiting: boolean; stale: boolean; verified: boolean; pending?: PromptProgressNote;
+  /** Another turn follows; partial: older pages hold this turn's start. */
+  hasNext: boolean; partial: boolean; follow: boolean;
+};
+
+function TraceTurn({ turn, state, anchor, kept, onCopy, onTerminal, onAnswered, onOpenStep }: {
+  turn: AgentTurn; state: TurnState; anchor: TraceAnchor; kept?: DetailsState; onCopy?: CopyReply; onTerminal?: () => void;
+  onAnswered?: () => void; onOpenStep: OpenStep;
+}) {
+  const { entries, reply, compacted, interrupted } = splitTurn(turn);
+  const { live, waiting } = state;
+  const outcome = turnOutcome(turn.items, state);
+  const tools = entries.filter((item) => item.type === "tool");
+  if (!live && !reply.length && tools.length && !interrupted) {
+    // A message sent mid-run starts a new turn; the work goes on there.
+    outcome.detail = state.hasNext ? t("work.continued") : t("work.noReply", { step: stepObject(tools[tools.length - 1]) });
   }
-  return <article className="agent-user" {...anchorData(anchor, "user")}><div className="agent-user-text">{text}</div></article>;
-}
-
-/** Compaction and interrupt are timeline facts, not steps: they never fold. */
-function TraceMarkers({ items }: { items: AgentTraceItem[] }) {
-  return <>{items.map((item, index) => item.type === "compaction"
-    ? <div key={index} className="agent-marker agent-marker-compaction" role="note">
-      <ChevronsDownUp size={14} aria-hidden="true" /><span>{t("trace.compacted")}</span>
-    </div>
-    : <div key={index} className="agent-marker agent-marker-interrupt" role="note">
-      <CircleSlash size={14} aria-hidden="true" /><span>{t("trace.interrupted")}</span>
-    </div>)}</>;
-}
-
-function ProcessCard({ turn, items, blockIndex, live, anchor, kept, hooks }: {
-  turn: AgentTurn; items: AgentTraceItem[]; blockIndex: number; live: boolean; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks;
-}) {
-  const scope = `${turnKey(turn)}:${blockIndex}`;
-  return <AgentDetails traceKey={`p:${scope}`} className="agent-process" auto={live} kept={kept}
-    dataTraceAnchor={`${anchor.key}:process:${blockIndex}`} dataTraceOrdinal={anchor.ordinal} dataTraceOrdinalEnd={anchor.ordinalFromEnd}>
-    <summary className="agent-process-summary">{processTitle(items, live)}</summary>
-    <div className="agent-process-body">
-      {items.map((item, index) => <AgentStep key={index} item={item} index={index} scope={scope} kept={kept} hooks={hooks} />)}
-    </div>
-  </AgentDetails>;
-}
-
-function ProcessFold({ turn, blocks, anchor, kept, hooks, onCopy }: {
-  turn: AgentTurn; blocks: AgentTurnBlock[]; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks; onCopy?: CopyReply;
-}) {
-  const count = blocks.reduce((total, block) => total + block.items.length, 0);
-  let offset = 0;
-  return <AgentDetails traceKey={`f:${turnKey(turn)}`} className="agent-process agent-reply-fold" kept={kept}
-    dataTraceAnchor={`${anchor.key}:fold`} dataTraceOrdinal={anchor.ordinal} dataTraceOrdinalEnd={anchor.ordinalFromEnd}>
-    <summary className="agent-process-summary agent-reply-fold-summary">
-      <ChevronRight className="agent-reply-fold-chevron" size={16} aria-hidden="true" />
-      <span className="agent-reply-fold-title">{t("trace.nSteps", { n: count })}</span>
-    </summary>
-    <div className="agent-process-body agent-reply-fold-body">
-      {blocks.map((block, blockIndex) => {
-        const start = offset;
-        offset += block.items.length;
-        return block.type === "reply" ? <AssistantReply key={`reply:${blockIndex}`} items={block.items} final={false} live={false}
-          anchor={anchor} part={`fold-reply:${blockIndex}`} onCopy={onCopy} />
-          : <Fragment key={`process:${blockIndex}`}>
-            {block.items.map((item, index) => <AgentStep key={start + index} item={item} index={start + index}
-              scope={turnKey(turn)} kept={kept} hooks={hooks} />)}
-          </Fragment>;
-      })}
-    </div>
-  </AgentDetails>;
-}
-
-function TraceTurn({ turn, live, anchor, kept, hooks, onCopy }: {
-  turn: AgentTurn; live: boolean; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks; onCopy?: CopyReply;
-}) {
-  const all = groupAgentTurnBlocks(turn.items);
-  // A trailing interrupt or compaction follows the reply instead of hiding it.
-  let end = all.length;
-  while (end > 0 && all[end - 1].type === "marker") end -= 1;
-  const blocks = all.slice(0, end);
-  const steps = turn.items.filter((item) => !isTraceMarker(item.type)).length;
-  const trailing = all.slice(end).flatMap((block) => block.items);
-  const finalReply = !live && blocks.at(-1)?.type === "reply" ? blocks.length - 1 : -1;
-  // Markers before a final reply stay outside the collapsed fold.
-  const folded = finalReply > 0 ? blocks.slice(0, finalReply) : [];
-  const foldSteps = folded.filter((block) => block.type !== "marker");
-  const foldMarkers = folded.filter((block) => block.type === "marker").flatMap((block) => block.items);
-  let lastProcess = -1;
-  for (const [index, block] of blocks.entries()) if (block.type === "process") lastProcess = index;
+  if (state.partial) outcome.detail = [t("work.partial"), outcome.detail].filter(Boolean).join(" · ");
+  const card = entries.length > 0 || interrupted || (live && !state.pending);
   return <>
-    {turn.user && <TurnHead item={turn.user} anchor={anchor} />}
-    {foldSteps.length > 0 && <ProcessFold turn={turn} blocks={foldSteps} anchor={anchor}
-      kept={kept} hooks={hooks} onCopy={onCopy} />}
-    {foldMarkers.length > 0 && <TraceMarkers items={foldMarkers} />}
-    {finalReply >= 0 ? <AssistantReply items={blocks[finalReply].items} final live={live}
-      anchor={anchor} part={`reply:${finalReply}`} onCopy={onCopy} />
-      : blocks.map((block, index) => block.type === "marker"
-        ? <TraceMarkers key={`marker:${index}`} items={block.items} />
-        : block.type === "process"
-        ? <ProcessCard key={`process:${index}`} turn={turn} items={block.items} blockIndex={index}
-          live={live && index === lastProcess} anchor={anchor} kept={kept} hooks={hooks} />
-        : <AssistantReply key={`reply:${index}`} items={block.items} final={false} live={live}
-          anchor={anchor} part={`reply:${index}`} onCopy={onCopy} />)}
-    {trailing.length > 0 && <TraceMarkers items={trailing} />}
-    {live && <div className="agent-run-status" role="status" aria-live="polite">
-      <Spinner /><span>{steps ? t("trace.runningSteps", { n: steps }) : t("chat.runningEllipsis")}</span>
-    </div>}
+    {turn.user && <TurnHead item={turn.user} anchorData={anchorData(anchor, "user")} />}
+    {state.pending && !turn.items.length && <PendingCard {...state.pending} />}
+    {card && <WorkCard traceKey={workKey(turn)} entries={entries} outcome={outcome} live={live} follow={state.follow} kept={kept}
+      verified={state.verified} span={turnSpan(turn.user, turn.items)}
+      onOpen={(item, steps) => onOpenStep(item, steps, { key: anchor.key, ordinal: anchor.ordinal })}
+      anchor={{ anchor: `${anchor.key}:work`, ordinal: anchor.ordinal, ordinalFromEnd: anchor.ordinalFromEnd }} />}
+    {live && waiting && <NeedsYouCard ask={pendingAsk(turn.items)} onTerminal={onTerminal} onAnswered={onAnswered} />}
+    {reply.length > 0 && <AssistantReply items={reply} final={!live} anchor={anchor} part="reply" onCopy={onCopy} onTerminal={onTerminal} />}
+    {compacted && <CompactionDivider />}
   </>;
 }
 
@@ -156,15 +134,18 @@ function turnAnchor(turn: AgentTurn, index: number, turns: readonly AgentTurn[])
   return { key, ordinal, ordinalFromEnd };
 }
 
-export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerminal, onNeedOlder, onFollow, onCopyReply,
-  toolDetail, onNeedToolDetail, truncated, older, streamRef, signature }: {
-  items: AgentTraceItem[]; working: boolean; empty: AgentEmptySpec; busy?: boolean; kept?: DetailsState;
-  onRetry?: () => void; onTerminal?: () => void; onNeedOlder?: () => void; onFollow?: (follow: boolean, stream: HTMLElement) => void; onCopyReply?: CopyReply;
-  toolDetail?: ToolDetailHooks["view"]; onNeedToolDetail?: ToolDetailHooks["need"]; truncated?: boolean;
+export function AgentStream({ items, working, waiting = false, stale = false, verified = false, follow = true, hasOlder = false,
+  progress, empty, busy, kept,
+  onRetry, onTerminal, onAnswered, onNeedOlder, onFollow, onCopyReply, onOpenStep, truncated, older, streamRef, signature }: {
+  items: AgentTraceItem[]; working: boolean; waiting?: boolean; stale?: boolean; verified?: boolean; progress?: PromptProgressNote | null;
+  follow?: boolean; hasOlder?: boolean;
+  empty: AgentEmptySpec; busy?: boolean; kept?: DetailsState;
+  onRetry?: () => void; onTerminal?: () => void; onAnswered?: () => void; onNeedOlder?: () => void; onFollow?: (follow: boolean, stream: HTMLElement) => void;
+  onCopyReply?: CopyReply; onOpenStep?: OpenStep; truncated?: boolean;
   older?: ReactNode; streamRef?: Ref<HTMLDivElement>; signature?: string;
 }) {
   const turns = groupAgentTurns(items);
-  const hooks = { view: toolDetail, need: onNeedToolDetail };
+  const openStep = onOpenStep ?? (() => undefined);
   return <div ref={streamRef} className="agent-stream" role="log" aria-label={t("chat.streamAria")}
     aria-busy={busy === true} tabIndex={0} data-sig={signature} onScroll={event => {
       const stream = event.currentTarget;
@@ -176,11 +157,17 @@ export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerm
       {older}
       {(!items.length || empty.kind === "unavailable") && <EmptyPanel spec={empty} onRetry={onRetry} onTerminal={onTerminal} />}
       {truncated && items.length > 0 && <p className="agent-trace-limit">{t("chat.truncated")}</p>}
+      {/* Claude Code's /clear opens a new transcript: nothing older belongs to it. */}
+      {!hasOlder && turns[0]?.user?.type === "command" && /^\/clear\b/.test(turns[0].user.text || "")
+        && <div className="agent-marker agent-marker-compaction agent-new-session" role="note"><span>{t("chat.newSession")}</span></div>}
       {turns.map((turn, index) => {
-        const anchor = turnAnchor(turn, index, turns);
-        return <TraceTurn key={`${turnKey(turn)}:${index}`} turn={turn} anchor={anchor}
-          live={working && empty.kind !== "unavailable" && index === turns.length - 1 && turn.items.at(-1)?.type !== "interrupt"}
-          kept={kept} hooks={hooks} onCopy={onCopyReply} />;
+        const last = index === turns.length - 1;
+        const live = working && empty.kind !== "unavailable" && last && turn.items.at(-1)?.type !== "interrupt";
+        const pending = turn.user?.pending && progress ? progress : undefined;
+        return <TraceTurn key={`${turnKey(turn)}:${index}`} turn={turn} anchor={turnAnchor(turn, index, turns)}
+          state={{ live, waiting: waiting && last, stale, verified, pending, follow,
+            hasNext: !last, partial: index === 0 && hasOlder && !turn.user }}
+          kept={kept} onCopy={onCopyReply} onTerminal={onTerminal} onAnswered={onAnswered} onOpenStep={openStep} />;
       })}
     </div>
   </div>;

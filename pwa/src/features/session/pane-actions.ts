@@ -11,7 +11,8 @@ import { keyboardOpen, navigateWithTransition, nextTransition, settleKeyboard, s
 import { openPaneMenu } from "./guided/pane-menu";
 import { dropQueuedKeys } from "../../features/session/guided/keys";
 import { type SessionHandlers } from "../../features/session/guided/view";
-import { leaveAgentChat } from "./chat/agent-chat-controller";
+import { canEnterAgentChat, leaveAgentChat } from "./chat/agent-chat-controller";
+import { selectPaneTermMode } from "./term-mode";
 import { leaveFullTerminal } from "./full-terminal/full-terminal";
 
 /**
@@ -84,8 +85,11 @@ function leavePane(paneId: string, morph: boolean): Promise<void> {
 export function sessionHandlers(): SessionHandlers {
   return {
     onBack: () => void goBackFromPane(),
-    onMenu: openPaneMenu,
+    onMenu: () => openPaneMenu(() => void openSelectedWorkspace()),
     onWorkspace: () => void openSelectedWorkspace(),
+    // Leaving chat picks Auto: the complete terminal or the control view.
+    onToggleView: () => void selectPaneTermMode(isAgentChat() ? "auto" : "agent"),
+    chatAvailable: (agent) => canEnterAgentChat(agent),
   };
 }
 

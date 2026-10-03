@@ -87,12 +87,14 @@ test("the phone entry mounts the React page and forwards its chrome callbacks", 
       onBack: () => actions.push("back"),
       onWorkspace: () => actions.push("workspace"),
       onMenu: () => actions.push("menu"),
+      onToggleView: () => actions.push("toggle"),
+      chatAvailable: () => true,
     },
   }));
   expect(appRoot().querySelector("[data-react-agent-chat]")?.getAttribute("data-back")).toBe("1");
   expect(appRoot().querySelector(".agent-md strong")?.textContent).toBe("Ready");
   act(() => {
-    for (const selector of [".back", ".icon-workspace", ".icon-more", ".chrome-title"]) {
+    for (const selector of [".back", ".icon-view", ".icon-more", ".chrome-title"]) {
       const button = appRoot().querySelector<HTMLElement>(selector);
       if (!button) throw new Error(`Missing ${selector}`);
       button.click();
@@ -100,7 +102,7 @@ test("the phone entry mounts the React page and forwards its chrome callbacks", 
   });
   // The identity is display-only: tapping it switches nothing.
   expect(appRoot().querySelector(".chrome-title")?.tagName).toBe("DIV");
-  expect(actions).toEqual(["back", "workspace", "menu"]);
+  expect(actions).toEqual(["back", "toggle", "menu"]);
 });
 
 test("the desktop entry hosts React chat in the main column without a pane back button", () => {

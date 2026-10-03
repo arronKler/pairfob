@@ -1,3 +1,4 @@
+import { closeTestDialogs } from "./close-dialogs";
 import { afterEach, expect, test } from "bun:test";
 import { act } from "react";
 
@@ -47,25 +48,24 @@ test("phase2 long Pi scene includes successful, failed, and empty tool results",
   const stream = document.querySelector(".agent-stream")?.textContent ?? "";
   expect(stream).toContain("Turn 1");
   expect(stream).toContain("Turn 12 complete");
-  expect(stream).toContain("Bash · bun test chat");
+  expect(stream).toContain("bun test chat");
   expect(stream).toContain("empty.txt");
-  const tools = [...document.querySelectorAll<HTMLDetailsElement>("details.agent-tool")];
-  const failed = tools.find((tool) => tool.textContent?.includes("Bash · bun test chat"))!;
-  await act(async () => {
-    failed.open = true;
-    failed.dispatchEvent(new Event("toggle"));
-    await Promise.resolve();
-  });
-  await settle(() => (document.querySelector(".agent-stream")?.textContent ?? "").includes("expected one refresh"));
+  // The failed command is visible on its card without opening anything.
+  const steps = [...document.querySelectorAll<HTMLButtonElement>(".work-step")];
+  const failed = steps.find((step) => step.textContent?.includes("bun test chat"))!;
+  expect(failed.className).toContain("is-error");
+  expect(failed.closest("details.work-card")?.className).toBe("work-card is-error");
+  // Tool bodies load only when a step's sheet opens, and never enter the stream.
+  await act(async () => { failed.click(); await Promise.resolve(); });
+  await settle(() => (document.querySelector("dialog.step-sheet")?.textContent ?? "").includes("expected one refresh"));
   expect(api!.calls.some((call) => call.method === "agentTraceDetail" && call.args[1] === "qa-tool-error")).toBeTrue();
-  const empty = tools.find((tool) => tool.textContent?.includes("empty.txt"))!;
-  await act(async () => {
-    empty.open = true;
-    empty.dispatchEvent(new Event("toggle"));
-    await Promise.resolve();
-  });
+  expect(document.querySelector(".agent-stream")?.textContent).not.toContain("expected one refresh");
+  closeTestDialogs();
+  const empty = steps.find((step) => step.textContent?.includes("empty.txt"))!;
+  await act(async () => { empty.click(); await Promise.resolve(); });
   await settle(() => api!.calls.some((call) => call.method === "agentTraceDetail" && call.args[1] === "qa-empty-output"));
-  expect(empty.textContent).not.toContain("export function App");
+  expect(document.querySelector("dialog.step-sheet")?.textContent).not.toContain("export function App");
+  closeTestDialogs();
 });
 
 test("phase2 unread and recovery scenes expose real fixture actions without mutation replay", async () => {

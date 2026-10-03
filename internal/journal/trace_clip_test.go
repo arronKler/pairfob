@@ -74,3 +74,42 @@ func TestClipEventToLimitBoundsLargeToolTail(t *testing.T) {
 		t.Fatalf("metadata or UTF-8 damaged: %+v", got)
 	}
 }
+
+func TestClipEventKeepsToolOutputHeadAndTail(t *testing.T) {
+	body := "go test ./...\n" + strings.Repeat("ok  pairfob/internal/x 0.1s\n", 8_000) + "FAIL: 2 tests failed"
+	got, truncated := clipEvent(Event{Type: "tool", Name: "Bash", Input: body, Output: body, Text: body}, false)
+	if !truncated || !strings.HasPrefix(got.Output, "go test ./...") || !strings.HasSuffix(got.Output, "FAIL: 2 tests failed") {
+		t.Fatalf("output lost its head or tail: %q … %q", got.Output[:20], got.Output[len(got.Output)-20:])
+	}
+	if !strings.Contains(got.Output, toolOutputGap) || len(got.Output) > maxMessageBytes+len("…") {
+		t.Fatalf("output bytes=%d gap=%v", len(got.Output), strings.Contains(got.Output, toolOutputGap))
+	}
+	for _, prefixClipped := range []string{got.Input, got.Text} {
+		if strings.Contains(prefixClipped, "FAIL") || !strings.HasSuffix(prefixClipped, "…") || len(prefixClipped) > maxMessageBytes+len("…") {
+			t.Fatalf("input/text must keep prefix clipping: bytes=%d", len(prefixClipped))
+		}
+	}
+}
+
+func TestClipEventToLimitShrinksToolOutputAroundItsMiddle(t *testing.T) {
+	output := "开始" + strings.Repeat("输出<>&", 20_000) + "结尾总结"
+	for _, limit := range []int{256, 4 << 10, 40 << 10} {
+		got, truncated := clipEventPromptly(t, Event{Type: "tool", Name: "exec_command", Output: output}, limit, false)
+		if !truncated || eventSize(got) > limit || !utf8.ValidString(got.Output) {
+			t.Fatalf("limit=%d size=%d valid=%v", limit, eventSize(got), utf8.ValidString(got.Output))
+		}
+		if !strings.HasPrefix(got.Output, "开始") || !strings.HasSuffix(got.Output, "结尾总结") || strings.Count(got.Output, "…") != 1 {
+			t.Fatalf("limit=%d output=%q", limit, got.Output)
+		}
+	}
+}
+
+func TestHeadTailStaysOnRuneBoundaries(t *testing.T) {
+	text := strings.Repeat("甲乙", 100)
+	for keep := 2; keep < 40; keep++ {
+		got := headTail(text, keep)
+		if !utf8.ValidString(got) || len(got) > keep+len(toolOutputGap) {
+			t.Fatalf("keep=%d got=%q", keep, got)
+		}
+	}
+}

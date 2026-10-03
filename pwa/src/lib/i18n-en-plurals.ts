@@ -1,7 +1,9 @@
 import type { zh } from "./i18n-zh";
+import { enChatWorkSingular } from "./i18n-chat-work";
 
 /** English singular forms; the main catalog supplies zero and plural forms. */
 export const enSingular: Partial<Record<keyof typeof zh, string>> = {
+  ...enChatWorkSingular,
   "workspace.showMoreChanges": "Show {count} more change",
   "workspace.diffRenderLimit": "For smooth mobile rendering, only the first {count} line is shown.",
   "diffNotes.count": "{count} comment",
