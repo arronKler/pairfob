@@ -179,9 +179,13 @@ function looksLikeMachineTitle(text: string, agent: AgentCard): boolean {
     lower === "终端" ||
     lower === "会话" ||
     lower === "未命名会话" ||
+    lower === "窗格" ||
+    lower === "未命名窗格" ||
     lower === "terminal" ||
     lower === "session" ||
-    lower === "unnamed session"
+    lower === "unnamed session" ||
+    lower === "pane" ||
+    lower === "unnamed pane"
   ) return true;
   if (/^[/~]/.test(text) || /^[a-z]:[\\/]/i.test(text) || text.includes("://")) return true;
   if (/^[^@\s]+@\S+/.test(text)) return true;

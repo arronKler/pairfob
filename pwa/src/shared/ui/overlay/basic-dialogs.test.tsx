@@ -37,11 +37,11 @@ test("text dialog selects its initial value, submits current text and restores f
 
 test("text actions sit in the heading and Save waits for a real change", async () => {
   let result!: Promise<string | null>;
-  act(() => { result = askText({ title: "改会话名", initial: "api", hint: "留空恢复", emptyHint: "将恢复自动名称" }); });
+  act(() => { result = askText({ title: "改窗格名", initial: "api", hint: "留空恢复", emptyHint: "将恢复自动名称" }); });
   const modal = dialog();
   const head = modal.querySelector(".text-edit-head")!;
   const save = head.querySelector<HTMLButtonElement>(".text-edit-save")!;
-  expect(head.querySelector("h2")?.textContent).toBe("改会话名");
+  expect(head.querySelector("h2")?.textContent).toBe("改窗格名");
   expect(save.disabled).toBeTrue();
   expect(modal.querySelector(".text-edit-hint")?.textContent).toBe("留空恢复");
   act(() => modal.querySelector<HTMLButtonElement>(".text-edit-clear")!.click());

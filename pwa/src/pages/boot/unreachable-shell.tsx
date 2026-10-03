@@ -79,7 +79,7 @@ export function UnreachableShell({ retrying = false }: { retrying?: boolean }) {
       ];
   return (
     <div className="page herd-page unreachable-shell">
-      <h1 className="sr-only">{t("tabs.sessions")}</h1>
+      <h1 className="sr-only">{t("tabs.panes")}</h1>
       <header className="herd-head">
         <div className="herd-head-row">
           <Button className="host-title is-off" aria-haspopup="dialog" aria-label={t("host.aria", { host: name, status: line })}

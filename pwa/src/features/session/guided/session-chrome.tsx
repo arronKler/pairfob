@@ -94,6 +94,6 @@ export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, c
 export function SessionChrome({ selected, includeBack, handlers }: {
   selected?: Immutable<DashboardAgentCard>; includeBack: boolean; handlers: SessionHandlers;
 }) {
-  return <SessionIdentity agent={selected} fallbackTitle={t("title.session")} includeBack={includeBack}
+  return <SessionIdentity agent={selected} fallbackTitle={t("title.pane")} includeBack={includeBack}
     handlers={handlers} guided />;
 }

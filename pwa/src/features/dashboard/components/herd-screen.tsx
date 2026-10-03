@@ -192,7 +192,7 @@ export function HerdScreen({
 
   return (
     <div ref={bindRoot} className="page herd-page">
-      <h1 className="sr-only">{t("tabs.sessions")}</h1>
+      <h1 className="sr-only">{t("tabs.panes")}</h1>
       <header ref={head} className={`herd-head${folded ? " is-folded" : ""}`}>
         <div className="herd-head-row">
           <HostTitle host={view.host} onOpen={actions.openHostMenu} />

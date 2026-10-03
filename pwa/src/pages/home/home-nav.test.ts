@@ -147,7 +147,7 @@ afterEach(async () => await act(async () => {
   restoreForeignExtras();
 }));
 
-describe("session list object controls", () => {
+describe("pane list object controls", () => {
   test("app notices sit above the session cards", async () => await act(async () => {
     boot();
     showStatus("网络已恢复，正在确认连接…", true);
@@ -200,8 +200,8 @@ describe("session list object controls", () => {
     expect(facts).toContain("/tmp/a");
     expect(facts).toContain("alpha");
     expect(facts).not.toContain("p1");
-    expect(plain?.textContent).toContain("改会话名");
-    expect(plain?.textContent).toContain("关闭这个会话");
+    expect(plain?.textContent).toContain("改窗格名");
+    expect(plain?.textContent).toContain("关闭这个窗格");
     expect(plain?.textContent).not.toContain("改标签页名");
     expect(plain?.textContent).not.toContain("关闭整个标签页");
     expect(plain?.textContent).toContain("改工作区名");
@@ -245,13 +245,13 @@ describe("session list object controls", () => {
     expect(sheet?.querySelector(".modal-title")?.textContent).toBe("alpha");
     expect(sheet?.textContent).toContain("改工作区名");
     expect(sheet?.textContent).toContain("关闭这个工作区");
-    expect(sheet?.textContent).not.toContain("改会话名");
+    expect(sheet?.textContent).not.toContain("改窗格名");
     expect(sheet?.textContent).not.toContain("在这个工作区新建标签页");
     (sheet as HTMLDialogElement | null)?.close("cancel");
 
     cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const cardSheet = document.querySelector("dialog.sheet");
-    expect(cardSheet?.textContent).toContain("改会话名");
+    expect(cardSheet?.textContent).toContain("改窗格名");
     expect(cardSheet?.textContent).not.toContain("改工作区名");
     expect(cardSheet?.textContent).not.toContain("关闭这个工作区");
   }));
@@ -277,10 +277,10 @@ describe("session list object controls", () => {
     expect(group?.textContent).toContain("改工作区名");
     expect(group?.textContent).toContain("关闭这个工作区");
     expect(group?.textContent).not.toContain("分屏");
-    expect(group?.textContent).not.toContain("改会话名");
+    expect(group?.textContent).not.toContain("改窗格名");
   }));
 
-  test("pinning a session puts it in the pinned section at the top", async () => await act(async () => {
+  test("pinning a pane puts it in the pinned section at the top", async () => await act(async () => {
     boot();
     cardNamed("two").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const pin = [...document.querySelectorAll("dialog.sheet .menu-item")].find((el) => el.textContent === "置顶");

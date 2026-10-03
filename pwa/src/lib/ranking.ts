@@ -163,7 +163,7 @@ export function groupAgents(
     groups.push({ id: PINNED_GROUP_ID, title: t("group.pinned"), items: pinnedItems });
   }
   if (mode === "flat") {
-    if (rest.length) groups.push({ id: "all", title: t("group.sessions"), items: rest });
+    if (rest.length) groups.push({ id: "all", title: t("group.panes"), items: rest });
     return groups;
   }
   const buckets = new Map<string, AgentGroup>();

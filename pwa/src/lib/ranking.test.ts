@@ -88,10 +88,10 @@ describe("touchPane", () => {
 });
 
 describe("groupAgents", () => {
-  test("flat lists every session in recency order", () => {
+  test("flat lists every pane in recency order", () => {
     const groups = groupAgents(sample, "flat", { d: 4, b: 3, a: 2, c: 1 });
     expect(groups).toHaveLength(1);
-    expect(groups[0].title).toBe("会话");
+    expect(groups[0].title).toBe("窗格");
     expect(groups[0].items.map((item) => item.paneId)).toEqual(["d", "b", "a", "c"]);
   });
 
