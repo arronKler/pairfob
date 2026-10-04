@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"pairfob/internal/admin"
@@ -76,7 +77,7 @@ func runDaemon(store *state.Store, sock string) error {
 	defer logger.Close()
 
 	devFake := getenv("PAIRFOB_DEV_FAKE_RUNTIME", "") == "1"
-	multiSession := getenv("PAIRFOB_MULTI_SESSION", "") == "1"
+	multiSession := herdrMultiSessionEnabled()
 	rt, source, rtErr := runtime.Open(devFake, multiSession)
 	if rtErr != nil {
 		log.Printf("runtime herdr_offline: %v", rtErr)
@@ -212,6 +213,20 @@ func prepareRuntimeAvailability(rt runtime.Runtime, source string, autostart boo
 
 func herdrAutostartEnabled(devFake bool) bool {
 	return !devFake && getenv("PAIRFOB_HERDR_AUTOSTART", "1") != "0"
+}
+
+func herdrMultiSessionEnabled() bool {
+	if value := getenv("PAIRFOB_MULTI_SESSION", ""); value != "" {
+		return value == "1"
+	}
+	// Herdr exports HERDR_SOCKET_PATH into every pane, so an install from a
+	// default-session pane persists the default path; only another path pins.
+	socket := os.Getenv("HERDR_SOCKET_PATH")
+	if socket == "" {
+		return true
+	}
+	fallback := runtime.FallbackSocket()
+	return fallback != "" && filepath.Clean(socket) == filepath.Clean(fallback)
 }
 
 func offerPairingOnStart(_ int, explicitCode string) bool {

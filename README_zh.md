@@ -43,7 +43,7 @@ pairfob pair
 - **管理工作区。** 新建对话、标签页、分屏和 worktree，在 **画板** 上看标签页
   的真实分栏。电脑不支持的操作不会出现。
 - **多台电脑、多台设备。** 一台手机可以在几台电脑之间切换，一台电脑也可以
-  配对多台设备。命名 Herdr 会话（`herdr --session <name>`）需要手动开启，见
+  配对多台设备。命名 Herdr 会话（`herdr --session <name>`）默认开启，见
   [命名 Herdr 会话](https://pairfob.com/doc/zh/app#命名-herdr-会话)。
 - **看订阅余量。** 由电脑收集 Codex、Claude Code、Copilot、Cursor、Grok 等账号的
   额度。

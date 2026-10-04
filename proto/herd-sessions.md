@@ -26,7 +26,7 @@ excluding `.` and `..`. Session directories can outlive their servers;
 It does not describe the panes or promise that a later RPC will succeed.
 
 An older daemon returns `unknown_op`. A runtime without session listing, or
-Herdr without `PAIRFOB_MULTI_SESSION=1`, returns `unsupported`. The latter
+Herdr with multi-session off, returns `unsupported`. The latter
 does not expose session names. Invalid params and runtime failures retain the
 existing RPC error handling.
 
@@ -34,14 +34,14 @@ existing RPC error handling.
 
 `GetConfig.capabilities.list_sessions` is optional; absence means false.
 The PWA sends discovery only when it is true. For Herdr it follows the
-multi-session opt-in without I/O and independently of `Describe`: the default
+multi-session setting without I/O and independently of `Describe`: the default
 server may be offline while a named server is running. Other runtimes without
 an enabled session lister advertise false.
 
 Session-scoped RPCs that declare `session` in the schema accept an optional
 name, including `GetConfig`. Omission or `null` targets the default socket.
 `GetConfig` describes the selected session's capabilities and agent kinds;
-the discovery capability still follows the daemon's opt-in.
+the discovery capability still follows the daemon's setting.
 
 The connection captures its selected name when issuing a scoped RPC. Already
 issued calls retain their target. Selecting default preserves the existing
@@ -63,5 +63,13 @@ to default before resolving the pane against a fresh snapshot. The intent
 stays pending across that transition; a newer notification or a replacement
 connection owns the eventual resolution.
 
-Multi-session remains opt-in. Autostart starts only the default server at the
-configured socket, never a named server.
+Multi-session is on by default when `PAIRFOB_MULTI_SESSION` is unset or empty
+and `HERDR_SOCKET_PATH` is unset, empty, or equal (after path cleaning) to
+Herdr's default socket `~/.config/herdr/herdr.sock`. Herdr exports that path
+into every default-session pane, so installing from one must not pin the
+daemon. `PAIRFOB_MULTI_SESSION=1` turns it on even with a socket set to a
+non-default path; `=0` turns it off. With `HERDR_SOCKET_PATH` set to a
+non-default path, unset or empty `PAIRFOB_MULTI_SESSION` keeps it off. A pane
+in a named session counts as pinned. Other non-empty values
+also keep it off. Autostart starts only the default server at the configured
+socket, never a named server.
