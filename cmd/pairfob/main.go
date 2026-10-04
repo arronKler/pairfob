@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"pairfob/internal/admin"
@@ -218,7 +219,14 @@ func herdrMultiSessionEnabled() bool {
 	if value := getenv("PAIRFOB_MULTI_SESSION", ""); value != "" {
 		return value == "1"
 	}
-	return os.Getenv("HERDR_SOCKET_PATH") == ""
+	// Herdr exports HERDR_SOCKET_PATH into every pane, so an install from a
+	// default-session pane persists the default path; only another path pins.
+	socket := os.Getenv("HERDR_SOCKET_PATH")
+	if socket == "" {
+		return true
+	}
+	fallback := runtime.FallbackSocket()
+	return fallback != "" && filepath.Clean(socket) == filepath.Clean(fallback)
 }
 
 func offerPairingOnStart(_ int, explicitCode string) bool {

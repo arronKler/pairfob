@@ -36,8 +36,15 @@ func TestHerdrMultiSessionPolicy(t *testing.T) {
 		{name: "pinned socket default", socket: "/tmp/herdr.sock"},
 		{name: "unknown value", multiSession: "true"},
 		{name: "unknown value with pinned socket", multiSession: "true", socket: "/tmp/herdr.sock"},
+		// Herdr exports the default socket into every default-session pane;
+		// installing from one must not pin the daemon.
+		{name: "default socket from pane", socket: "/home/u/.config/herdr/herdr.sock", want: true},
+		{name: "default socket uncleaned", socket: "/home/u/.config/herdr/../herdr/herdr.sock", want: true},
+		{name: "default socket explicit off", multiSession: "0", socket: "/home/u/.config/herdr/herdr.sock"},
+		{name: "named session socket", socket: "/home/u/.config/herdr/sessions/work/herdr.sock"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", "/home/u")
 			t.Setenv("PAIRFOB_MULTI_SESSION", tc.multiSession)
 			t.Setenv("HERDR_SOCKET_PATH", tc.socket)
 			if got := herdrMultiSessionEnabled(); got != tc.want {

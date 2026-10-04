@@ -30,6 +30,12 @@ func DefaultSocket() string {
 	if p := os.Getenv("HERDR_SOCKET_PATH"); p != "" {
 		return p
 	}
+	return FallbackSocket()
+}
+
+// FallbackSocket is Herdr's default-session socket, used when
+// HERDR_SOCKET_PATH is unset. It is empty when the home directory is unknown.
+func FallbackSocket() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""

@@ -187,7 +187,7 @@ description: 列表、点进会话、系统键盘，以及等你时如何确认�
 
 如果电脑上跑着不止一个 Herdr 服务（`herdr --session <name>`），手机可以在它们之间切换。当有命名会话正在运行，或当前选择的是命名会话时，会话列表顶部会显示当前 Herdr 会话的胶囊按钮（宽屏时在左栏），设置里也有 **Herdr 会话** 一行。选中的命名服务停止后，切换入口仍保留，方便返回默认会话。点任意一处即可换一个；列表会标出哪些正在运行。
 
-命名 Herdr 会话默认开启。如果设置了 `HERDR_SOCKET_PATH`，而 `PAIRFOB_MULTI_SESSION` 未设置或为空，多会话功能保持关闭。设置 `PAIRFOB_MULTI_SESSION=1` 可在固定 socket 时开启；其他非空值保持关闭。
+命名 Herdr 会话默认开启。如果 `HERDR_SOCKET_PATH` 设置为非默认路径（即不是 `~/.config/herdr/herdr.sock`），而 `PAIRFOB_MULTI_SESSION` 未设置或为空，多会话功能保持关闭。设置 `PAIRFOB_MULTI_SESSION=1` 可在固定 socket 时开启；其他非空值保持关闭。
 
 要关闭这个功能，在电脑上用你平时安装时的同一个 shell 运行：
 

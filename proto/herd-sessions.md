@@ -64,8 +64,12 @@ stays pending across that transition; a newer notification or a replacement
 connection owns the eventual resolution.
 
 Multi-session is on by default when `PAIRFOB_MULTI_SESSION` is unset or empty
-and `HERDR_SOCKET_PATH` is unset or empty. `PAIRFOB_MULTI_SESSION=1` turns it on
-even with a pinned socket; `=0` turns it off. With a pinned `HERDR_SOCKET_PATH`,
-unset or empty `PAIRFOB_MULTI_SESSION` keeps it off. Other non-empty values
+and `HERDR_SOCKET_PATH` is unset, empty, or equal (after path cleaning) to
+Herdr's default socket `~/.config/herdr/herdr.sock`. Herdr exports that path
+into every default-session pane, so installing from one must not pin the
+daemon. `PAIRFOB_MULTI_SESSION=1` turns it on even with a socket set to a
+non-default path; `=0` turns it off. With `HERDR_SOCKET_PATH` set to a
+non-default path, unset or empty `PAIRFOB_MULTI_SESSION` keeps it off. A pane
+in a named session counts as pinned. Other non-empty values
 also keep it off. Autostart starts only the default server at the configured
 socket, never a named server.
