@@ -131,3 +131,35 @@ test("a prompt that keeps changing points to the terminal after the second refus
   }
   expect(appRoot().querySelector('[role="alert"]')?.textContent).toBe(t("needs.unstable"));
 });
+
+/** The fixture DOM has no layout: the card is 40px while it reads and 200px once the options show. */
+async function growInside(scrollTop: number): Promise<HTMLElement> {
+  session(async () => ({ ok: true }));
+  const rect = window.HTMLElement.prototype.getBoundingClientRect;
+  window.HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+    const height = this.classList.contains("needs-card") ? (this.querySelector(".needs-option") ? 200 : 40) : 0;
+    return { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: height, width: 0, height, toJSON() {} } as DOMRect;
+  };
+  try {
+    act(() => renderReact(<div className="agent-stream"><NeedsYouCard ask={null} /></div>));
+    const stream = appRoot().querySelector<HTMLElement>(".agent-stream")!;
+    // 600px of transcript in a 300px scrollport; the grown card makes it 760px.
+    Object.defineProperties(stream, {
+      scrollHeight: { configurable: true, get: () => (stream.querySelector(".needs-option") ? 760 : 600) },
+      clientHeight: { configurable: true, value: 300 },
+    });
+    stream.scrollTop = scrollTop;
+    await drain();
+    return stream;
+  } finally {
+    window.HTMLElement.prototype.getBoundingClientRect = rect;
+  }
+}
+
+test("a reader at the latest turn stays there when the card grows with its choices", async () => {
+  expect((await growInside(300)).scrollTop).toBe(760);
+});
+
+test("a reader further up is not moved when the card grows", async () => {
+  expect((await growInside(120)).scrollTop).toBe(120);
+});

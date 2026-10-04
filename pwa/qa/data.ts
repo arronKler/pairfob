@@ -175,6 +175,27 @@ export function markerTrace(): AgentTraceItem[] {
   ];
 }
 
+/**
+ * Codex-shaped steps: a failed step the agent worked past, write_stdin reads of a
+ * running command (direct and inside a code-mode snippet), then a turn that
+ * stopped on a failed step with no reply.
+ */
+export function stepsTrace(): AgentTraceItem[] {
+  return [
+    { type: "user", text: "Check the latest usage numbers." },
+    { type: "assistant", text: "I will refresh the production stats and compare them with the last run." },
+    { type: "tool", name: "exec", input: "text(await tools.exec_command({cmd:\"cat /tmp/usage.ts\"}))", output: "export const query = 1;", toolState: "done", detailRef: "qa-steps-cat", label: "cat /tmp/usage.ts +1" },
+    { type: "tool", name: "exec", input: "text(await tools.write_stdin({session_id:7,chars:\"\"}))", output: "write_stdin failed: session 7 has exited", toolState: "error", detailRef: "qa-steps-read-failed", label: "write_stdin" },
+    { type: "tool", name: "exec", input: "text(await tools.exec_command({cmd:\"bun /tmp/usage.ts\"}))", output: "installs 385", toolState: "done", detailRef: "qa-steps-run", label: "bun /tmp/usage.ts +1" },
+    { type: "tool", name: "exec", input: "text(await tools.write_stdin({session_id:8,chars:\"\"}))", output: "active 191", toolState: "done", detailRef: "qa-steps-read-code", label: "write_stdin +1" },
+    { type: "tool", name: "write_stdin", output: "done", toolState: "done", detailRef: "qa-steps-read" },
+    { type: "assistant", text: "Installs are at **385**, unchanged since the last run." },
+    { type: "user", text: "Run the release build." },
+    { type: "tool", name: "exec_command", input: '{"cmd":"bun test"}', output: "12 pass", toolState: "done", detailRef: "qa-steps-test", label: "bun test" },
+    { type: "tool", name: "exec_command", input: '{"cmd":"bun run build"}', output: "error: out of memory", toolState: "error", detailRef: "qa-steps-build", label: "bun run build" },
+  ];
+}
+
 export function trace(): AgentTraceItem[] {
   return [
     // The finished turn carries record times (trace_times); the live one below does not.

@@ -27,9 +27,8 @@ function toggle(card: HTMLDetailsElement, open: boolean) {
 
 test("a finished turn folds its steps into a result-first card above the reply and its actions", () => {
   const copied: string[] = [];
-  let terminal = 0;
   act(() => renderReact(<AgentStream items={items} working={false} empty={empty} verified
-    onCopyReply={text => { copied.push(text); }} onTerminal={() => { terminal++; }} />));
+    onCopyReply={text => { copied.push(text); }} onTerminal={() => {}} />));
   expect(appRoot().querySelector(".agent-user-text")?.textContent).toBe(items[0].text);
   const card = appRoot().querySelector<HTMLDetailsElement>("details.work-card")!;
   expect(card.open).toBeFalse();
@@ -43,9 +42,9 @@ test("a finished turn folds its steps into a result-first card above the reply a
   expect(link.getAttribute("target")).toBe("_blank");
   expect(appRoot().querySelectorAll(".agent-reply-copy")).toHaveLength(1);
   act(() => appRoot().querySelector<HTMLButtonElement>(".agent-reply-copy")!.click());
-  act(() => appRoot().querySelector<HTMLButtonElement>(".agent-reply-terminal")!.click());
+  // Mode switching lives in the session menu; a reply only offers copy.
+  expect(appRoot().querySelector(".agent-reply-actions")?.querySelectorAll("button")).toHaveLength(1);
   expect(copied).toEqual([items[3].text!]);
-  expect(terminal).toBe(1);
 });
 
 test("without verified failure states a finished card stays neutral instead of claiming success", () => {
@@ -54,7 +53,7 @@ test("without verified failure states a finished card stays neutral instead of c
   expect(appRoot().querySelector(".work-step.is-read")?.className).toContain("is-ended");
 });
 
-test("the card leads with failures and changed files, and step rows open their sheet", () => {
+test("the card leads with changed files past a routine failure, and step rows open their sheet", () => {
   const opened: AgentTraceItem[] = [];
   const turn: AgentTraceItem[] = [
     { type: "user", text: "fix" },
@@ -64,9 +63,9 @@ test("the card leads with failures and changed files, and step rows open their s
   ];
   act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified onOpenStep={item => opened.push(item)} />));
   const card = appRoot().querySelector<HTMLDetailsElement>("details.work-card")!;
-  expect(card.className).toBe("work-card is-error");
-  expect(card.querySelector(".work-title")?.textContent).toBe(t("work.failedCommands", { n: 1 }));
-  expect(card.querySelector(".work-detail")?.textContent).toBe(`${t("work.changedFiles", { n: 1 })} · ${t("work.total", { n: 2 })}`);
+  expect(card.className).toBe("work-card is-done");
+  expect(card.querySelector(".work-title")?.textContent).toBe(t("work.changedFiles", { n: 1 }));
+  expect(card.querySelector(".work-detail")?.textContent).toBe(`boot.ts · ${t("work.total", { n: 2 })}`);
   const rows = [...card.querySelectorAll<HTMLButtonElement>(".work-step")];
   expect(rows.map(row => row.querySelector(".work-step-text")?.textContent)).toEqual(["app/boot.ts", "bun test"]);
   expect(rows[1].getAttribute("aria-label")).toBe(t("work.stepAria", { category: t("work.cat.command"), object: "bun test", state: t("work.state.error") }));
@@ -220,6 +219,20 @@ test("a turn interrupted by a new message says the work continues there", () => 
   const details = [...appRoot().querySelectorAll(".work-detail")].map((node) => node.textContent);
   expect(details[0]).toBe(t("work.continued"));
   expect(details[1]).toContain(t("work.noReply", { step: "b.ts" }));
+});
+
+test("only a turn that stopped on a failed step leads with the failure, and names the step", () => {
+  act(() => renderReact(<AgentStream items={[
+    { type: "user", text: "first" }, { type: "tool", name: "Bash", label: "bun test", toolState: "error" },
+    { type: "tool", name: "Read", label: "a.ts", toolState: "done" }, { type: "assistant", text: "Fixed." },
+    { type: "user", text: "again" }, { type: "tool", name: "Read", label: "b.ts", toolState: "done" },
+    { type: "tool", name: "Bash", label: "bun test", toolState: "error" },
+  ]} working={false} verified empty={empty} />));
+  const cards = [...appRoot().querySelectorAll("details.work-card")];
+  expect(cards.map((card) => card.className)).toEqual(["work-card is-done", "work-card is-error"]);
+  expect(cards[0].querySelector(".work-title")?.textContent).toBe(t("work.doneSteps", { n: 2 }));
+  expect(cards[1].querySelector(".work-title")?.textContent).toBe(t("work.endedFailed"));
+  expect(cards[1].querySelector(".work-detail")?.textContent).toBe(`bun test · ${t("work.total", { n: 2 })}`);
 });
 
 test("a headless first turn with older pages says earlier steps are not loaded", () => {

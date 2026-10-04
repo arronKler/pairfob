@@ -81,6 +81,19 @@ export function cacheAgentTraceViewport(paneId: string, ownerKey: string, viewpo
   entries.set(paneId, copy({ ...entry, ownerKey, viewport }));
 }
 
+/** Update who is reading (follow, unread) without re-measuring a stream that may no longer be laid out. */
+export function cacheAgentTracePosture(paneId: string, ownerKey: string, posture: { follow: boolean; unread: boolean }): void {
+  const entry = entries.get(paneId);
+  if (!entry?.viewport || (entry.ownerKey && entry.ownerKey !== ownerKey)) return;
+  entry.viewport = { ...entry.viewport, follow: posture.follow, unread: posture.unread };
+}
+
+/** Keep the transcript but not the reading place: the next visit starts at the latest turn. */
+export function forgetAgentTraceViewport(paneId: string): void {
+  const entry = entries.get(paneId);
+  if (entry) delete entry.viewport;
+}
+
 export function forgetAgentTrace(paneId: string): void {
   entries.delete(paneId);
   if (details.delete(paneId)) detailRevision += 1;

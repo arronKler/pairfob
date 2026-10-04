@@ -34,6 +34,17 @@ describe("step categories follow each agent's own tool names", () => {
     expect(stepObject({ type: "thinking", text: "\n  first line\nsecond" })).toBe("first line");
   });
 
+  test("Codex reading a running command says so instead of naming write_stdin", () => {
+    const output = t("work.commandOutput");
+    // A direct call carries no label; code mode labels the snippet by its first tool.
+    expect(stepObject(tool("write_stdin"))).toBe(output);
+    expect(stepObject(tool("write_stdin", { input: '{"session_id":7,"chars":""}' }))).toBe(output);
+    expect(stepObject(tool("exec", { label: "write_stdin" }))).toBe(output);
+    expect(stepObject(tool("exec", { label: "write_stdin +1" }))).toBe(`${output} +1`);
+    // A command that merely mentions it stays a command.
+    expect(stepObject(tool("exec", { label: "rg write_stdin src" }))).toBe("rg write_stdin src");
+  });
+
   test("an unverified daemon never turns done into success", () => {
     expect(stepState(tool("Read", { toolState: "done" }), false)).toBe("ended");
     expect(stepState(tool("Read", { toolState: "done" }), true)).toBe("done");
@@ -42,10 +53,28 @@ describe("step categories follow each agent's own tool names", () => {
 });
 
 describe("turn outcome leads with what the reader needs", () => {
-  test("failures outrank changed files, which outrank a step count", () => {
-    const edit = tool("Edit", { label: "src/a.ts", toolState: "done" });
+  test("a failed step the agent worked past is routine: the card still leads with changes or the step count", () => {
     const fail = tool("Bash", { label: "bun test", toolState: "error" });
-    expect(turnOutcome([edit, fail], done)).toMatchObject({ tone: "error", title: t("work.failedCommands", { n: 1 }) });
+    const read = tool("Read", { toolState: "done" });
+    const reply: AgentTraceItem = { type: "assistant", text: "Done." };
+    expect(turnOutcome([fail, read], done)).toMatchObject({ tone: "done", title: t("work.doneSteps", { n: 2 }) });
+    expect(turnOutcome([read, fail, reply], done)).toMatchObject({ tone: "done", title: t("work.doneSteps", { n: 2 }) });
+    expect(turnOutcome([tool("Edit", { label: "src/a.ts", toolState: "done" }), fail, reply], done))
+      .toMatchObject({ tone: "done", title: t("work.changedFiles", { n: 1 }) });
+  });
+
+  test("only a turn that stopped on a failed step says so", () => {
+    const fail = tool("Bash", { label: "bun test", toolState: "error" });
+    const read = tool("Read", { toolState: "done" });
+    const thought: AgentTraceItem = { type: "thinking", text: "Try again?" };
+    expect(turnOutcome([read, fail], done)).toMatchObject({ tone: "error", title: t("work.endedFailed"), detail: `bun test · ${t("work.total", { n: 2 })}` });
+    expect(turnOutcome([read, fail, thought], done).tone).toBe("error");
+    // A message sent mid-run moves the work to the next turn: this one did not stop there.
+    expect(turnOutcome([read, fail], { ...done, hasNext: true })).toMatchObject({ tone: "done", title: t("work.doneSteps", { n: 2 }) });
+  });
+
+  test("changed files outrank a step count", () => {
+    const edit = tool("Edit", { label: "src/a.ts", toolState: "done" });
     expect(turnOutcome([edit, tool("Edit", { label: "src/a.ts", toolState: "done" })], done))
       .toMatchObject({ tone: "done", title: t("work.changedFiles", { n: 1 }), detail: `a.ts · ${t("work.total", { n: 2 })}` });
     expect(turnOutcome([tool("Read", { toolState: "done" })], done)).toMatchObject({ title: t("work.doneSteps", { n: 1 }) });

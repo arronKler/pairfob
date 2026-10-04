@@ -176,8 +176,7 @@ describe("react complete-terminal shell", () => {
     expect(chrome?.querySelector(".chrome-name")?.textContent).toBeTruthy();
     expect(chrome?.querySelector(".chrome-avatar .agent-avatar")).toBeTruthy();
     expect(chrome?.querySelector(".chrome-status")?.textContent).toBe(t("status.working"));
-    // Files moved into the session menu; the header keeps the view toggle and more.
-    expect(chrome?.querySelector(".icon-workspace")).toBeNull();
+    expect(chrome?.querySelector(".icon-workspace")).toBeTruthy();
     expect(chrome?.querySelector(".icon-more")).toBeTruthy();
     expect(getFullTerminalView().working).toBeTrue();
     // Stopping lives on the send button now; the header never grows a stop target.
@@ -308,8 +307,6 @@ describe("react complete-terminal shell", () => {
         onBack: () => undefined,
         onWorkspace: () => undefined,
         onMenu: () => undefined,
-        onToggleView: () => undefined,
-        chatAvailable: () => true,
         onRetry: () => undefined,
         scroll: () => undefined,
         pageLines: () => 23,

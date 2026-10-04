@@ -18,13 +18,11 @@ import {
  * `FullTerminalHost` layout effect; this route is presentation composition.
  */
 export function FullTerminalRoute(): React.ReactElement {
-  const { onBack, onWorkspace, onMenu, onToggleView, chatAvailable } = sessionHandlers();
+  const { onBack, onWorkspace, onMenu } = sessionHandlers();
   const props: FullTerminalScreenProps = {
     onBack,
     onWorkspace,
     onMenu,
-    onToggleView,
-    chatAvailable,
     onRetry: retryFullTerminal,
     scroll: sendFullTerminalScroll,
     pageLines: pageScrollLines,

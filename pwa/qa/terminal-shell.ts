@@ -65,8 +65,6 @@ export function renderTerminalShell(error: boolean): void {
       onBack: action("back"),
       onWorkspace: action("workspace"),
       onMenu: action("menu"),
-      onToggleView: action("toggle-view"),
-      chatAvailable: () => true,
       onRetry: action("retry"),
       scroll: (...args) => { record("lifecycle", "terminalShell.scroll", args); },
       pageLines: () => 23,

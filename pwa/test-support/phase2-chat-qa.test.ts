@@ -50,11 +50,11 @@ test("phase2 long Pi scene includes successful, failed, and empty tool results",
   expect(stream).toContain("Turn 12 complete");
   expect(stream).toContain("bun test chat");
   expect(stream).toContain("empty.txt");
-  // The failed command is visible on its card without opening anything.
+  // The failed command is marked on its own row; the agent worked past it, so the card still reads as done.
   const steps = [...document.querySelectorAll<HTMLButtonElement>(".work-step")];
   const failed = steps.find((step) => step.textContent?.includes("bun test chat"))!;
   expect(failed.className).toContain("is-error");
-  expect(failed.closest("details.work-card")?.className).toBe("work-card is-error");
+  expect(failed.closest("details.work-card")?.className).toBe("work-card is-done");
   // Tool bodies load only when a step's sheet opens, and never enter the stream.
   await act(async () => { failed.click(); await Promise.resolve(); });
   await settle(() => (document.querySelector("dialog.step-sheet")?.textContent ?? "").includes("expected one refresh"));
@@ -66,6 +66,25 @@ test("phase2 long Pi scene includes successful, failed, and empty tool results",
   await settle(() => api!.calls.some((call) => call.method === "agentTraceDetail" && call.args[1] === "qa-empty-output"));
   expect(document.querySelector("dialog.step-sheet")?.textContent).not.toContain("export function App");
   closeTestDialogs();
+});
+
+test("the steps scene keeps routine failures off the card header and names command-output reads", async () => {
+  await start("chat-steps");
+  const cards = [...document.querySelectorAll<HTMLDetailsElement>("details.work-card")];
+  // The agent worked past a failed read and answered: the card counts its steps.
+  expect(cards[0].className).toBe("work-card is-done");
+  expect(cards[0].querySelector(".work-title")?.textContent).toBe("Done · 5 steps");
+  // The agent's note before its first step is a row too; only tool rows carry a target.
+  const rows = [...cards[0].querySelectorAll(".work-step")].filter((row) => row.querySelector(".work-step-text"));
+  expect(rows.map((row) => row.querySelector(".work-step-text")?.textContent)).toEqual([
+    "cat /tmp/usage.ts +1", "Read command output", "bun /tmp/usage.ts +1", "Read command output +1", "Read command output",
+  ]);
+  expect(rows.map((row) => row.className.includes("is-error"))).toEqual([false, true, false, false, false]);
+  expect(cards[0].textContent).not.toContain("write_stdin");
+  // The last turn stopped on a failed build with no reply: that is its result.
+  expect(cards[1].className).toBe("work-card is-error");
+  expect(cards[1].querySelector(".work-title")?.textContent).toBe("Last step failed");
+  expect(cards[1].querySelector(".work-detail")?.textContent).toBe("bun run build · 2 steps");
 });
 
 test("phase2 unread and recovery scenes expose real fixture actions without mutation replay", async () => {

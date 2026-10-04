@@ -1,5 +1,5 @@
 import { SquareTerminal, TriangleAlert } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { t } from "../../../lib/i18n";
 import type { PendingAsk } from "../../../lib/agent-trace-steps";
 import { dialogKeys, MAX_DIALOG_KEYS, parseTerminalDialog, screenExcerpt } from "../../../lib/terminal-dialog";
@@ -13,6 +13,29 @@ import { Button, Spinner } from "../../../shared/ui/primitives";
 const GUARDED_LINES = 80;
 /** Re-reads after an answer, for a follow-up prompt the status poll has not seen yet. */
 const FOLLOW_UP_READS_MS = [1500, 4000];
+
+/** Must match the stream's own "at the latest turn" slack (agent-stream onScroll). */
+const TAIL_SLACK_PX = 32;
+
+/**
+ * The card grows once its screen read lands, after the stream already settled
+ * on the latest turn. A reader who was there stays there, so the choices are
+ * not pushed below the fold; a reader further up is left alone.
+ */
+function useKeepTail(card: RefObject<HTMLElement | null>): void {
+  const height = useRef(0);
+  useLayoutEffect(() => {
+    const node = card.current;
+    const stream = node?.closest<HTMLElement>(".agent-stream");
+    if (!node) return;
+    const next = node.getBoundingClientRect().height;
+    const grew = next - height.current;
+    const first = height.current === 0;
+    height.current = next;
+    if (first || grew <= 0 || !stream) return;
+    if (stream.scrollHeight - grew - stream.scrollTop - stream.clientHeight < TAIL_SLACK_PX) stream.scrollTop = stream.scrollHeight;
+  });
+}
 
 type Screen = { text: string; hash?: string };
 type Phase = "reading" | "ready" | "sending" | "sent";
@@ -29,6 +52,8 @@ export function NeedsYouCard({ ask, onTerminal, onAnswered }: {
 }) {
   const paneId = useSession().paneId;
   const titleId = useId();
+  const card = useRef<HTMLElement>(null);
+  useKeepTail(card);
   const [screen, setScreen] = useState<Screen | null>(null);
   const [phase, setPhase] = useState<Phase>("reading");
   const [choice, setChoice] = useState<number | null>(null);
@@ -106,7 +131,7 @@ export function NeedsYouCard({ ask, onTerminal, onAnswered }: {
 
   const busy = phase === "sending" || phase === "sent";
   const excerpt = !dialog && screen ? screenExcerpt(screen.text) : [];
-  return <section className="needs-card" aria-labelledby={titleId}>
+  return <section ref={card} className="needs-card" aria-labelledby={titleId}>
     <p className="needs-title" id={titleId}><TriangleAlert size={16} aria-hidden="true" />{t("needs.title")}</p>
     {dialog ? <>
       {dialog.context.length > 0 && <pre className="needs-screen" aria-label={t("needs.screenAria")}>{dialog.context.join("\n")}</pre>}

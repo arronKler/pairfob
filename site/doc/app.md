@@ -61,11 +61,11 @@ Chrome:
 
 - Left: back to the list (phone). The back control shows a count when other sessions need you
 - Center: agent icon, name and status. It is display-only; switch sessions from the list or with the edge swipe
-- Right: the switch between chat and terminal (Agent sessions only; greyed when this Agent has no readable transcript), then `···` **Session actions** (how this view looks and types, **Browse files and changes**, this pane's name, close this pane)
+- Right: **Browse files and changes**, then `···` **Session actions** (how this view looks and types, this pane's name, close this pane)
 
 Stopping a working agent lives on the button beside the compose field; see **Control** below.
 
-The four choices are at the top of `···` under **Mode**; the switch in the header goes between chat and terminal in one tap. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **Settings**.
+The four choices are at the top of `···` under **Mode**. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **Settings**.
 
 | Mode | What it is |
 | --- | --- |
@@ -95,7 +95,7 @@ The computer and phone operate the same terminal dialog. Once either confirms it
 
 ## Files and changes
 
-**Browse files and changes** under `···` → **Session** is not the Worktree menu. It opens this pane's workspace, with the current branch and how many commits it is ahead at the top:
+The folder control in the session chrome is not the Worktree menu. It opens this pane's workspace, with the current branch and how many commits it is ahead at the top:
 
 - **Files** — directory listing and a text preview
 - **Changes** — uncommitted git status in **Staged Changes** and **Changes**; tap a file for the diff
@@ -161,9 +161,9 @@ Tap the session chrome `···`. Missing items are not drawn. **Rename tab**, **
 | Mode | Auto, Control, Terminal (vim / TUI), Chat |
 | Tiles | Copy screen, New tab, Split, Rename |
 | Input and display | Input: Compose / Live (Control), Larger text / Smaller text, Wrap long lines (Control), Fit width to screen (Terminal) |
-| Session | Browse files and changes, Layout (drag dividers to resize, long-press this pane to swap it, zoom), Worktree (list, new, open), Agent info, Close session |
+| Session | Layout (drag dividers to resize, long-press this pane to swap it, zoom), Worktree (list, new, open), Agent info, Close session |
 
-**Chat** puts a turn's thinking and tools in one step card. Its header leads with the result: waiting on you, which command failed, which files changed, how many steps and how long. It is open with the latest steps while the turn runs and one line afterwards; long turns can filter to failed or edited steps. Tap a step for its command or arguments and output, copy them, and move with **Previous** / **Next**. A finished answer has **Copy**, each code block its own **Copy code**. **Load earlier** pulls older turns when the thread is long.
+**Chat** puts a turn's thinking and tools in one step card. Its header leads with the result: waiting on you, which files changed, how many steps and how long. A failed step the agent worked past is only marked in the list; the header says so only when the turn stopped on one. It is open with the latest steps while the turn runs and one line afterwards; long turns can filter to failed or edited steps. Tap a step for its command or arguments and output, copy them, and move with **Previous** / **Next**. A finished answer has **Copy**, each code block its own **Copy code**. **Load earlier** pulls older turns when the thread is long.
 
 The web surface does not offer arbitrary shell, deleting worktrees, or yanking the computer window to the front.
 

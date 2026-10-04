@@ -1,4 +1,4 @@
-import { ChevronRight, Columns2, Copy, FolderOpen, GitBranch, Info, LayoutGrid, Pencil, Plus, RotateCw, Trash2, X } from "lucide-react";
+import { ChevronRight, Columns2, Copy, GitBranch, Info, LayoutGrid, Pencil, Plus, RotateCw, Trash2, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AgentInformation } from "./agent-information";
 import { PaneDisplaySettings, PaneModeSetting } from "./pane-menu-settings";
@@ -27,7 +27,7 @@ import { PanePage } from "./pane-page";
 
 export function fillSelectedPane(): void { void layoutSelectedPane("zoom"); }
 
-type MenuContext = { modal: ActionSheetController; agent: AgentCard | undefined; full: boolean; chat: boolean; onWorkspace?: () => void };
+type MenuContext = { modal: ActionSheetController; agent: AgentCard | undefined; full: boolean; chat: boolean };
 
 /** Copy the screen as plain text; the count is what the reader sees confirmed. */
 async function copyScreenLines(paneId: string): Promise<number | null> {
@@ -116,7 +116,7 @@ function pushPage(nav: SheetNav, key: string, title: string, render: () => React
  * pages, and closing on its own at the end. Every follow-up is a page pushed
  * inside this one sheet.
  */
-function PaneMenu({ modal, agent, full, chat, onWorkspace }: MenuContext) {
+function PaneMenu({ modal, agent, full, chat }: MenuContext) {
   const nav = useSheetNav()!;
   const caps = useCapabilities().operationCapabilities;
   const [status, setStatus] = useState("");
@@ -153,7 +153,6 @@ function PaneMenu({ modal, agent, full, chat, onWorkspace }: MenuContext) {
     <PaneDisplaySettings modal={modal} full={full} chat={chat} />
     <h3 className="pane-group-title">{t("pm.groupSession")}</h3>
     <MenuGroup label={t("pm.groupSession")}>
-      {agent && onWorkspace && <MenuRow icon={<FolderOpen size={18} />} label={t("workspace.open")} modal={modal} action={onWorkspace} />}
       {full && <MenuRow icon={<RotateCw size={18} />} label={t("pane.reconnect")} modal={modal} action={retryFullTerminal} />}
       {agent && <PageRow icon={<LayoutGrid size={18} />} label={t("pm.layout")} value={layoutValue}
         onClick={() => pushPage(nav, "layout", t("pm.layout"), () => <PaneLayoutPage modal={modal} agent={agent} />)} />}
@@ -166,11 +165,10 @@ function PaneMenu({ modal, agent, full, chat, onWorkspace }: MenuContext) {
   </PanePage>;
 }
 
-/** `onWorkspace` adds the files entry; the session header passes it, since files left the header. */
-export function openPaneMenu(onWorkspace?: () => void): void {
+export function openPaneMenu(): void {
   const agent = selectedAgent();
   const full = isFullTerminal();
   const chat = isAgentChat();
-  showActionSheet(t("pane.menuTitle"), modal => <PaneMenu modal={modal} agent={agent} full={full} chat={chat} onWorkspace={onWorkspace} />,
+  showActionSheet(t("pane.menuTitle"), modal => <PaneMenu modal={modal} agent={agent} full={full} chat={chat} />,
     { className: "pane-menu-sheet" });
 }

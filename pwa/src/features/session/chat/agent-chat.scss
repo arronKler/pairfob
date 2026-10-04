@@ -390,7 +390,6 @@
 }
 
 // Looks 28px tall; the padding-box keeps the tap target at 44px.
-.agent-reply-terminal,
 .agent-reply-copy {
   display: inline-flex;
   align-items: center;
@@ -405,7 +404,6 @@
   position: relative;
 }
 
-.agent-reply-terminal::before,
 .agent-reply-copy::before {
   content: "";
   position: absolute;
@@ -416,15 +414,12 @@
 }
 
 .agent-reply-copy:focus-visible,
-.agent-reply-copy:active,
-.agent-reply-terminal:focus-visible,
-.agent-reply-terminal:active {
+.agent-reply-copy:active {
   color: var(--ink);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .agent-reply-copy:hover,
-  .agent-reply-terminal:hover { color: var(--ink); }
+  .agent-reply-copy:hover { color: var(--ink); }
 }
 
 // Delivery status for the last prompt, on the stream's gutter above compose.

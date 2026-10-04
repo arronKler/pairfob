@@ -34,7 +34,9 @@ import {
   agentTraceDetailRevision,
   cacheAgentTrace,
   cachedAgentTrace,
+  cacheAgentTracePosture,
   cacheAgentTraceViewport,
+  forgetAgentTraceViewport,
   type AgentTraceViewport,
 } from "../../../lib/agent-trace-cache";
 import { isTraceMarker, type AgentTraceItem, type AgentTracePage } from "../../../lib/operations";
@@ -172,23 +174,18 @@ function rememberTrace(paneId: string, ownerKey = currentAgentTraceOwnerKey(), v
   });
 }
 
-export function rememberAgentViewport(
-  stream: HTMLElement,
-  paneId = openPaneId(),
-  ownerKey = currentAgentTraceOwnerKey(),
-  posture?: { follow: boolean; unread: boolean },
-): void {
+export function rememberAgentViewport(stream: HTMLElement, paneId = openPaneId(), ownerKey = currentAgentTraceOwnerKey()): void {
   if (!paneId || !ownerKey) return;
   const snapshot = chatSnapshot();
-  cacheAgentTraceViewport(
-    paneId,
-    ownerKey,
-    captureTraceViewport(
-      stream,
-      posture?.follow ?? snapshot.agentTraceFollow,
-      posture?.unread ?? snapshot.agentTraceUnread,
-    ),
-  );
+  cacheAgentTraceViewport(paneId, ownerKey, captureTraceViewport(stream, snapshot.agentTraceFollow, snapshot.agentTraceUnread));
+}
+
+/**
+ * A stream being unmounted may already have lost its layout (its page is
+ * leaving), so only the posture is saved; scrolling keeps the place current.
+ */
+export function rememberAgentPosture(paneId: string, ownerKey: string, posture: { follow: boolean; unread: boolean }): void {
+  if (paneId && ownerKey) cacheAgentTracePosture(paneId, ownerKey, posture);
 }
 
 export function restoreAgentViewport(stream: HTMLElement, paneId = openPaneId(), ownerKey = currentAgentTraceOwnerKey()): boolean {
@@ -202,16 +199,16 @@ export function restoreAgentReadingPosition(): void {
   if (stream && !restoreAgentViewport(stream)) stickAgentStream();
 }
 
+/**
+ * Opening a pane paints its last transcript at once. The reading place does not
+ * outlive the visit: every entry starts at the latest turn.
+ */
 export function restoreAgentTrace(paneId: string): boolean {
   const entry = cachedAgentTrace(paneId, currentAgentTraceOwnerKey());
   if (!entry) return false;
+  forgetAgentTraceViewport(paneId);
   adoptTracePage(entry);
-  if (entry.viewport) {
-    applyTrace({
-      agentTraceFollow: entry.viewport.follow,
-      agentTraceUnread: entry.viewport.unread,
-    });
-  }
+  followTrace();
   return true;
 }
 
@@ -542,6 +539,7 @@ export function enterAgentChat(): void {
     haptic(8);
     switchComposeView(() => {
       setPaneTermMode(openPaneId(), "agent");
+      forgetAgentTraceViewport(openPaneId());
       batch(() => {
         setFullTerminal(false);
         setAgentChat(true);

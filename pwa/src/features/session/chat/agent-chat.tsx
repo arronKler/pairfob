@@ -11,7 +11,7 @@ import { capabilityEnabled } from "../../operations/capabilities-store";
 import { useStatusUnverifiable } from "../guided/session-chrome";
 import { openStepSheet } from "./step-sheet";
 import { chatDockNotice, copyAgentReply, currentAgentTraceOwnerKey, emptySpec, jumpToLatest, leaveAgentChat,
-  refreshAgentTrace, rememberAgentViewport, restoreAgentViewport, streamSig, visibleItems,
+  refreshAgentTrace, rememberAgentPosture, rememberAgentViewport, restoreAgentViewport, streamSig, visibleItems,
 } from "./agent-chat-controller";
 import { agentChatUIRevision, publishAgentChatUI, subscribeAgentChatUI } from "./agent-chat-ui";
 import type { SessionHandlers } from "../guided/view";
@@ -66,10 +66,9 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   useLayoutEffect(() => {
     const element = stream.current;
     const ownerKey = currentAgentTraceOwnerKey();
-    if (element) restoreAgentViewport(element, paneId, ownerKey);
-    return () => {
-      if (element) rememberAgentViewport(element, paneId, ownerKey, reading.current);
-    };
+    // No saved place means a fresh visit: it starts at the latest turn.
+    if (element && !restoreAgentViewport(element, paneId, ownerKey) && reading.current.follow) element.scrollTop = element.scrollHeight;
+    return () => rememberAgentPosture(paneId, ownerKey, reading.current);
   }, [paneId]);
   useEffect(() => {
     let retired = false;

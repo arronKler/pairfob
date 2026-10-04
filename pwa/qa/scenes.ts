@@ -122,6 +122,7 @@ export const scenes: FixtureScene[] = [
   { name: "chat-older", description: "Older-history control and truncation notice" },
   { name: "chat-markers", description: "Slash command chip, context compaction divider and interrupted turn" },
   { name: "chat-needs-you", description: "Agent waiting on a terminal approval answered from the chat" },
+  { name: "chat-steps", description: "Codex steps: a failure the agent worked past, command-output reads, and a turn stopped on a failed step" },
   { name: "chat-pi-long", description: "Long Pi transcript with tool success, error, and empty output" },
   { name: "chat-pi-unread", description: "Long Pi transcript scrolled away from the tail with unread updates" },
   { name: "chat-pi-recovery", description: "Long Pi transcript ready for disconnect, reconnect, and foreground actions" },
@@ -424,9 +425,9 @@ export async function applyScene(name: string, session: FixtureSession): Promise
       session.setTrace(trace);
       applyTrace({ agentTraceItems: trace, agentTraceTail: trace.length, agentTraceLoadState: "ready", agentTraceSig: JSON.stringify(trace) });
     }
-    if (name === "chat-markers") {
+    if (name === "chat-markers" || name === "chat-steps") {
       replaceAgentsFromSnapshot(idleFocusedSnapshot());
-      const trace = data.markerTrace();
+      const trace = name === "chat-steps" ? data.stepsTrace() : data.markerTrace();
       session.setTrace(trace);
       applyTrace({ agentTraceItems: trace, agentTraceTail: trace.length, agentTraceLoadState: "ready", agentTraceSig: JSON.stringify(trace) });
     }

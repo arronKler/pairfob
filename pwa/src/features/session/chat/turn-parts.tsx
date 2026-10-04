@@ -55,13 +55,11 @@ export function TurnHead({ item, anchorData }: { item: AgentTraceItem; anchorDat
   return <PromptBubble text={text} anchorData={anchorData} />;
 }
 
-export function ReplyActions({ text, onCopy, onTerminal }: { text: string; onCopy?: (text: string) => void | Promise<void>; onTerminal?: () => void }) {
-  if (!onCopy && !onTerminal) return null;
+export function ReplyActions({ text, onCopy }: { text: string; onCopy?: (text: string) => void | Promise<void> }) {
+  if (!onCopy || !text) return null;
   return <div className="agent-reply-actions">
-    {onCopy && text && <Button className="agent-reply-copy" aria-label={t("chat.copyReplyAria")} onClick={() => void onCopy(text)}>
-      <Copy size={14} aria-hidden="true" />{t("reply.copy")}</Button>}
-    {onTerminal && <Button className="agent-reply-terminal" aria-label={t("reply.terminalAria")} onClick={onTerminal}>
-      <SquareTerminal size={14} aria-hidden="true" />{t("reply.terminal")}</Button>}
+    <Button className="agent-reply-copy" aria-label={t("chat.copyReplyAria")} onClick={() => void onCopy(text)}>
+      <Copy size={14} aria-hidden="true" />{t("reply.copy")}</Button>
   </div>;
 }
 

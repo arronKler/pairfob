@@ -42,6 +42,13 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "";
 }
 
+/**
+ * Codex reads a running command through write_stdin (nearly always with nothing
+ * to type); as a step name it says nothing. Code mode labels the call by its
+ * tool name, with " +N" for further calls in the same snippet.
+ */
+const COMMAND_OUTPUT = /^write_stdin( \+\d+)?$/;
+
 /** The step's target in a few words: a path tail, a command line, a query. */
 export function stepObject(item: AgentTraceItem): string {
   if (item.type === "thinking") return firstLine(item.text || "");
@@ -53,6 +60,8 @@ export function stepObject(item: AgentTraceItem): string {
   }
   if (item.label) {
     const label = firstLine(item.label);
+    const output = COMMAND_OUTPUT.exec(label);
+    if (output) return t("work.commandOutput") + (output[1] ?? "");
     if (category === "read" || category === "edit") {
       // "path/to/file.ts +2" keeps the extra-file count after the shortened path.
       const [path, more] = label.split(/ (?=\+\d+$)/);
@@ -60,6 +69,7 @@ export function stepObject(item: AgentTraceItem): string {
     }
     return label;
   }
+  if (name.toLowerCase() === "write_stdin") return t("work.commandOutput");
   // Older daemons send no label; a full AgentTrace still carries the input.
   if (item.input) return toolSummary(item);
   return name;
@@ -75,7 +85,7 @@ export function stepState(item: AgentTraceItem, verified: boolean): StepState {
 
 export type TurnTone = "running" | "waiting" | "stale" | "interrupted" | "error" | "done" | "neutral";
 export type TurnOutcome = { tone: TurnTone; title: string; detail: string; steps: number };
-export type TurnContext = { live: boolean; waiting: boolean; stale: boolean; verified: boolean };
+export type TurnContext = { live: boolean; waiting: boolean; stale: boolean; verified: boolean; hasNext?: boolean };
 
 function editedFiles(tools: readonly AgentTraceItem[]): string[] {
   const files: string[] = [];
@@ -95,9 +105,20 @@ function latestPlan(tools: readonly AgentTraceItem[]): string {
   return "";
 }
 
+/** The turn stopped on a failed step: nothing ran and nothing was said after it. */
+function endedOnFailure(items: readonly AgentTraceItem[]): boolean {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item.type === "tool") return toolState(item) === "error";
+    if (item.type === "assistant") return false;
+  }
+  return false;
+}
+
 /**
- * Result first: waiting on you, then failures, then what changed, then size.
- * Reading and searching only show once the card is open.
+ * Result first: waiting on you, then what changed, then size. A failed step the
+ * agent worked past is routine and stays in the step list; only a turn that
+ * stopped on one says so. Reading and searching only show once the card is open.
  */
 export function turnOutcome(items: readonly AgentTraceItem[], context: TurnContext): TurnOutcome {
   const tools = items.filter((item) => item.type === "tool");
@@ -118,12 +139,9 @@ export function turnOutcome(items: readonly AgentTraceItem[], context: TurnConte
     const title = running > 1 ? t("work.runningMany", { n: running }) : steps ? t("work.running", { n: steps }) : t("work.starting");
     return { tone: "running", title, detail: join(files.length ? t("work.changedFiles", { n: files.length }) : "", planPart), steps };
   }
-  const failed = tools.filter((tool) => toolState(tool) === "error");
   const changed = files.length ? t("work.changedFiles", { n: files.length }) : edits ? t("work.edits", { n: edits }) : "";
-  if (failed.length) {
-    const commands = failed.every((tool) => stepCategory(tool) === "command");
-    const title = commands ? t("work.failedCommands", { n: failed.length }) : t("work.failedSteps", { n: failed.length });
-    return { tone: "error", title, detail: join(changed, planPart, total), steps };
+  if (!context.hasNext && endedOnFailure(items)) {
+    return { tone: "error", title: t("work.endedFailed"), detail: join(stepObject(tools[tools.length - 1]), changed, planPart, total), steps };
   }
   const tone: TurnTone = context.verified ? "done" : "neutral";
   if (changed) {

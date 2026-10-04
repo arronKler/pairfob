@@ -54,8 +54,8 @@ function anchorData(anchor: TraceAnchor, part: string): TraceAnchorData {
   };
 }
 
-function AssistantReply({ items, final, anchor, part, onCopy, onTerminal }: {
-  items: AgentTraceItem[]; final: boolean; anchor: TraceAnchor; part: string; onCopy?: CopyReply; onTerminal?: () => void;
+function AssistantReply({ items, final, anchor, part, onCopy }: {
+  items: AgentTraceItem[]; final: boolean; anchor: TraceAnchor; part: string; onCopy?: CopyReply;
 }) {
   const text = replyText(items);
   const html = renderMarkdown(text);
@@ -63,7 +63,7 @@ function AssistantReply({ items, final, anchor, part, onCopy, onTerminal }: {
   return <article {...anchorData(anchor, part)} className={`agent-assistant${final ? " agent-assistant-final" : " agent-assistant-intermediate"}`}>
     {/* The existing Markdown parser returns sanitized allowlisted HTML. */}
     <div ref={code.root} className="agent-md" onClick={code.onClick} dangerouslySetInnerHTML={{ __html: html }} />
-    {final && <ReplyActions text={text} onCopy={onCopy} onTerminal={onTerminal} />}
+    {final && <ReplyActions text={text} onCopy={onCopy} />}
   </article>;
 }
 
@@ -92,7 +92,8 @@ function TraceTurn({ turn, state, anchor, kept, onCopy, onTerminal, onAnswered, 
   const { live, waiting } = state;
   const outcome = turnOutcome(turn.items, state);
   const tools = entries.filter((item) => item.type === "tool");
-  if (!live && !reply.length && tools.length && !interrupted) {
+  // A turn that stopped on a failed step already names it.
+  if (!live && !reply.length && tools.length && !interrupted && outcome.tone !== "error") {
     // A message sent mid-run starts a new turn; the work goes on there.
     outcome.detail = state.hasNext ? t("work.continued") : t("work.noReply", { step: stepObject(tools[tools.length - 1]) });
   }
@@ -106,7 +107,7 @@ function TraceTurn({ turn, state, anchor, kept, onCopy, onTerminal, onAnswered, 
       onOpen={(item, steps) => onOpenStep(item, steps, { key: anchor.key, ordinal: anchor.ordinal })}
       anchor={{ anchor: `${anchor.key}:work`, ordinal: anchor.ordinal, ordinalFromEnd: anchor.ordinalFromEnd }} />}
     {live && waiting && <NeedsYouCard ask={pendingAsk(turn.items)} onTerminal={onTerminal} onAnswered={onAnswered} />}
-    {reply.length > 0 && <AssistantReply items={reply} final={!live} anchor={anchor} part="reply" onCopy={onCopy} onTerminal={onTerminal} />}
+    {reply.length > 0 && <AssistantReply items={reply} final={!live} anchor={anchor} part="reply" onCopy={onCopy} />}
     {compacted && <CompactionDivider />}
   </>;
 }

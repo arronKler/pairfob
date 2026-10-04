@@ -27,6 +27,7 @@ import { bindSessionOwnerFromLive } from "../bind-live";
 import { AgentChatPane } from "./agent-chat";
 import {
   currentAgentTraceOwnerKey,
+  enterAgentChat,
   leaveAgentChat,
   patchAgentChat,
   refreshAgentTrace,
@@ -466,22 +467,62 @@ test("view cleanup saves the retired owner's reading posture", async () => {
   });
 });
 
-test("same daemon session and occupant restore cached reading position after transport replacement", async () => {
+test("same daemon session and occupant keep the reading place when the view remounts", async () => {
   await act(async () => mount());
   await act(async () => { await refreshAgentTrace(); });
   const ownerKey = currentAgentTraceOwnerKey();
   const oldStream = appRoot().querySelector<HTMLElement>(".agent-stream")!;
   setStreamSize(oldStream, 1000, 135);
   await act(async () => oldStream.dispatchEvent(new window.Event("scroll", { bubbles: true })));
+  expect(chatSnapshot().agentTraceFollow).toBeFalse();
 
-  withLive({});
-  expect(currentAgentTraceOwnerKey()).toBe(ownerKey);
-  applyTrace({ agentTraceItems: [], agentTraceLoadState: "cold", agentTraceFollow: true, agentTraceUnread: false });
-  expect(restoreAgentTrace("p1")).toBeTrue();
+  // A page that is leaving has no layout: its stream reads as unscrolled.
+  setStreamSize(oldStream, 100, 0);
+  await act(async () => unmountSyncRoot());
+  expect(cachedAgentTrace("p1", ownerKey)?.viewport).toMatchObject({ scrollTop: 135, follow: false });
   await act(async () => mount());
   const restored = appRoot().querySelector<HTMLElement>(".agent-stream")!;
+  expect(restored === oldStream).toBeFalse();
   expect(restored.scrollTop).toBe(135);
   expect(chatSnapshot().agentTraceFollow).toBeFalse();
+});
+
+test("opening the pane again starts at the latest turn, not the place left behind", async () => {
+  await act(async () => mount());
+  await act(async () => { await refreshAgentTrace(); });
+  const oldStream = appRoot().querySelector<HTMLElement>(".agent-stream")!;
+  setStreamSize(oldStream, 1000, 135);
+  await act(async () => oldStream.dispatchEvent(new window.Event("scroll", { bubbles: true })));
+  expect(cachedAgentTrace("p1")?.viewport?.follow).toBeFalse();
+  await act(async () => unmountSyncRoot());
+
+  // openPane: the pane view resets, then the cached transcript is adopted.
+  applyTrace({ agentTraceItems: [], agentTraceLoadState: "cold", agentTraceFollow: false, agentTraceUnread: true });
+  expect(restoreAgentTrace("p1")).toBeTrue();
+  expect(cachedAgentTrace("p1")?.viewport).toBeUndefined();
+  expect(chatSnapshot()).toMatchObject({ agentTraceFollow: true, agentTraceUnread: false });
+  const height = Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, "scrollHeight");
+  Object.defineProperty(window.HTMLElement.prototype, "scrollHeight", { configurable: true, get() { return 1000; } });
+  try {
+    await act(async () => mount());
+  } finally {
+    if (height) Object.defineProperty(window.HTMLElement.prototype, "scrollHeight", height);
+    else delete (window.HTMLElement.prototype as { scrollHeight?: number }).scrollHeight;
+  }
+  expect(appRoot().querySelector<HTMLElement>(".agent-stream")!.scrollTop).toBe(1000);
+});
+
+test("switching back to chat mode starts at the latest turn", async () => {
+  await act(async () => mount());
+  await act(async () => { await refreshAgentTrace(); });
+  const stream = appRoot().querySelector<HTMLElement>(".agent-stream")!;
+  setStreamSize(stream, 1000, 135);
+  await act(async () => stream.dispatchEvent(new window.Event("scroll", { bubbles: true })));
+  await act(async () => { leaveAgentChat({ paint: false }); unmountSyncRoot(); });
+  expect(cachedAgentTrace("p1")?.viewport?.follow).toBeFalse();
+  await act(async () => { enterAgentChat(); await Promise.resolve(); });
+  expect(cachedAgentTrace("p1")?.viewport?.follow ?? true).toBeTrue();
+  expect(chatSnapshot()).toMatchObject({ agentTraceFollow: true, agentTraceUnread: false });
 });
 
 test("view cleanup saves the retired owner's reading posture", async () => {

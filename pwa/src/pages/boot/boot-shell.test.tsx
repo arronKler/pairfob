@@ -87,7 +87,9 @@ describe("the boot frame while connecting", () => {
   });
 
   test("a wait before pairfob.com answers is pinned on that hop", () => {
-    setConnectionRecordSource(() => [{ event: "connect_start", at: Date.now() - 9_000 }]);
+    // A fixed start: a source that re-read the clock would land after the render's own reading of it.
+    const started = Date.now() - 9_000;
+    setConnectionRecordSource(() => [{ event: "connect_start", at: started }]);
     const node = render(createElement(BootShell));
     expect(line(node)).toBe(t("slow.lineRelay", { n: "9" }));
   });
