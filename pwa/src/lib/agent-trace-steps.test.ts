@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { setLang, t } from "./i18n.ts";
 import type { AgentTraceItem } from "./operations";
-import { formatElapsed, pendingAsk, stepCategory, stepObject, stepState, turnOutcome, turnSpan } from "./agent-trace-steps";
+import { formatElapsed, pendingAsk, recordsStepResults, stepCategory, stepObject, stepState, turnOutcome, turnSpan } from "./agent-trace-steps";
 
 beforeEach(() => setLang("zh"));
 
@@ -19,6 +19,13 @@ describe("step categories follow each agent's own tool names", () => {
       ["TodoWrite", "plan"], ["update_plan", "plan"],
       ["AskUserQuestion", "question"], ["request_user_input_async", "question"],
       ["mcp__github__create_issue", "mcp"], ["SomethingNew", "other"],
+      // Cursor
+      ["Shell", "command"], ["StrReplace", "edit"], ["Delete", "edit"], ["LS", "read"],
+      // Hermes
+      ["terminal", "command"], ["execute_code", "command"], ["write_file", "edit"], ["patch", "edit"], ["search_files", "search"],
+      ["browser_navigate", "web"], ["delegate_task", "subtask"], ["todo", "plan"], ["clarify", "question"], ["skill_view", "other"],
+      // opencode
+      ["list", "read"], ["todoread", "plan"], ["webfetch", "web"],
     ];
     for (const [name, category] of cases) expect([name, stepCategory(tool(name))]).toEqual([name, category]);
     expect(stepCategory({ type: "thinking", text: "x" })).toBe("think");
@@ -43,6 +50,11 @@ describe("step categories follow each agent's own tool names", () => {
     expect(stepObject(tool("exec", { label: "write_stdin +1" }))).toBe(`${output} +1`);
     // A command that merely mentions it stays a command.
     expect(stepObject(tool("exec", { label: "rg write_stdin src" }))).toBe("rg write_stdin src");
+  });
+
+  test("only agents that record how a step ended can show a verified result", () => {
+    for (const agent of ["claude", "codex", "grok", "pi", "hermes", "opencode", undefined]) expect(recordsStepResults(agent)).toBeTrue();
+    expect(recordsStepResults("cursor")).toBeFalse();
   });
 
   test("an unverified daemon never turns done into success", () => {

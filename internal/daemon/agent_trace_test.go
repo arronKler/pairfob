@@ -285,3 +285,48 @@ func TestAgentTraceSummaryTimesAreOptIn(t *testing.T) {
 		t.Fatalf("non-boolean times accepted: %s err=%v", raw, err)
 	}
 }
+
+// A Cursor pane is served by the same RPCs as any other agent: the snapshot
+// offers its history without naming the session, and its steps carry a state
+// although Cursor records no results.
+func TestAgentTraceServesACursorSession(t *testing.T) {
+	root := t.TempDir()
+	sessionID := "9596adbe-4b90-481d-ade2-99c2ca70bf7a"
+	transcript := filepath.Join(root, "projects", "work-repo", "agent-transcripts", sessionID, sessionID+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lines := `{"role":"user","message":{"content":[{"type":"text","text":"<timestamp>Monday</timestamp>\n<user_query>\nList the folder\n</user_query>"}]}}` + "\n" +
+		`{"role":"assistant","message":{"content":[{"type":"text","text":"Listing."},{"type":"tool_use","name":"Shell","input":{"command":"ls -la"}}]}}` + "\n" +
+		`{"role":"assistant","message":{"content":[{"type":"text","text":"One file."}]}}` + "\n" +
+		`{"type":"turn_ended","status":"success"}` + "\n"
+	if err := os.WriteFile(transcript, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := runtime.NewFake()
+	fake.Snap.Panes[0].Agent = "cursor"
+	fake.Snap.Panes[0].AgentSession = &runtime.AgentSessionRef{Source: "herdr:cursor", Agent: "cursor", Kind: "id", Value: sessionID}
+	engine, client := runtimeRPCClient(t, fake)
+	engine.Journal = &journal.Reader{CursorRoot: root}
+
+	snapshot, err := client.RPC("Snapshot", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsJSONText(snapshot, `"history_available":true`) || containsJSONText(snapshot, sessionID) {
+		t.Fatalf("snapshot: %s", snapshot)
+	}
+	raw, err := client.RPC("AgentTraceSummary", map[string]any{"pane_id": "w0:p1", "limit": 20, "labels": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := string(raw)
+	for _, want := range []string{`"text":"List the folder"`, `"name":"Shell"`, `"state":"done"`, `"label":"ls -la"`, `"text":"One file."`} {
+		if !strings.Contains(encoded, want) {
+			t.Fatalf("summary lacks %s: %s", want, raw)
+		}
+	}
+	if strings.Contains(encoded, "timestamp") || strings.Contains(encoded, "user_query") {
+		t.Fatalf("Cursor's own wrapping leaked: %s", raw)
+	}
+}

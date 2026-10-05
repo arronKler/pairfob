@@ -30,6 +30,10 @@ The installer-created user service **does not** pick these up from your current 
 pairfob service restart
 ```
 
+On Linux, run `systemctl --user daemon-reload` before the restart so systemd reads the edited unit.
+
+`pairfob service install` and the installer rewrite the service definition without these variables. The command names each variable or `EnvironmentFile=` line it removed; add them again and restart as above.
+
 ## Subscribe on the phone
 
 1. The computer already has push enabled and the service is up

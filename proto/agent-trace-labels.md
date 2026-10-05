@@ -34,10 +34,16 @@ labels. If labels would push a page past its byte budget, the oldest labels on
 that page are dropped first.
 
 Tool `state` is independent of labels: `error` comes from the agent's own
-record (Claude `tool_result.is_error`, Pi `isError`, Grok `status: failed` whatever text came with it) or, for
+record (Claude `tool_result.is_error`, Pi `isError`, Grok `status: failed` whatever text came with it,
+opencode part `status: error` or a nonzero `metadata.exit`, Hermes a JSON result
+with a nonzero `exit_code`, `success: false` or an `error` text) or, for
 Codex, from the exit status it prints with the output (`Process exited with
 code N`, `Exit code: N`, a JSON `exit_code`) and its `Script failed` /
 `apply_patch verification failed` notices. A nonzero exit is `error`.
+
+Cursor records no tool results. Its tools are `running` while their message is
+the newest record and `done` once any later record exists; `done` there means
+the tool ended, not that it succeeded, and `output` stays empty.
 
 Release order: ship the PWA that knows `trace_labels` and `trace_times` before
 the daemon that advertises them. A PWA built before them rejects the unknown

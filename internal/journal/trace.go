@@ -60,6 +60,11 @@ type parsedEvent struct {
 	lineStart     int
 	sourceOrdinal int
 	outputOnly    bool
+	// unresulted marks a tool whose agent records no result for it; settles
+	// marks a record that proves every earlier such tool has finished. An
+	// event that only settles has no Type and never enters a page.
+	unresulted bool
+	settles    bool
 }
 
 const (

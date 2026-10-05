@@ -4,8 +4,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 )
 
@@ -15,42 +13,46 @@ type plistValue struct {
 	Values  []plistValue `xml:",any"`
 }
 
-// An unloaded job has no launchctl program to inspect. Validate the on-disk
-// configuration before bootstrapping it or stopping an independent daemon.
-func launchdConfiguredExecutable(layout serviceLayout) (string, error) {
-	f, err := os.Open(layout.UnitPath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
-	if err != nil {
-		return "", err
-	}
-	if len(b) > 1<<20 {
-		return "", errors.New("service plist is too large")
-	}
+func launchdPlistFields(b []byte) (map[string]plistValue, error) {
 	var root plistValue
 	if err := xml.Unmarshal(b, &root); err != nil {
-		return "", fmt.Errorf("cannot verify service plist: %w", err)
+		return nil, fmt.Errorf("cannot verify service plist: %w", err)
 	}
 	if root.XMLName.Local != "plist" || len(root.Values) != 1 || root.Values[0].XMLName.Local != "dict" {
-		return "", errors.New("invalid service plist")
+		return nil, errors.New("invalid service plist")
 	}
-	values := root.Values[0].Values
+	return plistDictFields(root.Values[0])
+}
+
+func plistDictFields(dict plistValue) (map[string]plistValue, error) {
+	values := dict.Values
 	if len(values)%2 != 0 {
-		return "", errors.New("invalid service plist dictionary")
+		return nil, errors.New("invalid service plist dictionary")
 	}
 	fields := map[string]plistValue{}
 	for i := 0; i < len(values); i += 2 {
 		if values[i].XMLName.Local != "key" {
-			return "", errors.New("invalid service plist key")
+			return nil, errors.New("invalid service plist key")
 		}
 		key := values[i].Text
 		if _, exists := fields[key]; exists {
-			return "", errors.New("duplicate service plist key")
+			return nil, errors.New("duplicate service plist key")
 		}
 		fields[key] = values[i+1]
+	}
+	return fields, nil
+}
+
+// An unloaded job has no launchctl program to inspect. Validate the on-disk
+// configuration before bootstrapping it or stopping an independent daemon.
+func launchdConfiguredExecutable(layout serviceLayout) (string, error) {
+	b, err := readServiceUnit(layout.UnitPath)
+	if err != nil {
+		return "", err
+	}
+	fields, err := launchdPlistFields(b)
+	if err != nil {
+		return "", err
 	}
 	label := fields["Label"]
 	if label.XMLName.Local != "string" || label.Text != serviceLaunchdLabel(layout) {

@@ -23,5 +23,7 @@ Markers come only from records the agent CLI itself writes: Claude Code
 `compact_boundary` and its interrupt notice, Codex `compacted` and
 `turn_aborted` with `reason: interrupted`, Grok `turn_completed` with
 `stop_reason: cancelled`, Pi `compaction` entries and assistant
-`stopReason: aborted`. Injected context (instructions, reminders, local command
+`stopReason: aborted`, Hermes skill invocations (as the `/skill` command) and
+its hidden interrupted-response note, opencode `summary: true` messages and
+`MessageAbortedError`. Cursor writes none. Injected context (instructions, reminders, local command
 output, background notices) is never returned as any item type.

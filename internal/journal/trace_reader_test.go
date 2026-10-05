@@ -60,14 +60,14 @@ func TestTraceReadsNewestTurnPastWholeFileScanBound(t *testing.T) {
 	if page.NextCursor == nil {
 		t.Fatal("large transcript did not expose an older cursor")
 	}
-	_, stats, err := readTracePage(path,
+	_, scanned, err := readTracePage(openLogTranscript(t, path),
 		Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}, 0, 20, parseCodexTrace, TraceOptions{},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stats.ScannedBytes > traceInitialReadBytes {
-		t.Fatalf("scanned=%d, want at most the initial tail window %d", stats.ScannedBytes, traceInitialReadBytes)
+	if scanned > traceInitialReadBytes {
+		t.Fatalf("scanned=%d, want at most the initial tail window %d", scanned, traceInitialReadBytes)
 	}
 }
 
@@ -152,9 +152,9 @@ func BenchmarkReadTraceLargeTail(b *testing.B) {
 
 	b.Run("cold_tail", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			page, stats, readErr := readTracePage(path, ref, 0, 200, parseCodexTrace, TraceOptions{})
-			if readErr != nil || len(page.Items) != 2 || stats.ScannedBytes > traceInitialReadBytes {
-				b.Fatalf("page=%+v stats=%+v err=%v", page, stats, readErr)
+			page, scanned, readErr := readTracePage(openLogTranscript(b, path), ref, 0, 200, parseCodexTrace, TraceOptions{})
+			if readErr != nil || len(page.Items) != 2 || scanned > traceInitialReadBytes {
+				b.Fatalf("page=%+v scanned=%d err=%v", page, scanned, readErr)
 			}
 		}
 	})
@@ -170,4 +170,19 @@ func BenchmarkReadTraceLargeTail(b *testing.B) {
 			}
 		}
 	})
+}
+
+// openLogTranscript opens a log file the way the reader does, closed with the test.
+func openLogTranscript(tb testing.TB, path string) *transcript {
+	tb.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	tb.Cleanup(func() { file.Close() })
+	info, err := file.Stat()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	return &transcript{name: path, size: info.Size(), modified: info.ModTime().UnixNano(), reader: file, file: file}
 }

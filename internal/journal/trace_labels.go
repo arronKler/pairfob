@@ -19,9 +19,9 @@ const maxTraceLabelRunes = 160
 // value becomes the label.
 var (
 	labelCommandKeys = []string{"command", "cmd", "script"}
-	labelPathKeys    = []string{"file_path", "path", "file", "target_file", "filename", "notebook_path", "target_directory"}
+	labelPathKeys    = []string{"file_path", "filePath", "path", "file", "target_file", "filename", "notebook_path", "target_directory"}
 	labelPatchKeys   = []string{"input", "patch"}
-	labelQueryKeys   = []string{"pattern", "query", "regex", "q", "search"}
+	labelQueryKeys   = []string{"pattern", "query", "regex", "q", "search", "glob_pattern"}
 	labelURLKeys     = []string{"url", "uri"}
 )
 

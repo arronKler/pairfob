@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -63,6 +64,10 @@ type Reader struct {
 	ClaudeRoot string
 	GrokRoot   string
 	PiRoot     string
+	CursorRoot string
+	// HermesRoot holds state.db; OpencodeRoot holds storage/.
+	HermesRoot   string
+	OpencodeRoot string
 
 	indexMu       sync.Mutex
 	traceMu       sync.Mutex
@@ -71,12 +76,17 @@ type Reader struct {
 	activityCache map[string]activityCacheEntry
 	traceCache    map[traceCacheKey]traceCacheEntry
 	piCache       []piCacheEntry
-	piCacheTick   uint64
-	codexIndex    codexFileIndex
-	claudeIndex   codexFileIndex
-	piIndex       piFileIndex
-	now           func() time.Time
-	walkDir       func(string, fs.WalkDirFunc) error
+	storeMu       sync.Mutex
+	storeCache    map[string]*storeEntry
+	storeTick     uint64
+	// sqlite runs one read-only query; nil uses the system sqlite3.
+	sqlite      func(ctx context.Context, db, sql string) ([]byte, error)
+	piCacheTick uint64
+	codexIndex  codexFileIndex
+	claudeIndex codexFileIndex
+	piIndex     piFileIndex
+	now         func() time.Time
+	walkDir     func(string, fs.WalkDirFunc) error
 }
 
 type codexFileIndex struct {
@@ -110,7 +120,18 @@ func NewDefault() *Reader {
 	if piRoot == "" {
 		piRoot = filepath.Join(home, ".pi", "agent")
 	}
-	return &Reader{CodexRoot: codexRoot, ClaudeRoot: claudeRoot, GrokRoot: grokRoot, PiRoot: piRoot}
+	hermesRoot := os.Getenv("HERMES_HOME")
+	if hermesRoot == "" {
+		hermesRoot = filepath.Join(home, ".hermes")
+	}
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome == "" {
+		dataHome = filepath.Join(home, ".local", "share")
+	}
+	return &Reader{
+		CodexRoot: codexRoot, ClaudeRoot: claudeRoot, GrokRoot: grokRoot, PiRoot: piRoot,
+		CursorRoot: filepath.Join(home, ".cursor"), HermesRoot: hermesRoot, OpencodeRoot: filepath.Join(dataHome, "opencode"),
+	}
 }
 
 func (r *Reader) Supports(ref Ref) bool {
@@ -128,6 +149,12 @@ func (r *Reader) Supports(ref Ref) bool {
 		return r.ClaudeRoot != ""
 	case ref.Source == "herdr:grok" && ref.Agent == "grok":
 		return r.GrokRoot != ""
+	case ref.Source == "herdr:cursor" && ref.Agent == "cursor":
+		return r.CursorRoot != ""
+	case ref.Source == "herdr:hermes" && ref.Agent == "hermes":
+		return r.HermesRoot != ""
+	case ref.Source == "herdr:opencode" && ref.Agent == "opencode":
+		return r.OpencodeRoot != ""
 	default:
 		return false
 	}
@@ -141,6 +168,10 @@ func (r *Reader) Available(ref Ref) bool {
 	}
 	if ref.Agent == "pi" {
 		_, err := r.loadPiSession(ref, false)
+		return err == nil
+	}
+	if storeAgent(ref.Agent) {
+		_, err := r.loadStore(ref, false)
 		return err == nil
 	}
 	_, err := r.transcriptPath(ref, false)
@@ -165,18 +196,12 @@ func (r *Reader) Read(ref Ref, cursor *string, limit int) (Page, error) {
 		return Page{}, err
 	}
 
-	path, err := r.transcriptPath(ref, true)
+	source, err := r.openTranscript(ref, true)
 	if err != nil {
 		return Page{}, err
 	}
-	parse := parseGrok
-	switch ref.Agent {
-	case "codex":
-		parse = parseCodex
-	case "claude":
-		parse = parseClaude
-	}
-	return readPage(path, ref, offset, limit, parse)
+	defer source.Close()
+	return readPage(source, ref, offset, limit, historyParserFor(ref.Agent))
 }
 
 func (r *Reader) transcriptPath(ref Ref, refreshMissing bool) (string, error) {
@@ -191,6 +216,8 @@ func (r *Reader) transcriptPath(ref Ref, refreshMissing bool) (string, error) {
 		path, err = r.findClaudeTranscript(ref.Value, refreshMissing)
 	case "pi":
 		path, err = r.findPiTranscript(ref, refreshMissing)
+	case "cursor":
+		path, err = findCursorTranscript(r.CursorRoot, ref.Value)
 	default:
 		path, err = findGrokTranscript(r.GrokRoot, ref.Value)
 	}
@@ -403,21 +430,9 @@ func verifiedRegular(root, path string) (string, error) {
 	return pathReal, nil
 }
 
-func readPage(path string, ref Ref, offset, limit int, parse func([]byte) (Message, bool)) (Page, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return Page{}, err
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return Page{}, err
-	}
-	if offset < 0 || int64(offset) > info.Size() {
+func readPage(source *transcript, ref Ref, offset, limit int, parse func([]byte) (Message, bool)) (Page, error) {
+	if offset < 0 || int64(offset) > source.size {
 		return Page{}, errors.New("invalid history cursor offset")
-	}
-	if _, err := file.Seek(int64(offset), 0); err != nil {
-		return Page{}, err
 	}
 
 	page := Page{Messages: make([]Message, 0, limit)}
@@ -426,7 +441,7 @@ func readPage(path string, ref Ref, offset, limit int, parse func([]byte) (Messa
 	pageBytes := 0
 	more := false
 	overBudget := false
-	err = forEachLine(file, maxTraceLine, func(line []byte, lineBytes int, oversized bool) bool {
+	err := forEachLine(source.from(int64(offset)), maxTraceLine, func(line []byte, lineBytes int, oversized bool) bool {
 		lineStart := position
 		position += lineBytes
 		scannedBytes += lineBytes

@@ -562,6 +562,30 @@ test("view cleanup saves the retired owner's reading posture", async () => {
   expect(newStream?.scrollTop).toBe(140);
 });
 
+test("a Cursor session shows finished steps as ended, never as a verified success", async () => {
+  applyCapabilities({ ...NO_OPERATION_CAPABILITIES, prompt_agent: true, history: true, trace_labels: true }, []);
+  const turn = [
+    { type: "user" as const, text: "Question" },
+    { type: "tool" as const, name: "Shell", label: "ls -la", toolState: "done" as const },
+    { type: "assistant" as const, text: "ready" },
+  ];
+  applyTrace({ agentTraceItems: turn, agentTraceTail: turn.length, agentTraceSig: "cursor-turn", agentTraceNext: null });
+  const panes = (agent: string) => replaceAgentsFromSnapshot({
+    focused: { workspace_id: "w1", tab_id: "w1:t1", pane_id: "p1" },
+    workspaces: [{ workspace_id: "w1", label: "p1" }],
+    tabs: [{ tab_id: "w1:t1", workspace_id: "w1", label: "main" }],
+    panes: [{ pane_id: "p1", workspace_id: "w1", tab_id: "w1:t1", cwd: "/repo", agent, agent_status: "idle", history_available: true }],
+  });
+  const card = () => appRoot().querySelector("details.work-card")?.className;
+  // Codex records how its commands ended, so with trace_labels a done step is a success.
+  await act(async () => mount());
+  expect(card()).toBe("work-card is-done");
+  // Cursor's transcript only says the tool was called.
+  await act(async () => panes("cursor"));
+  expect(card()).toBe("work-card is-neutral");
+  expect(appRoot().querySelector(".work-step")?.className).toContain("is-ended");
+});
+
 test("same owner still follows a successful current-tail refresh", async () => {
   withLive({ agentTrace: async () => ({ ...page("same owner delivered"), nextCursor: null }) });
   applyTrace({ agentTraceFollow: false, agentTraceUnread: true });

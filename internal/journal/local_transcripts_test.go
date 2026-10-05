@@ -1,6 +1,9 @@
 package journal
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -33,6 +36,7 @@ func TestLocalTranscriptsShowNoInjectedContext(t *testing.T) {
 		{"claude", filepath.Join(reader.ClaudeRoot, "projects", "*", "*.jsonl"), parseClaudeTrace, parseClaude},
 		{"codex", filepath.Join(reader.CodexRoot, "sessions", "*", "*", "*", "*.jsonl"), parseCodexTrace, parseCodex},
 		{"grok", filepath.Join(reader.GrokRoot, "sessions", "*", "*", "updates.jsonl"), parseGrokTrace, parseGrok},
+		{"cursor", filepath.Join(reader.CursorRoot, "projects", "*", "agent-transcripts", "*", "*.jsonl"), parseCursorTrace, parseCursor},
 	}
 	for _, source := range sources {
 		files, _ := filepath.Glob(source.glob)
@@ -71,6 +75,62 @@ func TestLocalTranscriptsShowNoInjectedContext(t *testing.T) {
 		}
 	}
 	t.Logf("pi: %d transcripts", len(piFiles))
+	scanLocalStore(t, reader, "opencode", localOpencodeSessions(reader))
+	scanLocalStore(t, reader, "hermes", localHermesSessions(t, reader))
+}
+
+// scanLocalStore renders each session the way the reader serves it.
+func scanLocalStore(t *testing.T, reader *Reader, agent string, ids []string) {
+	t.Helper()
+	heads, read := 0, 0
+	for _, id := range ids {
+		snapshot, err := reader.loadStore(Ref{Source: "herdr:" + agent, Agent: agent, Kind: "id", Value: id}, true)
+		if err != nil {
+			continue
+		}
+		read++
+		for _, line := range bytes.Split(snapshot.data, []byte("\n")) {
+			for _, ev := range parseStoreTrace(line) {
+				if turnHead(ev.Type) {
+					heads++
+					reportInjected(t, agent, id, ev)
+				}
+			}
+		}
+	}
+	t.Logf("%s: %d of %d sessions read, %d prompts/commands", agent, read, len(ids), heads)
+}
+
+func localOpencodeSessions(reader *Reader) []string {
+	files, _ := filepath.Glob(filepath.Join(reader.OpencodeRoot, "storage", "session", "*", "*.json"))
+	ids := make([]string, 0, len(files))
+	for _, file := range files {
+		ids = append(ids, strings.TrimSuffix(filepath.Base(file), ".json"))
+	}
+	return ids
+}
+
+// localHermesSessions lists the sessions Herdr can bind: the interactive ones.
+func localHermesSessions(t *testing.T, reader *Reader) []string {
+	t.Helper()
+	db, err := reader.hermesDB()
+	if err != nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), hermesQueryTimeout)
+	defer cancel()
+	reply, err := runSQLite(ctx, db, "select id from sessions where source in ('cli','tui','desktop','acp') order by started_at;")
+	var rows []struct {
+		ID string `json:"id"`
+	}
+	if err != nil || json.Unmarshal(reply, &rows) != nil {
+		return nil
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	return ids
 }
 
 func scanLocalTranscript(t *testing.T, path string, parse traceParser) []parsedEvent {

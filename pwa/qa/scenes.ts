@@ -36,6 +36,7 @@ import {
 import type { FixtureScene } from "./types";
 import type { FixtureSession, SessionSource } from "./session";
 import { FIXED_NOW } from "./environment";
+import { recordedAgentSession, type RecordedAgent } from "./agent-sessions";
 import * as data from "./data";
 import { BUSY_AGENT_KINDS, BUSY_PINNED, busyPaneText, busySnapshot } from "./demo-data";
 import { resetAttachmentFixture, seedAttachmentTray } from "./attachments";
@@ -122,6 +123,9 @@ export const scenes: FixtureScene[] = [
   { name: "chat-older", description: "Older-history control and truncation notice" },
   { name: "chat-markers", description: "Slash command chip, context compaction divider and interrupted turn" },
   { name: "chat-needs-you", description: "Agent waiting on a terminal approval answered from the chat" },
+  { name: "chat-cursor", description: "A recorded Cursor session: steps end without a result, no times" },
+  { name: "chat-hermes", description: "A recorded Hermes session: thinking, shell results and a failed command" },
+  { name: "chat-opencode", description: "A recorded opencode session: thinking, tools and a failed command" },
   { name: "chat-steps", description: "Codex steps: a failure the agent worked past, command-output reads, and a turn stopped on a failed step" },
   { name: "chat-pi-long", description: "Long Pi transcript with tool success, error, and empty output" },
   { name: "chat-pi-unread", description: "Long Pi transcript scrolled away from the tail with unread updates" },
@@ -166,11 +170,12 @@ function chatPane(): void {
 }
 
 /** The herd/board fixture snapshot with the focused pane in another status. */
-function focusedSnapshot(status: string): ReturnType<typeof data.snapshot> {
+function focusedSnapshot(status: string, agent?: string): ReturnType<typeof data.snapshot> {
   const base = data.snapshot();
   return {
     ...base,
-    panes: (base.panes ?? []).map((entry) => entry.pane_id === base.focused?.pane_id ? { ...entry, agent_status: status } : entry),
+    panes: (base.panes ?? []).map((entry) => entry.pane_id === base.focused?.pane_id
+      ? { ...entry, agent_status: status, ...(agent ? { agent } : {}) } : entry),
   };
 }
 const idleFocusedSnapshot = () => focusedSnapshot("idle");
@@ -424,6 +429,13 @@ export async function applyScene(name: string, session: FixtureSession): Promise
       const trace = data.needsYouTrace();
       session.setTrace(trace);
       applyTrace({ agentTraceItems: trace, agentTraceTail: trace.length, agentTraceLoadState: "ready", agentTraceSig: JSON.stringify(trace) });
+    }
+    if (name === "chat-cursor" || name === "chat-hermes" || name === "chat-opencode") {
+      const agent = name.slice("chat-".length) as RecordedAgent;
+      replaceAgentsFromSnapshot(focusedSnapshot("idle", agent));
+      const { view, backing } = recordedAgentSession(agent);
+      session.setTrace(backing);
+      applyTrace({ agentTraceItems: view, agentTraceTail: view.length, agentTraceLoadState: "ready", agentTraceSig: JSON.stringify(view) });
     }
     if (name === "chat-markers" || name === "chat-steps") {
       replaceAgentsFromSnapshot(idleFocusedSnapshot());

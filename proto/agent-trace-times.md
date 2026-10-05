@@ -26,6 +26,9 @@ The daemon reads the time the agent CLI wrote with each record:
 | Codex | top-level `timestamp` (RFC 3339) of each rollout line |
 | Grok | `params._meta.agentTimestampMs`, else the top-level `timestamp` (epoch seconds) of each `updates.jsonl` line |
 | Pi | the session entry's `timestamp` (RFC 3339) |
+| Hermes | the message row's `timestamp` (epoch seconds) in `state.db` |
+| opencode | the part's `state.time.start` or `time.start`, else its message's `time.created` (epoch ms) |
+| Cursor | none: its transcript carries no times, so `at` is omitted |
 
 RFC 3339 strings may carry fractional seconds and any offset; a JSON number is
 epoch milliseconds when at least 10^11, else epoch seconds. `at` is omitted

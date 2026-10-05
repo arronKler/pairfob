@@ -30,6 +30,10 @@ PAIRFOB_VAPID_SUBJECT=mailto:you@example.com
 pairfob service restart
 ```
 
+Linux 上重启前先运行 `systemctl --user daemon-reload`，让 systemd 读到改过的 unit。
+
+`pairfob service install` 和安装脚本会重写服务定义，不会带上这两个变量。命令会列出被移除的变量名或 `EnvironmentFile=` 行，需要重新写回去并按上面的方式重启。
+
 ## 手机上订阅
 
 1. 电脑端已经打开推送，并且服务已起来

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -221,8 +222,7 @@ func installUserServiceLayout(layout serviceLayout) error {
 	if err := os.MkdirAll(filepath.Dir(layout.UnitPath), 0o755); err != nil {
 		return err
 	}
-	body := []byte(unitBody(layout))
-	if err := os.WriteFile(layout.UnitPath, body, 0o644); err != nil {
+	if err := rewriteServiceUnit(layout, os.Stdout); err != nil {
 		return err
 	}
 	if err := applyService(layout, "install"); err != nil {
@@ -241,6 +241,34 @@ func installUserServiceLayout(layout serviceLayout) error {
 	}
 	fmt.Printf("installed user service %s\nlogs: %s\n", layout.UnitPath, layout.LogPath)
 	return nil
+}
+
+// The previous unit is examined before it is replaced; afterwards its settings
+// are gone. The notice follows the write so it never describes an unmade change.
+func rewriteServiceUnit(layout serviceLayout, out io.Writer) error {
+	body := []byte(unitBody(layout))
+	notice := runtimeSettingsNotice(layout, body)
+	if err := os.WriteFile(layout.UnitPath, body, 0o644); err != nil {
+		return err
+	}
+	io.WriteString(out, notice)
+	return nil
+}
+
+func readServiceUnit(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > 1<<20 {
+		return nil, errors.New("service definition is too large")
+	}
+	return b, nil
 }
 
 func uninstallUserService() error {

@@ -43,6 +43,46 @@ afterEach(async () => {
   api = undefined;
 });
 
+for (const board of [false, true]) {
+  for (const gesture of [false, true]) {
+    test(`leaving a completed chat marks only its current turn read (board=${board}, gesture=${gesture})`, async () => {
+      await start("chat");
+      const { snapshot, PANE } = await import("../qa/data");
+      const { replaceAgentsFromSnapshot, dashboardStore, loadCompletionSeen } = await import("../src/features/dashboard/catalog-store");
+      const { setBoardReturn } = await import("../src/features/board/layout-store");
+      const { goBackFromPane } = await import("../src/features/session/pane-actions");
+      const completed = snapshot();
+      for (const pane of completed.panes ?? []) {
+        if (pane.pane_id === PANE) {
+          pane.agent_status = "done";
+          pane.state_change_seq = 10;
+        }
+      }
+      await act(async () => {
+        setBoardReturn(board);
+        replaceAgentsFromSnapshot(completed);
+        await api!.render();
+      });
+      expect(dashboardStore.get().agents.find((pane) => pane.paneId === PANE)?.status).toBe("done");
+      const others = dashboardStore.get().agents.filter((pane) => pane.paneId !== PANE);
+      await act(async () => {
+        if (gesture) await goBackFromPane({ gesture: true });
+        else document.querySelector<HTMLButtonElement>(".chrome-back button")!.click();
+      });
+      await settle(() => api!.snapshot().screen === (board ? "board" : "home"));
+      expect(dashboardStore.get().agents.find((pane) => pane.paneId === PANE)?.status).toBe("idle");
+      expect(loadCompletionSeen()[PANE]).toBe(dashboardStore.get().completionSeen[PANE]);
+      expect(dashboardStore.get().agents.filter((pane) => pane.paneId !== PANE)).toEqual(others);
+      // Polling the same completion cannot restore the badge; a later turn can.
+      await act(async () => { replaceAgentsFromSnapshot(completed); });
+      expect(dashboardStore.get().agents.find((pane) => pane.paneId === PANE)?.status).toBe("idle");
+      completed.panes!.find((pane) => pane.pane_id === PANE)!.state_change_seq = 11;
+      await act(async () => { replaceAgentsFromSnapshot(completed); });
+      expect(dashboardStore.get().agents.find((pane) => pane.paneId === PANE)?.status).toBe("done");
+    });
+  }
+}
+
 test("phase2 long Pi scene includes successful, failed, and empty tool results", async () => {
   await start("chat-pi-long");
   const stream = document.querySelector(".agent-stream")?.textContent ?? "";
@@ -85,6 +125,36 @@ test("the steps scene keeps routine failures off the card header and names comma
   expect(cards[1].className).toBe("work-card is-error");
   expect(cards[1].querySelector(".work-title")?.textContent).toBe("Last step failed");
   expect(cards[1].querySelector(".work-detail")?.textContent).toBe("bun run build · 2 steps");
+});
+
+test("recorded Cursor, Hermes and opencode sessions render from the daemon's own replies", async () => {
+  const card = () => document.querySelector<HTMLDetailsElement>("details.work-card")!;
+  // Tool rows only: thinking and the agent's notes are rows too.
+  const rows = () => [...card().querySelectorAll(".work-step")].filter((row) => row.querySelector(".work-step-text") && !row.className.includes("is-think"))
+    .map((row) => `${row.className.match(/is-(read|search|edit|command|web|other|think)/)?.[1]}:${row.className.match(/is-(done|error|ended|running)/)?.[1] ?? ""}`);
+  await start("chat-cursor");
+  // Cursor records no results: steps are ended, the card claims nothing.
+  expect(card().className).toBe("work-card is-neutral");
+  expect(rows()).toEqual(["read:ended", "command:ended", "command:ended", "command:ended", "search:ended"]);
+  expect(document.querySelector(".agent-user-text")?.textContent).toStartWith("Do these steps in order");
+  expect(document.querySelector(".agent-stream")?.textContent).not.toContain("user_query");
+  // Its step sheet says the output was not recorded rather than that there was none.
+  await act(async () => { card().querySelector<HTMLButtonElement>(".work-step.is-command")!.click(); await Promise.resolve(); });
+  await settle(() => Boolean(document.querySelector("dialog.step-sheet .step-empty")));
+  expect(document.querySelector("dialog.step-sheet .step-empty")?.textContent).toBe("This agent does not record step output");
+  closeTestDialogs();
+  await select("chat-hermes");
+  // Hermes reports the failed command; the agent went on to answer, so the card stays done.
+  expect(card().className).toBe("work-card is-done");
+  expect(rows()).toEqual(["read:done", "command:done", "command:error"]);
+  await select("chat-opencode");
+  expect(card().className).toBe("work-card is-done");
+  expect(rows()).toEqual(["read:done", "command:done", "command:error"]);
+  // A step's body comes from the recorded detail reply.
+  const failed = [...card().querySelectorAll<HTMLButtonElement>(".work-step")].find((row) => row.className.includes("is-error"))!;
+  await act(async () => { failed.click(); await Promise.resolve(); });
+  await settle(() => (document.querySelector("dialog.step-sheet")?.textContent ?? "").includes("No such file or directory"));
+  closeTestDialogs();
 });
 
 test("phase2 unread and recovery scenes expose real fixture actions without mutation replay", async () => {

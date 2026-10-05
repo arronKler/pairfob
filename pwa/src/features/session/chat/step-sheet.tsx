@@ -5,7 +5,9 @@ import { t } from "../../../lib/i18n";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import type { AgentTraceItem } from "../../../lib/operations";
 import type { AgentTraceDetailState } from "../../../lib/agent-trace-cache";
-import { categoryLabel, stepCategory, stepObject, stepState, type StepState } from "../../../lib/agent-trace-steps";
+import { categoryLabel, recordsStepResults, stepCategory, stepObject, stepState, type StepState } from "../../../lib/agent-trace-steps";
+import { agentFromDashboardSnapshot } from "../agents";
+import { useDashboard } from "../../dashboard/hooks";
 import { showActionSheet } from "../../../shared/ui/overlay/action-sheet";
 import { Button, Spinner } from "../../../shared/ui/primitives";
 import { loadToolDetail, toolDetailView } from "./agent-chat-detail";
@@ -123,14 +125,16 @@ function Arguments({ item, input }: { item: AgentTraceItem; input: string }) {
   </Section>;
 }
 
-function ToolBody({ item, detail }: { item: AgentTraceItem; detail: AgentTraceDetailState }) {
+function ToolBody({ paneId, item, detail }: { paneId: string; item: AgentTraceItem; detail: AgentTraceDetailState }) {
+  // An agent that records no results has no output to show, which is not the same as a step that printed nothing.
+  const recorded = recordsStepResults(agentFromDashboardSnapshot(useDashboard(), paneId)?.agent);
   const body = detail.detail;
   const input = body?.input ?? item.input ?? "";
   const output = body?.output ?? item.output ?? "";
   return <>
     {input && <Arguments item={item} input={input} />}
     <Section title={t("sheet.output")} copy={output || undefined}>
-      {output ? <pre className="step-code">{output}</pre> : <p className="step-empty">{t("sheet.empty")}</p>}
+      {output ? <pre className="step-code">{output}</pre> : <p className="step-empty">{t(recorded ? "sheet.empty" : "sheet.unrecorded")}</p>}
     </Section>
     {body?.truncated && <p className="step-note">{t("sheet.truncated")}</p>}
     {stepCategory(item) === "subtask" && <p className="step-note">{t("work.subtaskHidden")}</p>}
@@ -164,6 +168,6 @@ function StepSheetBody({ paneId, item, verified }: { paneId: string; item: Agent
       <span>{detail.message || t("chat.detailFailed")}</span>
       <Button className="btn btn-small" onClick={() => { if (ref) loadToolDetail(paneId, ref, changed); }}>{t("retry")}</Button>
     </div>}
-    {(detail.status === "ready" || !ref) && <ToolBody item={item} detail={detail} />}
+    {(detail.status === "ready" || !ref) && <ToolBody paneId={paneId} item={item} detail={detail} />}
   </div>;
 }

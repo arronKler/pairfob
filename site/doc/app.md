@@ -72,7 +72,7 @@ The four choices are at the top of `···` under **Mode**. A switch inside a se
 | **Auto** | Chooses when the session opens: Terminal on P2P with WebGL2 unless Save-Data is on, otherwise Control |
 | **Control** | View the terminal and operate the session with the system keyboard and keypad |
 | **Terminal** | A real terminal. Use for vim or a full-screen TUI. On a phone the default is an 80-column view you pan sideways; **Fit screen** resizes the computer to the phone width. Vertical pan still scrolls remotely |
-| **Chat** | Message the Agent (this is where you send a task; it is not a `···` menu item). Each turn's work sits in one step card: open while it runs, one result line after. Available for Claude Code, Codex, Grok and Pi sessions |
+| **Chat** | Message the Agent (this is where you send a task; it is not a `···` menu item). Each turn's work sits in one step card: open while it runs, one result line after. Available for Claude Code, Codex, Grok, Pi, Cursor, Hermes and opencode sessions; the last three open once the agent has saved the session, which for Cursor is after its first message. Cursor records no step results, so its steps show as ended rather than succeeded or failed. Hermes needs `sqlite3` on the computer; opencode 1.2 and later is not read yet |
 
 In **Control**:
 
@@ -198,6 +198,8 @@ PAIRFOB_MULTI_SESSION=0 pairfob service install
 ```
 
 `service install` rewrites the user service from the current shell's environment, so also export any other variable you set at install time (for example `HERDR_SOCKET_PATH`), or it is dropped. The setting then survives restarts and `pairfob update`. To turn it back on, run `pairfob service install` again without it.
+
+Each run lists what it removed or changed in the previous service definition's environment, including entries added by hand. Values are shown only for the variables `service install` writes itself. If the previous definition cannot be read for comparison, a copy is kept in the state directory and the command prints its path.
 
 Current limits:
 

@@ -9,24 +9,36 @@ import { groupAgentTurns, toolState, toolSummary, turnKey, type AgentTurn } from
  */
 export type StepCategory = "read" | "search" | "edit" | "command" | "web" | "subtask" | "plan" | "question" | "mcp" | "think" | "other";
 
-/** Tool names as Claude Code, Codex, Grok and Pi write them, lowercased. */
+/** Tool names as Claude Code, Codex, Grok, Pi, Cursor, Hermes and opencode write them, lowercased. */
 const CATEGORY_NAMES: ReadonlyArray<readonly [StepCategory, readonly string[]]> = [
-  ["read", ["read", "read_file", "list_dir", "ls", "view", "notebookread", "view_image"]],
-  ["search", ["grep", "glob", "search", "find", "rg", "file_search", "codebase_search", "toolsearch"]],
-  ["edit", ["edit", "write", "multiedit", "apply_patch", "notebookedit", "str_replace", "create_file"]],
-  ["command", ["bash", "exec_command", "exec", "shell", "run_terminal_command", "write_stdin", "bashoutput", "killshell", "monitor"]],
+  ["read", ["read", "read_file", "list_dir", "ls", "list", "view", "notebookread", "view_image"]],
+  ["search", ["grep", "glob", "search", "find", "rg", "file_search", "codebase_search", "toolsearch", "search_files", "session_search"]],
+  ["edit", ["edit", "write", "multiedit", "apply_patch", "notebookedit", "str_replace", "create_file",
+    "strreplace", "editnotebook", "delete", "write_file", "patch"]],
+  ["command", ["bash", "exec_command", "exec", "shell", "run_terminal_command", "write_stdin", "bashoutput", "killshell", "monitor",
+    "terminal", "process", "execute_code"]],
   ["web", ["webfetch", "websearch", "web_search", "browser", "fetch"]],
-  ["subtask", ["task", "agent", "get_command_or_subagent_output", "spawn_agent", "sendmessage"]],
-  ["plan", ["todowrite", "update_plan"]],
-  ["question", ["askuserquestion", "request_user_input_async", "request_user_input"]],
+  ["subtask", ["task", "agent", "get_command_or_subagent_output", "spawn_agent", "sendmessage", "delegate_task"]],
+  ["plan", ["todowrite", "update_plan", "todo", "todoread"]],
+  ["question", ["askuserquestion", "request_user_input_async", "request_user_input", "clarify"]],
 ];
 
 export function stepCategory(item: AgentTraceItem): StepCategory {
   if (item.type === "thinking") return "think";
   const name = (item.name || "").toLowerCase();
   if (name.startsWith("mcp__")) return "mcp";
+  // Hermes names each browser action its own tool (browser_navigate, browser_click).
+  if (name.startsWith("browser_")) return "web";
   for (const [category, names] of CATEGORY_NAMES) if (names.includes(name)) return category;
   return "other";
+}
+
+/**
+ * Cursor's transcript records that a tool was called and nothing about how it
+ * ended, so a finished Cursor step is only "ended", never a verified success.
+ */
+export function recordsStepResults(agent: string | undefined): boolean {
+  return agent !== "cursor";
 }
 
 export function categoryLabel(category: StepCategory): string {

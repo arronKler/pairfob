@@ -9,12 +9,19 @@ import (
 	runtimeapi "pairfob/internal/runtime"
 )
 
+var serviceCopiedKeys = []string{"HERDR_SOCKET_PATH", "HERDR_CONFIG_PATH", "HERDR_CLIENT_SOCKET_PATH", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "GROK_HOME", "PAIRFOB_STATE_DIR", "PAIRFOB_ADMIN_SOCK", "PAIRFOB_HERDR_AUTOSTART", "PAIRFOB_MULTI_SESSION"}
+
+// The variables serviceRuntimeEnvironment writes. None holds a credential, so
+// an install may print their values; any other variable is named only.
+var servicePersistedKeys = append(append([]string(nil), serviceCopiedKeys...),
+	"PAIRFOB_CLAUDE_QUOTA_SOURCE", "AGENT_CLI_CREDENTIAL_STORE", "PAIRFOB_CURSOR_QUOTA_NO_STORED_LOGIN", "HERDR_BIN")
+
 // Persist only runtime configuration, never pairing credentials or the current
 // Herdr pane identity. A login service must use the runtime setup just checked.
 // Relative paths retain the caller's context; the installer calls from home.
 func serviceRuntimeEnvironment() [][2]string {
 	var out [][2]string
-	for _, key := range []string{"HERDR_SOCKET_PATH", "HERDR_CONFIG_PATH", "HERDR_CLIENT_SOCKET_PATH", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "GROK_HOME", "PAIRFOB_STATE_DIR", "PAIRFOB_ADMIN_SOCK", "PAIRFOB_HERDR_AUTOSTART", "PAIRFOB_MULTI_SESSION"} {
+	for _, key := range serviceCopiedKeys {
 		value := os.Getenv(key)
 		if value == "" {
 			continue

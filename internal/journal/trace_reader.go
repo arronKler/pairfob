@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"slices"
 )
 
@@ -16,12 +15,6 @@ const (
 )
 
 type traceParser func([]byte) []parsedEvent
-
-type traceReadStats struct {
-	FileBytes    int64
-	Modified     int64
-	ScannedBytes int
-}
 
 type traceCacheKey struct {
 	path    string
@@ -68,26 +61,20 @@ func (r *Reader) ReadTraceWith(ref Ref, cursor *string, limit int, options Trace
 	if err != nil {
 		return TracePage{}, err
 	}
-	path, err := r.transcriptPath(ref, true)
+	source, err := r.openTranscript(ref, true)
 	if err != nil {
 		return TracePage{}, err
 	}
-	parse := traceParser(parseGrokTrace)
-	switch ref.Agent {
-	case "codex":
-		parse = parseCodexTrace
-	case "claude":
-		parse = parseClaudeTrace
-	}
-	key := traceCacheKey{path: path, limit: limit, options: options}
+	defer source.Close()
+	key := traceCacheKey{path: source.name, limit: limit, options: options}
 	if cursor == nil {
-		if page, ok := r.cachedTracePage(key); ok {
+		if page, ok := r.cachedTracePage(key, source); ok {
 			return page, nil
 		}
 	}
-	page, stats, err := readTracePage(path, ref, end, limit, parse, options)
-	if err == nil && cursor == nil {
-		r.cacheTracePage(key, stats, page)
+	page, _, err := readTracePage(source, ref, end, limit, traceParserFor(ref.Agent), options)
+	if err == nil && cursor == nil && source.unchanged() {
+		r.cacheTracePage(key, source, page)
 	}
 	return page, err
 }
@@ -150,33 +137,23 @@ func summaryItemSize(item TraceSummaryItem) int {
 	return len(encoded) + 1
 }
 
-func (r *Reader) cachedTracePage(key traceCacheKey) (TracePage, bool) {
-	info, err := os.Stat(key.path)
-	if err != nil {
-		return TracePage{}, false
-	}
+func (r *Reader) cachedTracePage(key traceCacheKey, source *transcript) (TracePage, bool) {
 	r.traceMu.Lock()
 	defer r.traceMu.Unlock()
 	entry, ok := r.traceCache[key]
-	if !ok || entry.size != info.Size() || entry.modified != info.ModTime().UnixNano() {
+	if !ok || entry.size != source.size || entry.modified != source.modified {
 		return TracePage{}, false
 	}
 	return cloneTracePage(entry.page), true
 }
 
-func (r *Reader) cacheTracePage(key traceCacheKey, stats traceReadStats, page TracePage) {
-	info, err := os.Stat(key.path)
-	if err != nil || info.Size() != stats.FileBytes || info.ModTime().UnixNano() != stats.Modified {
-		return
-	}
+func (r *Reader) cacheTracePage(key traceCacheKey, source *transcript, page TracePage) {
 	r.traceMu.Lock()
 	defer r.traceMu.Unlock()
 	if r.traceCache == nil || len(r.traceCache) >= maxTraceCacheEntries {
 		r.traceCache = make(map[traceCacheKey]traceCacheEntry)
 	}
-	r.traceCache[key] = traceCacheEntry{
-		size: info.Size(), modified: info.ModTime().UnixNano(), page: cloneTracePage(page),
-	}
+	r.traceCache[key] = traceCacheEntry{size: source.size, modified: source.modified, page: cloneTracePage(page)}
 }
 
 func cloneTracePage(page TracePage) TracePage {
@@ -190,19 +167,9 @@ func cloneTracePage(page TracePage) TracePage {
 	return copyPage
 }
 
-func readTracePage(path string, ref Ref, end, limit int, parse traceParser, options TraceOptions) (TracePage, traceReadStats, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return TracePage{}, traceReadStats{}, err
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return TracePage{}, traceReadStats{}, err
-	}
-	stats := traceReadStats{FileBytes: info.Size(), Modified: info.ModTime().UnixNano()}
-	if end <= 0 || int64(end) > info.Size() {
-		end = int(info.Size())
+func readTracePage(source *transcript, ref Ref, end, limit int, parse traceParser, options TraceOptions) (page TracePage, scanned int, err error) {
+	if end <= 0 || int64(end) > source.size {
+		end = int(source.size)
 	}
 	start := end
 	chunkSize := traceInitialReadBytes
@@ -212,7 +179,7 @@ func readTracePage(path string, ref Ref, end, limit int, parse traceParser, opti
 	limited := false
 
 	for {
-		remainingBudget := maxScanBytes - stats.ScannedBytes
+		remainingBudget := maxScanBytes - scanned
 		if start == 0 || remainingBudget <= 0 {
 			limited = start > 0
 			break
@@ -220,15 +187,15 @@ func readTracePage(path string, ref Ref, end, limit int, parse traceParser, opti
 		readBytes := min(chunkSize, start, remainingBudget)
 		nextStart := start - readBytes
 		chunk := make([]byte, readBytes)
-		read, err := file.ReadAt(chunk, int64(nextStart))
+		read, err := source.reader.ReadAt(chunk, int64(nextStart))
 		if err != nil && err != io.EOF {
-			return TracePage{}, stats, err
+			return TracePage{}, scanned, err
 		}
 		if read != readBytes {
-			return TracePage{}, stats, io.ErrUnexpectedEOF
+			return TracePage{}, scanned, io.ErrUnexpectedEOF
 		}
 		data = append(chunk, data...)
-		stats.ScannedBytes += readBytes
+		scanned += readBytes
 		start = nextStart
 
 		view := data
@@ -244,7 +211,7 @@ func readTracePage(path string, ref Ref, end, limit int, parse traceParser, opti
 		}
 		window, err = parseTraceWindow(view, alignedStart, limit, parse, options)
 		if err != nil {
-			return TracePage{}, stats, err
+			return TracePage{}, scanned, err
 		}
 		if traceWindowComplete(window, start == 0) {
 			break
@@ -252,8 +219,11 @@ func readTracePage(path string, ref Ref, end, limit int, parse traceParser, opti
 		chunkSize = min(chunkSize*2, traceMaxReadChunk)
 	}
 
-	page := window.page(ref, alignedStart, limited)
-	return page, stats, nil
+	if int64(end) < source.size {
+		// An older page: records after it exist, whatever they hold.
+		window.settleBefore(end)
+	}
+	return window.page(ref, alignedStart, limited), scanned, nil
 }
 
 func parseTraceWindow(data []byte, base, limit int, parse traceParser, options TraceOptions) (traceWindow, error) {
@@ -281,6 +251,12 @@ func parseTraceWindow(data []byte, base, limit int, parse traceParser, options T
 			return true
 		}
 		for ordinal, event := range parse(line) {
+			if event.settles {
+				window.settleBefore(lineStart)
+				if event.Type == "" {
+					continue
+				}
+			}
 			event, keep := options.adapt(event)
 			if !keep {
 				continue
@@ -334,6 +310,21 @@ func parseTraceWindow(data []byte, base, limit int, parse traceParser, options T
 		return true
 	})
 	return window, err
+}
+
+// settleBefore marks unresulted tools recorded before lineStart as done: a
+// later record exists, so they are no longer running. Their result is unknown.
+func (window *traceWindow) settleBefore(lineStart int) {
+	for i := len(window.items) - 1; i >= 0; i-- {
+		item := &window.items[i]
+		if !item.unresulted || item.lineStart >= lineStart {
+			continue
+		}
+		if item.State != "" {
+			return
+		}
+		item.State = "done"
+	}
 }
 
 func traceWindowComplete(window traceWindow, atStart bool) bool {

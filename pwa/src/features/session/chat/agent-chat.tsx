@@ -16,7 +16,7 @@ import { chatDockNotice, copyAgentReply, currentAgentTraceOwnerKey, emptySpec, j
 import { agentChatUIRevision, publishAgentChatUI, subscribeAgentChatUI } from "./agent-chat-ui";
 import type { SessionHandlers } from "../guided/view";
 import type { AgentTraceItem } from "../../../lib/operations";
-import { turnEntries, type TurnRef } from "../../../lib/agent-trace-steps";
+import { recordsStepResults, turnEntries, type TurnRef } from "../../../lib/agent-trace-steps";
 import { agentFromDashboardSnapshot } from "../agents";
 import { sessionOwner } from "../identity";
 import { subscribeVisibleNotice, visibleNotice } from "../../../app/notices-store";
@@ -46,12 +46,13 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   const reading = useRef({ follow: chat.agentTraceFollow, unread: chat.agentTraceUnread });
   reading.current = { follow: chat.agentTraceFollow, unread: chat.agentTraceUnread };
   const paneId = sessionSnap.paneId;
-  const status = agentFromDashboardSnapshot(useDashboard(), paneId)?.status;
+  const agent = agentFromDashboardSnapshot(useDashboard(), paneId);
+  const status = agent?.status;
   // A blocked agent is still inside its turn: the card stays live and says it waits on you.
   const working = status === "working" || status === "blocked";
   const stale = useStatusUnverifiable();
   // trace_labels comes with real Claude/Codex failure states; before it, "done" only means "ended".
-  const verified = capabilityEnabled("trace_labels");
+  const verified = capabilityEnabled("trace_labels") && recordsStepResults(agent?.agent);
   const progress = usePromptProgressNote();
   const items = visibleItems();
   const notice = chatDockNotice();

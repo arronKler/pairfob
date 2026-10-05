@@ -2,6 +2,7 @@ import { appRoot } from "../../app/dom-root";
 import { commitView } from "../../app/host";
 import { phase } from "../connection/connection-store";
 import { boardReturn } from "../board/layout-store";
+import { acknowledgePaneCompletion } from "../dashboard/catalog-store";
 import { isAgentChat, isFullTerminal, openPaneId, resetPaneView } from "./session-store";
 import { currentScreen, leavePaneScreen } from "../../app/navigation-store";
 import { applyComposeDraft, parkComposeView } from "./drafts/compose-drafts";
@@ -57,6 +58,11 @@ export function goBackFromPane(options: { gesture?: boolean } = {}): Promise<voi
 }
 
 function leavePane(paneId: string, morph: boolean): Promise<void> {
+  // A turn can finish while this pane stays open (chat/full terminal do not
+  // poll PaneRead). Consume that completion before returning to its list/card.
+  if (currentScreen() === "pane" && openPaneId() === paneId && document.visibilityState === "visible") {
+    acknowledgePaneCompletion(paneId);
+  }
   if (boardReturn()) {
     shareOpening(appRoot().querySelector<HTMLElement>(".pane-root"));
     nextTransition("expand", paneId);

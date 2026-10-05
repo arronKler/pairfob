@@ -34,20 +34,14 @@ func (r *Reader) ReadActivity(ref Ref) Activity {
 	if !r.Supports(ref) {
 		return Activity{}
 	}
+	if storeAgent(ref.Agent) {
+		return r.storeActivity(ref)
+	}
 	path, err := r.transcriptPath(ref, false)
 	if err != nil {
 		return Activity{}
 	}
-	base := filepath.Join(r.GrokRoot, "sessions")
-	switch ref.Agent {
-	case "codex":
-		base = filepath.Join(r.CodexRoot, "sessions")
-	case "claude":
-		base = filepath.Join(r.ClaudeRoot, "projects")
-	case "pi":
-		base = filepath.Join(r.PiRoot, "sessions")
-	}
-	file, err := openActivityFile(base, path)
+	file, err := openActivityFile(r.transcriptBase(ref.Agent), path)
 	if err != nil {
 		return Activity{}
 	}
@@ -123,9 +117,7 @@ func scanActivity(agent string, data []byte, offset int64) Activity {
 }
 
 func activityLine(agent string, line []byte) bool {
-	parse := traceParser(parseGrokTrace)
-	switch agent {
-	case "codex":
+	if agent == "codex" {
 		var record struct {
 			Type    string `json:"type"`
 			Payload struct {
@@ -141,11 +133,8 @@ func activityLine(agent string, line []byte) bool {
 				return true
 			}
 		}
-		parse = parseCodexTrace
-	case "claude":
-		parse = parseClaudeTrace
 	}
-	for _, event := range parse(line) {
+	for _, event := range traceParserFor(agent)(line) {
 		// Codex injects AGENTS.md and environment context as user messages.
 		// Its user_message/task_started records identify real submissions.
 		if agent == "codex" && event.Type == "user" && codexContextMessage(line) {

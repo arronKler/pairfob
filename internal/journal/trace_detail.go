@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -52,17 +51,6 @@ func decodeTraceDetailRef(ref Ref, detailRef string) (traceDetailLocator, error)
 	return traceDetailLocator{offset: offset, ordinal: ordinal, static: parts[4]}, nil
 }
 
-func traceParserFor(ref Ref) traceParser {
-	switch ref.Agent {
-	case "codex":
-		return parseCodexTrace
-	case "claude":
-		return parseClaudeTrace
-	default:
-		return parseGrokTrace
-	}
-}
-
 // ReadTraceDetail resolves one server-issued locator against the same trusted
 // pane transcript. The phone never supplies a path or an agent session id.
 func (r *Reader) ReadTraceDetail(ref Ref, detailRef string) (TraceDetail, error) {
@@ -76,31 +64,20 @@ func (r *Reader) ReadTraceDetail(ref Ref, detailRef string) (TraceDetail, error)
 	if err != nil {
 		return TraceDetail{}, err
 	}
-	path, err := r.transcriptPath(ref, true)
+	source, err := r.openTranscript(ref, true)
 	if err != nil {
 		return TraceDetail{}, err
 	}
-	file, err := os.Open(path)
-	if err != nil {
-		return TraceDetail{}, err
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return TraceDetail{}, err
-	}
-	if int64(locator.offset) >= info.Size() {
+	defer source.Close()
+	if int64(locator.offset) >= source.size {
 		return TraceDetail{}, ErrCursorConflict
 	}
-	if _, err := file.Seek(int64(locator.offset), 0); err != nil {
-		return TraceDetail{}, err
-	}
 
-	parse := traceParserFor(ref)
+	parse := traceParserFor(ref.Agent)
 	var target *parsedEvent
 	scanned := 0
 	skipped, conflict := false, false
-	err = forEachLine(file, maxTraceLine, func(line []byte, lineSize int, oversized bool) bool {
+	err = forEachLine(source.from(int64(locator.offset)), maxTraceLine, func(line []byte, lineSize int, oversized bool) bool {
 		scanned += lineSize
 		if scanned > maxScanBytes {
 			return false
