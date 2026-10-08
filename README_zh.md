@@ -130,6 +130,16 @@ pairfob --loopback-------------->  Herdr
 [`docs/develop.md`](docs/develop.md#verification)），并在 PR 里写明跑了哪些。
 `proto/` 下的信封格式、测试向量和 RPC 字段是有意冻结的，想改动请先开 issue 讨论。
 
+## Star 历史
+
+<a href="https://www.star-history.com/?repos=arronkler%2Fpairfob&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=arronkler/pairfob&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=arronkler/pairfob&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=arronkler/pairfob&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ## 许可证
 
 [Apache License 2.0](LICENSE)。见 [NOTICE](NOTICE)。

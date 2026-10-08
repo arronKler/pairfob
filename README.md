@@ -144,6 +144,16 @@ checks that match your change (see [`docs/develop.md`](docs/develop.md#verificat
 and list them in the PR. The envelope, vectors and RPC fields under `proto/`
 are frozen by design; please open an issue before proposing a change there.
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=arronkler%2Fpairfob&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=arronkler/pairfob&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=arronkler/pairfob&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=arronkler/pairfob&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ## License
 
 [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
