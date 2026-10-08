@@ -3,6 +3,17 @@ import { newAttachment, type Attachment } from "./attachment.ts";
 import { CfSocket, type HibernatingSocket } from "./cf-socket.ts";
 
 describe("hibernating socket attachment cache", () => {
+  test("does not hide an unexpected runtime close failure", () => {
+    const error = new Error("instance no longer active");
+    const socket = new CfSocket({
+      send() {},
+      close() { throw error; },
+      serializeAttachment() {},
+      deserializeAttachment() { return null; },
+    });
+    expect(() => socket.close(1000, "closed")).toThrow(error);
+  });
+
   test("deserializes once and keeps caller mutations isolated", () => {
     let stored: Attachment | null = newAttachment("phone", 100);
     let reads = 0;

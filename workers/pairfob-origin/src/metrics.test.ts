@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { observeEnroll, observeError, resetMetrics, sanitizeIndex, sanitizeLabel, snapshot } from "./metrics.ts";
+import { observeAlarmLate, observeEnroll, observeError, resetMetrics, sanitizeIndex, sanitizeLabel, snapshot } from "./metrics.ts";
 import { FakeMetrics, testEnv } from "./testutil/make-room.ts";
 
 beforeEach(() => resetMetrics());
 
 describe("metrics labels", () => {
+  test("late alarm log includes its measured delay", () => {
+    const logs: string[] = [];
+    const original = console.log;
+    console.log = (line: unknown) => { logs.push(String(line)); };
+    try { observeAlarmLate({ BUILD: "dev" }, 1234); } finally { console.log = original; }
+    expect(JSON.parse(logs[0])).toMatchObject({ event: "alarm_late", ms: 1234 });
+  });
   test("keeps allowlisted ids and error codes", () => {
     expect(sanitizeLabel("unpaired")).toBe("unpaired");
     expect(sanitizeLabel("too_many_devices")).toBe("too_many_devices");

@@ -18,11 +18,7 @@ export class CfSocket implements RoomSocket {
   }
 
   close(code?: number, reason?: string): void {
-    try {
-      this.ws.close(code, reason);
-    } catch {
-      /* already closed */
-    }
+    this.ws.close(code, reason);
   }
 
   serializeAttachment(att: Attachment): void {

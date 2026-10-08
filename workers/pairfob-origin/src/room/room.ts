@@ -6,6 +6,7 @@ import { NamespaceIndexClient } from "../index/client.ts";
 import { CfSocket, wrapSockets } from "./cf-socket.ts";
 import { CfStore } from "./cf-store.ts";
 import { RoomCore } from "./core.ts";
+import { closeReason, diagnosticLog, frameLabel, traceHandler } from "./diagnostics.ts";
 import { handleRoomFetch } from "./http.ts";
 import { onMessage } from "./ws.ts";
 
@@ -62,12 +63,26 @@ export class DaemonRoom {
       wrapped = new CfSocket(ws);
       this.wraps.set(ws, wrapped);
     }
-    return onMessage(this.core, wrapped, message);
+    const socket = wrapped;
+    return traceHandler(this.env, this.ctx.id.toString(), frameLabel(message), this.core.att(socket)?.role ?? "unknown",
+      () => onMessage(this.core, socket, message));
   }
 
-  async webSocketClose(ws: WebSocket, _code: number, reason: string, _wasClean: boolean): Promise<void> {
+  webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): void {
     const wrapped = this.wraps.get(ws) ?? new CfSocket(ws);
-    this.core.onClose(wrapped, reason || "closed");
+    diagnosticLog(this.env, this.ctx.id.toString(), {
+      event: "room_socket_close", code, was_clean: wasClean, reason: closeReason(reason),
+      role: this.core.att(wrapped)?.role ?? "unknown",
+    });
+    this.core.onClose(wrapped, closeReason(reason));
+  }
+
+  webSocketError(ws: WebSocket, _error: unknown): void {
+    const wrapped = this.wraps.get(ws) ?? new CfSocket(ws);
+    // A non-disconnection error is not evidence that all peers must be closed.
+    diagnosticLog(this.env, this.ctx.id.toString(), {
+      event: "room_socket_error", role: this.core.att(wrapped)?.role ?? "unknown",
+    });
   }
 
   async alarm(): Promise<void> {

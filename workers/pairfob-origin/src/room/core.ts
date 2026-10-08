@@ -1,10 +1,11 @@
 import { DAEMON_ID_RE, FWD_FLUSH_BYTES, HELLO_GRACE_MS, RESUME_MS, TICKET_MS, TICKET_RE } from "../constants.ts";
 import { bytesToHex, sha256Hex, timingSafeEqual } from "../crypto.ts";
 import { Typ } from "../envelope.ts";
-import { encodeJSON, sendErr } from "../frames.ts";
+import { encodeJSON } from "../frames.ts";
 import { harvestDue, syncHeapAlarm } from "./alarms.ts";
 import { isRegisteredDaemon, needsConstructorSql, newAttachment, readAttachment, type Attachment } from "./attachment.ts";
 import type { PairIndexClient, RoomDeps, RoomSocket, RoomStore } from "./types.ts";
+import { TeardownNotifications } from "./teardown-notifications.ts";
 
 export interface UpgradeOk {
   ok: true;
@@ -117,14 +118,12 @@ export class RoomCore {
         liveHello = hello;
       }
     }
+    const notifications = new TeardownNotifications();
     for (const ws of daemons) {
       if (ws === live) continue;
-      try {
-        ws.close(1000, "replaced");
-      } catch {
-        /* already closed */
-      }
+      notifications.close(ws, 1000, "replaced");
     }
+    notifications.finish();
     return live;
   }
 
@@ -209,15 +208,13 @@ export class RoomCore {
   kick(): void {
     this.store.clearReconnectHash();
     this.reconnectHash = "";
-    this.dropDaemon("kicked");
+    const notifications = new TeardownNotifications();
+    this.dropDaemon("kicked", notifications);
     for (const ws of this.sockets()) {
-      try {
-        ws.close(1000, "kicked");
-      } catch {
-        /* already closed */
-      }
+      notifications.close(ws, 1000, "kicked");
     }
     this.daemon = null;
+    notifications.finish();
   }
 
   async issueTicket(pairLoc: string): Promise<{ ok: true; pair_ticket: string; pair_ref: string } | { ok: false }> {
@@ -246,18 +243,20 @@ export class RoomCore {
     this.rebuildMaps();
   }
 
-  dropDaemon(reason: string): void {
+  dropDaemon(reason: string, pending?: TeardownNotifications): void {
     const daemon = this.daemon;
+    const notifications = pending ?? new TeardownNotifications();
+    this.daemon = null;
+    if (daemon) {
+      const att = this.att(daemon);
+      if (att) this.writeAtt(daemon, { ...att, hello_at_ms: 0 });
+    }
     for (const ws of this.sockets()) {
       const a = this.att(ws);
       if (!a || a.role === "daemon") continue;
-      sendErr(ws, "daemon_offline", "daemon websocket gone");
-      try {
-        ws.close(1000, "daemon_offline");
-      } catch {
-        /* ignore */
-      }
-      if (a.route_id) this.deleteBind(a.route_id);
+      notifications.error(ws, "daemon_offline", "daemon websocket gone");
+      notifications.close(ws, 1000, "daemon_offline");
+      this.releaseBind(ws, a);
     }
     const slot = this.store.loadSlot();
     if (slot) {
@@ -267,28 +266,22 @@ export class RoomCore {
     }
     this.daemon = null;
     if (daemon && reason === "replaced") {
-      try {
-        daemon.close(1000, "replaced");
-      } catch {
-        /* ignore */
-      }
+      notifications.close(daemon, 1000, "replaced");
     }
     void reason;
+    if (!pending) notifications.finish();
   }
 
   notifyReplaced(): void {
     const id = this.daemonId;
+    const notifications = new TeardownNotifications();
     for (const ws of this.sockets()) {
       const a = this.att(ws);
       if (!a || a.role === "daemon") continue;
       const rid = a.route_id ? hexToRoute(a.route_id) : new Uint8Array(16);
-      ws.send(encodeJSON(Typ.DAEMON_REPLACED, rid, { v: 2, daemon_id: id }));
-      try {
-        ws.close(1000, "replaced");
-      } catch {
-        /* ignore */
-      }
-      if (a.route_id) this.deleteBind(a.route_id);
+      notifications.send(ws, encodeJSON(Typ.DAEMON_REPLACED, rid, { v: 2, daemon_id: id }));
+      notifications.close(ws, 1000, "replaced");
+      this.releaseBind(ws, a);
     }
     const slot = this.store.loadSlot();
     if (slot) {
@@ -296,6 +289,7 @@ export class RoomCore {
       this.store.deleteSlot();
       void this.index()?.remove(loc, { daemon_id: this.daemonId, pair_ref: slot.pair_ref });
     }
+    notifications.finish();
   }
 
   noteFwd(bytes: number): void {
@@ -318,19 +312,23 @@ export class RoomCore {
     this.deps.metrics?.bind(kind);
   }
 
-  closeBind(ws: RoomSocket, code: string, message: string, notifyDaemon = true): void {
+  closeBind(ws: RoomSocket, code: string, message: string, notifyDaemon = true, notifications?: TeardownNotifications): void {
+    const sends = notifications ?? new TeardownNotifications();
     const a = this.att(ws);
     const rid = a?.route_id ? hexToRoute(a.route_id) : undefined;
-    sendErr(ws, code, message, rid ? { routeId: rid, pairRef: a?.pair_ref || undefined } : undefined);
+    sends.error(ws, code, message, rid ? { routeId: rid, pairRef: a?.pair_ref || undefined } : undefined);
     if (notifyDaemon && this.daemon && rid) {
-      sendErr(this.daemon, code, message, { routeId: rid, pairRef: a?.pair_ref || undefined });
+      sends.error(this.daemon, code, message, { routeId: rid, pairRef: a?.pair_ref || undefined });
     }
-    if (a?.route_id) this.deleteBind(a.route_id);
-    try {
-      ws.close(1000, code);
-    } catch {
-      /* ignore */
-    }
+    if (a) this.releaseBind(ws, a);
+    sends.close(ws, 1000, code);
+    if (!notifications) sends.finish();
+  }
+
+  private releaseBind(ws: RoomSocket, att: Attachment): void {
+    if (!att.route_id) return;
+    this.deleteBind(att.route_id);
+    this.writeAtt(ws, { ...att, kind: "none", route_id: "" });
   }
 
   noteAlarmLate(ms: number): void {
@@ -400,25 +398,27 @@ export class RoomCore {
       this.dropDaemon("closed");
       return;
     }
+    // A delayed close for a replaced daemon must never tear down its successor.
+    if (a?.role === "daemon") return;
+    const notifications = new TeardownNotifications();
     if (a?.route_id) {
       if (this.daemon) {
-        sendErr(this.daemon, "unpaired", "client websocket gone", { routeId: hexToRoute(a.route_id) });
+        notifications.error(this.daemon, "unpaired", "client websocket gone", { routeId: hexToRoute(a.route_id) });
       }
-      this.deleteBind(a.route_id);
-      a.kind = "none";
-      a.route_id = "";
-      this.writeAtt(ws, a);
+      this.releaseBind(ws, a);
     }
     if (a?.kind === "pairing") {
       /* slot remains until ttl; bind occupancy released via attachment gone */
     }
     this.rebuildMaps();
+    notifications.finish();
   }
 
   async alarm(): Promise<void> {
-    await harvestDue(this);
+    const notifications = await harvestDue(this);
     this.flushFwd();
     await syncHeapAlarm(this.store);
+    notifications.finish();
   }
 
   loadReconnectHash(): string {

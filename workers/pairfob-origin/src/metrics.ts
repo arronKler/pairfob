@@ -94,6 +94,7 @@ function emit(env: MetricsEnv | undefined, point: Point): void {
       result,
       dim: sanitizeLabel(point.dim),
       extra: sanitizeLabel(point.extra),
+      ...(point.ms === undefined ? {} : { ms: point.ms }),
     }),
   );
 }
