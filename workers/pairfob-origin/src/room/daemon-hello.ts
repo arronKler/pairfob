@@ -52,11 +52,7 @@ export async function handleDaemonHello(room: RoomCore, ws: RoomSocket, frame: F
 
   if (room.daemon && room.daemon !== ws) {
     room.notifyReplaced();
-    try {
-      room.daemon.close(1000, "replaced");
-    } catch {
-      /* ignore */
-    }
+    room.daemon.close(1000, "replaced");
   }
 
   room.daemon = ws;

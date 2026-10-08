@@ -13,17 +13,29 @@ export class CfSocket implements RoomSocket {
 
   constructor(private readonly ws: HibernatingSocket) {}
 
+  isRetired(): boolean {
+    return this.deserializeAttachment()?.retired === true;
+  }
+
   send(data: Uint8Array): void {
+    if (this.isRetired()) throw new TypeError("Can't call WebSocket send() after close().");
     this.ws.send(data);
   }
 
   close(code?: number, reason?: string): void {
+    const att = this.deserializeAttachment();
+    if (att?.retired) return;
+    // A half-closed runtime socket can report OPEN after repeated hibernation.
+    // Persist retirement before closing so reconstruction cannot revive it.
+    if (att) this.serializeAttachment({ ...att, retired: true });
     this.ws.close(code, reason);
   }
 
   serializeAttachment(att: Attachment): void {
-    this.ws.serializeAttachment(att);
-    this.attachment = { ...att };
+    // Cleanup may write an attachment captured before close(). Retirement is final.
+    const next = this.isRetired() ? { ...att, retired: true } : att;
+    this.ws.serializeAttachment(next);
+    this.attachment = { ...next };
   }
 
   deserializeAttachment(): Attachment | null {
@@ -43,7 +55,7 @@ export function wrapSockets(raw: WebSocket[], cache: WeakMap<WebSocket, CfSocket
       w = new CfSocket(ws);
       cache.set(ws, w);
     }
-    out.push(w);
+    if (!w.isRetired()) out.push(w);
   }
   return out;
 }

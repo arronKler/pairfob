@@ -4,6 +4,8 @@ export type BindKind = "none" | "pairing" | "resumehello" | "established";
 
 export interface Attachment {
   v: 2;
+  /** Local lifecycle state; survives hibernation and never enters protocol frames. */
+  retired?: boolean;
   role: SocketRole;
   mode: SocketMode;
   route_id: string;
@@ -42,6 +44,7 @@ export function readAttachment(raw: unknown): Attachment | null {
   if (o.kind !== "none" && o.kind !== "pairing" && o.kind !== "resumehello" && o.kind !== "established") return null;
   return {
     v: 2,
+    ...(o.retired === true ? { retired: true } : {}),
     role: o.role,
     mode: o.mode,
     route_id: typeof o.route_id === "string" ? o.route_id : "",

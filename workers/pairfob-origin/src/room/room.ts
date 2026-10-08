@@ -64,6 +64,9 @@ export class DaemonRoom {
       this.wraps.set(ws, wrapped);
     }
     const socket = wrapped;
+    // A close handshake can still deliver queued frames. Retired sockets must
+    // neither answer PING nor register themselves again after hibernation.
+    if (socket.isRetired()) return;
     return traceHandler(this.env, this.ctx.id.toString(), frameLabel(message), this.core.att(socket)?.role ?? "unknown",
       () => onMessage(this.core, socket, message));
   }
