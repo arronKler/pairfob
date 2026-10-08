@@ -73,7 +73,7 @@ A bit more: [The same screen](/model).
 
 ## Who it is for
 
-You already run coding agents in Herdr 0.7 or newer on a computer, and you want to:
+You already run coding agents in Herdr 0.8 or newer on a computer, and you want to:
 
 - Keep typing, confirm in the terminal, read diffs, and open worktrees from the phone after you leave the desk
 - Sit back down with nothing to merge

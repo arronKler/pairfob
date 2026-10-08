@@ -7,7 +7,7 @@ description: Herdr、pane、pairfob、定位码这些词在 Pairfob 里指什么
 
 | 词 | 意思 |
 | --- | --- |
-| Herdr | 电脑上跑 coding agent 的本机程序。Pairfob 不替代它。需要 0.7 或更高 |
+| Herdr | 电脑上跑 coding agent 的本机程序。Pairfob 不替代它。需要 0.8 或更高 |
 | pane | 已经打开的那一块会话画面 |
 | 自动 | 点开会话时的默认模式：P2P 直连、浏览器支持 WebGL2 且未开省流时用终端，否则用控制 |
 | 控制 | 手机上操作这个会话：终端画面、按键垫、系统键盘 |
@@ -19,7 +19,7 @@ description: Herdr、pane、pairfob、定位码这些词在 Pairfob 里指什么
 | 电脑确认 | 手机证明配对码后，只在电脑终端按一次 Enter 才放行 |
 | relay | `pairfob.com`，本项目的官方实例。转发密文，不看会话。找不到直连时会话走这里 |
 | P2P | 手机和电脑之间的直连。会话仍加密。连不上时继续走 relay |
-| 网络连接方式 | 设置里的 **自动** / **P2P** / **Relay**。自动优先直连；P2P 立即尝试直连；Relay 只用中继 |
+| 网络路线 | 设置里电脑页面的 **自动** / **仅 P2P** / **仅 Relay**。自动优先直连；仅 P2P 只尝试直连，不通时暂走中继；仅 Relay 只用中继 |
 | PWA | 浏览器里的 Pairfob 页面，可以加到主屏幕。路径是 `/pair` |
 | `PAIRFOB_STATE_DIR` | 默认 `~/.config/pairfob`，凭据和设备名单 |
 | worktree | Git worktree。列出 / 创建 / 打开以电脑当时为准 |

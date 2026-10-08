@@ -94,3 +94,22 @@ test("a drag cannot swallow a later more-button click", () => {
   more.dispatchEvent(click);
   expect(click.defaultPrevented).toBe(false);
 });
+
+test("long press menu does not swallow the subsequent split placement tap", async () => {
+  const rig = setup();
+  rig.pointer("pointerdown");
+  await wait();
+  rig.pointer("pointerup");
+  expect(rig.calls.menus).toEqual(["p1"]);
+
+  const ghost = document.createElement("button");
+  ghost.dataset.boardOverlay = "";
+  rig.viewport.append(ghost);
+  let picks = 0;
+  ghost.addEventListener("click", () => picks++);
+  rig.pointer("pointerdown", {}, ghost);
+  rig.pointer("pointerup", {}, ghost);
+  ghost.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+  expect(picks).toBe(1);
+  expect(rig.calls.opens).toBe(0);
+});

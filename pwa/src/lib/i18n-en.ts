@@ -583,7 +583,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "connect.manual": "Type the pairing code",
   "connect.submit": "Connect",
   "connect.installTitle": "Install pairfob on the computer",
-  "connect.installReq": "macOS or Linux, with Herdr 0.7 or later.",
+  "connect.installReq": "macOS or Linux, with Herdr 0.8 or later.",
   "connect.installRunBefore": "In a terminal on that computer, run ",
   "connect.installRunAfter": ", then run pairfob pair.",
   "connect.installPlugin": "Using the Herdr plugin? Run the Pair a device action in Herdr instead.",

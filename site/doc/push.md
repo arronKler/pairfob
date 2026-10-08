@@ -38,10 +38,10 @@ On Linux, run `systemctl --user daemon-reload` before the restart so systemd rea
 
 1. The computer already has push enabled and the service is up
 2. Pairfob → **Settings** → **Notifications**
-3. Tap **Turn on notifications** when it is enabled
+3. Tap **Turn on** on the Notifications row
 4. The browser asks for system permission once
 
-If the computer has not enabled push, the button reads **Off on the computer**, with a short setup note. Browsers without Web Notifications say so; they do not fake a subscription.
+If the computer has not enabled push, the row says so and **How to enable** expands the setup steps. Browsers without Web Notifications say so; they do not fake a subscription.
 
 **Settings** shows whether this phone has notifications on.
 

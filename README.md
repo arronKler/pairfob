@@ -75,7 +75,7 @@ vulnerabilities privately via [SECURITY.md](SECURITY.md).
 | | |
 | --- | --- |
 | Computer | macOS or Linux (Windows is not supported) |
-| Herdr | 0.7 or newer; the installer can install pinned 0.8.2 |
+| Herdr | 0.8 or newer; the installer can install pinned 0.8.2 |
 | Herdr plugin | Herdr 0.8.2 or newer |
 | Close a workspace from the phone | Herdr 0.9.0 or newer |
 | Phone / tablet | A current mobile browser; installable as a PWA |
@@ -95,7 +95,7 @@ pairfob service status      # login service: start / stop / restart / install / 
 ```
 
 A second computer runs the same installer; pair it from the phone with
-**Settings → Add another computer**. Machines that Herdr already reaches over
+**Settings → Switch computer → Add a computer**. Machines that Herdr already reaches over
 SSH can be added from the phone's **Computers** page without a pairing code.
 Everything else: [Computer commands](https://pairfob.com/doc/cli).
 

@@ -14,7 +14,7 @@ Four steps: install Herdr → install Pairfob → pair → open a session.
 | Need | Notes |
 | --- | --- |
 | A macOS or Linux computer | `pairfob` and the agents run here |
-| [Herdr](https://herdr.dev) 0.7 or newer | Pairfob does not ship an agent and does not replace Herdr |
+| [Herdr](https://herdr.dev) 0.8 or newer | Pairfob does not ship an agent and does not replace Herdr |
 | `curl` | The install script downloads the binary |
 | A browser on another device | Phone, tablet, or another computer |
 
@@ -34,7 +34,7 @@ This downloads `pairfob`, enrolls with the official instance at `https://pairfob
 
 The service starts after you log in, not at power-on. Sleeping with the lid closed, or logging out, stops it until you return to that same session.
 
-A second computer uses the same command, then **Settings → Add another computer** on the phone.
+A second computer uses the same command, then **Settings → Switch computer → Add a computer** on the phone.
 
 Flags, install paths, and uninstall: [Install](/install).
 

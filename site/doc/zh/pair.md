@@ -74,7 +74,7 @@ pairfob pair
 ## 配对完成之后
 
 - 下次打开 <a href="/pair">pairfob.com/pair</a> 会连回这台浏览器最近用的那台电脑
-- 同一部手机再连另一台电脑：那台电脑先用同一条命令装 pairfob，再 `pairfob pair`，然后设置 → **添加另一台电脑**，见 [多台设备](/zh/devices)
+- 同一部手机再连另一台电脑：那台电脑先用同一条命令装 pairfob，再 `pairfob pair`，然后 **设置 → 切换电脑 → 添加电脑**，见 [多台设备](/zh/devices)
 - 再加设备：在电脑上再执行一次 `pairfob pair`，用**新设备**扫新码，见 [多台设备](/zh/devices)
 - 手机设置里可以解除其他设备；电脑上也可以 `pairfob forget N`
 

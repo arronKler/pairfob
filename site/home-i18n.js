@@ -55,7 +55,7 @@
     "how.p": "前两步在装有 Herdr 的电脑终端里做，第三步在手机上。之后就不用再配了。",
     "req.aria": "使用条件",
     "req1.b": "电脑",
-    req1: "macOS 或 Linux，装好 Herdr 0.7+",
+    req1: "macOS 或 Linux，装好 Herdr 0.8+",
     "req2.b": "手机 / 平板",
     req2: "浏览器打开即可，iOS 建议用 Safari 添加到主屏幕",
     "req3.b": "网络",
@@ -68,7 +68,7 @@
     "s1.term4": "缺什么，它会告诉你",
     "s1.h": "安装 pairfob",
     "s1.p":
-      '需要先装好 <a href="https://herdr.dev" target="_blank" rel="noreferrer">Herdr</a> 0.7+（电脑上跑 coding agent 的程序，Pairfob 不替代它）。支持 macOS 和 Linux。',
+      '需要先装好 <a href="https://herdr.dev" target="_blank" rel="noreferrer">Herdr</a> 0.8+（电脑上跑 coding agent 的程序，Pairfob 不替代它）。支持 macOS 和 Linux。',
     "s2.h": "运行 <code>pairfob pair</code>",
     "s2.p": "终端里出现二维码。先别关，留着给手机扫。",
     "s3.h": "打开 pairfob.com/pair 扫码",
@@ -78,7 +78,7 @@
     "after1.b": "之后每一次",
     after1: "手机打开 <code>pairfob.com/pair</code> 或主屏幕图标，就是电脑上那几个会话。",
     "after2.b": "第二台电脑",
-    after2: "同样跑第 1 步，然后在手机上「设置 → 添加另一台电脑」。",
+    after2: "同样跑第 1 步，然后在手机上「设置 → 切换电脑 → 添加电脑」。",
 
     "what.ask": "能帮你做什么？",
     "what.h2": "人不在电脑前，<br />Agent 也不用干等你。",
@@ -173,7 +173,7 @@
     "faq.q4": "家里要开端口或开 Tailscale 吗？",
     "faq.a4": "不要。pairfob 只往外连。",
     "faq.q5": "一部设备能管多台电脑吗？",
-    "faq.a5": "能。手机、平板、另一台电脑都可以当设备。第二台电脑装好后，设置 → 添加另一台电脑。",
+    "faq.a5": "能。手机、平板、另一台电脑都可以当设备。第二台电脑装好后，设置 → 切换电脑 → 添加电脑。",
     "faq.q6": "收费吗？",
     "faq.a6": "不收费。",
 
@@ -240,7 +240,7 @@
       "The first two steps run in a terminal on the computer with Herdr; the third is on your phone. After that, you're set.",
     "req.aria": "Requirements",
     "req1.b": "Computer",
-    req1: "macOS or Linux with Herdr 0.7+",
+    req1: "macOS or Linux with Herdr 0.8+",
     "req2.b": "Phone / tablet",
     req2: "Just a browser; on iOS, add it to the Home Screen from Safari",
     "req3.b": "Network",
@@ -253,7 +253,7 @@
     "s1.term4": "tells you what is still missing",
     "s1.h": "Install pairfob",
     "s1.p":
-      'Needs <a href="https://herdr.dev" target="_blank" rel="noreferrer">Herdr</a> 0.7+, which runs your coding agents; Pairfob doesn\'t replace it. macOS and Linux.',
+      'Needs <a href="https://herdr.dev" target="_blank" rel="noreferrer">Herdr</a> 0.8+, which runs your coding agents; Pairfob doesn\'t replace it. macOS and Linux.',
     "s2.h": "Run <code>pairfob pair</code>",
     "s2.p": "A QR code appears in the terminal. Leave it there for the phone.",
     "s3.h": "Open pairfob.com/pair and scan",
@@ -264,7 +264,7 @@
     "after1.b": "Every time after",
     after1: "Open <code>pairfob.com/pair</code> or the Home Screen icon and you're in your computer's sessions.",
     "after2.b": "A second computer",
-    after2: "Run step 1 there too, then on your phone: Settings → Add another computer.",
+    after2: "Run step 1 there too, then on your phone: Settings → Switch computer → Add a computer.",
 
     "what.ask": "What does it do for you?",
     "what.h2": "You're away from the desk.<br />Your agents don't have to wait.",
@@ -363,7 +363,7 @@
     "faq.a4": "No. pairfob only dials out.",
     "faq.q5": "Can one device manage several computers?",
     "faq.a5":
-      "Yes. A phone, tablet, or another computer can be the device. After the second host is installed: Settings → Add another computer.",
+      "Yes. A phone, tablet, or another computer can be the device. After the second host is installed: Settings → Switch computer → Add a computer.",
     "faq.q6": "Does it cost money?",
     "faq.a6": "No.",
 
@@ -451,7 +451,7 @@
         const data = JSON.parse(ld.textContent);
         data.url = url;
         data.description = desc;
-        data.softwareRequirements = lang === "en" ? "Herdr 0.7 or newer" : "Herdr 0.7 或更高版本";
+        data.softwareRequirements = lang === "en" ? "Herdr 0.8 or newer" : "Herdr 0.8 或更高版本";
         ld.textContent = JSON.stringify(data);
       } catch {
         /* leave original */

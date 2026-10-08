@@ -50,6 +50,7 @@ Pairfob <version>
   Running     yes
   Paired      1
   Herdr       ready (0.8.2, protocol 20)
+  P2P         on
   Origin      pairfob.com
 ```
 
@@ -58,6 +59,7 @@ Pairfob <version>
 | Running | yes | Login service did not start. See `pairfob service status` |
 | Paired | ≥ 1 | Nothing paired yet. Run `pairfob pair` |
 | Herdr | `ready` | `not installed` / `installed but not running` / `incompatible server` / `unavailable` |
+| P2P | `on` | `off` means this computer is relay-only (`PAIRFOB_P2P=0`); `unknown` clears after a restart |
 | Origin | `pairfob.com` | Not enrolled |
 
 `doctor` exits non-zero when Running or Herdr is unhealthy, so scripts can branch on it.

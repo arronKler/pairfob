@@ -38,7 +38,7 @@ Open <a href="/pair">pairfob.com/pair</a>. The pairing page follows the same lan
 
 Point the camera at the QR on the computer. Camera permission is only for that scan.
 
-### Type it — **Can't scan? Type the pairing code**
+### Type it — **Type the pairing code**
 
 Typing needs **8 secret glyphs + 6 locator glyphs**. There is no 8-glyph-only hand entry.
 
@@ -76,9 +76,9 @@ Match the string on screen (English Pairfob):
 ## After pairing
 
 - Opening <a href="/pair">pairfob.com/pair</a> reconnects to the last computer this browser used
-- Another computer on this phone: install pairfob there with the same command, run `pairfob pair`, then **Settings → Add another computer** — [Multiple devices](/devices)
+- Another computer on this phone: install pairfob there with the same command, run `pairfob pair`, then **Settings → Switch computer → Add a computer** — [Multiple devices](/devices)
 - Another device: run `pairfob pair` again and scan with the **new** device — [Multiple devices](/devices)
-- On the phone, **Settings → Paired devices** can unpair other devices. The computer can also `pairfob forget N`
+- On the phone, **Settings → computer card → Paired devices** can unpair other devices. The computer can also `pairfob forget N`
 
 ## Do not
 

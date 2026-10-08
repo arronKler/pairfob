@@ -11,7 +11,7 @@ No. There is no email login. The computer enrolls when you run the installer. De
 
 ## Can Pairfob run agents by itself?
 
-No. It is the phone surface for [Herdr](https://herdr.dev). The computer needs Herdr 0.7 or newer installed. `pairfob` starts Herdr when needed. If automatic startup fails, the list shows Herdr offline and recovers after you run `herdr` manually.
+No. It is the phone surface for [Herdr](https://herdr.dev). The computer needs Herdr 0.8 or newer installed. `pairfob` starts Herdr when needed. If automatic startup fails, the list shows Herdr offline and recovers after you run `herdr` manually.
 
 ## Is this remote desktop?
 
@@ -58,7 +58,7 @@ It cannot see the session, what you type, or the conversation. On a P2P path, pa
 
 ## What if P2P cannot connect?
 
-The session stays on Relay. In **Settings → Network path**, pin **Relay** to stop automatic direct attempts, or **Auto** to try again when a direct path is possible. If the site has P2P off, only Relay is available.
+The session stays on Relay. In **Settings**, tap the computer card and set **Network route** to **Relay only** to stop automatic direct attempts, or **Auto** to try again when a direct path is possible. If the site has P2P off, only Relay is available.
 
 ## Someone photographed the QR code.
 
@@ -74,7 +74,7 @@ This device is unpaired. Run `pairfob pair` again. Other devices on the computer
 
 ## Can one phone talk to two computers?
 
-Yes. Install pairfob on the other computer with the same command, run `pairfob pair` there, then **Settings → Add another computer**. The phone keeps both credentials and reconnects to the last one you used. Switch from **Computers** on the home screen. A computer that is offline stays on the list; that is not the same as unpaired. See [Multiple devices](/devices).
+Yes. Install pairfob on the other computer with the same command, run `pairfob pair` there, then **Settings → Switch computer → Add a computer**. The phone keeps both credentials and reconnects to the last one you used. To switch, tap the computer name at the top of the session list (on a wide screen, **Computers** in the left rail). A computer that is offline stays on the list; that is not the same as unpaired. See [Multiple devices](/devices).
 
 ## Why 14 glyphs when typing?
 
@@ -82,7 +82,7 @@ Yes. Install pairfob on the other computer with the same command, run `pairfob p
 
 ## Can I reuse the install command?
 
-Yes. Each computer runs `curl -fsSL https://pairfob.com/install.sh | sh` on its own. Then pair it from the phone: **Settings → Add another computer**. Update with `pairfob update`.
+Yes. Each computer runs `curl -fsSL https://pairfob.com/install.sh | sh` on its own. Then pair it from the phone: **Settings → Switch computer → Add a computer**. Update with `pairfob update`.
 
 ## Install failed on enroll.
 
@@ -90,7 +90,7 @@ Check the network and `pairfob doctor`. If this network has enrolled too many co
 
 ## The list is empty.
 
-In order: `pairfob doctor` — is Herdr `on`? **Herdr is not running on the computer** means Herdr is closed; **No sessions yet** with a create hint means you are connected but there is no session yet. Did pairing finish (not still on the scan page)?
+In order: `pairfob doctor` — does the Herdr line say `ready`? **Herdr isn't running on the computer** means Herdr is closed; **No sessions on … yet** with a create hint means you are connected but there is no session yet. Did pairing finish (not still on the scan page)?
 
 ## Why is there no New / Split / Worktree?
 
@@ -124,6 +124,6 @@ That is the public channel for bugs and product feedback. A security vulnerabili
 
 ## How can I diagnose repeated disconnects?
 
-Open **Settings → Export connection diagnostics** in Pairfob. The browser keeps up to 200 connection events from the last 24 hours in this tab, including across reloads. Closing the tab may clear them. If browser storage is unavailable, only the current page's in-memory records remain. Records are not uploaded automatically.
+In Pairfob, open **Settings**, tap the computer card, and tap **Export** next to **Export connection diagnostics**. The browser keeps up to 200 connection events from the last 24 hours in this tab, including across reloads. Closing the tab may clear them. If browser storage is unavailable, only the current page's in-memory records remain. Records are not uploaded automatically.
 
 Diagnostics contain route IDs, connection states, heartbeat wait times and failure classifications, but no terminal content, keys, SDP or raw exception text. The daemon also writes `session_closed` / `p2p_closed` to `audit.log`; correlate both sides by `route_id`. `reason` describes session closure and `transport_reason` the transport's first observed cause, not a proven network root cause.

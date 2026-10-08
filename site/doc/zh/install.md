@@ -11,7 +11,7 @@ description: install.sh 会下载 pairfob、核对校验和、登记，并装上
 curl -fsSL https://pairfob.com/install.sh | sh
 ```
 
-第二台电脑也是这条命令。装好后在手机上：**设置 → 添加另一台电脑**。不要设 `PAIRFOB_JOIN_TOKEN`。
+第二台电脑也是这条命令。装好后在手机上：**设置 → 切换电脑 → 添加电脑**。不要设 `PAIRFOB_JOIN_TOKEN`。
 
 
 ## Herdr 检查与安装

@@ -22,9 +22,8 @@ pairfob service status
 | 你看到的 | 先做什么 |
 | --- | --- |
 | 电脑现在不在线 | 睡眠、合盖、断网，或 `pairfob` 没在跑。先把电脑唤醒，不用重新配对。再 `pairfob doctor` |
-| 电脑上的 Herdr 现在没开 / 电脑上的 Herdr 没有运行 | 机器还醒着，但 Herdr 退了。打开 Herdr；Pairfob 会自动恢复 |
-| 还没有读到会话 | Herdr 没开；空状态会说明打开后会自动恢复 |
-| 还没有会话 | 已经连上，但还没有会话——可以新建，或在电脑上打开终端 |
+| 电脑上的 Herdr 没在运行 | 机器还醒着，但 Herdr 退了。打开 Herdr；Pairfob 会自动恢复 |
+| … 上还没有会话 | 已经连上，但还没有会话——可以新建，或在电脑上打开终端 |
 | 请完整输入电脑上显示的配对码 | 手输要 8+6 位 |
 | 配对码还没输完整：需要 14 位 | 把定位码也贴上 |
 | 配对码过期或已经用过 | 电脑重新 `pairfob pair` |
@@ -36,7 +35,7 @@ pairfob service status
 | 另一个窗口接管了这台手机 | 只用一个打开的 Pairfob 页 |
 | 无法读取站点配置 | 网络不对，或打开了错误的网页 |
 | 另一台电脑开启了配对 | 被挤掉，在目标电脑上重新 `pair` |
-| 暂时无法建立 P2P，已继续使用 Relay | 直连没通，会话还在中继上。要停掉自动重试，到设置把网络连接方式改成 **Relay** |
+| 暂时无法建立 P2P，已继续使用 Relay | 直连没通，会话还在中继上。要停掉自动重试，到设置把网络路线改成 **仅 Relay** |
 | 当前站点未开放 P2P | 这个站点关掉了直连，只能走中继 |
 
 ## doctor 对照
@@ -44,7 +43,7 @@ pairfob service status
 | 输出 | 处理 |
 | --- | --- |
 | Running no | `pairfob` 或 `pairfob service restart` |
-| Herdr off | 自动启动没有成功；确认已安装 Herdr 0.7+，在这台电脑运行 `herdr` |
+| Herdr 不是 `ready` | 照那一行的提示做：`pairfob setup` 启动已安装的 Herdr，`pairfob setup --install-herdr` 安装缺少的 Herdr。需要 Herdr 0.8+ |
 | Origin … not set up | 再跑一遍安装脚本 |
 | Paired 0 | `pairfob pair` |
 | P2P off | 这台电脑只用中继（`PAIRFOB_P2P=0`） |
@@ -64,14 +63,14 @@ pairfob service status
 - 电脑必须保持 `pairfob pair` 还在等待；Ctrl-C 掉了就重新开
 - 两台电脑同时 `pair` 会互挤
 
-## 网络连接方式
+## 网络路线
 
 - 默认 **自动**：先走 Relay，能直连就升 P2P；升不上去会话不会断
 - 切换 Wi-Fi 或重新上线会立刻再试，并重置 P2P 重试间隔
 - 设置里能看到上次直连失败的原因，会话仍留在 Relay
-- 直连一直失败：设置 → 网络连接方式 → **Relay**
-- 想再试直连：改回 **自动**，或选 **P2P** 立即尝试一次
-- 选 **Relay** 后，这次浏览器里不会再自动试 P2P
+- 直连一直失败：设置 → 电脑卡片 → 网络路线 → **仅 Relay**
+- 想再试直连：改回 **自动**，或选 **仅 P2P** 立即尝试
+- 选 **仅 Relay** 后，这次浏览器里不会再自动试 P2P
 - 没有 TURN；对称 NAT 会留在 Relay
 - 已经在 P2P 上但 ICE 断了，会话会掉回 Relay 再升级，不会整段断开
 
@@ -86,7 +85,7 @@ pairfob service status
 
 - 锁屏但机器还醒着：应该能用。Pairfob 不需要桌面保持解锁
 - 合盖 / 睡眠：手机显示 **电脑现在不在线**。揭盖或唤醒即可，不用重新配对；电脑仍在名单上
-- 机器醒着但 Herdr 退了：**电脑上的 Herdr 现在没开**
+- 机器醒着但 Herdr 退了：**电脑上的 Herdr 没在运行**
 - Pairfob 唤不醒已经睡着的电脑。详见 [常见问题](/zh/faq)
 
 ## 还是不行

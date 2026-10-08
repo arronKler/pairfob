@@ -24,8 +24,8 @@ Match the English Pairfob string on screen:
 | You see | Do this first |
 | --- | --- |
 | The computer is offline | Sleep, a closed lid, a dropped network, or `pairfob` not running. Wake the computer; you do not pair again. Then `pairfob doctor` |
-| Herdr is not running on the computer | The machine is up, but Herdr quit. Open Herdr; Pairfob recovers automatically |
-| No sessions yet | Connected, but there is no session yet — create one or open a terminal on the computer |
+| Herdr isn't running on the computer | The machine is up, but Herdr quit. Open Herdr; Pairfob recovers automatically |
+| No sessions on … yet | Connected, but there is no session yet — create one or open a terminal on the computer |
 | Enter the full pairing code shown on the computer | Hand entry is 8+6 glyphs |
 | The pairing code is not complete: 14 glyphs needed | Include the locator |
 | That pairing code is spent or expired | `pairfob pair` again on the computer |
@@ -37,7 +37,7 @@ Match the English Pairfob string on screen:
 | Another window took over this phone | Keep a single Pairfob page |
 | Could not read site config / Could not reach this site | Network or wrong page |
 | Another computer started pairing | Slot stolen; `pair` on the computer you mean |
-| P2P is temporarily unavailable. Relay remains active | Direct path failed; the session stayed on Relay. To stop retries, set Network path to **Relay** |
+| P2P is temporarily unavailable. Relay remains active | Direct path failed; the session stayed on Relay. To stop retries, set Network route to **Relay only** |
 | P2P is unavailable on this site | This site has direct paths off; only Relay is available |
 
 ## doctor
@@ -45,7 +45,7 @@ Match the English Pairfob string on screen:
 | Output | Action |
 | --- | --- |
 | Running no | `pairfob` or `pairfob service restart` |
-| Herdr off | Automatic startup did not complete. Confirm Herdr 0.7+ is installed, run `herdr` |
+| Herdr anything but `ready` | Follow the hint on that line: `pairfob setup` starts an installed Herdr, `pairfob setup --install-herdr` installs a missing one. Herdr 0.8+ is required |
 | Origin … not set up | Rerun the installer |
 | Paired 0 | `pairfob pair` |
 | P2P off | This computer is relay-only (`PAIRFOB_P2P=0`) |
@@ -65,14 +65,14 @@ Match the English Pairfob string on screen:
 - The computer must still be waiting in `pairfob pair`; Ctrl-C means open a new slot
 - Two computers running `pair` at once steal the slot from each other
 
-## Network path
+## Network route
 
 - Default **Auto**: Relay first, then P2P when a direct path exists; a failed upgrade does not drop the session
 - Switching Wi-Fi or coming back online probes immediately and resets the P2P retry timer
 - Settings shows why the last direct attempt failed while the session stays on Relay
-- Direct path keeps failing: Settings → Network path → **Relay**
-- To try a direct path again: **Auto**, or **P2P** for one immediate attempt
-- **Relay** pauses automatic P2P retries in this browser
+- Direct path keeps failing: Settings → computer card → Network route → **Relay only**
+- To try a direct path again: **Auto**, or **P2P only** for an immediate attempt
+- **Relay only** pauses automatic P2P retries in this browser
 - Pairfob does not run TURN; a strict NAT stays on Relay
 - If an existing P2P path loses ICE, the session drops back to Relay without disconnecting, then retries the upgrade
 
@@ -87,7 +87,7 @@ Match the English Pairfob string on screen:
 
 - Locked screen, machine still up: should work. Pairfob does not need the desktop unlocked
 - Closed lid / sleep: the phone shows **The computer is offline**. Open the lid or wake it. Do not pair again; the computer stays on the list
-- Herdr quit while the machine is awake: **Herdr is not running on the computer**
+- Herdr quit while the machine is awake: **Herdr isn't running on the computer**
 - Pairfob cannot wake a sleeping computer. Details: [FAQ](/faq)
 
 ## Still stuck

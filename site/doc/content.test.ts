@@ -79,7 +79,7 @@ describe("user-facing documentation", () => {
     expect(app).toContain("**发送**");
     expect(app).toContain("**停止**");
     expect(app).toContain("**强制停止**");
-    expect(app).toContain("**键盘回车直接发送**");
+    expect(app).toContain("**回车键发送**");
     expect(app).not.toContain("点它可以切换到别的会话");
     expect(app).not.toContain("在输入框上方直接切换");
     expect(appEn).toContain("**Group by**");
@@ -96,7 +96,7 @@ describe("user-facing documentation", () => {
 
   test("describes empty sessions without claiming Herdr is offline", () => {
     expect(app).toContain("已连接但列表为空时，说明 Herdr 里还没有会话");
-    expect(app).toContain("只有页面明确显示 Herdr 没有运行时");
+    expect(app).toContain("只有页面明确显示 **电脑上的 Herdr 没在运行** 时");
   });
 
   test("names GitHub Issues as the public feedback channel", async () => {
@@ -107,9 +107,9 @@ describe("user-facing documentation", () => {
     expect(faqEn).toContain("GitHub Security Advisories");
   });
 
-  test("documents the three network path choices on the settings connection card", () => {
-    expect(app).toContain("**网络连接方式**");
-    expect(app).toContain("**自动** / **P2P** / **Relay**");
+  test("documents the three network route choices on the computer page", () => {
+    expect(app).toContain("**网络路线**");
+    expect(app).toContain("**自动** / **仅 P2P** / **仅 Relay**");
     expect(app).toContain("**语言**");
     expect(app).toContain("**置顶**");
     expect(app).toContain("**取消置顶**");
@@ -120,10 +120,10 @@ describe("user-facing documentation", () => {
     const security = await Bun.file(new URL("./zh/security.md", import.meta.url)).text();
     const troubleshoot = await Bun.file(new URL("./zh/troubleshoot.md", import.meta.url)).text();
     expect(glossary).toContain("| P2P |");
-    expect(glossary).toContain("| 网络连接方式 |");
+    expect(glossary).toContain("| 网络路线 |");
     expect(glossary).not.toContain("系统键盘。默认模式");
     expect(faq).toContain("P2P 直连失败了怎么办");
-    expect(faq).toContain("设置 → 网络连接方式");
+    expect(faq).toContain("**网络路线** 改成 **仅 Relay**");
     expect(faq).toContain("设置 → 语言");
     expect(troubleshoot).toContain("暂时无法建立 P2P，已继续使用 Relay");
     expect(troubleshoot).toContain("当前站点未开放 P2P");
@@ -134,7 +134,7 @@ describe("user-facing documentation", () => {
   });
 
   test("documents the shipped multi-computer flow", () => {
-    expect(faq).toContain("设置 → 添加另一台电脑");
+    expect(faq).toContain("设置 → 切换电脑 → 添加电脑");
     expect(faq).toContain("多台电脑分别保存一条配对凭证");
     expect(faq).not.toContain("一台设备的浏览器配置对应一次配对、一头电脑");
   });
@@ -221,7 +221,7 @@ describe("user-facing documentation", () => {
     expect(appEn).toContain("**Pin to top**");
     expect(appEn).toContain("**Needs you**");
     expect(appEn).toContain("| **Control** |");
-    expect(appEn).toContain("**Network path**");
+    expect(appEn).toContain("**Network route**");
     expect(appEn).toContain("**Browse files and changes**");
     expect(appEn).toContain("**Subscription quota:**");
     expect(appEn).toContain("**Update computer**");
@@ -233,7 +233,7 @@ describe("user-facing documentation", () => {
     expect(pairEn).toContain("**Scan to connect**");
     expect(pairEn).not.toContain("The pairing page copy is Chinese");
     expect(faqEn).toContain("Settings → Language");
-    expect(faqEn).toContain("Settings → Add another computer");
+    expect(faqEn).toContain("Settings → Switch computer → Add a computer");
   });
 
   test("lock screen and lid-close are distinct, and sleep cannot be woken", async () => {

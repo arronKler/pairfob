@@ -41,9 +41,9 @@ The card title is a single identity: the session name if you set one; otherwise 
 | **Starting** | The agent is starting up |
 | **Unknown** | The computer did not report a status, or it cannot be confirmed right now |
 
-When Pairfob is connected, an empty list means there are no sessions yet; create one or open a terminal on the computer. Only the explicit **Herdr is not running on the computer** state means Herdr is closed. You can run `pairfob doctor` on the computer to confirm.
+When Pairfob is connected, an empty list means there are no sessions yet; create one or open a terminal on the computer. Only the explicit **Herdr isn't running on the computer** state means Herdr is closed. You can run `pairfob doctor` on the computer to confirm.
 
-**New** appears when the computer supports creating a session: bottom right on a phone, at the top of the left rail on a wide screen. **New tab** (list long-press or session `···`) and **Split** (session `···`) use the same kind list. Each form can start a supported agent, or a **Terminal only (no agent)** pane. With no kinds listed, the dialog still opens and creates that terminal session. An in-flight worktree shows a progress card above the list until it finishes.
+**New** appears when the computer supports creating a session: bottom right on a phone, at the top of the left rail on a wide screen. **New tab** (list long-press or session `···`) and **Split** (session `···`) use the same kind list. Each form can start a supported agent, or a plain **Terminal** pane. With no kinds listed, the dialog still opens and creates that terminal session. An in-flight worktree shows a progress card above the list until it finishes.
 
 Tap a card to open it. Long-press (right-click on a computer) to **Pin to top**, open another tab in this workspace, rename, or close that session. Pinned sessions move into a **Pinned** section at the top of the list and leave their workspace or Agent group; long-press again to **Unpin**. **Rename tab** appears only when the tab already has a visible name, or the tab is split; **Close the whole tab** only when split. Grouped by workspace, long-press the group heading to create a tab in that workspace, rename it, or **Close this workspace**; in other groupings workspace rename and close sit at the bottom of the card menu. Create-tab actions appear only when the computer supports them. Split stays in `···` after you open a session.
 
@@ -65,7 +65,7 @@ Chrome:
 
 Stopping a working agent lives on the button beside the compose field; see **Control** below.
 
-The four choices are at the top of `···` under **Mode**. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **Settings**.
+The four choices are at the top of `···`. A switch inside a session is remembered for that session only. The default for newly opened sessions is in **Settings**.
 
 | Mode | What it is |
 | --- | --- |
@@ -87,7 +87,7 @@ In **Control**:
 - Swipe or **Page up** pages the live view; it does not dump history
 - Font size is remembered
 - Long lines can wrap or not
-- The first keypad row is Esc, arrows and Backspace. `···` expands it; switch between **Keys** and **Commands**. Keys has two pages, **Control** (Ctrl, Alt, Shift, Cmd, Tab, Shift+Tab, Enter, Ctrl+C and more) and **Select & edit**; Commands holds the agent's slash commands (such as `/clear`, typed into the terminal; Pairfob does not interpret them) and your own saved commands, which you can add, edit and reorder
+- The first keypad row is Esc, arrows and Backspace. `···` expands it; switch between **Keys** and **Commands**. Keys has two pages, **Control** (Ctrl, Alt, Shift, Cmd, Tab, Shift+Tab, Enter, Ctrl+C and more) and **Select & edit**; Commands holds the agent's slash commands (such as `/clear`; tapping one puts it at the start of your draft, or types it into the terminal in Live input. Neither presses Enter, and Pairfob does not interpret them) and your own saved commands, which you can add, edit and reorder
 
 When the Agent waits on you in **Chat**, the turn shows a **Needs your confirmation** card with the prompt from the terminal. When that prompt is a numbered list (Claude Code and Codex approvals), pick an option on the card and tap **Send choice**: before sending, the computer checks that the terminal screen has not changed; if it has, the card reads it again and asks you to choose again. Nothing is resent on its own. Other prompts show the last lines of the terminal. **Handle in terminal** always switches to **Control**; check the operation and current selection before confirming.
 
@@ -120,7 +120,7 @@ Files are saved in the current session's workspace on the computer. Uploading al
 
 ### File types and limits
 
-**PDFs are supported and transferred unchanged.** **Choose file** does not restrict extensions: text, Markdown, JSON, images, Office documents, archives, audio and video can also be selected. Upload support does not imply that Pairfob previews or parses a format.
+**PDFs are supported and transferred unchanged.** The system picker does not restrict extensions: text, Markdown, JSON, images, Office documents, archives, audio and video can also be selected. Upload support does not imply that Pairfob previews or parses a format.
 
 The computer saves attachments under controlled filenames. A PDF correctly identified by the browser is saved with `.pdf`; types without a dedicated mapping, or without a recognized type, may be saved as `.bin` with their contents unchanged.
 
@@ -135,22 +135,22 @@ Eligible JPEG photos can be selected at up to 40 MiB per source file, but the co
 
 ### Smart image compression
 
-The default is **Photo → Smart compress**. Processing starts when P2P is ready and the upload begins, not immediately when you select an image:
+Images default to **Smart compress**. Processing starts when P2P is ready and the upload begins, not immediately when you select an image:
 
 - Ordinary JPG/JPEG photos larger than 256 KiB are compression candidates, with an output long edge of at most 2048 pixels. PNGs produced by editing a JPEG photo may also use this path.
 - Ordinary PNG, WebP, AVIF, HEIC/HEIF, GIF and SVG files stay original. Files recognized as screenshots by their names also skip automatic compression.
-- **Text & detail** or **Original** skips this compression step. Original keeps any edits already made.
+- **Original** skips this compression step and keeps any edits already made.
 - Files of 256 KiB or less, failed compression, or results saving less than 10% keep the original.
 
-Each file shows the actual size savings or why the original was kept. Choose **Text & detail** for text screenshots, error messages and fine diagrams.
+**Preview → Info** shows the actual size savings or why the original was kept. Tap **Use original** on text screenshots, error messages and fine diagrams.
 
 ### Interruptions, status checks and resuming
 
-**File uploads use P2P only.** Relay can show the session and **Check status**, but cannot start or continue sending files. Unsent queue work stops when P2P is unavailable; prepared image results can be reused. After reconnecting, explicitly tap **Upload**, **Upload all**, or **Continue upload**.
+**File uploads use P2P only.** Relay can show the session, but cannot start, continue or check uploads. Unsent queue work stops when P2P is unavailable; prepared image results can be reused. Once the direct connection is back, files that had not started yet upload by themselves; tap **Continue upload** on a **Paused** file or **Try again** on a failed one, and **Continue all** for files left unfinished from last time.
 
-After an interruption or an uncertain result, use **Check status** to find out how much the computer has received. This only reads status and never resumes automatically. Once P2P is ready, tap **Continue upload**. After a page reload, the browser attempts to restore unfinished attachments saved locally. Recovery is not guaranteed if browser storage is unavailable or its records have been cleared; follow the on-screen instructions.
+When a result is uncertain (for example a cancellation the computer never confirmed), the file offers **Check status** instead. It connects directly first if needed, then only reads how much the computer has received; it never resumes by itself. After a page reload, the browser attempts to restore unfinished attachments saved locally. Recovery is not guaranteed if browser storage is unavailable or its records have been cleared; follow the on-screen instructions.
 
-**Transfer details** separates hashing, local saving, sending and other measured stages. **Saving resume information** means the browser is storing its recovery record; that file has not entered the network sending stage yet.
+Open an attachment's **Preview** and tap **Info** for its size, saved path and how long each stage took (**Compression**, **Hashing**, **Local save**, **Sending** and so on). **Local save** is the browser storing its recovery record; it comes before that file's network sending stage.
 
 ## Actions that may appear on this view
 
@@ -159,8 +159,8 @@ Tap the session chrome `···`. Missing items are not drawn. **Rename tab**, **
 | Group | May include |
 | --- | --- |
 | Mode | Auto, Control, Terminal (vim / TUI), Chat |
-| Tiles | Copy screen, New tab, Split, Rename |
-| Input and display | Input: Compose / Live (Control), Larger text / Smaller text, Wrap long lines (Control), Fit width to screen (Terminal) |
+| Tiles | Copy text, New tab, Split, Rename |
+| Input and display | Input: Compose / Live, Text size, Wrap long lines (Control), Width: Fit screen / 80 / 100 / 120 cols (Terminal). Not shown in Chat |
 | Session | Layout (drag dividers to resize, long-press this pane to swap it, zoom), Worktree (list, new, open), Agent info, Close session |
 
 **Chat** puts a turn's thinking and tools in one step card. Its header leads with the result: waiting on you, which files changed, how many steps and how long. A failed step the agent worked past is only marked in the list; the header says so only when the turn stopped on one. It is open with the latest steps while the turn runs and one line afterwards; long turns can filter to failed or edited steps. Tap a step for its command or arguments and output, copy them, and move with **Previous** / **Next**. A finished answer has **Copy**, each code block its own **Copy code**. **Load earlier** pulls older turns when the thread is long.
@@ -171,17 +171,17 @@ The web surface does not offer arbitrary shell, deleting worktrees, or yanking t
 
 Tap **Settings** at the bottom on a phone, or at the top of the left rail on a wide screen.
 
-- **Connection:** computer name, online state, this phone’s label (for example iPhone), and **Network path** as **Auto** / **P2P** / **Relay**. Auto prefers a direct path; P2P tries one now; Relay stays on the relay. The current path and round-trip sit on the same card. The choice is remembered in this browser. **Add another computer** starts another pairing without replacing the current one. With more than one credential, **Switch computer** appears here and **Computers** appears in the top bar
-- **Subscription quota:** allowance for accounts signed in on this computer (Codex, Claude Code, GitHub Copilot, Cursor, Grok, Antigravity). Overview rings; **Usage details** for each window. **Refresh quota** on that page. Missing or stale data is not shown as zero
+- **Computer card:** the computer's name above a line from **This phone** to **Computer** that carries the current path and round-trip time (or **Not connected**). Tap the card for this computer's page, where **Network route** offers **Auto** / **P2P only** / **Relay only**: Auto prefers a direct path and falls back to the relay; P2P only keeps trying for a direct path and uses the relay meanwhile (tap it again to retry now); Relay only stays on the relay. The choice is remembered in this browser. That page also holds **Paired devices**, **Export connection diagnostics** and **Unpair this phone**. **Switch computer** opens **Computers**, where **Add a computer** starts another pairing without replacing the current one. On a phone, tapping the computer name at the top of the session list opens the same **Computers** choices; on a wide screen **Computers** appears in the left rail once more than one computer is paired
+- **Subscription quota:** allowance for accounts signed in on this computer (Codex, Claude Code, GitHub Copilot, Cursor, Grok, Antigravity). One row per service with a bar and the percentage left; **All quota** opens every window, with **Refresh quota** on that page. Missing or stale data is not shown as zero
 - **Language:** **Browser default**, or pin **中文** / **English**. This only changes Pairfob on this device. Docs have their own language menu in the top bar; both remember `pairfob_lang`
 - **Mode:** defaults to **Auto**, or can be pinned to **Control** / **Terminal** / **Chat**. A later switch is remembered per session
 - **Input:** whether new sessions start in Compose (write, then Send) or Live (type straight into the terminal). `···` → **Input and display** switches one session only
 - **Return key sends:** off by default, so the phone keyboard's Return adds a line and the send button sends; turn it on to send with Return. External keyboards always send with Enter and add a line with Shift+Enter
-- **Notifications:** see [Notifications](/push). Once enabled, this phone is notified when an Agent needs you or finishes; if the computer has not enabled push, it shows **Off on the computer**
-- **Paired devices:** label, online or offline, last used, and notification state. The current row is marked **This phone**. Other rows have **Unpair**; already unpaired rows are omitted
-- **Export connection diagnostics:** export recent connection events when something goes wrong; see the [FAQ](/faq)
+- **Notifications:** see [Notifications](/push). Once enabled, this phone is notified when an Agent needs you or finishes; if the computer has not enabled push, the row says so and **How to enable** expands the setup steps
+- **Paired devices** (on the computer's page): label, online or offline, last used, and notification state. The current row is marked **This phone**. Other rows have **Unpair**; already unpaired rows are omitted
+- **Export connection diagnostics** (on the computer's page, under **Diagnostics**): export recent connection events when something goes wrong; see the [FAQ](/faq)
 - **Computer update:** a reminder on the list, and **Check for updates** / **Update computer** on the **Computer version** row in Settings when the user service can do it. Confirming briefly disconnects, then reconnects. Never automatic. Command-line: [CLI](/cli)
-- **Danger zone:** **Unpair this phone**. Pairing is required to connect again
+- **Unpair this phone:** at the bottom of the computer's page. Pairing is required to connect again
 
 A lost phone that can still open Pairfob can also unpair other devices from Settings. `pairfob forget` that phone on the computer immediately — [Multiple devices](/devices).
 

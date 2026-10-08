@@ -65,7 +65,7 @@ pairfob pair
 | | |
 | --- | --- |
 | 电脑 | macOS 或 Linux（不支持 Windows） |
-| Herdr | 0.7 及以上；安装脚本可以装固定版本 0.8.2 |
+| Herdr | 0.8 及以上；安装脚本可以装固定版本 0.8.2 |
 | Herdr 插件 | Herdr 0.8.2 及以上 |
 | 在手机上关闭工作区 | Herdr 0.9.0 及以上 |
 | 手机 / 平板 | 较新的移动浏览器，可安装为 PWA |
@@ -84,7 +84,7 @@ pairfob quota-setup-claude  # 开启 Claude 订阅余量采集
 pairfob service status      # 登录服务：start / stop / restart / install / uninstall
 ```
 
-第二台电脑运行同一个安装脚本，然后在手机上用 **设置 → 添加另一台电脑**
+第二台电脑运行同一个安装脚本，然后在手机上用 **设置 → 切换电脑 → 添加电脑**
 配对。Herdr 已经通过 SSH 连接的机器，可以在手机的 **电脑** 页里直接添加，不用配对码。
 其他命令见 [电脑上的命令](https://pairfob.com/doc/zh/cli)。
 

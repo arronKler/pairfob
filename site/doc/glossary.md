@@ -7,7 +7,7 @@ description: What Herdr, pane, pairfob, and locator mean in Pairfob.
 
 | Term | Meaning |
 | --- | --- |
-| Herdr | Local program that runs coding agents on the computer. Pairfob does not replace it. Needs 0.7 or newer |
+| Herdr | Local program that runs coding agents on the computer. Pairfob does not replace it. Needs 0.8 or newer |
 | pane | One already-open session surface |
 | Auto | Default when a session opens: Terminal on P2P with WebGL2 unless Save-Data is on, otherwise Control |
 | Control | Phone UI for that pane: the terminal view, keypad, and system keyboard |
@@ -19,7 +19,7 @@ description: What Herdr, pane, pairfob, and locator mean in Pairfob.
 | Computer confirm | After the other device proves the code, one Enter on the computer admits it |
 | relay | `pairfob.com`, this project's official instance. Forwards ciphertext, does not read the session. The session stays here when a direct path is unavailable |
 | P2P | A direct path between the phone and the computer. The session stays encrypted. Falls back to relay when a direct path cannot be found |
-| Network path | **Auto** / **P2P** / **Relay** in Settings. Auto prefers a direct path; P2P tries one now; Relay uses the relay only |
+| Network route | **Auto** / **P2P only** / **Relay only** on the computer's page in Settings. Auto prefers a direct path; P2P only keeps trying for one and uses the relay meanwhile; Relay only uses the relay |
 | PWA | The Pairfob page in the browser; can be added to the Home Screen. Path `/pair` |
 | `PAIRFOB_STATE_DIR` | Default `~/.config/pairfob`, credentials and device list |
 | worktree | Git worktree. List / create / open follow the computer |

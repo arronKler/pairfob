@@ -127,7 +127,13 @@ export function bindBoardCanvasGestures(
 
   const onDown = (event: PointerEvent) => {
     if (retired) return;
-    if (!pointers.size && onOverlay(event)) { overlayPointers.set(event.pointerId, point(event)); return; }
+    if (!pointers.size && onOverlay(event)) {
+      // This control owns a fresh press, not the trailing click of the last
+      // canvas drag or long press. Let its native click reach the placement UI.
+      if (!overlayPointers.size) { held = false; moved = false; }
+      overlayPointers.set(event.pointerId, point(event));
+      return;
+    }
     if (lift) { dropLift(); held = true; }
     if (event.button === 2) { held = false; moved = false; cancelLongPress(); return; }
     if (event.button !== 0) return;

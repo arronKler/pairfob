@@ -11,7 +11,7 @@ Install pulls binaries from this project's official instance at `https://pairfob
 curl -fsSL https://pairfob.com/install.sh | sh
 ```
 
-The same command on a second computer. Then pair it from the phone: **Settings → Add another computer**. Do not set `PAIRFOB_JOIN_TOKEN`.
+The same command on a second computer. Then pair it from the phone: **Settings → Switch computer → Add a computer**. Do not set `PAIRFOB_JOIN_TOKEN`.
 
 
 ## Herdr checks and installation

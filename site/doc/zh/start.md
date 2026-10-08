@@ -14,7 +14,7 @@ description: 电脑装好 Herdr 和 pairfob，配对一次就能在另一台设�
 | 需要 | 说明 |
 | --- | --- |
 | 一台 macOS 或 Linux 电脑 | `pairfob` 跑在这里，agent 也跑在这里 |
-| [Herdr](https://herdr.dev) 0.7 或更高 | Pairfob 不自带 agent，也不代替 Herdr |
+| [Herdr](https://herdr.dev) 0.8 或更高 | Pairfob 不自带 agent，也不代替 Herdr |
 | `curl` | 安装脚本用来下载 |
 | 另一台设备的浏览器 | 手机、平板，或另一台电脑都可以 |
 
@@ -34,7 +34,7 @@ curl -fsSL https://pairfob.com/install.sh | sh
 
 这是登录后启动，不是开机就活。合盖睡眠或注销会停掉，回到同一次图形会话后再起来。
 
-第二台电脑也是这条命令，然后在手机上 **设置 → 添加另一台电脑**。
+第二台电脑也是这条命令，然后在手机上 **设置 → 切换电脑 → 添加电脑**。
 
 参数、安装位置、如何卸载见 [安装](/zh/install)。
 

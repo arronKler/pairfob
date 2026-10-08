@@ -282,4 +282,59 @@ describe("board canvas gesture adapter", () => {
     expect(record.scrolls).toEqual([]);
     stop();
   });
+
+  for (const prior of ["drag", "tap", "cancel", "contextmenu"] as const) {
+    for (const pointerType of ["touch", "mouse", "pen"]) {
+      test(`${prior} cannot swallow a fresh ${pointerType} press on placement controls`, () => {
+        const { viewport, stage, tile, stop } = harness(undefined, true, { openMenu: () => {} });
+        const overlay = document.createElement("button");
+        overlay.dataset.boardOverlay = "";
+        overlay.innerHTML = "<span>Split here</span>";
+        stage.append(overlay);
+        let picks = 0;
+        overlay.addEventListener("click", () => picks++);
+        try {
+          pointer(tile, "pointerdown", { x: 10, y: 10 });
+          if (prior === "drag") pointer(viewport, "pointermove", { x: 60, y: 10 });
+          if (prior === "contextmenu") tile.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+          pointer(viewport, prior === "cancel" ? "pointercancel" : "pointerup", { x: 10, y: 10 });
+
+          // A trailing click from the old gesture must still be suppressed,
+          // even if it lands on an overlay. Only a new press earns a new click.
+          const trailing = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
+          overlay.dispatchEvent(trailing);
+          expect(trailing.defaultPrevented).toBe(true);
+          expect(picks).toBe(0);
+
+          const label = overlay.firstElementChild!;
+          const down = pointer(label, "pointerdown", { x: 40, y: 40 }, { pointerType });
+          pointer(label, "pointerup", { x: 40, y: 40 }, { pointerType });
+          const click = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
+          label.dispatchEvent(click);
+          expect(down.defaultPrevented).toBe(false);
+          expect(click.defaultPrevented).toBe(false);
+          expect(picks).toBe(1);
+        } finally { stop(); }
+      });
+    }
+  }
+
+  test("an overlay press that joins a canvas pinch still suppresses its click", () => {
+    const { viewport, stage, stop, record } = harness();
+    const overlay = document.createElement("button");
+    overlay.dataset.boardOverlay = "";
+    stage.append(overlay);
+    try {
+      pointer(overlay, "pointerdown", { x: 10, y: 10 }, { pointerId: 1 });
+      pointer(stage, "pointerdown", { x: 100, y: 10 }, { pointerId: 2 });
+      pointer(viewport, "pointermove", { x: 190, y: 10 }, { pointerId: 2 });
+      pointer(viewport, "pointerup", { x: 190, y: 10 }, { pointerId: 2 });
+      pointer(overlay, "pointerup", { x: 10, y: 10 }, { pointerId: 1 });
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
+      overlay.dispatchEvent(click);
+      expect(click.defaultPrevented).toBe(true);
+      expect(record.cameras[0].scale).toBeCloseTo(2);
+      expect(record.clicks).toBe(0);
+    } finally { stop(); }
+  });
 });
