@@ -74,6 +74,7 @@ interface WebSocketPair {
 declare const WebSocketPair: { new (): WebSocketPair };
 
 interface WebSocket {
+  accept(): void;
   serializeAttachment(attachment: unknown): void;
   deserializeAttachment(): unknown;
 }

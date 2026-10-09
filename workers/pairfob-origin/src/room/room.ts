@@ -8,6 +8,7 @@ import { CfStore } from "./cf-store.ts";
 import { RoomCore } from "./core.ts";
 import { closeReason, diagnosticLog, frameLabel, traceHandler } from "./diagnostics.ts";
 import { handleRoomFetch } from "./http.ts";
+import { watchUpgradeCancellation } from "./upgrade-cancellation.ts";
 import { onMessage } from "./ws.ts";
 
 export class DaemonRoom {
@@ -50,6 +51,11 @@ export class DaemonRoom {
           const wrapped = new CfSocket(server);
           this.wraps.set(server, wrapped);
           this.core.attachSocket(wrapped);
+          watchUpgradeCancellation(request.signal, client, wrapped, () => {
+            diagnosticLog(this.env, this.ctx.id.toString(), {
+              event: "room_upgrade_cancelled", role: att.role,
+            });
+          });
           return new Response(null, { status: 101, webSocket: client, headers });
         },
       },
