@@ -94,7 +94,7 @@ func printResult(sock string, req admin.Request) error {
 
 func notRunning(err error) error {
 	if errors.Is(err, admin.ErrNotRunning) {
-		return fmt.Errorf("Pairfob isn't running. %s", localServiceHint().advice())
+		return errors.New("Pairfob isn't running. " + localServiceHint().advice())
 	}
 	return err
 }
