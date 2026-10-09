@@ -297,6 +297,17 @@ export function clearNotificationTarget(): void {
   });
 }
 
+/** Capture a validated runtime notification without rewriting the pairing draft. */
+export function captureNotificationTarget(target: NotificationTarget): void {
+  batch(() => {
+    write((record) => {
+      record.notificationTarget = detach(target);
+      record.fragment = null;
+    });
+    notificationIntentSeq += 1;
+  });
+}
+
 /** Drop a consumed pairing intent (boot already acted on it). */
 export function clearPairingFragment(): void {
   if (!read().fragment) return;

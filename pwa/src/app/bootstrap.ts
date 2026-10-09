@@ -51,6 +51,7 @@ import { createReachability, type Reachability } from "./reachability";
 import { forgetSavedComputerCount } from "../lib/credentials";
 import type { OriginConfig } from "../lib/origin-config";
 import { recordConnectionDiagnostic } from "../lib/protocol/connection-diagnostics";
+import { bindNotificationLinks } from "./notification-links";
 
 /**
  * Browser boot and lifecycle.
@@ -188,6 +189,7 @@ export function startApplication(): () => void {
     initI18n();
     bindLanguageChange(signal);
     capturePairingFragment();
+    bindNotificationLinks(signal);
     // Bind the session feature's owner adoption on the frame seam before the
     // first commit: every prepared session composition (phone chat, desk chat,
     // guided, complete terminal) then adopts its owner before React renders.

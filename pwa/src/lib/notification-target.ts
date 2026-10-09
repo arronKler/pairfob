@@ -8,6 +8,18 @@ export type NotificationTargetResolution =
 
 const PANE_ID_RE = /^[A-Za-z0-9._:-]{1,256}$/;
 
+/** Worker messages have the same URL boundary as notification clicks. */
+export function parseNotificationURL(value: unknown, origin: string): NotificationTarget | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value, origin);
+    if (url.origin !== origin || url.pathname !== "/pair" || url.search) return null;
+    return parseNotificationTarget(url.hash);
+  } catch {
+    return null;
+  }
+}
+
 /** Parse a notification deep link that remains in the URL fragment and never reaches the origin. */
 export function parseNotificationTarget(hash: string): NotificationTarget | null {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;

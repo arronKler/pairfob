@@ -169,16 +169,41 @@ self.addEventListener("push", (event) => {
   })());
 });
 
+// Older pages do not speak the message protocol. Only fall back to navigation
+// when capture was not acknowledged; a warm current page never needs a reload.
+function deliverNotification(client, url) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const finish = (captured) => {
+      clearTimeout(timer);
+      channel.port1.close();
+      channel.port2.close();
+      resolve(captured);
+    };
+    const timer = setTimeout(() => finish(false), 1000);
+    channel.port1.onmessage = (event) => {
+      if (event.data?.type === "pairfob_notify_captured") finish(true);
+    };
+    try { client.postMessage({ type: "pairfob_notify", url }, [channel.port2]); }
+    catch { finish(false); }
+  });
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = new URL(safeNotificationURL(event.notification.data?.url), self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
       for (const client of clients) {
-        if ("focus" in client) {
-          if ("navigate" in client) await client.navigate(target);
-          return client.focus();
-        }
+        const url = new URL(client.url);
+        if (url.origin !== self.location.origin || url.pathname !== "/pair" || !("focus" in client)) continue;
+        const delivered = deliverNotification(client, target);
+        // Focus immediately, so a suspended app can receive and capture it.
+        try {
+          await client.focus();
+          if (await delivered) return;
+          if ("navigate" in client && await client.navigate(target)) return;
+        } catch { /* A closing window must not lose the notification target. */ }
       }
       return self.clients.openWindow(target);
     }),
