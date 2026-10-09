@@ -73,7 +73,8 @@ pairfob pair
 ## 电脑上的命令
 
 ```sh
-pairfob                     # 查看状态；没在运行时启动它
+pairfob                     # 在终端查看状态；没在运行时退出
+pairfob run                 # 在前台启动 daemon
 pairfob pair                # 配对手机、平板或另一台电脑
 pairfob list                # 已配对设备
 pairfob forget 1            # 按序号或名字解除配对

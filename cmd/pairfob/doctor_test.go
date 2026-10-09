@@ -57,14 +57,6 @@ func TestWriteDoctorP2PUnknown(t *testing.T) {
 	}
 }
 
-func TestWriteLiveSnapshot(t *testing.T) {
-	var buf bytes.Buffer
-	writeDoctor(&buf, health{Version: "dev", Running: false, HerdrNote: "off — open Herdr on this computer"})
-	if !strings.Contains(buf.String(), "no —") {
-		t.Fatalf("%s", buf.String())
-	}
-}
-
 func TestDoctorDistinguishesInstalledAndRunningVersions(t *testing.T) {
 	var out bytes.Buffer
 	writeDoctor(&out, health{Version: "v1.1.0", Running: true, RunningVersion: "0027625", RunningPID: 42, ProcessNote: "installed and running programs differ"})
@@ -72,5 +64,33 @@ func TestDoctorDistinguishesInstalledAndRunningVersions(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("missing %q in %s", want, out.String())
 		}
+	}
+}
+
+func TestDoctorServiceRecoveryVariants(t *testing.T) {
+	stubServiceRunner(t, func(args []string) ([]byte, error) {
+		t.Fatalf("rendering doctor queried service: %v", args)
+		return nil, nil
+	})
+	for _, test := range []struct {
+		hint   serviceRecoveryHint
+		advice string
+	}{
+		{serviceRecoveryHint{"service not installed", "pairfob service install"}, "Install the login service: pairfob service install"},
+		{serviceRecoveryHint{"service stopped", "pairfob service start"}, "Start it with: pairfob service start"},
+		{serviceRecoveryHint{"service running but not answering", "pairfob service restart"}, "Restart it with: pairfob service restart"},
+		{serviceRecoveryHint{"service status unavailable", "pairfob service status"}, "Check the service: pairfob service status"},
+		{serviceRecoveryHint{"service unavailable", "pairfob run"}, "Run it in the foreground: pairfob run"},
+	} {
+		hint := test.hint
+		t.Run(hint.Note, func(t *testing.T) {
+			var out bytes.Buffer
+			writeDoctor(&out, health{Version: "dev", Recovery: hint})
+			for _, want := range []string{"Running     no — " + hint.Note, test.advice} {
+				if !strings.Contains(out.String(), want) {
+					t.Fatalf("missing %q in %s", want, out.String())
+				}
+			}
+		})
 	}
 }

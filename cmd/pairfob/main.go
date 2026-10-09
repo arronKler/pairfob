@@ -37,21 +37,10 @@ func main() {
 	if err != nil {
 		log.Fatal("admin socket: ", err)
 	}
-	if stdoutIsTTY() && daemonIsLive(sock) {
-		if err := writeLiveSnapshot(os.Stdout, sock); err != nil {
-			log.Fatal(err)
+	if err := runBareCommand(os.Stdout, sock, stdoutIsTTY()); err != nil {
+		if errors.Is(err, admin.ErrNotRunning) {
+			os.Exit(1)
 		}
-		return
-	}
-	store, err := state.Open("")
-	if err != nil {
-		log.Fatal("state: ", err)
-	}
-	sock, err = admin.SocketPathIn(store.Dir)
-	if err != nil {
-		log.Fatal("admin socket: ", err)
-	}
-	if err := runDaemon(store, sock); err != nil {
 		log.Fatal(err)
 	}
 }

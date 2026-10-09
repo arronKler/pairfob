@@ -19,6 +19,7 @@ type health struct {
 	RunningPID     int
 	ProcessNote    string
 	Running        bool
+	Recovery       serviceRecoveryHint
 	Phones         int
 	HerdrOK        bool
 	HerdrNote      string
@@ -45,6 +46,9 @@ var errDoctor = fmt.Errorf("not ready")
 func gatherHealth(sock string) (health, error) {
 	configuredP2P := getenv("PAIRFOB_P2P", "1") != "0"
 	h := health{Version: version, Running: daemonIsLive(sock), P2P: &configuredP2P}
+	if !h.Running {
+		h.Recovery = localServiceHint()
+	}
 	store, err := state.Open("")
 	if err != nil {
 		return h, err
@@ -139,7 +143,7 @@ func writeDoctor(w io.Writer, h health) {
 			fmt.Fprintf(w, "  Notice      %s\n", h.ProcessNote)
 		}
 	}
-	fmt.Fprintf(w, "  Running     %s\n", yesNo(h.Running, "yes", "no — it starts at login after install"))
+	fmt.Fprintf(w, "  Running     %s\n", yesNo(h.Running, "yes", "no — "+h.Recovery.Note))
 	fmt.Fprintf(w, "  Paired      %d\n", h.Phones)
 	fmt.Fprintf(w, "  Herdr       %s\n", h.HerdrNote)
 	p2p := "unknown — restart Pairfob to check"
@@ -160,7 +164,7 @@ func writeDoctor(w io.Writer, h health) {
 		fmt.Fprintln(w, "\n  pairfob pair     pair a device")
 		fmt.Fprintln(w, "  pairfob list     what's paired")
 	} else {
-		fmt.Fprintln(w, "\nStart it in this terminal with: pairfob")
+		fmt.Fprintln(w, "\n"+h.Recovery.advice())
 	}
 }
 

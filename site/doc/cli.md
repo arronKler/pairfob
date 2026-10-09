@@ -5,7 +5,7 @@ description: pair, list, forget, doctor, update. After install it runs in the ba
 
 # Computer commands
 
-After install, Pairfob runs in the background. Typing `pairfob` with no subcommand prints status: running or not, how many devices, whether Herdr is open.
+After install, Pairfob runs in the background. Typing `pairfob` with no subcommand in a terminal prints status and exits: running or not, how many devices, whether Herdr is open. If it is not running, the command prints recovery advice and exits non-zero.
 
 ```
 Pairfob is running.
@@ -17,7 +17,7 @@ Herdr is on.
   pairfob doctor   full check
 ```
 
-If it is not running: it starts at login after install, or run `pairfob` in this terminal. Sleep and logout stop the login service until you are back in that session.
+If it is not running, follow the suggested service command, or use `pairfob run` for foreground use. Sleep and logout stop the login service until you are back in that session.
 
 ## Daily commands
 
@@ -26,6 +26,7 @@ pairfob pair      # pair a phone, tablet, or another computer
 pairfob list      # paired devices
 pairfob forget 1  # unpair #1 (index from list)
 pairfob doctor    # local checklist
+pairfob run       # foreground daemon
 pairfob update    # latest binary and restart the user service
 pairfob version
 pairfob help
@@ -56,7 +57,7 @@ Pairfob <version>
 
 | Field | Healthy | When it is not |
 | --- | --- | --- |
-| Running | yes | Login service did not start. See `pairfob service status` |
+| Running | yes | `service not installed` → `pairfob service install`; `service stopped` → `pairfob service start`; `service running but not answering` → `pairfob service restart`; status unavailable → `pairfob service status` |
 | Paired | ≥ 1 | Nothing paired yet. Run `pairfob pair` |
 | Herdr | `ready` | `not installed` / `installed but not running` / `incompatible server` / `unavailable` |
 | P2P | `on` | `off` means this computer is relay-only (`PAIRFOB_P2P=0`); `unknown` clears after a restart |
@@ -68,7 +69,7 @@ Pairfob <version>
 
 ## Service
 
-The installer puts a user service in place. When you need to touch it:
+The installer puts a user service in place. `doctor` and the not-running status suggest the matching install, start, restart, or status command without changing the service. For foreground use, run `pairfob run`. Typing `pairfob` in a terminal only shows status; login services still start the daemon the same way as before. When you need to touch the service:
 
 ```sh
 pairfob service status

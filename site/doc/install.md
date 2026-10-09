@@ -78,7 +78,7 @@ source ~/.zshrc
 
 ## After install
 
-After a login, the service starts on its own. It is a login service, not a boot daemon: sleep and logout stop it; coming back to the same graphical session starts it again. In the current graphical session you can run `pairfob` in a terminal, or:
+After a login, the service starts on its own. It is a login service, not a boot daemon: sleep and logout stop it; coming back to the same graphical session starts it again. In a terminal, `pairfob` shows status and suggests the appropriate recovery command. Use `pairfob run` for foreground use. To inspect or restart the installed service:
 
 ```sh
 pairfob service status
