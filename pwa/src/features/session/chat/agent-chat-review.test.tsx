@@ -397,7 +397,7 @@ test("unreadable Pi transcript keeps a terminal exit after one successful send a
   });
   act(mount);
   await act(async () => { await refreshAgentTrace(); });
-  expect(stream().textContent).toContain("当前无法读取此会话的记录");
+  expect(stream().textContent).toContain("当前无法读取此窗格的记录");
   expect(stream().querySelector(".agent-open-terminal")).not.toBeNull();
   setComposeDraft("Run once");
   await act(async () => { await submitAgentPrompt(); });

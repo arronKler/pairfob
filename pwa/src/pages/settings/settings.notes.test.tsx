@@ -118,10 +118,10 @@ describe("settings notes and inline steps (actual App)", () => {
     mountSettings();
     const app = appRoot();
     expect([...app.querySelectorAll(".set-group-label")].map((el) => el.firstElementChild?.textContent))
-      .toEqual(["订阅余量", "会话默认", "这台手机"]);
+      .toEqual(["订阅余量", "窗格默认", "这台手机"]);
     expect(app.querySelector(".set-help")).toBeNull();
     expect(app.querySelector('[aria-haspopup="dialog"]')).toBeNull();
-    expect(app.querySelector(".session-defaults .set-foot")?.textContent).toContain("只影响新打开的会话");
+    expect(app.querySelector(".session-defaults .set-foot")?.textContent).toContain("只影响新打开的窗格");
     // Computer-owned actions live on the computer page, not the overview.
     expect(app.textContent).not.toContain("解除这台手机的配对");
     expect(app.textContent).not.toContain("导出连接诊断");

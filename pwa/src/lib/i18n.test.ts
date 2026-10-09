@@ -91,7 +91,7 @@ test("English count copy handles zero, one and many without changing Chinese", (
   expect(t("diffNotes.count", { count: 2 })).toBe("2 comments");
   expect(t("trace.runningSteps", { n: 1 })).toBe("Running · 1 step");
   expect(t("trace.nSteps", { n: 2 })).toBe("Run · 2 steps");
-  expect(t("tabs.attentionAria", { count: "1" })).toBe("1 session needs you");
+  expect(t("tabs.attentionAria", { count: "1" })).toBe("1 pane needs you");
   setLang("zh");
   expect(t("diffNotes.count", { count: 1 })).toBe("1 条批注");
 });

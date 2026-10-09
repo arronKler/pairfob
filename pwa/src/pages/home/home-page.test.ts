@@ -120,7 +120,7 @@ describe("home new session", () => {
     act(closeTestDialogs);
     expect(app.textContent).not.toContain("电脑没有提供可用的 Agent 类型");
     expect(app.querySelector(".home-create") === null).toBe(true);
-    expect(app.textContent).not.toContain("＋ 新建会话");
+    expect(app.textContent).not.toContain("＋ 新建窗格");
     act(() => setOperationBusy(true));
     paint();
     expect(create().disabled).toBe(true);

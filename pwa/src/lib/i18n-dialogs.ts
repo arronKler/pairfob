@@ -1,5 +1,5 @@
 /**
- * Copy for the shared dialogs and the session action sheet: confirmation
+ * Copy for the shared dialogs and the pane action sheet: confirmation
  * titles and consequences, the single-field editor, sheet navigation, the
  * quick-settings card and the in-sheet layout panel.
  */
@@ -13,13 +13,13 @@ export const zhDialogs = {
   "text.paneEmptyHint": "保存后恢复为自动名称",
   "text.nameRequired": "名称不能为空",
   "text.fileName": "文件名",
-  "confirm.closePaneTitle": "关闭这个会话？",
+  "confirm.closePaneTitle": "关闭这个窗格？",
   "confirm.closePaneEffect": "会结束里面的进程，无法在这里撤销。",
   "confirm.closeRunning": "它还有未完成的任务，关闭会立即中断。",
   "confirm.closeTabTitle": "关闭这个标签页？",
   "confirm.closeWorkspaceTitle": "关闭这个工作区？",
-  "confirm.closeGroupEffect": "会结束里面所有会话，无法在这里撤销。",
-  "confirm.paneCount": "{n} 个会话",
+  "confirm.closeGroupEffect": "会结束里面所有窗格，无法在这里撤销。",
+  "confirm.paneCount": "{n} 个窗格",
   "confirm.deleteFileTitle": "删除这个文件？",
   "confirm.deleteFileEffect": "文件会直接从电脑中删除，无法在这里撤销。",
   "confirm.unpairSelfTitle": "解除这台手机的配对？",
@@ -36,7 +36,7 @@ export const zhDialogs = {
   "pane.tileNewTab": "新建标签页",
   "pane.tileSplit": "分屏",
   "pane.layoutPage": "布局与大小",
-  "layout.previewAria": "这个标签页在电脑上的布局，高亮的是当前会话",
+  "layout.previewAria": "这个标签页在电脑上的布局，高亮的是当前窗格",
   "layout.width": "宽度",
   "layout.height": "高度",
   "layout.share": "{n}%",
@@ -58,13 +58,13 @@ export const enDialogs: { [K in keyof typeof zhDialogs]: string } = {
   "text.paneEmptyHint": "Saving restores the automatic name",
   "text.nameRequired": "Name cannot be empty",
   "text.fileName": "File name",
-  "confirm.closePaneTitle": "Close this session?",
+  "confirm.closePaneTitle": "Close this pane?",
   "confirm.closePaneEffect": "Processes running in it end. This cannot be undone here.",
   "confirm.closeRunning": "It has unfinished work. Closing interrupts it immediately.",
   "confirm.closeTabTitle": "Close this tab?",
   "confirm.closeWorkspaceTitle": "Close this workspace?",
-  "confirm.closeGroupEffect": "Every session in it ends. This cannot be undone here.",
-  "confirm.paneCount": "{n} sessions",
+  "confirm.closeGroupEffect": "Every pane in it ends. This cannot be undone here.",
+  "confirm.paneCount": "{n} panes",
   "confirm.deleteFileTitle": "Delete this file?",
   "confirm.deleteFileEffect": "The file is removed from your computer. This cannot be undone here.",
   "confirm.unpairSelfTitle": "Unpair this phone?",
@@ -81,7 +81,7 @@ export const enDialogs: { [K in keyof typeof zhDialogs]: string } = {
   "pane.tileNewTab": "New tab",
   "pane.tileSplit": "Split",
   "pane.layoutPage": "Layout and size",
-  "layout.previewAria": "This tab's layout on your computer; the highlighted cell is this session",
+  "layout.previewAria": "This tab's layout on your computer; the highlighted cell is this pane",
   "layout.width": "Width",
   "layout.height": "Height",
   "layout.share": "{n}%",

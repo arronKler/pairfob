@@ -188,12 +188,12 @@ test("one computer row opens the list that both switches and adds, and back retu
   expect(appRoot().querySelector(".settings-title")?.textContent).toBe("设置");
 });
 
-test("on a phone, the Sessions tab leaves settings for the list even if a pane is remembered", async () => {
+test("on a phone, the Panes tab leaves settings for the list even if a pane is remembered", async () => {
   bootHome();
   await click(t("home.settings"));
   expect(currentScreen()).toBe("settings");
   expect(appRoot().querySelector(".settings-title")?.textContent).toBe("设置");
-  await click(t("tabs.sessions"));
+  await click(t("tabs.panes"));
   expect(currentScreen()).toBe("home");
   expect(appRoot().querySelector(".settings-page")).toBeNull();
   expect(appRoot().querySelector(".host-title")).not.toBeNull();
@@ -202,7 +202,7 @@ test("on a phone, the Sessions tab leaves settings for the list even if a pane i
 test("settings offers auto and the three explicit views in place, then persists an override", async () => {
   bootHome();
   await click(t("home.settings"));
-  expect(appRoot().querySelector(".session-defaults .set-group-label")?.textContent).toBe("会话默认");
+  expect(appRoot().querySelector(".session-defaults .set-group-label")?.textContent).toBe("窗格默认");
   expect(options("默认模式")).toEqual([
     { title: "自动", current: true }, { title: "控制", current: false },
     { title: "终端", current: false }, { title: "对话", current: false },

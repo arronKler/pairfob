@@ -148,9 +148,9 @@ describe("guided pane no longer overlays earlier output", () => {
     ]);
   });
 
-  test("会话操作 has no 更早的输出 even when history is allowed", () => {
+  test("窗格操作 has no 更早的输出 even when history is allowed", () => {
     bootGuided();
-    click("会话操作");
+    click("窗格操作");
     const sheet = document.querySelector("dialog.sheet");
     expect(sheet?.textContent).not.toContain("更早的输出");
     expect(document.querySelector("dialog.history-modal")).toBeNull();

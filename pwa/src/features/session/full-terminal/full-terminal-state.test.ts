@@ -66,7 +66,7 @@ describe("full terminal centered state", () => {
     expect(layer.dataset.stage).toBe("loading");
     expect(layer.getAttribute("role")).toBe("status");
     expect(layer.getAttribute("aria-live")).toBe("polite");
-    expect(appRoot().querySelector(".full-terminal-state-title")?.textContent).toBe("正在载入会话终端");
+    expect(appRoot().querySelector(".full-terminal-state-title")?.textContent).toBe("正在载入窗格终端");
     expect(appRoot().querySelector(".full-terminal-state-detail")?.textContent).toContain("建立加密连接");
     expect(appRoot().querySelector<HTMLButtonElement>(".full-terminal-state-retry")?.hidden).toBe(true);
   });
@@ -86,7 +86,7 @@ describe("full terminal centered state", () => {
     const retry = appRoot().querySelector<HTMLButtonElement>(".full-terminal-state-retry")!;
     expect(layer.getAttribute("role")).toBe("alert");
     expect(layer.getAttribute("aria-live")).toBe("assertive");
-    expect(appRoot().querySelector(".full-terminal-state-title")?.textContent).toBe("无法打开会话终端");
+    expect(appRoot().querySelector(".full-terminal-state-title")?.textContent).toBe("无法打开窗格终端");
     expect(retry.hidden).toBe(false);
     act(() => { retry.click(); });
     expect(retries).toBe(1);
