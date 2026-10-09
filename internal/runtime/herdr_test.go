@@ -365,7 +365,15 @@ func assertSafeHerdrParams(t *testing.T, requests []scriptedRequest) {
 			if params["timeout_ms"] != float64(30000) {
 				t.Fatalf("agent.start timeout not aligned: %s", request.Params)
 			}
-			for _, forbidden := range []string{"args", "env", "focus"} {
+			if params["kind"] == "codex" {
+				args, _ := json.Marshal(params["args"])
+				if string(args) != `["--no-daemon"]` {
+					t.Fatalf("Codex must retain pane-local hook identity: %s", request.Params)
+				}
+			} else if _, ok := params["args"]; ok {
+				t.Fatalf("non-Codex agent received arguments: %s", request.Params)
+			}
+			for _, forbidden := range []string{"env", "focus"} {
 				if _, ok := params[forbidden]; ok {
 					t.Fatalf("agent.start exposed %s: %s", forbidden, request.Params)
 				}

@@ -370,6 +370,7 @@ func parseCodexTrace(line []byte) (events []parsedEvent) {
 		}
 		out := make([]parsedEvent, 0, 2)
 		parts := make([]string, 0, len(item.Payload.Content))
+		var image codexImageWrapper
 		for _, content := range item.Payload.Content {
 			if content.Text == "" {
 				continue
@@ -383,6 +384,9 @@ func parseCodexTrace(line []byte) (events []parsedEvent) {
 			}
 			text := content.Text
 			if item.Payload.Role == "user" {
+				if image.drops(text) {
+					continue
+				}
 				text = visibleCodexUserText(text)
 			}
 			if text != "" {

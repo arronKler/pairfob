@@ -524,9 +524,17 @@ func (h *Herdr) startAgentOnPane(ctx context.Context, session SessionRef, paneID
 	if err := h.waitCreatedShell(ctx, session, paneID); err != nil {
 		return "", err
 	}
-	result, startErr := h.callWithTimeout(ctx, session, "agent.start", map[string]any{
+	params := map[string]any{
 		"name": name, "kind": kind, "pane_id": paneID, "timeout_ms": 30000,
-	}, true, 35*time.Second)
+	}
+	// A shared Codex app-server inherits the first client's HERDR_PANE_ID.
+	// Its SessionStart hooks can then bind later sessions to that wrong pane.
+	// Use the embedded server so hooks retain the newly created pane's identity.
+	// These are daemon-owned arguments, never arguments supplied by the phone.
+	if kind == "codex" {
+		params["args"] = []string{"--no-daemon"}
+	}
+	result, startErr := h.callWithTimeout(ctx, session, "agent.start", params, true, 35*time.Second)
 	if startErr != nil {
 		return "", startErr
 	}

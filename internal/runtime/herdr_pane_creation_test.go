@@ -88,6 +88,10 @@ func TestHerdrPaneCreationKinds(t *testing.T) {
 						}
 					case "agent.start":
 						started++
+						args, _ := json.Marshal(params["args"])
+						if kind == "codex" && string(args) != `["--no-daemon"]` || kind != "codex" && string(args) != "null" {
+							t.Fatalf("unexpected pane-scoped launch args: %s", request.Params)
+						}
 						if created != 1 || params["pane_id"] != "w1:p2" || params["kind"] != kind || params["name"] != generatedAgentName(kind, "pane-kind") {
 							t.Fatalf("agent must start on the new pane after creation: %s", request.Params)
 						}

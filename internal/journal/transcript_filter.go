@@ -2,6 +2,7 @@ package journal
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 )
 
@@ -13,6 +14,32 @@ import (
 var codexInjectedTags = []string{
 	"environment_context", "user_instructions", "developer_instructions", "INSTRUCTIONS",
 	"turn_aborted", "subagent_notification", "skill", "codex_internal_context",
+}
+
+// Codex 0.162 writes these empty image references ahead of the user's request.
+// Match only its generated wrapper; ordinary user markup remains visible.
+var codexImageReference = regexp.MustCompile(`^<image name=\[Image #[0-9]+\] path="[^"\r\n]+">\s*</image>\s*`)
+
+// In the transcript the same wrapper is three content items: the opening
+// reference, the image itself, then the closing tag on its own.
+var codexImageOpen = regexp.MustCompile(`^<image name=\[Image #[0-9]+\] path="[^"\r\n]+">$`)
+
+// codexImageWrapper follows one user message's content items and says which
+// text items are that wrapper. A closing tag counts only after its opening
+// reference, so the same text typed by the user stays visible.
+type codexImageWrapper struct{ open bool }
+
+func (w *codexImageWrapper) drops(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	if codexImageOpen.MatchString(trimmed) {
+		w.open = true
+		return true
+	}
+	if w.open && trimmed == "</image>" {
+		w.open = false
+		return true
+	}
+	return false
 }
 
 // Claude Code wraps local command output, reminders, hook output and
@@ -59,6 +86,10 @@ func visibleCodexUserText(text string) string {
 	rest := text
 	for {
 		rest = strings.TrimLeft(rest, " \t\r\n")
+		if loc := codexImageReference.FindStringIndex(rest); loc != nil {
+			rest = rest[loc[1]:]
+			continue
+		}
 		if strings.HasPrefix(rest, "# AGENTS.md instructions") {
 			_, after, _ := strings.Cut(rest, "\n")
 			rest = after

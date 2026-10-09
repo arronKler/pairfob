@@ -12,6 +12,7 @@ func (e *Engine) decorateAgentActivity(snapshot runtime.Snapshot) runtime.Snapsh
 	snapshot.Panes = append([]runtime.Pane(nil), snapshot.Panes...)
 	for i := range snapshot.Panes {
 		pane := &snapshot.Panes[i]
+		e.decorateAgentTitle(pane)
 		pane.TaskEvidence = ""
 		if pane.Agent == "" || pane.AgentStatus == "blocked" || pane.AgentStatus == "unknown" {
 			continue

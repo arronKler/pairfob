@@ -396,6 +396,7 @@ func herdPushForPane(pane runtime.Pane, workspaceLabel, tabLabel string, kind Pu
 
 func observedPaneChanged(previous, current monitoredPane) bool {
 	return previous.status != current.status || previous.instanceID != current.instanceID ||
+		observedTaskTitle(previous.pane) != observedTaskTitle(current.pane) ||
 		!equalUint64(previous.stateChangeSeq, current.stateChangeSeq) ||
 		!equalBool(previous.interactiveReady, current.interactiveReady) ||
 		!equalBool(previous.launchPending, current.launchPending)

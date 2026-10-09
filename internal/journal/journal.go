@@ -74,6 +74,8 @@ type Reader struct {
 	piMu          sync.Mutex
 	activityMu    sync.Mutex
 	activityCache map[string]activityCacheEntry
+	titleMu       sync.Mutex
+	titleCache    map[string]titleCacheEntry
 	traceCache    map[traceCacheKey]traceCacheEntry
 	piCache       []piCacheEntry
 	storeMu       sync.Mutex
@@ -521,12 +523,16 @@ func parseCodex(line []byte) (Message, bool) {
 		return Message{}, false
 	}
 	parts := make([]string, 0, len(item.Payload.Content))
+	var image codexImageWrapper
 	for _, content := range item.Payload.Content {
 		if content.Type != "input_text" && content.Type != "output_text" {
 			continue
 		}
 		text := content.Text
 		if item.Payload.Role == "user" {
+			if image.drops(text) {
+				continue
+			}
 			text = visibleCodexUserText(text)
 		}
 		if text != "" {

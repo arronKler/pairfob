@@ -168,6 +168,38 @@ func TestCodexDropsTheWholeInjectedAgentsFile(t *testing.T) {
 	assertNoInjected(t, history)
 }
 
+// Codex 0.162 records an attached image as three content items around the
+// user's words: the opening reference, the image, and the closing tag alone.
+func TestCodexDropsTheImageReferenceWrittenAsSeparateItems(t *testing.T) {
+	root := t.TempDir()
+	id := "session_87654321"
+	writeLines(t, filepath.Join(root, "sessions", "2026", "10", "09", "rollout-"+id+".jsonl"),
+		map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "message", "role": "user", "content": []map[string]any{
+				{"type": "input_text", "text": "<image name=[Image #1] path=\"/tmp/repo/.pairfob/attachments/a1/attachment.jpg\">"},
+				{"type": "input_image", "image_url": "data:image/jpeg;base64,AAAA"},
+				{"type": "input_text", "text": "</image>"},
+				{"type": "input_text", "text": "swap the two corners\n\n[Image #1]"},
+			},
+		}},
+		// The same closing tag typed by the user, with no reference before it, is theirs.
+		map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "message", "role": "user", "content": []map[string]any{{"type": "input_text", "text": "</image>"}},
+		}},
+	)
+	reader := &Reader{CodexRoot: root}
+	ref := Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}
+	const asked = "swap the two corners\n\n[Image #1]"
+	trace, err := reader.ReadTrace(ref, nil, 20)
+	if err != nil || len(trace.Items) != 2 || trace.Items[0].Text != asked || trace.Items[1].Text != "</image>" {
+		t.Fatalf("trace=%+v err=%v", trace, err)
+	}
+	history, err := reader.Read(ref, nil, 20)
+	if err != nil || len(history.Messages) != 2 || history.Messages[0].Text != asked || history.Messages[1].Text != "</image>" {
+		t.Fatalf("history=%+v err=%v", history, err)
+	}
+}
+
 func TestClaudePastedTextKeepsBodyWithoutWrapper(t *testing.T) {
 	text := "\n\n<pasted_content id=\"2c1f\">\nfirst line\n\nsecond\n</pasted_content id=\"2c1f\">\n\nreview it"
 	if got := visibleClaudeUserText(text); got != "first line\n\nsecond\n\nreview it" {
