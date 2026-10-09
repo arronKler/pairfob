@@ -48,7 +48,7 @@ pairfob pair
 - **看订阅余量。** 由电脑收集 Codex、Claude Code、Copilot、Cursor、Grok 等账号的
   额度。
 
-手机端支持中文和 English。详见 [手机上怎么用](https://pairfob.com/doc/zh/app)。
+界面支持中文和 English。详见 [界面怎么用](https://pairfob.com/doc/zh/app)。
 
 ## 安全
 
@@ -62,7 +62,7 @@ pairfob pair
 
 ## 环境要求
 
-| | |
+| 项目 | 要求 |
 | --- | --- |
 | 电脑 | macOS 或 Linux（不支持 Windows） |
 | Herdr | 0.8 及以上；安装脚本可以装固定版本 0.8.2 |

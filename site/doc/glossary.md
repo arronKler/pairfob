@@ -10,7 +10,7 @@ description: What Herdr, pane, pairfob, and locator mean in Pairfob.
 | Herdr | Local program that runs coding agents on the computer. Pairfob does not replace it. Needs 0.8 or newer |
 | pane | One already-open session surface |
 | Auto | Default when a session opens: Terminal on P2P with WebGL2 unless Save-Data is on, otherwise Control |
-| Control | Phone UI for that pane: the terminal view, keypad, and system keyboard |
+| Control | Operate that pane: a tidied terminal view, keypad, and system keyboard |
 | Terminal | A real terminal. For vim or a full-screen TUI |
 | Chat | Message the Agent. Collapsible run |
 | pairfob | Pairfob background process on this computer. Outbound only. Talks to local Herdr only |
@@ -23,5 +23,5 @@ description: What Herdr, pane, pairfob, and locator mean in Pairfob.
 | PWA | The Pairfob page in the browser; can be added to the Home Screen. Path `/pair` |
 | `PAIRFOB_STATE_DIR` | Default `~/.config/pairfob`, credentials and device list |
 | worktree | Git worktree. List / create / open follow the computer |
-| Workspace viewer | Folder in the session chrome: files, uncommitted changes, diff comments |
+| Workspace viewer | Folder in the session chrome (**Browse files and changes**): files, uncommitted changes, diff comments. A column beside the session in a window 900px or wider |
 | Subscription quota | Allowance for accounts signed in on this computer, in Settings; not this session's usage |

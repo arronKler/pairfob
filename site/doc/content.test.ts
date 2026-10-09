@@ -94,6 +94,36 @@ describe("user-facing documentation", () => {
     expect(appEn).not.toContain("**Insert all paths**");
   });
 
+  test("covers the wide layout and the device-neutral labels", async () => {
+    const appEn = await Bun.file(new URL("./app.md", import.meta.url)).text();
+    const pair = await Bun.file(new URL("./zh/pair.md", import.meta.url)).text();
+    const pairEn = await Bun.file(new URL("./pair.md", import.meta.url)).text();
+    // Labels the PWA no longer shows (i18n-zh.ts / i18n-en.ts and the split tables).
+    for (const stale of ["这台手机的配对", "接管了这台手机", "适应屏幕", "关闭这个工作区", "关闭整个标签页", "左栏顶部一排"]) {
+      expect(docs).not.toContain(stale);
+    }
+    for (const stale of ["Unpair this phone", "took over this phone", "Fit screen", "Close this workspace", "Close the whole tab"]) {
+      expect(docs).not.toContain(stale);
+    }
+    // Width tiers follow shared/ui/dom/width-tier.ts: 720 / 900 / 1200.
+    expect(app).toContain("## 平板和桌面浏览器");
+    expect(app).toContain("| 720–899px |");
+    expect(app).toContain("| 900–1199px |");
+    expect(app).toContain("| 1200px 以上 | 三栏：列表、会话、文件与更改 |");
+    expect(app).toContain("最底下是 **画板** 和 **设置**");
+    expect(app).toContain("**解除这台设备的配对**");
+    expect(app).toContain("**屏幕键盘回车发送**");
+    expect(app).toContain("**整页打开**");
+    expect(appEn).toContain("## Tablets and desktop browsers");
+    expect(appEn).toContain("| 1200px and up | Three columns: list, session, files and changes |");
+    expect(appEn).toContain("**Unpair this device**");
+    expect(appEn).toContain("**On-screen Return sends**");
+    expect(appEn).toContain("**Open as a full page**");
+    // A mouse gets the typed code on the page; scanning stays first on touch.
+    expect(pair).toContain("用鼠标的桌面浏览器直接给输入框");
+    expect(pairEn).toContain("A desktop browser with a mouse shows the code field on the page and no scan.");
+  });
+
   test("describes empty sessions without claiming Herdr is offline", () => {
     expect(app).toContain("已连接但列表为空时，说明 Herdr 里还没有会话");
     expect(app).toContain("只有页面明确显示 **电脑上的 Herdr 没在运行** 时");

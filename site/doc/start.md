@@ -52,6 +52,7 @@ It leads with a QR code and keeps a manual code as fallback. On the other device
 
 - **Can scan:** scan and pairing starts
 - **Cannot scan:** type the code. That is **8 pairing glyphs + 6 locator glyphs** (you can paste all 14)
+- **Desktop browser:** the page shows the code field directly; type or paste the code there
 
 After the other side proves the code, press **Enter** once in the computer terminal. This is authorization, not an account login. Neither side shows security words.
 

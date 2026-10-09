@@ -74,7 +74,7 @@ This device is unpaired. Run `pairfob pair` again. Other devices on the computer
 
 ## Can one phone talk to two computers?
 
-Yes. Install pairfob on the other computer with the same command, run `pairfob pair` there, then **Settings → Switch computer → Add a computer**. The phone keeps both credentials and reconnects to the last one you used. To switch, tap the computer name at the top of the session list (on a wide screen, **Computers** in the left rail). A computer that is offline stays on the list; that is not the same as unpaired. See [Multiple devices](/devices).
+Yes. Install pairfob on the other computer with the same command, run `pairfob pair` there, then **Settings → Switch computer → Add a computer**. The phone keeps both credentials and reconnects to the last one you used. To switch, tap the computer name at the top of the session list (at the top of the left rail on a wide screen). A computer that is offline stays on the list; that is not the same as unpaired. See [Multiple devices](/devices).
 
 ## Why 14 glyphs when typing?
 
@@ -90,7 +90,7 @@ Check the network and `pairfob doctor`. If this network has enrolled too many co
 
 ## The list is empty.
 
-In order: `pairfob doctor` — does the Herdr line say `ready`? **Herdr isn't running on the computer** means Herdr is closed; **No sessions on … yet** with a create hint means you are connected but there is no session yet. Did pairing finish (not still on the scan page)?
+In order: `pairfob doctor` — does the Herdr line say `ready`? **Herdr isn't running on the computer** means Herdr is closed; **No sessions on … yet** with a create hint means you are connected but there is no session yet. Did pairing finish (not still on the pairing page)?
 
 ## Why is there no New / Split / Worktree?
 

@@ -26,7 +26,7 @@ const CDP_PORT = Number(process.env.SHOTS_CDP_PORT ?? 9337);
 const SCALE = 1.5;
 const LANGS = ["en", "zh"] as const;
 
-type Shot = { name: string; scene: string; width: number; height: number };
+type Shot = { name: string; scene: string; width: number; height: number; touch?: boolean };
 const PHONE = { width: 390, height: 844 };
 const SHOTS: Shot[] = [
   { name: "connect", scene: "connect", ...PHONE },
@@ -36,8 +36,9 @@ const SHOTS: Shot[] = [
   { name: "workspace-diff", scene: "workspace-diff", ...PHONE },
   { name: "chat-complete", scene: "chat-complete", ...PHONE },
   { name: "settings", scene: "settings", ...PHONE },
-  // iPad landscape: above the PWA's 900px breakpoint, so the two-column desk layout.
-  { name: "tablet", scene: "desktop-guided", width: 1180, height: 820 },
+  // iPad landscape: the two-column desk layout, operated by touch (the mouse
+  // variant has hover rows, a collapsed key row and a keyboard hint).
+  { name: "tablet", scene: "desktop-guided", width: 1180, height: 820, touch: true },
 ];
 
 function chromePath(): string {
@@ -103,8 +104,9 @@ async function capture(cdp: Cdp, lang: string, shot: Shot): Promise<void> {
       width: shot.width,
       height: shot.height,
       deviceScaleFactor: SCALE,
-      mobile: shot.width < 900,
+      mobile: shot.touch ?? shot.width < 900,
     }, sessionId);
+    if (shot.touch) await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 }, sessionId);
     await cdp.send("Page.enable", {}, sessionId);
     const url = `http://127.0.0.1:${VITE_PORT}/qa/index.html?lang=${lang}&scene=${shot.scene}`;
     await cdp.send("Page.navigate", { url }, sessionId);

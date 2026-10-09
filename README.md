@@ -54,7 +54,7 @@ binary on first use. See [`plugin/herdr/`](plugin/herdr/README.md).
 - **Keep an eye on quota.** Subscription allowance for Codex, Claude Code,
   Copilot, Cursor, Grok and more, collected on the computer.
 
-The phone UI speaks English and 中文. Details: [Using the app](https://pairfob.com/doc/app).
+The app speaks English and 中文. Details: [Using the app](https://pairfob.com/doc/app).
 
 ## Security
 
@@ -72,7 +72,7 @@ vulnerabilities privately via [SECURITY.md](SECURITY.md).
 
 ## Requirements
 
-| | |
+| Item | Requirement |
 | --- | --- |
 | Computer | macOS or Linux (Windows is not supported) |
 | Herdr | 0.8 or newer; the installer can install pinned 0.8.2 |

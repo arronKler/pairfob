@@ -34,7 +34,9 @@ If another computer also runs `pairfob pair`, the old code dies. The phone may s
 
 Open <a href="/pair">pairfob.com/pair</a>. The pairing page follows the same language as Pairfob (**Connect your computer** in English). A device that is already paired goes straight to the session list.
 
-### Scan (preferred) — **Scan to connect**
+What the page offers follows what you point with. A phone or touch tablet leads with the scan and keeps typing behind **Type the pairing code**. A desktop browser with a mouse shows the code field on the page and no scan.
+
+### Scan (preferred on a phone or touch tablet) — **Scan to connect**
 
 Point the camera at the QR on the computer. Camera permission is only for that scan.
 
@@ -44,6 +46,7 @@ Typing needs **8 secret glyphs + 6 locator glyphs**. There is no 8-glyph-only ha
 
 - One field; paste all 14 glyphs (spaces and hyphens allowed; `O` → `0`, `I`/`L` → `1`)
 - Eight glyphs only: the page asks for the rest and **does not send**
+- Desktop browser: run `pairfob pair` on the computer you want to control, type or paste the code under the QR into the field on the page, and click **Connect**. This browser can then see the sessions on that computer
 
 The two parts are different jobs:
 
@@ -54,7 +57,7 @@ The two parts are different jobs:
 
 ## Enter on the computer
 
-**Only Enter on the computer actually admits the device.** After the phone scans it still waits. Neither side shows security words. That stops a screenshot of the QR from pairing without you.
+**Only Enter on the computer actually admits the device.** After you scan or type the code, the device still waits. Neither side shows security words. That stops a screenshot of the QR from pairing without you.
 
 If it is not your device, refuse on the computer (Ctrl-C or wait for expiry) and run `pairfob pair` again.
 
@@ -67,7 +70,8 @@ Match the string on screen (English Pairfob):
 | You see | Meaning | Do this |
 | --- | --- | --- |
 | That pairing code is spent or expired | Slot rotated, or the code is dead | Use the code the computer is **printing now** |
-| Enter the full pairing code / 14 glyphs needed | Locator missing | Paste 8+6 together |
+| Enter the full pairing code / 14 characters needed | Locator missing | Paste 8+6 together |
+| The pairing code is too long: it should have 14 characters | Extra characters typed or pasted | Keep only the 14 the computer shows |
 | That pairing code is incorrect | Does not match | New code; do not permute the old one |
 | Pairing timed out | Network, or the computer left the wait | Scan or type the current code again |
 | Too many attempts | This side is rate-limited | Wait |
@@ -77,7 +81,7 @@ Match the string on screen (English Pairfob):
 
 - Opening <a href="/pair">pairfob.com/pair</a> reconnects to the last computer this browser used
 - Another computer on this phone: install pairfob there with the same command, run `pairfob pair`, then **Settings → Switch computer → Add a computer** — [Multiple devices](/devices)
-- Another device: run `pairfob pair` again and scan with the **new** device — [Multiple devices](/devices)
+- Another device: run `pairfob pair` again and scan or type the new code on the **new** device — [Multiple devices](/devices)
 - On the phone, **Settings → computer card → Paired devices** can unpair other devices. The computer can also `pairfob forget N`
 
 ## Do not

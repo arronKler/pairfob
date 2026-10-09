@@ -34,11 +34,11 @@ Unpair one: pairfob forget 1
 
 If nothing is paired: `Nothing paired yet. Pair one: pairfob pair`.
 
-The phone **Settings** page also lists devices: the current row is **This phone**, others show online or offline. Already unpaired rows are omitted.
+The phone **Settings** page also lists devices: the current row is **This device**, others show online or offline. Already unpaired rows are omitted.
 
 ## Revoke
 
-On the phone, open **Settings**, tap the computer card, and **Paired devices** has **Unpair** on every other row. That device disconnects immediately and must scan again. **Unpair this phone**, at the bottom of the same page, still only drops this device.
+On the phone, open **Settings**, tap the computer card, and **Paired devices** has **Unpair** on every other row. That device disconnects immediately and must pair again. **Unpair this device**, at the bottom of the same page, still only drops this device.
 
 On the computer, use the `list` index:
 
@@ -66,13 +66,13 @@ Each computer enrolls and pairs on its own. Same installer, new pairing:
 
 1. On the other computer: `curl -fsSL https://pairfob.com/install.sh | sh`
 2. There: `pairfob pair`
-3. On this phone: **Settings → Switch computer → Add a computer**, then scan that computer’s current code
+3. On this phone: **Settings → Switch computer → Add a computer**, then scan that computer’s current code (a desktop browser types it)
 
-The phone keeps one credential per computer and reconnects to the last one you used. To switch, tap the computer name at the top of the session list on a phone; on a wide screen **Computers** appears in the left rail once more than one credential is stored.
+The phone keeps one credential per computer and reconnects to the last one you used. To switch, tap the computer name at the top of the session list; on a wide screen it is at the top of the left rail.
 
-A computer that is asleep or offline stays on the list. Pairfob does not delete that credential, and it does not send you back to the scan page. Wake it; you do not pair again. A locked screen is fine; a closed lid only works if the machine does not sleep.
+A computer that is asleep or offline stays on the list. Pairfob does not delete that credential, and it does not send you back to the pairing page. Wake it; you do not pair again. A locked screen is fine; a closed lid only works if the machine does not sleep.
 
-**Forget** on a row only drops the credential in this browser. The computer still lists this device until you `forget` it there or **Unpair** it under Settings → computer card → Paired devices. **Unpair this phone** still only affects the current computer pairing.
+**Forget** on a row only drops the credential in this browser. The computer still lists this device until you `forget` it there or **Unpair** it under Settings → computer card → Paired devices. **Unpair this device** still only affects the current computer pairing.
 
 ## Machines Herdr reaches over SSH
 
@@ -95,4 +95,4 @@ From the computer's terminal, `pairfob machine list` shows the same machines and
 
 ## Another window
 
-A second Pairfob page on the same paired phone may tell the old window that another window took over. Distinct **devices** can stay connected together; multiple windows of one device steal the session.
+A second Pairfob page on the same paired phone may tell the old window **Another window took over this device's connection**. Distinct **devices** can stay connected together; multiple windows of one device steal the session.

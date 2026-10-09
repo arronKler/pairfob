@@ -1,6 +1,6 @@
 ---
 title: Using the app
-description: List, open a session, use the system keyboard, and respond when an agent needs you. Controls appear only when the computer supports them.
+description: List, open a session, use the system keyboard, the mouse and keyboard on a wide screen, and respond when an agent needs you. Controls appear only when the computer supports them.
 ---
 
 # Using the app
@@ -9,7 +9,7 @@ Pairfob opens on the session list from the computer. Tapping a card opens that s
 
 Labels below are the English Pairfob strings. **Settings → Language** can pin **English**, **中文**, or **Browser default**.
 
-Wide layouts (roughly a landscape tablet or a desktop browser) use two columns: list on the left, session on the right. Phones are one screen at a time. Swipe right from the left edge of a session to return to the list.
+Phones are one screen at a time; swipe right from the left edge of a session to return to the list. In a window 720px or wider (a tablet, a desktop browser) the list stays on the left with the session beside it; see [Tablets and desktop browsers](#tablets-and-desktop-browsers). What follows describes the phone first. Where it says long-press for a menu, right-click with a mouse.
 
 ## The list
 
@@ -19,7 +19,7 @@ The default groups by **Workspace**, meaning by project directory. The **Workspa
 - **Agent** — agent kinds
 - **All** — no grouping, one list
 
-The same sheet has **Expand all** / **Collapse all**. Cards and groups follow the order you last opened them; a status change never moves a row.
+The same sheet has **Expand all** / **Collapse all**. Cards and groups follow the order you last opened them; a status change never moves a row. On a wide screen the list stays beside the session, so opening one session after another does not reorder it; it is sorted by last opened again after you switch computer or grouping, reload the page, or come back to this browser tab.
 
 Grouped headings toggle open and closed. The first group starts open; the rest start collapsed. When **Pinned** is present, that section and the group under it start open.
 
@@ -43,15 +43,19 @@ The card title is a single identity: the session name if you set one; otherwise 
 
 When Pairfob is connected, an empty list means there are no sessions yet; create one or open a terminal on the computer. Only the explicit **Herdr isn't running on the computer** state means Herdr is closed. You can run `pairfob doctor` on the computer to confirm.
 
-**New** appears when the computer supports creating a session: bottom right on a phone, at the top of the left rail on a wide screen. **New tab** (list long-press or session `···`) and **Split** (session `···`) use the same kind list. Each form can start a supported agent, or a plain **Terminal** pane. With no kinds listed, the dialog still opens and creates that terminal session. An in-flight worktree shows a progress card above the list until it finishes.
+**New** appears when the computer supports creating a session: bottom right on a phone, **＋** at the top of the left rail on a wide screen. **New tab** (list long-press or session `···`) and **Split** (session `···`) use the same kind list. Each form can start a supported agent, or a plain **Terminal** pane. With no kinds listed, the dialog still opens and creates that terminal session. An in-flight worktree shows a progress card above the list until it finishes.
 
-Tap a card to open it. Long-press (right-click on a computer) to **Pin to top**, open another tab in this workspace, rename, or close that session. Pinned sessions move into a **Pinned** section at the top of the list and leave their workspace or Agent group; long-press again to **Unpin**. **Rename tab** appears only when the tab already has a visible name, or the tab is split; **Close the whole tab** only when split. Grouped by workspace, long-press the group heading to create a tab in that workspace, rename it, or **Close this workspace**; in other groupings workspace rename and close sit at the bottom of the card menu. Create-tab actions appear only when the computer supports them. Split stays in `···` after you open a session.
+Tap a card to open it. Long-press (right-click with a mouse) for the card's menu: **Pin to top**, **Rename session**, **Close session**, **Tab layout**, and **New tab** in the same workspace. Pinned sessions move into a **Pinned** section at the top of the list and leave their workspace or Agent group; long-press again to **Unpin**. **Rename tab** appears only when the tab already has a visible name, or the tab is split; **Close tab** only when split. Grouped by workspace, long-press the group heading (or tap `···` beside it) for **New tab**, **Open in Board**, **Rename workspace**, or **Close workspace**; in other groupings **Rename workspace** and **Close workspace** sit at the bottom of the card menu. Create-tab actions appear only when the computer supports them. Split stays in `···` after you open a session.
 
-**Board** (also **Tab layout** in a card's long-press menu, and **View on the board** in a session's `···`) draws the current tab the way the computer shows it: every pane sits where it does in Herdr at the same size, shows its real screen, and scales with the pinch (Ctrl + scroll on a computer). A title bar on each pane shows the agent, name and status. Tap the title to switch workspace; the row under it holds that workspace's tabs. **+** creates a tab (long-press it for **Start another**), and long-pressing a tab renames, creates or closes tabs. Switching workspace or tab here does not steal focus on the computer.
+With a finger, swipe a card left for **Pin** and **More** (the menu above); swipe an unread finished card right to mark it **Read**.
 
-Tap a pane to open that session; drag up or down on a pane to scroll its screen on the computer. Long-press a pane (right-click on a computer, or tap `···` in its title bar) for **Split…**, **Resize**, **Swap position…**, **Maximize on computer**, rename and close. You can also drag the divider between panes to resize, or long-press a pane and drop it on a neighbour to swap. These change the split on the computer right away; each appears only when the computer supports it, and while reconnecting the board is view-only. On a wide screen the board sits on the right and the left rail stays the session list; with the canvas focused, Herdr's keys work too: arrows select a pane, Shift + arrow swaps, Option + arrow resizes, `v` / `-` split, `z` maximizes, `x` closes, `0` fits.
+**Board** (also **Tab layout** in a card's long-press menu, and **View on the board** under `···` → **Layout** in a session) draws the current tab the way the computer shows it: every pane sits where it does in Herdr at the same size, shows its real screen, and scales with the pinch (Ctrl + scroll with a mouse). A title bar on each pane shows the agent, name and status. Tap the title to switch workspace; the row under it holds that workspace's tabs. **+** creates a tab (long-press it for **Start another**), and long-pressing a tab offers **Rename tab**, **New tab** and **Close tab**. Switching workspace or tab here does not steal focus on the computer.
 
-On a phone, the bottom bar has **Sessions** / **Board** / **Settings**; **Sessions** shows a count when something needs you. On a wide screen the same entries sit in a row at the top of the left rail: **New** / **Computers** / **Board** / **Settings**.
+Tap a pane to open that session; drag one finger up or down on a pane to scroll its screen on the computer, and drag two fingers to move the board. Long-press a pane (right-click with a mouse, or tap `···` in its title bar) for **Split**, **Resize**, **Swap position**, **Maximize on computer**, **Rename session** and **Close session**. You can also drag the divider between panes to resize. A long-press with a finger lifts the pane: drop it on a neighbour to swap, or let go in place for the menu; the tab row says what letting go will do. These change the split on the computer right away; each appears only when the computer supports it, and while reconnecting the board is view-only.
+
+On a wide screen the board takes the main column and the left rail stays the session list; in a window narrower than 900px the board takes the full width, with back to the list at the top left. With a mouse, a sideways scroll or Shift + scroll moves the board, and a vertical scroll scrolls the pane under the pointer on the computer; when the board is zoomed past the window, a vertical scroll or drag moves the board first, and the wheel scrolls the pane only once the board's edge is in view. With the canvas focused, Herdr's keys work too: arrows select a pane, Shift + arrow swaps, Option + arrow resizes, `v` / `-` split, `z` maximizes, `x` closes, `0` fits.
+
+On a phone, the bottom bar has **Sessions** / **Board** / **Settings**; **Sessions** shows a count when something needs you. On a wide screen **Board** and **Settings** sit at the bottom of the left rail, with create and the computer switch at its top.
 
 ## Inside a session
 
@@ -59,7 +63,7 @@ Opening a session defaults to **Auto**: Terminal on a P2P direct connection when
 
 Chrome:
 
-- Left: back to the list (phone). The back control shows a count when other sessions need you
+- Left: back to the list (phone; on a wide screen only while the rail has given way to files and changes). The back control shows a count when other sessions need you
 - Center: agent icon, name and status. It is display-only; switch sessions from the list or with the edge swipe
 - Right: **Browse files and changes**, then `···` **Session actions** (how this view looks and types, this pane's name, close this pane)
 
@@ -71,7 +75,7 @@ The four choices are at the top of `···`. A switch inside a session is rememb
 | --- | --- |
 | **Auto** | Chooses when the session opens: Terminal on P2P with WebGL2 unless Save-Data is on, otherwise Control |
 | **Control** | View the terminal and operate the session with the system keyboard and keypad |
-| **Terminal** | A real terminal. Use for vim or a full-screen TUI. On a phone the default is an 80-column view you pan sideways; **Fit screen** resizes the computer to the phone width. Vertical pan still scrolls remotely |
+| **Terminal** | A real terminal. Use for vim or a full-screen TUI. On a phone the default is an 80-column view you pan sideways; **Fit** resizes the computer's terminal to this screen's width. Vertical pan and the mouse wheel scroll remotely; a URL on screen opens in a new tab when you tap or click it |
 | **Chat** | Message the Agent (this is where you send a task; it is not a `···` menu item). Each turn's work sits in one step card: open while it runs, one result line after. Available for Claude Code, Codex, Grok, Pi, Cursor, Hermes and opencode sessions; the last three open once the agent has saved the session, which for Cursor is after its first message. Cursor records no step results, so its steps show as ended rather than succeeded or failed. Hermes needs `sqlite3` on the computer; opencode 1.2 and later is not read yet |
 
 In **Control**:
@@ -83,7 +87,7 @@ In **Control**:
   - Otherwise: **Enter** (↵) sends a terminal Return
 - **Compose / Live** is under `···` → **Input and display** → **Input**, for this session only; Live marks the field with **Live**
 - Confirmation choices stay in the terminal view. Follow the prompt: use the keypad's ↑/↓ to select, then Enter to confirm. Type a letter or text when the prompt asks for it
-- Tapping a row offers **Copy**, **Copy path**, **Quote** into compose, or **Select…** text
+- Tapping a row offers **Copy**, **Copy path**, **Quote** into compose, or **Select** text
 - Swipe or **Page up** pages the live view; it does not dump history
 - Font size is remembered
 - Long lines can wrap or not
@@ -92,6 +96,60 @@ In **Control**:
 When the Agent waits on you in **Chat**, the turn shows a **Needs your confirmation** card with the prompt from the terminal. When that prompt is a numbered list (Claude Code and Codex approvals), pick an option on the card and tap **Send choice**: before sending, the computer checks that the terminal screen has not changed; if it has, the card reads it again and asks you to choose again. Nothing is resent on its own. Other prompts show the last lines of the terminal. **Handle in terminal** always switches to **Control**; check the operation and current selection before confirming.
 
 The computer and phone operate the same terminal dialog. Once either confirms it, the other sees the updated state. If the prompt is missing on the phone, handle it on the computer and report the phone's mode, Agent / extension versions, and a redacted recording.
+
+## Tablets and desktop browsers
+
+The window's width decides the layout; whether you point with a finger or a mouse decides how it handles. A landscape tablet and a laptop window of the same width get the same columns: the tablet keeps swipes, long-press and the keypad, the laptop gains hover actions and keyboard shortcuts.
+
+| Window width | Layout |
+| --- | --- |
+| Under 720px | Phone layout: one screen at a time, three tabs at the bottom |
+| 720–899px | Left rail + session. **Browse files and changes** and the board each take the full width, with back at the top left |
+| 900–1199px | Left rail + session. **Browse files and changes** opens in a column right of the session and the rail gives way; the session gets a back control at the top left with the count of other sessions that need you, and it closes the column and returns the list |
+| 1200px and up | Three columns: list, session, files and changes |
+
+A phone turned sideways keeps the phone layout below 900px, and **Terminal** always takes the whole screen on a phone.
+
+A session stays beside the list in every mode, **Terminal** included. With no session open, the main column lists the sessions that need you and offers **New session** and **Search or jump**.
+
+### The left rail
+
+Top to bottom:
+
+- The computer's name and connection status. It opens the **Computers** menu: switch computer, **Connection details**, **Add a computer**. Grouping and **＋** sit on the same row
+- **Search or jump…** searches sessions, workspaces and actions. With nothing typed, sessions waiting on you come first, and Enter opens the highlighted one. On macOS ⌘K opens it too; other systems have no shortcut, so click the field
+- The **Needs you** strip; one tap opens a session
+- The session list
+- **Board** and **Settings** at the bottom
+
+With a mouse, **＋** opens a menu of recent combinations whose last row, **New session**, opens the full create panel; with nothing recent it opens the panel directly. With a finger, a tap opens the panel and a long-press offers the recent combinations.
+
+### Mouse and keyboard
+
+- Hover a row in the list for **Pin** and **More**, plus **Read** on an unread finished session: the same buttons a swipe reveals
+- Right-click a row, a group heading, or a pane or tab on the board for its menu
+- Menus and panels open where you clicked, and dialogs are centered cards; a finger still gets bottom sheets
+- In **Control** the keypad folds behind **Keys** beside the compose field, a **Compose** / **Live** switch sits under the field, and terminal text can be selected by dragging
+
+With a hardware keyboard:
+
+| Key | What it does |
+| --- | --- |
+| F6 / Shift+F6 | Move between the list, the session, and files and changes |
+| ↑ / ↓ | Walk the rows while focus is in the list; → reaches a row's actions, ← comes back |
+| Esc | Closes the top-most menu, panel or dialog when one is open. With focus in files and changes it closes the open file or diff first, then the column. While the session holds the keyboard, Esc in **Control** and **Terminal** goes to the program |
+| PageUp / PageDown | Page the session |
+| ⌘K | **Search and jump**, macOS only |
+
+While the session holds the keyboard, typing goes straight into its compose field without a click. With focus in the list, in files and changes, or in any menu, keys are not sent to the session, so Ctrl+C over a diff copies and does not interrupt the agent beside it.
+
+- **Compose:** Enter sends, Shift+Enter adds a line, and Control chords such as Ctrl+C and Ctrl+D go to the program. Tab goes to the program while the field is empty and leaves the field once there is a draft; Shift+Tab always leaves the field
+- **Live:** every key goes to the program, Tab and Shift+Tab included; only F6 moves the keyboard out of the session
+- With terminal text selected, Ctrl+C copies and does not interrupt. On macOS copying is ⌘C, and Ctrl+C always goes to the program
+
+### Touch tablets
+
+A touch tablet keeps the phone's ways: swipes, long-press, bottom sheets and the keypad. Once a hardware keyboard is attached, the first physical key you press is recognized: Enter then sends, and the keys above work. When the on-screen keyboard comes up again, Return adds a line again.
 
 ## Files and changes
 
@@ -102,6 +160,15 @@ The folder control in the session chrome is not the Worktree menu. It opens this
 - A diff switches between **Staged** and **Working tree**, **Open file** shows the whole file, and **Previous** / **Next** at the bottom step through changed files
 - Tap a diff line to comment, then **Send to agent**
 - The branch list is read-only. Switch work with worktree actions
+
+In a window 900px or wider the folder control opens and closes a column right of the session without leaving it:
+
+- **Changes** comes before **Files** there; outside a Git repository there is only the file view
+- Opening a file or diff folds the list into the file's name at the top; click it to return to the list
+- A comment is written under its line. Esc sets it aside: what you typed waits under the line marked **Not saved**, and pressing it resumes; only **Cancel** discards it
+- **Send to agent** sends to the session beside it
+- **Open as a full page** is at the top right, next to closing the column. A window that gets too narrow puts the column away, and it comes back on the same file or diff with any half-written comment
+- In **Terminal**, opening or closing the column does not resize the terminal on the computer, and neither does a multi-line draft
 
 If the computer daemon cannot inspect the workspace, the page says so.
 
@@ -154,13 +221,13 @@ Open an attachment's **Preview** and tap **Info** for its size, saved path and h
 
 ## Actions that may appear on this view
 
-Tap the session chrome `···`. Missing items are not drawn. **Rename tab**, **Rename workspace**, **Close the whole tab**, and **Close this workspace** live on the list long-press menu, not here.
+Tap the session chrome `···`. Missing items are not drawn. **Rename tab**, **Rename workspace**, **Close tab**, and **Close workspace** live on the list long-press menu, not here. With a mouse the panel opens under `···`; with a finger it is a bottom sheet.
 
 | Group | May include |
 | --- | --- |
 | Mode | Auto, Control, Terminal (vim / TUI), Chat |
 | Tiles | Copy text, New tab, Split, Rename |
-| Input and display | Input: Compose / Live, Text size, Wrap long lines (Control), Width: Fit screen / 80 / 100 / 120 cols (Terminal). Not shown in Chat |
+| Input and display | Input: Compose / Live, Text size, Wrap long lines (Control), Width (columns): Fit / 80 / 100 / 120 (Terminal). Not shown in Chat |
 | Session | Layout (drag dividers to resize, long-press this pane to swap it, zoom), Worktree (list, new, open), Agent info, Close session |
 
 **Chat** puts a turn's thinking and tools in one step card. Its header leads with the result: waiting on you, which files changed, how many steps and how long. A failed step the agent worked past is only marked in the list; the header says so only when the turn stopped on one. It is open with the latest steps while the turn runs and one line afterwards; long turns can filter to failed or edited steps. Tap a step for its command or arguments and output, copy them, and move with **Previous** / **Next**. A finished answer has **Copy**, each code block its own **Copy code**. **Load earlier** pulls older turns when the thread is long.
@@ -169,19 +236,19 @@ The web surface does not offer arbitrary shell, deleting worktrees, or yanking t
 
 ## Settings
 
-Tap **Settings** at the bottom on a phone, or at the top of the left rail on a wide screen.
+Tap **Settings** at the bottom on a phone, or at the bottom of the left rail on a wide screen.
 
-- **Computer card:** the computer's name above a line from **This phone** to **Computer** that carries the current path and round-trip time (or **Not connected**). Tap the card for this computer's page, where **Network route** offers **Auto** / **P2P only** / **Relay only**: Auto prefers a direct path and falls back to the relay; P2P only keeps trying for a direct path and uses the relay meanwhile (tap it again to retry now); Relay only stays on the relay. The choice is remembered in this browser. That page also holds **Paired devices**, **Export connection diagnostics** and **Unpair this phone**. **Switch computer** opens **Computers**, where **Add a computer** starts another pairing without replacing the current one. On a phone, tapping the computer name at the top of the session list opens the same **Computers** choices; on a wide screen **Computers** appears in the left rail once more than one computer is paired
+- **Computer card:** the computer's name above a line from **This device** to **Computer** that carries the current path and round-trip time (or **Not connected**). Tap the card for this computer's page, where **Network route** offers **Auto** / **P2P only** / **Relay only**: Auto prefers a direct path and falls back to the relay; P2P only keeps trying for a direct path and uses the relay meanwhile (tap it again to retry now); Relay only stays on the relay. The choice is remembered in this browser. That page also holds **Paired devices**, **Export connection diagnostics** and **Unpair this device**. **Switch computer** opens **Computers**, where **Add a computer** starts another pairing without replacing the current one. Tapping the computer name at the top of the session list (the top of the left rail on a wide screen) also switches and adds computers
 - **Subscription quota:** allowance for accounts signed in on this computer (Codex, Claude Code, GitHub Copilot, Cursor, Grok, Antigravity). One row per service with a bar and the percentage left; **All quota** opens every window, with **Refresh quota** on that page. Missing or stale data is not shown as zero
 - **Language:** **Browser default**, or pin **中文** / **English**. This only changes Pairfob on this device. Docs have their own language menu in the top bar; both remember `pairfob_lang`
 - **Mode:** defaults to **Auto**, or can be pinned to **Control** / **Terminal** / **Chat**. A later switch is remembered per session
 - **Input:** whether new sessions start in Compose (write, then Send) or Live (type straight into the terminal). `···` → **Input and display** switches one session only
-- **Return key sends:** off by default, so the phone keyboard's Return adds a line and the send button sends; turn it on to send with Return. External keyboards always send with Enter and add a line with Shift+Enter
-- **Notifications:** see [Notifications](/push). Once enabled, this phone is notified when an Agent needs you or finishes; if the computer has not enabled push, the row says so and **How to enable** expands the setup steps
-- **Paired devices** (on the computer's page): label, online or offline, last used, and notification state. The current row is marked **This phone**. Other rows have **Unpair**; already unpaired rows are omitted
+- **Return key sends:** off by default, so the on-screen keyboard's Return adds a line and the send button sends; turn it on to send with Return. External keyboards always send with Enter and add a line with Shift+Enter; in a desktop browser with a mouse, or on a tablet with a hardware keyboard, the row reads **On-screen Return sends**
+- **Notifications:** see [Notifications](/push). Once enabled, this device is notified when an Agent needs you or finishes; if the computer has not enabled push, the row says so and **How to enable** expands the setup steps
+- **Paired devices** (on the computer's page): label, online or offline, last used, and notification state. The current row is marked **This device**. Other rows have **Unpair**; already unpaired rows are omitted
 - **Export connection diagnostics** (on the computer's page, under **Diagnostics**): export recent connection events when something goes wrong; see the [FAQ](/faq)
 - **Computer update:** a reminder on the list, and **Check for updates** / **Update computer** on the **Computer version** row in Settings when the user service can do it. Confirming briefly disconnects, then reconnects. Never automatic. Command-line: [CLI](/cli)
-- **Unpair this phone:** at the bottom of the computer's page. Pairing is required to connect again
+- **Unpair this device:** at the bottom of the computer's page. Pairing is required to connect again
 
 A lost phone that can still open Pairfob can also unpair other devices from Settings. `pairfob forget` that phone on the computer immediately — [Multiple devices](/devices).
 
@@ -209,7 +276,7 @@ Current limits:
 
 ## Another window
 
-If another browser window of the same paired device opens Pairfob, the old window may say **Another window took over this phone**. Keep a single open page.
+If another browser window of the same paired device opens Pairfob, the old window may say **Another window took over this device's connection**. Keep a single open page.
 
 ## Add to Home Screen
 

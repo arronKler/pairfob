@@ -95,7 +95,7 @@ const zhSidebar: DefaultTheme.Sidebar = [
     text: "使用",
     items: [
       { text: "配对", link: "/zh/pair" },
-      { text: "手机上怎么用", link: "/zh/app" },
+      { text: "界面怎么用", link: "/zh/app" },
       { text: "出门和回来", link: "/zh/continue" },
       { text: "电脑上的命令", link: "/zh/cli" },
       { text: "多台设备", link: "/zh/devices" },

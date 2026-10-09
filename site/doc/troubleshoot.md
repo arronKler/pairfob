@@ -24,17 +24,19 @@ Match the English Pairfob string on screen:
 | You see | Do this first |
 | --- | --- |
 | The computer is offline | Sleep, a closed lid, a dropped network, or `pairfob` not running. Wake the computer; you do not pair again. Then `pairfob doctor` |
+| Offline · last connected: … / Can't reach … (the page title on a wide screen) | The only paired computer, or pairfob.com, cannot be reached. Follow the steps on the page; it retries by itself and you do not pair again |
 | Herdr isn't running on the computer | The machine is up, but Herdr quit. Open Herdr; Pairfob recovers automatically |
 | No sessions on … yet | Connected, but there is no session yet — create one or open a terminal on the computer |
 | Enter the full pairing code shown on the computer | Hand entry is 8+6 glyphs |
-| The pairing code is not complete: 14 glyphs needed | Include the locator |
+| The pairing code is not complete: 14 characters needed | Include the locator |
+| The pairing code is too long: it should have 14 characters | Keep only the 14 the computer shows |
 | That pairing code is spent or expired | `pairfob pair` again on the computer |
 | That pairing code is incorrect | Use the code being printed now; do not edit the old one |
 | Too many attempts | Wait; do not loop |
 | This Herdr version cannot do that yet | Computer Herdr, not a missing phone button |
 | The computer may already have run that action | Do not double-tap; look at the frame |
 | That session is gone | Back to the list |
-| Another window took over this phone | Keep a single Pairfob page |
+| Another window took over this device's connection | Keep a single Pairfob page |
 | Could not read site config / Could not reach this site | Network or wrong page |
 | Another computer started pairing | Slot stolen; `pair` on the computer you mean |
 | P2P is temporarily unavailable. Relay remains active | Direct path failed; the session stayed on Relay. To stop retries, set Network route to **Relay only** |
@@ -78,7 +80,7 @@ Match the English Pairfob string on screen:
 
 ## Connected but cannot act
 
-- Still on the scan page means not paired
+- Still on the pairing page means not paired
 - If Herdr quit, an open session fails; open Herdr first
 - Missing buttons: upgrade and restart the **running** Herdr
 - Path rejected: outside the directories the computer allows
