@@ -108,5 +108,5 @@ function openSwitchSheet(others: readonly PairResult[]): void {
         <MenuChoice key={pair.daemonId} modal={modal} title={computerTitle(pair)} action={() => void resumeComputer(pair)} />
       ))}
     </>
-  ));
+  ), { popover: "menu" });
 }

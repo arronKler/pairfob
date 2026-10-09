@@ -6,10 +6,11 @@ import { commitView } from "../src/app/host";
 import { mountApp, unmountApp, isAppMounted } from "../src/app/mount";
 import { registerSessionOwnerPreparer, sessionOwnerPreparer } from "../src/app/frame";
 import { registerSessionView } from "../src/features/session/register";
-import { bindVisualViewport, applyVisualViewport } from "../src/app/viewport";
+import { bindVisualViewport, applyVisualViewport, DESK_QUERY, ROOMY_QUERY, WIDE_QUERY } from "../src/app/viewport";
 import { initSwipeBack } from "../src/features/session/pane-actions";
 import { dropQueuedKeys } from "../src/features/session/guided/keys";
-import { handlePaneKey } from "../src/features/session/guided/compose";
+import { bindPaneKeys } from "../src/app/pane-keys";
+import { bindOverlayOrigin } from "../src/shared/ui/overlay";
 import { revealCaretRow, stickBottom } from "../src/features/session/guided/term";
 import { refreshAgentTrace, stickAgentStream } from "../src/features/session/chat/agent-chat-controller";
 import { guidedScrollController } from "../src/features/session/guided/guided-scroll";
@@ -20,7 +21,7 @@ import { releaseBoardScroll } from "../src/pages/board/pane-scroll";
 import { phase, setNetworkOnline } from "../src/features/connection/connection-store";
 import { currentScreen } from "../src/app/navigation-store";
 import { isAgentChat, isFullTerminal, paneFollow, termSelect } from "../src/features/session/session-store";
-import { scenes, resetFixtureBaseline, applyScene, afterScenePaint, sceneSource } from "./scenes";
+import { scenes, resetFixtureBaseline, applyScene, afterScenePaint, sceneSource, terminalSceneReadiness } from "./scenes";
 import { createSession, type FixtureSession } from "./session";
 import { renderTerminalShell, disposeTerminalShell } from "./terminal-shell";
 import { calls, errors, record, settlePaint } from "./environment";
@@ -41,7 +42,7 @@ import type { FixtureAPI, FixtureRect, FixtureSnapshot, FixtureTerminalFrame, Fi
  * scenes or reloading never accumulates handlers.
  */
 
-const RECT_SELECTORS = ["#app", ".page", ".boot", ".chrome", ".rail", ".main", ".pane-root", ".term-wrap", ".term", ".dock",
+const RECT_SELECTORS = ["#app", ".page", ".boot", ".chrome", ".rail", ".main", ".workspace-inspector", ".pane-root", ".term-wrap", ".term", ".dock",
   ".keys", ".agent-stream", ".agent-dock", ".workspace-shell", ".workspace-nav", ".workspace-main", ".workspace-diff",
   ".board-viewport", ".board-stage", ".board-pane", ".full-terminal-host", ".full-terminal-pad", "dialog[open]"];
 const nodeIds = new WeakMap<Node, number>();
@@ -70,17 +71,18 @@ export async function createFixtureAPI(language: "zh" | "en", initialScene: stri
   const onVisibility = () => handleFullTerminalVisibility(document.visibilityState === "hidden");
   document.addEventListener("visibilitychange", onVisibility);
   stops.push(() => document.removeEventListener("visibilitychange", onVisibility));
-  const onKey = (event: KeyboardEvent) => {
-    if (phase() !== "live" || currentScreen() !== "pane" || termSelect() || isFullTerminal() || isAgentChat() || event.defaultPrevented) return;
-    if (event.target instanceof HTMLElement && event.target.closest("button, a, input, textarea, select, summary, dialog, [role='button'], [contenteditable='true']")) return;
-    handlePaneKey(event, false);
-  };
-  document.addEventListener("keydown", onKey);
-  stops.push(() => document.removeEventListener("keydown", onKey));
-  const media = window.matchMedia("(min-width: 900px)");
-  const onDeskChange = () => { if (phase() === "live") commitView(); };
-  media.addEventListener("change", onDeskChange);
-  stops.push(() => media.removeEventListener("change", onDeskChange));
+  // The production key routing and overlay-origin bindings, so focus zones,
+  // anchored menus and the palette shortcut behave here as they do in the app.
+  const keys = new AbortController();
+  bindPaneKeys(keys.signal);
+  stops.push(() => keys.abort());
+  stops.push(bindOverlayOrigin(document));
+  const onTierChange = () => { if (phase() === "live") commitView(); };
+  for (const query of [DESK_QUERY, ROOMY_QUERY, WIDE_QUERY]) {
+    const media = window.matchMedia(query);
+    media.addEventListener("change", onTierChange);
+    stops.push(() => media.removeEventListener("change", onTierChange));
+  }
   stops.push(bindVisualViewport(() => {
     if (phase() !== "live" || currentScreen() !== "pane" || isFullTerminal()) return;
     requestAnimationFrame(() => {
@@ -146,6 +148,21 @@ export async function createFixtureAPI(language: "zh" | "en", initialScene: stri
     throw new Error(`QA terminal scene "${name}" did not reach stage "${expected}" with a TerminalOpen call within the bounded wait (stage=${getFullTerminalView().stage})`);
   };
 
+  const waitForTerminalScreen = async (name: string): Promise<void> => {
+    // The computer's screen has arrived and the grid has stopped moving: a
+    // resize the renderer asks for after opening is answered with the screen
+    // redrawn, so the count holding still across two paints is the last one.
+    let seen = -1;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const sent = session.terminalFrames();
+      if (sent > 0 && sent === seen) return;
+      seen = sent;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await settlePaint();
+    }
+    throw new Error(`QA terminal scene "${name}" never received a settled screen (frames=${session.terminalFrames()})`);
+  };
+
   const select = async (name: string): Promise<FixtureSnapshot> => {
     if (!scenes.some((scene) => scene.name === name)) throw new Error(`Unknown QA scene: ${name}`);
     preparing = true;
@@ -159,10 +176,13 @@ export async function createFixtureAPI(language: "zh" | "en", initialScene: stri
     resetTelemetry();
     // Promise dialogs own detached roots and are removed here; a dialog whose
     // open state lives in a domain (data-state-portal) is only closed — the
-    // domain reset below unmounts it through React.
+    // domain reset below unmounts it through React. A React modal (a sheet, a
+    // menu, search and jump) is only closed as well: its own close handler
+    // unmounts the portal, and removing the node from under React would make
+    // that unmount throw.
     for (const dialog of document.querySelectorAll("dialog")) {
       if (dialog.open) dialog.close();
-      if (!dialog.hasAttribute("data-state-portal")) dialog.remove();
+      if (!dialog.hasAttribute("data-state-portal") && !dialog.hasAttribute("data-react-modal")) dialog.remove();
     }
     // A deliberate complete-fixture remount boundary: retire whichever fixture
     // owned the PREVIOUS scene before installing this one. The standalone shell
@@ -194,12 +214,15 @@ export async function createFixtureAPI(language: "zh" | "en", initialScene: stri
     await settlePaint();
     afterScenePaint(name);
     await settlePaint();
-    // QA readiness for the two real-engine terminal scenes must mean the actual
+    // QA readiness for the real-engine terminal scenes must mean the actual
     // live/error stage and its TerminalOpen RPC have landed, never a paused
-    // loader frame. The deliberate shellOnly scenes already render their final
-    // state through their own fixture and are not gated here.
-    if (name === "terminal-live" || name === "terminal-open-error") {
-      await waitForTerminalScene(name, name === "terminal-live" ? "live" : "error");
+    // loader frame, and for a scene with a screen that the screen is drawn. The
+    // deliberate shellOnly scenes already render their final state through
+    // their own fixture and are not gated here.
+    const terminal = terminalSceneReadiness(name);
+    if (terminal) {
+      await waitForTerminalScene(name, terminal.stage);
+      if (terminal.screen) await waitForTerminalScreen(name);
     }
     ready = true;
     document.documentElement.dataset.qaReady = "true";

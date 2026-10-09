@@ -14,6 +14,7 @@ import { withModifiers } from "../keypad/keypad";
 import { discard, predictKeys } from "./echo";
 import { flyKeyToCursor } from "./key-flight";
 import { bindPadPress } from "../keypad/key-press";
+import { liveOrder, registerLivePath } from "./live-order";
 
 export { REPEAT_DELAY_MS, REPEAT_EVERY_MS } from "../keypad/key-press";
 
@@ -83,6 +84,32 @@ function beginPagePending(paneId: string, direction: "up" | "down"): () => void 
 }
 
 /**
+ * Keys are one of the paths a guided session is typed on (`live-order`): a key
+ * must not be written before a character typed ahead of it, nor a character
+ * before a key this queue is still holding.
+ */
+const writtenWaiters: Array<() => void> = [];
+
+function resolveWritten(): void {
+  if (pending.length) return;
+  for (const resolve of writtenWaiters.splice(0)) resolve();
+}
+
+registerLivePath("keys", {
+  unsent: () => pending.length > 0,
+  written: () => pending.length ? new Promise<void>((resolve) => writtenWaiters.push(resolve)) : Promise.resolve(),
+});
+
+/** Run `send` for the pane the key was pressed for, in its turn; a pane that changed meanwhile gets nothing. */
+function inTurn(send: () => void): void {
+  const session = liveSession();
+  const paneId = openPaneId();
+  liveOrder.submit("keys", () => {
+    if (liveSession() === session && openPaneId() === paneId) send();
+  });
+}
+
+/**
  * Held arrow keys would otherwise be one RPC round trip and one full pane read
  * per repeat. Coalesce into a single SendKeys so the runtime sees the same key
  * order the thumb produced. The queue is bound to the pane it was typed for so
@@ -90,8 +117,13 @@ function beginPagePending(paneId: string, direction: "up" | "down"): () => void 
  */
 export function queueKey(key: string, source?: HTMLElement | null): void {
   if (!liveSession() || !openPaneId()) return;
+  // The modifiers armed when the key was pressed, not when its turn comes.
   const mapped = withModifiers(key);
   if (!mapped.length) return;
+  inTurn(() => writeKeys(mapped, source));
+}
+
+function writeKeys(mapped: string[], source?: HTMLElement | null): void {
   if (pendingPane && (pendingPane !== openPaneId() || pendingSession !== liveSession())) dropQueuedKeys();
   const wasEmpty = pending.length === 0;
   pendingPane = openPaneId();
@@ -149,6 +181,8 @@ export function flushKeys(): Promise<void> {
         let count = 1;
         while (count < Math.min(pending.length, MAX_BATCH) && requiresTerminalText(pending[count]) === raw) count++;
         const keys = pending.splice(0, count);
+        // The batch is written below in this same turn: what waited for it may follow.
+        resolveWritten();
         const mutationStartedAt = nowMs();
         // Start the ordered read behind the write without another network round trip.
         const mutation = raw
@@ -180,6 +214,7 @@ export function dropQueuedKeys(): void {
   pendingSession = null;
   pending = [];
   pendingPane = "";
+  resolveWritten();
   // Keys that were never sent must not keep showing as if they had been.
   discard();
   if (batchTimer !== null) {
@@ -192,6 +227,10 @@ export function dropQueuedKeys(): void {
 export function queueRepeats(key: string, count: number, source?: HTMLElement | null): void {
   const mapped = withModifiers(key);
   if (!mapped.length) return;
+  inTurn(() => writeRepeats(mapped, count, source));
+}
+
+function writeRepeats(mapped: string[], count: number, source?: HTMLElement | null): void {
   const n = Math.min(Math.max(count, 1), MAX_BATCH);
   for (let i = 0; i < n; i++) {
     if (!liveSession() || !openPaneId()) return;
@@ -208,6 +247,31 @@ export function queueRepeats(key: string, count: number, source?: HTMLElement | 
   }
 }
 
+/** What a page key's turn did: nothing (the pane was left), or the write and what the screen read before it. */
+type PageWrite = {
+  baselineHash: string;
+  baselineText: string;
+  startedAt: number;
+  mutation: Promise<unknown>;
+  initialRead: ReturnType<typeof requestPaneRefresh> | null;
+};
+
+/**
+ * A page key's turn in the session's order (`live-order`). It writes directly,
+ * so it waits for what was typed and pressed before it, and what is typed after
+ * it waits until it has written: a PageUp pressed between two characters stays
+ * between them. Undefined when the turn never came (the pane changed).
+ */
+function pageTurn(write: () => PageWrite | null): Promise<PageWrite | null | undefined> {
+  return new Promise((resolve) => {
+    liveOrder.submit(null, async () => {
+      // Keys already queued are acknowledged first, as they always were before a page.
+      await flushKeys().catch(() => undefined);
+      resolve(write());
+    }, () => resolve(undefined));
+  });
+}
+
 /**
  * Herdr pane.send_keys rejects pageup/pagedown (host scrollback owns them).
  * Write the xterm CSI sequence into the PTY instead so alt-screen TUIs page.
@@ -222,8 +286,26 @@ export async function sendPage(direction: "up" | "down"): Promise<void> {
   let mutationStartedAt: number | null = null;
   let mutationAckAt: number | null = null;
   try {
-    await flushKeys();
-    if (liveSession() !== session || openPaneId() !== paneId || currentScreen() !== "pane" || isFullTerminal()) {
+    const written = await pageTurn(() => {
+      if (liveSession() !== session || openPaneId() !== paneId || currentScreen() !== "pane" || isFullTerminal()) return null;
+      const baselineHash = livePaneHash();
+      const baselineText = livePaneText();
+      const startedAt = nowMs();
+      let initialRead: PageWrite["initialRead"] = null;
+      let mutation: Promise<unknown>;
+      try {
+        // The browser sends these frames in order and the daemon drains each
+        // session's RPC queue serially. Start the read immediately behind the
+        // mutation so a high-latency connection pays one round trip, while the
+        // hash confirmation below still catches a stale runtime snapshot.
+        mutation = session.sendText(paneId, direction === "up" ? "\u001b[5~" : "\u001b[6~");
+        initialRead = requestPaneRefresh({ notBefore: startedAt, postponeFallback: true });
+      } catch (error) {
+        mutation = Promise.reject(error);
+      }
+      return { baselineHash, baselineText, startedAt, mutation, initialRead };
+    });
+    if (!written) {
       const finishedAt = nowMs();
       publishPanePagePerf({
         direction, result: "cancelled", attempts: 0,
@@ -233,18 +315,10 @@ export async function sendPage(direction: "up" | "down"): Promise<void> {
       });
       return;
     }
-    const baselineHash = livePaneHash();
-    const baselineText = livePaneText();
-    mutationStartedAt = nowMs();
-    let initialRead: ReturnType<typeof requestPaneRefresh> | null = null;
+    const { baselineHash, baselineText, initialRead } = written;
+    mutationStartedAt = written.startedAt;
     try {
-      // The browser sends these frames in order and the daemon drains each
-      // session's RPC queue serially. Start the read immediately behind the
-      // mutation so a high-latency connection pays one round trip, while the
-      // hash confirmation below still catches a stale runtime snapshot.
-      const mutation = session.sendText(paneId, direction === "up" ? "\u001b[5~" : "\u001b[6~");
-      initialRead = requestPaneRefresh({ notBefore: mutationStartedAt, postponeFallback: true });
-      await mutation;
+      await written.mutation;
     } catch (error) {
       void initialRead?.catch(() => undefined);
       const finishedAt = nowMs();

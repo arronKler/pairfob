@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { t } from "../../lib/i18n";
-import { fitOperationPrompt, type CreateConversationInput, type CreateTabInput, type CreateWorktreeInput,
-  type LayoutDirection, type OpenWorktreeInput, type SplitDirection, type SplitPaneInput, type WorktreeDraft } from "../../lib/operations";
-import { accepted, loadLastAgentKind, openWorktreeTargetError, readAgentKind, rejected, type FormResult } from "./operation-form-model";
+import { fitOperationPrompt, type CreateConversationInput, type CreateTabInput, type LayoutDirection, type SplitDirection,
+  type SplitPaneInput } from "../../lib/operations";
+import { accepted, loadLastAgentKind, readAgentKind, rejected, type FormResult } from "./operation-form-model";
 import { formDialog, OperationField, OperationPrompt, OperationSelect } from "./operation-form";
 
 function AgentKindField({ kinds }: { kinds: string[] }) {
@@ -96,34 +96,6 @@ export function askAgentPrompt(): Promise<string | null> {
     if (fitOperationPrompt(text).truncated) return rejected(t("form.taskTooBig"), "text");
     return accepted(text);
   });
-}
-
-export function askWorktree(kind: "create", defaults: WorktreeDraft): Promise<CreateWorktreeInput | null>;
-export function askWorktree(kind: "open", defaults: WorktreeDraft): Promise<OpenWorktreeInput | null>;
-export function askWorktree(kind: "create" | "open", defaults: WorktreeDraft): Promise<CreateWorktreeInput | OpenWorktreeInput | null> {
-  return formDialog(kind === "create" ? t("form.newWorktree") : t("form.openWorktree"),
-    kind === "create" ? t("form.create") : t("open"), <>
-      <OperationField label={kind === "open" ? t("form.pathEither") : t("form.pathOptional")} name="path" value={defaults.path || ""} />
-      <OperationField label={kind === "open" ? t("form.branchEither") : t("form.branchOptional")} name="branch" value={defaults.branch || ""} />
-      {kind === "create" && <OperationField label={t("form.baseOptional")} name="base" value={(defaults as Partial<CreateWorktreeInput>).base || ""} />}
-      <OperationField label={t("form.labelOptional")} name="label" value={defaults.label || ""} />
-      {kind === "create" && <p className="operation-hint">{t("form.worktreeBlank")}</p>}
-      <p className="operation-hint">{defaults.cwd ? t("form.repoCwd", { cwd: defaults.cwd }) : t("form.currentWorkspace")}</p>
-    </>, data => {
-      const value: CreateWorktreeInput = { ...defaults };
-      for (const key of ["path", "branch", "base", "label"] as const) {
-        const text = String(data.get(key) || "").trim();
-        if (text) value[key] = text;
-        else delete value[key];
-      }
-      if (kind === "open") {
-        const error = openWorktreeTargetError(value.path || "", value.branch || "");
-        if (error) return rejected(error, value.path ? "branch" : "path");
-        delete value.base;
-        return accepted(value as OpenWorktreeInput);
-      }
-      return accepted(value);
-    });
 }
 
 export type LayoutChoice = { kind: "resize"; direction: LayoutDirection; amount: number } | { kind: "swap"; direction: LayoutDirection };

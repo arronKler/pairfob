@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   checkDaemonRelease,
@@ -89,7 +90,7 @@ function UpdateCommand() {
 export function ManualUpdateHelp({ inline = false }: { inline?: boolean }) {
   return (
     <details className={inline ? "set-item-block daemon-update-help" : "set-card daemon-update-help"}>
-      <summary>{t("update.helpTitle")}</summary>
+      <summary>{t("update.helpTitle")}<ChevronDown className="set-disclosure" size={14} aria-hidden="true" /></summary>
       <p className="set-note">{t("update.helpBody")}</p>
       <UpdateCommand />
     </details>

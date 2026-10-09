@@ -1,13 +1,14 @@
-import { Monitor, Smartphone } from "lucide-react";
+import { Monitor } from "lucide-react";
 import type { ReactNode } from "react";
 import type { HerdStatus } from "../../features/connection/herd-status";
 import { settingsNetworkP2PFail, settingsNetworkPath, type SettingsNetworkInput } from "../../features/settings/model";
+import { ThisDeviceIcon } from "../../features/settings/this-device";
 import { t } from "../../lib/i18n";
 import { Button, Chevron } from "../../shared/ui/primitives";
 
 /**
  * The computer panel shared by the overview and the computer page: the
- * computer's name over a live link from this phone to it. The line itself is
+ * computer's name over a live link from this device to it. The line itself is
  * the status — solid for a direct P2P path, dashed through the relay, broken
  * while offline, quiet while the first read is pending — and the path with its
  * round trip sits on the line. Both pages place the panel at the same height,
@@ -19,7 +20,7 @@ export type LinkState = { wire: LinkWire; chip: string; note: string | null; not
 
 /**
  * Project the published session state onto the link. The wire follows the
- * transport (is this phone talking to the computer, and how); what the
+ * transport (is this device talking to the computer, and how); what the
  * computer's runtime reports — Herdr unverified, still reading — and a failed
  * P2P attempt read as a note under it.
  */
@@ -41,7 +42,7 @@ export function linkState(status: HerdStatus, network: SettingsNetworkInput, con
 
 function Link({ link }: { link: LinkState }) {
   return <span className="cp-link" role="img" aria-label={t("set.linkAria", { path: link.chip })}>
-    <span className="cp-node"><span className="cp-node-mark"><Smartphone size={20} aria-hidden="true" /></span>{t("set.linkPhone")}</span>
+    <span className="cp-node"><span className="cp-node-mark"><ThisDeviceIcon size={20} /></span>{t("set.linkPhone")}</span>
     <span className={`cp-wire is-${link.wire}`}><span className="cp-chip">{link.chip}</span></span>
     <span className="cp-node is-end"><span className="cp-node-mark"><Monitor size={20} aria-hidden="true" /></span>{t("set.linkComputer")}</span>
   </span>;

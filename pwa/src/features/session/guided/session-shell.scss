@@ -1,3 +1,5 @@
+@use "../../../shared/ui/styles/notice";
+
 /* --- Session shell: fixed pane frame and its title bar -------------------------- */
 
 /*
@@ -250,4 +252,49 @@ html[data-kb="open"] .chrome-avatar .agent-avatar {
 .pane-root > .notice {
   flex: none;
   margin: 8px 10px 0;
+}
+
+/*
+  A notice that leaves by itself floats (session-notice.tsx). Its anchor is a
+  flex item of no height in the place the notice used to push the page down
+  from, so the notice hangs under the header, whatever height the header has
+  with the safe area, and nothing under it is laid out again when it comes or
+  goes: no line moves and the buffer keeps its box. It is a line of text with
+  nothing to press, so presses go through it to what it covers.
+*/
+.session-notice {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  height: 0;
+  pointer-events: none;
+}
+
+/* The same box the notice has in the page, on a ground of its own: what it
+   floats over must not read through its tint. */
+.session-notice > .notice {
+  margin: 8px 10px 0;
+  box-shadow: var(--shadow-1);
+  animation: session-notice-in var(--dur-2) var(--ease);
+}
+
+.session-notice > .notice-error { background: linear-gradient(notice.$error-tint, notice.$error-tint), var(--surface); }
+
+.session-notice > .notice-status { background: linear-gradient(notice.$status-tint, notice.$status-tint), var(--surface); }
+
+@keyframes session-notice-in {
+  from { opacity: 0; transform: translateY(-4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-notice > .notice { animation: none; }
+}
+
+/* --- Wide layout --------------------------------------------------------------------- */
+
+/* Beside the list the files button opens and closes the inspector; it stays
+   lit while that column is open. Same place, same icon. */
+#app.desk .icon-workspace[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
 }

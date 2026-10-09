@@ -78,6 +78,8 @@ test("dropping a lifted tile on a neighbour swaps toward it; elsewhere it falls 
   rig.pointer("pointerdown");
   await hold();
   rig.pointer("pointermove", { clientX: 150 });
+  // Dragged: a release is no longer the menu, and the tab row's hint follows this mark.
+  expect(rig.tiles[0].dataset.boardLift).toBe("moved");
   expect(rig.tiles[1].dataset.boardDropOver).toBe("");
   expect(rig.tiles[0].style.getPropertyValue("--board-lift-x")).toBe("110px");
   rig.pointer("pointerup", { clientX: 150 });
@@ -90,6 +92,28 @@ test("dropping a lifted tile on a neighbour swaps toward it; elsewhere it falls 
   miss.pointer("pointerup", { clientX: 40, clientY: 400 });
   expect(miss.calls).toMatchObject({ menus: [], swaps: [] });
   expect(miss.tiles[0].dataset.boardLift).toBeUndefined();
+});
+
+test("a lifted tile's release never taps: not the menu it opens in place, not the pane it is dropped on", async () => {
+  const touchEnd = (target: Element) => {
+    const event = new TouchEvent("touchend", { bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const inPlace = setup();
+  inPlace.pointer("pointerdown");
+  await hold();
+  inPlace.pointer("pointerup");
+  expect(inPlace.calls.menus).toEqual(["p1"]);
+  expect(touchEnd(inPlace.tiles[0])).toBe(true);
+
+  const dropped = setup();
+  dropped.pointer("pointerdown");
+  await hold();
+  dropped.pointer("pointermove", { clientX: 150 });
+  dropped.pointer("pointerup", { clientX: 150 });
+  expect(touchEnd(dropped.tiles[0])).toBe(true);
+  expect(dropped.calls).toMatchObject({ menus: [], swaps: [["p1", "right"]], opens: 0 });
 });
 
 test("without a swap port, or while swapping is refused, a long press is the menu as before", async () => {

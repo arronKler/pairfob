@@ -1,5 +1,5 @@
 import { liveSession } from "../../computers/catalog-store";
-import { openPaneId, paneFollow, setPaneFollow, setPaneRow, setTermSelect, termSelect } from "../session-store";
+import { openPaneId, paneFollow, paneRow, setPaneFollow, setPaneRow, setTermSelect, termSelect } from "../session-store";
 import { prefersReducedMotion } from "../../../lib/dom";
 import { isPageZoomed } from "../../../lib/gesture-boundary";
 import { TERMINAL_MAX_COLS, TERMINAL_MAX_ROWS, TERMINAL_MIN_COLS, TERMINAL_MIN_ROWS } from "../../../lib/protocol/terminal";
@@ -8,8 +8,10 @@ import { commitView } from "../../../app/host";
 import { clampTermFont, saveTermFont, setTermFontPx, setTermWrap, termFontPx, termLineHeightPx, termWrap } from "../../settings/preferences-store";
 import { appRoot } from "../../../app/dom-root";
 import { haptic } from "../../../lib/dom";
+import { deskPointer } from "../desk-pointer";
 
 import { guidedScrollController } from "./guided-scroll";
+import { liveOrder } from "./live-order";
 import { pageLineCount } from "../full-terminal/full-terminal-scroll";
 import { sendPage } from "./keys";
 import { paneModel, type PaneModel } from "./pane-model";
@@ -24,6 +26,8 @@ const JUMP_OUT_MS = 220;
 let jumpTimer = 0;
 let jumpLeaving = false;
 let frozenDisplay: { session: ReturnType<typeof liveSession>; paneId: string; model: PaneModel } | null = null;
+/** Text dragged out of the buffer with a mouse is selected right now (no select mode). */
+let dragSelection = false;
 let termDisplayRevision = 0;
 const termDisplayListeners = new Set<() => void>();
 
@@ -56,11 +60,12 @@ export function cancelTermJump(): void {
 /**
  * Rows shown in the terminal. While term selection is on, this is the model
  * captured when selection started so a React root repaint cannot replace row
- * nodes under an in-progress DOM Range.
+ * nodes under an in-progress DOM Range. A mouse selection holds the rows the
+ * same way without entering the mode.
  */
 export function displayedTermModel(live: PaneModel): PaneModel {
   const paneId = openPaneId();
-  if (!termSelect()) {
+  if (!termSelect() && !dragSelection) {
     frozenDisplay = null;
     return live;
   }
@@ -72,6 +77,92 @@ export function displayedTermModel(live: PaneModel): PaneModel {
 export function termElement(): HTMLElement | null {
   // Resolved at call time: importing this controller must not require #app.
   return appRoot().querySelector(".term");
+}
+
+/** Whether a selection the reader made starts or ends inside the buffer. */
+export function termHasSelection(): boolean {
+  const term = termElement();
+  const selection = term?.ownerDocument.getSelection();
+  if (!term || !selection || selection.isCollapsed) return false;
+  return term.contains(selection.anchorNode) || term.contains(selection.focusNode);
+}
+
+/**
+ * The selected text as terminal rows: one line per row. A row is a strip of
+ * styled cells laid out as blocks, so the browser's own copy would put every
+ * colour run on a line of its own.
+ */
+export function selectedTermText(term: HTMLElement, range: Range): string {
+  const lines: string[] = [];
+  for (const row of term.querySelectorAll<HTMLElement>(".term-line")) {
+    if (!range.intersectsNode(row)) continue;
+    const part = range.cloneRange();
+    if (!row.contains(range.startContainer)) part.setStart(row, 0);
+    if (!row.contains(range.endContainer)) part.setEnd(row, row.childNodes.length);
+    lines.push(part.toString().replace(/\u00a0/g, " ").trimEnd());
+  }
+  return lines.join("\n");
+}
+
+/** A mouse selection is holding the rows still; snapshots wait as they do in select mode. */
+export function termDragSelecting(): boolean {
+  return dragSelection;
+}
+
+/**
+ * Let a mouse drag text straight out of the buffer. A repaint would collapse the
+ * range, so the rows hold while anything in them is selected and catch up the
+ * moment the selection goes. Typing in a field ends it: the reader has moved on,
+ * and some engines would otherwise keep both selections alive. Copying writes
+ * the rows as lines.
+ *
+ * A selection and the row actions are never up together. The first click of a
+ * double-click is a row tap like any other and opens them; the word the second
+ * click selects is what the reader was after, so they step aside for it, as
+ * they do when select mode starts.
+ */
+export function bindDragSelection(term: HTMLElement): () => void {
+  const doc = term.ownerDocument;
+  const release = (): void => {
+    dragSelection = false;
+    frozenDisplay = null;
+  };
+  const sync = (): void => {
+    const selecting = !termSelect() && termHasSelection();
+    if (selecting === dragSelection) return;
+    if (selecting) {
+      dragSelection = true;
+      // Capture what is on screen now; the next snapshot must not get there first.
+      displayedTermModel(paneModel());
+      if (paneRow() !== null) {
+        setPaneRow(null);
+        commitView();
+      }
+      return;
+    }
+    release();
+    commitView();
+  };
+  const onFocusIn = (event: Event): void => {
+    if (dragSelection && event.target instanceof HTMLElement && event.target.matches("input, textarea")) {
+      doc.getSelection()?.removeAllRanges();
+    }
+  };
+  const onCopy = (event: ClipboardEvent): void => {
+    const picked = doc.getSelection();
+    if (!event.clipboardData || !picked?.rangeCount || !termHasSelection()) return;
+    event.clipboardData.setData("text/plain", selectedTermText(term, picked.getRangeAt(0)));
+    event.preventDefault();
+  };
+  doc.addEventListener("selectionchange", sync);
+  doc.addEventListener("focusin", onFocusIn);
+  doc.addEventListener("copy", onCopy);
+  return () => {
+    doc.removeEventListener("selectionchange", sync);
+    doc.removeEventListener("focusin", onFocusIn);
+    doc.removeEventListener("copy", onCopy);
+    release();
+  };
 }
 
 export function atBottom(term: HTMLElement): boolean {
@@ -156,8 +247,12 @@ export function sendGuidedTuiScroll(direction: "up" | "down", lines = 1, source:
     Math.max(TERMINAL_MIN_ROWS, Math.round((term?.clientHeight || 320) / Math.max(1, termLineHeightPx(termFontPx())))),
   );
   haptic(4);
-  void guidedScrollController.scroll({ session, paneId, cols, rows }, direction, lines).catch((error) => {
-    void reportMutationError(session, error);
+  // In its turn among what was typed before it; a pane left meanwhile gets nothing.
+  liveOrder.submit("wheel", () => {
+    if (liveSession() !== session || openPaneId() !== paneId) return;
+    void guidedScrollController.scroll({ session, paneId, cols, rows }, direction, lines).catch((error) => {
+      void reportMutationError(session, error);
+    });
   });
 }
 
@@ -213,6 +308,9 @@ function dismissKeyboard(doc: Document): void {
   if (active instanceof HTMLElement && active !== doc.body) active.blur();
 }
 
+/** Where a row was pressed and with what: a mouse gets its actions beside the pointer. */
+export type RowPress = { x: number; mouse: boolean };
+
 /**
  * A short tap on a row reports it (the floating row actions); a tap on blank
  * space reports -1. While the soft keyboard is up, the first tap only puts it
@@ -220,7 +318,7 @@ function dismissKeyboard(doc: Document): void {
  * reported separately, and a drag is a pan, not a tap. Terminal rows never
  * invent controls from text.
  */
-export function bindTap(term: HTMLElement, onRow: (index: number) => void, gestures?: TermGestures): () => void {
+export function bindTap(term: HTMLElement, onRow: (index: number, at?: RowPress) => void, gestures?: TermGestures): () => void {
   let startX = 0;
   let startY = 0;
   let armed = false;
@@ -251,11 +349,13 @@ export function bindTap(term: HTMLElement, onRow: (index: number) => void, gestu
     startX = event.clientX;
     startY = event.clientY;
     const index = rowIndex(event.target);
+    // A mouse beside the list drags to select; only a finger holds to select.
+    const holds = !(event.pointerType === "mouse" && deskPointer());
     clearHold();
     hold = window.setTimeout(() => {
       hold = null;
       armed = false;
-      if (retired || panned) return;
+      if (retired || panned || !holds) return;
       haptic(8);
       gestures?.onHold?.(index, startX, startY);
     }, HOLD_MS);
@@ -290,7 +390,7 @@ export function bindTap(term: HTMLElement, onRow: (index: number) => void, gestu
       return;
     }
     haptic(4);
-    onRow(rowIndex(event.target));
+    onRow(rowIndex(event.target), { x: event.clientX, mouse: event.pointerType === "mouse" });
   };
   const onContextMenu = (event: Event) => {
     if (termSelect()) return;

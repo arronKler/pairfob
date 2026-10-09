@@ -3,6 +3,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import type { GitBranch } from "../../lib/workspace";
 import { t } from "../../lib/i18n";
 import { createSelectedWorktree, listSelectedWorktrees, openSelectedWorktree } from "../../features/operations/controller";
+import { runDialogStep } from "../../features/operations/worktree-steps";
 import { MenuGroup, MenuRow } from "../../shared/ui/overlay/menu-controls";
 import { Button } from "../../shared/ui/primitives";
 import { showError, showStatus } from "../../app/notices-store";
@@ -40,7 +41,9 @@ async function copyRoot(root: string): Promise<void> {
 /**
  * Read-only branches plus the worktree actions that are the safe way to switch
  * work. Actions sit first; remote branches start folded because they are the
- * long list. Picking an action closes this sheet before the next flow opens.
+ * long list. Picking an action is a step of this dialog (`runDialogStep`): beside
+ * the list it opens over the dialog and Escape comes back here; a finger's sheet
+ * closes first and the step takes its place.
  */
 export function BranchSheet({ branches, onClose }: { branches: NonNullable<WorkspaceSnapshot["branches"]>; onClose: () => void }) {
   const dismiss = useCallback(() => onClose(), [onClose]);
@@ -66,10 +69,8 @@ export function BranchSheet({ branches, onClose }: { branches: NonNullable<Works
     </div>}
     {worktreeActions.length > 0 && <Section title={t("workspace.worktreeSection")}>
       <MenuGroup>
-        {worktreeActions.map((action) => <MenuRow key={action.label} icon={action.icon} label={action.label} next onClick={() => {
-          onClose();
-          window.setTimeout(() => void action.run(), 0);
-        }} />)}
+        {worktreeActions.map((action) => <MenuRow key={action.label} icon={action.icon} label={action.label} next
+          onClick={() => runDialogStep(action.run, onClose)} />)}
       </MenuGroup>
     </Section>}
     <Section title={t("workspace.localBranches")} aside={t("workspace.readOnly")}>

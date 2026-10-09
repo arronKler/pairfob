@@ -77,36 +77,69 @@ export function httpLinkProvider(terminal: Terminal): ILinkProvider {
 
 /**
  * xterm only listens for mouse events. Phones fire pointer/touch and never
- * produce mousedown, so TUI mouse protocol and OSC 8 links would otherwise
- * ignore a tap.
+ * produce mousedown, so TUI mouse protocol and links would otherwise ignore a
+ * tap. A tap is replayed as the whole of what a mouse does to press a spot:
+ *
+ * - on the screen, where xterm's link layer listens; the press bubbles from
+ *   there to the element around it, where the mouse protocol does. Sent to
+ *   that outer element it never reached the link layer, and a tapped URL
+ *   opened nothing;
+ * - a move onto the spot first: xterm only knows the link under a pointer that
+ *   has moved over it, and opens the link a press both began and ended on;
+ * - and before that a move somewhere else, for the link layer alone: it looks
+ *   under the pointer only when the cell changes, and it remembers the last
+ *   cell after the pointer has left. Without it a second tap on the same spot
+ *   of a URL found no link and opened nothing;
+ * - and the pointer leaving afterwards, so the link does not stay underlined
+ *   as hovered under a finger that is gone.
+ *
+ * `window.open` runs inside the tap's own event, so it counts as the reader's.
+ *
+ * A press that was held (`held`) is still a click for a TUI that reads the
+ * mouse, but it is not how a link is opened: it goes without the moves, so the
+ * link layer has nothing under it.
  */
 export function tapAsMouse(
   host: HTMLElement,
   event: Pick<PointerEvent, "clientX" | "clientY" | "screenX" | "screenY">,
+  held = false,
 ): void {
-  const target = (host.querySelector(".xterm") as HTMLElement | null) ?? host;
-  const fire = (type: string, buttons: number) => {
+  const target = host.querySelector<HTMLElement>(".xterm-screen") ?? host.querySelector<HTMLElement>(".xterm") ?? host;
+  const fire = (type: string, buttons: number, bubbles = true, at: { clientX: number; clientY: number } = event) => {
     target.dispatchEvent(
       new MouseEvent(type, {
-        bubbles: true,
+        bubbles,
         cancelable: true,
         view: window,
-        clientX: event.clientX,
-        clientY: event.clientY,
-        screenX: event.screenX,
-        screenY: event.screenY,
+        clientX: at.clientX,
+        clientY: at.clientY,
+        screenX: event.screenX + at.clientX - event.clientX,
+        screenY: event.screenY + at.clientY - event.clientY,
         button: 0,
         buttons,
         detail: 1,
       }),
     );
   };
+  if (!held) {
+    // The corner of the screen farthest from the tap is another cell on any
+    // grid larger than one. It does not bubble: a program tracking the mouse
+    // is told about the tap, not about a pointer that was never there.
+    const box = target.getBoundingClientRect();
+    fire("mousemove", 0, false, {
+      clientX: event.clientX < box.left + box.width / 2 ? box.right - 1 : box.left + 1,
+      clientY: event.clientY < box.top + box.height / 2 ? box.bottom - 1 : box.top + 1,
+    });
+    fire("mousemove", 0);
+  }
   fire("mousedown", 1);
   fire("mouseup", 0);
+  fire("mouseleave", 0, false);
 }
 
 export type TerminalKeyboard = {
-  open: () => void;
+  /** Let xterm take keys; `focus: false` leaves the caret where the reader has it. */
+  open: (focus?: boolean) => void;
   close: () => void;
   toggle: () => void;
   isOpen: () => boolean;
@@ -116,8 +149,14 @@ export type TerminalKeyboard = {
 /**
  * xterm's helper textarea is what pops the phone IME. Keep it inert until the
  * user asks for a keyboard; scroll, taps, and on-screen keys must not focus it.
+ * `mayFocus` lets a terminal that starts open leave the caret where the reader
+ * is typing; an explicit open, toggle or tap always takes it.
  */
-export function bindXtermKeyboard(host: HTMLElement, startOpen: boolean): TerminalKeyboard {
+export function bindXtermKeyboard(
+  host: HTMLElement,
+  startOpen: boolean,
+  mayFocus: () => boolean = () => true,
+): TerminalKeyboard {
   let wanted = startOpen;
   let attached: HTMLTextAreaElement | null = null;
   let alive = true;
@@ -126,7 +165,7 @@ export function bindXtermKeyboard(host: HTMLElement, startOpen: boolean): Termin
     host.querySelector("textarea.xterm-helper-textarea");
 
   const onFocus = (): void => {
-    if (!wanted) queueMicrotask(apply);
+    if (!wanted) queueMicrotask(() => apply());
   };
 
   const attach = (): HTMLTextAreaElement | null => {
@@ -139,28 +178,32 @@ export function bindXtermKeyboard(host: HTMLElement, startOpen: boolean): Termin
     return attached;
   };
 
-  const apply = (): void => {
+  const apply = (focus = true): void => {
     if (!alive) return;
     const el = attach();
     host.classList.toggle("kb-on", wanted);
     host.classList.toggle("kb-off", !wanted);
     if (!el) return;
     el.readOnly = !wanted;
+    // Switched off it gives focus straight back (`onFocus`), so it must not be
+    // somewhere Tab stops: the walk from `···` to the dock would lose a press
+    // there. A press or `focus()` still reaches it, which is how it is opened.
+    el.tabIndex = wanted ? 0 : -1;
     if (wanted) {
       el.removeAttribute("inputmode");
-      el.focus();
+      if (focus) el.focus();
       return;
     }
     el.setAttribute("inputmode", "none");
     el.blur();
   };
 
-  apply();
+  apply(mayFocus());
   return {
-    open() {
+    open(focus = true) {
       if (!alive) return;
       wanted = true;
-      apply();
+      apply(focus);
     },
     close() {
       if (!alive) return;

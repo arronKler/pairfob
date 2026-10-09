@@ -179,11 +179,15 @@
   to { transform: rotate(360deg); }
 }
 
+/* xterm stacks its own layers (link canvas 2, helpers 5, scrollbars 11) and
+   none of its wrappers contains them. Contain them here, so the state layer
+   and the scroll rail are over the terminal whatever it adds. */
 .full-terminal-pan {
   width: 100%;
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  isolation: isolate;
 }
 
 .full-terminal-canvas {
@@ -227,14 +231,16 @@ html.page-zoomed .full-terminal-host .full-terminal-pan {
 /*
   Four 44px controls plus gaps are taller than the five-row host retained in
   short landscape. Add a real grid row for the horizontal rail: it must not
-  float over either the session chrome or the terminal canvas.
+  float over either the session chrome or the terminal canvas. The row is the
+  rail and 2px either side; every pixel more is taken from the key pad, which
+  has to fit under it without scrolling (dock-dense.scss counts the same 48).
 */
 @media (max-height: 500px) and (orientation: landscape) {
   .full-terminal-host {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) 54px;
-    min-height: calc(var(--full-terminal-min-host-height, 128px) + 54px);
+    grid-template-rows: minmax(0, 1fr) 48px;
+    min-height: calc(var(--full-terminal-min-host-height, 128px) + 48px);
   }
 
   .full-terminal-pan {
@@ -259,7 +265,7 @@ html.page-zoomed .full-terminal-host .full-terminal-pan {
   }
 
   .full-terminal-pad {
-    max-height: calc(var(--vv-height, 100dvh) - 53px - env(safe-area-inset-top, 0px) - var(--full-terminal-min-host-height, 128px) - 54px);
+    max-height: calc(var(--vv-height, 100dvh) - 53px - env(safe-area-inset-top, 0px) - var(--full-terminal-min-host-height, 128px) - 48px);
   }
 }
 
@@ -348,7 +354,9 @@ html.full-terminal-active body {
   text-size-adjust: none;
 }
 
-@media (min-width: 900px) {
+/* A device that types without an on-screen keyboard has nothing to call up. A
+   landscape tablet is wide and still needs this button. */
+@media (hover: hover) and (pointer: fine) {
   .full-terminal-kb { display: none; }
 }
 
@@ -366,7 +374,10 @@ html.full-terminal-active body {
   font-synthesis: none;
 }
 
-.full-terminal-host .xterm-viewport {
+/* xterm's stylesheet arrives with the renderer, after this one, and gives the
+   viewport a black background and a vertical scrollbar. The viewport is the
+   whole mount, taller than the rows, so outrank that rule rather than tie it. */
+.full-terminal-host .xterm .xterm-viewport {
   overflow: hidden;
   background-color: #090c10;
   overscroll-behavior: none;
@@ -396,5 +407,75 @@ html.full-terminal-active body {
 @media (min-width: 900px) {
   .full-terminal-host {
     padding: 8px;
+  }
+}
+
+/* --- Wide layout --------------------------------------------------------------------- */
+
+/* A scrollbar that takes room would cost the computer's terminal a row every
+   time the columns start or stop overflowing, and the inspector opening is
+   enough for that. Beside the list, and wherever a mouse points, the pan row
+   therefore never has one: the wheel pans it and a thin bar over the host's
+   bottom edge shows where the visible part sits. A finger on a phone keeps the
+   platform's overlay scrollbar, which takes no room. */
+@mixin pan-without-scrollbar {
+  .full-terminal-host.is-pan .full-terminal-pan { scrollbar-width: none; }
+  .full-terminal-host.is-pan .full-terminal-pan::-webkit-scrollbar { display: none; }
+
+  .full-terminal-pan-bar {
+    position: absolute;
+    right: 8px;
+    bottom: 0;
+    left: 8px;
+    z-index: 1;
+    display: block;
+    height: 8px;
+    touch-action: none;
+  }
+
+  .full-terminal-pan-bar[hidden] { display: none; }
+}
+
+.full-terminal-pan-bar { display: none; }
+
+.full-terminal-pan-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 1px;
+  border-radius: 999px;
+  background: rgba(233, 237, 243, 0.34);
+  transition: background var(--dur-1) var(--ease);
+}
+
+.full-terminal-pan-bar.is-dragging .full-terminal-pan-thumb { background: rgba(233, 237, 243, 0.62); }
+
+#app.desk { @include pan-without-scrollbar; }
+
+@media (hover: hover) and (pointer: fine) {
+  @include pan-without-scrollbar;
+
+  .full-terminal-pan-bar:hover .full-terminal-pan-thumb { background: rgba(233, 237, 243, 0.62); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .full-terminal-pan-thumb { transition: none; }
+}
+
+/* The pad's ceiling is measured from the column it sits in, which can start
+   below the link back to the board, rather than from the whole viewport. */
+#app.desk .full-terminal-pad {
+  max-height: calc(100% - 53px - var(--full-terminal-min-host-height, 128px));
+}
+
+/* A mouse has a wheel and the pad's paging; the press-and-hold rail is a finger's. */
+@media (hover: hover) and (pointer: fine) {
+  #app.desk .pane-root .full-terminal-scroll { display: none; }
+}
+
+/* With no rail there is no row to reserve for it in a short window. */
+@media (hover: hover) and (pointer: fine) and (max-height: 500px) and (orientation: landscape) {
+  #app.desk .full-terminal-host {
+    display: block;
+    min-height: var(--full-terminal-min-host-height, 128px);
   }
 }

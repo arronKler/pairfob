@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resetBoardTestDOM } from "../../../../test-support/dom";
@@ -7,6 +8,7 @@ import { composeDraft, composeIME, composeLive, setComposeDraft, setComposeFocus
 import { COMPOSE_ENTER_SENDS_KEY, paneComposeLive, setComposeEnterSends, setKeysExpanded, setPadKind } from "../../settings/preferences-store";
 import { selectPane } from "../session-store";
 import { PaneComposePreferenceRestorer } from "../../../../test-support/preferences-restore";
+import { emulateTouchDevice } from "../touch-realm";
 const { notifyFullTerminalKeyboard } = await import("./full-terminal-input");
 const { setFullTerminalInputMode, submitFullTerminalCompose } = await import("./full-terminal-compose");
 const { FullTerminalPad } = await import("./full-terminal-pad");
@@ -26,7 +28,7 @@ function paint(sendCompose: (text: string, enter: boolean) => boolean) {
     sendKey: () => undefined,
     sendCompose,
     keyboard: keyboard(),
-    desk: false,
+    hardwareKeyboard: false,
   }} />);
 }
 
@@ -90,11 +92,11 @@ describe("React full-terminal compose", () => {
     act(() => { more.dispatchEvent(down); });
     expect(down.defaultPrevented).toBe(true);
     await act(() => { more.click(); });
-    expect(document.activeElement === input).toBeTrue();
+    expectSameNode(document.activeElement, input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
     await act(() => { (app.querySelector('[aria-label="Enter"]') as HTMLButtonElement).click(); });
     expect(sent).toEqual(["draft"]);
-    expect(document.activeElement === input).toBeTrue();
+    expectSameNode(document.activeElement, input);
     const send = app.querySelector<HTMLButtonElement>(".full-terminal-compose-send")!;
     const sendDown = new view.PointerEvent("pointerdown", { button: 0, cancelable: true });
     act(() => { send.dispatchEvent(sendDown); });
@@ -284,24 +286,44 @@ describe("React full-terminal compose", () => {
 });
 describe("full-terminal compose v2", () => {
   test("on a phone, Return adds a line and only the send button sends", () => {
+    const restorePointer = emulateTouchDevice();
+    try {
+      act(() => { setComposeEnterSends(false); });
+      const sent: Array<[string, boolean]> = [];
+      act(() => { paint((text, enter) => { sent.push([text, enter]); return true; }); });
+      const input = app.querySelector<HTMLTextAreaElement>(".full-terminal-compose-input")!;
+      expect(input.getAttribute("enterkeyhint")).toBe("enter");
+      input.value = "line one";
+      act(() => { input.dispatchEvent(new (input.ownerDocument.defaultView!.Event)("input", { bubbles: true })); });
+      const view = input.ownerDocument.defaultView!;
+      const enter = new view.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+      act(() => { input.dispatchEvent(enter); });
+      expect(enter.defaultPrevented).toBeFalse();
+      expect(sent).toEqual([]);
+      const button = app.querySelector<HTMLButtonElement>(".full-terminal-compose-send")!;
+      expect(button.dataset.sendKind).toBe("send");
+      act(() => { button.click(); });
+      expect(sent).toEqual([["line one", true]]);
+      expect(composeDraft()).toBe("");
+      expect(button.dataset.sendKind).toBe("enter");
+    } finally {
+      restorePointer();
+    }
+  });
+
+  test("a hardware keyboard's Enter sends at any width; the width alone no longer decides", () => {
+    // The same phone-wide window and the same preference, driven by a mouse and keys.
     act(() => { setComposeEnterSends(false); });
     const sent: Array<[string, boolean]> = [];
     act(() => { paint((text, enter) => { sent.push([text, enter]); return true; }); });
     const input = app.querySelector<HTMLTextAreaElement>(".full-terminal-compose-input")!;
-    expect(input.getAttribute("enterkeyhint")).toBe("enter");
     input.value = "line one";
     act(() => { input.dispatchEvent(new (input.ownerDocument.defaultView!.Event)("input", { bubbles: true })); });
     const view = input.ownerDocument.defaultView!;
     const enter = new view.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
     act(() => { input.dispatchEvent(enter); });
-    expect(enter.defaultPrevented).toBeFalse();
-    expect(sent).toEqual([]);
-    const button = app.querySelector<HTMLButtonElement>(".full-terminal-compose-send")!;
-    expect(button.dataset.sendKind).toBe("send");
-    act(() => { button.click(); });
+    expect(enter.defaultPrevented).toBeTrue();
     expect(sent).toEqual([["line one", true]]);
-    expect(composeDraft()).toBe("");
-    expect(button.dataset.sendKind).toBe("enter");
   });
 
   test("a working agent's empty draft offers stop, written as the Esc byte", async () => {

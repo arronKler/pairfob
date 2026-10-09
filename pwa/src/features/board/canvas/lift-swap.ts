@@ -2,7 +2,9 @@
  * Lift-to-swap on the board canvas.
  *
  * A long press lifts a tile: it follows the finger, the panes it touches become
- * drop targets labelled with the swap direction, every other pane dims. The
+ * drop targets labelled with the swap direction, every other pane dims, and
+ * the tab row says what a release does (`data-board-lift` is "" while the tile
+ * is held in place, "moved" once it has been dragged; see `.board-mode`). The
  * marks are data attributes and CSS variables on the rendered tiles, so the
  * React tree never re-renders at pointer speed; `finish` and `cancel` strip
  * every mark they set. Hit-testing uses tile rects, not `elementFromPoint`, so
@@ -71,7 +73,8 @@ export function startLift(
     move(point) {
       const dx = point.x - origin.x;
       const dy = point.y - origin.y;
-      if (!moved && Math.hypot(dx, dy) >= slop) moved = true;
+      // From here a release no longer opens the menu, and the hint in the tab row says so.
+      if (!moved && Math.hypot(dx, dy) >= slop) { moved = true; tile.dataset.boardLift = "moved"; }
       tile.style.setProperty("--board-lift-x", `${dx / scale}px`);
       tile.style.setProperty("--board-lift-y", `${dy / scale}px`);
       const hit = tiles.find((other) => other !== tile && targets.has(other.dataset.paneId || "")

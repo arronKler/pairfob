@@ -31,35 +31,32 @@ import {
   parseWorktrees,
 } from "../../lib/operations";
 import { type GitLayer } from "../../lib/workspace";
-import {
-  askAgentPrompt,
-  askCreateConversation,
-  askCreateTab,
-  askSplitPane,
-  askWorktree,
-  showWorktrees,
-} from "./operation-ui";
+import { askAgentPrompt, askCreateConversation, askCreateTab, askSplitPane, showWorktrees } from "./operation-ui";
 import { ProtocolError, type DeviceSummary, type LiveSession } from "../../lib/protocol/client";
 import { type AgentCard } from "../../lib/ranking";
 import { startWorktreeJob, type WorktreeJobDriver } from "../../lib/worktree-jobs";
 import { applyComposeDraft, acquirePromptLock, currentViewIncarnation, parkComposeView, releasePromptLock } from "../session/drafts/compose-drafts";
 import { liveView } from "../connection/generations";
 import { boardStore, focusBoard, selectBoardTab, selectBoardWorkspace } from "../board/layout-store";
-import { advertisedAgentKinds, capabilityEnabled, operationBusy } from "./capabilities-store";
+import { advertisedAgentKinds, capabilitiesStore, capabilityEnabled, operationBusy } from "./capabilities-store";
 import { computersStore, currentDaemonId, liveSession } from "../computers/catalog-store";
 import { dashboardStore, selectedAgent } from "../dashboard/catalog-store";
 import { currentScreen, leavePaneScreen } from "../../app/navigation-store";
+import { connectionStore } from "../connection/connection-store";
 import { applyDeviceList } from "../connection/runtime-store";
 import { isFullTerminal, openPaneId, selectPane, sessionStore } from "../session/session-store";
 import { landAfterDisconnect, openPane, openPaneWithOwner, refreshFromSession, refreshPane } from "../connection/controller";
 import { reconcileAmbiguousMutation, refreshSnapshotOnly } from "../connection/mutations";
 import { commitView } from "../../app/host";
 import { promptLockHeld } from "../session/drafts/state-drafts";
-import { captureNoticeScope, noticeScopeIsCurrent, noticesStore, showError, showStatus } from "../../app/notices-store";
+import { captureNoticeScope, noticeScopeIsCurrent, showError, showStatus } from "../../app/notices-store";
 import { markPaneSubmitted } from "../dashboard/catalog-store";
 import { messageOf } from "../../lib/notices";
 import { resetPaneView } from "../session/session-store";
-import { openWorktreeTargetError } from "./operation-form-model";
+import { openWorktreeTargetError, type SheetOutcome } from "./operation-form-model";
+import { followWorktreeJob } from "./worktree-outcome";
+import { showWorktreeForm, type OperationGate } from "./worktree-sheet";
+import { takesSheetPlace } from "./worktree-steps";
 import { disposeFullTerminal, leaveFullTerminalWithTransition } from "../session/full-terminal/full-terminal";
 import { dropQueuedKeys } from "../../features/session/guided/keys";
 import {
@@ -68,6 +65,8 @@ import {
   ownsOperationView as ownerOwnsView,
   reportOwnedError as reportError,
   runHerdOperation as runOwnedOperation,
+  NOT_RUN,
+  sheetOutcome,
   type MutationRunnerPorts,
   type OperationOwner,
 } from "./run";
@@ -165,28 +164,7 @@ async function runHerdOperation<T>(
   await runOwnedOperation(pending, success, action, mutationPorts, options);
 }
 
-/**
- * What an in-sheet form shows once its operation settles: done, or why not.
- * An empty message means it never ran (offline, busy or superseded) and the
- * form's own disabled reason already says so.
- */
-export type SheetOutcome = { ok: true } | { ok: false; message: string };
-
-const NOT_RUN: SheetOutcome = { ok: false, message: "" };
-
-/**
- * Run a notice-reporting operation for a form that stays open: `done` marks
- * success from inside the operation's `after`; a failure is the error notice
- * the runner raised meanwhile.
- */
-async function sheetOutcome(run: (done: () => void) => Promise<void>): Promise<SheetOutcome> {
-  const before = noticesStore.get().notice;
-  let ok = false;
-  await run(() => { ok = true; });
-  if (ok) return { ok: true };
-  const notice = noticesStore.get().notice;
-  return { ok: false, message: notice && notice !== before && notice.tone === "error" ? notice.text : "" };
-}
+export type { SheetOutcome };
 
 async function selectCreatedPane(result: { pane_id?: string; workspace_id?: string; tab_id?: string }, owner: OperationOwner): Promise<void> {
   const paneId = typeof result.pane_id === "string" && result.pane_id ? result.pane_id : "";
@@ -411,22 +389,46 @@ export async function openPaneWorktree(agent: AgentCard, target: { path?: string
   }));
 }
 
-/** Start the background create job for the pane's repository; false when it could not start. */
-export function createPaneWorktree(agent: AgentCard, fields: { branch?: string; base?: string; label?: string; path?: string }): boolean {
+/**
+ * Start the background create job for the pane's repository. The promise
+ * settles with the job, for the form that stays open on it; null when no job
+ * could be started.
+ */
+export function createPaneWorktree(agent: AgentCard, fields: { branch?: string; base?: string; label?: string; path?: string }): Promise<SheetOutcome> | null {
   const scope = selectedWorktreeDefaults(agent);
-  if (!scope) return false;
+  if (!scope) return null;
   const input: CreateWorktreeInput = { ...scope };
   for (const key of ["branch", "base", "label", "path"] as const) {
     const text = fields[key]?.trim();
     if (text) input[key] = text;
   }
-  return createWorktreeFrom(input);
+  return startWorktree(input);
 }
 
-export async function listSelectedWorktrees(): Promise<void> {
+/**
+ * Why a form that runs its operation in place cannot run it right now:
+ * offline, or another operation holds the lock. The session panel's pages and
+ * the same forms in a dialog of their own follow this one reading.
+ */
+export const operationGate: OperationGate = {
+  subscribe(listener) {
+    const stops = [capabilitiesStore.subscribe(listener), connectionStore.subscribe(listener)];
+    return () => { for (const stop of stops) stop(); };
+  },
+  read: () => !connectionStore.get().networkOnline || !liveSession()?.isConnected() ? t("boardMenu.offline")
+    : operationBusy() ? t("boardMenu.busy") : "",
+};
+
+/**
+ * The repository's Worktrees in a dialog. Resolves once the list is read;
+ * `closed` hears how the dialog went away, as the two forms below tell it:
+ * true when a Worktree was opened from it, false when it was only put away.
+ * Asked from a finger's sheet it takes that sheet's place (`worktree-steps`).
+ */
+export const listSelectedWorktrees = takesSheetPlace(async (closed?: (opened: boolean) => void): Promise<void> => {
   const session = liveSession();
   const defaults = selectedWorktreeDefaults();
-  if (!session || !defaults || !capabilityEnabled("list_worktrees")) return;
+  if (!session || !defaults || !capabilityEnabled("list_worktrees")) return closed?.(false);
   const owner = operationOwner(session);
   await showWorktrees(
     async () => {
@@ -453,22 +455,38 @@ export async function listSelectedWorktrees(): Promise<void> {
           }
         }
       : undefined,
+    closed,
   );
+});
+
+/**
+ * New Worktree for the selected session's repository, asked from outside the
+ * session panel: the panel's own form in a sheet of its own (`worktree-sheet`),
+ * run in place at every width. `closed` hears how the form went away: true
+ * when it closed on the Worktree it created, false when the reader put it away.
+ */
+export async function createSelectedWorktree(closed?: (created: boolean) => void): Promise<void> {
+  const agent = selectedAgent();
+  if (!liveSession() || !agent || !selectedWorktreeDefaults(agent) || !capabilityEnabled("create_worktree")) return closed?.(false);
+  const created = await showWorktreeForm({ kind: "create", gate: operationGate, dir: agent.workspaceCwd || agent.cwd,
+    start: fields => createPaneWorktree(agent, fields) });
+  closed?.(created);
 }
 
-export async function createSelectedWorktree(): Promise<void> {
+/**
+ * Start the create job for the repository `input` names. The promise settles
+ * with the job (`worktree-outcome`); null when no job could be started.
+ */
+function startWorktree(input: CreateWorktreeInput): Promise<SheetOutcome> | null {
   const session = liveSession();
-  const defaults = selectedWorktreeDefaults();
-  if (!session || !defaults || !capabilityEnabled("create_worktree")) return;
-  const owner = operationOwner(session);
-  const input = await askWorktree("create", defaults);
-  if (!input || !ownsOperationView(owner) || !capabilityEnabled("create_worktree")) return;
-  // No `operationBusy` here on purpose: the create runs as a job card so other
-  // sessions stay tappable while the daemon does fetch + worktree add.
-  if (!startWorktreeJob(worktreeJobDriver(session, defaults), input)) {
-    showError(t("op.worktreeJobLimit"));
-    commitView();
-  }
+  const scope = worktreeScope(input.workspace_id, input.cwd);
+  if (!session || !scope || !capabilityEnabled("create_worktree")) return null;
+  const followed = followWorktreeJob(worktreeJobDriver(session, scope));
+  const job = startWorktreeJob(followed.driver, input);
+  if (job) return followed.outcome(job);
+  showError(t("op.worktreeJobLimit"));
+  commitView();
+  return null;
 }
 
 /**
@@ -476,28 +494,15 @@ export async function createSelectedWorktree(): Promise<void> {
  * directory it names. Runs as the same background job card as the menu path.
  */
 export function createWorktreeFrom(input: CreateWorktreeInput): boolean {
-  const session = liveSession();
-  const scope = worktreeScope(input.workspace_id, input.cwd);
-  if (!session || !scope || !capabilityEnabled("create_worktree")) return false;
-  if (!startWorktreeJob(worktreeJobDriver(session, scope), input)) {
-    showError(t("op.worktreeJobLimit"));
-    commitView();
-    return false;
-  }
-  return true;
+  return startWorktree(input) !== null;
 }
 
-export async function openSelectedWorktree(): Promise<void> {
-  const session = liveSession();
-  const defaults = selectedWorktreeDefaults();
-  if (!session || !defaults || !capabilityEnabled("open_worktree")) return;
-  const owner = operationOwner(session);
-  const input = await askWorktree("open", defaults);
-  if (!input || !ownsOperationView(owner) || !capabilityEnabled("open_worktree")) return;
-  await runHerdOperation(t("op.openingWorktree"), t("op.openedWorktree"), () => session.openWorktree(input), {
-    owner, capability: "open_worktree", after: selectCreatedPane,
-    reconcileWorktrees: defaults,
-  });
+/** Open a Worktree by path or branch, asked from outside the session panel; as `createSelectedWorktree`. */
+export async function openSelectedWorktree(closed?: (opened: boolean) => void): Promise<void> {
+  const agent = selectedAgent();
+  if (!liveSession() || !agent || !selectedWorktreeDefaults(agent) || !capabilityEnabled("open_worktree")) return closed?.(false);
+  const opened = await showWorktreeForm({ kind: "open", gate: operationGate, open: target => openPaneWorktree(agent, target) });
+  closed?.(opened);
 }
 
 export async function layoutSelectedPane(kind: "resize" | "swap" | "zoom", selected = selectedAgent(),
@@ -512,7 +517,9 @@ export async function layoutSelectedPane(kind: "resize" | "swap" | "zoom", selec
   if (!session || !selected || !allowed || options.valid?.() === false) return;
   const owner = operationOwner(session);
   if (kind === "zoom") {
-    await runHerdOperation(t("op.zooming"), t("op.zoomed"), () => {
+    // The notice says which way it went: leaving the zoom is not "zoomed".
+    const off = options.zoomMode === "off";
+    await runHerdOperation(t(off ? "op.unzooming" : "op.zooming"), t(off ? "op.unzoomed" : "op.zoomed"), () => {
       requirePaneTarget(selected, options);
       return session.zoomPane({ pane_id: selected.paneId, mode: options.zoomMode ?? "toggle" }); },
       { owner, capability: "zoom_pane" },
@@ -593,7 +600,7 @@ export async function renameTab(agent: AgentCard | undefined = selectedAgent()):
   const session = liveSession();
   if (!session || !agent?.tabId) return;
   const owner = operationOwner(session);
-  const label = await askText({ title: t("op.renameTab"), initial: agent.tabLabel || "", maxLength: OPERATION_INPUT_LIMITS.label,
+  const label = await askText({ title: t("menu.renameTab"), initial: agent.tabLabel || "", maxLength: OPERATION_INPUT_LIMITS.label,
     label: t("op.tabName"), allowEmpty: false });
   if (label === null || !ownsOperationView(owner)) return;
   const normalized = label.trim();
@@ -614,7 +621,7 @@ export async function renameWorkspace(agent: AgentCard | undefined = selectedAge
   const session = liveSession();
   if (!session || !agent?.workspaceId) return;
   const owner = operationOwner(session);
-  const label = await askText({ title: t("op.renameWorkspace"), initial: agent.workspaceLabel, maxLength: OPERATION_INPUT_LIMITS.label,
+  const label = await askText({ title: t("menu.renameWorkspace"), initial: agent.workspaceLabel, maxLength: OPERATION_INPUT_LIMITS.label,
     label: t("op.workspaceName"), allowEmpty: false });
   if (label === null || !ownsOperationView(owner)) return;
   const normalized = label.trim();

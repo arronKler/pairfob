@@ -21,13 +21,21 @@
 
 .daemon-update-version code { color: var(--muted); font-family: var(--mono); }
 
+/* The question is the whole row and opens in place: the settings family's
+   turning chevron at its end says so, as on "how to enable". */
 .daemon-update-help summary {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 44px;
   cursor: pointer;
   font-size: var(--text-body);
+  text-wrap: balance;
 }
+
+.daemon-update-help summary .set-disclosure { flex: none; color: var(--muted); }
+.daemon-update-help[open] summary .set-disclosure { transform: rotate(180deg); }
 
 .daemon-update-help .set-note,
 .daemon-update-help p {
@@ -35,6 +43,10 @@
   color: var(--muted);
   font-size: var(--text-secondary);
   line-height: 1.55;
+  text-wrap: balance;
 }
 
-.set-card.daemon-update-help { margin-top: 16px; padding: 4px 16px 14px; }
+/* Closed, the card is its one row, with the same room above and below it; the
+   answer brings its own floor. */
+.set-card.daemon-update-help { margin-top: 16px; padding: 4px 16px; }
+.set-card.daemon-update-help[open] { padding-bottom: 14px; }

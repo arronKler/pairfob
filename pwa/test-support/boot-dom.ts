@@ -1,4 +1,5 @@
 import { Window } from "happy-dom";
+import "./node-inspect";
 
 const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
 export function installTestDOM(): void {

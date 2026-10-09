@@ -2,7 +2,7 @@ import { boardLayoutFixture } from "./board-layout";
 import type { SplitPaneInput, ResizePaneInput, SwapPaneInput, ZoomPaneInput } from "../src/lib/operations";
 import { ProtocolError } from "../src/lib/protocol/errors";
 import { NO_OPERATION_CAPABILITIES } from "../src/lib/operations";
-import type { LiveSession, SessionEvent } from "../src/lib/protocol/session-types";
+import type { HerdSessionSummary, LiveSession, SessionEvent } from "../src/lib/protocol/session-types";
 import type { AgentTraceItem } from "../src/lib/operations";
 import { setSessionTransport } from "../src/features/connection/connection-store";
 import { FIXED_NOW, record } from "./environment";
@@ -14,6 +14,8 @@ export type FixtureSession = {
   live: LiveSession;
   emit(event: SessionEvent): void;
   terminalFrame(text: string, options?: FixtureTerminalFrame): boolean;
+  /** Frames this session has delivered, its own screen and injected ones alike. */
+  terminalFrames(): number;
   setConnected(connected: boolean): void;
   setTrace(items: AgentTraceItem[]): void;
   appendChatTurn(): void;
@@ -29,6 +31,15 @@ export type SessionSource = {
   /** Per-pane screen text; panes it does not know read the shared baseline text. */
   paneText?: (paneId: string) => string | undefined;
   agentKinds?: string[];
+  /**
+   * What the pane's complete terminal shows, drawn for the grid it was asked
+   * for. Like the computer, the fixture sends it once the terminal opens and
+   * again after every resize; without one the terminal stays blank until a
+   * caller injects a frame.
+   */
+  terminalScreen?: (cols: number, rows: number) => string;
+  /** The Herdr sessions the computer lists; a computer that lists none has no switch. */
+  herdSessions?: HerdSessionSummary[];
 };
 
 /** Every request is local and logged. Holds/errors allow deliberate async interaction probes. */
@@ -40,6 +51,7 @@ export function createSession(source: SessionSource = {}): FixtureSession {
   let hash = 1;
   let terminalSerial = 0;
   let terminal: { id: string; cols: number; rows: number; sequence: bigint } | null = null;
+  let terminalFrames = 0;
   const listeners = new Set<(event: SessionEvent) => void>();
   const held = new Set<string>();
   const waiters = new Map<string, Array<{ resolve(): void; reject(error: Error): void }>>();
@@ -53,6 +65,26 @@ export function createSession(source: SessionSource = {}): FixtureSession {
   const emit = (event: SessionEvent) => { for (const listener of listeners) listener(event); };
   const op = () => `op_qa_${String(++operation).padStart(12, "0")}`;
   const created = () => ({ operation_id: op(), workspace_id: "w1", tab_id: "w1:t1", pane_id: data.PANE, outcome: "applied" });
+  const sendFrame = (text: string, options: FixtureTerminalFrame = {}): boolean => {
+    if (!terminal || disposed) return false;
+    const sequence = options.sequence ?? String(terminal.sequence + 1n);
+    terminal.sequence = BigInt(sequence);
+    terminalFrames++;
+    emit({ type: "terminal_frame", terminalId: terminal.id, terminalFrame: {
+      terminalId: terminal.id, sequence, width: options.cols ?? terminal.cols, height: options.rows ?? terminal.rows,
+      full: options.full ?? true, index: 0, count: 1, data: new TextEncoder().encode(text),
+    } });
+    return true;
+  };
+  // On the next task, once the caller holds the reply that names this terminal:
+  // a frame for a terminal the page has not adopted yet is dropped.
+  const sendScreen = (id: string): void => {
+    const screen = source.terminalScreen;
+    if (!screen) return;
+    setTimeout(() => {
+      if (terminal?.id === id) sendFrame(screen(terminal.cols, terminal.rows));
+    }, 0);
+  };
   const request = async <T>(method: string, args: unknown[], run: () => T | Promise<T>, mutation = false): Promise<T> => {
     record(mutation ? "mutation" : "read", method, args);
     if (held.has(method)) await new Promise<void>((resolve, reject) => {
@@ -66,6 +98,16 @@ export function createSession(source: SessionSource = {}): FixtureSession {
     return run();
   };
   const mutation = (method: string, args: unknown[], run: () => unknown = () => ({ operation_id: op(), outcome: "applied" })) => request(method, args, run, true);
+  // A file deleted or renamed from its menu leaves the listing, as on a real computer, so what the list does next can be walked.
+  const deletedFiles = new Set<string>();
+  const renamedFiles = new Map<string, string>();
+  const listed = (page: ReturnType<typeof data.directory>): ReturnType<typeof data.directory> => ({
+    ...page,
+    entries: page.entries.filter((entry) => !deletedFiles.has(entry.path)).map((entry) => {
+      const name = renamedFiles.get(entry.path);
+      return name ? { ...entry, name, path: `${entry.path.slice(0, entry.path.length - entry.name.length)}${name}` } : entry;
+    }),
+  });
   const live = {
     isConnected: () => connected && !disposed,
     onEvent(listener: (event: SessionEvent) => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
@@ -97,7 +139,7 @@ export function createSession(source: SessionSource = {}): FixtureSession {
     agentInspect: (paneId: string) => request("agentInspect", [paneId], () => ({ status: "idle" as const, manifest_source: "builtin", manifest_version: "1.2.0", matched_rule: "ready-prompt", screen_detection_skipped: false, rules: [{ id: "ready-prompt", state: "idle" as const, matched: true }] })),
     agentQuota: () => request("agentQuota", [], data.quotas),
     workspaceOpen: (paneId: string) => request("workspaceOpen", [paneId], data.descriptor),
-    workspaceList: (paneId: string, path = "", cursor?: string) => request("workspaceList", [paneId, path, cursor], () => data.directory(path)),
+    workspaceList: (paneId: string, path = "", cursor?: string) => request("workspaceList", [paneId, path, cursor], () => listed(data.directory(path))),
     workspaceRead: (paneId: string, path: string) => request("workspaceRead", [paneId, path], () => data.file(path)),
     workspaceMediaOpen: (paneId: string, path: string) => request("workspaceMediaOpen", [paneId, path], () => data.mediaOpen(path)),
     workspaceMediaRead: (handle: string, offset: number, length: number) => request("workspaceMediaRead", [handle, offset, length], () => data.mediaChunk(handle, offset, length)),
@@ -108,8 +150,8 @@ export function createSession(source: SessionSource = {}): FixtureSession {
       { name: "main", kind: "local", current: true, head: "1234567890abcdef", upstream: "origin/main" },
       { name: "feature/react", kind: "local", current: false, head: "abcdef", upstream: null },
     ], truncated: false, revision: data.REVISION })),
-    workspaceRename: (...args: unknown[]) => mutation("workspaceRename", args),
-    workspaceDelete: (...args: unknown[]) => mutation("workspaceDelete", args),
+    workspaceRename: (...args: unknown[]) => mutation("workspaceRename", args, () => { renamedFiles.set(String(args[2]), String(args[3])); return { operation_id: op(), outcome: "applied" }; }),
+    workspaceDelete: (...args: unknown[]) => mutation("workspaceDelete", args, () => { deletedFiles.add(String(args[2])); return { operation_id: op(), outcome: "applied" }; }),
     listWorktrees: (...args: unknown[]) => request("listWorktrees", args, () => ({ worktrees: [
       { path: data.ROOT, branch: "main", label: "Main workspace", is_bare: false, is_detached: false, is_prunable: false, is_linked_worktree: false, open_workspace_id: "w1" },
       { path: "/work/pairfob-react", branch: "feature/react", label: "React migration", is_bare: false, is_detached: false, is_prunable: false, is_linked_worktree: true, open_workspace_id: null },
@@ -122,14 +164,23 @@ export function createSession(source: SessionSource = {}): FixtureSession {
     terminalOpen: (paneId: string, cols: number, rows: number, takeover?: boolean) => mutation("terminalOpen", [paneId, cols, rows, takeover], () => {
       const terminalId = `term_${(++terminalSerial).toString(16).padStart(32, "0")}`;
       terminal = { id: terminalId, cols, rows, sequence: 0n };
+      sendScreen(terminalId);
       return { operationId: op(), terminalId, paneId, cols, rows, encoding: "ansi" };
     }),
     terminalInput: (...args: unknown[]) => mutation("terminalInput", args),
     terminalResize: (id: string, sequence: number, cols: number, rows: number, ...extra: unknown[]) => mutation("terminalResize", [id, sequence, cols, rows, ...extra], () => {
-      if (terminal?.id === id) { terminal.cols = cols; terminal.rows = rows; }
+      if (terminal?.id !== id) return;
+      const changed = terminal.cols !== cols || terminal.rows !== rows;
+      terminal.cols = cols;
+      terminal.rows = rows;
+      if (changed) sendScreen(id);
     }),
     terminalScroll: (...args: unknown[]) => mutation("terminalScroll", args),
     terminalClose: (id: string) => mutation("terminalClose", [id], () => { if (terminal?.id === id) terminal = null; }),
+    ...(source.herdSessions ? {
+      listHerdSessions: () => request("listHerdSessions", [], () => structuredClone(source.herdSessions)),
+      herdSession: () => null,
+    } : {}),
     daemonUpdateStatus: () => request("daemonUpdateStatus", [], () => ({ available: true, phase: "idle", target: "", operation_id: "" })),
     daemonUpdate: (target: string) => mutation("daemonUpdate", [target]),
     async switchTransport(target: "auto" | "p2p" | "relay") {
@@ -143,16 +194,8 @@ export function createSession(source: SessionSource = {}): FixtureSession {
   } as unknown as LiveSession;
   return {
     live, emit,
-    terminalFrame(text, options = {}) {
-      if (!terminal || disposed) return false;
-      const sequence = options.sequence ?? String(terminal.sequence + 1n);
-      terminal.sequence = BigInt(sequence);
-      emit({ type: "terminal_frame", terminalId: terminal.id, terminalFrame: {
-        terminalId: terminal.id, sequence, width: options.cols ?? terminal.cols, height: options.rows ?? terminal.rows,
-        full: options.full ?? true, index: 0, count: 1, data: new TextEncoder().encode(text),
-      } });
-      return true;
-    },
+    terminalFrame: sendFrame,
+    terminalFrames: () => terminalFrames,
     setConnected(value) { connected = value; },
     setTrace(items) { trace = structuredClone(items); appendedTurns = 0; },
     appendChatTurn() {

@@ -24,7 +24,7 @@ export function openBoardTabMenu(tabId: string, createTab: () => void): void {
   const card = inside[0];
   const reason = boardCommandReason();
   const blocked = reason || (!card ? t("boardMenu.targetGone") : "");
-  showActionSheet(boardTabLabel(tab, Math.max(0, index), agents), (modal) => <>
+  showActionSheet(boardTabLabel(tab, Math.max(0, index), agents), (modal) => <div className="board-sheet">
     <MenuChoice modal={modal} icon={<Pencil size={18} aria-hidden="true" />} title={t("boardMenu.renameTab")}
       detail={blocked || undefined} disabled={!!blocked} action={() => renameTab(card)} />
     {capabilityEnabled("create_tab") ? <MenuChoice modal={modal} icon={<Plus size={18} aria-hidden="true" />} title={t("boardMenu.newTab")}
@@ -33,5 +33,5 @@ export function openBoardTabMenu(tabId: string, createTab: () => void): void {
       <MenuChoice modal={modal} danger icon={<Trash2 size={18} aria-hidden="true" />} title={t("boardMenu.closeTab")}
         detail={blocked || undefined} disabled={!!blocked} action={() => closeTab(card)} />
     </MenuSection>
-  </>, { subtitle: t("boardMenu.tabPanes", { n: inside.length }) });
+  </div>, { subtitle: t("boardMenu.tabPanes", { n: inside.length }), popover: "menu" });
 }

@@ -1,0 +1,231 @@
+/* Files and changes as a column beside the desk session.
+
+   The workspace partials become a two-pane page at 900px of viewport. This
+   column is 440–720px wide whatever the window is, so nothing here asks the
+   viewport: the inspector arranges the shared lists and detail views in one
+   column and adapts to its own width as a container. Pointer size follows the
+   input, as everywhere on the desk.
+
+   Everything is scoped to `.workspace-inspector`, the column itself. `.inspector`
+   alone would not do: the shell marks `#app` with that class too while the
+   column is open. */
+
+.workspace-inspector {
+  container: inspector / inline-size;
+  /* One trailing inset for whatever ends a row of the column: the head's
+     actions, the switcher's ⋯, a note card, Send. Their edges line up down it. */
+  --inspector-gutter: 10px;
+}
+/* The column takes focus itself when nothing inside it has it; that is where
+   the keyboard rests, not something to draw a ring around. */
+.workspace-inspector:focus { outline: none; }
+
+/* --- Head: tabs · refresh, expand, close -------------------------------------- */
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Level with the session header beside it, rule on rule, under the same status bar. */
+  min-height: calc(53px + env(safe-area-inset-top, 0px));
+  padding: calc(env(safe-area-inset-top, 0px) + 4px) var(--inspector-gutter) 4px 10px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.inspector-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.inspector-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font-size: var(--text-body);
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.inspector-tab.on { background: var(--surface-2); color: var(--ink); }
+
+.inspector-title {
+  min-width: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  font-size: var(--text-body);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex: none;
+}
+.inspector-actions .icon-btn { color: var(--muted); }
+
+/* --- List: the repository on one line, then the tab's list ------------------------ */
+
+.inspector-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Which directory this session's files are; opens branches where the daemon lists them. */
+.workspace-inspector .workspace-repo-title {
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+.workspace-inspector .workspace-repo-title .workspace-name { flex: 0 1 auto; max-width: 45%; font-size: var(--text-secondary); }
+.workspace-inspector .workspace-repo-title > .workspace-subline,
+.workspace-inspector .workspace-subline-row { flex: 1 1 0; min-width: 0; }
+.workspace-inspector .workspace-subline-row .workspace-subline { flex: 0 1 auto; }
+
+/* --- Detail: the list collapses into a one-line switcher --------------------------- */
+
+.workspace-inspector .workspace-detail-view { background: var(--term-bg); }
+
+.inspector-switch { gap: 8px; padding: 4px var(--inspector-gutter) 4px 6px; }
+/* The gutter comes out of the layer names' own padding, so the file's name
+   keeps the room it had at the column's narrowest. */
+.workspace-inspector .workspace-layer-switch button { padding: 0 8px; }
+
+.inspector-switch-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 4.5rem;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  text-align: left;
+  transition: background var(--dur-1) var(--ease);
+}
+.inspector-switch-file:active { background: var(--surface-2); }
+.inspector-switch-file > svg { flex: none; color: var(--muted); }
+.inspector-switch-file .workspace-detail-name { flex: 0 1 auto; }
+
+/* The page shows ⋯ here from 900px of viewport; the column always does. */
+.workspace-inspector .workspace-detail-more-inline { display: inline-flex; color: var(--muted); }
+
+/* Previous · position · next, without the labels the page's footer has room for. */
+.workspace-inspector .workspace-stepper {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding: 0;
+}
+.workspace-inspector .workspace-step { justify-content: center; min-width: 44px; padding: 0; }
+.workspace-inspector .workspace-step span,
+.workspace-inspector .workspace-step-where strong { display: none; }
+.workspace-inspector .workspace-step-where span { font-size: var(--text-caption); white-space: nowrap; }
+
+/* --- Footer: notes only ----------------------------------------------------------------- */
+
+/* Nothing to say: no bar, only the room the home indicator needs below the lines. */
+.workspace-inspector .workspace-diff-footer:empty { border-top: 0; background: none; }
+.workspace-inspector .workspace-diff-footer .workspace-diff-hint { padding: 12px 14px; }
+/* Pending notes or their receipt say more than the invitation to write one. */
+.workspace-inspector .workspace-notes-bar + .workspace-diff-hint { display: none; }
+.workspace-inspector .workspace-notes-bar { padding-right: var(--inspector-gutter); border-bottom: 0; }
+/* The page widens Send from 900px of viewport; here it keeps its own width. */
+.workspace-inspector .btn.workspace-notes-send { min-width: 0; }
+
+/* --- A note written in place, under its line -------------------------------------------- */
+
+.workspace-inspector .diff-note-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* The note card's own place, so saving swaps one for the other without a jump. */
+  margin: 4px 10px 8px calc(2.7rem + 0.95rem);
+  padding: 8px;
+  border: 1px solid rgba(110, 168, 254, 0.45);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  font-family: var(--font);
+}
+.workspace-inspector .diff-note-inline .diff-note-body-field { min-height: 4.75rem; max-height: 14rem; margin-top: 0; }
+.workspace-inspector .diff-note-inline .notice { margin: 0; }
+.diff-note-inline-foot { display: flex; align-items: center; gap: 6px; }
+.diff-note-inline-foot .diff-note-count { margin-right: auto; }
+.diff-note-inline-foot .btn { flex: none; margin: 0; }
+.diff-note-inline-foot .diff-note-remove { min-height: 44px; }
+.diff-note-inline-save:disabled { opacity: 0.45; }
+/* The line the editor hands the keyboard back to: its ring stays inside the gutter. */
+.workspace-inspector .diff-comment-btn:focus-visible { outline-offset: -2px; }
+
+/* --- A precise pointer needs less room than a finger ------------------------------------ */
+
+@media (hover: hover) and (pointer: fine) {
+  .inspector-tab { min-height: 32px; padding: 0 10px; }
+  .inspector-tab:hover:not(.on) { color: var(--ink); }
+  .inspector-actions .icon-btn,
+  .workspace-inspector .workspace-detail-more-inline {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: var(--r-sm);
+  }
+  .inspector-actions .icon-btn:hover:not(:disabled),
+  .workspace-inspector .workspace-detail-more-inline:hover { background: var(--surface); color: var(--ink); }
+  .workspace-inspector .workspace-repo-title { min-height: 36px; }
+  .inspector-switch-file { min-height: 30px; }
+  .inspector-switch-file:hover { background: var(--surface-2); }
+  .workspace-inspector .workspace-step { min-width: 28px; min-height: 28px; border-radius: var(--r-sm); }
+  .workspace-inspector .workspace-step:hover:not(:disabled) { background: var(--surface-2); }
+  .diff-note-inline-foot .btn,
+  .diff-note-inline-foot .diff-note-remove { min-height: 30px; padding: 0 12px; border-radius: var(--r-sm); font-size: var(--text-secondary); }
+  .diff-note-inline-foot .btn-ghost:hover,
+  .diff-note-inline-foot .diff-note-remove:hover { background: var(--surface); }
+}
+
+/* --- A finger needs the whole target ------------------------------------------------------
+   The shared partials give these the workspace screen's sizes, some of them
+   under 44px. In the column a finger gets the full target; the screen and a
+   precise pointer keep the sizes they have. */
+
+@media not all and (hover: hover) and (pointer: fine) {
+  .workspace-inspector .workspace-layer-switch { padding: 0; }
+  .workspace-inspector .workspace-layer-switch button { min-width: 44px; min-height: 44px; }
+  .workspace-inspector .btn.diff-note-action,
+  .workspace-inspector .btn.workspace-notes-send { min-height: 44px; }
+  .workspace-inspector .workspace-up { width: 44px; height: 44px; }
+  .workspace-inspector .workspace-crumb { min-width: 44px; min-height: 44px; }
+  .workspace-inspector .workspace-chip { min-height: 44px; }
+}
+
+/* --- The column at its narrowest ----------------------------------------------------------- */
+
+@container inspector (max-width: 479.98px) {
+  /* The name is what the reader switches by; size and age wait in the list. */
+  .inspector-switch .workspace-row-meta { display: none; }
+  /* Two layers plus the stepper leave no room for the counts. */
+  .inspector-switch:has(.workspace-layer-switch) .workspace-additions,
+  .inspector-switch:has(.workspace-layer-switch) .workspace-deletions { display: none; }
+}

@@ -8,9 +8,14 @@ import { messageOf } from "../../lib/notices";
 import { type WorkspaceReturnView, type WorkspaceTab } from "./model";
 import { clearWorkspaceMedia, loadWorkspaceMedia, prepareWorkspaceMedia } from "./media-actions";
 import { classifyWorkspaceFile } from "./media-model";
+import { focusClosingDetail } from "./focus-landing";
+import { focusEnteringScreen, focusLeaving } from "./opener-focus";
 import { applyWorkspaceNavigation, leaveWorkspaceToHome, prepareWorkspaceEnter, restoreWorkspaceLeave } from "./navigation";
 import { cloneData } from "./immutable";
 import { reviewOrder, type ChangeStep } from "./git-marks";
+import { workspaceBeside } from "./surface";
+import { dismissFilesDialogs } from "./surface-dialogs";
+import { changesLead } from "./tab-order";
 import {
   activeScope,
   applyBrowserTab,
@@ -39,16 +44,57 @@ function bindDiffNotes(session: object, paneId: string, diff: GitDiff | null): v
   adoptDiffNoteScope(diff?.revision ? { session, paneId, revision: diff.revision } : null);
 }
 
+function sessionReturnView(): WorkspaceReturnView {
+  return isFullTerminal() ? "full" : isAgentChat() ? "agent" : "guided";
+}
+
+/**
+ * What a pane seen for the first time opens on. Beside the list, files and
+ * changes are opened to see what the agent changed, and the answer is the same
+ * whether the window has room for the inspector or shows the screen instead: a
+ * rotation must not move the reader to another tab. A phone opens on its files,
+ * as it always has. After the first look the pane keeps the tab the reader
+ * chose, on either surface. The tab it opens on is the one that stands first.
+ */
+const opensOnChanges = changesLead;
+
 export async function enterWorkspace(
   paneId = openPaneId(),
-  returnView: WorkspaceReturnView = isFullTerminal() ? "full" : isAgentChat() ? "agent" : "guided",
+  returnView: WorkspaceReturnView = sessionReturnView(),
   force = false,
 ): Promise<void> {
   const session = liveSession();
   if (!session || !paneId) return;
+  // Opened with a key: the control that held focus leaves with the session, and Back takes it.
+  const takeFocus = focusEnteringScreen();
   prepareWorkspaceEnter();
-  const { ticket, cached } = beginEnter(session, paneId, returnView);
+  const entered = beginEnter(session, paneId, returnView);
   applyWorkspaceNavigation({ screen: "workspace" });
+  takeFocus();
+  await loadEntered(session, paneId, entered, force, opensOnChanges());
+}
+
+/**
+ * Bind the model to a pane for the inspector beside its session: the same load
+ * as entering the screen, without the ceremony that retires the session view.
+ * The pane stays the current screen and keeps polling, forwarding keys and
+ * holding its draft. The inspector only exists beside the list, so a first look
+ * opens on the pane's changes.
+ */
+export async function showWorkspaceBeside(paneId: string, force = false): Promise<void> {
+  const session = liveSession();
+  if (!session || !paneId) return;
+  await loadEntered(session, paneId, beginEnter(session, paneId, sessionReturnView(), true), force, true);
+}
+
+/** Open the pane's scope, restore where the reader was, and load what that shows. */
+async function loadEntered(
+  session: NonNullable<ReturnType<typeof liveSession>>,
+  paneId: string,
+  { ticket, cached }: ReturnType<typeof beginEnter>,
+  force: boolean,
+  changesFirst: boolean,
+): Promise<void> {
   try {
     const scope = await readCache(session).open(paneId, force);
     if (!bindScope(ticket, scope)) return;
@@ -57,6 +103,8 @@ export async function enterWorkspace(
     if (cached?.root === scope.descriptor.root) {
       ticket.commit({ ...cached.navigation });
       if (!force) pages = cached.directoryPageCount;
+    } else if (changesFirst && scope.descriptor.features.git_status) {
+      ticket.commit({ tab: "changes" });
     }
     const restored = getWorkspaceSnapshot();
     const detail = restored.view !== "browser";
@@ -81,6 +129,10 @@ async function restoreDirectory(path: string, pages: number, owner: WorkspaceTic
 }
 
 export function leaveWorkspace(): void {
+  // Back pressed with a key: focus returns to the files button of the session it leaves for.
+  const handBack = focusLeaving(".workspace-shell");
+  // Left from under an open menu or question (the pane went away, a link opened elsewhere): it goes with the screen.
+  dismissFilesDialogs();
   const { paneId, returnView } = beginLeave();
   const session = liveSession();
   adoptDiffNoteScope(null);
@@ -89,6 +141,7 @@ export function leaveWorkspace(): void {
     return;
   }
   restoreWorkspaceLeave(paneId, returnView);
+  handBack();
 }
 
 export async function loadDirectory(path: string, append = false): Promise<void> {
@@ -236,7 +289,9 @@ export async function loadStatus(owner?: WorkspaceTicket): Promise<void> {
 
 export async function refreshWorkspace(): Promise<void> {
   const snap = getWorkspaceSnapshot();
-  await enterWorkspace(snap.paneId, snap.returnView, true);
+  // Beside the session a refresh reloads in place; entering would navigate away from the pane.
+  if (workspaceBeside()) await showWorkspaceBeside(snap.paneId, true);
+  else await enterWorkspace(snap.paneId, snap.returnView, true);
 }
 
 export async function loadGitDiff(path: string, layer: GitLayer): Promise<void> {
@@ -311,6 +366,8 @@ export function showWorkspaceTab(tab: WorkspaceTab): void {
 }
 
 export function closeWorkspaceDetail(): void {
+  // Closed with a key: the row the detail was opened from takes the keyboard back.
+  const handBack = focusClosingDetail();
   const ticket = issueTicket({ content: "bump" });
   clearWorkspaceMedia();
   // Close the detail view but keep the selected path (detailPath): the list
@@ -319,6 +376,7 @@ export function closeWorkspaceDetail(): void {
   // path here would drop the row highlight on close.
   ticket?.commit({ view: "browser", file: null, diff: null, error: "" });
   ticket?.finishLoad();
+  handBack();
 }
 
 export function showMoreWorkspaceChanges(): void {

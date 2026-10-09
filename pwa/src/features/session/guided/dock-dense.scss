@@ -1,0 +1,203 @@
+/* --- A phone on its side: the dense dock ------------------------------------------------
+
+   About 390px of height for the header, the terminal, the pad and the compose
+   row (see keypad/short-landscape.ts, which puts `is-dense` on the dock). Two
+   rows of keys under a row of tabs took all of it: the compose row fell below
+   the fold of the complete terminal and the guided buffer kept one line.
+
+   So a page is one row of keys, and the pad's own chrome stands beside that
+   row instead of under it: the 按键 / 命令 switch on its left, the dots and the
+   page name on its right. Width is what this screen has to spare. Portrait and
+   the mouse-driven dock are untouched: nothing here applies without the class. */
+
+.dock.is-dense,
+.full-terminal-pad.is-dense {
+  /* What is left for two rows of keys once the terminal has its five rows and
+     its scroll row (48px), under a 53px header, with 69px of the dock spoken
+     for: 1 border, 6 + 6 padding, 4 between the rows, 6 above a 46px field.
+     Capped at the portrait key; never under 36px, a landscape keyboard's own. */
+  --pad-key-h: clamp(
+    36px,
+    calc((var(--vv-height, 100dvh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+      - 53px - var(--full-terminal-min-host-height, 113px) - 48px - 69px) / 2),
+    44px
+  );
+  padding-top: 6px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+}
+
+.is-dense .keys { padding: 0; }
+.is-dense .key { min-height: var(--pad-key-h); }
+.is-dense .pad-pages { margin-top: 4px; }
+.is-dense .dock-form,
+.is-dense .full-terminal-compose-form { margin-top: 6px; }
+/* The guided scroller's gap under its last row follows the form's margin. */
+.is-dense .keys-wrap { padding-bottom: 6px; margin-bottom: -6px; }
+
+/* On the shortest screens the keys are drawn 36px high (above): at 320px a
+   44px key would cost the terminal one of the three rows it keeps over an open
+   pad (two rows of keys are 16px more, and a row is 18 to 21). They are still
+   pressed over 44. Each key's hit area takes what lies around it: the dock's
+   6px above the first row, the 4px between the rows (half each where two keys
+   meet), half the 4px between two keys, and the 6px down to the compose row. So the rows tile the pad from its top
+   edge to the field, 6 + 36 + 2 and 2 + 36 + 6, and a press between two keys
+   is one of theirs. Measured from inside the key's 1px border. The guided
+   scroller reaches up over the dock's padding as it does down, or it would
+   clip the first row's area at its own edge. */
+.is-dense .keys-wrap { padding-top: 6px; margin-top: -6px; }
+/* Under an open page the 6px belong to the page's own box: it clips sideways
+   and is a size container, and inside a scroller an area that overflows such a
+   box downward is not hit at all. */
+.is-dense .keys-wrap:has(> .pad-pages) { padding-bottom: 0; }
+.is-dense .keys-wrap > .pad-pages { padding-bottom: 6px; }
+.is-dense .key { position: relative; }
+.is-dense .key::before { content: ""; position: absolute; inset: -3px; }
+.is-dense .keys > .key::before { top: -7px; }
+/* The row ends at the pad's side, and an area past it is content to the guided
+   scroller: it would scroll sideways by those pixels and lay a scrollbar over
+   the band under the keys. */
+.is-dense .keys > .key:first-child::before { left: -1px; }
+.is-dense .keys > .key:last-child::before { right: -1px; }
+/* Over an open page the first row takes the whole gap: where the page has a key under it that key's area lies on top, and beside the page nothing else would. */
+.is-dense .keys:has(+ .pad-pages) > .key::before { bottom: -5px; }
+.is-dense .pad-page > .key::before,
+.is-dense .keys:not(:has(+ .pad-pages)) > .key::before { bottom: -7px; }
+/* The page's first key takes the 8px column gap at the pad's side when nothing
+   stands there; a page name or 编辑 that does is drawn after it and keeps its own. */
+.is-dense .pad-pages.is-one-row > .pad-page > .key:first-child::before { left: -9px; }
+
+/* Live input in the complete terminal: the keyboard button takes the compose
+   field's place in the bottom row, where a row of its own would cost a line. */
+.is-dense .full-terminal-live-actions { margin-top: 6px; padding: 0; }
+.is-dense .full-terminal-kb {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  min-height: 46px;
+  margin: 0;
+}
+
+/* One row to a page (pad-pages.tsx): page name or Edit · keys · dots · switch.
+   A container, so what the row can afford follows its own width: beside the
+   list on a large phone the dock is a 620px column of a 932px screen. */
+.pad-pages.is-one-row {
+  container: pad-row / inline-size;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto var(--pad-key-h, 44px);
+  align-items: center;
+  column-gap: 8px;
+}
+.pad-pages.is-one-row > .pad-edit-hint { grid-area: 1 / 1 / 2 / -1; margin-bottom: 4px; }
+/* As many of its keys as fit at 44px (pad-pages.tsx sets the count it measured). */
+.pad-pages.is-one-row > .pad-page {
+  grid-area: 2 / 2;
+  grid-template-columns: repeat(var(--pad-cols), minmax(0, 1fr));
+  grid-template-rows: var(--pad-key-h, 44px);
+}
+.pad-pages.is-one-row > .pad-pagination { display: contents; }
+.pad-pages.is-one-row .pad-pagination-start { grid-area: 2 / 1; }
+.pad-pages.is-one-row .pad-dots { grid-area: 2 / 3; }
+.pad-pages.is-one-row .pad-pagination-end { grid-area: 2 / 4; }
+/* As wide as the longer of the two names, so turning the page moves no key. */
+.pad-pages.is-one-row .pad-page-name {
+  display: inline-block;
+  min-width: 68px;
+  text-align: start;
+}
+
+/* Seven keys of 44px need 332px. Under 700px an English row cannot give the
+   page name its 68 as well, so the name goes whole rather than cut: the dots
+   still say where the page is. Under 600px the dots close up too. */
+@container pad-row (max-width: 699.98px) {
+  .pad-pages.is-one-row .pad-page-name { display: none; }
+}
+@container pad-row (max-width: 599.98px) {
+  .pad-pages.is-one-row .pad-page-dot { width: 24px; }
+}
+
+/* A row with no room for dots at 24px (pad-fit.ts) does not draw them closer:
+   a 16px dot is not a target. The page is a count instead, one box a finger
+   wide; pressing it turns to the next page, and the row is swiped as before. */
+.pad-page-count {
+  position: relative;
+  min-width: 44px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 500 11px var(--font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pad-page-count b { color: var(--accent); font-weight: 650; }
+.pad-page-count::before { content: ""; position: absolute; inset: 0; }
+.pad-page-count:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Beside the keys the chrome has the row's whole height to be pressed in. */
+.pad-pages.is-one-row :is(.pad-kind-option, .pad-page-dot, .pad-page-count, .pad-text-btn)::before {
+  top: 50%;
+  bottom: auto;
+  height: var(--pad-key-h, 44px);
+  translate: 0 -50%;
+}
+/* In the dense dock that is the keys' own band beside them: 2px above the row and 6px below it. */
+.is-dense .pad-pages.is-one-row :is(.pad-kind-option, .pad-page-dot, .pad-page-count, .pad-text-btn)::before {
+  top: calc(50% + 2px);
+  height: calc(var(--pad-key-h, 44px) + 8px);
+}
+/* The switch meets the dots' area: its 3px of frame and the 2px the last dot leaves of the gap. */
+.is-dense .pad-pages.is-one-row .pad-kind-option:first-child::before { left: -5px; }
+/* The keys are 8px away on either side of the dots. */
+.pad-pages.is-one-row .pad-page-dot:first-child::before { left: -6px; }
+.pad-pages.is-one-row .pad-page-dot:last-child::before { right: -6px; }
+
+/* A command's name in a key of this row: `/compact` is 58px of type in a 62px
+   key on a 568px screen and stood on both borders. The name keeps 5px clear of
+   them, set a size smaller where the row is that narrow, and one longer than
+   its key ends in an ellipsis (the name is its own box: a button's own text
+   has no ellipsis to give). */
+.pad-pages.is-one-row :is(.slash-cmd, .quick-cmd) { padding-inline: 5px; }
+.pad-pages.is-one-row .pad-cmd-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@container pad-row (max-width: 599.98px) {
+  .pad-pages.is-one-row .slash-cmd { font-size: 10px; }
+  .pad-pages.is-one-row .quick-cmd { font-size: 11px; }
+}
+
+/* The buffer above a dense dock ends on the scroll rail's row, not on the
+   screen's edge: its last line needs no more room under it than over it. Ten
+   pixels are most of a fifth row at 360px. */
+[data-react-guided-pane]:has(.dock.is-dense) .term { padding-bottom: 8px; }
+
+/* The complete terminal keeps five rows and its scroll row above the pad, and
+   the pad scrolls rather than take them. Under about 355px of height that
+   leaves the pad less than its densest form (141px: the 69 above and two 36px
+   rows), and a pad that scrolls hides the compose row. So here the terminal's
+   floor is the lesser of the two: five rows, or what the densest pad leaves,
+   which at 320px is three rows over the scroll row.
+
+   Arranging commands puts a line of instructions (18px and its 4px margin)
+   above the row; the terminal lends that too while it lasts, as it gives way
+   upright. */
+.full-terminal-root:has(> .full-terminal-pad.is-dense) {
+  --dense-lend: 0px;
+  --dense-host-floor: max(0px, min(
+    calc(var(--full-terminal-min-host-height, 128px) + 48px - var(--dense-lend)),
+    calc(var(--vv-height, 100dvh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+      - 53px - 141px - var(--dense-lend))
+  ));
+}
+.full-terminal-root:has(> .full-terminal-pad.is-dense .pad-edit-hint) { --dense-lend: 22px; }
+.full-terminal-root:has(> .full-terminal-pad.is-dense) > .full-terminal-host { min-height: var(--dense-host-floor); }
+.full-terminal-pad.is-dense {
+  max-height: calc(var(--vv-height, 100dvh) - 53px - env(safe-area-inset-top, 0px) - var(--dense-host-floor));
+}
+/* Beside the list the pad's ceiling is measured from its column (full-terminal.scss). */
+#app.desk .full-terminal-pad.is-dense { max-height: calc(100% - 53px - var(--dense-host-floor)); }

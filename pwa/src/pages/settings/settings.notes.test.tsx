@@ -11,6 +11,7 @@ import { applyOriginConfig, connectionStore, setPhase, type Phase } from "../../
 import { attachLiveSession, computersStore, setCredential, setLastUsedDaemon } from "../../features/computers/catalog-store";
 import { navigationStore, setScreen, type Screen } from "../../app/navigation-store";
 import { setLang, t } from "../../lib/i18n";
+import { setSettingsSection } from "../../features/settings/settings-section";
 import type { PairResult } from "../../lib/protocol/client";
 import { stopPolling } from "../../features/connection/controller";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
@@ -118,31 +119,62 @@ describe("settings notes and inline steps (actual App)", () => {
     mountSettings();
     const app = appRoot();
     expect([...app.querySelectorAll(".set-group-label")].map((el) => el.firstElementChild?.textContent))
-      .toEqual(["订阅余量", "会话默认", "这台手机"]);
+      .toEqual(["订阅余量", "会话默认", "这台设备"]);
     expect(app.querySelector(".set-help")).toBeNull();
     expect(app.querySelector('[aria-haspopup="dialog"]')).toBeNull();
     expect(app.querySelector(".session-defaults .set-foot")?.textContent).toContain("只影响新打开的会话");
     // Computer-owned actions live on the computer page, not the overview.
-    expect(app.textContent).not.toContain("解除这台手机的配对");
+    expect(app.textContent).not.toContain("解除这台设备的配对");
     expect(app.textContent).not.toContain("导出连接诊断");
     expect(app.textContent).not.toContain("危险操作");
   });
 
-  test("the computer page names the computer in its panel and explains a P2P-off site under the route", () => {
+  test("the computer page names its computer once: in the panel at rest, in the bar once the panel has scrolled under it", async () => {
+    mountSettings();
+    openComputerPage();
+    const app = appRoot();
+    const heading = app.querySelector(".topbar-title")!;
+    const name = app.querySelector<HTMLElement>(".cp-name")!;
+    const bar = app.querySelector<HTMLElement>(".topbar")!;
+    const at = (top: number, bottom: number) => () => ({ top, bottom, left: 0, right: 300, width: 300, height: bottom - top, x: 0, y: top, toJSON() {} });
+    const scrolled = async () => {
+      await act(async () => {
+        document.dispatchEvent(new happy.Event("scroll") as unknown as Event);
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        await Promise.resolve();
+      });
+    };
+    expect(heading.classList.contains("sr-only")).toBeFalse();
+    expect(heading.textContent).toBe(t("settings.computer"));
+    expect(name.textContent).not.toBe(t("settings.computer"));
+    bar.getBoundingClientRect = at(0, 52);
+    // Half under the bar is still in sight.
+    name.getBoundingClientRect = at(40, 62);
+    await scrolled();
+    expect(heading.textContent).toBe(t("settings.computer"));
+    name.getBoundingClientRect = at(20, 42);
+    await scrolled();
+    expect(heading.textContent).toBe(name.textContent);
+    name.getBoundingClientRect = at(80, 102);
+    await scrolled();
+    expect(heading.textContent).toBe(t("settings.computer"));
+    // Back on the overview the bar is the family's own title again.
+    act(() => setSettingsSection("overview"));
+    expect(app.querySelector(".topbar-title, .settings-title")?.textContent).toBe(t("settings.title"));
+  });
+
+  test("the computer page explains a P2P-off site under the route", () => {
     mountSettings();
     act(() => applyOriginConfig({ protocol: 2, p2p: false }));
     openComputerPage();
     const app = appRoot();
-    const heading = app.querySelector(".topbar-title");
-    expect(heading?.classList.contains("sr-only")).toBeTrue();
-    expect(heading?.textContent).toBe(app.querySelector(".cp-name")?.textContent ?? "");
     expect(app.querySelector("button.cp-main")).toBeNull();
     expect(app.querySelector(".route-group .set-foot")?.textContent).toContain("当前站点未开放 P2P");
     const p2p = [...app.querySelectorAll<HTMLButtonElement>('.route-group [role="radio"]')]
       .find((el) => el.querySelector(".set-item-label")?.textContent === "仅 P2P");
     expect(p2p?.disabled).toBeTrue();
-    expect(buttonLabelled("解除这台手机的配对").classList.contains("set-danger")).toBeTrue();
-    expect(app.textContent).toContain("解除后，这台手机会立即断开并删除本地凭证");
+    expect(buttonLabelled("解除这台设备的配对").classList.contains("set-danger")).toBeTrue();
+    expect(app.textContent).toContain("解除后，这台设备会立即断开并删除本地凭证");
   });
 
   test("notification setup steps expand inside the card instead of a dialog", () => {

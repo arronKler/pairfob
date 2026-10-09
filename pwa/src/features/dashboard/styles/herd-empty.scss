@@ -66,12 +66,17 @@
   text-wrap: balance;
 }
 
+/* A line or two of explanation in a narrow column: broken into even lines, so
+   the last is never one word (or, in Chinese, a character and its full stop)
+   on its own. The same for every such note here and on the pages built from
+   these parts. */
 .herd-empty-sub {
   max-width: 34ch;
   margin: -6px 0 0;
   color: var(--muted);
   font-size: var(--text-secondary);
   line-height: 1.55;
+  text-wrap: balance;
 }
 
 .herd-empty-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -133,7 +138,15 @@
 }
 
 .herd-empty-command-label { flex: none; }
-.herd-empty-copy { flex: none; margin-left: auto; min-height: 36px; padding: 0 6px; }
+.herd-empty-copy { position: relative; flex: none; margin-left: auto; min-height: 36px; padding: 0 6px; }
+
+/* Drawn 36px tall so the command's row keeps its height; the target reaches
+   5px further on each side, into that row's own 8px of padding. */
+.herd-empty-copy::after {
+  content: "";
+  position: absolute;
+  inset: -5px 0;
+}
 
 .herd-empty-panel {
   display: grid;
@@ -152,6 +165,7 @@
   color: var(--ink);
   font-size: var(--text-lead);
   font-weight: 700;
+  text-wrap: balance;
 }
 
 .herd-empty-panel.is-exited .herd-empty-panel-title svg { color: var(--error); }
@@ -162,7 +176,14 @@
   margin: 6px 2px 4px;
   color: var(--muted);
   font-size: var(--text-secondary);
+  text-wrap: balance;
 }
+
+/* The desk rail beside a column that says the invitation itself: one quiet
+   line where the rows would start, then what is the list's own. */
+.herd-empty.is-beside { gap: 10px; padding-top: 8px; }
+.herd-empty.is-beside .herd-empty-note { margin: 0 2px; font-weight: 500; }
+.herd-empty.is-beside .herd-empty-recent { margin-top: 4px; }
 
 @media (prefers-reduced-motion: reduce) {
   .herd-empty-glyph i { animation: none; }

@@ -7,29 +7,33 @@
 */
 
 @use "./pane-layout-preview";
+@use "../../../shared/ui/styles/desk-action" as action;
 
 /* --- Height follows content ---------------------------------------------------
    Short pages leave the pane visible above the sheet so in-place changes are
    seen landing; only pages whose content is long by nature grow tall. */
 
 @media (max-width: 899.98px) {
+  /* The sheet only: anchored under its button (a mouse on a narrow desk window) the
+     same panel is placed and sized by the popover, and with nothing left to
+     anchor to it is the centred card of a wide window. */
   /* The soft keyboard does not shrink the layout viewport on iOS, so the
      bottom-anchored sheet lifts by the keyboard inset and never grows past
      the visible viewport: the field and the pinned footer stay above the keys. */
   /* Four tiles always sit on one row; auto-fit wrapped the fourth onto its own line. */
-  dialog.modal.pane-menu-sheet .menu-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  dialog.modal.pane-menu-sheet:where(:not(.popover, .desk-form)) .menu-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
-  dialog.modal.pane-menu-sheet {
+  dialog.modal.pane-menu-sheet:where(:not(.popover, .desk-form)) {
     margin-bottom: var(--kb, 0px);
     max-height: calc(var(--vv-height, 100dvh) - 12px);
   }
 
-  dialog.modal.pane-menu-sheet > form {
+  dialog.modal.pane-menu-sheet:where(:not(.popover, .desk-form)) > form {
     max-height: min(82dvh, calc(var(--vv-height, 100dvh) - 12px));
   }
 
-  dialog.modal.pane-menu-sheet:has(.pane-page.is-tall) > form,
-  html[data-kb="open"] dialog.modal.pane-menu-sheet > form { max-height: min(92dvh, calc(var(--vv-height, 100dvh) - 12px)); }
+  dialog.modal.pane-menu-sheet:where(:not(.popover, .desk-form)):has(.pane-page.is-tall) > form,
+  html[data-kb="open"] dialog.modal.pane-menu-sheet:where(:not(.popover, .desk-form)) > form { max-height: min(92dvh, calc(var(--vv-height, 100dvh) - 12px)); }
 }
 
 /* A field scrolled into view clears the sticky footer below it. */
@@ -109,6 +113,15 @@
   font: 500 var(--text-caption) var(--mono);
 }
 
+/* The line is 28px tall; a finger gets 44px around it. */
+.pane-head-path { position: relative; }
+
+.pane-head-path::after {
+  content: "";
+  position: absolute;
+  inset: -8px 0;
+}
+
 .pane-head-path > span {
   overflow: hidden;
   white-space: nowrap;
@@ -134,6 +147,12 @@
 .pane-mode { margin-top: 8px; }
 
 .pane-mode .menu-mode { margin: 0; }
+
+.pane-width-options .seg-item {
+  min-width: 0;
+  padding-inline: 3px;
+  white-space: nowrap;
+}
 
 .pane-mode-hint {
   margin: 6px 2px 0;
@@ -219,6 +238,119 @@
   gap: var(--space-2);
 }
 
+/* --- Anchored under the header button -----------------------------------------
+   Opened with a mouse on a desk layout the same panel hangs under the "more"
+   button, beside the pane it changes (overlay/popover). A mouse does not need
+   finger-sized rows, and the tighter rhythm keeps "close session" on screen in
+   a short window. Touch, and every phone, keeps the sizes above. */
+
+@media (min-width: 720px) and (hover: hover) and (pointer: fine) {
+  .popover-panel.pane-menu-sheet .sheet-body {
+    --desk-pad: 14px;
+    padding: 0 14px 14px;
+  }
+
+  /* A page's footer stands under the body (`.sheet-foot`, desk-dialog.scss) on the same inset. */
+  .popover-panel.pane-menu-sheet .sheet-foot { --desk-pad: 14px; }
+
+
+  .popover-panel.pane-menu-sheet .seg-item { min-height: 32px; }
+
+  .popover-panel.pane-menu-sheet .menu-tile {
+    gap: 4px;
+    min-height: 56px;
+    padding: 8px 4px 6px;
+  }
+
+  .popover-panel.pane-menu-sheet .menu-tile-icon svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .popover-panel.pane-menu-sheet .menu-setting {
+    min-height: 42px;
+    padding: 4px 0;
+  }
+
+  .popover-panel.pane-menu-sheet .menu-stepper-btn {
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .popover-panel.pane-menu-sheet .menu-switch { min-height: 32px; }
+
+  .popover-panel.pane-menu-sheet .menu-row { min-height: 38px; }
+
+  .popover-panel.pane-menu-sheet .pane-group-title,
+  .popover-panel.pane-menu-sheet .menu-danger-zone { margin-top: 12px; }
+}
+
+/* --- The desk form of the panel ------------------------------------------------
+   Anchored under its button, or the centred card when nothing is left to hang
+   from: the dialog's corner close stands in for the identity head's own (it is
+   written last, so Tab walks the panel first), the path line has room for its
+   focus ring between the name and the status, and the closing question ends in
+   the desk footer's two buttons. Pushed pages take the desk form's head and
+   footer from shared/ui/styles/desk-dialog.scss and the create footer. */
+
+$desk: ":is(.desk-form, .popover-panel)";
+
+dialog.modal#{$desk} .pane-head-close { display: none; }
+
+/* The identity stays at the top while the panel scrolls under it: the corner
+   close is fixed there, and rows must not pass beneath it. It is ruled off
+   once something has (`data-above`, overlay/sheet-content.tsx). */
+dialog.modal.pane-menu-sheet#{$desk} .sheet-body { padding-top: 0; }
+
+dialog.modal#{$desk} .pane-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 calc(var(--desk-pad, 18px) * -1);
+  padding: 12px calc(var(--desk-pad, 18px) + 36px) 6px var(--desk-pad, 18px);
+  background: var(--surface);
+}
+
+dialog.modal#{$desk} .sheet-body[data-above] .pane-head { box-shadow: 0 1px 0 var(--line); }
+
+dialog.modal#{$desk} .pane-head-path {
+  min-height: 24px;
+  margin: 3px -6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  outline-offset: 0;
+}
+
+/* The line is shorter here, so its finger area reaches further; a mouse needs none. */
+dialog.modal#{$desk} .pane-head-path::after { inset: -10px 0; }
+
+@media (hover: hover) and (pointer: fine) {
+  dialog.modal#{$desk} .pane-head-path::after { content: none; }
+}
+
+dialog.modal#{$desk} .pane-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+dialog.modal#{$desk} .pane-confirm-actions .btn { @include action.desk-action; }
+
+dialog.modal#{$desk} .pane-confirm-actions .pane-confirm-cancel {
+  @include action.desk-action-quiet;
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover { background: var(--line); }
+  }
+}
+
+/* The clear control's ring stays inside the field it belongs to. */
+dialog.modal#{$desk} .pane-rename-clear { outline-offset: -5px; }
+
+.pane-rename-label {
+  display: block;
+  margin: 4px 0 0;
+}
+
 /* --- Page skeleton ------------------------------------------------------------ */
 
 .pane-fieldset {
@@ -235,6 +367,15 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+/* Busy, the button is not disabled: it holds focus while the form is locked
+   (operations/sheet-page.tsx). It looks and answers as the disabled one did. */
+.pane-page-footer .create-submit[aria-disabled="true"] { cursor: not-allowed; }
+
+.pane-page-footer .create-submit[aria-disabled="true"]:active {
+  background: var(--accent);
+  transform: none;
 }
 
 .pane-page-note {

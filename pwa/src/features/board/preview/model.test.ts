@@ -4,7 +4,7 @@ import {
   ansiPreviewModel,
   BOARD_PREVIEW_MAX_PANES,
   boardPreviewPaneIds,
-  previewFillScale,
+  previewFit,
   previewGridPx,
   previewLineCount,
 } from "./model";
@@ -22,8 +22,13 @@ function layout(panes: Array<{ paneId: string; focused: boolean }>, focusedPaneI
 
 describe("board preview projection", () => {
   test("fits the TUI grid into the cell without stretching either axis", () => {
-    expect(previewFillScale(480, 640, 520, 660)).toEqual({ x: 660 / 640, y: 660 / 640 });
-    expect(previewFillScale(8, 16, 400, 640)).toEqual({ x: 1, y: 1 });
+    // Each side of the cell on its own; the smaller is the one scale both axes get.
+    expect(previewFit(480, 640, 520, 660)).toEqual({ byWidth: 520 / 480, byHeight: 660 / 640 });
+    // A grid the cell would blow up past twice its size is drawn as it is.
+    expect(previewFit(8, 16, 400, 640)).toEqual({ byWidth: 1, byHeight: 1 });
+    expect(previewFit(0, 16, 400, 640)).toEqual({ byWidth: 1, byHeight: 1 });
+    // A grid of unknown height is fitted by its width alone.
+    expect(previewFit(480, 0, 520, 660)).toEqual({ byWidth: 520 / 480, byHeight: 520 / 480 });
     expect(previewGridPx(52, 40)).toEqual({ width: 416, height: 640 });
   });
 

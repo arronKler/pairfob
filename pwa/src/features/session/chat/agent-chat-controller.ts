@@ -14,10 +14,9 @@ import {
   setTraceUnread,
   type ChatRecord,
 } from "./trace-store";
-import {
-  COMPOSE_MAX_PX, COMPOSE_MIN_PX, composeDraft, composeFocused, composeIME, setComposeDraft,
-} from "../compose-store";
-import { clearNoticeForScope, showError, showStatus, visibleNotice, type Notice } from "../../../app/notices-store";
+import { composeDraft, composeFocused, composeIME, setComposeDraft } from "../compose-store";
+import { fitComposeHeight } from "../compose-size";
+import { clearNoticeForScope, showError, visibleNotice, type Notice } from "../../../app/notices-store";
 import { currentDaemonId, liveSession } from "../../computers/catalog-store";
 import { phase } from "../../connection/connection-store";
 import { batch } from "../../../app/domain-publication";
@@ -55,6 +54,7 @@ import {
   switchComposeView,
 } from "../drafts/compose-drafts";
 import { leaveFullTerminal } from "../full-terminal/full-terminal";
+import { sessionMayTakeFocus } from "../focus";
 import { agentEmptySpec, agentStreamSignature, type AgentEmptySpec } from "./model";
 import { publishAgentChatUI } from "./agent-chat-ui";
 import { captureTraceViewport, restoreTraceViewport } from "./viewport";
@@ -256,8 +256,7 @@ export function jumpToLatest(): void {
 }
 
 export function sizeChatCompose(field: HTMLTextAreaElement): void {
-  field.style.height = "auto";
-  field.style.height = `${Math.min(Math.max(field.scrollHeight, COMPOSE_MIN_PX), COMPOSE_MAX_PX)}px`;
+  fitComposeHeight(field);
   stickAgentStream();
 }
 
@@ -578,22 +577,27 @@ export function leaveAgentChat(opts?: { rememberGuided?: boolean; paint?: boolea
   if (opts?.paint !== false) commitView();
 }
 
-export async function copyAgentReply(text: string, what: "reply" | "code" = "reply"): Promise<void> {
+/**
+ * Put a reply or one of its code blocks on the clipboard. True once it is
+ * there: the pressed button says so itself (`copy-confirm`), so nothing is
+ * raised above the transcript. A refusal is an error the reader has to read.
+ */
+export async function copyAgentReply(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     haptic(6);
-    showStatus(t(what === "code" ? "chat.copiedCode" : "chat.copiedReply"));
+    return true;
   } catch {
     showError(t("err.copyDenied"));
+    publishAgentChatUI();
+    return false;
   }
-  publishAgentChatUI();
 }
 
 function syncChatCompose(): void { publishAgentChatUI(); }
 
-export function chatDockNotice(): Notice | null {
-  const fromApp = visibleNotice();
-  if (fromApp) return fromApp;
+/** The chat's own note about its history: there for as long as the state it reports. */
+export function chatTraceNote(): Notice | null {
   if (chatSnapshot().agentTraceNote === traceUnavailableNote()) return null;
   if (!(chatSnapshot().agentTraceItems.length || chatSnapshot().agentTracePending) || !chatSnapshot().agentTraceNote) return null;
   return { text: chatSnapshot().agentTraceNote, tone: chatSnapshot().agentTraceLoadState === "error" ? "error" : "status" };
@@ -680,7 +684,8 @@ function releasePromptOwner(owner: { lockId: number }, live: boolean): void {
   appRoot().setAttribute("aria-busy", operationBusy() ? "true" : "false");
   syncChatDock();
   stickAgentStream();
-  if (!composeFocused()) composeEl()?.focus({ preventScroll: true });
+  // The reply can land while the reader is in the list or the inspector.
+  if (!composeFocused() && sessionMayTakeFocus()) composeEl()?.focus({ preventScroll: true });
 }
 
 export async function submitAgentPrompt(): Promise<void> {

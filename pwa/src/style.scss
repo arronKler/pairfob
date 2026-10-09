@@ -9,6 +9,7 @@
 @use "./features/dashboard/styles/herd-skeleton";
 @use "./features/dashboard/styles/herd-empty";
 @use "./features/dashboard/styles/herd-connect";
+@use "./features/dashboard/styles/object-menu";
 @use "./app/layout/styles/tab-bar";
 @use "./features/pairing/styles/connect";
 @use "./features/session/guided/session-shell";
@@ -18,10 +19,14 @@
 @use "./features/session/chat/agent-chat";
 @use "./features/session/chat/work-card";
 @use "./styles/attachments";
+@use "./styles/attachment-viewer";
 @use "./features/session/guided/row-actions";
 @use "./features/session/guided/dock";
 @use "./features/session/guided/compose";
+@use "./features/session/guided/dock-dense";
 @use "./app/layout/styles/desk";
+@use "./app/layout/styles/desk-rail";
+@use "./app/layout/styles/desk-empty";
 @use "./styles/switcher";
 @use "./features/computers/styles/computers";
 @use "./features/settings/styles/settings";
@@ -32,6 +37,8 @@
 @use "./shared/ui/styles/overlay";
 @use "./shared/ui/styles/menu-controls";
 @use "./shared/ui/styles/dialogs";
+@use "./shared/ui/styles/popover";
+@use "./shared/ui/styles/desk-dialog";
 @use "./features/session/keypad/quick-command-editor";
 @use "./features/operations/styles/operations";
 @use "./features/operations/styles/create-sheet";
@@ -41,9 +48,13 @@
 @use "./features/workspace/workspace-media";
 @use "./features/workspace/file-icons";
 @use "./features/workspace/workspace-pending";
+@use "./features/workspace/workspace-inspector";
+@use "./features/command-palette/command-palette";
 @use "./features/board/styles/board";
 @use "./features/board/styles/board-canvas";
 @use "./features/board/styles/pane-menu";
 @use "./features/board/styles/board-chrome";
 @use "./features/board/styles/board-overlays";
+/* One rule for every scroller above, so it follows them. */
+@use "./styles/scrollbars";
 @use "./styles/motion";

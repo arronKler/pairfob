@@ -16,12 +16,21 @@ export function ptyCols(visibleCols: number, fit: TermFitMode, target = FULL_TER
   return Math.max(visibleCols, target);
 }
 
-/** Measure against the visible host, then stretch the canvas to the PTY. */
+/**
+ * Measure against the room the terminal is sized for, then stretch the canvas to
+ * the PTY. Rounded up: xterm's own fit runs against this box, and a box a
+ * fraction short of the room would drop the last column and its text with it.
+ */
 export function probePanCanvas(canvas: HTMLElement | null, hostWidth: number): void {
   if (!canvas) return;
-  canvas.style.width = hostWidth > 0 ? `${Math.round(hostWidth)}px` : "";
+  canvas.style.width = hostWidth > 0 ? `${Math.ceil(hostWidth)}px` : "";
 }
 
+/**
+ * Give the canvas the PTY's width when the host cannot show all of it. A grid
+ * the host does show fills the host through the style sheet, so nothing is left
+ * to overflow by a fraction of a pixel.
+ */
 export function sizePanCanvas(
   canvas: HTMLElement | null,
   pan: boolean,
@@ -30,12 +39,10 @@ export function sizePanCanvas(
   hostWidth: number,
 ): void {
   if (!canvas) return;
-  if (!pan || !(cols > 0) || !(cellWidth > 0)) {
-    canvas.style.width = "";
-    return;
-  }
-  canvas.style.width = `${Math.max(Math.round(hostWidth), Math.round(cols * cellWidth))}px`;
+  const width = pan && cols > 0 && cellWidth > 0 ? cols * cellWidth : 0;
+  canvas.style.width = width > hostWidth ? `${Math.round(width)}px` : "";
 }
+
 export const FULL_TERM_FONT_MIN = 11;
 export const FULL_TERM_FONT_MAX = 22;
 export const FULL_TERM_FONT_FAMILY =
@@ -74,11 +81,21 @@ export function hostInnerSize(host: HTMLElement): HostInner {
   };
 }
 
+/**
+ * The width layout gave an element, unrounded. `clientWidth` rounds to a whole
+ * pixel, and beside a column sized in viewport units that can be half a pixel
+ * more than the box really has.
+ */
+export function usedWidth(element: HTMLElement): number {
+  const width = Number.parseFloat(window.getComputedStyle(element).width);
+  return width > 0 ? width : element.clientWidth;
+}
+
 /** Visible xterm box; short landscape reserves a sibling grid row for controls. */
 export function terminalViewportSize(host: HTMLElement, fallback = hostInnerSize(host)): HostInner {
   const viewport = host.querySelector<HTMLElement>(".full-terminal-pan");
   if (!viewport || !(viewport.clientWidth > 0) || !(viewport.clientHeight > 0)) return fallback;
-  return { width: viewport.clientWidth, height: viewport.clientHeight };
+  return { width: usedWidth(viewport), height: viewport.clientHeight };
 }
 
 /**
@@ -299,6 +316,42 @@ export function terminalGridSize(
     rows,
     cellWidth: visual.width || Math.round(measured?.width || 0),
     cellHeight: visual.height || Math.round(measured?.height || 0),
+  };
+}
+
+/** The xterm screen box, or the host's own while the renderer has not opened. */
+function screenRect(host: HTMLElement): DOMRect | null {
+  const screen = host.querySelector(".xterm-screen") as HTMLElement | null;
+  const rect = (screen ?? host).getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 ? rect : null;
+}
+
+/** The grid cell under a viewport point, clamped to the grid. */
+export function terminalCellAt(
+  host: HTMLElement,
+  grid: { cols: number; rows: number },
+  clientX: number,
+  clientY: number,
+): { column: number; row: number } | undefined {
+  const rect = screenRect(host);
+  if (!rect) return;
+  return {
+    column: clamp(Math.floor((clientX - rect.left) / (rect.width / grid.cols)), 0, grid.cols - 1),
+    row: clamp(Math.floor((clientY - rect.top) / (rect.height / grid.rows)), 0, grid.rows - 1),
+  };
+}
+
+/** The centre of a grid cell in viewport coordinates. xterm draws on canvas, so there is no node to measure. */
+export function terminalCellPoint(
+  host: HTMLElement,
+  grid: { cols: number; rows: number },
+  cell: { column: number; row: number },
+): { x: number; y: number } | null {
+  const rect = screenRect(host);
+  if (!rect) return null;
+  return {
+    x: rect.left + (cell.column + 0.5) * (rect.width / grid.cols),
+    y: rect.top + (cell.row + 0.5) * (rect.height / grid.rows),
   };
 }
 

@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { applySnapshot as seedPadSnapshot } from "../../dashboard/catalog-store";
 import { selectPane as selectPadPane } from "../session-store";
 import { act, createElement } from "react";
@@ -83,8 +84,8 @@ describe("React session dock", () => {
       act(() => { button.dispatchEvent(down); });
       expect(down.defaultPrevented).toBe(true);
       await act(() => { button.click(); });
-      expect(appRoot().querySelector("textarea")).toBe(input);
-      expect(document.activeElement).toBe(input);
+      expectSameNode(appRoot().querySelector("textarea"), input);
+      expectSameNode(document.activeElement, input);
       expect([input.selectionStart, input.selectionEnd]).toEqual([1, 4]);
       expect(input.value).toBe("正在编辑的文字");
       expect(composeIME()).toBe(true);
@@ -116,7 +117,7 @@ describe("React session dock", () => {
     expect(ctrl.getAttribute("aria-pressed")).toBe("true");
     expect(ctrl.classList.contains("on")).toBe(true);
     await act(() => { paint(); });
-    expect(appRoot().querySelector(".key-mod")).toBe(ctrl);
+    expectSameNode(appRoot().querySelector(".key-mod"), ctrl);
     expect(ctrl.getAttribute("aria-pressed")).toBe("true");
     expect(ctrl.classList.contains("on")).toBe(true);
   });

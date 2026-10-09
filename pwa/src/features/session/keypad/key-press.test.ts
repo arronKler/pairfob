@@ -1,6 +1,7 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
-import { bindPadPress, REPEAT_DELAY_MS, REPEAT_EVERY_MS } from "./key-press";
+import { bindPadPress, pressReach, REPEAT_DELAY_MS, REPEAT_EVERY_MS } from "./key-press";
 
 const happy = new Window({ url: "https://pairfob.com/pair" });
 const stops: Array<() => void> = [];
@@ -38,7 +39,7 @@ describe("pad physical press ownership", () => {
   test("keeps focus and selection, gives press feedback and consumes the matching click once", () => {
     const { input, button, pointer, count, releases } = setup();
     expect(pointer("pointerdown").defaultPrevented).toBe(true);
-    expect(happy.document.activeElement).toBe(input);
+    expectSameNode(happy.document.activeElement, input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([2, 6]);
     expect(button.classList.contains("is-pressed")).toBe(true);
     pointer("pointerdown");
@@ -161,5 +162,50 @@ describe("pad physical press ownership", () => {
     await new Promise((resolve) => setTimeout(resolve, REPEAT_EVERY_MS * 2));
     expect(count()).toBe(detachedCount);
     expect(releases).toEqual([true]);
+  });
+});
+
+describe("a key pressed in the hit area around it", () => {
+  // A 36px key of the dense pad: its hit area reaches 6px up into the dock's padding and 2px into each gap.
+  const box = { left: 100, right: 170, top: 186, bottom: 222, width: 70, height: 36, x: 100, y: 186 } as DOMRect;
+  const pressAt = (clientX: number, clientY: number) => {
+    const pad = setup(true);
+    pad.button.getBoundingClientRect = () => box;
+    pad.pointer("pointerdown", { clientX, clientY });
+    return pad;
+  };
+  const move = (clientX: number, clientY: number) => happy.document.dispatchEvent(new happy.PointerEvent("pointermove", {
+    pointerId: 1, pointerType: "touch", bubbles: true, clientX, clientY,
+  }));
+
+  test("stays the key's while the finger stays where it came down: its first move does not end the press", () => {
+    const { button, pointer, count, releases } = pressAt(135, 181);
+    expect(count()).toBe(1);
+    // A finger never holds still: half a pixel on, and still above the key's own box.
+    move(135.5, 181.5);
+    move(134, 180);
+    expect(button.classList.contains("is-pressed")).toBe(true);
+    expect(releases).toEqual([]);
+    pointer("pointerup", { clientX: 134, clientY: 180 });
+    expect(releases).toEqual([false]);
+  });
+
+  test("is left when the finger goes on past where it came down", () => {
+    const { button, releases } = pressAt(135, 181);
+    // 6px above the key at the press, so 9 with the pressed key's shrink: 12px above is gone.
+    move(135, 174);
+    expect(button.classList.contains("is-pressed")).toBe(false);
+    expect(releases).toEqual([true]);
+  });
+
+  test("a press on the key itself keeps the key's box exactly, as it always did", () => {
+    const { button, releases } = pressAt(135, 200);
+    move(135, 187);
+    expect(button.classList.contains("is-pressed")).toBe(true);
+    move(135, 185);
+    expect(button.classList.contains("is-pressed")).toBe(false);
+    expect(releases).toEqual([true]);
+    expect(pressReach(box, { clientX: 135, clientY: 200 })).toEqual({ left: 0, right: 0, top: 0, bottom: 0 });
+    expect(pressReach(box, { clientX: 98, clientY: 224 })).toEqual({ left: 5, right: 0, top: 0, bottom: 5 });
   });
 });

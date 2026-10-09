@@ -47,15 +47,20 @@ export function deferHostMinimumHeight(root: HTMLElement | null, height: number)
  * Ignore the initial delivery and coalesce height-only changes while a phone's
  * software keyboard animates. The shell can still follow the visual viewport,
  * but xterm only clears, fits, and repaints once the available height settles.
+ *
+ * `roomHeight` is the height the terminal is sized against. A change that
+ * leaves it alone (a draft growing a line over the terminal) has nothing to
+ * settle: the grid stays, and the part in view moves at once.
  */
 export function observeHostResize(
   host: HTMLElement,
   resize: () => void,
-  options: { settleHeight?: boolean } = {},
+  options: { settleHeight?: boolean; roomHeight?: () => number } = {},
 ): { disconnect: () => void } | null {
   if (typeof ResizeObserver === "undefined") return null;
   let width = host.clientWidth;
   let height = host.clientHeight;
+  let room = options.roomHeight?.();
   let settleTimer = 0;
   let active = true;
   const clearSettle = (): void => {
@@ -67,10 +72,13 @@ export function observeHostResize(
     const nextHeight = host.clientHeight;
     if (nextWidth === width && nextHeight === height) return;
     const widthChanged = nextWidth !== width;
+    const nextRoom = options.roomHeight?.();
+    const roomKept = nextRoom !== undefined && nextRoom === room;
     width = nextWidth;
     height = nextHeight;
+    room = nextRoom;
     clearSettle();
-    if (widthChanged || options.settleHeight === false) {
+    if (widthChanged || roomKept || options.settleHeight === false) {
       resize();
       return;
     }

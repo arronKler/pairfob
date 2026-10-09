@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type MouseEvent, type ReactNode, type Ref } from "react";
+import { useLayoutEffect, useMemo, useRef, type MouseEvent, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import { groupAgentTurns, replyText, turnKey, type AgentTurn } from "../../../lib/agent-trace-view";
 import { pendingAsk, splitTurn, stepObject, turnOutcome, turnSpan, type TurnRef } from "../../../lib/agent-trace-steps";
@@ -9,16 +9,51 @@ import { Button, Spinner } from "../../../shared/ui/primitives";
 import { CompactionDivider, PendingCard, ReplyActions, TurnHead, type TraceAnchorData } from "./turn-parts";
 import { NeedsYouCard } from "./needs-you";
 import { WorkCard } from "./work-card";
+import { confirmCopyOn } from "../copy-confirm";
 
-type CopyReply = (text: string, what?: "reply" | "code") => void | Promise<void>;
+/** Copies `text`; resolves true once it is on the clipboard, so the pressed button can say so. */
+type CopyReply = (text: string, what?: "reply" | "code") => unknown;
+
+/** A code block as it is copied: the line break that ends the block is not code, and pasted into a shell it would run the line. */
+export function copiedCode(text: string): string {
+  return text.replace(/\r?\n$/, "");
+}
+
+/**
+ * Where each block's copy button stands. A block of one line that fits beside
+ * the button is a single row with the button at its end, and the line stops
+ * short of it. Every other block (several lines, or one line longer than that
+ * room) keeps a strip above its first line for the button, so the button never
+ * covers code and a short block is not a tall one.
+ */
+function layCodeBlocks(node: HTMLElement): void {
+  for (const frame of node.querySelectorAll<HTMLElement>(".md-code")) {
+    const pre = frame.querySelector("pre");
+    const button = frame.querySelector<HTMLElement>(".md-copy");
+    if (!pre || !button) continue;
+    const oneLine = !copiedCode(pre.textContent ?? "").includes("\n");
+    frame.classList.toggle("is-inline", oneLine);
+    if (!oneLine) continue;
+    frame.style.setProperty("--md-copy-w", `${button.offsetWidth}px`);
+    // Measured in the one-row form: a line that scrolls there has no room beside the button.
+    if (pre.scrollWidth > pre.clientWidth + 1) frame.classList.remove("is-inline");
+  }
+}
 
 /**
  * Give each code block in a sanitized reply its own copy button. The reply's
  * HTML is not React-managed, so the buttons are added after it is set and
  * handled by one delegated click.
+ *
+ * `markup` is the object to hand React, the same one for the same HTML. React
+ * writes `innerHTML` again whenever that object is a new one, not when the
+ * string in it changes: a fresh `{ __html }` on every render threw the buttons
+ * away on the first re-render after they were added (and with them whatever
+ * the reader had selected in the reply), and nothing put them back.
  */
 function useCodeCopy(html: string, onCopy?: CopyReply) {
   const root = useRef<HTMLDivElement>(null);
+  const markup = useMemo(() => ({ __html: html }), [html]);
   useLayoutEffect(() => {
     const node = root.current;
     if (!node || !onCopy) return;
@@ -33,13 +68,28 @@ function useCodeCopy(html: string, onCopy?: CopyReply) {
       pre.replaceWith(frame);
       frame.append(pre, button);
     }
-  }, [html, onCopy]);
+    layCodeBlocks(node);
+    // The room beside the button follows the reply's width: a turned phone, the inspector opening.
+    const Observer = node.ownerDocument.defaultView?.ResizeObserver;
+    if (!Observer) return;
+    let width = node.clientWidth;
+    const observer = new Observer(() => {
+      if (node.clientWidth === width) return;
+      width = node.clientWidth;
+      layCodeBlocks(node);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [markup, onCopy]);
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
-    const button = (event.target as Element).closest?.(".md-copy");
+    const button = (event.target as Element).closest?.<HTMLElement>(".md-copy");
     const code = button?.parentElement?.querySelector("pre");
-    if (button && code && onCopy) void onCopy(code.textContent ?? "", "code");
+    if (!button || !code || !onCopy) return;
+    void Promise.resolve(onCopy(copiedCode(code.textContent ?? ""), "code")).then((copied) => {
+      if (copied === true && button.isConnected) confirmCopyOn(button, t("reply.copyCode"), t("reply.copied"), t("chat.copiedCode"));
+    });
   };
-  return { root, onClick };
+  return { root, markup, onClick };
 }
 type TraceAnchor = { key: string; ordinal: number; ordinalFromEnd: number };
 /** A step tapped in a card: the card's steps and where to find the turn again. */
@@ -62,7 +112,7 @@ function AssistantReply({ items, final, anchor, part, onCopy }: {
   const code = useCodeCopy(html, final ? onCopy : undefined);
   return <article {...anchorData(anchor, part)} className={`agent-assistant${final ? " agent-assistant-final" : " agent-assistant-intermediate"}`}>
     {/* The existing Markdown parser returns sanitized allowlisted HTML. */}
-    <div ref={code.root} className="agent-md" onClick={code.onClick} dangerouslySetInnerHTML={{ __html: html }} />
+    <div ref={code.root} className="agent-md" onClick={code.onClick} dangerouslySetInnerHTML={code.markup} />
     {final && <ReplyActions text={text} onCopy={onCopy} />}
   </article>;
 }

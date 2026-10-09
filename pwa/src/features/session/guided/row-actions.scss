@@ -68,6 +68,34 @@
 
 .row-act:active { background: var(--surface); }
 
+.row-act[data-copied] { color: var(--ok); }
+
+/* Opened by a mouse (rowbar.ts sets its left edge): as wide as its actions and
+   beside the pointer, not a bar across a pane the pointer is at one end of.
+   The actions are a mouse's size; a finger never gets this form. */
+.row-bubble[data-anchor="pointer"] {
+  inset-inline: auto;
+  margin-inline: 0;
+  width: max-content;
+  max-width: calc(100% - 16px);
+}
+.row-bubble[data-anchor="pointer"] .row-act {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 12px;
+}
+.row-bubble[data-anchor="pointer"] .row-act:hover { background: var(--surface); }
+/* The action that confirms a copy keeps one width for both of its labels, so
+   the actions after it stay under the pointer while it says "copied". */
+.row-bubble[data-anchor="pointer"] .row-act[data-reserve]::after {
+  content: attr(data-reserve);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+.row-bubble[data-anchor="pointer"] .row-act + .row-act::before { top: 7px; bottom: 7px; }
+
 @keyframes row-bubble-in {
   from { opacity: 0; transform: translateY(4px) scale(0.97); }
 }
@@ -98,13 +126,39 @@
   animation: row-bubble-in-below var(--dur-2) var(--ease);
 }
 
+/* At the bottom when the selection is under the top (see select-hint.tsx),
+   centred in what the scroll rail leaves of the width. */
+.select-hint.is-below {
+  top: auto;
+  bottom: 8px;
+  inset-inline: 0 52px;
+  max-width: calc(100% - 72px);
+  animation-name: row-bubble-in;
+}
+
+/* Under the buffer, beside a scroll rail that lies in a row of its own (a short
+   landscape screen; select-hint.tsx measures the room). Without its padding the
+   pill is the row's height, so it covers no line of the buffer. */
+.select-hint.is-beside-rail {
+  top: auto;
+  bottom: 0;
+  left: var(--select-hint-start);
+  right: var(--select-hint-end);
+  max-width: calc(100% - var(--select-hint-start) - var(--select-hint-end) - 16px);
+  padding-block: 0;
+  animation-name: row-bubble-in;
+}
+
+/* One line where it fits. Where it does not, a second line before any word is
+   cut: both fit inside the Done button's height, so the pill is no taller. */
 .select-hint-label {
   min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   font-size: var(--text-secondary);
   color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .select-hint-label b { color: var(--ink); font-weight: 640; }

@@ -7,6 +7,8 @@ import { isAgentChat, isFullTerminal, openPaneId, resetPaneView } from "./sessio
 import { currentScreen, leavePaneScreen } from "../../app/navigation-store";
 import { applyComposeDraft, parkComposeView } from "./drafts/compose-drafts";
 import { enterWorkspace } from "../../features/workspace";
+import { toggleWorkspaceInspector } from "../../features/workspace/inspector";
+import { isRoomy } from "../../app/viewport";
 import { initSwipeBack as bindSwipeBack } from "./guided/pane-swipe";
 import { keyboardOpen, navigateWithTransition, nextTransition, settleKeyboard, shareOpening } from "../../app/transition";
 import { openPaneMenu } from "./guided/pane-menu";
@@ -27,6 +29,12 @@ import { leaveFullTerminal } from "./full-terminal/full-terminal";
 export { openPaneMenu };
 
 export async function openSelectedWorkspace(): Promise<void> {
+  // With room for the files next to the session the pane stays where it is;
+  // narrower layouts navigate to the workspace screen.
+  if (isRoomy()) {
+    toggleWorkspaceInspector();
+    return;
+  }
   parkComposeView();
   const returnView = isFullTerminal() ? "full" : isAgentChat() ? "agent" : "guided";
   if (isFullTerminal()) await leaveFullTerminal({ rememberGuided: false, paint: false });

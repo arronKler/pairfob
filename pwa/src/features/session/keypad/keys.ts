@@ -21,6 +21,15 @@ export const PRIMARY_KEYS: KeySpec[] = [
 ];
 
 /**
+ * Paging, for a pad opened with a mouse: the scroll rail a finger pages with is
+ * put away there. These are not sendable keys; each pad pages its own way.
+ */
+export const PAGE_KEYS: KeySpec[] = [
+  { key: "pageup", label: "PgUp" },
+  { key: "pagedown", label: "PgDn" },
+];
+
+/**
  * Modifiers can be held or latched for the next key. Modified keys use terminal
  * encoding; Cmd retains the pad’s Ctrl alias. One name, Alt, for the key and
  * for the chords it forms; the spoken label keeps the Mac name too.

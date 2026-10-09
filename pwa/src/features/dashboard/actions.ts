@@ -32,8 +32,11 @@ export type HerdActionPorts = {
   markRead(paneId: string): void;
   /** The create sheet, optionally on one workspace. */
   openCreate(workspace?: AgentCard): void;
-  /** Recent agent + workspace combinations, created in one step. */
-  openQuickCreate(): void;
+  /**
+   * Recent agent + workspace combinations, created in one step: a sheet under a
+   * finger, a menu at `anchor` (or the pointer) for a mouse or the keyboard.
+   */
+  openQuickCreate(anchor?: Element | null): void;
   /** The create sheet on a new workspace in `dir` (never creates by itself). */
   openCreateInDir(dir: string): void;
   /** A pane opened from the list did not come from the board: back must not lead there. */
@@ -61,7 +64,8 @@ export type HerdActions = {
   revealAttention(groupId: string, kind: "blocked" | "done"): void;
   createInWorkspace(agent: AgentCard | undefined): void;
   openCreate(): void;
-  openQuickCreate(): void;
+  /** `anchor` is the button a mouse or key menu hangs under. */
+  openQuickCreate(anchor?: Element | null): void;
   togglePin(paneId: string): void;
   markRead(paneId: string): void;
 };
@@ -114,8 +118,8 @@ export function createHerdActions(ports: HerdActionPorts): HerdActions {
     openCreate() {
       ports.openCreate();
     },
-    openQuickCreate() {
-      ports.openQuickCreate();
+    openQuickCreate(anchor) {
+      ports.openQuickCreate(anchor);
     },
     togglePin(paneId) {
       ports.togglePin(paneId);

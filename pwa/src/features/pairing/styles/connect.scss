@@ -1,4 +1,6 @@
 @use "./terminal-miniature";
+@use "./connect-steps" as steps;
+@use "./connect-wide" as wide;
 
 /* --- Connect / pairing ----------------------------------------------------------
    One skeleton for every stage: top bar, terminal miniature, title + lede, and
@@ -58,6 +60,17 @@
 .connect-lede.is-error { color: var(--error); }
 .connect-lede.is-status { color: var(--accent); }
 
+/* A lede is a sentence or two in a column a few words wide, and the last of
+   them tends to end on a line of its own: one word, or in Chinese a character
+   and its full stop. It wraps the way the code field's message does (below):
+   balanced lines, and Chinese kept to its own pauses. */
+.connect-lede,
+.connect-phone-note {
+  text-wrap: balance;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
 .connect-install {
   position: relative;
   display: inline;
@@ -95,25 +108,18 @@
   font-weight: 600;
 }
 
+/* One centred sentence behind its lock. Where the column is too narrow for it
+   (the page's card, an English phone) it breaks into two even lines instead of
+   leaving its last word alone, and the lock stays with the first. */
 .trust {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
   margin: 6px 0 0;
   color: var(--muted);
   font-size: var(--text-caption);
+  text-align: center;
+  text-wrap: balance;
 }
 
-/* A desk has no thumb zone: the actions follow the copy instead of the floor. */
-@media (min-width: 900px) {
-  .page.connect-page {
-    min-height: 0;
-    padding-top: max(6vh, calc(env(safe-area-inset-top, 0px) + 24px));
-  }
-
-  .connect-actions { margin-top: 0; padding-top: 28px; }
-}
+.trust svg { margin-right: 6px; vertical-align: -2px; }
 
 /* --- Code sheet ---------------------------------------------------------------- */
 
@@ -131,15 +137,20 @@
 }
 
 .pair-paste {
+  /* Two Chinese characters come to 43px: the last pixel of the target is added
+     on the label's side, and the words stay against the field's edge. */
+  min-width: 44px;
   min-height: 44px;
   margin-right: -8px;
   padding: 0 8px;
+  text-align: right;
   color: var(--accent);
   font-size: var(--text-body);
   font-weight: 600;
 }
 
-.pair-code-sheet input.pair-code-input {
+/* The same field in the sheet and in the page's own card. */
+:is(.pair-code-sheet, .connect-card) input.pair-code-input {
   min-height: 52px;
   padding: 0 14px;
   background: var(--bg);
@@ -154,7 +165,7 @@
   letter-spacing: 0.1em;
 }
 
-.pair-code-sheet input.pair-code-input[aria-invalid="true"] {
+:is(.pair-code-sheet, .connect-card) input.pair-code-input[aria-invalid="true"] {
   border-color: var(--error);
   box-shadow: 0 0 0 3px rgba(255, 128, 128, 0.16);
 }
@@ -172,6 +183,31 @@
 
 .pair-help.is-error { color: var(--error); }
 
+/* The sheet is anchored to the floor and the page's card is centred in its
+   column, so a feedback line that changes height moves the field under the
+   finger or the pointer. The hint and the error share one slot, as tall as the
+   two lines an error takes; clearing it by typing moves nothing. */
+:is(.pair-code-sheet, .connect-card) .pair-help { min-height: calc(2 * 1.45em); }
+
+/* The sheet and the card are narrow enough to strand a message's last
+   character or two on a line of their own. Balanced, its two lines are about
+   as long as each other at every width; `pretty` only takes one more word
+   along, which in Chinese is one more character. Chinese breaks between any
+   two characters, so the lines are also kept to the message's own pauses (its
+   punctuation and the spaces around a number); a run longer than the line
+   still breaks rather than spill. */
+:is(.pair-code-sheet, .connect-card) #pair-feedback {
+  text-wrap: balance;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+/* The longest English messages take a third line beside the counter on the
+   narrowest phones; the slot is theirs there, so they still move nothing. */
+@media (max-width: 359.98px) {
+  :lang(en) :is(.pair-code-sheet, .connect-card) .pair-help { min-height: calc(3 * 1.45em); }
+}
+
 .field-count {
   flex: none;
   font: 500 0.75rem/1.45 var(--mono);
@@ -180,15 +216,21 @@
 }
 
 .field-count.ok { color: var(--ok); }
+/* More characters than a code has: the count is the error, in the message's colour. */
+.field-count.over { color: var(--error); }
 
 @media (max-width: 899.98px) {
   /* iOS does not shrink the layout viewport for the keyboard: lift the sheet by
-     the keyboard inset so the field and Connect stay above the keys. */
-  dialog.modal.pair-code-sheet {
+     the keyboard inset so the field and Connect stay above the keys. The desk
+     form is centred like the card of a wide window and is not lifted. */
+  dialog.modal.pair-code-sheet:where(:not(.desk-form)) {
     margin-bottom: var(--kb, 0px);
     max-height: calc(var(--vv-height, 100dvh) - 12px);
   }
 }
+
+@include steps.connect-steps;
+@include wide.connect-wide;
 
 /* --- Scanner sheet ---------------------------------------------------------------- */
 
@@ -299,9 +341,24 @@
   font-size: var(--text-subhead);
   line-height: 1.6;
   margin: 0 0 22px;
+  /* Even lines: the last one is never a word, or a character and its full stop, alone. */
+  text-wrap: balance;
 }
 
 .settings-page .topbar + .lede { margin-top: 14px; }
+
+/* The standalone picker with room around it: the same column, set down from the
+   top edge the way the connect page is, instead of the phone page pinned under
+   the window's title bar. */
+@media (min-width: 900px) {
+  .page.computer-pick {
+    max-width: 36rem;
+    padding-top: max(12vh, calc(env(safe-area-inset-top, 0px) + 56px));
+  }
+
+  .computer-pick .prelude-title { margin-top: 26px; font-size: 1.85rem; }
+  .computer-pick .lede { margin-bottom: 26px; }
+}
 
 .lang-select {
   display: block;

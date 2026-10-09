@@ -86,10 +86,15 @@ describe("Tab stays a focus key outside the compose field", () => {
    * the back button, the menu, the keypad or the compose field by keyboard, and
    * each swallowed Tab was forwarded to the agent as a keystroke.
    */
-  test("only an unshifted Tab typed into the field reaches the TUI", () => {
+  test("composed: Shift+Tab is the way out of the field, and only an unshifted Tab at an empty prompt reaches the TUI", () => {
+    // With words in the draft a Tab has nothing in the terminal to complete, so it
+    // moves focus on like any field's (session-pane.hardware-keys.test pins the behaviour).
     const handler = composeSource.slice(composeSource.indexOf("export function handlePaneKey"));
     const guard = handler.slice(0, handler.indexOf('if (event.key === "Enter"'));
-    expect(guard).toContain('event.key === "Tab" && (!fromField || event.shiftKey)');
+    // A phone has no such rule: its field's Tab goes on to the program whatever is drafted.
+    expect(guard).toContain('event.key === "Tab" && (!fromField || event.shiftKey || (!live && composeDraft() && hardwareKeyboard()))');
+    // Live input on a hardware keyboard takes Tab and Shift+Tab for the program before that guard is reached.
+    expect(guard.indexOf("hardwareLiveKey(event)")).toBeLessThan(guard.indexOf('event.key === "Tab"'));
   });
 
   test("the keypad still offers a literal Tab", async () => {
@@ -157,13 +162,12 @@ describe("compose live vs batch", () => {
     expect(composeSource).toContain("function typeLive(");
     expect(composeSource).toContain("takeLiveField(input)");
     expect(composeSource).toContain("session.sendText(paneId, text)");
-    const liveEnterStart = composeSource.indexOf("async function submitLiveEnter");
+    const liveEnterStart = composeSource.indexOf("function submitLiveEnter");
     const liveEnter = composeSource.slice(liveEnterStart, composeSource.indexOf("export async function submitTyped"));
-    expect(liveEnter).toContain("flushLiveInput()");
     expect(liveEnter).toContain('queueKey("enter")');
     expect(liveEnter).not.toContain("guardedSubmit");
     expect(composeSource).toContain("if (composeLive())");
-    expect(composeSource).toContain("await submitLiveEnter()");
+    expect(composeSource).toContain("if (allowBareEnter) submitLiveEnter()");
   });
 
   test("keeps input behavior independent from the terminal display mode", () => {
@@ -183,10 +187,14 @@ describe("compose live vs batch", () => {
     expect(composeSource).not.toContain("const LIVE_FLUSH_MS = 55");
   });
 
-  test("Enter waits for all queued live text and does not replay an uncertain mutation", () => {
-    const liveEnterStart = composeSource.indexOf("async function submitLiveEnter");
-    const liveEnter = composeSource.slice(liveEnterStart, composeSource.indexOf("export async function submitTyped"));
-    expect(liveEnter).toContain("if (!(await flushLiveInput())) return");
+  test("Enter takes its turn behind the live text typed before it and does not replay an uncertain mutation", () => {
+    // Every key in live input, Enter included, is ordered with the typed text
+    // (live-order.test and session-compose.live-order.test pin the behaviour):
+    // the key queue asks for its turn, and text that fails takes what follows with it.
+    expect(composeSource).toContain('registerLivePath("text", {');
+    expect(composeSource).toContain('liveOrder.submit("text", () => {');
+    const failed = composeSource.slice(composeSource.indexOf("onError: async (error, input) => {"));
+    expect(failed.slice(0, failed.indexOf("await reportMutationError"))).toContain("liveOrder.reset();");
     expect(composeSource).toContain('error.code === "unknown_outcome"');
     expect(composeSource).toContain("? input.queuedText");
   });

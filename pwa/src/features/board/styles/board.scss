@@ -14,6 +14,7 @@
 }
 
 .board-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -35,21 +36,75 @@
 
 .board-shell .statusline { margin: 6px 12px 0; }
 
-/* Status, banners and operation notices float over the bottom of the canvas. */
+/* Status, banners and operation notices float, never on the stage's middle and
+   never in the way of a touch. On a phone held upright the board is as wide as
+   its window and leaves the bottom of the canvas free, so they sit there, above
+   the zoom pill. Wherever the board is as tall as its window (the desk shell, a
+   phone on its side) no place on the canvas is clear of the panes, and they go
+   where the app's other feedback goes: under the top edge, in the header row,
+   at its trailing end.
+
+   The float is a row of no height after the canvas, growing upwards: it
+   measures from the canvas's bottom edge whatever the shell keeps free below it
+   (the phone's tab bar). */
 .board-float {
-  position: absolute;
-  left: 12px;
-  right: 12px;
+  position: relative;
   bottom: 68px;
   z-index: 6;
+  flex: none;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
+  height: 0;
+  margin: 0 12px;
   pointer-events: none;
 }
-.board-float > * { pointer-events: auto; max-width: 100%; margin: 0; box-shadow: var(--shadow-2); }
+/* A line of text takes no touch: what lands on it was meant for the board. */
+.board-float > * { flex: none; pointer-events: none; max-width: 100%; margin: 0; box-shadow: var(--shadow-2); }
+/* The offer to open a new split is two buttons. */
+.board-float > .board-created-notice { pointer-events: auto; }
 .board-float:empty { display: none; }
+
+/* In the header row the feedback has a place of its own, which the header's
+   text never shares: the row's trailing end, up to the "⋯" that closes it, and
+   no more than `--board-float-room` of the row. While something is shown the
+   title keeps to the rest, so a long path gives way with an ellipsis instead of
+   running under a notice; a title that fits, which is the usual one, does not
+   move. A notice longer than its room wraps, set a little tighter so two lines
+   stand inside the row and balanced so the second is never one stray word, and
+   two pieces of feedback (a split's notice and its offer) share the row instead
+   of running down over the tabs. */
+@mixin float-room {
+  --board-float-room: min(26rem, 55%);
+}
+@mixin float-in-header {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 6px);
+  right: 56px;
+  bottom: auto;
+  left: auto;
+  flex-flow: row wrap;
+  justify-content: flex-end;
+  width: max-content;
+  max-width: var(--board-float-room);
+  height: auto;
+  min-height: 46px;
+  margin: 0;
+}
+@mixin float-beside-title {
+  &:has(> .board-float > *) .board-title { margin-right: calc(var(--board-float-room) + 12px); }
+  .board-float > .notice,
+  .board-float > .banner { padding: 4px 12px; font-size: var(--text-secondary); line-height: 1.35; text-wrap: balance; }
+}
+.desk .board-shell { @include float-room; @include float-beside-title; }
+.desk .board-float { @include float-in-header; }
+@media (max-height: 500px) {
+  .board-shell { @include float-room; @include float-beside-title; }
+  .board-float { @include float-in-header; }
+}
+
 .board-status {
   display: inline-flex;
   align-items: center;

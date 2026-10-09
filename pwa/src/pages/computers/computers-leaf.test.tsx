@@ -77,14 +77,19 @@ describe("computer picker (private root)", () => {
     expect(add?.querySelector(".add-mark")).toBeTruthy();
     expect(add?.querySelector(".switch-name")?.textContent).toBe("添加电脑");
     expect(add?.querySelector(".switch-meta")?.textContent).toBe(
-      "先装 pairfob 再执行 pairfob pair。只是多一条凭证，不会替换现在这台。",
+      // The command is kept on one line: its space does not break.
+      "先装 pairfob 再执行 pairfob\u00a0pair。只是多一条凭证，不会替换现在这台。",
     );
     expect(el.querySelector(".computer-add + .lede")).toBeNull();
     expect(el.querySelectorAll(".computer-row")).toHaveLength(2);
     expect(el.querySelector(".prelude-title")?.textContent).toBe("选择电脑");
     expect(el.querySelector("h1.prelude-title")).toBeTruthy();
-    // Pick phase (no live session) shows no settings-page chrome.
+    // Pick phase (no live session) shows no settings-page chrome; its own class
+    // is what the wide layout sets down from the top edge.
     expect(el.querySelector(".page.settings-page")).toBeNull();
+    expect(el.querySelector(".page.computer-pick")).toBeTruthy();
+    // True on a phone, a tablet and a computer browser alike.
+    expect(el.querySelector(".lede")?.textContent).toBe("这台设备已经配对过多台电脑。连其中一台，或再添加一台。");
     expect(el.querySelector(".computer-forget")?.getAttribute("aria-label")).toContain("desk");
     // The picker footer carries the manual update help even without a session.
     expect(el.textContent).toContain("pairfob update");
@@ -100,7 +105,7 @@ describe("computer picker (private root)", () => {
     const add = el.querySelector(".computer-add");
     expect(add?.querySelector(".switch-name")?.textContent).toBe("Add a computer");
     expect(add?.querySelector(".switch-meta")?.textContent).toBe(
-      "Install pairfob, then run pairfob pair. This adds a credential; it does not replace this one.",
+      "Install pairfob, then run pairfob\u00a0pair. This adds a credential; it does not replace this one.",
     );
   });
 
@@ -124,6 +129,7 @@ describe("computer picker (private root)", () => {
     });
     const el = render(createElement(ComputersScreen));
     expect(el.querySelector(".page.settings-page")).toBeTruthy();
+    expect(el.querySelector(".computer-pick")).toBeNull();
     expect(el.querySelector(".topbar-title")?.textContent).toBe("电脑");
     expect(el.querySelector(".prelude-title")).toBeNull();
     expect(el.querySelector("details.set-card")).toBeNull();

@@ -1,3 +1,4 @@
+import { expectDifferentNode } from "../../test-support/node-identity";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
 import { happy, resetBoardTestDOM } from "../../test-support/dom";
@@ -192,7 +193,7 @@ test("same-pane new-session reconciliation retires an active gesture before any 
     commitTest();
   });
   await mutations();
-  expect(app().querySelector(".pane-root") === oldRoot).toBeFalse();
+  expectDifferentNode(app().querySelector(".pane-root"), oldRoot);
   expect(layer.isConnected).toBeFalse();
   expect(oldRoot.classList.contains("dragging")).toBeFalse();
   act(() => touch("touchend", 150, oldRoot));

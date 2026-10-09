@@ -1,88 +1,35 @@
 import { Folder, Plus, X } from "lucide-react";
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../../../lib/i18n";
 import { OPERATION_INPUT_LIMITS, type SplitDirection } from "../../../lib/operations";
 import { agentTitle, type DashboardAgentCard as AgentCard } from "../../../lib/dashboard";
 import { advertisedAgentKinds } from "../../operations/capabilities-store";
-import { createSelectedTab, renamePaneTo, splitSelectedPane, type SheetOutcome } from "../../operations/controller";
-import { useCapabilities } from "../../operations/hooks";
+import { createSelectedTab, operationGate, renamePaneTo, splitSelectedPane } from "../../operations/controller";
 import { AgentKindGrid, kindName } from "../../operations/agent-kind-grid";
 import { AgentKindPickerPanel } from "../../operations/agent-kind-picker";
 import { loadCreateMemory, rememberCreate } from "../../operations/create-memory";
 import { loadLastAgentKind } from "../../operations/operation-form-model";
-import { useConnection } from "../../connection/hooks";
-import { liveSession } from "../../computers/catalog-store";
+import { PageFooter, usePageEnter, useSheetRun } from "../../operations/sheet-page";
 import { usePreferences } from "../../settings/hooks";
 import { useDashboard } from "../../dashboard/hooks";
 import { cellStyle, layoutBoxes, layoutRatio, useTabLayout, type CellBox } from "./pane-layout-page";
 import type { ActionSheetController } from "../../../shared/ui/overlay/action-sheet";
-import { Button, Spinner } from "../../../shared/ui/primitives";
+import { useDeskCancel } from "../../../shared/ui/overlay/desk-form";
+import { useEscapeStep } from "../../../shared/ui/overlay/escape-steps";
+import { Button } from "../../../shared/ui/primitives";
 import { PanePage } from "./pane-page";
 
 /**
- * Pages pushed inside the pane sheet share one skeleton: the sheet's header
- * names the page and the way back, the body holds the form, and a footer
- * pinned to the bottom says what will happen above the one primary button.
- * Running locks the form and spins the button; success closes the sheet;
- * failure stays on the page with the reason above the button.
+ * The session panel's own pages. Each is a form that runs inside the sheet:
+ * the skeleton, the pinned footer, Enter and where the keyboard stays while it
+ * runs or is refused are the operations feature's (`operations/sheet-page`),
+ * shared with the same forms opened from elsewhere.
  */
+export { PageFooter, usePageEnter, useSheetRun, type SheetRun } from "../../operations/sheet-page";
 
 /** Why the primary action cannot run right now: offline, or another operation holds the lock. */
 export function useOperationGate(): string {
-  const { operationBusy } = useCapabilities();
-  const { networkOnline } = useConnection();
-  if (!networkOnline || !liveSession()?.isConnected()) return t("boardMenu.offline");
-  return operationBusy ? t("boardMenu.busy") : "";
-}
-
-export type SheetRun = { pending: boolean; error: string; clearError: () => void; submit: (work: () => Promise<SheetOutcome>) => Promise<void> };
-
-/** One submission at a time; the sheet closes on success. */
-export function useSheetRun(modal: ActionSheetController): SheetRun {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const busy = useRef(false);
-  return {
-    pending, error, clearError: () => setError(""),
-    async submit(work) {
-      if (busy.current) return;
-      busy.current = true;
-      setPending(true);
-      setError("");
-      try {
-        const outcome = await work();
-        if (outcome.ok) modal.dismiss();
-        else setError(outcome.message);
-      } finally {
-        busy.current = false;
-        setPending(false);
-      }
-    },
-  };
-}
-
-export function PageFooter({ summary, label, busyLabel, run, onSubmit, disabled = false, reason = "" }: {
-  summary?: ReactNode; label: string; busyLabel: string; run: Pick<SheetRun, "pending" | "error">;
-  onSubmit: () => void; disabled?: boolean; reason?: string;
-}) {
-  // While this page's own operation runs it holds the lock; the busy reason is ours, not news.
-  const note = run.error || (run.pending ? "" : reason);
-  return <div className="create-footer pane-page-footer">
-    {summary ? <p className="create-summary">{summary}</p> : null}
-    {note ? <p className={`pane-page-note${run.error ? " is-error" : ""}`} role={run.error ? "alert" : "status"}>{note}</p> : null}
-    <Button className="btn btn-primary create-submit" disabled={disabled || run.pending || !!reason} aria-busy={run.pending} onClick={onSubmit}>
-      {run.pending ? <><Spinner />{busyLabel}</> : label}
-    </Button>
-  </div>;
-}
-
-/** Enter in a single-line field submits the page; the sheet form itself never submits. */
-function enterSubmits(submit: () => void) {
-  return (event: KeyboardEvent) => {
-    if (event.key !== "Enter" || !(event.target instanceof HTMLInputElement) || event.nativeEvent.isComposing) return;
-    event.preventDefault();
-    submit();
-  };
+  return useSyncExternalStore(operationGate.subscribe, operationGate.read);
 }
 
 function workspaceName(agent: AgentCard): string {
@@ -100,6 +47,8 @@ function useKindChoice() {
   const [lastKind] = useState(() => loadLastAgentKind(kinds));
   const [kind, setKind] = useState(() => kinds.includes(lastKind) ? lastKind : kinds[0] ?? "");
   const [picking, setPicking] = useState(false);
+  // Escape takes back the list first, then the page it stands in for.
+  useEscapeStep(picking, () => setPicking(false));
   const grid = <>
     <AgentKindGrid kinds={kinds} memory={memory} selected={kind} lastKind={lastKind} onSelect={setKind} onShowAll={() => setPicking(true)} />
     {!kinds.length ? <p className="create-hint">{t("create.noKinds")}</p> : null}
@@ -126,9 +75,10 @@ export function NewTabPage({ modal, agent }: { modal: ActionSheetController; age
       return outcome;
     });
   };
+  const onEnter = usePageEnter(submit);
   if (picker) return picker;
   return <PanePage key="form">
-    <div className="create-sheet-body pane-create" onKeyDown={enterSubmits(submit)}>
+    <div ref={run.form} className="create-sheet-body pane-create" onKeyDown={onEnter}>
       <fieldset className="pane-fieldset" disabled={run.pending}>
         <h3 className="create-label">{t("create.where")}</h3>
         <div className="pane-where">
@@ -163,9 +113,10 @@ export function SplitPage({ modal, agent }: { modal: ActionSheetController; agen
       return outcome;
     });
   };
+  const onEnter = usePageEnter(submit);
   if (picker) return picker;
   return <PanePage key="form">
-    <div className="create-sheet-body pane-create">
+    <div ref={run.form} className="create-sheet-body pane-create" onKeyDown={onEnter}>
       <fieldset className="pane-fieldset" disabled={run.pending}>
         <h3 className="create-label">{t("pm.splitWhere")} <span className="create-optional">{t("pm.splitWhereHint")}</span></h3>
         <SplitPreview agent={agent} direction={direction} onDirection={setDirection} />
@@ -219,12 +170,17 @@ export function RenamePage({ modal, agent }: { modal: ActionSheetController; age
   const reason = useOperationGate();
   const automatic = agentTitle({ ...agent, paneLabel: "" }, listGroup);
   const submit = () => { if (!reason) void run.submit(() => renamePaneTo(agent, value)); };
+  const onEnter = usePageEnter(submit);
+  // The desk form names its field above it, as the same rename does in its dialog.
+  const desk = !!useDeskCancel();
+  const fieldId = useId();
   return <PanePage>
-    <div className="create-sheet-body pane-create" onKeyDown={enterSubmits(submit)}>
+    <div ref={run.form} className="create-sheet-body pane-create" onKeyDown={onEnter}>
       <fieldset className="pane-fieldset" disabled={run.pending}>
+        {desk ? <label className="create-label pane-rename-label" htmlFor={fieldId}>{t("op.paneName")}</label> : null}
         <div className="pane-rename">
-          <input ref={input} className="create-input" type="text" value={value} maxLength={OPERATION_INPUT_LIMITS.label} autoComplete="off"
-            aria-label={t("op.paneName")} placeholder={automatic} enterKeyHint="done" data-autofocus=""
+          <input ref={input} id={fieldId} className="create-input" type="text" value={value} maxLength={OPERATION_INPUT_LIMITS.label} autoComplete="off"
+            aria-label={desk ? undefined : t("op.paneName")} placeholder={automatic} enterKeyHint="done" data-autofocus=""
             onChange={(event) => { setValue(event.currentTarget.value); run.clearError(); }} />
           {value ? <Button className="icon-btn pane-rename-clear" aria-label={t("pm.renameClear")}
             onClick={() => { setValue(""); input.current?.focus(); }}><X size={14} aria-hidden="true" /></Button> : null}

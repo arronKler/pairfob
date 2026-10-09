@@ -1,4 +1,10 @@
 // Shared application toast styles (the Feedback primitive's .notice).
+
+// The two tones' fills. They are see-through, so a notice that floats over
+// content lays the same tint on a ground of its own (session-shell.scss).
+$error-tint: rgba(214, 59, 49, 0.12);
+$status-tint: rgba(110, 168, 254, 0.1);
+
 @mixin notice-toast {
   /* --- Notices / banners ------------------------------------------------------- */
 
@@ -11,13 +17,13 @@
   }
 
   .notice-error {
-    background: rgba(214, 59, 49, 0.12);
+    background: $error-tint;
     border: 1px solid rgba(214, 59, 49, 0.35);
     color: var(--error);
   }
 
   .notice-status {
-    background: rgba(110, 168, 254, 0.1);
+    background: $status-tint;
     border: 1px solid rgba(110, 168, 254, 0.3);
     color: var(--accent);
   }

@@ -1,8 +1,10 @@
 import { Plus } from "lucide-react";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../../lib/i18n";
-import { presentModal, type ModalController } from "../../../shared/ui/overlay/modal";
+import { DeskCancel, DeskClose, presentModal, type ModalController } from "../../../shared/ui/overlay/modal";
+import { DeskFormContext, dialogClass } from "../../../shared/ui/overlay/desk-form";
 import { useDialogLifecycle } from "../../../shared/ui/overlay/dialog-lifecycle";
+import { overlayOrigin } from "../../../shared/ui/overlay/origin";
 import { QUICK_LABEL_LIMIT, QUICK_TEXT_LIMIT, type QuickCommand } from "../../settings/quick-command-model";
 
 export function defaultQuickCommands(): QuickCommand[] {
@@ -62,22 +64,44 @@ function QuickCommandSheet({ modal, command, draft = "", reorder }: EditorReques
   const labelField = useRef<HTMLInputElement>(null);
   const creating = !command;
   const complete = Boolean(label.trim() && text.trim());
-  useDialogLifecycle({ dialog: modal.dialog, onDismiss: modal.dismiss, onClose: modal.finish, cancelGuardMs: 0,
+  // A new command starts in its name. So does one being edited where a mouse or
+  // the keyboard opened it; under a finger that would raise the on-screen
+  // keyboard over a command the reader may only want to move or delete.
+  const start = (desk: boolean) => {
+    if (!creating && !desk) return;
+    labelField.current?.focus({ preventScroll: true });
+    if (!creating) labelField.current?.select();
+  };
+  const deskRef = useRef(false);
+  const deskForm = useDialogLifecycle({ dialog: modal.dialog, onDismiss: modal.dismiss, onClose: modal.finish, cancelGuardMs: 0,
     sheet: { form: modal.form, scroller: body },
-    focus: () => { if (creating) labelField.current?.focus({ preventScroll: true }); } });
+    focus: () => start(deskRef.current) });
+  deskRef.current = deskForm;
+  const desk = useMemo(() => deskForm ? { cancel: modal.dismiss } : null, [deskForm, modal]);
+  // The two actions are the sheet's bar or the card's footer, drawn anew when
+  // the window crosses the tier; focus that was on one of them starts over.
+  const drawn = useRef(deskForm);
+  useLayoutEffect(() => {
+    if (drawn.current === deskForm) return;
+    drawn.current = deskForm;
+    if (!modal.form.current?.contains(document.activeElement)) labelField.current?.focus({ preventScroll: true });
+  });
   const title = t(creating ? "pad.sheetNew" : "pad.sheetEdit");
-  return <dialog ref={modal.dialog} className="modal sheet quick-command-sheet" aria-labelledby={modal.titleId} data-react-modal="">
+  const heading = <h2 id={modal.titleId} className="modal-title">{title}</h2>;
+  const submit = (className: string) => <button type="submit" className={className} disabled={!complete}>
+    {t(creating ? "pad.sheetAdd" : "pad.sheetDone")}</button>;
+  return <dialog ref={modal.dialog} className={dialogClass("modal sheet quick-command-sheet", deskForm)} aria-labelledby={modal.titleId} data-react-modal="">
     <form ref={modal.form} method="dialog" onSubmit={event => {
       event.preventDefault();
       if (complete) modal.close({ action: "save", label: label.trim(), text });
     }}>
       <div className="sheet-grab" aria-hidden="true"><span className="sheet-grab-bar" /></div>
-      <div className="quick-sheet-bar">
+      {/* The sheet's bar is iOS-shaped; the desk form has its title here and its actions after the fields. */}
+      {deskForm ? <div className="quick-sheet-title">{heading}</div> : <div className="quick-sheet-bar">
         <button type="button" className="quick-sheet-text-btn" onClick={modal.dismiss}>{t("pad.sheetCancel")}</button>
-        <h2 id={modal.titleId} className="modal-title">{title}</h2>
-        <button type="submit" className="quick-sheet-text-btn is-primary" disabled={!complete}>
-          {t(creating ? "pad.sheetAdd" : "pad.sheetDone")}</button>
-      </div>
+        {heading}
+        {submit("quick-sheet-text-btn is-primary")}
+      </div>}
       <div ref={body} className="quick-sheet-body">
         {creating && draft.trim() && !fromDraft && <button type="button" className="quick-sheet-draft" onClick={() => {
           setText(draft.slice(0, QUICK_TEXT_LIMIT));
@@ -93,14 +117,23 @@ function QuickCommandSheet({ modal, command, draft = "", reorder }: EditorReques
         <label className="quick-sheet-field">
           <span className="quick-sheet-field-head">{t("pad.fieldText")}
             <span className="quick-sheet-count">{t("pad.count", { count: text.length, limit: QUICK_TEXT_LIMIT })}</span></span>
+          {/* Enter is a new line in the command; ⌘ or Ctrl with it is the form's submit, as in the note editor. */}
           <textarea value={text} maxLength={QUICK_TEXT_LIMIT} rows={4} placeholder={t("pad.fieldTextPlaceholder")}
-            onChange={event => setText(event.target.value)} />
+            onChange={event => setText(event.target.value)} onKeyDown={event => {
+              if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey) || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              modal.form.current?.requestSubmit();
+            }} />
         </label>
         <p className="quick-sheet-hint">{t("pad.sheetHint")}</p>
         {!creating && reorder && <ReorderRow reorder={reorder} />}
         {!creating && <button type="button" className="quick-sheet-delete"
           onClick={() => modal.close({ action: "delete" })}>{t("pad.sheetDelete")}</button>}
       </div>
+      {deskForm ? <DeskFormContext value={desk}>
+        <div className="desk-actions quick-sheet-actions"><DeskCancel />{submit("desk-action is-primary")}</div>
+        <DeskClose onDismiss={modal.dismiss} />
+      </DeskFormContext> : null}
     </form>
   </dialog>;
 }
@@ -111,5 +144,19 @@ function QuickCommandSheet({ modal, command, draft = "", reorder }: EditorReques
  */
 export function editQuickCommand(request: EditorRequest): Promise<QuickCommandEdit | null> {
   return presentModal<QuickCommandEdit>(modal => <QuickCommandSheet modal={modal} {...request} />,
-    { replaceKey: "quick-command" }).result;
+    { replaceKey: "quick-command", returnFocus: opener() }).result;
+}
+
+/**
+ * The pad's button that asked for the editor, under a mouse or the keyboard.
+ * A pad button does not take focus when it is pressed (the compose field keeps
+ * the caret), so what held focus is not what opened the editor; the gesture
+ * is. A finger keeps the default: focus goes back to where it was, which is
+ * what brings the on-screen keyboard back.
+ */
+function opener(): HTMLElement | undefined {
+  const origin = overlayOrigin();
+  if (origin?.input !== "mouse" && origin?.input !== "key") return undefined;
+  const control = origin.target?.closest("button");
+  return control instanceof HTMLElement ? control : undefined;
 }

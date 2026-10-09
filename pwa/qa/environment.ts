@@ -1,6 +1,22 @@
 import type { FixtureCall } from "./types";
 
 export const FIXED_NOW = Date.UTC(2026, 8, 8, 4, 0, 0);
+let clock = FIXED_NOW;
+
+/**
+ * Run one synchronous action with the fixture clock at another instant, for a
+ * scene that seeds stamps the application takes from `Date.now()` itself (the
+ * order sessions were opened in). The clock is back at `FIXED_NOW` on return.
+ */
+export function clockAt<T>(time: number, action: () => T): T {
+  const before = clock;
+  clock = time;
+  try {
+    return action();
+  } finally {
+    clock = before;
+  }
+}
 export const calls: FixtureCall[] = [];
 export const errors: string[] = [];
 export function record(kind: FixtureCall["kind"], method: string, args: unknown[] = []): void {
@@ -24,9 +40,9 @@ function isolatedStorage(): Storage {
 export function installEnvironment(): void {
   const NativeDate = Date;
   globalThis.Date = new Proxy(NativeDate, {
-    construct(target, args) { return Reflect.construct(target, args.length ? args : [FIXED_NOW]); },
-    apply() { return new NativeDate(FIXED_NOW).toString(); },
-    get(target, property) { return property === "now" ? () => FIXED_NOW : Reflect.get(target, property); },
+    construct(target, args) { return Reflect.construct(target, args.length ? args : [clock]); },
+    apply() { return new NativeDate(clock).toString(); },
+    get(target, property) { return property === "now" ? () => clock : Reflect.get(target, property); },
   });
   Object.defineProperty(window, "localStorage", { configurable: true, value: isolatedStorage() });
   Object.defineProperty(window, "sessionStorage", { configurable: true, value: isolatedStorage() });

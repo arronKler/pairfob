@@ -20,10 +20,13 @@ import { openPaneId, resetPaneView, selectPane } from "../../features/session/se
 import { clearNotice } from "../../app/notices-store";
 import { appRoot } from "../../app/dom-root";
 import { boardCamera } from "../../features/board/model/camera";
+import { buildHerdViewModel } from "../../features/dashboard/model/herd-view";
+import { readHerdAttention, readHerdInput } from "../home/herd-bridge";
 import {
   applyBoardTransform,
   boardCanvasController,
   fitCurrentBoard,
+  newTabInBoard,
   nudgeBoardZoom,
   openBoardPane,
   placeBoardStage,
@@ -289,6 +292,20 @@ describe("board camera bridge", () => {
     expect(readBoardCamera()).toEqual(before);
     expect(node.style.transform).toBe(transform);
   });
+
+  test("a zoom from the toolbar or a tile is bounded like a gesture: the board leaves no empty band", () => {
+    const viewport = sizedViewport(800, 600);
+    const node = stage();
+    // The mounted stage: inside its viewport, with the size the canvas gives it (100×40 cells).
+    viewport.append(node);
+    node.style.width = "800px";
+    node.style.height = "640px";
+    setBoardCamera({ scale: 1, panX: 350, panY: 0 }, true);
+    // Zooming in at the far corner would throw the stage 1400px to the right of it; its edge stays at the viewport's.
+    zoomBoardAt(viewport, node, 0, 0, 4);
+    expect(readBoardCamera()).toEqual({ scale: 4, panX: 0, panY: 0, fitted: true });
+    expect(node.style.transform).toBe("translate(0px, 0px) scale(4)");
+  });
 });
 
 describe("board canvas controller", () => {
@@ -395,6 +412,47 @@ describe("board projection bridge", () => {
     expect(presentBoardView().create?.disabled).toBe(true);
     attachLiveSession(null);
     expect(presentBoardView().create?.disabled).toBe(true);
+  });
+
+  test("an empty board answers as the list does: its action opens the list's create sheet, and is held whenever the list's is", async () => {
+    mountTestApp();
+    applyCapabilities({ ...NO_OPERATION_CAPABILITIES, create_tab: true, create_conversation: true }, []);
+    act(() => { resetBoardCatalog(); replaceAgentsFromSnapshot({ panes: [] }); });
+    const board = () => presentBoardView().create?.disabled;
+    const list = () => buildHerdViewModel(readHerdInput(readHerdAttention())).create?.disabled;
+    expect(presentBoardView().tabs).toEqual([]);
+    expect(boardStore.get().boardWorkspaceId).toBe("");
+    // The computer is read and has no session: both invite the first one.
+    expect([board(), list()]).toEqual([false, false]);
+
+    // Every reason the list's create is held holds the board's with it.
+    const held: Array<[string, () => void, () => void]> = [
+      ["another change in flight", () => setOperationBusy(true), () => setOperationBusy(false)],
+      ["Herdr is not running", () => applyRuntimeIdentity({ herdHost: "MacBook Pro", runtimeKind: "offline" }), () => applyRuntimeIdentity({ herdHost: "MacBook Pro", runtimeKind: "herdr" })],
+      ["Herdr did not answer", () => applyRuntimeIdentity({ herdHost: "MacBook Pro", runtimeKind: "" }), () => applyRuntimeIdentity({ herdHost: "MacBook Pro", runtimeKind: "herdr" })],
+      ["this device is offline", () => setNetworkOnline(false), () => setNetworkOnline(true)],
+      ["the list is not read yet", () => resetDashboard(), () => replaceAgentsFromSnapshot({ panes: [] })],
+    ];
+    for (const [why, enter, leave] of held) {
+      act(enter);
+      expect([why, board(), list()]).toEqual([why, true, true]);
+      act(leave);
+      expect([why, board(), list()]).toEqual([why, false, false]);
+    }
+
+    // The action is the list's own create: the shared sheet, starting on a new workspace.
+    act(() => newTabInBoard());
+    await act(async () => { await Promise.resolve(); });
+    const sheet = document.querySelector<HTMLDialogElement>("dialog.create-sheet[open]")!;
+    expect(sheet).not.toBeNull();
+    expect(sheet.querySelector(".create-chip.is-new")?.getAttribute("aria-checked")).toBe("true");
+    act(() => sheet.close("cancel"));
+    await act(async () => { await Promise.resolve(); });
+  });
+
+  test("a computer that only takes tabs keeps the empty board's action held: there is no workspace to add one to", () => {
+    act(() => { resetBoardCatalog(); replaceAgentsFromSnapshot({ panes: [] }); });
+    expect(presentBoardView().create).toEqual({ label: t("board.newTab"), disabled: true });
   });
 
   test("the projected labels come from the catalog and the herd, not the caller", () => {

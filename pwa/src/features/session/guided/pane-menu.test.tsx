@@ -1,4 +1,5 @@
-import { resetBoardTestDOM } from "../../../../test-support/dom";
+import { expectSameNode, expectSameNodes } from "../../../../test-support/node-identity";
+import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { beforeEach, afterEach, expect, test } from "bun:test";
 import { act } from "react";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
@@ -45,6 +46,8 @@ import { projectSnapshot } from "../../board/layout-store";
 import { attachLiveSession } from "../../computers/catalog-store";
 import { openPaneMenu } from "./pane-menu";
 import { ProtocolError } from "../../../lib/protocol/errors";
+import { bindOverlayOrigin } from "../../../shared/ui/overlay/origin";
+import { tabStops } from "../../../shared/ui/overlay/tab-stops";
 
 const labels = () => [...document.querySelectorAll(".sheet-body button")].map((button) => button.textContent);
 const sections = () => [...document.querySelectorAll(".menu-section-title")].map((node) => node.textContent);
@@ -191,14 +194,19 @@ test("closing confirms inside the sheet, warns while running, and then closes th
     view.Element.prototype.scrollIntoView = realScroll;
   }
   // The question opens at the foot of a tall sheet; it is brought on screen.
-  expect(scrolled).toEqual([zone().querySelector(".pane-confirm")!]);
+  expectSameNodes(scrolled, [zone().querySelector(".pane-confirm")!]);
   expect(sheetOpen()).toBeTrue();
   expect(document.querySelectorAll("dialog[open]")).toHaveLength(1);
   expect(zone().querySelector(".pane-confirm-subject")?.textContent).toContain("First");
   expect(zone().querySelector(".pane-confirm-warn")?.textContent).toBe(t("confirm.closeRunning"));
   const [cancel, confirm] = [...zone().querySelectorAll<HTMLButtonElement>(".pane-confirm-actions button")];
+  // As the confirmation dialog: Cancel first and holding focus, the destructive answer after it.
+  expect([cancel.textContent, confirm.textContent]).toEqual([t("cancel"), t("pm.closePane")]);
+  expectSameNode(document.activeElement, cancel);
   act(() => cancel.click());
   expect(zone().querySelector(".pane-confirm")).toBeNull();
+  // Cancel gives focus back to the row that asked.
+  expectSameNode(document.activeElement, zone().querySelector(".menu-row"));
   act(() => zone().querySelector<HTMLButtonElement>(".menu-row")!.click());
   await act(async () => { zone().querySelectorAll<HTMLButtonElement>(".pane-confirm-actions button")[1].click(); await new Promise((resolve) => setTimeout(resolve, 20)); });
   expect(confirm).toBeDefined();
@@ -368,6 +376,85 @@ test("Worktree lists in place, marks the current checkout, and opens a row with 
   expect(document.querySelectorAll("dialog[open]")).toHaveLength(1);
 });
 
+/** Escape as a keyboard sends it: down on what has focus, then up. */
+function escape(): void {
+  const target = document.activeElement ?? document.body;
+  act(() => { target.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }) as unknown as Event); });
+  act(() => { target.dispatchEvent(new happy.KeyboardEvent("keyup", { key: "Escape", bubbles: true }) as unknown as Event); });
+}
+
+test("Escape takes back the closing question first, as Cancel does, and only then the panel", async () => {
+  act(openPaneMenu);
+  const zone = () => document.querySelector(".menu-danger-zone")!;
+  act(() => zone().querySelector<HTMLButtonElement>(".menu-row")!.click());
+  expectSameNode(document.activeElement, zone().querySelector(".pane-confirm-cancel"));
+  escape();
+  expect(zone().querySelector(".pane-confirm")).toBeNull();
+  expect(sheetOpen()).toBeTrue();
+  expectSameNode(document.activeElement, zone().querySelector(".menu-row"));
+  escape();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(sheetOpen()).toBeFalse();
+});
+
+test("Escape in the full agent list returns to the form it stands in for, then steps back the page", () => {
+  applyCapabilities({ ...NO_OPERATION_CAPABILITIES, create_tab: true }, ["codex", "claude", "grok", "pi", "cursor", "hermes", "opencode"]);
+  act(openPaneMenu);
+  const dialog = document.querySelector<HTMLDialogElement>("dialog.sheet")!;
+  act(() => byLabel(t("menu.newTab")).click());
+  act(() => dialog.querySelector<HTMLButtonElement>(".create-kind.is-all")!.click());
+  expect(dialog.querySelector(".kind-picker")).not.toBeNull();
+  dialog.querySelector<HTMLButtonElement>(".kind-pick")!.focus();
+  escape();
+  expect(dialog.querySelector(".kind-picker")).toBeNull();
+  expect(dialog.querySelector("h2")?.textContent).toBe(t("pm.newTabTitle"));
+  dialog.querySelector<HTMLButtonElement>(".create-kind")!.focus();
+  escape();
+  expect(dialog.querySelector(".pane-head")).not.toBeNull();
+  expect(sheetOpen()).toBeTrue();
+});
+
+test("the panel's Worktree pages are the shared forms: refused in the field, and never dropping the keyboard while one runs", async () => {
+  applyCapabilities({ ...NO_OPERATION_CAPABILITIES, create_worktree: true, open_worktree: true }, ["codex"]);
+  const made: Array<Record<string, unknown>> = [];
+  let finish!: (result: unknown) => void;
+  attachLiveSession({ isConnected: () => true,
+    snapshot: async () => ({ workspaces: [{ workspace_id: "w1", label: "One", cwd: "/one" }], tabs: [{ tab_id: "t1", workspace_id: "w1", label: "main" }], panes: [card("p1")] }),
+    paneRead: async () => ({ text: "", hash: "h" }),
+    createWorktree: (input: Record<string, unknown>) => { made.push(input); return new Promise((resolve) => { finish = resolve; }); } } as never);
+  act(openPaneMenu);
+  const dialog = document.querySelector<HTMLDialogElement>("dialog.sheet")!;
+  act(() => pageRow(t("menu.worktree")).click());
+  act(() => pageRow(t("pm.wtOpenBy")).click());
+  expect(dialog.querySelector("h2")?.textContent).toBe(t("menu.openWorktree"));
+  const target = dialog.querySelector<HTMLInputElement>('input[name="target"]')!;
+  target.focus();
+  act(() => { target.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }) as unknown as Event); });
+  expect(dialog.querySelector(".pane-page-note.is-error")?.textContent).toBe(t("form.needPathOrBranch"));
+  expect(target.getAttribute("aria-invalid")).toBe("true");
+  expectSameNode(document.activeElement, target);
+  expect(dialog.querySelector<HTMLFieldSetElement>(".pane-fieldset")!.disabled).toBeFalse();
+
+  act(() => dialog.querySelector<HTMLButtonElement>(".sheet-back")!.click());
+  act(() => pageRow(t("pm.wtNew")).click());
+  expect([...dialog.querySelectorAll("input")].map((input) => input.name)).toEqual(["branch", "base", "label", "path"]);
+  const branch = dialog.querySelector<HTMLInputElement>('input[name="branch"]')!;
+  branch.focus();
+  await act(async () => {
+    branch.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }) as unknown as Event);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(made).toEqual([{ workspace_id: "w1" }]);
+  const primary = dialog.querySelector<HTMLButtonElement>(".pane-page-footer .create-submit")!;
+  expect(primary.textContent).toBe(t("pm.wtCreateStarted"));
+  expect(primary.disabled).toBeFalse();
+  expect(primary.getAttribute("aria-disabled")).toBe("true");
+  expectSameNode(document.activeElement, primary);
+  // The Worktree exists: the panel closes on it instead of going on saying it is being made.
+  await act(async () => { finish({ pane_id: "p1" }); await new Promise((resolve) => setTimeout(resolve, 20)); });
+  expect(sheetOpen()).toBeFalse();
+});
+
 test("layout page previews the tab and keeps the daemon edge directions for each step", async () => {
   applyCapabilities({ ...NO_OPERATION_CAPABILITIES, resize_pane: true, swap_pane: true, zoom_pane: true }, []);
   const panes = [card("p1"), card("p2", { label: "Second" })];
@@ -497,3 +584,98 @@ for (const scenario of ["empty", "full-unready", "changed", "denied"] as const) 
     }
   });
 }
+
+test("a mouse on a desk layout gets the same panel under the more button; a finger keeps the sheet", () => {
+  const more = document.createElement("button");
+  more.className = "icon-btn icon-more";
+  more.getBoundingClientRect = () => ({ left: 1390, top: 4, right: 1434, bottom: 48, width: 44, height: 44, x: 1390, y: 4, toJSON() {} });
+  document.body.append(more);
+  const press = (pointerType: string) => more.dispatchEvent(new happy.PointerEvent("pointerdown", { bubbles: true, pointerType }) as unknown as Event);
+  const content = () => [...document.querySelectorAll(".sheet-body .pane-menu-root > *")].map((node) => node.className);
+  happy.happyDOM.setWindowSize({ width: 1440, height: 900 });
+  const release = bindOverlayOrigin(document);
+  try {
+    press("touch");
+    act(openPaneMenu);
+    const sheet = document.querySelector<HTMLDialogElement>("dialog.sheet")!;
+    expect(sheet.className).toBe("modal sheet pane-menu-sheet");
+    expect(sheet.style.top).toBe("");
+    const asSheet = content();
+    act(() => closeTestDialogs());
+
+    press("mouse");
+    act(openPaneMenu);
+    const panel = document.querySelector<HTMLDialogElement>("dialog.sheet")!;
+    expect(panel.className).toBe("modal sheet popover popover-panel pane-menu-sheet");
+    // Under the button, on its trailing edge (the test realm lays the panel out 0px wide).
+    expect(panel.style.top).toBe("54px");
+    expect(panel.style.left).toBe("1432px");
+    expect(panel.style.maxHeight).toBe("838px");
+    // Nothing is removed or reordered, and its controls keep their own roles.
+    expect(content()).toEqual(asSheet);
+    expect(panel.querySelector("[role=menu], [role=menuitem]")).toBeNull();
+    expect(document.querySelector(".menu-danger-zone")?.textContent).toBe(t("pm.closePane"));
+  } finally {
+    release();
+    more.remove();
+    happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+  }
+});
+
+test("the panel's pages take the desk form: the same name as the rail's dialog, a labelled field, Cancel that steps back", async () => {
+  applyCapabilities({ ...NO_OPERATION_CAPABILITIES, split_pane: true }, ["codex"]);
+  const splits: Array<Record<string, unknown>> = [];
+  attachLiveSession({ isConnected: () => true, splitPane: async (input: Record<string, unknown>) => { splits.push(input); return {}; },
+    snapshot: async () => ({ workspaces: [{ workspace_id: "w1", label: "One", cwd: "/one" }], tabs: [{ tab_id: "t1", workspace_id: "w1", label: "main" }],
+      panes: [card("p1")] }) } as never);
+  const more = document.createElement("button");
+  more.className = "icon-btn icon-more";
+  document.body.append(more);
+  const press = (pointerType: string) => more.dispatchEvent(new happy.PointerEvent("pointerdown", { bubbles: true, pointerType }) as unknown as Event);
+  const panel = () => document.querySelector<HTMLDialogElement>("dialog.sheet")!;
+  const stops = () => tabStops(panel()).map((stop) => stop.getAttribute("aria-label") ?? stop.textContent);
+  happy.happyDOM.setWindowSize({ width: 1440, height: 900 });
+  const release = bindOverlayOrigin(document);
+  try {
+    press("mouse");
+    act(openPaneMenu);
+    // The panel starts on its first control proper, the chosen mode, and ends on the dialog's own close.
+    expectSameNode(document.activeElement, radio(TERM_MODE_MENU.guided));
+    expectSameNode(panel().querySelector("form")!.lastElementChild, panel().querySelector(".desk-close"));
+    expect(stops().at(-1)).toBe(t("close"));
+
+    act(() => byLabel(t("menu.renamePane")).click());
+    expect(panel().querySelector("h2")?.textContent).toBe(t("menu.renamePane"));
+    const input = panel().querySelector<HTMLInputElement>(".pane-rename input")!;
+    expect(panel().querySelector(`label[for="${input.id}"]`)?.textContent).toBe(t("op.paneName"));
+    expectSameNode(document.activeElement, input);
+    // The way back, the field (named by its label), its clear, the footer, the close.
+    expect(stops()).toEqual([t("sheet.back"), "", t("pm.renameClear"), t("cancel"), t("pm.save"), t("close")]);
+    act(() => panel().querySelector<HTMLButtonElement>(".desk-cancel")!.click());
+    expect(panel().open).toBeTrue();
+    expect(panel().querySelector("h2")?.textContent).toBe(t("pane.menuTitle"));
+
+    // Enter on a choice chooses it and submits the page.
+    act(() => byLabel(t("menu.split")).click());
+    const down = panel().querySelector<HTMLButtonElement>(`[role=radio][aria-label="${t("pm.splitDownAria")}"]`)!;
+    await act(async () => {
+      down.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }) as unknown as Event);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(splits).toEqual([{ pane_id: "p1", direction: "down", ratio: 0.5, agent_kind: "codex" }]);
+    act(() => closeTestDialogs());
+    selectPane("p1");
+
+    // The sheet keeps its drill-down: the field named for assistive tech only, no Cancel beside the one button.
+    press("touch");
+    act(openPaneMenu);
+    act(() => byLabel(t("menu.renamePane")).click());
+    expect(panel().querySelector("h2")?.textContent).toBe(t("menu.renamePane"));
+    expect(panel().querySelector(".pane-rename input")?.getAttribute("aria-label")).toBe(t("op.paneName"));
+    expect(panel().querySelector(".pane-rename-label, .desk-cancel, .desk-close")).toBeNull();
+  } finally {
+    release();
+    more.remove();
+    happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+  }
+});

@@ -9,6 +9,7 @@ import { echoGhost, echoStoreRevision, subscribeEcho } from "./echo";
 import { closeRow, openRow } from "./rowbar";
 import {
   atBottom,
+  bindDragSelection,
   bindPinch,
   bindTap,
   cancelTermJump,
@@ -22,10 +23,12 @@ import {
   syncJump,
   termDisplayStoreRevision,
   termJumpLeaving,
+  type RowPress,
 } from "./term";
 import { paneModel } from "./pane-model";
 import { unreadBars, unreadCount } from "./unread";
 import { bindHostScroll } from "../full-terminal/full-terminal-scroll";
+import { deskPointer, useDeskPointer } from "../desk-pointer";
 import { SessionScrollRail } from "./session-scroll";
 
 function TermLine({
@@ -112,8 +115,10 @@ function JumpChip({ jumpRef }: { jumpRef: { current: HTMLButtonElement | null } 
  * Gestures: tap a row → floating row actions (`onRow`); long-press → native
  * selection; a hand pan dismisses the row actions. The picked row is read as a
  * narrow session-store slice so highlighting it does not wait for a pane commit.
+ * A mouse beside the list drags to select instead: the drag is the browser's,
+ * a click that did not move is still the row gesture.
  */
-export function SessionTerminal({ onRow }: { onRow?: (index: number) => void } = {}) {
+export function SessionTerminal({ onRow }: { onRow?: (index: number, at?: RowPress) => void } = {}) {
   useSyncExternalStore(subscribeEcho, echoStoreRevision);
   useSyncExternalStore(subscribeTermDisplay, termDisplayStoreRevision);
   const picked = useSyncExternalStore(sessionStore.subscribe, pickedRow, pickedRow);
@@ -122,6 +127,7 @@ export function SessionTerminal({ onRow }: { onRow?: (index: number) => void } =
   onRowRef.current = handleRow;
   const termRef = useRef<HTMLDivElement>(null);
   const jumpRef = useRef<HTMLButtonElement>(null);
+  const pointer = useDeskPointer();
   const model = displayedTermModel(paneModel());
   const painted = paintLines(model.lines);
   const live = painted.length ? painted : [{ text: "", spans: [] as StyledLine["spans"] }];
@@ -131,13 +137,14 @@ export function SessionTerminal({ onRow }: { onRow?: (index: number) => void } =
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
-    const stopTap = bindTap(term, (index) => onRowRef.current(index), { onHold: selectFromHold, onPan: closeRow });
+    const stopTap = bindTap(term, (index, at) => onRowRef.current(index, at), { onHold: selectFromHold, onPan: closeRow });
     const stopPinch = bindPinch(term);
     const stopHost = bindHostScroll(
       term,
       (direction, lines, source) => sendGuidedTuiScroll(direction, lines, source),
       () => undefined,
-      { grabTouch: false, tapAsClick: false, capturePan: guidedCapturePan },
+      // A mouse drag beside the list selects text; it must not also page the agent.
+      { grabTouch: false, tapAsClick: false, capturePan: guidedCapturePan, pansWith: (type) => type !== "mouse" || !deskPointer() },
     );
     const onScroll = () => {
       const following = atBottom(term);
@@ -147,14 +154,30 @@ export function SessionTerminal({ onRow }: { onRow?: (index: number) => void } =
       }
     };
     term.addEventListener("scroll", onScroll, { passive: true });
+    // The buffer's box changes under it: the pad opens or closes, the field
+    // grows, the keyboard rises. A box that got shorter keeps its scroll offset
+    // and fires no scroll event, so a buffer that was at its end would end
+    // with its last lines under the dock. Following means staying at the end.
+    const Observer = term.ownerDocument.defaultView?.ResizeObserver;
+    const resized = Observer ? new Observer(() => {
+      if (paneFollow() && !atBottom(term)) term.scrollTop = term.scrollHeight;
+    }) : null;
+    resized?.observe(term);
     return () => {
       stopTap();
       stopPinch();
       stopHost();
+      resized?.disconnect();
       term.removeEventListener("scroll", onScroll);
       cancelTermJump();
     };
   }, []);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term || !pointer) return;
+    return bindDragSelection(term);
+  }, [pointer]);
 
   const termClass = `term${termWrap() ? " wrapped" : ""}${termSelect() ? " selecting" : ""}`;
   return (

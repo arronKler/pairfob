@@ -9,6 +9,27 @@ type KeyPressOptions = {
 
 export type PadPressBinding = { stop: () => void; destroy: () => void };
 
+/** How far past each side of a key's box its press may be. */
+type Reach = { left: number; right: number; top: number; bottom: number };
+const NO_REACH: Reach = { left: 0, right: 0, top: 0, bottom: 0 };
+/** What a pressed key shrinks by (it is drawn at 94%), so a press at the rim of its hit area stays inside. */
+const PRESSED_SHRINK_PX = 3;
+
+/**
+ * A key is pressed over more than it is drawn where its hit area reaches into
+ * the gaps around it (the dense pad's 36px rows). A press that began out there
+ * belongs to the key as long as it stays that close: without this the first
+ * move of the finger, still outside the key's own box, ended it as "left the
+ * key". A press that began on the key keeps the key's box exactly.
+ */
+export function pressReach(rect: { left: number; right: number; top: number; bottom: number }, at: { clientX: number; clientY: number }): Reach {
+  const past = (distance: number): number => distance > 0 ? distance + PRESSED_SHRINK_PX : 0;
+  return {
+    left: past(rect.left - at.clientX), right: past(at.clientX - rect.right),
+    top: past(rect.top - at.clientY), bottom: past(at.clientY - rect.bottom),
+  };
+}
+
 /** One physical press owns its repeats and release; clicks only add keyboard/AT activation. */
 export function bindPadPress(
   element: HTMLElement,
@@ -21,6 +42,7 @@ export function bindPadPress(
   let timer: number | null = null;
   let pending = false;
   let origin: { x: number; y: number } | null = null;
+  let reach = NO_REACH;
 
   const disabled = () => element.matches(":disabled, [aria-disabled='true']");
   const finish = (cancelled: boolean) => {
@@ -67,6 +89,7 @@ export function bindPadPress(
     event.preventDefault();
     if (pointer !== null) return;
     pointer = event.pointerId;
+    reach = pressReach(element.getBoundingClientRect(), event);
     element.classList.add("is-pressed");
     // Track even outside the key: touch pointers may be implicitly captured.
     doc.addEventListener("pointermove", onPointerMove, true);
@@ -99,8 +122,8 @@ export function bindPadPress(
       return;
     }
     const rect = element.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right ||
-        event.clientY < rect.top || event.clientY > rect.bottom) stop();
+    if (event.clientX < rect.left - reach.left || event.clientX > rect.right + reach.right ||
+        event.clientY < rect.top - reach.top || event.clientY > rect.bottom + reach.bottom) stop();
   };
   const onClick = (event: MouseEvent) => {
     // Pointer-generated clicks belong to the handled pointer gesture,

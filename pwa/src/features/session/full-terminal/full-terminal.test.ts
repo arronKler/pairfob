@@ -77,8 +77,8 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(fitController).toContain("pickFontSize");
     expect(source).toContain("bindFontPinch");
     expect(source).toContain("document.fonts");
-    expect(fitController).toContain("Math.floor(inner.width / cell.width)");
-    expect(fitController).toContain("ptyCols(visibleCols, termFit(), targetCols)");
+    expect(fitController).toContain("Math.floor(width / cell.width)");
+    expect(fitController).toContain("ptyCols(colsIn(room.width), mode, targetCols)");
     expect(fitController).toContain("panePtySize(openPaneId(), boardLayouts(), liveAgents())");
     expect(source).toContain("panXScroller");
     const host = await Bun.file(new URL("./full-terminal-host.tsx", import.meta.url)).text();
@@ -110,7 +110,8 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(view).not.toContain("full-terminal-retry");
     expect(view).not.toContain("full-terminal-scroll");
     expect(view).toContain("Dock: SessionDock");
-    expect(view).toContain("<Dock includeBack={includeBack} />");
+    // The dock's field follows the keyboard the device has, not the back button.
+    expect(view).toContain("<Dock includeBack={includeBack} phone={phone} />");
   });
 
   test("a failed bridge stays in complete-terminal with retry", () => {
@@ -152,7 +153,7 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     const fitFn = fitController;
     expect(fitFn).toContain("displayGrid({ cols, rows }, remoteGrid)");
     expect(fitFn).toContain("hostFitRows");
-    expect(fitFn).toContain("ptyCols(visibleCols, termFit(), targetCols)");
+    expect(fitFn).toContain("ptyCols(colsIn(room.width), mode, targetCols)");
     expect(fitFn).toContain("panePtySize");
     expect(fitFn).toContain("sizePanCanvas");
     expect(fitFn).toContain("lockedFont !== null || pan");
@@ -168,13 +169,13 @@ describe("complete-terminal chrome stays a distinct surface", () => {
     expect(eventFn).toContain("frame.width");
     expect(eventFn).toContain("frame.height");
     expect(eventFn).toContain("remoteGrid = nextRemote");
-    expect(eventFn).toContain("enqueueResize");
+    expect(eventFn).toContain("requestResize(fit(), nextRemote)");
     expect(eventFn).toContain("frameGate.settle(sequence, frame.full");
     expect(eventFn.indexOf("frameGate.settle(sequence, frame.full")).toBeLessThan(eventFn.indexOf("writer?.reset()"));
     expect(eventFn.indexOf("frameGate.settle(sequence, frame.full")).toBeLessThan(eventFn.indexOf("writer.write(frame.data"));
     const bindFn = fn("function bindInput(", "async function mount(");
-    expect(bindFn).toContain("fittedSize.cols");
-    expect(bindFn).toContain("fittedSize.rows");
+    // xterm's own resize event asks for the fitted size, never its clamped display grid.
+    expect(bindFn).toContain("requestResize(fittedSize)");
     expect(bindFn).not.toContain("enqueueResize({ cols, rows");
   });
 

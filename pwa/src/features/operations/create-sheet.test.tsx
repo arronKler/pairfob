@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act } from "react";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
+import { expectSameNode } from "../../../test-support/node-identity";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { setLang, t } from "../../lib/i18n";
+import { bindOverlayOrigin } from "../../shared/ui/overlay/origin";
 import { loadCreateMemory, type CreateMemory } from "./create-memory";
 import { askCreate, NEW_WORKSPACE, type CreateRequest, type CreateSheetInput } from "./create-sheet";
 
@@ -98,6 +100,89 @@ describe("create sheet", () => {
     expect(await result).toEqual({ kind: "tab", workspaceId: "w1", agentKind: "claude", label: "review" });
   });
 
+  test("Enter in a text field submits the desk form; the sheet leaves Return to the on-screen keyboard", async () => {
+    const enter = (init: Record<string, unknown> = {}) => {
+      const event = new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init }) as unknown as KeyboardEvent;
+      act(() => { sheet().querySelector(".create-field input")!.dispatchEvent(event); });
+      return event;
+    };
+    const sheetOpen = await open();
+    expect(sheet().classList.contains("desk-form")).toBeFalse();
+    expect(enter().defaultPrevented).toBeFalse();
+    expect(sheet().open).toBeTrue();
+    await act(async () => { closeTestDialogs(); await settle(); });
+    expect(await sheetOpen.result).toBeNull();
+
+    happy.happyDOM.setWindowSize({ width: 1024, height: 768 });
+    const release = bindOverlayOrigin(document);
+    document.body.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true }) as unknown as Event);
+    try {
+      const { result } = await open();
+      expect(sheet().classList.contains("desk-form")).toBeTrue();
+      type(".create-field input", "review");
+      // An IME confirming its candidate is not the form's Enter.
+      expect(enter({ isComposing: true }).defaultPrevented).toBeFalse();
+      expect(sheet().open).toBeTrue();
+      // A button that is not a choice keeps Enter as its own press.
+      const cancel = new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }) as unknown as KeyboardEvent;
+      act(() => { button(".desk-cancel").dispatchEvent(cancel); });
+      expect(cancel.defaultPrevented).toBeFalse();
+      await act(async () => { expect(enter().defaultPrevented).toBeTrue(); await settle(); });
+      expect(await result).toEqual({ kind: "tab", workspaceId: "w2", agentKind: "codex", label: "review" });
+    } finally {
+      release();
+      happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+    }
+  });
+
+  test("Enter on a choice chooses it and submits the desk form with it; in the sheet it is the chip's own press", async () => {
+    const enterOn = (target: HTMLElement) => {
+      const event = new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }) as unknown as KeyboardEvent;
+      act(() => { target.dispatchEvent(event); });
+      return event;
+    };
+    const sheetOpen = await open();
+    expect(enterOn(button(".create-chip", "pairfob")).defaultPrevented).toBeFalse();
+    expect(sheet().querySelector(".desk-cancel")).toBeNull();
+    await act(async () => { closeTestDialogs(); await settle(); });
+    expect(await sheetOpen.result).toBeNull();
+
+    happy.happyDOM.setWindowSize({ width: 1024, height: 768 });
+    const release = bindOverlayOrigin(document);
+    document.body.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true }) as unknown as Event);
+    try {
+      // A workspace chip that is not the chosen one, then the form goes with it.
+      const first = await open();
+      expect(button(".create-chip.on").textContent).toBe("herdr-web");
+      await act(async () => { expect(enterOn(button(".create-chip", "pairfob")).defaultPrevented).toBeTrue(); await settle(); });
+      expect(await first.result).toEqual({ kind: "tab", workspaceId: "w1", agentKind: "codex", label: "" });
+      // A kind tile is a choice too; the way into the full list is not.
+      const second = await open({ kinds: ["claude", "codex", "gemini", "amp", "goose", "kimi", "qwen", "pi"], lastKind: "codex" });
+      expect(enterOn(button(".create-kind.is-all")).defaultPrevented).toBeFalse();
+      await act(async () => { expect(enterOn(button(".create-kind", "claude")).defaultPrevented).toBeTrue(); await settle(); });
+      expect(await second.result).toEqual({ kind: "tab", workspaceId: "w2", agentKind: "claude", label: "" });
+    } finally {
+      release();
+      happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+    }
+  });
+
+  test("the desk form's footer is Cancel, then the action; Cancel dismisses with nothing", async () => {
+    happy.happyDOM.setWindowSize({ width: 1024, height: 768 });
+    const release = bindOverlayOrigin(document);
+    document.body.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true }) as unknown as Event);
+    try {
+      const { result } = await open();
+      const actions = [...sheet().querySelectorAll(".create-footer button")];
+      expect(actions.map((node) => node.textContent)).toEqual([t("cancel"), t("create.submit")]);
+      await act(async () => { button(".desk-cancel").click(); await settle(); });
+      expect(await result).toBeNull();
+    } finally {
+      release();
+      happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+    }
+  });
+
   test("a terminal is always offered and carries no agent kind", async () => {
     const { result } = await open();
     act(() => button(".create-kind", t("create.terminal")).click());
@@ -111,9 +196,23 @@ describe("create sheet", () => {
     act(() => button(".create-chip", t("create.newWorkspace")).click());
     expect([...sheet().querySelectorAll(".create-dir-path")].map((node) => node.textContent))
       .toEqual(["~/work/herdr-cli", "~/projects/pairfob", "~/work/herdr-web", t("create.dirOther")]);
+    button(".create-submit").focus();
     await submit();
     expect(sheet().querySelector('[role="alert"]')?.textContent).toBe(t("create.needDir"));
-    act(() => button(".create-dir", t("create.dirOther")).click());
+    // A finger's tap left no keyboard position: the refusal moves nothing (and raises no keyboard).
+    expectSameNode(document.activeElement, button(".create-submit"));
+    // Under a mouse or the keyboard the reader is put in the chooser the message is about.
+    const release = bindOverlayOrigin(document);
+    try {
+      document.body.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Tab", bubbles: true }) as unknown as Event);
+      await submit();
+      expectSameNode(document.activeElement, button(".create-dir", "~/work/herdr-cli"));
+      act(() => button(".create-dir", t("create.dirOther")).click());
+      // With a path being typed, an empty one is refused in that field.
+      button(".create-submit").focus();
+      await submit();
+      expectSameNode(document.activeElement, sheet().querySelector(".create-dirs input"));
+    } finally { release(); }
     type(".create-dirs input", "~/work/newapp");
     expect(sheet().querySelector(".create-summary")?.textContent).toBe(t("create.summaryWs", { dir: "~/work/newapp", kind: "codex" }));
     await submit();

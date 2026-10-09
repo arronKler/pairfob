@@ -15,6 +15,9 @@ import { useCapabilities } from "../../features/operations/hooks";
 import { Button, Spinner } from "../../shared/ui/primitives";
 import { showActionSheet, type ActionSheetController } from "../../shared/ui/overlay";
 import { boardLayoutReason, boardPaneCard, watchBoardTarget } from "./board-layout-ops";
+import { useDeskEnter } from "../../shared/ui/overlay/desk-form";
+import { DeskCancel } from "../../shared/ui/overlay/modal";
+import { SheetFooter } from "../../shared/ui/overlay/sheet-content";
 
 /**
  * What to start in the new cell. Where it goes was the tap on "+" in the
@@ -72,28 +75,31 @@ function BoardSplitSheet({ modal, card, direction, target, reveal }: {
       return outcome;
     });
   };
+  // On the desk form Enter submits from a field or a chosen kind, as in every desk dialog.
+  const onEnter = useDeskEnter(submit);
   if (picking) {
     return <AgentKindPickerPanel kinds={kinds} memory={memory} selected={kind} onBack={() => setPicking(false)}
       onPick={(next) => { setKind(next); setPicking(false); }} onPinsChange={setMemory} />;
   }
   const title = agentTitle(card);
   const note = error || (pending ? "" : reason);
-  return <div className="create-sheet-body board-sheet board-split">
+  return <div className="create-sheet-body board-sheet board-split" onKeyDown={onEnter}>
     <fieldset className="pane-fieldset" disabled={pending}>
       <h3 className="create-label">{t("create.what")}</h3>
       <AgentKindGrid kinds={kinds} memory={memory} selected={kind} lastKind={lastKind} onSelect={setKind} onShowAll={() => setPicking(true)} />
       {!kinds.length ? <p className="create-hint">{t("create.noKinds")}</p> : null}
       <p className="create-hint">{t("boardMenu.splitCwd")}</p>
     </fieldset>
-    <div className="create-footer board-split-footer">
+    <SheetFooter><div className="create-footer board-split-footer">
       <p className="create-summary">
         {t(direction === "right" ? "boardMenu.splitSummaryRight" : "boardMenu.splitSummaryDown", { title, kind: kindName(kind) })}
       </p>
       {note ? <p className={`board-sheet-note${error ? " is-error" : ""}`} role={error ? "alert" : "status"}>{note}</p> : null}
+      <DeskCancel disabled={pending} />
       <Button className="btn btn-primary create-submit" disabled={pending || !!reason} aria-busy={pending} onClick={submit}>
         {pending ? <><Spinner />{t("pm.creating")}</> : t("boardMenu.splitSubmit")}
       </Button>
-    </div>
+    </div></SheetFooter>
   </div>;
 }
 

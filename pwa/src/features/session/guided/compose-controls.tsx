@@ -1,4 +1,4 @@
-import { CornerDownLeft, Square } from "lucide-react";
+import { CornerDownLeft, Keyboard, Square } from "lucide-react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { t } from "../../../lib/i18n";
 import { Button, Spinner } from "../../../shared/ui/primitives";
@@ -15,9 +15,13 @@ import {
   subscribeSendAttachments,
   type SendAttachmentsState,
 } from "../attachments/attachments-send";
-import { preventComposeBlurUnlessIME } from "../compose-focus";
+import { PadChromeButton, preventComposeBlurUnlessIME } from "../compose-focus";
 import { draftLineCount } from "../compose-size";
+import { clearModifiers } from "../keypad/keypad";
+import { useShortLandscape } from "../keypad/short-landscape";
 import { useSoftKeyboardOpen } from "../keypad/soft-keyboard";
+import { usePreferences } from "../../settings/hooks";
+import { keysExpanded, setKeysExpanded } from "../../settings/preferences-store";
 import {
   cancelSendWait,
   connectSendAttachments,
@@ -292,8 +296,12 @@ export function ComposeFrame({ field, draft, live, focused, foldable, onResize, 
     return () => el.removeEventListener("blur", save);
   }, [field]);
   // Folding, and the keyboard changing the room the field may take, both re-measure.
+  // So do the pad opening over a phone on its side, where its rows come out of
+  // the lines the field may show, and the phone being turned.
   const keyboardOpen = useKeyboardOpen();
-  useLayoutEffect(() => { resize.current?.(); }, [folded, keyboardOpen]);
+  const padOpen = usePreferences().keysExpanded;
+  const landscape = useShortLandscape();
+  useLayoutEffect(() => { resize.current?.(); }, [folded, keyboardOpen, padOpen, landscape]);
   const showLines = !live && (lines > 3 || folded);
   const unfold = () => {
     const el = field.current;
@@ -307,5 +315,41 @@ export function ComposeFrame({ field, draft, live, focused, foldable, onResize, 
     {children}
     {showLines && <span className="compose-lines" aria-hidden="true">{t("compose2.lines", { n: lines })}</span>}
     {folded && <Button className="compose-unfold" aria-label={t("compose2.unfoldAria", { n: lines })} onClick={unfold} />}
+  </div>;
+}
+
+/**
+ * "按键" in the dock of a mouse-driven session. A hardware keyboard has every
+ * key the pad offers, so the pad is put away until asked for; this shows and
+ * hides the same expanded pad the touch row's ⋯ opens.
+ */
+export function DockKeysButton() {
+  const expanded = usePreferences().keysExpanded;
+  return <PadChromeButton type="button" className="dock-keys-btn" aria-expanded={expanded ? "true" : "false"}
+    title={t(expanded ? "deskDock.keysHide" : "deskDock.keysShow")}
+    onClick={() => {
+      clearModifiers();
+      setKeysExpanded(!keysExpanded());
+    }}>
+    <Keyboard size={16} aria-hidden="true" /><span>{t("deskDock.keys")}</span>
+  </PadChromeButton>;
+}
+
+/**
+ * 组字 / 实时 under the field of a mouse-driven session: the per-pane input mode
+ * the `···` panel also sets, with a line saying where the keys go. The field
+ * itself still carries the live marking; this only makes the choice reachable.
+ */
+export function InputModeSwitch({ live, onChange, hints }: {
+  live: boolean; onChange: (live: boolean) => void; hints: readonly string[];
+}) {
+  return <div className="dock-mode">
+    <div className="dock-mode-switch" role="group" aria-label={t("pane.inputAria")}>
+      {[false, true].map(option => <PadChromeButton key={String(option)} type="button" className="dock-mode-option"
+        aria-pressed={live === option ? "true" : "false"} title={t(option ? "pane.liveAria" : "pane.composeAria")}
+        onClick={() => { if (live !== option) onChange(option); }}>
+        {t(option ? "compose.live" : "compose.batch")}</PadChromeButton>)}
+    </div>
+    <p className="dock-mode-hint">{hints.map(hint => <span key={hint}>{hint}</span>)}</p>
   </div>;
 }

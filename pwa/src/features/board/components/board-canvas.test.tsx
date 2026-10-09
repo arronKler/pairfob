@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act } from "react";
@@ -141,7 +142,7 @@ describe("board canvas lifecycle", () => {
     expect(first.calls).toContain("releaseHost:A");
     expect(second.bound()).toBe(1);
     expect(second.boundLayouts).toEqual([oneTab]);
-    expect(second.hosts.at(-1)?.stage).toBe(appRoot().querySelector(".board-stage"));
+    expectSameNode(second.hosts.at(-1)?.stage, appRoot().querySelector(".board-stage"));
     act(() => unmountReact());
     // Only the owner still in charge releases the host on the way out.
     expect(second.calls).toContain("releaseHost:B");
@@ -169,7 +170,7 @@ describe("board canvas lifecycle", () => {
     paint(canvas(oneTab), rig.controller);
     const viewport = appRoot().querySelector(".board-canvas");
     paint(canvas(null, []), rig.controller);
-    expect(appRoot().querySelector(".board-canvas")).toBe(viewport);
+    expectSameNode(appRoot().querySelector(".board-canvas"), viewport);
     expect(appRoot().querySelector(".board-stage")).toBeNull();
     expect(appRoot().querySelector(".board-canvas .empty-title")?.textContent).toBe(t("board.emptyTitle"));
     expect(rig.disposed()).toBe(1);
@@ -247,23 +248,23 @@ describe("board canvas lifecycle", () => {
     clearBoardPreviews();
   });
 
-  test("a zoomed tab draws the zoomed pane alone and offers the way back", () => {
+  test("a zoomed tab draws the zoomed pane alone, with nothing of the canvas's own over its head", () => {
     const rig = harness();
     const zoomed = { ...splitTab, zoomed: true, focusedPaneId: "w1:p2" };
     paint(canvas(zoomed, [agent("w1:p1"), agent("w1:p2")]), rig.controller);
     const tiles = [...appRoot().querySelectorAll<HTMLElement>(".board-pane")];
     expect(tiles.map((tile) => [tile.dataset.paneId, tile.style.width])).toEqual([["w1:p2", "800px"]]);
-    const banner = appRoot().querySelector(".board-zoom-banner")!;
-    // Presses on it must reach its button, not start a canvas gesture.
-    expect(banner.hasAttribute("data-board-overlay")).toBeTrue();
-    expect(banner.textContent).toContain(t("boardCanvas.zoomedBanner"));
-    act(() => banner.querySelector<HTMLButtonElement>("button")!.click());
-    expect(rig.calls).toContain("zoom:w1:p2:off");
-    zoomReason = t("boardMenu.offline");
-    paint(canvas(zoomed, [agent("w1:p1"), agent("w1:p2")]), rig.controller);
-    expect(appRoot().querySelector<HTMLButtonElement>(".board-zoom-banner button")!.disabled).toBeTrue();
+    // Saying so, and the way back, belong to the tab row (board-screen): the stage fills its window
+    // on a phone on its side and beside the list, and anything drawn here lands on the pane's head.
+    const viewport = appRoot().querySelector(".board-canvas")!;
+    expect([...viewport.children].map((node) => node.className)).toEqual(["board-stage"]);
+    expect(viewport.textContent).not.toContain(t("boardCanvas.zoomedBanner"));
+  });
+
+  test("a pane's ⋯ says which pane it is for, so an open menu finds it among panes of one name", () => {
+    const rig = harness();
     paint(canvas(splitTab, [agent("w1:p1"), agent("w1:p2")]), rig.controller);
-    expect(appRoot().querySelector(".board-zoom-banner")).toBeNull();
+    expect([...appRoot().querySelectorAll(".board-pane-more")].map((more) => more.getAttribute("data-trigger-of"))).toEqual(["w1:p1", "w1:p2"]);
   });
 
   test("a divider draft re-lays the tiles live and leaves the bound layout alone", () => {

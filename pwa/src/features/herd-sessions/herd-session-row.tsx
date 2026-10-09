@@ -1,4 +1,4 @@
-import { Layers } from "lucide-react";
+import { ChevronsUpDown, Layers } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { computersStore, liveSession } from "../computers/catalog-store";
 import { t } from "../../lib/i18n";
@@ -23,7 +23,7 @@ function openHerdSessionSheet(sessions: readonly HerdSessionSummary[], current: 
         detail={running ? t("set.herdSessionRunning") : t("set.herdSessionStopped")}
         selected={name === current} action={() => chooseHerdSession(name)} />
     ))}
-  </>);
+  </>, { popover: "menu" });
 }
 
 /**
@@ -47,18 +47,23 @@ export function HerdSessionRow() {
 }
 
 /**
- * The same switch on the Sessions tab: a pill in the phone header and a link in
- * the desktop rail, so a named session is one tap from the list it changes.
+ * The same switch on the Sessions tab: a pill in the phone header, and in the
+ * desktop rail a row of its own under the head, so a named session is one tap
+ * from the list it changes. The rail's head is the computer's; a third control
+ * beside it would cut the name short. The row has the width to say what it
+ * switches as well as which one is chosen.
  */
-export function HerdSessionSwitch({ className }: { className?: string }) {
+export function HerdSessionSwitch({ row = false }: { row?: boolean }) {
   const { session, list, current } = useHerdSessionChoice();
   if (!session || !list || !hasHerdSessionChoice(list.sessions, current)) return null;
   const label = herdSessionLabel(current);
   return (
-    <Button className={className ? `herd-session-switch ${className}` : "herd-session-switch"} aria-haspopup="dialog"
-      aria-label={t("set.herdSessionAria", { name: label })} onClick={() => openHerdSessionSheet(list.sessions, current)}>
+    <Button className="herd-session-switch" aria-haspopup="dialog" aria-label={t("set.herdSessionAria", { name: label })}
+      onClick={() => openHerdSessionSheet(list.sessions, current)}>
       <Layers size={16} aria-hidden="true" />
-      <span>{label}</span>
+      {row ? <span className="herd-session-kind">{t("set.herdSession")}</span> : null}
+      <span className="herd-session-name">{label}</span>
+      {row ? <ChevronsUpDown size={14} aria-hidden="true" /> : null}
     </Button>
   );
 }

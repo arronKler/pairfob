@@ -45,6 +45,7 @@
     text-align: center;
   }
 
+  .boot-recovery p { text-wrap: balance; }
   .boot-recovery p + p { color: var(--muted); }
 
   .boot-recovery .boot-pair-anyway {
@@ -57,5 +58,6 @@
     color: var(--muted);
     font-size: var(--text-lead);
     line-height: 1.45;
+    text-wrap: balance;
   }
 }

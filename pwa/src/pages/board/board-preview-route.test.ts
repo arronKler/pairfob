@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { resetBoardTestDOM } from "../../../test-support/dom";
 import { beforeEach, afterEach, describe, expect, test } from "bun:test";
 import { act } from "react";
@@ -81,8 +82,8 @@ describe("react board previews", () => {
       await refreshBoardPreviews();
     });
     commitTest();
-    expect(app.querySelector(".board-pane") === tile).toBeTrue();
-    expect(app.querySelector(".board-stage") === stage).toBeTrue();
+    expectSameNode(app.querySelector(".board-pane"), tile);
+    expectSameNode(app.querySelector(".board-stage"), stage);
     expect(tile?.querySelector(".board-pane-screen")?.textContent).toContain("w1:p1");
     expect(tile?.querySelector(".board-pane-line")).toBeTruthy();
   });
@@ -96,10 +97,10 @@ describe("react board previews", () => {
     const snapshot = boardPreviewSnapshot("w1:p1");
     expect(buffer).toBeTruthy();
     await act(refreshBoardPreviews);
-    expect(screen.querySelector(".board-pane-buffer") === buffer).toBeTrue();
+    expectSameNode(screen.querySelector(".board-pane-buffer"), buffer);
     expect(boardPreviewSnapshot("w1:p1") === snapshot).toBeTrue();
     await act(() => refreshBoardPanePreview("w1:p1"));
-    expect(screen.querySelector(".board-pane-buffer") === buffer).toBeTrue();
+    expectSameNode(screen.querySelector(".board-pane-buffer"), buffer);
     expect(boardPreviewSnapshot("w1:p1") === snapshot).toBeTrue();
     expect(screen.textContent).toContain("w1:p1");
   });

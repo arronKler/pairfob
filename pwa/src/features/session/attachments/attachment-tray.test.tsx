@@ -1,6 +1,7 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { resetBoardTestDOM } from "../../../../test-support/dom";
+import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { appRoot } from "../../../app/dom-root";
@@ -130,6 +131,7 @@ afterEach(async () => {
   clearCapabilities();
   resetComposeDrafts();
   appRoot().replaceChildren();
+  happy.happyDOM.setWindowSize({ width: 390, height: 844 });
 });
 
 describe("attachment tray", () => {
@@ -143,6 +145,29 @@ describe("attachment tray", () => {
     unmountReact();
     renderReact(<AttachmentTray compact />);
     expect(tray()!.classList.contains("is-compact")).toBe(true);
+  });
+
+  test("on a phone the count scrolls along inside the strip", async () => {
+    renderReact(<AttachmentTray />);
+    setSessionTransport("relay");
+    await act(async () => { adoptIncoming(key, scope, [file("a.txt")]); });
+    expect(tray()!.classList.contains("is-beside")).toBe(false);
+    expect(tray()!.querySelector(".attach-meta-col")!.parentElement!.classList.contains("attach-strip")).toBe(true);
+  });
+
+  test("beside the list the count leaves the strip, so a narrow column cannot run it off its edge", async () => {
+    happy.happyDOM.setWindowSize({ width: 820, height: 1180 });
+    renderReact(<AttachmentTray />);
+    setSessionTransport("relay");
+    await act(async () => { adoptIncoming(key, scope, [file("a.txt")]); });
+    expect(tray()!.classList.contains("is-beside")).toBe(true);
+    const meta = tray()!.querySelector(".attach-meta-col")!;
+    expectSameNode(meta.parentElement, tray());
+    expect(tray()!.querySelector(".attach-strip .attach-meta-col")).toBeNull();
+    // Still one status region, after the thumbnails it describes.
+    expect(tray()!.querySelectorAll(".attach-meta-col")).toHaveLength(1);
+    expect(meta.previousElementSibling!.classList.contains("attach-strip")).toBe(true);
+    expect(meta.textContent).toContain("1/5");
   });
 
   test("pasted files upload on their own and become ready paths in tray order", async () => {

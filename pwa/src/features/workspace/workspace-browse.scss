@@ -38,18 +38,43 @@
   max-width: 9rem;
   min-height: 36px;
   padding: 0 6px;
-  overflow: hidden;
   border-radius: var(--r-sm);
   color: inherit;
   font-size: var(--text-secondary);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The name is cut inside the button, so the button itself clips nothing: its
+   hit area may reach past its box (below). The label spans the button's
+   padding, so the name is cut where the button's own edge would cut it. */
+.workspace-crumb-label { display: block; margin: 0 -6px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; }
 .workspace-crumb:active { background: var(--surface); }
 /* The current folder never gives way to its ancestors. */
 .workspace-crumb.is-current { flex-shrink: 0; max-width: 11rem; color: var(--ink); font-weight: 650; }
 .workspace-crumb-fold { flex: none; min-width: 32px; letter-spacing: 0.05em; }
 .workspace-crumb-sep { flex: none; opacity: 0.45; }
+
+/* Drawn to fit a 44px bar with air around them: Up is 40px square, a folder's
+   name 36px high. Under a finger each is pressed the bar's whole height, its
+   hairline included (43px of room, so the area is a pixel deeper below than
+   above). Up also takes the bar's 4px of padding beside it, and the current
+   folder, which is often a short name, the free room after it up to 44px. A
+   folder above it keeps its own width: its neighbours are a separator's width
+   away on either side. Where a control is already a whole target (the
+   inspector's column) every term is 0. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .workspace-up,
+  .workspace-crumb { position: relative; }
+  .workspace-up::after,
+  .workspace-crumb::after {
+    content: "";
+    position: absolute;
+    inset: min(0px, calc(50% - 21.5px)) 0 min(0px, calc(50% - 22.5px));
+  }
+  .workspace-up::after { left: min(0px, calc(100% - 44px)); }
+  .workspace-crumb.is-current::after { right: min(0px, calc(100% - 44px)); }
+  /* The trail still cuts what is too long for it, and no longer what stands above and below. */
+  .workspace-crumbs { overflow: clip visible; }
+}
 
 /* --- Rows: an open button and, for files, a ⋯ button beside it ------------------ */
 

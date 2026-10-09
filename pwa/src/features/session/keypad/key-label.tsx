@@ -8,6 +8,7 @@ const KEY_ICONS: Readonly<Partial<Record<string, LucideIcon>>> = {
 
 const KEY_ARIA = {
   up: "key.up", down: "key.down", left: "key.left", right: "key.right", backspace: "key.backspace",
+  pageup: "keys.pageUp", pagedown: "keys.pageDown",
 } as const;
 
 /** The spoken name: localized for icon keys and Space, the full chord ("Ctrl+C") otherwise. */

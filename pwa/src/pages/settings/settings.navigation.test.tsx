@@ -10,6 +10,7 @@ import { setPhase, connectionStore, type Phase } from "../../features/connection
 import { attachLiveSession, computersStore, setComputers, setCredential, setLastUsedDaemon } from "../../features/computers/catalog-store";
 import { currentScreen, computersFrom, navigationStore, setComputersFrom, setScreen, type Screen } from "../../app/navigation-store";
 import { openPaneId, selectPane } from "../../features/session/session-store";
+import { emulateTouchDevice } from "../../features/session/touch-realm";
 import { applySnapshot, captureDashboardProjection } from "../../features/dashboard/catalog-store";
 import {
   paneComposeLive, paneTermMode, resetPreferences, setDefaultTermMode, setPaneComposeLive,
@@ -34,6 +35,7 @@ import type { LiveSession } from "../../lib/protocol/session-types";
  */
 
 const originalFetch = globalThis.fetch;
+let restorePointer: (() => void) | null = null;
 
 /** A button by aria-label, exact text, or its settings item label. */
 async function click(label: string): Promise<void> {
@@ -139,6 +141,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  restorePointer?.();
+  restorePointer = null;
   await act(async () => {
     stopPolling();
     unmountApp();
@@ -234,6 +238,8 @@ test("settings changes only the default input while pane choices remain independ
 });
 
 test("the Return key switch flips the phone keyboard behavior and says what it does", async () => {
+  // A phone types on glass; the test DOM would otherwise answer like a mouse.
+  restorePointer = emulateTouchDevice();
   bootHome();
   await click(t("home.settings"));
   const toggle = appRoot().querySelector<HTMLButtonElement>('.session-defaults [role="switch"]');
@@ -246,6 +252,20 @@ test("the Return key switch flips the phone keyboard behavior and says what it d
   expect(localStorage.getItem(COMPOSE_ENTER_SENDS_KEY)).toBe("1");
   expect(appRoot().querySelector('.session-defaults [role="switch"]')?.getAttribute("aria-checked")).toBe("true");
   expect(defaultsNote()).toContain("回车直接发送。");
+  await act(async () => { appRoot().querySelector<HTMLButtonElement>('.session-defaults [role="switch"]')!.click(); });
+  expect(composeEnterSends()).toBeFalse();
+});
+
+test("with a hardware keyboard the Return switch says it governs the on-screen keyboard only", async () => {
+  // Enter always sends from a hardware keyboard, so "回车键发送: off" would be false there.
+  bootHome();
+  await click(t("home.settings"));
+  const toggle = appRoot().querySelector<HTMLButtonElement>('.session-defaults [role="switch"]')!;
+  expect(document.getElementById(toggle.getAttribute("aria-labelledby") ?? "")?.textContent).toBe("屏幕键盘回车发送");
+  expect(defaultsNote()).toContain("屏幕键盘上回车换行，用发送键发送；实体键盘始终是 Enter 发送、Shift+Enter 换行。");
+  await act(async () => { toggle.click(); });
+  expect(composeEnterSends()).toBeTrue();
+  expect(defaultsNote()).toContain("屏幕键盘上回车直接发送；实体键盘始终是 Enter 发送、Shift+Enter 换行。");
   await act(async () => { appRoot().querySelector<HTMLButtonElement>('.session-defaults [role="switch"]')!.click(); });
   expect(composeEnterSends()).toBeFalse();
 });

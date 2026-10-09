@@ -13,14 +13,29 @@ import { HerdSkeleton } from "./herd-skeleton";
  * directories this phone used before. Herdr gone or silent: a solid panel with
  * what to run on the computer. Offline or reconnecting: the header already
  * says so, so the list only notes what happens next above still placeholder rows.
+ *
+ * `beside` is the desk rail. The column next to it says all of this, with the
+ * command and the buttons (`app/layout/desk-empty.tsx`), so the rail notes only
+ * the fact, in the place the rows would start, and keeps what is the list's
+ * own: the directories used before.
  */
-export function HerdEmpty({ empty, actions }: { empty: HerdEmptyView; actions: HerdActions }) {
+export function HerdEmpty({ empty, actions, beside = false }: { empty: HerdEmptyView; actions: HerdActions; beside?: boolean }) {
   if (empty.kind === "offline" || empty.kind === "reconnecting") {
     return (
       <>
-        <p className="herd-empty-note" role="status">{empty.sub}</p>
+        {/* Beside the rail the main column carries this line; the still rows alone stand for the list. */}
+        {beside ? null : <p className="herd-empty-note" role="status">{empty.sub}</p>}
         <HerdSkeleton still />
       </>
+    );
+  }
+  if (beside) {
+    const nothingYet = empty.kind === "none" || empty.kind === "noCreate";
+    return (
+      <section className="herd-empty is-beside" aria-labelledby="herd-empty-title">
+        <h2 id="herd-empty-title" className="herd-empty-note">{nothingYet ? t("empty.noneTitle") : empty.title}</h2>
+        <RecentDirs empty={empty} actions={actions} />
+      </section>
     );
   }
   if (empty.kind === "exited" || empty.kind === "unverifiable") {
@@ -41,21 +56,26 @@ export function HerdEmpty({ empty, actions }: { empty: HerdEmptyView; actions: H
       <p className="herd-empty-sub">{empty.sub}</p>
       {empty.command ? <CommandLine command={empty.command} label={t("empty.runOnComputer")} /> : null}
       <EmptyActions empty={empty} actions={actions} />
-      {empty.recentDirs.length ? (
-        <div className="herd-empty-recent">
-          <h3 className="herd-empty-recent-label">{t("empty.recentDirs")}</h3>
-          <div className="herd-group-body">
-            {empty.recentDirs.map((dir) => (
-              <Button key={dir} className="card-main herd-empty-dir" onClick={() => actions.createInDir(dir)}>
-                <span className="herd-empty-dir-icon" aria-hidden="true"><Folder size={18} /></span>
-                <span className="herd-empty-dir-path">{dir}</span>
-                <ChevronRight size={16} aria-hidden="true" />
-              </Button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <RecentDirs empty={empty} actions={actions} />
     </section>
+  );
+}
+
+function RecentDirs({ empty, actions }: { empty: HerdEmptyView; actions: HerdActions }) {
+  if (!empty.recentDirs.length) return null;
+  return (
+    <div className="herd-empty-recent">
+      <h3 className="herd-empty-recent-label">{t("empty.recentDirs")}</h3>
+      <div className="herd-group-body">
+        {empty.recentDirs.map((dir) => (
+          <Button key={dir} className="card-main herd-empty-dir" onClick={() => actions.createInDir(dir)}>
+            <span className="herd-empty-dir-icon" aria-hidden="true"><Folder size={18} /></span>
+            <span className="herd-empty-dir-path">{dir}</span>
+            <ChevronRight size={16} aria-hidden="true" />
+          </Button>
+        ))}
+      </div>
+    </div>
   );
 }
 

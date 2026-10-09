@@ -16,7 +16,7 @@ export type ShellLayout = Immutable<LayoutDescriptor>;
  * effect sees the shell it is inside), `useAppShell` re-applies it whenever the
  * composition changes, and unmounting removes it.
  */
-const SHELL_CLASSES = ["session", "desk", "workspace", "board", "boot-screen", "tabs"] as const;
+const SHELL_CLASSES = ["session", "desk", "workspace", "board", "boot-screen", "tabs", "inspector", "rail-hidden"] as const;
 
 export function applyShell(layout: ShellLayout): void {
   const root = appRoot();
@@ -26,6 +26,8 @@ export function applyShell(layout: ShellLayout): void {
   root.classList.toggle("board", layout.shell.board);
   root.classList.toggle("boot-screen", layout.shell.booting);
   root.classList.toggle("tabs", layout.shell.tabs);
+  root.classList.toggle("inspector", layout.shell.inspector);
+  root.classList.toggle("rail-hidden", layout.shell.railHidden);
   document.documentElement.classList.toggle("lock", layout.lockScroll);
   document.body.classList.toggle("lock", layout.lockScroll);
   root.style.setProperty("--term-fs", `${layout.termFontPx}px`);

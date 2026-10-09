@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { happy, resetTestDOM } from "../../../../test-support/boot-dom";
 import { afterEach, beforeEach, expect, test } from "bun:test";
@@ -15,7 +16,7 @@ import { applyTrace, chatSnapshot, setTraceBusy, setTraceLoadState } from "./tra
 import { leaveAgentChat, patchAgentChat, refreshAgentTrace, submitAgentPrompt } from "./agent-chat-controller";
 import { applyCapabilities, operationBusy, setOperationBusy } from "../../operations/capabilities-store";
 import { composeDraft, composeFocused, composeIME, setComposeDraft, setComposeFocused, setComposeIME } from "../compose-store";
-import { clearNotice, showStatus, visibleNotice } from "../../../app/notices-store";
+import { clearNotice, showError, showStatus, visibleNotice } from "../../../app/notices-store";
 import { attachLiveSession, liveSession, setCredential } from "../../computers/catalog-store";
 import { replaceAgentsFromSnapshot } from "../../dashboard/catalog-store";
 import { resetPaneView, selectPane, setAgentChat } from "../session-store";
@@ -271,7 +272,7 @@ async function imeEnterCase(): Promise<void> {
   });
   expect(submitted).toEqual([]);
   expect(field() === input).toBeTrue();
-  expect(document.activeElement === input).toBeTrue();
+  expectSameNode(document.activeElement, input);
   expect(input.value).toBe("拼音 in progress");
   expect([input.selectionStart, input.selectionEnd]).toEqual([2, 5]);
   expect(composeDraft()).toBe("Committed");
@@ -286,6 +287,43 @@ async function imeEnterCase(): Promise<void> {
   await act(async () => { pending.resolve({ outcome: "applied" }); await Promise.resolve(); });
   await drain();
 }
+
+test("a passing notice floats over the transcript; the chat's own note and a lasting error keep their place in the page", async () => {
+  act(mount);
+  const root = appRoot().querySelector(".agent-chat-root")!;
+  const wrap = appRoot().querySelector(".agent-stream-wrap");
+  const reading = stream();
+  const placed = () => appRoot().querySelector<HTMLElement>("[data-app-notice]");
+  // The stop outcome, a pad limit, a copy error: there for a moment, so nothing under it may move.
+  act(() => showStatus("仍在运行，可以强制停止"));
+  expect(placed()?.parentElement?.className).toBe("session-notice");
+  expectSameNode(placed()?.parentElement?.parentElement, root);
+  expect(placed()?.parentElement?.previousElementSibling?.classList.contains("chrome")).toBeTrue();
+  expectSameNode(placed()?.parentElement?.nextElementSibling, wrap);
+  expect([placed()?.getAttribute("role"), placed()?.getAttribute("aria-live")]).toEqual(["status", "polite"]);
+  expectSameNode(stream(), reading);
+  // A prompt that failed stays until the reader acts on it.
+  act(() => showError("没有发送", true));
+  expectSameNode(placed()?.parentElement, root);
+  expectSameNode(placed()?.nextElementSibling, wrap);
+  expect(appRoot().querySelector(".session-notice")).toBeNull();
+  // With the application notice gone, the history's own note takes the same place in the page.
+  act(() => { clearNotice(); setTraceLoadState("error"); applyTrace({ agentTraceNote: "没能完整读取" }); patchAgentChat(); });
+  const note = placed();
+  expect(note?.textContent).toBe("没能完整读取");
+  expectSameNode(note?.parentElement, root);
+  expect(appRoot().querySelector(".session-notice")).toBeNull();
+  // A passing notice does not take the note's place and hand it back: the note stays, the notice floats under it.
+  act(() => showStatus("已停止"));
+  expectSameNode(placed(), note);
+  expectSameNode(note?.nextElementSibling, appRoot().querySelector(".session-notice"));
+  expect(appRoot().querySelector(".session-notice > [data-app-notice]")?.textContent).toBe("已停止");
+  expectSameNode(appRoot().querySelector(".session-notice")?.nextElementSibling, wrap);
+  act(clearNotice);
+  expectSameNode(placed(), note);
+  expectSameNode(note?.nextElementSibling, wrap);
+  expectSameNode(stream(), reading);
+});
 
 test("the detached composer releases every input/composition/key listener", () => {
   let submits = 0;

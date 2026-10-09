@@ -1,10 +1,48 @@
 /* --- Settings -------------------------------------------------------------------------- */
 @use "./settings-panel";
 
+/*
+  The family's back bar stays where it is while the page scrolls under it: a
+  long page (the computer page, quotas) must not take the way back with it.
+  The bar reaches up over the page's own top padding, so it does not move when
+  it sticks, and it is opaque from the top edge down.
+*/
 .settings-page .topbar,
 .main-settings .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   gap: 0;
   margin-bottom: 0;
+  background: var(--bg);
+}
+
+/* The phone page scrolls the window; the bar spans it edge to edge. */
+.settings-page .topbar {
+  margin: calc(-14px - env(safe-area-inset-top, 0px)) -18px 0;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 0;
+}
+
+/* The desk page scrolls its main column, whose content is the bar's own width.
+   A sticky offset is measured inside the scroller's padding, so reaching the
+   column's top edge takes the same 22px back. */
+.main-settings .topbar {
+  top: -22px;
+  margin-top: -22px;
+  padding-top: 22px;
+}
+
+/* Rows fade out under the bar instead of being cut by its edge. */
+.settings-page .topbar::after,
+.main-settings .topbar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 10px;
+  background: linear-gradient(to bottom, var(--bg), transparent);
+  pointer-events: none;
 }
 
 .settings-page .icon-btn,
@@ -17,10 +55,15 @@
   font-weight: 400;
 }
 
+/* One line: a long computer name ends in an ellipsis instead of widening the page. */
 .settings-page .topbar-title,
 .main-settings .topbar-title {
+  display: block;
   padding-left: 2px;
-  line-height: 1.15;
+  overflow: hidden;
+  line-height: 44px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-title {
@@ -69,6 +112,25 @@
 
 .set-list > * { position: relative; }
 
+/* A row that takes focus is as wide as its card, and the card clips whatever is
+   drawn outside it: the ring would be two lines above and below the row. It is
+   drawn inside the row instead, and follows the card's corners where the row is
+   the card's first or last. */
+.set-card :is(button.set-item, .cp-main, summary):focus-visible { outline-offset: -2px; }
+
+/* A row of its own, or the first or last of a run of choices that is the card's first or last child. */
+.set-card > :is(button, summary):first-child:focus-visible,
+.set-card > :first-child > button.set-item:first-child:focus-visible {
+  border-top-left-radius: calc(var(--r-lg) - 1px);
+  border-top-right-radius: calc(var(--r-lg) - 1px);
+}
+
+.set-card > :is(button, summary):last-child:focus-visible,
+.set-card > :last-child > button.set-item:last-child:focus-visible {
+  border-bottom-right-radius: calc(var(--r-lg) - 1px);
+  border-bottom-left-radius: calc(var(--r-lg) - 1px);
+}
+
 .set-list > * + *::before,
 .set-radios > * + *::before {
   content: "";
@@ -83,12 +145,16 @@
 
 .set-list-icons > * + *::before { left: calc(var(--set-pad) + var(--set-icon) + 12px); }
 
+/* Footnotes and notes are a sentence or two in a column a few words wide: they
+   break into even lines, so the last is never one word (or, in Chinese, a
+   character and its full stop) on its own. */
 .set-foot {
   margin: 0;
   padding: 8px var(--set-pad) 0;
   color: var(--muted);
   font-size: var(--text-secondary);
   line-height: 1.55;
+  text-wrap: balance;
 }
 
 .set-foot code {
@@ -137,6 +203,11 @@
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+
+/* Where the second line is a sentence. A line of facts joined by dots (a quota's
+   window and reset) keeps its plain wrap: evened out, it would start a line with the dot. */
+.notification-item .set-item-sub,
+.set-radio .set-item-sub { text-wrap: balance; }
 
 .set-item-sub.is-error,
 .set-item.is-error .set-item-label { color: var(--error); }
@@ -199,6 +270,7 @@
   color: var(--muted);
   font-size: var(--text-secondary);
   line-height: 1.55;
+  text-wrap: balance;
 }
 
 .set-danger {
@@ -239,6 +311,10 @@
   border-radius: 9px;
   background: var(--surface-2);
 }
+
+/* The keyboard's ring goes round what is drawn, not round the taller target. */
+.set-action:focus-visible { outline: none; }
+.set-action:focus-visible::before { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .set-action.is-fill { color: var(--accent-ink); }
 .set-action.is-fill::before { background: var(--accent); }
@@ -352,6 +428,16 @@
 }
 
 .set-seg .seg-item.on { background: var(--bg); }
+
+/* The segment is drawn 40px tall inside its 44px track; a finger gets the
+   track's whole height and a pixel past it, so a row laid out on a fraction
+   of a pixel still offers 44. The row's own padding keeps the next control's
+   target 6px further away. */
+.set-seg .seg-item::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
 
 /* Single-choice rows (network route): the check marks the choice. */
 .set-radios.seg {

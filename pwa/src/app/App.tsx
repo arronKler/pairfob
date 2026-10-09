@@ -4,7 +4,7 @@ import { AgentChatPane } from "../features/session/chat/agent-chat";
 import { SessionPane } from "../features/session/guided/session-pane";
 import { FullTerminalRoute } from "../features/session/full-terminal/full-terminal-route";
 import { BoardPage as BoardScreen } from "../pages/board";
-import { BootScreen, BootShell, UnreachableShell } from "../pages/boot";
+import { BootScreen, BootShell, UnreachableDesk, UnreachableShell } from "../pages/boot";
 import { ComputersScreen } from "../pages/computers/computers-page";
 import { ConnectScreen } from "../pages/connect/connect-page";
 import { HomePage } from "../pages/home";
@@ -12,6 +12,7 @@ import { QuotaScreen } from "../pages/quota/quota-page";
 import { SettingsScreen } from "../pages/settings/settings-page";
 import { WorkspaceScreen } from "../pages/workspace/screen";
 import { sessionHandlers } from "../features/session/pane-actions";
+import { closeWorkspaceInspector } from "../features/workspace/inspector";
 import { DeskShell } from "./layout/desk";
 import { TabBar } from "./layout/tab-bar";
 import { getAppFrame, subscribeAppFrame, type FrameSnapshot, type SessionScroll } from "./frame";
@@ -36,6 +37,8 @@ import { useAppShell, type ShellLayout } from "./shell";
 
 /** Stable handler identity: these are module functions, not per-render closures. */
 const handlers = sessionHandlers();
+/** With the list hidden behind the inspector, the session's back button returns to it. */
+const railHiddenHandlers = { ...handlers, onBack: closeWorkspaceInspector };
 
 const NO_SCROLL: SessionScroll = { top: 0, left: 0, bottom: true };
 
@@ -61,11 +64,13 @@ function scrollOf(frame: FrameSnapshot): SessionScroll {
 export function pageFor(layout: ShellLayout, frame: FrameSnapshot): ReactNode {
   switch (layout.mode) {
     case "boot":
-      return layout.shell.booting ? <BootScreen /> : <BootShell />;
+      // Off the phone, a boot inside the desk shell is the "cannot reach" page's own retry.
+      return layout.shell.booting ? <BootScreen /> : layout.shell.desk ? <UnreachableDesk retrying /> : <BootShell />;
     case "connect":
       return <ConnectScreen />;
     case "pick":
-      return layout.shell.unreachable ? <UnreachableShell /> : <ComputersScreen />;
+      if (!layout.shell.unreachable) return <ComputersScreen />;
+      return layout.shell.desk ? <UnreachableDesk /> : <UnreachableShell />;
     case "workspace":
       return <WorkspaceScreen />;
     case "board":
@@ -79,7 +84,8 @@ export function pageFor(layout: ShellLayout, frame: FrameSnapshot): ReactNode {
     case "home":
       return <HomePage />;
     case "desk":
-      return <DeskShell deskPage={layout.deskPage} onReturn={layout.deskReturn === "board" ? handlers.onBack : undefined}>
+      return <DeskShell deskPage={layout.deskPage} inspector={layout.shell.inspector}
+        onReturn={layout.deskReturn === "board" ? handlers.onBack : undefined}>
         {deskChild(layout, frame)}
       </DeskShell>;
     case "chat":
@@ -95,9 +101,14 @@ export function pageFor(layout: ShellLayout, frame: FrameSnapshot): ReactNode {
 }
 
 function deskChild(layout: ShellLayout, frame: FrameSnapshot): ReactNode {
-  if (layout.deskChild === "chat") return <AgentChatPane includeBack={false} handlers={handlers} />;
+  // The desk session has no back of its own; it gains one only while the list
+  // has given its column to the inspector.
+  const back = layout.shell.railHidden;
+  const own = back ? railHiddenHandlers : handlers;
+  if (layout.deskChild === "full") return <FullTerminalRoute includeBack={back} onBack={back ? closeWorkspaceInspector : undefined} />;
+  if (layout.deskChild === "chat") return <AgentChatPane includeBack={back} handlers={own} />;
   if (layout.deskChild === "session") {
-    return <SessionPane includeBack={false} handlers={handlers} scroll={scrollOf(frame)} />;
+    return <SessionPane includeBack={back} handlers={own} scroll={scrollOf(frame)} />;
   }
   return undefined;
 }

@@ -127,6 +127,30 @@ html.page-zoomed :is(.term, .term-line) {
   white-space: pre;
 }
 
+/*
+  A prediction never widens the pane, on a phone or beside the list. Typed
+  faster than a slow link answers, it outgrows the screen's own lines, and a row
+  made that long gave the buffer a sideways scroll for as long as the answer
+  took. The pane keeps its rule for lines instead: where rows keep the
+  computer's columns the echo takes the room left in its row and is cut there,
+  fading out (the dock's pending line shows all of it); where rows are reflowed
+  it wraps with them.
+*/
+.term:not(.wrapped) .term-line > .term-ghost {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+
+.term.wrapped .term-line > .term-ghost {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .term-ghost.is-rollback {
   animation: term-ghost-out 120ms var(--ease) forwards;
 }
@@ -213,4 +237,24 @@ html.page-zoomed :is(.term, .term-line) {
 
   .term-jump.term-jump-out,
   .agent-jump.term-jump-out { animation: none; }
+}
+
+/* --- Wide layout --------------------------------------------------------------------- */
+
+/*
+  The guided buffer sits in a centered column with the dock (dock.scss); the
+  frame gives that column an edge the main column no longer provides.
+*/
+#app.desk [data-react-guided-pane] .term-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+/* A mouse drags text straight out of the buffer; a finger still uses select mode. */
+@media (hover: hover) and (pointer: fine) {
+  #app.desk .term {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }

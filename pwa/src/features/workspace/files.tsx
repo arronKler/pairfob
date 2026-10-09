@@ -8,6 +8,7 @@ import { showActionSheet } from "../../shared/ui/overlay/action-sheet";
 import { MenuGroup, MenuRow } from "../../shared/ui/overlay/menu-controls";
 import { Button, Chevron } from "../../shared/ui/primitives";
 import { loadDirectory, loadWorkspaceFile } from "./actions";
+import { guardBackPress } from "./back-press";
 import { bindWorkspaceFileActions, openWorkspaceFileMenu, workspaceMutationTarget } from "./file-actions";
 import { FileIcon } from "./file-icon";
 import { formatBytes, formatModified } from "./format";
@@ -16,6 +17,7 @@ import { foldBreadcrumbs, gitMarks, type GitMarks } from "./git-marks";
 import type { WorkspaceSnapshot } from "./model";
 
 import { workspacePaneCwd } from "./store";
+import { ownFilesDialog } from "./surface-dialogs";
 
 function FileRow({ entry, snapshot, marks }: { entry: WorkspaceEntry; snapshot: WorkspaceSnapshot; marks: GitMarks }) {
   const open = useRef<HTMLButtonElement>(null);
@@ -48,6 +50,7 @@ function FileRow({ entry, snapshot, marks }: { entry: WorkspaceEntry; snapshot: 
     <Button
       ref={open}
       className="workspace-row-main"
+      data-trigger-of={entry.path}
       disabled={entry.kind !== "directory" && !isFile}
       aria-busy={pending || undefined}
       onClick={onOpen}
@@ -68,6 +71,7 @@ function FileRow({ entry, snapshot, marks }: { entry: WorkspaceEntry; snapshot: 
       className="workspace-row-more"
       aria-label={t("workspace.fileActions", { name: entry.name })}
       aria-haspopup="dialog"
+      data-trigger-of={entry.path}
       disabled={busy}
       onClick={() => openWorkspaceFileMenu(entry)}
     ><Ellipsis size={18} aria-hidden="true" /></Button>}
@@ -76,7 +80,7 @@ function FileRow({ entry, snapshot, marks }: { entry: WorkspaceEntry; snapshot: 
 
 function openPathSheet(snapshot: WorkspaceSnapshot, rootLabel: string): void {
   const crumbs = workspaceBreadcrumbs(snapshot.directory);
-  showActionSheet(t("workspace.jumpTo"), modal => <MenuGroup>
+  ownFilesDialog(() => showActionSheet(t("workspace.jumpTo"), modal => <MenuGroup>
     {crumbs.map((crumb, depth) => {
       const current = crumb.path === snapshot.directory;
       const target = current ? { onClick: () => modal.dismiss() } : { modal, action: () => loadDirectory(crumb.path) };
@@ -86,7 +90,7 @@ function openPathSheet(snapshot: WorkspaceSnapshot, rootLabel: string): void {
         detail={current ? t("workspace.current") : undefined}
       />;
     })}
-  </MenuGroup>, { className: "workspace-path-sheet" });
+  </MenuGroup>, { className: "workspace-path-sheet", popover: "menu" }));
 }
 
 function Breadcrumbs({ snapshot }: { snapshot: WorkspaceSnapshot }) {
@@ -96,7 +100,12 @@ function Breadcrumbs({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2].path : null;
   return <nav className="workspace-breadcrumbs" aria-label={t("workspace.files")}>
     <Button className="workspace-up" aria-label={t("workspace.upDir")} title={t("workspace.upDir")}
-      disabled={parent === null} onClick={() => { if (parent !== null) void loadDirectory(parent); }}>
+      disabled={parent === null} onClick={(event) => {
+        if (parent === null) return;
+        // Up stays under the pointer: a doubled press would climb two folders.
+        guardBackPress(event);
+        void loadDirectory(parent);
+      }}>
       <ArrowUp size={18} aria-hidden="true" />
     </Button>
     <div className="workspace-crumbs">
@@ -106,9 +115,13 @@ function Breadcrumbs({ snapshot }: { snapshot: WorkspaceSnapshot }) {
           {index > 0 && <span className="workspace-crumb-sep" aria-hidden="true">/</span>}
           {"fold" in crumb
             ? <Button className="workspace-crumb workspace-crumb-fold" aria-label={t("workspace.foldedPath")} aria-haspopup="dialog"
-              onClick={() => openPathSheet(snapshot, rootLabel)}>…</Button>
+              onClick={() => openPathSheet(snapshot, rootLabel)}><span className="workspace-crumb-label">…</span></Button>
             : <Button className={`workspace-crumb${last ? " is-current" : ""}`} aria-current={last ? "page" : undefined}
-              onClick={() => loadDirectory(crumb.path)}>{crumb.path ? crumb.label : rootLabel}</Button>}
+              onClick={(event) => {
+                // A folder above: the trail is drawn again under the pointer, as with Up.
+                if (!last) guardBackPress(event);
+                void loadDirectory(crumb.path);
+              }}><span className="workspace-crumb-label">{crumb.path ? crumb.label : rootLabel}</span></Button>}
         </Fragment>;
       })}
     </div>

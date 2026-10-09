@@ -3,6 +3,13 @@ import { OPERATION_INPUT_LIMITS } from "../../lib/operations";
 
 export type FormResult<T> = { ok: true; value: T } | { ok: false; message: string; field?: string };
 
+/**
+ * What an in-sheet form shows once its operation settles: done, or why not.
+ * An empty message means it never ran (offline, busy or superseded) and the
+ * form's own disabled reason already says so.
+ */
+export type SheetOutcome = { ok: true } | { ok: false; message: string };
+
 export function accepted<T>(value: T): FormResult<T> {
   return { ok: true, value };
 }

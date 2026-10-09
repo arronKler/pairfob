@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetTestDOM } from "../../../../test-support/boot-dom";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
@@ -5,7 +6,8 @@ import { appRoot } from "../../../app/dom-root";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { setLang, t } from "../../../lib/i18n";
 import type { AgentTraceItem } from "../../../lib/operations";
-import { AgentStream } from "./agent-stream";
+import { AgentStream, copiedCode } from "./agent-stream";
+import { COPIED_MS } from "../copy-confirm";
 
 beforeEach(async () => { await resetTestDOM(); setLang("zh"); });
 afterEach(() => act(unmountReact));
@@ -82,7 +84,7 @@ test("a manual collapse of a live card survives new output and keeps its details
   toggle(card, false);
   expect(card.dataset.user).toBe("closed");
   paint("second partial reply");
-  expect(appRoot().querySelector("details.work-card") === card).toBeTrue();
+  expectSameNode(appRoot().querySelector("details.work-card"), card);
   expect(card.open).toBeFalse();
   expect(card.querySelector(".work-title")?.textContent).toBe(t("work.running", { n: 1 }));
   // While running, the latest note sits under the card and nothing offers a copy yet.
@@ -281,5 +283,123 @@ test("code blocks in a final reply get their own copy button", () => {
   const button = appRoot().querySelector<HTMLButtonElement>(".md-code .md-copy")!;
   expect(button.textContent).toBe(t("reply.copyCode"));
   act(() => button.click());
-  expect(copied).toEqual([["bun test\n", "code"]]);
+  // Without the line break that ends the block: pasted into a shell, it would run the line.
+  expect(copied).toEqual([["bun test", "code"]]);
+});
+
+test("every copy press copies what was pressed and is confirmed on that button, then the button is itself again", async () => {
+  const copied: string[] = [];
+  const text = "One:\n\n```sh\nfirst\n```\n\nTwo:\n\n```sh\nsecond\n```";
+  act(() => renderReact(<AgentStream items={[{ type: "user", text: "q" }, { type: "assistant", text }]}
+    working={false} empty={empty} onCopyReply={async (value) => { copied.push(value); return true; }} />));
+  const [first, second] = [...appRoot().querySelectorAll<HTMLButtonElement>(".md-code .md-copy")];
+  const reply = appRoot().querySelector<HTMLButtonElement>(".agent-reply-copy")!;
+  const labels = () => [first, second, reply].map((button) => button.textContent);
+  const press = async (button: HTMLButtonElement) => await act(async () => { button.click(); await Promise.resolve(); await Promise.resolve(); });
+  await press(first);
+  expect(labels()).toEqual([t("reply.copied"), t("reply.copyCode"), t("reply.copy")]);
+  expect(first.getAttribute("aria-label")).toBe(t("chat.copiedCode"));
+  // Straight on to the next block and to the reply's own button: nothing in between holds a press back.
+  await press(second);
+  await press(reply);
+  expect(copied).toEqual(["first", "second", text]);
+  expect(labels()).toEqual([t("reply.copied"), t("reply.copied"), t("reply.copied")]);
+  expect(reply.getAttribute("aria-label")).toBe(t("chat.copiedReply"));
+  expectSameNode(appRoot().querySelector(".agent-reply-copy"), reply);
+  expectSameNode(appRoot().querySelector(".md-code .md-copy"), first);
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, COPIED_MS + 60)); });
+  expect(labels()).toEqual([t("reply.copyCode"), t("reply.copyCode"), t("reply.copy")]);
+  expect([first.getAttribute("aria-label"), "copied" in first.dataset, reply.getAttribute("aria-label")])
+    .toEqual([null, false, t("chat.copyReplyAria")]);
+});
+
+test("a copy the browser refused leaves the pressed button as it was", async () => {
+  act(() => renderReact(<AgentStream items={[{ type: "user", text: "q" }, { type: "assistant", text: "```sh\nbun test\n```" }]}
+    working={false} empty={empty} onCopyReply={async () => false} />));
+  const code = appRoot().querySelector<HTMLButtonElement>(".md-code .md-copy")!;
+  const reply = appRoot().querySelector<HTMLButtonElement>(".agent-reply-copy")!;
+  await act(async () => { code.click(); reply.click(); await Promise.resolve(); await Promise.resolve(); });
+  expect([code.textContent, reply.textContent]).toEqual([t("reply.copyCode"), t("reply.copy")]);
+});
+
+test("copied code keeps the line breaks inside it and drops only the one that ends the block", () => {
+  expect(copiedCode("git status\ngit diff\n")).toBe("git status\ngit diff");
+  expect(copiedCode("a\n\nb\r\n")).toBe("a\n\nb");
+  // A blank last line the author wrote is theirs: one break goes, not all of them.
+  expect(copiedCode("a\n\n")).toBe("a\n");
+  expect(copiedCode("no break")).toBe("no break");
+  const copied: string[] = [];
+  act(() => renderReact(<AgentStream items={[{ type: "user", text: "q" }, { type: "assistant", text: "```sh\ngit status\ngit diff\n```" }]}
+    working={false} empty={empty} onCopyReply={(text) => { copied.push(text); }} />));
+  act(() => appRoot().querySelector<HTMLButtonElement>(".md-code .md-copy")!.click());
+  expect(copied).toEqual(["git status\ngit diff"]);
+});
+
+test("a one-line block is one row with its button; several lines, or a line too long for that row, keep a strip above", () => {
+  const reply = (text: string) => [{ type: "user" as const, text: "q" }, { type: "assistant" as const, text }];
+  const paintReply = (text: string): void => {
+    act(() => renderReact(<AgentStream items={reply(text)} working={false} empty={empty} onCopyReply={() => undefined} />));
+  };
+  paintReply("```sh\nbun test\n```\n\nthen\n\n```sh\ngit status\ngit diff\n```");
+  const frames = () => [...appRoot().querySelectorAll<HTMLElement>(".md-code")];
+  expect(frames().map((frame) => frame.classList.contains("is-inline"))).toEqual([true, false]);
+  act(() => unmountReact());
+  // A test DOM lays nothing out: stand in for a line that scrolls in the one-row form.
+  const proto = window.HTMLElement.prototype;
+  const scroll = Object.getOwnPropertyDescriptor(proto, "scrollWidth");
+  const client = Object.getOwnPropertyDescriptor(proto, "clientWidth");
+  Object.defineProperty(proto, "scrollWidth", { configurable: true, get(this: HTMLElement) { return this.tagName === "PRE" ? 932 : 0; } });
+  Object.defineProperty(proto, "clientWidth", { configurable: true, get(this: HTMLElement) { return this.tagName === "PRE" ? 360 : 0; } });
+  try {
+    paintReply("```sh\npairfob daemon --origin https://pairfob.com --log-level debug --no-color\n```");
+    expect(frames().map((frame) => frame.classList.contains("is-inline"))).toEqual([false]);
+  } finally {
+    if (scroll) Object.defineProperty(proto, "scrollWidth", scroll); else Reflect.deleteProperty(proto, "scrollWidth");
+    if (client) Object.defineProperty(proto, "clientWidth", client); else Reflect.deleteProperty(proto, "clientWidth");
+  }
+});
+
+test("a code block keeps its copy button, and its own node, through later renders of the same reply", () => {
+  // React writes innerHTML again for every new `{ __html }` object. The stream
+  // re-renders on any store change, so the button lasted until the first one.
+  const items = [{ type: "user" as const, text: "q" }, { type: "assistant" as const, text: "Run:\n\n```sh\nbun test\n```" }];
+  const copied: string[] = [];
+  const onCopy = (text: string): void => { copied.push(text); };
+  const paintAgain = (follow: boolean): void => {
+    act(() => renderReact(<AgentStream items={items} working={false} empty={empty} follow={follow} onCopyReply={onCopy} />));
+  };
+  paintAgain(true);
+  const pre = appRoot().querySelector(".agent-md pre")!;
+  expect(appRoot().querySelectorAll(".md-code .md-copy")).toHaveLength(1);
+  // The same reply, rendered again for something else that changed.
+  paintAgain(false);
+  paintAgain(true);
+  expect(appRoot().querySelectorAll(".md-code .md-copy")).toHaveLength(1);
+  // Not rebuilt: a selection the reader made in the reply is still in the document.
+  expectSameNode(appRoot().querySelector(".agent-md pre"), pre);
+  act(() => appRoot().querySelector<HTMLButtonElement>(".md-code .md-copy")!.click());
+  expect(copied).toEqual(["bun test"]);
+});
+
+test("a reply that changes gets the button on its new code block, once", () => {
+  const paintReply = (text: string): void => {
+    act(() => renderReact(<AgentStream items={[{ type: "user", text: "q" }, { type: "assistant", text }]}
+      working={false} empty={empty} onCopyReply={() => undefined} />));
+  };
+  paintReply("Run:\n\n```sh\nbun test\n```");
+  paintReply("Run:\n\n```sh\nbun test\n```\n\nthen\n\n```sh\nbun run build\n```");
+  expect(appRoot().querySelectorAll(".agent-md pre")).toHaveLength(2);
+  expect(appRoot().querySelectorAll(".md-code")).toHaveLength(2);
+  expect(appRoot().querySelectorAll(".md-code .md-copy")).toHaveLength(2);
+});
+
+test("a reply still being written has no copy button until it is final, and then it does", () => {
+  const items = [{ type: "user" as const, text: "q" }, { type: "assistant" as const, text: "```sh\nbun test\n```" }];
+  const paintWorking = (working: boolean): void => {
+    act(() => renderReact(<AgentStream items={items} working={working} empty={empty} onCopyReply={() => undefined} />));
+  };
+  paintWorking(true);
+  expect(appRoot().querySelectorAll(".md-copy")).toHaveLength(0);
+  paintWorking(false);
+  expect(appRoot().querySelectorAll(".md-code .md-copy")).toHaveLength(1);
 });

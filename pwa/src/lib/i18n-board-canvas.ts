@@ -21,6 +21,8 @@ export const zhBoardCanvas = {
   "boardCanvas.liftRight": "→ 交换",
   "boardCanvas.liftUp": "↑ 交换",
   "boardCanvas.liftDown": "↓ 交换",
+  "boardCanvas.liftHeld": "拖到相邻的格子交换，松手打开菜单",
+  "boardCanvas.liftMoved": "放到相邻的格子上交换，放在别处取消",
   "boardCanvas.keyNoDivider": "这个方向没有分隔线可调",
   "boardCanvas.keyLimit": "到头了：每条分隔线限制在 10%–90%",
 };
@@ -29,10 +31,11 @@ export const enBoardCanvas: Record<keyof typeof zhBoardCanvas, string> = {
   "boardCanvas.dividerWidth": "Drag to resize left and right",
   "boardCanvas.dividerHeight": "Drag to resize top and bottom",
   "boardCanvas.zoomedBanner": "Only this pane shows on the computer",
-  "boardCanvas.dragCols": "{first} cols │ {second} cols · {share}%",
-  "boardCanvas.dragRows": "{first} rows ─ {second} rows · {share}%",
+  // The unit leads and is said once: either side may be a single column or row.
+  "boardCanvas.dragCols": "Cols {first} │ {second} · {share}%",
+  "boardCanvas.dragRows": "Rows {first} ─ {second} · {share}%",
   "boardCanvas.placeSplit": "Where should the new pane go?",
-  "boardCanvas.placeSwap": "Tap a neighbouring pane to swap",
+  "boardCanvas.placeSwap": "Pick a neighbouring pane to swap",
   "boardCanvas.placeCancel": "Cancel",
   "boardCanvas.placeRight": "Put it on the right",
   "boardCanvas.placeDown": "Put it below",
@@ -44,6 +47,8 @@ export const enBoardCanvas: Record<keyof typeof zhBoardCanvas, string> = {
   "boardCanvas.liftRight": "→ Swap",
   "boardCanvas.liftUp": "↑ Swap",
   "boardCanvas.liftDown": "↓ Swap",
+  "boardCanvas.liftHeld": "Drag onto a neighbour to swap, or let go for the menu",
+  "boardCanvas.liftMoved": "Drop on a neighbour to swap, anywhere else to cancel",
   "boardCanvas.keyNoDivider": "No divider to move in this direction",
   "boardCanvas.keyLimit": "At the limit: each divider stays between 10% and 90%",
 };

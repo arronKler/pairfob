@@ -18,6 +18,8 @@ function ChangeRow({ step, snapshot, notes }: { step: ChangeStep; snapshot: Work
     className={`workspace-change status-${kind}${active ? " active" : ""}`}
     aria-label={`${path} · ${kind === "conflict" ? changeKindLabel(kind) : `${layerLabel(change, layer)} · ${changeKindLabel(kind)}`}${notes ? ` · ${t("workspace.noteCount", { count: notes })}` : ""}`}
     aria-current={active ? "true" : undefined}
+    data-change={`${layer}:${path}`}
+    data-trigger-of={`${layer}:${path}`}
     onClick={() => loadGitDiff(path, layer)}
   >
     <FileIcon kind="file" path={path} />

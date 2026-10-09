@@ -1,8 +1,10 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetTestDOM } from "../../../../test-support/boot-dom";
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { act } from "react";
 import { askConfirm, askText, showHelp } from "./basic-dialogs";
 import { setLang, t } from "../../../lib/i18n";
+import { tabStops } from "./tab-stops";
 
 beforeEach(async () => { await resetTestDOM(); setLang("zh"); });
 afterEach(() => {
@@ -22,7 +24,7 @@ test("text dialog selects its initial value, submits current text and restores f
   const modal = dialog();
   const input = modal.querySelector("input")!;
   expect(modal.open).toBeTrue();
-  expect(document.activeElement).toBe(input);
+  expectSameNode(document.activeElement, input);
   expect([input.selectionStart, input.selectionEnd]).toEqual([0, 8]);
   expect(input.maxLength).toBe(255);
   expect(input.getAttribute("enterkeyhint")).toBe("done");
@@ -31,7 +33,7 @@ test("text dialog selects its initial value, submits current text and restores f
   act(() => modal.querySelector("form")!.dispatchEvent(new happy.Event("submit", { bubbles: true, cancelable: true }) as unknown as Event));
   expect(await result).toBe("new name");
   expect(dialog()).toBeNull();
-  expect(document.activeElement).toBe(trigger);
+  expectSameNode(document.activeElement, trigger);
   trigger.remove();
 });
 
@@ -110,7 +112,7 @@ test("confirmation names its object, starts on cancel and resolves true only fro
   expect(modal.querySelector(".confirm-warning")?.textContent).toBe("它还在执行任务。");
   const buttons = [...modal.querySelectorAll<HTMLButtonElement>(".confirm-actions button")];
   expect(buttons.map(button => button.textContent)).toEqual(["取消", "删除"]);
-  expect(document.activeElement).toBe(buttons[0]);
+  expectSameNode(document.activeElement, buttons[0]);
   act(() => modal.querySelector<HTMLButtonElement>(".btn-danger")!.click());
   expect(await result).toBeTrue();
   act(() => { result = askConfirm({ title: "现在更新？", confirmLabel: "更新", tone: "primary" }); });
@@ -147,5 +149,146 @@ test("help replacement keeps one accessible React dialog with literal code", () 
   expect(first.isConnected).toBeFalse();
   expect(document.querySelectorAll("dialog.help")).toHaveLength(1);
   expect(dialog().querySelector("h2")?.textContent).toBe("语言");
-  expect(document.activeElement).toBe(dialog().querySelector(".help-close"));
+  expectSameNode(document.activeElement, dialog().querySelector(".help-close"));
+});
+
+/** The card a mouse or the keyboard gets beside the list (`desk-form`). */
+async function withDesk(run: () => Promise<void>): Promise<void> {
+  const { bindOverlayOrigin } = await import("./origin");
+  happy.happyDOM.setWindowSize({ width: 1024, height: 768 });
+  const release = bindOverlayOrigin(document);
+  document.body.dispatchEvent(new happy.PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse" }) as unknown as Event);
+  try { await run(); } finally {
+    release();
+    happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+  }
+}
+
+/** What Tab stops at inside the open dialog, in order, as their class or tag names. */
+function stops(): string[] {
+  return tabStops(dialog()).map(stop => stop.className.split(" ").at(-1) || stop.tagName.toLowerCase());
+}
+
+test("the desk form adds a corner close that cancels; the sheet has none", async () => {
+  let sheetResult!: Promise<string | null>;
+  act(() => { sheetResult = askText({ title: "名称", initial: "a" }); });
+  expect(dialog().classList.contains("desk-form")).toBeFalse();
+  expect(dialog().querySelector(".desk-close")).toBeNull();
+  act(() => dialog().close("cancel"));
+  expect(await sheetResult).toBeNull();
+
+  await withDesk(async () => {
+    let text!: Promise<string | null>;
+    act(() => { text = askText({ title: "名称", initial: "a" }); });
+    expect(dialog().className).toBe("modal text-edit desk-form");
+    const close = dialog().querySelector<HTMLButtonElement>(".desk-close")!;
+    expect(close.getAttribute("aria-label")).toBe(t("close"));
+    // Last in the form: Tab reaches the field and the two actions first.
+    expectSameNode(dialog().querySelector("form")!.lastElementChild, close);
+    dialog().querySelector("input")!.value = "typed";
+    act(() => close.click());
+    expect(await text).toBeNull();
+
+    let confirm!: Promise<boolean>;
+    act(() => { confirm = askConfirm({ title: "关闭？", confirmLabel: "关闭" }); });
+    expect(dialog().className).toBe("modal confirm desk-form");
+    act(() => dialog().querySelector<HTMLButtonElement>(".desk-close")!.click());
+    expect(await confirm).toBeFalse();
+
+    // Help is one of the family: the shared title and corner close, and one button that puts it away.
+    act(() => showHelp("帮助", ["说明"]));
+    expect(dialog().querySelectorAll(".help-close").length).toBe(0);
+    expectSameNode(dialog().querySelector("form")!.lastElementChild, dialog().querySelector(".desk-close"));
+    const done = dialog().querySelector<HTMLButtonElement>(".help-done")!;
+    expect(done.textContent).toBe(t("desk.gotIt"));
+    expectSameNode(document.activeElement, done);
+    act(() => done.click());
+    expect(document.querySelector("dialog.help")).toBeNull();
+  });
+});
+
+test("the single-field editor is written in the order it is drawn: the sheet's bar first, the card's footer last", async () => {
+  let sheetResult!: Promise<string | null>;
+  act(() => { sheetResult = askText({ title: "名称", initial: "a" }); });
+  // The sheet: Cancel · title · Save above the field, where the on-screen keyboard cannot cover them.
+  expect([...dialog().querySelector("form")!.children].map(child => child.className.split(" ")[0]))
+    .toEqual(["text-edit-head", "text-edit-label", "text-edit-field"]);
+  // Save waits for a change, so Tab passes it until there is one.
+  expect(stops()).toEqual(["text-edit-action", "input", "text-edit-clear"]);
+  act(() => dialog().close("cancel"));
+  expect(await sheetResult).toBeNull();
+
+  await withDesk(async () => {
+    let text!: Promise<string | null>;
+    act(() => { text = askText({ title: "名称", initial: "a", hint: "说明" }); });
+    // The card: title, the field, its guidance, the footer, the close — for the eye, Tab and a screen reader alike.
+    expect([...dialog().querySelector("form")!.children].map(child => child.className.split(" ").at(-1)))
+      .toEqual(["modal-title", "text-edit-label", "text-edit-field", "text-edit-hint", "desk-actions", "desk-close"]);
+    expect(dialog().querySelector(".text-edit-head")).toBeNull();
+    const footer = [...dialog().querySelectorAll<HTMLButtonElement>(".desk-actions button")];
+    expect(footer.map(button => button.textContent)).toEqual([t("cancel"), t("text.save")]);
+    // Save waits for a change, so Tab passes it until there is one.
+    expect(stops()).toEqual(["input", "text-edit-clear", "desk-cancel", "desk-close"]);
+    act(() => dialog().querySelector<HTMLButtonElement>(".text-edit-clear")!.click());
+    expect(stops()).toEqual(["input", "desk-cancel", "text-edit-save", "desk-close"]);
+    act(() => footer[1].click());
+    expect(await text).toBe("");
+
+    let confirm!: Promise<boolean>;
+    act(() => { confirm = askConfirm({ title: "关闭？", confirmLabel: "关闭" }); });
+    expect(stops()).toEqual(["confirm-cancel", "btn-danger", "desk-close"]);
+    act(() => dialog().close("cancel"));
+    expect(await confirm).toBeFalse();
+  });
+});
+
+test("Tab stays inside the dialog: past the close it starts over, and back from the field it reaches the close", async () => {
+  const tab = (shiftKey = false) => {
+    const event = new happy.KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }) as unknown as KeyboardEvent;
+    act(() => { (document.activeElement ?? document.body).dispatchEvent(event); });
+    return event;
+  };
+  await withDesk(async () => {
+    let text!: Promise<string | null>;
+    act(() => { text = askText({ title: "名称", initial: "a" }); });
+    const input = dialog().querySelector("input")!;
+    const close = dialog().querySelector<HTMLButtonElement>(".desk-close")!;
+    expectSameNode(document.activeElement, input);
+    // In the middle the browser moves focus itself.
+    dialog().querySelector<HTMLButtonElement>(".desk-cancel")!.focus();
+    expect(tab().defaultPrevented).toBeFalse();
+    close.focus();
+    expect(tab().defaultPrevented).toBeTrue();
+    expectSameNode(document.activeElement, input);
+    expect(tab(true).defaultPrevented).toBeTrue();
+    expectSameNode(document.activeElement, close);
+    // Focus on nothing at all (a press on the card's padding) comes back in at the start.
+    close.blur();
+    expect(tab().defaultPrevented).toBeTrue();
+    expectSameNode(document.activeElement, input);
+    act(() => dialog().close("cancel"));
+    expect(await text).toBeNull();
+  });
+});
+
+test("Escape is answered on the key, so a second one in a row is never the browser's to decide", async () => {
+  const now = spyOn(performance, "now").mockReturnValue(1000);
+  const escape = (init: Record<string, unknown> = {}) => {
+    const key = new happy.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init }) as unknown as KeyboardEvent;
+    act(() => { dialog().querySelector("input")!.dispatchEvent(key); });
+    return key;
+  };
+  try {
+    let result!: Promise<string | null>;
+    act(() => { result = askText({ title: "名称", initial: "a" }); });
+    // The opening gesture guard holds for the key as it does for the close request.
+    expect(escape().defaultPrevented).toBeTrue();
+    expect(dialog().open).toBeTrue();
+    now.mockReturnValue(1400);
+    // An input method's own Escape (it cancels the candidate) is left to it.
+    expect(escape({ isComposing: true }).defaultPrevented).toBeFalse();
+    expect(dialog().open).toBeTrue();
+    expect(escape().defaultPrevented).toBeTrue();
+    expect(await result).toBeNull();
+  } finally { now.mockRestore(); }
 });

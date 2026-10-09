@@ -11,6 +11,7 @@
  * No production function is mocked; the case bodies below are the original four
  * tests with the existing React harness and named owners.
  */
+import { expectSameNode } from "./node-identity";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act, createElement } from "react";
 import { resetBoardTestDOM } from "./dom";
@@ -112,7 +113,7 @@ test("persistent manual copy label follows language repaint", () => {
   expect(before.textContent).toBe(t("update.copyCommand"));
   act(() => setLang("en"));
   act(() => render(ManualUpdateHelp));
-  expect(appRoot().querySelector("button") === before).toBeTrue();
+  expectSameNode(appRoot().querySelector("button"), before);
   expect(before.textContent).toBe(t("update.copyCommand"));
 });
 
@@ -157,7 +158,7 @@ test("persistent settings notice updates and clears through real subscription", 
   const page = appRoot().firstElementChild;
   act(() => showStatus("review status"));
   expect(appRoot().querySelector("[data-react-notice]")?.textContent).toBe("review status");
-  expect(appRoot().firstElementChild === page).toBeTrue();
+  expectSameNode(appRoot().firstElementChild, page);
   act(() => clearNotice());
   expect(appRoot().querySelector("[data-react-notice]")).toBeNull();
 });
@@ -184,7 +185,7 @@ test("daemon release check updates the mounted subtree without repainting the ap
     let finish!: (r: Response) => void;
     globalThis.fetch = (() => new Promise((r) => { finish = r; })) as typeof fetch;
     act(() => button.click());
-    expect(appRoot().firstElementChild === host).toBeTrue();
+    expectSameNode(appRoot().firstElementChild, host);
     expect(button.disabled).toBeTrue();
     expect(button.textContent).toContain(t("update.checking"));
     await act(async () => {
@@ -192,8 +193,8 @@ test("daemon release check updates the mounted subtree without repainting the ap
       await checkDaemonRelease();
       await refreshDaemonUpdate();
     });
-    expect(appRoot().firstElementChild === host).toBeTrue();
-    expect(appRoot().querySelector(".daemon-update-check") === button).toBeTrue();
+    expectSameNode(appRoot().firstElementChild, host);
+    expectSameNode(appRoot().querySelector(".daemon-update-check"), button);
     expect(button.disabled).toBeFalse();
     expect(appRoot().querySelector(".daemon-update-feedback")?.textContent).toContain("1.1.0");
     // The subtree updated through its own subscription: no whole-App commit.

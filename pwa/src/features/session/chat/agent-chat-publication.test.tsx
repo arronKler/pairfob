@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -369,8 +370,8 @@ test("typed chat publication updates mounted status without replacing composer",
   await act(async () => { input.focus(); });
   await act(async () => applyTrace({ agentTraceTruncated: true, agentTraceNext: null }));
   expect(appRoot().querySelector<HTMLButtonElement>(".agent-older")!.hidden).toBeTrue();
-  expect(appRoot().querySelector("textarea") === input).toBeTrue();
-  expect(document.activeElement === input).toBeTrue();
+  expectSameNode(appRoot().querySelector("textarea"), input);
+  expectSameNode(document.activeElement, input);
   expect(committed).toBe(0);
   expect(requested).toBe(0);
 });
@@ -558,7 +559,7 @@ test("view cleanup saves the retired owner's reading posture", async () => {
   expect(openPaneId()).toBe("p2");
   expect(result).toBeFalse();
   expect(chatSnapshot().agentTraceFollow).toBeFalse();
-  expect(appRoot().querySelector(".agent-stream") === newStream).toBeTrue();
+  expectSameNode(appRoot().querySelector(".agent-stream"), newStream);
   expect(newStream?.scrollTop).toBe(140);
 });
 
@@ -597,7 +598,7 @@ test("same owner still follows a successful current-tail refresh", async () => {
   expect(result).toBeTrue();
   expect(openPaneId()).toBe("p1");
   expect(chatSnapshot().agentTraceFollow).toBeTrue();
-  expect(appRoot().querySelector(".agent-stream") === stream).toBeTrue();
+  expectSameNode(appRoot().querySelector(".agent-stream"), stream);
   expect(stream.scrollTop).toBe(1000);
 });
 
@@ -711,7 +712,7 @@ test("a same session and pane remount during nested follow does not scroll the r
   expect(openPaneId()).toBe("p1");
   expect(old.isConnected).toBeFalse();
   expect(next === old).toBeFalse();
-  expect(appRoot().querySelector(".agent-stream") === next).toBeTrue();
+  expectSameNode(appRoot().querySelector(".agent-stream"), next);
   expect(next?.scrollTop).toBe(140);
 });
 test("a recurring command and marker pair does not prove a changed tail continues the prefix", async () => {

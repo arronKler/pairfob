@@ -63,6 +63,8 @@ import {
   type TrayPhase,
 } from "./attachments-tray-model";
 import { presentAttachmentViewer } from "./attachment-viewer";
+import { useDeskLayout } from "../desk-pointer";
+import { useStripOverflow } from "./strip-overflow";
 
 /** Rejection notes fade after this long. */
 const NOTE_MS = 3000;
@@ -187,6 +189,9 @@ function TrayBody({ scope, compact }: { scope: AttachmentScope; compact: boolean
   const undoRevision = useSyncExternalStore(subscribeTrayState, trayStateRevision);
   const draft = useSyncExternalStore(composeStore.subscribe, composeDraft);
   const p2pReady = useAttachmentP2PReady();
+  // Beside the list the count and the note leave the strip, so a narrow column
+  // cannot run them off its edge; a phone scrolls them along with the thumbnails.
+  const beside = useDeskLayout();
   const attempt = useSyncExternalStore(subscribeConnectAttempt, connectAttempt);
   const switching = useSyncExternalStore(connectionStore.subscribe, () => connectionStore.get().transportSwitching);
   const [selected, setSelected] = useState<string | null>(null);
@@ -229,6 +234,9 @@ function TrayBody({ scope, compact }: { scope: AttachmentScope; compact: boolean
     const rect = chip?.getBoundingClientRect();
     if (box && rect) setAnchorX(Math.max(12, rect.left - box.left + rect.width / 2));
   }, [selected, items]);
+
+  // The strip fades where it continues past its box.
+  useStripOverflow(strip);
 
   // Tapping anywhere else, or Escape, closes the action bar.
   useEffect(() => {
@@ -357,7 +365,24 @@ function TrayBody({ scope, compact }: { scope: AttachmentScope; compact: boolean
   const selectedIndex = selectedItem ? items.indexOf(selectedItem) : -1;
   const selectedPhase = selectedItem ? trayPhase(selectedItem, ctx) : null;
 
-  return <div ref={root} className={`attach-tray${compact ? " is-compact" : ""}`}>
+  const meta = <div className="attach-meta-col" role="status" aria-live="polite">
+    {undoHere
+      ? <span className="attach-undo">
+        <small>{attachT(undoHere.cancelled ? "tray.removedCancelled" : "tray.removed", { name: undoHere.name })}</small>
+        <Button className="attach-undo-btn" onClick={() => { haptic(2); undoRemove(); }}>{attachT("tray.undo")}</Button>
+      </span>
+      : note
+        ? <small className={`attach-note${note.error ? " is-error" : ""}`}>{note.text}</small>
+        : items.length > 0 && <>
+          <small className={nearLimit ? "is-warn" : undefined}>{attachT("tray.usage", {
+            count: items.length, max: LOCAL_INTAKE_LIMITS.maxFiles, size: formatBytes(used),
+          })}</small>
+          <small className="attach-meta-dim">{allInBody ? attachT("tray.allInBody")
+            : attachT("tray.willAttach", { n: attached })}</small>
+        </>}
+  </div>;
+
+  return <div ref={root} className={`attach-tray${compact ? " is-compact" : ""}${beside ? " is-beside" : ""}`}>
     {selectedItem && selectedPhase && <div className="attach-pop" role="menu" aria-label={selectedItem.name}
       style={{ "--attach-pop-x": `${anchorX}px` } as CSSProperties}>
       <div className="attach-pop-head">
@@ -411,22 +436,8 @@ function TrayBody({ scope, compact }: { scope: AttachmentScope; compact: boolean
           </Button>
         </div>;
       })}
-      <div className="attach-meta-col" role="status" aria-live="polite">
-        {undoHere
-          ? <span className="attach-undo">
-            <small>{attachT(undoHere.cancelled ? "tray.removedCancelled" : "tray.removed", { name: undoHere.name })}</small>
-            <Button className="attach-undo-btn" onClick={() => { haptic(2); undoRemove(); }}>{attachT("tray.undo")}</Button>
-          </span>
-          : note
-            ? <small className={`attach-note${note.error ? " is-error" : ""}`}>{note.text}</small>
-            : items.length > 0 && <>
-              <small className={nearLimit ? "is-warn" : undefined}>{attachT("tray.usage", {
-                count: items.length, max: LOCAL_INTAKE_LIMITS.maxFiles, size: formatBytes(used),
-              })}</small>
-              <small className="attach-meta-dim">{allInBody ? attachT("tray.allInBody")
-                : attachT("tray.willAttach", { n: attached })}</small>
-            </>}
-      </div>
+      {!beside && meta}
     </div>
+    {beside && meta}
   </div>;
 }

@@ -7,8 +7,9 @@ import { runtimeStore } from "../../features/connection/runtime-store";
 import { sessionStore } from "../../features/session/session-store";
 import { BoardScreenView } from "../../features/board/components/board-screen";
 import { buildBoardViewModel } from "../../features/board/model/board-view";
+import { blockedElsewhere } from "../../features/dashboard/model/herd-view";
 import { createDomainUpdates, useDomainUpdates, type DomainWatch } from "../domain-updates";
-import { boardActions, boardCanvasController, readBoardInput } from "./board-bridge";
+import { boardActions, boardAloneActions, boardCanvasController, readBoardInput } from "./board-bridge";
 import { BoardZoom } from "./zoom-control";
 import { useEffect, useSyncExternalStore } from "react";
 import { publishedLayout, subscribeLayout } from "../../app/layout-store";
@@ -56,20 +57,29 @@ export function BoardPage() {
     const layout = publishedLayout();
     return layout?.shell.tabs === true || layout?.deskPage === "board";
   });
+  // In the desk's narrowest tier the list gave the board its column, so the
+  // board's header is the way back to it.
+  const alone = useSyncExternalStore(subscribeLayout, () => {
+    const layout = publishedLayout();
+    return layout?.deskPage === "board" && layout.shell.railHidden;
+  });
   const view = buildBoardViewModel(readBoardInput());
   const attention = boardInteractionStore.get();
   const sameTab = attention.tabId === view.canvas.tabId;
   const created = sameTab && view.canvas.tiles.some(tile => tile.paneId === attention.createdPaneId) ? attention.createdPaneId : "";
   view.canvas.highlightedPaneId = sameTab ? attention.paneId : "";
+  // Loss of contact claims nothing, so the way back counts no one waiting then.
+  const known = view.status.tone === "live" || view.status.tone === "demo";
   const session = computersStore.get().live;
   useEffect(() => () => clearBoardInteraction(), [view.canvas.tabId, session]);
   return (
     <>
     <BoardScreenView
       view={view}
-      actions={boardActions}
+      actions={alone ? boardAloneActions : boardActions}
       controller={boardCanvasController}
       showBack={!embedded}
+      listBack={alone ? { waiting: blockedElsewhere(dashboardStore.get().agents, "", !known) } : undefined}
       zoomControl={<BoardZoom view={view} actions={boardActions} />}
       notices={created ? <div className="notice notice-status board-created-notice" role="status" aria-label={t("boardMenu.created")}>
         {/* The operation's own notice already says it was created; this only offers to open it. */}

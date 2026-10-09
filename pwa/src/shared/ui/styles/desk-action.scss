@@ -1,0 +1,61 @@
+/*
+  The buttons of a desk form's footer, as mixins: one size, one corner and one
+  weight for the quiet Cancel and the action it stands beside, whichever class
+  a dialog's own markup gives them. Shared dialogs use the classes in
+  desk-dialog.scss; a feature dialog whose button is also the sheet's
+  (`.btn`, a bar's text button) includes these under its desk selector.
+
+  Finger-sized until the pointer is known to be a mouse: a card the keyboard
+  opened on a tablet is touched afterwards.
+*/
+
+@mixin desk-action {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  min-width: 5.5rem;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: 640 var(--text-body) var(--font);
+
+  @media (hover: hover) and (pointer: fine) {
+    min-height: 36px;
+  }
+}
+
+@mixin desk-action-quiet {
+  background: transparent;
+  color: var(--muted);
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+  }
+}
+
+@mixin desk-action-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+
+  /* Nothing to submit yet: the footer keeps its shape, the button its place. */
+  &:disabled {
+    background: var(--surface-2);
+    color: var(--muted);
+    opacity: 1;
+  }
+}
+
+/* The footer itself: at the bottom right, Cancel before the action. */
+@mixin desk-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: 18px;
+}

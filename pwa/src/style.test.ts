@@ -9,6 +9,7 @@ const main = await Bun.file(new URL("../src/main.ts", import.meta.url)).text();
 const boot = await Bun.file(new URL("./app/bootstrap.ts", import.meta.url)).text();
 const viewportSrc = await Bun.file(new URL("./app/viewport.ts", import.meta.url)).text();
 const preferencesSrc = await Bun.file(new URL("./features/settings/preferences-store.ts", import.meta.url)).text();
+const padFit = await import("./features/session/keypad/pad-fit.ts");
 
 function color(token: string): string {
   const match = css.match(new RegExp(`--${token}:\\s*(#[0-9a-f]{6})`, "i"));
@@ -209,6 +210,27 @@ describe("UI accessibility guardrails", () => {
     expect(css).toMatch(/\.herd-page > \.notice,\s*\.herd-page > \.banner\s*\{[^}]*margin-bottom:\s*var\(--space-2\)/);
   });
 
+  test("a left swipe uncovers the trailing actions even on an unread row", () => {
+    // The mark-read layer spans the row, so it shows only behind a right swipe.
+    expect(rule(".card-action.is-read")).toContain("width: 100%");
+    expect(rule(".card:not(.is-leading) .card-action.is-read")).toContain("visibility: hidden");
+    // As a hover button on the rail it is not a swipe layer at all.
+    expect(rule(".rail .card:not(.is-leading) .card-action.is-read")).toContain("visibility: inherit");
+  });
+
+  test("the live terminal row is the compose row's height, so a mode switch resizes nothing", () => {
+    expect(rule(".full-terminal-live-actions")).toContain("padding: 2px 0");
+    expect(rule(".full-terminal-live-actions:has(> .full-terminal-live-field)")).toContain("padding-block: 0");
+  });
+
+  test("the cannot-reach page keeps its last step clear of the retry dock", () => {
+    // The dock is fixed above the tab bar; the tab-bar page's own floor is shorter than the dock.
+    const floor = rule("#app.tabs .page.unreachable-shell");
+    expect(floor).toMatch(/padding-bottom: calc\(var\(--tab-bar-h\) \+ env\(safe-area-inset-bottom, 0px\) \+ 1[2-9]\dpx\)/);
+    // Named more specifically than that floor, so the order of the two sheets does not decide it.
+    expect(rule("#app.tabs .page")).toContain("padding-bottom");
+  });
+
   test("the boot screen centers its copy; the connect page pins its actions to the floor", () => {
     expect(rule("#app.boot-screen")).toMatch(/position:\s*fixed/);
     expect(rule("#app.boot-screen")).toMatch(/top:\s*0/);
@@ -238,15 +260,19 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".chrome-title")).toMatch(/overflow:\s*hidden/);
   });
 
+  // The sheet rules name the dialogs that are sheets. `:where` keeps their weight
+  // at `dialog.modal`, so the overrides written against them win as before.
+  const SHEET = String.raw`dialog\.modal:where\(:not\(\.popover, \.desk-form\)\)`;
+
   test("mobile sheets animate the form, not the dialog box", () => {
-    expect(css).toMatch(/dialog\.modal\s*>\s*form\s*\{[^}]*animation:\s*sheet-up/);
-    expect(css).not.toMatch(/@media \(max-width: 899\.98px\)\s*\{\s*dialog\.modal\s*\{[^}]*animation:/);
+    expect(css).toMatch(new RegExp(String.raw`${SHEET}\s*>\s*form\s*\{[^}]*animation:\s*sheet-up`));
+    expect(css).not.toMatch(new RegExp(String.raw`@media \(max-width: 899\.98px\)\s*\{\s*${SHEET}\s*\{[^}]*animation:`));
   });
 
   test("a dragged sheet carries its own frame instead of sliding out from under it", () => {
     const phone = css.slice(css.indexOf("@media (max-width: 899.98px) {", css.indexOf("dialog.modal {")));
-    const dialog = phone.match(/dialog\.modal\s*\{([^}]*)\}/)?.[1] ?? "";
-    const form = phone.match(/dialog\.modal\s*>\s*form\s*\{([^}]*)\}/)?.[1] ?? "";
+    const dialog = phone.match(new RegExp(String.raw`${SHEET}\s*\{([^}]*)\}`))?.[1] ?? "";
+    const form = phone.match(new RegExp(String.raw`${SHEET}\s*>\s*form\s*\{([^}]*)\}`))?.[1] ?? "";
     // The card is on the moving element.
     expect(form).toMatch(/border:\s*1px solid var\(--line-strong\)/);
     expect(form).toMatch(/border-radius:\s*var\(--r-xl\) var\(--r-xl\) 0 0/);
@@ -257,9 +283,26 @@ describe("UI accessibility guardrails", () => {
     expect(dialog).toMatch(/background:\s*transparent/);
     expect(dialog).toMatch(/box-shadow:\s*none/);
     expect(dialog).toMatch(/overflow:\s*visible/);
-    expect(phone).toMatch(/dialog\.modal\.sheet\s*\{[^}]*overflow:\s*visible/);
+    expect(phone).toMatch(new RegExp(String.raw`dialog\.modal\.sheet${SHEET.slice("dialog\\.modal".length)}\s*\{[^}]*overflow:\s*visible`));
     // Whatever scrolls has to move with the card too.
-    expect(phone).toMatch(/dialog\.modal:not\(\.sheet\)\s*>\s*form\s*\{[^}]*overflow-y:\s*auto/);
+    expect(phone).toMatch(new RegExp(String.raw`dialog\.modal:not\(\.sheet\)${SHEET.slice("dialog\\.modal".length)}\s*>\s*form\s*\{[^}]*overflow-y:\s*auto`));
+  });
+
+  test("a popover and the desk palette are the wide window's card wherever the list sits beside the page", () => {
+    // Between 720 and 900px the sheet rules still match by width, so they must
+    // not name a dialog that a mouse or the keyboard opened on the desk.
+    const phone = css.slice(css.indexOf("@media (max-width: 899.98px) {", css.indexOf("dialog.modal {")));
+    const sheets = phone.slice(0, phone.indexOf(".sheet-grab"));
+    expect(sheets.match(/^\s*dialog\.modal[^{]*\{/gm)?.every(selector => selector.includes(":where(:not(.popover, .desk-form))"))).toBeTrue();
+    const anchored = css.slice(css.indexOf("@media (min-width: 720px) {\n  dialog.modal.popover {"), css.indexOf("@keyframes popover-in"));
+    expect(anchored).toMatch(/dialog\.modal\.popover\s*\{[^}]*position:\s*fixed/);
+    expect(anchored).toMatch(/\.popover \.sheet-grab\s*\{[^}]*display:\s*none/);
+    expect(css).toContain("@media (min-width: 720px) and (hover: hover) and (pointer: fine) {\n  .popover-menu .menu-item");
+    expect(css).not.toMatch(/@media \(min-width: 900px\)[^{]*\{\s*(?:dialog\.modal\.popover|\.popover-menu \.menu-item)/);
+    // Search and jump: the panel on every roomy window, and below it only as the desk form.
+    const panel = String.raw`\s*\{[^}]*margin:\s*var\(--palette-top\) auto auto`;
+    expect(css).toMatch(new RegExp(String.raw`@media \(min-width: 900px\) \{\s*dialog\.modal\.command-palette${panel}`));
+    expect(css).toMatch(new RegExp(String.raw`@media \(min-width: 720px\) and \(max-width: 899\.98px\) \{\s*dialog\.modal\.command-palette\.desk-form${panel}`));
   });
 
   test("board tabs keep a 44px target without growing the strip", () => {
@@ -309,7 +352,8 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("mobile form controls do not trigger iOS focus zoom", () => {
-    expect(css).toMatch(/@media \(max-width: 899\.98px\)[\s\S]*?\.operation-field input,[\s\S]*?font-size:\s*16px/);
+    // Every operation field below the roomy width, except in the desk form, which is the wide window's card.
+    expect(css).toMatch(/@media \(max-width: 899\.98px\)[\s\S]*?\.operation-field:where\(:not\(\.desk-form \*\)\) input,[\s\S]*?font-size:\s*16px/);
     expect(css).toMatch(/@media \(max-width: 899\.98px\)[\s\S]*?\.lang-select[\s\S]*?font-size:\s*16px/);
   });
 
@@ -339,7 +383,7 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".full-terminal-host .xterm")).toMatch(/(?:^|[;\s])text-size-adjust:\s*none/);
     expect(rule(".full-terminal-host .xterm")).toMatch(/font-kerning:\s*none/);
     expect(rule(".full-terminal-host .xterm")).not.toMatch(/text-rendering:\s*geometricPrecision/);
-    expect(rule(".full-terminal-host .xterm-viewport")).toMatch(/overflow:\s*hidden/);
+    expect(rule(".full-terminal-host .xterm .xterm-viewport")).toMatch(/overflow:\s*hidden/);
     expect(rule(".full-terminal-host .xterm-rows > div")).toMatch(/overflow:\s*hidden/);
     expect(rule(".full-terminal-host .xterm-rows > div")).toMatch(/clip-path:\s*inset\(0\)/);
     expect(rule(".full-terminal-host .xterm-rows")).toMatch(/line-height:\s*0/);
@@ -404,6 +448,20 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".agent-stream-inner")).toMatch(/min-height:\s*100%/);
   });
 
+  test("a chat code block keeps a strip above its first line for the copy button", () => {
+    // The block's own padding is declared after the framed rule at the same
+    // weight and used to win: a long first line ran under "复制代码".
+    expect(rule(".agent-md .md-code > pre")).toMatch(/padding-top:\s*30px/);
+    expect(rule(".agent-md pre")).toMatch(/padding:\s*10px 12px/);
+    expect(css).not.toMatch(/(?:^|\n)\.md-code > pre\s*\{/);
+    expect(rule(".md-copy")).toMatch(/position:\s*absolute/);
+    expect(rule(".md-copy")).toMatch(/min-height:\s*44px/);
+    // One line that fits beside the button has no strip: a row as tall as the button, ending clear of it.
+    const row = rule(".agent-md .md-code.is-inline > pre");
+    expect(row).toMatch(/min-height:\s*44px/);
+    expect(row).toMatch(/padding:\s*10px calc\(var\(--md-copy-w, 84px\) \+ 4px\) 10px 12px/);
+  });
+
   test("the terminal scrollport is a definite box WebKit can pan", () => {
     expect(rule(".term-wrap")).toMatch(/flex:\s*1 1 0%/);
     expect(rule(".term-wrap")).toMatch(/min-height:\s*0/);
@@ -447,8 +505,9 @@ describe("UI accessibility guardrails", () => {
   test("short-landscape CSS contract reserves non-overlapping rows at 844x390", () => {
     const shortLandscape = atRuleBody("@media (max-height: 500px) and (orientation: landscape)");
     expect(shortLandscape).toMatch(/\.full-terminal-host\s*\{[^}]*display:\s*grid/);
-    expect(shortLandscape).toMatch(/\.full-terminal-host\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) 54px/);
-    expect(shortLandscape).toMatch(/\.full-terminal-host\s*\{[^}]*min-height:\s*calc\(var\(--full-terminal-min-host-height, 128px\) \+ 54px\)/);
+    // The rail's row is the rail and 2px either side: what it does not take, the key pad can.
+    expect(shortLandscape).toMatch(/\.full-terminal-host\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) 48px/);
+    expect(shortLandscape).toMatch(/\.full-terminal-host\s*\{[^}]*min-height:\s*calc\(var\(--full-terminal-min-host-height, 128px\) \+ 48px\)/);
     expect(shortLandscape).toMatch(/\.full-terminal-pan\s*\{[^}]*grid-row:\s*1/);
     expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*flex-direction:\s*row/);
     expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*position:\s*static/);
@@ -457,23 +516,109 @@ describe("UI accessibility guardrails", () => {
     expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*max-width:\s*calc\(100% - 8px\)/);
     expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*overflow-x:\s*auto/);
     expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*overflow-y:\s*hidden/);
-    expect(shortLandscape).toMatch(/\.full-terminal-pad\s*\{[^}]*max-height:\s*calc\([^}]* - 54px\)/);
+    expect(shortLandscape).toMatch(/\.full-terminal-pad\s*\{[^}]*max-height:\s*calc\([^}]* - 48px\)/);
     expect(rule(".full-terminal-scroll-btn")).toMatch(/min-width:\s*44px/);
     expect(rule(".full-terminal-scroll-btn")).toMatch(/min-height:\s*44px/);
 
     // Contract arithmetic only. Ego/Chromium owns the real getBoundingClientRect acceptance check.
     const chrome = { top: 0, bottom: 53 };
-    const host = { top: chrome.bottom, bottom: chrome.bottom + 128 + 54 };
-    const canvas = { top: host.top + 4, bottom: host.bottom - 4 - 54 };
-    const rail = { top: canvas.bottom + 5, bottom: canvas.bottom + 5 + 44 };
-    const pad = { top: host.bottom, bottom: host.bottom + (390 - 53 - 128 - 54) };
+    const host = { top: chrome.bottom, bottom: chrome.bottom + 128 + 48 };
+    const canvas = { top: host.top + 4, bottom: host.bottom - 4 - 48 };
+    const rail = { top: canvas.bottom + 2, bottom: canvas.bottom + 2 + 44 };
+    const pad = { top: host.bottom, bottom: host.bottom + (390 - 53 - 128 - 48) };
     expect(canvas).toEqual({ top: 57, bottom: 177 });
-    expect(rail).toEqual({ top: 182, bottom: 226 });
-    expect(pad).toEqual({ top: 235, bottom: 390 });
+    expect(rail).toEqual({ top: 179, bottom: 223 });
+    expect(pad).toEqual({ top: 229, bottom: 390 });
     expect(chrome.bottom).toBeLessThanOrEqual(canvas.top);
     expect(canvas.bottom).toBeLessThanOrEqual(rail.top);
     expect(rail.bottom).toBeLessThanOrEqual(host.bottom);
     expect(host.bottom).toBeLessThanOrEqual(pad.top);
+  });
+
+  test("a phone on its side gets a dense pad that fits under a five-row terminal without scrolling", () => {
+    // Everything dense hangs off one class, which keypad/short-landscape.ts sets:
+    // portrait, and a mouse's pad, never match a rule below.
+    const dense = rule(".dock.is-dense,\n.full-terminal-pad.is-dense");
+    expect(dense).toMatch(/padding-top:\s*6px/);
+    expect(dense).toMatch(/padding-bottom:\s*calc\(6px \+ env\(safe-area-inset-bottom, 0px\)\)/);
+    // A custom property keeps its line breaks; the formula is read on one line.
+    const formula = dense.replace(/\s+/g, " ").match(/--pad-key-h: clamp\( ?36px, calc\(\(var\(--vv-height, 100dvh\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\) - 53px - var\(--full-terminal-min-host-height, 113px\) - 48px - (\d+)px\) \/ 2\), 44px ?\)/);
+    expect(formula, dense).not.toBeNull();
+    expect(rule(".is-dense .key")).toMatch(/min-height:\s*var\(--pad-key-h\)/);
+    expect(rule(".is-dense .keys")).toMatch(/padding:\s*0/);
+
+    // One row to a page, its tabs, dots and page name beside it instead of under it.
+    const row = rule(".pad-pages.is-one-row");
+    expect(row).toMatch(/display:\s*grid/);
+    expect(row).toMatch(/grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto/);
+    expect(rule(".pad-pages.is-one-row > .pad-page")).toMatch(/grid-template-rows:\s*var\(--pad-key-h, 44px\)/);
+    expect(rule(".pad-pages.is-one-row > .pad-pagination")).toMatch(/display:\s*contents/);
+    expect(rule(".pad-pages.is-one-row .pad-pagination-start")).toMatch(/grid-area:\s*2\s*\/\s*1/);
+    expect(rule(".pad-pages.is-one-row .pad-dots")).toMatch(/grid-area:\s*2\s*\/\s*3/);
+    expect(rule(".pad-pages.is-one-row .pad-pagination-end")).toMatch(/grid-area:\s*2\s*\/\s*4/);
+    // A page name that cannot be shown whole beside seven 44px keys is not shown cut.
+    expect(css).toMatch(/@container pad-row \(max-width: 699\.98px\) \{\s*\.pad-pages\.is-one-row \.pad-page-name \{\s*display: none;/);
+
+    // What the formula's constant stands for, read back from the rules that spend it.
+    const px = (declarations: string, property: string) => Number(new RegExp(`${property}:\\s*(\\d+)px`).exec(declarations)?.[1]);
+    const fixed = 1 /* the dock's top border */ + 6 + 6
+      + px(rule(".is-dense .pad-pages"), "margin-top")
+      + px(rule(".is-dense .dock-form,\n.is-dense .full-terminal-compose-form"), "margin-top")
+      + px(rule(".full-terminal-compose-input"), "min-height");
+    expect(fixed).toBe(Number(formula?.[1]));
+
+    // Contract arithmetic for the screens the walkthrough used (five rows of the
+    // default 13px terminal are 113px). Chromium owns the real rectangles.
+    const hostFloor = 113 + 48;
+    for (const [height, key] of [[390, 44], [375, 44], [360, 38.5], [430, 44]] as const) {
+      const keyHeight = Math.min(44, Math.max(36, (height - 53 - hostFloor - fixed) / 2));
+      expect(keyHeight, String(height)).toBe(key);
+      const padHeight = fixed + 2 * keyHeight;
+      const ceiling = height - 53 - hostFloor;
+      expect(padHeight, String(height)).toBeLessThanOrEqual(ceiling);
+    }
+    // Arranging commands adds a 22px line; the terminal lends it rather than let the compose row scroll away.
+    const hint = Number(/min-height:\s*(\d+)px/.exec(rule(".pad-edit-hint"))?.[1]) + Number(/margin-bottom:\s*(\d+)px/.exec(rule(".pad-pages.is-one-row > .pad-edit-hint"))?.[1]);
+    expect(hint).toBe(22);
+    expect(rule(".full-terminal-root:has(> .full-terminal-pad.is-dense .pad-edit-hint)")).toMatch(/--dense-lend:\s*22px/);
+    for (const [height, key] of [[390, 44], [375, 44], [360, 38.5]] as const) {
+      expect(fixed + 2 * key + hint, String(height)).toBeLessThanOrEqual(height - 53 - hostFloor + hint);
+    }
+    // The guided buffer above it ends on the rail's row, so its last line gives back the screen-edge padding.
+    expect(rule("[data-react-guided-pane]:has(.dock.is-dense) .term")).toMatch(/padding-bottom:\s*8px/);
+    expect(rule(".term")).toMatch(/padding:\s*10px 12px 18px/);
+    // A page holds as many keys as fit at 44px (pad-fit.ts counts with the dots drawn here).
+    expect(rule(".pad-pages.is-one-row > .pad-page")).toMatch(/grid-template-columns:\s*repeat\(var\(--pad-cols\), minmax\(0, 1fr\)\)/);
+    expect(rule(".pad-page-dot")).toMatch(new RegExp(`width:\\s*${padFit.DOT_PX}px`));
+    expect(css).toMatch(new RegExp(`@container pad-row \\(max-width: ${padFit.DOT_NARROW_BELOW_PX - 0.02}px\\) \\{\\s*\\.pad-pages\\.is-one-row \\.pad-page-dot \\{\\s*width: ${padFit.DOT_NARROW_PX}px;`));
+    // A row short of dots at that width counts its pages in one box a finger wide; no dot is drawn closer.
+    expect(rule(".pad-page-count")).toMatch(new RegExp(`min-width:\\s*${padFit.PAGE_COUNT_PX}px`));
+    expect(css).not.toContain('data-dots="tight"');
+
+    // Under about 355px five rows and the densest pad do not both fit. The pad
+    // does not scroll: the terminal's floor is the lesser of five rows and what
+    // that pad leaves.
+    const densest = fixed + 2 * 36;
+    expect(densest).toBe(141);
+    const root = rule(".full-terminal-root:has(> .full-terminal-pad.is-dense)").replace(/\s+/g, " ");
+    expect(root).toContain("--dense-host-floor: max(0px, min( calc(var(--full-terminal-min-host-height, 128px) + 48px - var(--dense-lend)),");
+    expect(root).toContain(`- 53px - ${densest}px - var(--dense-lend))`);
+    expect(rule(".full-terminal-root:has(> .full-terminal-pad.is-dense) > .full-terminal-host")).toMatch(/min-height:\s*var\(--dense-host-floor\)/);
+    expect(css.replace(/\s+/g, " ")).toContain(".full-terminal-pad.is-dense { max-height: calc(100dvh - 53px - env(safe-area-inset-top, 0px) - var(--dense-host-floor)); }".replace("100dvh", "var(--vv-height, 100dvh)"));
+    expect(rule("#app.desk .full-terminal-pad.is-dense")).toMatch(/max-height:\s*calc\(100% - 53px - var\(--dense-host-floor\)\)/);
+    for (const [height, rows] of [[320, 3], [340, 4], [354, 4], [355, 5], [360, 5], [390, 5]] as const) {
+      const keyHeight = Math.min(44, Math.max(36, (height - 53 - hostFloor - fixed) / 2));
+      const floor = Math.max(0, Math.min(hostFloor, height - 53 - densest));
+      const ceiling = height - 53 - floor;
+      // The pad always fits under its ceiling, at every height.
+      expect(fixed + 2 * keyHeight, String(height)).toBeLessThanOrEqual(ceiling);
+      // What the terminal shows of its 21px rows above the scroll rail's row.
+      expect(Math.min(5, Math.floor((height - 53 - (fixed + 2 * keyHeight) - 8 - 48) / 21)), String(height)).toBe(rows);
+    }
+
+    // The row of live actions and the keyboard button follow the compose row's height.
+    expect(rule(".is-dense .full-terminal-kb")).toMatch(/min-height:\s*46px/);
+    expect(rule(".is-dense .full-terminal-live-actions")).toMatch(/margin-top:\s*6px/);
   });
 
   test("portrait and desktop retain the vertical in-host rail baseline", () => {

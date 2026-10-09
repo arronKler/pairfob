@@ -65,11 +65,12 @@
   resize: vertical;
 }
 
-/* iOS zooms the visual viewport when a focused form control is below 16px. */
+/* iOS zooms the visual viewport when a focused form control is below 16px.
+   The desk form keeps the size the card has in a wide window. */
 @media (max-width: 899.98px) {
-  .operation-field input,
-  .operation-field select,
-  .operation-field textarea {
+  .operation-field:where(:not(.desk-form *)) input,
+  .operation-field:where(:not(.desk-form *)) select,
+  .operation-field:where(:not(.desk-form *)) textarea {
     font-size: 16px;
   }
 }
@@ -188,9 +189,22 @@
    and `dialog.modal.operation-modal .sheet-grab` (0,3,1) sets only margin where
    `.sheet-grab` (0,1,0) sets flex, display, justify-content and padding. The
    one crossed rule that also sets max-height, `dialog.modal.help > form`, needs
-   a class this dialog never carries. */
+   a class this dialog never carries. The desk form is the card, not the sheet
+   frame, so the cap steps aside for it without changing weight. */
 @media (max-width: 899.98px) {
-  dialog.modal.operation-modal:not(.sheet) > form { max-height: min(34rem, calc(100dvh - 48px)); }
+  dialog.modal.operation-modal:not(.sheet):where(:not(.desk-form)) > form { max-height: min(34rem, calc(100dvh - 48px)); }
 
   dialog.modal.operation-modal .sheet-grab { margin: -8px 0 4px; }
+}
+
+/* The Worktree form in a sheet of its own (`worktree-sheet`). The soft keyboard
+   does not shrink the layout viewport on iOS, so the bottom-anchored sheet
+   lifts by the keyboard inset and never grows past the visible viewport: the
+   field and the pinned action stay above the keys, as in the session panel
+   that draws the same form. The card (`.desk-form`) has no keyboard under it. */
+@media (max-width: 899.98px) {
+  dialog.modal.worktree-form-sheet:where(:not(.popover, .desk-form)) {
+    margin-bottom: var(--kb, 0px);
+    max-height: calc(var(--vv-height, 100dvh) - 24px);
+  }
 }

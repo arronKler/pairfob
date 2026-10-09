@@ -145,9 +145,11 @@ describe("computer picker copy (actual App)", () => {
     expect(add).toBeTruthy();
     expect(add.querySelector(".add-mark")).toBeTruthy();
     expect(add.querySelector(".switch-name")?.textContent).toBe(t("settings.addComputer"));
-    expect(add.querySelector(".switch-meta")?.textContent).toBe(t("computers.addHint"));
+    // The words of the hint, its command kept whole on a line (a non-breaking space inside it).
+    expect(add.querySelector(".switch-meta")?.textContent?.replaceAll("\u00a0", " ")).toBe(t("computers.addHint"));
+    expect(add.querySelector(".switch-meta")?.textContent).toContain("pairfob\u00a0pair");
     expect(add.classList.contains("btn-ghost")).toBeFalse();
-    expect([...app.querySelectorAll("p.lede")].some(p => p.textContent === t("computers.addHint"))).toBeFalse();
+    expect([...app.querySelectorAll("p.lede")].some(p => p.textContent?.replaceAll("\u00a0", " ") === t("computers.addHint"))).toBeFalse();
   });
 
   test("forgetting a computer is local and does not say revoke", () => {

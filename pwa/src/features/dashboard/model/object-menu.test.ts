@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { DashboardAgentCard } from "../../../lib/dashboard";
 import { setLang, t } from "../../../lib/i18n";
-import { paneMenuModel, workspaceMenuModel, type ObjectMenuKind } from "./object-menu";
+import { objectMenuSections, paneMenuModel, workspaceMenuModel, type ObjectMenuKind } from "./object-menu";
 
 function agent(id: string, extra: Partial<DashboardAgentCard> = {}): DashboardAgentCard {
   return {
@@ -22,12 +22,12 @@ describe("pane object menu model", () => {
   test("the base card menu keeps its order, facts and title", () => {
     const model = paneMenuModel({ agent: agent("p2"), ...plain });
     expect(model.title).toBe("Target");
-    expect(kinds(model.items)).toEqual(["pin", "openBoard", "renamePane", "closePane", "renameWorkspace", "closeWorkspace"]);
+    expect(kinds(model.items)).toEqual(["pin", "renamePane", "closePane", "openBoard", "renameWorkspace", "closeWorkspace"]);
     expect(model.items.map((item) => item.label)).toEqual([
-      t("menu.pin"), t("menu.board"), t("menu.renamePane"), t("op.closePane"),
+      t("menu.pin"), t("menu.renamePane"), t("op.closePane"), t("menu.board"),
       t("menu.renameWorkspace"), t("op.closeWorkspace"),
     ]);
-    expect(model.items.map((item) => item.danger === true)).toEqual([false, false, false, true, false, true]);
+    expect(model.items.map((item) => item.danger === true)).toEqual([false, false, true, false, false, true]);
     expect(model.facts.map((row) => row.key)).toContain(t("detail.path"));
     expect(model.facts.find((row) => row.kind === "path")?.value).toBe("/two/project");
   });
@@ -38,7 +38,7 @@ describe("pane object menu model", () => {
 
   test("create_tab adds the beside-tab entry only for a card with a workspace", () => {
     expect(kinds(paneMenuModel({ agent: agent("p2"), ...plain, createTab: true }).items))
-      .toEqual(["pin", "newTabBeside", "openBoard", "renamePane", "closePane", "renameWorkspace", "closeWorkspace"]);
+      .toEqual(["pin", "renamePane", "closePane", "openBoard", "newTabBeside", "renameWorkspace", "closeWorkspace"]);
     const homeless = paneMenuModel({ agent: agent("p2", { workspaceId: "", workspaceLabel: "" }), ...plain, createTab: true });
     expect(kinds(homeless.items)).toEqual(["pin", "renamePane", "closePane"]);
   });
@@ -62,7 +62,7 @@ describe("pane object menu model", () => {
 
   test("workspace grouping moves parent management to the heading menu", () => {
     const grouped = paneMenuModel({ agent: agent("p2"), agents: [agent("p2")], listGroup: "space", pinned: false, createTab: false });
-    expect(kinds(grouped.items)).toEqual(["pin", "openBoard", "renamePane", "closePane"]);
+    expect(kinds(grouped.items)).toEqual(["pin", "renamePane", "closePane", "openBoard"]);
     expect(grouped.title).toBe("Target");
   });
 
@@ -76,6 +76,41 @@ describe("pane object menu model", () => {
     // The facts keep the full coordinates in every grouping.
     expect(grouped.facts.map((row) => row.value)).toContain("Two");
     expect(paneMenuModel({ agent: agent("p2"), ...plain }).facts.map((row) => row.value)).toContain("Two");
+  });
+});
+
+describe("object menu sections", () => {
+  const everything = () => paneMenuModel({
+    agent: agent("p2", { tabLabel: "Review" }), agents: [agent("p2", { tabLabel: "Review" }), agent("p3", { tabLabel: "Review" })],
+    listGroup: "flat", pinned: false, createTab: true,
+  });
+
+  test("rows are grouped by what they act on: this session, its tab, its workspace", () => {
+    const sections = objectMenuSections(everything());
+    expect(sections.map((section) => section.title)).toEqual([t("menu.thisPane"), t("menu.tab"), t("menu.workspace")]);
+    expect(sections.map((section) => kinds(section.items))).toEqual([
+      ["pin", "renamePane", "closePane"],
+      ["openBoard", "renameTab", "closeTab"],
+      ["newTabBeside", "renameWorkspace", "closeWorkspace"],
+    ]);
+  });
+
+  test("a section's destructive row is its last, and its only one", () => {
+    for (const model of [everything(), paneMenuModel({ agent: agent("p2"), ...plain }), workspaceMenuModel({ agent: agent("p2"), createTab: true })!]) {
+      for (const section of objectMenuSections(model)) {
+        const danger = section.items.map((item) => item.danger === true);
+        expect(danger.slice(0, -1)).not.toContain(true);
+        expect(danger.filter(Boolean).length).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  test("a menu about one object is a single run with no heading", () => {
+    const heading = objectMenuSections(workspaceMenuModel({ agent: agent("p2"), createTab: true })!);
+    expect(heading.map((section) => section.title)).toEqual([""]);
+    expect(kinds(heading[0].items)).toEqual(["newTabInWorkspace", "openBoard", "renameWorkspace", "closeWorkspace"]);
+    const homeless = objectMenuSections(paneMenuModel({ agent: agent("p2", { workspaceId: "", workspaceLabel: "" }), ...plain }));
+    expect(homeless.map((section) => section.title)).toEqual([""]);
   });
 });
 

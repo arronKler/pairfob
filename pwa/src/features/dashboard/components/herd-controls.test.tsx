@@ -8,7 +8,7 @@ import { setLang, t } from "../../../lib/i18n";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { appRoot } from "../../../app/dom-root";
 import { appHost, registerAppHost, releaseAppHost, type AppHost } from "../../../app/host";
-import { CompletionCount, ListGroupControl } from "./herd-controls";
+import { chooseListGroup, GroupModeButton } from "./herd-controls";
 
 const app = appRoot;
 const presentationRestorer = new WorkspaceSnapshotRestorer();
@@ -19,12 +19,12 @@ let boundHost: AppHost | null = null;
 let priorHost: AppHost | null = null;
 
 /**
- * A bounded recording host for this leaf-only fixture: the control is its own
- * preferences-store subscriber, so a host that never paints still updates. The
- * zero-commit window observes the REAL installed host registry — commit and
- * requestCommit stay 0 while the typed grouping actions only publish the
- * preferences domain. The host is a bounded observer (no App render), restored
- * to the previous registry identity in finally.
+ * A bounded recording host for this leaf-only fixture: the grouping choice is a
+ * typed preferences action, so its subscribers update without a host that
+ * paints. The zero-commit window observes the REAL installed host registry —
+ * commit and requestCommit stay 0 while the typed grouping actions only publish
+ * the preferences domain. The host is a bounded observer (no App render),
+ * restored to the previous registry identity in finally.
  */
 function installRecordingHost(): void {
   // Save the pre-install real host: releaseAppHost only clears when it matches,
@@ -68,12 +68,6 @@ function mount(node: ReactNode): void {
   act(() => renderReact(node));
 }
 
-function segment(label: string): HTMLButtonElement {
-  const found = [...app().querySelectorAll<HTMLButtonElement>(".seg-item")].find((node) => node.textContent === label);
-  if (!found) throw new Error(`missing segment ${label}`);
-  return found;
-}
-
 beforeEach(async () => {
   await resetBoardTestDOM();
   presentationRestorer.capture();
@@ -93,29 +87,15 @@ afterEach(() => {
   presentationRestorer.restore();
 });
 
-describe("list grouping control", () => {
-  test("it reads the preference it owns and marks exactly one choice", () => {
-    mount(createElement(ListGroupControl));
-    const items = [...app().querySelectorAll<HTMLButtonElement>(".seg-item")];
-    expect(items.map((node) => node.textContent)).toEqual([t("list.flat"), t("list.space"), t("list.agent")]);
-    expect(items.map((node) => node.getAttribute("aria-checked"))).toEqual(["true", "false", "false"]);
-    expect(app().querySelector(".seg")?.getAttribute("role")).toBe("radiogroup");
-    expect(app().querySelector(".seg")?.getAttribute("aria-label")).toBe(t("list.groupAria"));
-  });
-
+describe("list grouping choice", () => {
   test("a new grouping publishes, resets the accordion and repaints nothing", () => {
     resetDashboard();
     setListGroupCollapsed({ alpha: false, beta: true });
-    mount(createElement(ListGroupControl));
     withinZeroCommitWindow(() => {
-      act(() => segment(t("list.space")).click());
+      act(() => chooseListGroup("space"));
     });
     expect(listGroup()).toBe("space");
-    expect(listGroup()).toBe("space");
     expect(preferencesStore.get().listGroupCollapsed).toEqual({});
-    // The control is its own subscriber: a host that never paints still updates.
-    expect(segment(t("list.space")).getAttribute("aria-checked")).toBe("true");
-    expect(segment(t("list.flat")).getAttribute("aria-checked")).toBe("false");
   });
 
   test("a grouping choice with a live herd writes the default accordion, not an empty map", () => {
@@ -136,52 +116,40 @@ describe("list grouping control", () => {
         { pane_id: "p3", workspace_id: "w3", tab_id: "t3", agent: "codex", agent_status: "idle", label: "three" },
       ],
     });
-    mount(createElement(ListGroupControl));
     withinZeroCommitWindow(() => {
-      act(() => segment(t("list.space")).click());
+      act(() => chooseListGroup("space"));
     });
     expect(listGroup()).toBe("space");
     expect(preferencesStore.get().listGroupCollapsed).toEqual({ w1: false, w2: true, w3: true });
   });
 
   test("choosing the current grouping publishes nothing", () => {
-    mount(createElement(ListGroupControl));
     const before = preferencesStore.get();
     withinZeroCommitWindow(() => {
-      act(() => segment(t("list.flat")).click());
+      act(() => chooseListGroup("flat"));
     });
     expect(preferencesStore.get()).toBe(before);
   });
-
-  test("the grouping survives a remount through the preference it persists", () => {
-    mount(createElement(ListGroupControl));
-    act(() => segment(t("list.agent")).click());
-    act(() => unmountReact());
-    mount(createElement(ListGroupControl));
-    expect(segment(t("list.agent")).getAttribute("aria-checked")).toBe("true");
-  });
 });
 
-describe("completion count", () => {
-  test("no unread completion means no control at all", () => {
-    mount(createElement(CompletionCount, { count: 0 }));
-    expect(app().querySelector(".done-count")).toBeNull();
+describe("grouping button", () => {
+  test("it names the current grouping and opens the sheet", () => {
+    let opened = 0;
+    mount(createElement(GroupModeButton, { mode: "space", onOpen: () => { opened += 1; } }));
+    const button = app().querySelector<HTMLButtonElement>(".herd-mode")!;
+    expect(button.textContent).toBe(t("list.modeSpace"));
+    expect(button.getAttribute("aria-label")).toBe(t("list.modeAria", { mode: t("list.modeSpace") }));
+    expect(button.hasAttribute("title")).toBe(false);
+    act(() => button.click());
+    expect(opened).toBe(1);
   });
 
-  test("it counts the cards still waiting and scrolls to the first one", () => {
-    const card = document.createElement("article");
-    card.className = "card status-done";
-    let scrolled: unknown = null;
-    card.scrollIntoView = (options) => {
-      scrolled = options;
-    };
-    document.body.append(card);
-    mount(createElement(CompletionCount, { count: 2 }));
-    const count = app().querySelector<HTMLButtonElement>(".done-count")!;
-    expect(count.textContent).toBe(t("home.doneCount", { count: "2" }));
-    expect(count.getAttribute("aria-label")).toBe(t("home.doneCountAria", { count: "2" }));
-    act(() => count.click());
-    expect(scrolled).toEqual({ behavior: "smooth", block: "center" });
-    card.remove();
+  test("with room for the icon only, the name moves to the label and the tooltip", () => {
+    mount(createElement(GroupModeButton, { mode: "agent", onOpen: () => {}, iconOnly: true }));
+    const button = app().querySelector<HTMLButtonElement>(".herd-mode")!;
+    const name = t("list.modeAria", { mode: t("list.modeAgent") });
+    expect(button.textContent).toBe("");
+    expect(button.getAttribute("aria-label")).toBe(name);
+    expect(button.getAttribute("title")).toBe(name);
   });
 });

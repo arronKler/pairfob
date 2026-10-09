@@ -42,7 +42,7 @@ const layers: LayerPolicy[] = [
     root: "shared",
     allowedRoots: ["shared/"],
     allowedModules: ["lib/i18n", "lib/i18n-en", "lib/i18n-zh", "lib/i18n-en-plurals",
-      "lib/i18n-en-workspace", "lib/i18n-zh-workspace", "lib/i18n-en-shell", "lib/i18n-zh-shell", "lib/i18n-en-agent-info", "lib/i18n-zh-agent-info", "lib/i18n-board-menu", "lib/i18n-board-canvas", "lib/i18n-dialogs", "lib/i18n-machines",
+      "lib/i18n-en-workspace", "lib/i18n-zh-workspace", "lib/i18n-en-shell", "lib/i18n-zh-shell", "lib/i18n-en-agent-info", "lib/i18n-zh-agent-info", "lib/i18n-board-menu", "lib/i18n-board-canvas", "lib/i18n-desk-rail", "lib/i18n-desk-session", "lib/i18n-desk-overlay", "lib/i18n-desk-inspector", "lib/i18n-desk-palette", "lib/i18n-desk-connect", "lib/i18n-dialogs", "lib/i18n-errors", "lib/i18n-machines",
       "lib/i18n-compose-v2", "lib/i18n-keypad-v2", "lib/i18n-chrome-v2", "lib/i18n-pane-menu-v2", "lib/i18n-rowbar-v2",
       "lib/i18n-settings-v3", "lib/i18n-chat-work"],
     prohibitedModules: applicationModules,
@@ -200,6 +200,18 @@ const layers: LayerPolicy[] = [
       "live-operations", "mutations",
     ],
   },
+  {
+    // Search and jump. The rail and the keyboard both open it, so it is a leaf:
+    // it lists the herd through the dashboard's pure view model and reaches the
+    // application only through the ports the composition provides. No connected
+    // adapter, hence no exclusion.
+    name: "features/command-palette",
+    root: "features/command-palette",
+    allowedRoots: ["features/command-palette/", "shared/", "lib/"],
+    allowedModules: ["features/dashboard/model/herd-view"],
+    prohibitedModules: applicationModules,
+    prohibitedRoots: ["ui/", "pages/", "app/"],
+  },
 ];
 
 /**
@@ -300,6 +312,7 @@ describe("architecture layer boundaries", () => {
       "features/settings/network-preference",
       "features/settings/notifications",
     ]);
+    expect(connectedAdapters("features/command-palette")).toEqual([]);
   });
 
   test("a page touches the retired legacy paint adapter only where it declares", () => {

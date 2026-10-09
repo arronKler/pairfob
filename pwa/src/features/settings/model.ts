@@ -25,6 +25,17 @@ export function settingsNetworkPath(input: SettingsNetworkInput): string {
   return input.relayRttMs === null ? t("settings.networkRelayPending") : t("settings.networkRttRelay", { ms: input.relayRttMs });
 }
 
+/**
+ * The path in use and what it measures, without the preference beside it: a
+ * head too narrow for the whole sentence still says how the computer is reached.
+ */
+export function settingsNetworkPathInUse(input: Pick<SettingsNetworkInput, "sessionTransport" | "relayRttMs">): string {
+  if (input.sessionTransport === "p2p") {
+    return input.relayRttMs === null ? t("settings.networkP2PPending") : t("settings.networkRttP2P", { ms: input.relayRttMs });
+  }
+  return input.relayRttMs === null ? t("settings.networkRelayPending") : t("settings.networkRttRelay", { ms: input.relayRttMs });
+}
+
 export function settingsNetworkHelp(input: Pick<SettingsNetworkInput, "networkMode">): string {
   if (input.networkMode === "p2p") return t("settings.networkP2PNote");
   return t("settings.networkNote");

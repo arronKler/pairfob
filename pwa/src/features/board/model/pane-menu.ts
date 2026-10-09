@@ -105,11 +105,19 @@ export function panePosition(layout: TabLayoutView | null, paneId: string): stri
 }
 
 /**
+ * How the reader who opened the menu swaps without it: a finger lifts the tile
+ * with a long press and drags it; a mouse drag pans the board instead, so a
+ * mouse or the keyboard is told the canvas keys.
+ */
+export type PaneSwapShortcut = "press" | "keys";
+
+/**
  * The pane menu, gated by the advertised capabilities: an action the computer
  * does not offer is absent, one it cannot run right now stays visible with
  * its reason.
  */
-export function paneMenuEntries(caps: OperationCapabilities, layout: TabLayoutView | null, disabledReason: string): PaneMenuEntry[] {
+export function paneMenuEntries(caps: OperationCapabilities, layout: TabLayoutView | null, disabledReason: string,
+  swapBy: PaneSwapShortcut = "press"): PaneMenuEntry[] {
   const split = !!layout && layout.panes.length > 1;
   const zoomed = !!layout?.zoomed;
   const arranged = zoomed ? t("boardMenu.zoomedReason") : "";
@@ -121,7 +129,7 @@ export function paneMenuEntries(caps: OperationCapabilities, layout: TabLayoutVi
   if (caps.resize_pane && split) entries.push({ id: "resize", label: t("boardMenu.resize"), group: "layout",
     detail: t("boardMenu.resizeDetail"), reason: arranged || undefined });
   if (caps.swap_pane && split) entries.push({ id: "swap", label: t("boardMenu.swapPick"), group: "layout",
-    detail: t("boardMenu.swapDetail"), reason: arranged || undefined });
+    detail: t(swapBy === "keys" ? "boardMenu.swapDetailKeys" : "boardMenu.swapDetail"), reason: arranged || undefined });
   if (caps.zoom_pane && (split || zoomed)) entries.push({ id: "zoom",
     label: t(zoomed ? "boardMenu.restore" : "boardMenu.maximize"), group: "layout" });
   entries.push({ id: "close", label: t("boardMenu.close"), group: "manage", danger: true });

@@ -1,7 +1,6 @@
-import { CircleAlert, Plus } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../../lib/i18n";
-import { Brand, Button, StatusDot, TopbarActions } from "../../../shared/ui/primitives";
+import { Button } from "../../../shared/ui/primitives";
 import { prefersReducedMotion } from "../../../shared/ui/dom/motion";
 import { rememberedScroll, useRememberedScroll } from "../../../shared/ui/dom/remembered-scroll";
 import { preferencesStore, setListGroupCollapsed } from "../../settings/preferences-store";
@@ -10,13 +9,16 @@ import { preferencesStore, setListGroupCollapsed } from "../../settings/preferen
 import { AppNotice } from "../../../app/notice";
 import { HerdBanners } from "../../../features/connection/herd-banners";
 import { HerdSessionSwitch } from "../../herd-sessions/herd-session-row";
-import { CompletionCount, CreateFab, GroupModeButton } from "./herd-controls";
+import { CreateFab, GroupModeButton } from "./herd-controls";
 import type { HerdActions } from "../actions";
 import type { HerdViewModel } from "../model/herd-view";
 import { AttentionStrip } from "./attention-strip";
 import { HerdList } from "./herd-list";
 import { HostTitle } from "./host-title";
-import { closeOpenSwipeRow } from "./swipe-row";
+import { useListKeys } from "./list-keys";
+import { RailFoot, RailHead, RailSearch } from "./rail-chrome";
+import { useRegridFocus } from "./regrid-focus";
+import { closeOpenSwipeRow, closeSwipeRowOutside } from "./swipe-row";
 
 /**
  * The phone header folds past FOLD_PX and unfolds only back near the top. The
@@ -25,37 +27,6 @@ import { closeOpenSwipeRow } from "./swipe-row";
  */
 const FOLD_PX = 120;
 const UNFOLD_PX = 12;
-
-function RailCreate({ view, actions }: { view: HerdViewModel; actions: HerdActions }) {
-  if (!view.create) return null;
-  return (
-    <TopbarActions className="herd-topbar-actions">
-      <Button
-        className="topbar-create"
-        onClick={actions.createConversation}
-        disabled={view.create.disabled}
-        aria-label={view.create.aria}
-      >
-        <Plus size={16} aria-hidden="true" />{view.create.label}
-      </Button>
-    </TopbarActions>
-  );
-}
-
-/** The rail's destinations on one row of their own, so none wraps under the brand. */
-function RailNav({ view, actions }: { view: HerdViewModel; actions: HerdActions }) {
-  return (
-    <nav className="rail-nav" aria-label={t("tabs.aria")}>
-      {view.computers && (
-        <Button className="text-link" onClick={actions.openComputers}>{view.computers.label}</Button>
-      )}
-      <Button className={`text-link${view.board.current ? " is-current" : ""}`} aria-current={view.board.current ? "page" : undefined}
-        onClick={actions.openBoard}>{view.board.label}</Button>
-      <Button className="text-link" onClick={actions.openSettings}>{view.settings.label}</Button>
-      <HerdSessionSwitch className="text-link" />
-    </nav>
-  );
-}
 
 /** Reveal a row the reader asked for: open its group, then scroll it into view. */
 function useReveal(view: HerdViewModel, root: React.RefObject<HTMLElement | null>) {
@@ -92,9 +63,10 @@ function useMinuteTick(): void {
  *
  * The phone page is the option B header (computer title, grouping button, the
  * "needs you" strip), the list and the floating create button; the tab bar
- * outside it reaches Board and Settings. The desktop rail keeps its compact top
- * bar and status line, and deliberately shows no app notice because the desk
- * main pane owns notices for the open session.
+ * outside it reaches Board and Settings. The desktop rail is the same parts in a
+ * fixed frame: the header's controls and create in its head, search, the strip,
+ * then the list scrolling above Board and Settings. It deliberately shows no app
+ * notice because the desk main pane owns notices for the open session.
  */
 export function HerdScreen({
   view,
@@ -107,7 +79,7 @@ export function HerdScreen({
 }) {
   const root = useRef<HTMLElement>(null);
   const reveal = useReveal(view, root);
-  const lastLocated = useRef({ blocked: "", done: "" });
+  const lastLocated = useRef({ blocked: "", done: "", any: "" });
   // A page returning past the fold renders folded from the start: folding after
   // the offset is restored would shrink the header above it and scroll
   // anchoring would pull the list up by the difference.
@@ -152,42 +124,63 @@ export function HerdScreen({
       rootStyle.removeProperty("--herd-head-h");
     };
   }, [variant]);
-  const revealNext = (status: "blocked" | "done", groupId?: string) => {
-    const candidates = view.groups
+  // "any" walks the strip's own order: rows waiting on the reader, then unread completions.
+  const revealNext = (status: "blocked" | "done" | "any", groupId?: string) => {
+    const rows = view.groups
       .filter(group => !groupId || group.id === groupId)
-      .flatMap(group => group.cards
-        .filter(card => status === "blocked" ? card.blocked : card.unread)
-        .map(card => ({ paneId: card.paneId, groupId: group.id })));
+      .flatMap(group => group.cards.map(card => ({ paneId: card.paneId, groupId: group.id, blocked: card.blocked, unread: card.unread })));
+    const candidates = status === "any"
+      ? view.attention.flatMap(item => rows.filter(row => row.paneId === item.paneId))
+      : rows.filter(row => status === "blocked" ? row.blocked : row.unread);
     if (!candidates.length) return;
     const previous = candidates.findIndex(card => card.paneId === lastLocated.current[status]);
     const next = candidates[(previous + 1) % candidates.length];
     lastLocated.current[status] = next.paneId;
     reveal(next.paneId, next.groupId);
   };
-  const screenActions: HerdActions = { ...actions, revealAttention: (groupId, kind) => revealNext(kind, groupId) };
+  // One identity for the life of the screen: a row binds its swipe to these
+  // actions, and a new object on every commit would rebind it and shut a row
+  // the reader has swiped open.
+  const latestReveal = useRef(revealNext);
+  latestReveal.current = revealNext;
+  const screenActions = useMemo<HerdActions>(
+    () => ({ ...actions, revealAttention: (groupId, kind) => latestReveal.current(kind, groupId) }),
+    [actions],
+  );
   const bindRoot = (node: HTMLElement | null) => { root.current = node; };
+  useRegridFocus(root, variant);
+  useListKeys(root, variant);
+  // What the column beside the rail shows. However it moved on (a ticket, the
+  // empty column's card, search and jump, Board), a row left swiped open belongs
+  // to the moment before. The phone page leaves with its rows instead.
+  const beside = variant === "rail"
+    ? `${view.groups.flatMap(group => group.cards).find(card => card.selected)?.paneId ?? ""}|${view.board.current}|${view.settings.current}`
+    : "";
+  useEffect(() => { closeOpenSwipeRow(); }, [beside]);
+  // Beside the rail the reader goes on working with the row still slid open:
+  // the session it sits next to, the rail's own chrome, the inspector. A press
+  // on any of them puts the row back, and is left to do what it was for. The
+  // phone page has only its list under the finger, and keeps closing by row.
+  useEffect(() => {
+    if (variant !== "rail") return;
+    const pressed = (event: PointerEvent) => closeSwipeRowOutside(event.target);
+    document.addEventListener("pointerdown", pressed, { capture: true, passive: true });
+    return () => document.removeEventListener("pointerdown", pressed, { capture: true });
+  }, [variant]);
 
+  const explained = view.empty?.kind === "exited" || view.empty?.kind === "unverifiable";
   if (variant === "rail") {
     return (
       <aside ref={bindRoot} className="rail">
-        <div className="topbar herd-topbar">
-          <Brand tone={view.status.tone} heading />
-          <RailCreate view={view} actions={actions} />
+        <RailHead view={view} actions={actions} />
+        <RailSearch />
+        <AttentionStrip items={view.attention} onOpen={actions.openAttention} onLocate={() => revealNext("any")} wheel />
+        {/* As on the page: an empty list already says Herdr is gone or silent, here and in the column beside it. */}
+        {explained ? null : <HerdBanners tone={view.status.tone} />}
+        <div className="rail-list">
+          <HerdList view={view} actions={screenActions} variant="rail" />
         </div>
-        <RailNav view={view} actions={actions} />
-        <p className="statusline">
-          <StatusDot tone={view.status.tone} />
-          <span className="statusline-text">{view.status.text}</span>
-          <span className="attention-counts">
-            {view.pendingCount > 0 && <Button className="text-link pending-count"
-              aria-label={t("home.pendingCountAria", { count: String(view.pendingCount) })} onClick={() => revealNext("blocked")}>
-              <CircleAlert size={14} aria-hidden="true" />{t("home.pendingCount", { count: String(view.pendingCount) })}
-            </Button>}
-            <CompletionCount count={view.doneCount} onActivate={() => revealNext("done")} />
-          </span>
-        </p>
-        <HerdBanners tone={view.status.tone} />
-        <HerdList view={view} actions={screenActions} variant="rail" />
+        <RailFoot view={view} actions={actions} />
       </aside>
     );
   }
@@ -212,11 +205,11 @@ export function HerdScreen({
         <AttentionStrip items={view.attention} onOpen={actions.openAttention} hidden={folded} />
       </header>
       {/* An empty list's panel already explains Herdr being gone or silent. */}
-      {view.empty?.kind === "exited" || view.empty?.kind === "unverifiable" ? null : <HerdBanners tone={view.status.tone} />}
+      {explained ? null : <HerdBanners tone={view.status.tone} />}
       <AppNotice />
       <HerdList view={view} actions={screenActions} variant="page" />
       {/* Empty or still reading: the list area owns the one create action (or none). */}
-      {view.create && view.groups.length ? <CreateFab create={view.create} onCreate={actions.openCreate} onQuick={actions.openQuickCreate} /> : null}
+      {view.create && view.groups.length ? <CreateFab create={view.create} onCreate={actions.openCreate} onQuick={() => actions.openQuickCreate()} /> : null}
     </div>
   );
 }

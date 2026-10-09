@@ -40,7 +40,7 @@ function MeasuringBoot() {
   return createElement("div", { className: "boot-shell-probe" });
 }
 mock.module(`${pwaRoot}/src/pages/boot/index.tsx`, () => ({
-  BootScreen: MeasuringBoot, BootShell: MeasuringBoot, UnreachableShell: MeasuringBoot,
+  BootScreen: MeasuringBoot, BootShell: MeasuringBoot, UnreachableShell: MeasuringBoot, UnreachableDesk: MeasuringBoot,
 }));
 
 const { mountApp, unmountApp, isAppMounted } = await import("../src/app/mount");

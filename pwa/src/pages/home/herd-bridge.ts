@@ -24,7 +24,7 @@
 import { capabilityEnabled, operationBusy } from "../../features/operations/capabilities-store";
 import { computersStore, liveSession } from "../../features/computers/catalog-store";
 import { computerTitle } from "../../lib/computer-catalog";
-import { settingsNetworkPath } from "../../features/settings/model";
+import { settingsNetworkPath, settingsNetworkPathInUse } from "../../features/settings/model";
 import { t } from "../../lib/i18n";
 import { connectionStore, networkOnline } from "../../features/connection/connection-store";
 import { dashboardStore, liveAgents } from "../../features/dashboard/catalog-store";
@@ -40,10 +40,11 @@ import type { HerdActionPorts } from "../../features/dashboard/actions";
 import type { DashboardAgentCard } from "../../lib/dashboard";
 import type { HerdPaint, StatusMark } from "../../lib/herd-attention";
 import { openHerdPaint } from "../../lib/herd-attention";
-import { groupAgents, syncGroupCollapsed, toggleCollapsedForIds } from "../../lib/ranking";
+import { groupAgents, holdActivation, syncGroupCollapsed, toggleCollapsedForIds, type ActivationHold, type TouchedAt } from "../../lib/ranking";
+import { isDesk } from "../../app/viewport";
 import { haptic } from "../../shared/ui/dom/feedback";
 import { herdLivenessModel, herdStatusModel } from "../../features/dashboard/model/herd-status";
-import { buildHerdViewModel, type HerdHostView, type HerdModelInput, type HerdStatus, type HerdViewModel } from "../../features/dashboard/model/herd-view";
+import { buildHerdViewModel, STATUS_JOIN, type HerdHostView, type HerdModelInput, type HerdStatus, type HerdViewModel } from "../../features/dashboard/model/herd-view";
 import { morphingPane } from "../../app/transition";
 import { openBoard } from "../board/board-bridge";
 import { boardStore, clearBoardReturn } from "../../features/board/layout-store";
@@ -51,6 +52,9 @@ import { navigationStore } from "../../app/navigation-store";
 import { openListPaneMenu, openListWorkspaceMenu } from "./object-menu";
 
 /** Completion acknowledgement for a batch that just landed, while visible. */
+/** The pages the rail's Settings entry leads to. */
+const SETTINGS_SCREENS: ReadonlySet<string> = new Set(["settings", "quota", "computers"]);
+
 const COMPLETION_HAPTIC_MS = 14;
 
 const NO_ATTENTION: HerdPaint = Object.freeze({
@@ -110,6 +114,30 @@ function sameCollapsed(left: Record<string, boolean>, right: Record<string, bool
   return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
 }
 
+let orderHold: ActivationHold | null = null;
+
+/**
+ * The stamps the list is ordered by. On the phone they are the live ones: its
+ * list is rebuilt each time the reader comes back to it. Beside the session the
+ * list never leaves, so its order is held until it is built again — another
+ * computer, another grouping, a first snapshot, or a return to the tab. Only a
+ * memo of what was read: deriving it twice from the same records changes nothing.
+ */
+function listActivation(live: TouchedAt, agents: readonly DashboardAgentCard[], loaded: boolean): TouchedAt {
+  if (!loaded || !isDesk() || document.visibilityState !== "visible") {
+    orderHold = null;
+    return live;
+  }
+  const scope = `${computersStore.get().credential?.daemonId ?? ""}\u0000${runtimeStore.get().herdHost}\u0000${listGroup()}`;
+  orderHold = holdActivation(orderHold, scope, live, agents.map((agent) => agent.paneId));
+  return orderHold.stamps;
+}
+
+/** Forget the held list order (tests, and a list that must be built afresh). */
+export function resetHerdListOrder(): void {
+  orderHold = null;
+}
+
 /**
  * Everything the herd projection reads, from the domains that own it. Called
  * during render, so it mutates nothing: the presentation boundary below is where
@@ -132,7 +160,8 @@ export function readHerdHost(status: HerdStatus): HerdHostView {
     // header's short form names the action instead of repeating it.
     if (networkOnline() && status.tone === "warn" && connected) return { name, line: t("host.unverifiedLine"), tone: status.tone };
     const retry = networkOnline() && status.tone === "off";
-    return { name, line: retry ? `${status.text} · ${t("host.retryShort")}` : status.text, tone: status.tone };
+    const line = retry ? `${status.text}${STATUS_JOIN}${t("host.retryShort")}` : status.text;
+    return { name, line, tone: status.tone, brief: troubleBrief(status, line, retry) };
   }
   const connection = connectionStore.get();
   const path = settingsNetworkPath({
@@ -142,13 +171,27 @@ export function readHerdHost(status: HerdStatus): HerdHostView {
     networkMode: connection.networkMode,
     lastP2PAttempt: connection.lastP2PAttempt,
   });
-  return { name, line: `${t("chrome.connected")} · ${path}`, tone: status.tone };
+  // The rail's head: the green dot already says connected, and the path in use
+  // comes before the preference it fell back from.
+  const brief = settingsNetworkPathInUse(connection).split(STATUS_JOIN);
+  return { name, line: `${t("chrome.connected")}${STATUS_JOIN}${path}`, tone: status.tone, brief };
+}
+
+/**
+ * A status that is not "connected", cut for the rail's head: the two sentences
+ * too long for it in any language get their short form, and "connected" steps
+ * aside for what follows it (still reading the sessions).
+ */
+function troubleBrief(status: HerdStatus, line: string, retry: boolean): readonly string[] {
+  if (status.tone === "off") return retry ? [t("rail.herdrOff"), t("host.retryShort")] : [t("rail.herdrOff")];
+  if (status.tone === "warn" && networkOnline()) return [t("rail.reconnecting")];
+  const parts = line.split(STATUS_JOIN);
+  return parts.length > 1 && parts[0] === t("chrome.connected") ? parts.slice(1) : parts;
 }
 
 export function readHerdInput(painted: HerdPaint): HerdModelInput {
   const dashboard = dashboardStore.get();
   const preferences = preferencesStore.get();
-  const computers = computersStore.get();
   const runtime = runtimeStore.get();
   const connected = liveSession()?.isConnected() === true;
   const online = networkOnline();
@@ -158,7 +201,7 @@ export function readHerdInput(painted: HerdPaint): HerdModelInput {
     agents: dashboard.agents,
     listGroup: listGroup(),
     paneTouched: preferences.paneTouched,
-    paneActivated: preferences.paneActivated,
+    paneActivated: listActivation(preferences.paneActivated, dashboard.agents, dashboard.snapshotLoaded),
     panePinned: preferences.panePinned,
     groupCollapsed: preferences.listGroupCollapsed,
     selectedPaneId: openPaneId(),
@@ -177,11 +220,44 @@ export function readHerdInput(painted: HerdPaint): HerdModelInput {
     runtimeKind: runtime.runtimeKind,
     createConversation: capabilityEnabled("create_conversation"),
     operationBusy: operationBusy(),
-    computerCount: computers.computers.length,
     morphingPaneId: morphingPane(),
     boardOpen: navigationStore.get().screen === "board",
+    settingsOpen: SETTINGS_SCREENS.has(navigationStore.get().screen),
     boardTabId: boardStore.get().boardTabId,
   };
+}
+
+/**
+ * The rail's frame while the only computer cannot be reached: that computer
+ * and why in its head, nothing listed, nothing to create, no destination
+ * current. Rows an earlier session left in the dashboard record are not this
+ * page's to show.
+ */
+export function unreachableHerdView(host: HerdHostView): HerdViewModel {
+  return buildHerdViewModel({
+    agents: [],
+    listGroup: listGroup(),
+    paneTouched: {},
+    paneActivated: {},
+    panePinned: {},
+    groupCollapsed: {},
+    selectedPaneId: "",
+    attention: NO_ATTENTION,
+    liveness: "unverifiable",
+    status: { tone: host.tone, text: host.line },
+    reading: false,
+    snapshotLoaded: false,
+    recentDirs: [],
+    host,
+    createTab: false,
+    now: Date.now(),
+    connected: false,
+    networkOnline: networkOnline(),
+    runtimeKind: "",
+    createConversation: false,
+    operationBusy: false,
+    morphingPaneId: null,
+  });
 }
 
 /**
@@ -198,7 +274,7 @@ export function presentHerdView(): HerdViewModel {
   const consumed = openHerdPaint([...agents], group);
   if (consumed.completed.length && document.visibilityState === "visible") haptic(COMPLETION_HAPTIC_MS);
   if (group !== "flat") {
-    const groups = groupAgents([...agents], group, paneActivated(), panePinned());
+    const groups = groupAgents([...agents], group, listActivation(paneActivated(), agents, dashboardStore.get().snapshotLoaded), panePinned());
     const collapsed = listGroupCollapsed();
     const synced = syncGroupCollapsed(groups, collapsed);
     if (!sameCollapsed(synced, collapsed)) setListGroupCollapsed(synced);

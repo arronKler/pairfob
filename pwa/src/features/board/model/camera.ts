@@ -59,6 +59,65 @@ export function panCamera(camera: BoardCamera, dx: number, dy: number): BoardCam
   return { ...camera, panX: camera.panX + dx, panY: camera.panY + dy };
 }
 
+/**
+ * Keep the board in its viewport: one rule for both axes and for every input
+ * that moves it (a drag, a wheel, two fingers, a zoom, a reveal). On an axis
+ * where the stage is larger than the viewport it slides from edge to edge and
+ * stops there, so no band of empty canvas opens beside a board that could
+ * fill it. Where it is smaller it stays whole inside the viewport and cannot
+ * be dragged off; the fit puts it in the middle. A camera already inside comes
+ * back as it is; a viewport that cannot be measured bounds nothing.
+ */
+export function cameraInView(
+  camera: BoardCamera,
+  viewWidth: number,
+  viewHeight: number,
+  stage: { width: number; height: number },
+): BoardCamera {
+  if (!(viewWidth > 0) || !(viewHeight > 0)) return camera;
+  const panX = panInView(camera.panX, viewWidth, stage.width * camera.scale);
+  const panY = panInView(camera.panY, viewHeight, stage.height * camera.scale);
+  return panX === camera.panX && panY === camera.panY ? camera : { ...camera, panX, panY };
+}
+
+/**
+ * The stage spans `pan … pan + extent`. Larger than the view, its edges stay
+ * at or past the view's; smaller, they stay inside them. Either way `pan` lies
+ * between 0 and the difference of the two.
+ */
+function panInView(pan: number, view: number, extent: number): number {
+  const room = view - extent;
+  return Math.min(Math.max(room, 0), Math.max(Math.min(room, 0), pan));
+}
+
+/**
+ * How far a vertical wheel still moves the board: the part of the stage that
+ * lies past the viewport's edge in the wheel's direction, and no more than the
+ * wheel travelled. Positive `deltaY` is a wheel turned down, which brings up
+ * what lies below. 0 when that edge is already in view (a board at its fit, or
+ * one moved all the way), which leaves the wheel to the pane under it.
+ */
+export function wheelPanY(
+  camera: BoardCamera,
+  viewHeight: number,
+  stageHeight: number,
+  deltaY: number,
+): number {
+  if (!(viewHeight > 0) || !deltaY) return 0;
+  const hidden = deltaY > 0 ? camera.panY + stageHeight * camera.scale - viewHeight : -camera.panY;
+  // Less than a pixel is rounding at the fit, not something left to see.
+  if (hidden < 1) return 0;
+  return deltaY > 0 ? -Math.min(deltaY, hidden) : Math.min(-deltaY, hidden);
+}
+
+/**
+ * The stage is taller than its viewport: there is board above or below what
+ * shows, at one end at least. A pixel of difference is rounding at the fit.
+ */
+export function stageTallerThanView(camera: BoardCamera, viewHeight: number, stageHeight: number): boolean {
+  return viewHeight > 0 && stageHeight * camera.scale - viewHeight >= 1;
+}
+
 /** Double-click fill: the scale that makes one tile cover the viewport. */
 export function tileFillScale(
   viewWidth: number,

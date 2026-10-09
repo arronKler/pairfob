@@ -1,5 +1,6 @@
 import { encodeLiveKey } from "../keypad/live-key";
 import { appRoot } from "../../../app/dom-root";
+import { hardwareKeyboard, macPlatform } from "../../../app/input-mode";
 import {
   composeDraft,
   composeFocused,
@@ -16,11 +17,10 @@ import { clearNotice, clearNoticeForScope, captureNoticeScope, noticeScopeIsCurr
 import { setPaneComposeLive } from "../../settings/preferences-store";
 import { haptic } from "../../../lib/dom";
 import { messageOf } from "../../../lib/notices";
-import { currentDaemonId, liveSession } from "../../computers/catalog-store";
+import { liveSession } from "../../computers/catalog-store";
 import { currentScreen } from "../../../app/navigation-store";
 import { isAgentChat, isFullTerminal, livePaneHash, openPaneId, paneFollow } from "../session-store";
 import { currentViewIncarnation } from "../drafts/compose-drafts";
-import { type ComposeDraftScope, type ComposeInputMode } from "../../../lib/compose-draft-scope";
 import { guardedReply } from "../../../lib/guarded";
 import { t } from "../../../lib/i18n";
 import { fitOperationPrompt } from "../../../lib/operations";
@@ -30,13 +30,15 @@ import { ProtocolError } from "../../../lib/protocol/errors";
 import { reconcileAmbiguousMutation, reportMutationError } from "../../connection/mutations";
 import { requestPaneRefresh } from "../../connection/refresh-request";
 import { commitView } from "../../../app/host";
-import { nextDraftRevision, parkStoredDraft, readStoredDraft, writeStoredDraft } from "../drafts/state-drafts";
-import { composeDraftMode } from "../model";
 import { predictText } from "./echo";
-import { flushKeys, queueKey } from "./keys";
+import { flushKeys, queueKey, sendPage } from "./keys";
+import { liveOrder, registerLivePath } from "./live-order";
+import { termHasSelection } from "./term";
 import { LiveInputPump } from "./live-input";
+import { liveComposeOwner, liveOwnerMoved, parkLiveComposeText } from "./live-owner";
 import { fitComposeHeight } from "../compose-size";
-import { returnAddsNewline, withQuickCommand, withSlashCommand } from "../compose-keys";
+import { hardwareLiveKey } from "../keypad/hardware-keys";
+import { returnAddsNewline, withQuickCommand, withSlashCommand, fieldKeepsControlChord } from "../compose-keys";
 import { acceptComposePaste, attachmentMessage, markSentAttachments, requestSend } from "./send-gate";
 
 const SPECIAL_KEYS: Record<string, string> = {
@@ -64,8 +66,15 @@ function focusComposeField(field: HTMLTextAreaElement): void {
   field.focus({ preventScroll: true });
 }
 
-/** Tap the buffer to type into the PTY, the same way a desktop terminal focuses. */
+/**
+ * Hand the keyboard to the compose field without a tap on it: a session opened
+ * from the board, or the input mode switched under the field. Only a keyboard
+ * that is not on glass is handed anything. A field typed on glass waits for its
+ * tap at every width, as it does when the list opens the session: focusing it
+ * raises the keys over what the reader came to look at.
+ */
 export function focusCompose(): void {
+  if (!hardwareKeyboard()) return;
   const field = composeField();
   if (!field) return;
   focusComposeField(field);
@@ -93,6 +102,18 @@ let liveInputPump: LiveInputPump | null = null;
 let liveInputSession: LiveSession | null = null;
 let liveInputPane = "";
 let submitBusy = false;
+
+/**
+ * Typed characters are one of the paths of the session's order (`live-order`):
+ * what the pump holds behind a slow write keeps a later key waiting, and a key
+ * still queued keeps a later character out of the pump.
+ */
+registerLivePath("text", {
+  unsent: () => Boolean(liveInputPump?.snapshot().queuedText),
+  written: () => liveInputPump?.written() ?? Promise.resolve(),
+});
+/** Characters that were waiting for their turn when the order was reset, oldest first. */
+let droppedLiveText = "";
 
 function reapStaleLiveInputPump(): void {
   if (liveInputPump && (liveInputSession !== liveSession() || liveInputPane !== openPaneId())) {
@@ -165,6 +186,8 @@ function syncLiveInputFeedback(): void {
 }
 
 function stopLiveInputPump(): void {
+  liveOrder.reset();
+  droppedLiveText = "";
   liveInputPump?.stop();
   liveInputPump = null;
   liveInputSession = null;
@@ -189,7 +212,10 @@ function ensureLiveInputPump(): LiveInputPump | null {
   const paneId = openPaneId();
   if (!session || !paneId) return null;
   if (liveInputPump && liveInputSession === session && liveInputPane === paneId) return liveInputPump;
-  stopLiveInputPump();
+  // A pump left from another pane goes, and what waited for it with it. With
+  // none there is nothing to stop: a page key pressed before the first
+  // character here keeps its place in the order.
+  if (liveInputPump) stopLiveInputPump();
 
   let pump!: LiveInputPump;
   pump = new LiveInputPump({
@@ -211,14 +237,19 @@ function ensureLiveInputPump(): LiveInputPump | null {
       if (liveInputPump === pump) syncLiveInputFeedback();
     },
     onError: async (error, input) => {
+      // What was typed after the text that failed does not go on without it:
+      // keys are dropped, characters go back to the draft behind what failed.
+      liveOrder.reset();
+      const waiting = droppedLiveText;
+      droppedLiveText = "";
       if (liveInputPump === pump) {
         liveInputPump = null;
         liveInputSession = null;
         liveInputPane = "";
       }
-      const restore = error instanceof ProtocolError && error.code === "unknown_outcome"
+      const restore = (error instanceof ProtocolError && error.code === "unknown_outcome"
         ? input.queuedText
-        : input.failedText + input.queuedText;
+        : input.failedText + input.queuedText) + waiting;
       setPaneComposeLive(paneId, false);
       if (openPaneId() === paneId) writeComposeLive(false);
       restoreLiveInput(restore, paneId);
@@ -233,7 +264,20 @@ function ensureLiveInputPump(): LiveInputPump | null {
 }
 
 function typeLive(text: string): boolean {
-  if (!text) return false;
+  if (!text || !ensureLiveInputPump()) return false;
+  const paneId = openPaneId();
+  let now = true;
+  let accepted = true;
+  liveOrder.submit("text", () => {
+    accepted = writeLive(text);
+    // Typed behind a key that was still waiting: the caller has gone on, so text that is refused goes back to the draft here.
+    if (!accepted && !now) restoreLiveInput(text, paneId);
+  }, () => { droppedLiveText += text; });
+  now = false;
+  return accepted;
+}
+
+function writeLive(text: string): boolean {
   const pump = ensureLiveInputPump();
   if (!pump) return false;
   const queued = pump.snapshot().queuedText;
@@ -247,63 +291,15 @@ function typeLive(text: string): boolean {
   return true;
 }
 
-export async function flushLiveInput(): Promise<boolean> {
-  return liveInputPump ? liveInputPump.flush() : true;
-}
-
-/**
- * Identity of the pane that owns a live field when its text is transferred.
- * `setComposeDraft("")` inside the transfer publishes synchronously, and a
- * subscriber can replace the pane (switchComposeView) before the transfer
- * resumes. Carrying this identity lets the continuation recheck the owner
- * instead of enqueueing the retired field's text into the replacement.
- */
-type LiveComposeOwner = {
-  session: LiveSession | null;
-  paneId: string;
-  incarnation: number;
-  daemonId: string | null;
-  mode: ComposeInputMode;
-};
-
-function liveOwnerMoved(owner: LiveComposeOwner): boolean {
-  return (
-    liveSession() !== owner.session
-    || openPaneId() !== owner.paneId
-    || currentViewIncarnation() !== owner.incarnation
-  );
-}
-
-/**
- * The owner pane was replaced while its live field's text was being
- * transferred. The text belongs to the pane that owned the field, never to
- * the replacement now on screen: park it in that pane's stored draft so
- * returning to the pane restores it, without sending anything or touching
- * the replacement's visible draft. The park mark keeps the replacement's
- * next empty-draft capture from erasing this text before it is ever shown.
- */
-function parkLiveComposeText(text: string, owner: LiveComposeOwner): void {
-  const fitted = fitOperationPrompt(text).text;
-  if (!fitted) return;
-  const scope: ComposeDraftScope = {
-    daemonId: owner.daemonId,
-    paneId: owner.paneId,
-    mode: owner.mode,
-  };
-  const merged = fitOperationPrompt(fitted + readStoredDraft(scope).text).text;
-  if (!merged) return;
-  writeStoredDraft(scope, { text: merged, revision: nextDraftRevision() });
-  parkStoredDraft(scope);
+/** Everything typed so far in live input has been written and acknowledged, or was refused (false). */
+export function flushLiveInput(): Promise<boolean> {
+  // What is still waiting for its turn has not reached the pump yet.
+  if (liveOrder.waiting()) return liveOrder.drained().then(() => flushLiveInput());
+  return liveInputPump ? liveInputPump.flush() : Promise.resolve(true);
 }
 
 function takeLiveField(input: HTMLTextAreaElement): void {
-  const owner: LiveComposeOwner = {
-    session: liveSession(),
-    paneId: openPaneId(),
-    incarnation: currentViewIncarnation(),
-    daemonId: currentDaemonId(),
-    mode: composeDraftMode({ agentChat: isAgentChat(), fullTerminal: isFullTerminal() }),
-  };
+  const owner = liveComposeOwner();
   const text = input.value;
   input.value = "";
   setComposeDraft("");
@@ -368,9 +364,7 @@ function clearComposeDraft(): void {
 /** Soft keyboards have no Shift+Enter, so newlines need their own affordance. */
 export function insertNewline(): void {
   if (composeLive()) {
-    void flushLiveInput().then((sent) => {
-      if (sent) queueKey("enter");
-    });
+    submitLiveEnter();
     return;
   }
   const field = composeField();
@@ -508,8 +502,8 @@ async function guardedSubmit(
   });
 }
 
-async function submitLiveEnter(): Promise<void> {
-  if (!(await flushLiveInput())) return;
+/** Enter in live input: a key like any other, written after the text typed before it (`liveOrder`). */
+function submitLiveEnter(): void {
   queueKey("enter");
 }
 
@@ -524,7 +518,7 @@ export async function submitTyped(allowBareEnter = false): Promise<void> {
 async function submitMessage(paths: readonly string[], allowBareEnter: boolean): Promise<void> {
   if (composeLive()) {
     if (!paths.length) {
-      if (allowBareEnter) await submitLiveEnter();
+      if (allowBareEnter) submitLiveEnter();
       return;
     }
     // Paths cannot be typed live (their newlines would be Enter presses):
@@ -595,12 +589,49 @@ function fieldHasSelection(input: HTMLTextAreaElement): boolean {
   return input.selectionStart !== input.selectionEnd;
 }
 
+/** The browser's paste: Command+V, and Shift+Insert as terminals have it. */
+function isPaste(event: KeyboardEvent): boolean {
+  if (event.ctrlKey || event.altKey) return false;
+  return event.metaKey ? event.key.toLowerCase() === "v" && !event.shiftKey : event.key === "Insert" && event.shiftKey;
+}
+
+/**
+ * A key for the session, pressed in its compose field (`fromField`) or on the
+ * page. Composed: the field edits its draft, and Enter, Esc, the arrows and
+ * Ctrl with a letter go to the program. Live input on a hardware keyboard: the
+ * keyboard is the program's wherever in the session it is typed, with the bytes
+ * a terminal sends (`hardwareLiveKey`); only F6 is taken before it gets here
+ * (`app/column-keys`), and Command chords stay the browser's.
+ */
 export function handlePaneKey(event: KeyboardEvent, fromField: boolean): void {
   if (event.isComposing || composeIME()) return;
-  // Tab is how a keyboard reaches the chrome and the dock at all, and the pane
-  // opens with focus on the body. Only the compose field keeps Tab for TUI
-  // completion, and never with Shift, so focus can always back out.
-  if (event.key === "Tab" && (!fromField || event.shiftKey)) return;
+  const live = composeLive();
+  const keyboard = live && hardwareKeyboard();
+  // A paste pressed on the page lands where live input is typed, as it does in the complete terminal.
+  if (keyboard && !fromField && isPaste(event)) focusCompose();
+  // Live input: the keys the pad has no cap for go to the program too.
+  const hardwareKey = keyboard ? hardwareLiveKey(event) : null;
+  if (hardwareKey) {
+    event.preventDefault();
+    queueKey(hardwareKey);
+    return;
+  }
+  // Composed, Tab is how a keyboard reaches the chrome and the dock at all, and
+  // the pane opens with focus on the body. Only the compose field keeps Tab for
+  // TUI completion, and never with Shift: Shift+Tab is the way back out of the
+  // field (the key row has ⇧Tab for the program). With words in the draft there
+  // is nothing in the terminal for a Tab to complete, so it leaves the field
+  // like any other; an empty prompt sends it on. That last rule is a hardware
+  // keyboard's: a phone keeps sending the field's Tab on, as it always has.
+  if (event.key === "Tab" && (!fromField || event.shiftKey || (!live && composeDraft() && hardwareKeyboard()))) return;
+  // PageUp / PageDown page the session, as the touch rail's buttons do. Only
+  // from a hardware keyboard: a phone forwards neither, whatever reports them.
+  if ((event.key === "PageUp" || event.key === "PageDown") && hardwareKeyboard()
+    && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    event.preventDefault();
+    void sendPage(event.key === "PageUp" ? "up" : "down");
+    return;
+  }
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     void submitTyped(true);
@@ -612,8 +643,14 @@ export function handlePaneKey(event: KeyboardEvent, fromField: boolean): void {
     return;
   }
   if (event.ctrlKey && !event.metaKey && /^[a-z]$/i.test(event.key)) {
+    // Ctrl+Shift with a letter is no terminal key: terminals keep it for copy and paste, browsers for their own.
+    if (event.shiftKey && hardwareKeyboard()) return;
     const input = fromField ? composeField() : null;
     if (input && event.key.toLowerCase() === "c" && fieldHasSelection(input)) return;
+    if (input && fieldKeepsControlChord(event.key, Boolean(composeDraft()))) return;
+    // Text dragged out of the buffer: Ctrl+C copies it instead of interrupting.
+    // On a Mac copying is Command+C, so there Control+C is always the program's.
+    if (!fromField && event.key.toLowerCase() === "c" && termHasSelection() && !macPlatform()) return;
     event.preventDefault();
     queueKey(`ctrl+${event.key.toLowerCase()}`);
     return;
@@ -623,7 +660,7 @@ export function handlePaneKey(event: KeyboardEvent, fromField: boolean): void {
   if (!special || event.key === "Enter" || event.key === "Backspace") {
     if (!fromField && event.key.length === 1) {
       event.preventDefault();
-      if (composeLive()) {
+      if (live) {
         typeLive(event.key);
         return;
       }

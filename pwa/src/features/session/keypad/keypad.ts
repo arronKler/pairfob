@@ -3,7 +3,7 @@ import { mapPadKey } from "./modifiers";
 import { bindPadPress } from "./key-press";
 
 export type { Modifier, KeySpec } from "./keys";
-export { PRIMARY_KEYS, SECONDARY_KEYS, TERTIARY_KEYS, EXPANDED_KEYS, EXTRA_KEYS, KEY_PAGES } from "./keys";
+export { PRIMARY_KEYS, PAGE_KEYS, SECONDARY_KEYS, TERTIARY_KEYS, EXPANDED_KEYS, EXTRA_KEYS, KEY_PAGES } from "./keys";
 
 const down = new Set<Modifier>();
 const sticky = new Set<Modifier>();

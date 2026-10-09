@@ -1,8 +1,9 @@
-import { ChevronsDownUp, Copy, Paperclip, SquareTerminal } from "lucide-react";
+import { Check, ChevronsDownUp, Copy, Paperclip, SquareTerminal } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../../lib/i18n";
 import type { AgentTraceItem } from "../../../lib/operations";
 import { Button, Spinner } from "../../../shared/ui/primitives";
+import { useCopied } from "../copy-confirm";
 
 export type TraceAnchorData = { "data-trace-anchor": string; "data-trace-ordinal": number; "data-trace-ordinal-end": number };
 
@@ -55,11 +56,17 @@ export function TurnHead({ item, anchorData }: { item: AgentTraceItem; anchorDat
   return <PromptBubble text={text} anchorData={anchorData} />;
 }
 
-export function ReplyActions({ text, onCopy }: { text: string; onCopy?: (text: string) => void | Promise<void> }) {
+export function ReplyActions({ text, onCopy }: { text: string; onCopy?: (text: string) => unknown }) {
+  const [copied, confirm] = useCopied();
   if (!onCopy || !text) return null;
+  const copy = (): void => {
+    void Promise.resolve(onCopy(text)).then((done) => { if (done === true) confirm("done"); });
+  };
   return <div className="agent-reply-actions">
-    <Button className="agent-reply-copy" aria-label={t("chat.copyReplyAria")} onClick={() => void onCopy(text)}>
-      <Copy size={14} aria-hidden="true" />{t("reply.copy")}</Button>
+    <Button className="agent-reply-copy" data-copied={copied ? "" : undefined}
+      aria-label={t(copied ? "chat.copiedReply" : "chat.copyReplyAria")} onClick={copy}>
+      {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+      {t(copied ? "reply.copied" : "reply.copy")}</Button>
   </div>;
 }
 

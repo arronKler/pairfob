@@ -202,4 +202,51 @@ describe("full-terminal mount lifecycle", () => {
     notify?.([], {} as ResizeObserver);
     expect(fits).toBe(1);
   });
+
+  test("a height change that leaves the terminal's room alone fits at once, a keyboard's still settles", () => {
+    let notify: ResizeObserverCallback | undefined;
+    class Observer {
+      constructor(callback: ResizeObserverCallback) { notify = callback; }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords(): ResizeObserverEntry[] { return []; }
+    }
+    g.ResizeObserver = Observer as unknown as typeof ResizeObserver;
+    const host = happy.document.createElement("div");
+    let height = 664;
+    let covered = 0;
+    Object.defineProperty(host, "clientWidth", { configurable: true, get: () => 390 });
+    Object.defineProperty(host, "clientHeight", { configurable: true, get: () => height });
+    let task: TimerHandler | undefined;
+    happy.setTimeout = ((callback: TimerHandler) => {
+      task = callback;
+      return 51;
+    }) as typeof happy.setTimeout;
+    happy.clearTimeout = (() => { task = undefined; }) as typeof happy.clearTimeout;
+    let fits = 0;
+    observeHostResize(host, () => { fits++; }, { settleHeight: true, roomHeight: () => height + covered });
+
+    // A draft grows a line over the terminal: the host is shorter by what the draft covers.
+    height = 643;
+    covered = 21;
+    notify?.([], {} as ResizeObserver);
+    expect(fits).toBe(1);
+    expect(task).toBeUndefined();
+
+    // The keyboard comes up under that draft: the room itself is changing.
+    height = 500;
+    notify?.([], {} as ResizeObserver);
+    height = 340;
+    notify?.([], {} as ResizeObserver);
+    expect(fits).toBe(1);
+    if (typeof task === "function") task();
+    expect(fits).toBe(2);
+
+    // The draft is sent with the keyboard still up.
+    height = 361;
+    covered = 0;
+    notify?.([], {} as ResizeObserver);
+    expect(fits).toBe(3);
+  });
 });

@@ -1,5 +1,5 @@
 import { ArrowLeftRight, ArrowRight, Columns2, Maximize, Minimize, Pencil, SlidersHorizontal, Trash2 } from "lucide-react";
-import { Fragment, useEffect, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { currentScreen, navigationStore } from "../../app/navigation-store";
 import { noticesStore, showStatus } from "../../app/notices-store";
 import { agentStatusLabel, agentTitle, type DashboardAgentCard } from "../../lib/dashboard";
@@ -16,10 +16,14 @@ import { connectionStore, networkOnline } from "../../features/connection/connec
 import { dashboardStore, liveAgents } from "../../features/dashboard/catalog-store";
 import { capabilitiesStore, operationBusy, operationCapabilities } from "../../features/operations/capabilities-store";
 import { closePane, layoutSelectedPane, renamePane } from "../../features/operations/controller";
-import { paneMenuEntries, panePosition, type BoardPaneAction, type PaneMenuGroup, type PaneMenuModel } from "../../features/board/model/pane-menu";
-import { MenuChoice } from "../../shared/ui/overlay";
+import { paneMenuEntries, panePosition, type BoardPaneAction, type PaneMenuGroup, type PaneMenuModel,
+  type PaneSwapShortcut } from "../../features/board/model/pane-menu";
+import { MenuChoice, MenuSection } from "../../shared/ui/overlay";
 import { SheetFrame, type ActionSheetController, type SheetAction } from "../../shared/ui/overlay/action-sheet";
 import { presentModal } from "../../shared/ui/overlay/modal";
+import { overlayOrigin } from "../../shared/ui/overlay/origin";
+import { deskPresentation, popoverTarget, type PopoverTarget } from "../../shared/ui/overlay/popover";
+import { liveTrigger } from "../../shared/ui/overlay/trigger";
 import { createDomainUpdates, useDomainUpdates } from "../domain-updates";
 import { openBoardResizeSheet } from "./resize-sheet";
 
@@ -64,14 +68,45 @@ function LivePaneMenu({ modal, driver }: { modal: ActionSheetController; driver:
     {(["pane", "layout", "manage"] as const).map((group) => {
       const entries = model.entries.filter((entry) => entry.group === group);
       if (!entries.length) return null;
-      return <Fragment key={group}>
-        <h3 className="menu-section-title">{t(GROUP_TITLE[group])}</h3>
+      return <MenuSection key={group} title={t(GROUP_TITLE[group])}>
         {entries.map((entry) => <MenuChoice key={entry.id} modal={modal} icon={ICON[entry.id](zoomed)} title={entry.label}
           detail={entry.reason || entry.detail} disabled={!!entry.reason} danger={entry.danger} action={driver.run(entry.id)} />)}
-      </Fragment>;
+      </MenuSection>;
     })}
     {model.notice ? <p className="board-sheet-note" role="status">{model.notice}</p> : null}
   </div>;
+}
+
+/**
+ * Where the menu opens for a mouse or the keyboard on the desk board: at the
+ * pointer for a context click on the tile, under the tile's ⋯ otherwise. Null
+ * keeps the sheet, for a finger and on the phone board.
+ */
+function menuPlace(tile: HTMLElement): PopoverTarget | null {
+  const pressed = popoverTarget("menu");
+  return pressed?.atPoint ? pressed : popoverTarget("menu", tile.querySelector(".board-pane-more"));
+}
+
+/**
+ * The control the menu was opened from, where focus goes back when the menu
+ * and whatever it opened (a rename, a confirmation, the resize steps) have
+ * closed. On a desk layout a mouse or the keyboard came from somewhere: the
+ * tile's ⋯ when that was pressed or held focus, the pane itself (its open
+ * button) for a context click or the menu key on the pane. A finger left no
+ * keyboard position on the ⋯; its menu stays with the pane, on any layout.
+ */
+function menuOpener(tile: HTMLElement): HTMLElement {
+  const open = tile.querySelector<HTMLElement>(".board-pane-open") ?? tile;
+  const more = tile.querySelector<HTMLElement>(".board-pane-more");
+  const origin = overlayOrigin();
+  if (!more || !origin?.target || origin.atPointer || !deskPresentation()) return open;
+  return more.contains(origin.target) ? more : open;
+}
+
+/** What opened the menu decides the shortcut its swap row mentions, at any width; an unknown gesture is a finger's. */
+function swapShortcut(): PaneSwapShortcut {
+  const input = overlayOrigin()?.input;
+  return input === "mouse" || input === "key" ? "keys" : "press";
 }
 
 /** Capture identity once; never select a session pane just to operate on a tile. */
@@ -83,6 +118,8 @@ export async function openBoardPaneMenu(paneId: string, _anchor: { x: number; y:
   const agent = liveAgents().find(pane => pane.paneId === paneId && pane.tabId === catalog.tabId && pane.workspaceId === catalog.workspaceId);
   if (!agent || !agent.tabId || !session || currentScreen() !== "board") return;
   const tabId = agent.tabId;
+  // Read once: presses inside the open menu are not what opened it.
+  const swapBy = swapShortcut();
   let invalidated = false;
   const valid = () => {
     const current = liveBoardCatalog();
@@ -101,7 +138,7 @@ export async function openBoardPaneMenu(paneId: string, _anchor: { x: number; y:
       : operationBusy() ? t("boardMenu.busy") : "";
     return { title: agentTitle(current), subtitle: [agentStatusLabel(current), current.tabLabel || current.tabId, panePosition(layout, paneId)]
       .filter(Boolean).join(" · "),
-      paneId, layout, disabledReason, entries: paneMenuEntries(operationCapabilities(), layout, disabledReason),
+      paneId, layout, disabledReason, entries: paneMenuEntries(operationCapabilities(), layout, disabledReason, swapBy),
       notice: noticesStore.get().notice?.text ?? "" };
   };
   const options = { valid };
@@ -119,16 +156,18 @@ export async function openBoardPaneMenu(paneId: string, _anchor: { x: number; y:
       case "close": await closePane(card(), options); break;
     }
   };
-  const trigger = tile.querySelector<HTMLElement>(".board-pane-open") ?? tile;
-  if (!tile.contains(document.activeElement)) trigger.focus({ preventScroll: true });
+  // Not every engine focuses a clicked button, and a held press focuses nothing.
+  const opener = menuOpener(tile);
+  if (document.activeElement !== opener) opener.focus({ preventScroll: true });
   highlightBoardPane(paneId, tabId);
   try {
     const initial = read();
+    const popover = menuPlace(tile);
     const modal = presentModal<SheetAction>(controller => (
-      <SheetFrame modal={controller} title={initial.title} subtitle={initial.subtitle} className="board-pane-sheet">
+      <SheetFrame modal={controller} title={initial.title} subtitle={initial.subtitle} className="board-pane-sheet" popover={popover}>
         <LivePaneMenu modal={controller} driver={{ valid, read, run }} />
       </SheetFrame>
-    ), { replaceKey: "board-pane-menu" });
+    ), { replaceKey: "board-pane-menu", returnFocus: opener });
     const action = await modal.result;
     if (action && valid()) await action();
   } finally {
@@ -138,9 +177,11 @@ export async function openBoardPaneMenu(paneId: string, _anchor: { x: number; y:
     // menu started keeps its target and only drops the menu highlight.
     if (interaction.placementKind) highlightBoardPane("", interaction.tabId);
     else if (!interaction.createdPaneId) clearBoardInteraction();
-    if (currentScreen() === "board" && !document.querySelector("dialog[open]")) {
-      if (trigger.isConnected) trigger.focus({ preventScroll: true });
-      else document.querySelector<HTMLElement>(".board-pane-open, .board-tab")?.focus({ preventScroll: true });
+    // The menu, and each dialog it opened, gave focus back to the opener as it closed. Only when
+    // that left focus nowhere (the opener did not come through what ran) does the board take it.
+    const active = document.activeElement;
+    if (currentScreen() === "board" && !document.querySelector("dialog[open]") && (!active || active === document.body)) {
+      (liveTrigger(opener) ?? document.querySelector<HTMLElement>(".board-pane-open, .board-tab"))?.focus({ preventScroll: true });
     }
   }
 }

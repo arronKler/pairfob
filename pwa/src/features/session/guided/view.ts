@@ -8,7 +8,10 @@ import { composeFocused } from "../compose-store";
 import { applyPaneRead, isAgentChat, livePaneHash, livePaneText, openPaneId, sessionStore, setPaneFollow, setPaneUnread, termSelect } from "../session-store";
 import { registerSessionView } from "../register";
 import { appRoot } from "../../../app/dom-root";
+import { hardwareKeyboard } from "../../../app/input-mode";
 import { isDesk } from "../../../app/viewport";
+import { keyboardHeldBeside, sessionMayTakeFocus } from "../focus";
+import { sessionControlHasFocus } from "../key-target";
 import { composeField, sizeCompose, syncSendButton } from "./compose";
 import { settleEcho } from "./echo";
 import { paneModel } from "./pane-model";
@@ -20,6 +23,7 @@ import {
   sessionScroll,
   stickBottom,
   syncJump,
+  termDragSelecting,
   termElement,
 } from "./term";
 import { markCaughtUp, noteSnapshot, unreadCount } from "./unread";
@@ -89,7 +93,15 @@ export function finishSessionPaint(scroll: { top: number; left: number; bottom: 
   const field = input ?? composeField();
   if (field) {
     sizeCompose(field);
-    if (composeFocused() || isDesk()) {
+    // A field that was focused keeps its focus across the repaint, unless the
+    // reader has since moved to the list or the inspector. Beside the list a
+    // hardware keyboard also types into the session without a click first,
+    // while no other column or dialog holds the keyboard. A touch field waits
+    // for its tap: focusing it raises the keys. A button of this column the
+    // reader has just pressed keeps the focus the press gave it: the files
+    // button, when the column it opened is what changed this header.
+    const pressed = sessionControlHasFocus(document.activeElement);
+    if ((composeFocused() && !keyboardHeldBeside()) || (isDesk() && hardwareKeyboard() && !pressed && sessionMayTakeFocus())) {
       field.focus({ preventScroll: true });
       const caret = field.value.length;
       field.setSelectionRange(caret, caret);
@@ -124,7 +136,7 @@ export function patchSessionScreen(): SessionPatchOutcome {
   const bound = committedBound();
   if (bound === null || !frameOwnsCanonicalOwner()) return "missing";
   // Repainting rows would collapse an in-progress text selection.
-  if (termSelect()) return "patched";
+  if (termSelect() || termDragSelecting()) return "patched";
   const following = atBottom(term);
   const left = term.scrollLeft;
   const top = term.scrollTop;

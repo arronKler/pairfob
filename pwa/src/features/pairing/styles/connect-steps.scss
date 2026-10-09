@@ -1,0 +1,147 @@
+/* --- Connect / pairing, spelled out ----------------------------------------------
+   The parts of a connect page that says what to do in steps: the numbered steps
+   with the command to run, and the card the code is typed in. The two-column
+   page places them side by side (connect-wide); a mouse in a narrow window gets
+   them in one column, the `is-stacked` page below.
+
+   A touch screen under the two-column breakpoint never renders one of these
+   classes: its page is the miniature over the scan actions, in connect.scss.
+   -------------------------------------------------------------------------------- */
+
+@mixin connect-steps {
+  .connect-steps {
+    display: grid;
+    gap: 16px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+    transition: opacity var(--dur-2) var(--ease);
+  }
+
+  /* The steps are behind the reader once the handshake runs. */
+  .connect-page:is(.is-connecting, .is-approve) .connect-steps { opacity: 0.45; }
+
+  .connect-step {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+
+  .connect-step-n {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--line-strong);
+    border-radius: 50%;
+    color: var(--muted);
+    font: 600 0.75rem/22px var(--mono);
+    text-align: center;
+  }
+
+  .connect-step-body > b {
+    display: block;
+    font-size: var(--text-lead);
+    font-weight: 600;
+    line-height: 24px;
+  }
+
+  .connect-step-note {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: var(--text-body);
+    line-height: 1.6;
+  }
+
+  .connect-command {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    max-width: 26rem;
+    margin-top: 6px;
+    padding: 0 4px 0 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--surface);
+    font: 500 0.82rem/1.4 var(--mono);
+  }
+
+  .connect-command-prompt { flex: none; color: var(--ok); }
+
+  .connect-command code {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+  }
+
+  .connect-command-copy {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 44px;
+    padding: 0 8px;
+    border-radius: 7px;
+    color: var(--muted);
+    font: 550 var(--text-secondary)/1 var(--font);
+  }
+
+  .connect-phone-note {
+    max-width: 30rem;
+    margin: 26px 0 0;
+    color: var(--muted);
+    font-size: var(--text-body);
+    line-height: 1.6;
+  }
+
+  /* --- The code card -------------------------------------------------------------- */
+
+  .connect-card {
+    display: flex;
+    flex-direction: column;
+    padding: 22px;
+    border: 1px solid var(--line-strong);
+    border-radius: 18px;
+    background: var(--surface);
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+  }
+
+  .connect-card .pair-field-head { margin: 0 0 8px; }
+
+  /* The placeholder is a sentence here, not a sample code. */
+  .connect-card input.pair-code-input::placeholder { text-transform: none; }
+
+  /* The code a running handshake is using: shown, not editable. */
+  .connect-card input.pair-code-input:read-only {
+    border-color: var(--line);
+    box-shadow: none;
+    color: var(--muted);
+  }
+
+  .connect-card .trust { margin-top: 12px; }
+
+  /* A mouse needs no finger-sized copy button, and it can hover. */
+  @media (hover: hover) and (pointer: fine) {
+    .connect-command-copy { min-height: 32px; margin-block: 3px; }
+    .connect-command-copy:hover { background: var(--surface-2); color: var(--ink); }
+  }
+
+  /* --- One column: a mouse in a narrow window ----------------------------------------
+     The steps, then the card they lead to, as one group set a little above the
+     middle of the window. A class, not a width query: the page is chosen by the
+     pointer, and a phone on its side is wide without being this page.
+     -------------------------------------------------------------------------------- */
+
+  .page.connect-page.is-stacked {
+    max-width: 28rem;
+    padding-bottom: max(8vh, calc(28px + env(safe-area-inset-bottom, 0px)));
+  }
+
+  /* Auto margins centre the group and give way first when the window is short. */
+  .is-stacked > .connect-copy { margin-top: auto; padding-top: 20px; }
+  .is-stacked > .connect-phone-note { margin: 18px 2px auto; }
+
+  /* Two lines are always reserved, so a shorter stage lede moves nothing. */
+  .is-stacked .connect-lede { min-height: 3.2em; }
+
+  .is-stacked > .connect-card { margin-top: 26px; }
+}

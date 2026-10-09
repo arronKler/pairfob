@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetChatDOM } from "../../../../test-support/chat-dom";
 import { beforeEach, afterEach, describe, expect, test } from "bun:test";
 import { act } from "react";
@@ -279,10 +280,10 @@ describe("async prompt results stay on the originating request", () => {
         const priorReads = snapshots;
         finish();
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
-        expect(app.querySelector("textarea") === input).toBe(true);
+        expectSameNode(app.querySelector("textarea"), input);
         expect(input.value).toBe("B 中文输入中");
         expect([input.selectionStart, input.selectionEnd]).toEqual([2, 5]);
-        expect(input.ownerDocument.activeElement === input).toBe(true);
+        expectSameNode(input.ownerDocument.activeElement, input);
         expect(openPaneId()).toBe("p2");
         expect(operationBusy()).toBe(false);
         expect(composeIME()).toBe(true);
@@ -329,7 +330,7 @@ describe("async prompt results stay on the originating request", () => {
     expect(trace().agentTraceNote).not.toContain("delayed response for pane A");
     expect(visibleNotice()).toBeNull();
     expect(operationBusy()).toBe(false);
-    expect(document.activeElement).toBe(focusedBefore);
+    expectSameNode(document.activeElement, focusedBefore);
     expect(readStoredDraft({ daemonId: "daemon-a", paneId: "p1", mode: "agent" }).text).toBe(
       "Prompt intended for pane A",
     );
@@ -371,7 +372,7 @@ describe("async prompt results stay on the originating request", () => {
     await Promise.resolve();
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(openPaneId()).toBe("p2");
-    expect(field()).toBe(input);
+    expectSameNode(field(), input);
     expect(input.value).toBe(beforeValue);
     expect(input.selectionStart).toBe(beforeStart);
     expect(input.selectionEnd).toBe(beforeEnd);

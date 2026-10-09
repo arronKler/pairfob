@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   groupAgents,
+  holdActivation,
   nextTouchedAt,
   paneIsPinned,
   parseListGroup,
@@ -114,11 +115,12 @@ describe("groupAgents", () => {
     expect(groups[0].items.map((item) => item.paneId)).toEqual(["a", "c"]);
   });
 
-  test("parseListGroup fails closed to a flat list", () => {
-    expect(parseListGroup(null)).toBe("flat");
+  test("parseListGroup defaults to workspace grouping and keeps a stored choice", () => {
+    expect(parseListGroup(null)).toBe("space");
     expect(parseListGroup("space")).toBe("space");
     expect(parseListGroup("agent")).toBe("agent");
-    expect(parseListGroup("needs")).toBe("flat");
+    expect(parseListGroup("flat")).toBe("flat");
+    expect(parseListGroup("needs")).toBe("space");
   });
 
   test("pinned sessions form a top section and leave their original groups", () => {
@@ -173,5 +175,29 @@ describe("group collapse", () => {
       "agent:codex": true,
       unbound: true,
     });
+  });
+});
+
+describe("held list order", () => {
+  test("a list that stays on screen keeps the order it was built with", () => {
+    const first = holdActivation(null, "mac", { a: 10, b: 20 }, ["a", "b", "c"]);
+    expect(first.stamps).toEqual({ a: 10, b: 20 });
+    // The reader opens `a` and then `c`: the live record moves, the held one does not.
+    const later = holdActivation(first, "mac", { a: 30, b: 20, c: 40 }, ["a", "b", "c"]);
+    expect(later).toBe(first);
+    expect(rankAgents(sample.slice(0, 3), later.stamps).map((agent) => agent.paneId)).toEqual(["b", "a", "c"]);
+  });
+
+  test("a pane that turns up later joins with the stamp it has then, and keeps it", () => {
+    const first = holdActivation(null, "mac", { a: 10 }, ["a"]);
+    const joined = holdActivation(first, "mac", { a: 50, b: 60 }, ["a", "b", "c"]);
+    expect(joined.stamps).toEqual({ a: 10, b: 60 });
+    expect(holdActivation(joined, "mac", { a: 50, b: 70, c: 80 }, ["a", "b", "c"])).toBe(joined);
+  });
+
+  test("building the list again adopts the reader's latest opens", () => {
+    const first = holdActivation(null, "mac\u0000flat", { a: 10 }, ["a", "b"]);
+    const regrouped = holdActivation(first, "mac\u0000space", { a: 10, b: 90 }, ["a", "b"]);
+    expect(regrouped.stamps).toEqual({ a: 10, b: 90 });
   });
 });

@@ -1,5 +1,5 @@
 import { pickResumeCredential } from "../lib/computer-catalog";
-import { bindRippleSurface, hasOpenDialog } from "../lib/dom";
+import { bindRippleSurface } from "../lib/dom";
 import { bindLegacyGestureBoundary } from "../lib/gesture-boundary";
 import { detectLang, initI18n, langPref, setLang, t } from "../lib/i18n";
 import { messageOf } from "../lib/notices";
@@ -10,7 +10,6 @@ import { preloadFullTerminalXterm } from "../features/session/full-terminal/full
 import { handleFullTerminalVisibility } from "../features/session/full-terminal/full-terminal";
 import { initSwipeBack } from "../features/session/pane-actions";
 import { restoreAgentReadingPosition } from "../features/session/chat/agent-chat-controller";
-import { handlePaneKey } from "../features/session/guided/compose";
 import { revealCaretRow, stickBottom } from "../features/session/guided/term";
 import { resumeComputer } from "../features/computers/actions";
 import {
@@ -43,14 +42,16 @@ import {
 } from "../features/connection/connection-store";
 import { currentScreen } from "./navigation-store";
 import { clearNotice, showError, showStatus } from "./notices-store";
-import { isAgentChat, isFullTerminal, paneFollow, termSelect } from "../features/session/session-store";
+import { isAgentChat, isFullTerminal, paneFollow } from "../features/session/session-store";
 import { resetTransitionState, takeTransition, withTransition } from "./transition";
-import { bindVisualViewport, releaseVisualViewport } from "./viewport";
+import { bindVisualViewport, releaseVisualViewport, DESK_QUERY, ROOMY_QUERY, WIDE_QUERY } from "./viewport";
 import { bindBootRecovery } from "./boot-actions";
+import { bindPaneKeys } from "./pane-keys";
 import { createReachability, type Reachability } from "./reachability";
 import { forgetSavedComputerCount } from "../lib/credentials";
 import type { OriginConfig } from "../lib/origin-config";
 import { recordConnectionDiagnostic } from "../lib/protocol/connection-diagnostics";
+import { bindOverlayOrigin } from "../shared/ui/overlay/origin";
 import { bindNotificationLinks } from "./notification-links";
 
 /**
@@ -233,6 +234,9 @@ export function startApplication(): () => void {
     releases.push(bindLegacyGestureBoundary(document));
     releases.push(bindRippleSurface(document));
     bindPaneKeys(signal);
+    // Menus present by what opened them (mouse, finger or key), so the page
+    // keeps the latest press for the overlay layer to read.
+    releases.push(bindOverlayOrigin(document));
     releases.push(initSwipeBack());
     registerServiceWorkerAfterLoad(signal);
     void boot(generation);
@@ -328,33 +332,17 @@ function bindNetworkLifecycle(signal: AbortSignal): void {
 }
 
 function bindResponsiveLayout(signal: AbortSignal): void {
-  const media = window.matchMedia("(min-width: 900px)");
-  const onDeskChange = (): void => {
+  const onTierChange = (): void => {
     if (currentPhase() === "live") commitBootView();
   };
-  media.addEventListener("change", onDeskChange, { signal });
-  // Some engines ignore the signal option on MediaQueryList; release the exact
-  // listener so a stopped application can never commit from a resize.
-  signal.addEventListener("abort", () => media.removeEventListener("change", onDeskChange), { once: true });
-}
-
-export function bindPaneKeys(signal: AbortSignal): void {
-  document.addEventListener("keydown", (event) => {
-    if (currentPhase() !== "live" || currentScreen() !== "pane" || termSelect() || isFullTerminal() || isAgentChat()) return;
-    if (event.defaultPrevented) return;
-    // A native modal dialog is open: never forward typing keys to the pane. This
-    // is checked before the target guard because focus can drop to <body> (the
-    // Insert All/focused button being disabled), so an ESC or printable key must
-    // not leak into the PTY — native Escape keeps closing the top modal.
-    if (hasOpenDialog()) return;
-    const target = event.target;
-    if (
-      target instanceof HTMLElement &&
-      target.closest("button, a, input, textarea, select, summary, dialog, [role='button'], [contenteditable='true']")
-    )
-      return;
-    handlePaneKey(event, false);
-  }, { signal });
+  // The list beside the page, the inspector beside the session, and all three side by side.
+  for (const query of [DESK_QUERY, ROOMY_QUERY, WIDE_QUERY]) {
+    const media = window.matchMedia(query);
+    media.addEventListener("change", onTierChange, { signal });
+    // Some engines ignore the signal option on MediaQueryList; release the exact
+    // listener so a stopped application can never commit from a resize.
+    signal.addEventListener("abort", () => media.removeEventListener("change", onTierChange), { once: true });
+  }
 }
 
 async function boot(generation: number): Promise<void> {

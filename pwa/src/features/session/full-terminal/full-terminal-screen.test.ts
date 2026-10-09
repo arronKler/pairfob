@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { resolveCopy, setLang, t } from "../../../lib/i18n";
 import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { happy } from "../../../../test-support/dom";
@@ -213,9 +214,9 @@ describe("react complete-terminal shell", () => {
       syncFullTerminalChrome();
     });
     expect((app.querySelector(".icon-stop")) === null).toBeTrue();
-    expect(app.querySelector(".full-terminal-host") === host).toBeTrue();
-    expect(app.querySelector(".full-terminal-canvas") === canvas).toBeTrue();
-    expect(app.querySelector(".xterm-helper-textarea") === field).toBeTrue();
+    expectSameNode(app.querySelector(".full-terminal-host"), host);
+    expectSameNode(app.querySelector(".full-terminal-canvas"), canvas);
+    expectSameNode(app.querySelector(".xterm-helper-textarea"), field);
     stop();
     expect(paints.length).toBeGreaterThan(0);
   });
@@ -261,8 +262,8 @@ describe("react complete-terminal shell", () => {
       });
     }
     stop();
-    expect(app.querySelector(".full-terminal-host") === host).toBeTrue();
-    expect(app.querySelector(".xterm-helper-textarea") === field).toBeTrue();
+    expectSameNode(app.querySelector(".full-terminal-host"), host);
+    expectSameNode(app.querySelector(".xterm-helper-textarea"), field);
     expect(views).toBe(afterFirst);
   });
 
@@ -310,7 +311,7 @@ describe("react complete-terminal shell", () => {
         onRetry: () => undefined,
         scroll: () => undefined,
         pageLines: () => 23,
-        controls: { sendKey: () => undefined, sendCompose: () => false, desk: false,
+        controls: { sendKey: () => undefined, sendCompose: () => false, hardwareKeyboard: false,
           keyboard: { open() {}, close() {}, toggle() {}, isOpen: () => false } },
       }));
     });
@@ -335,6 +336,6 @@ test("language changes update the memoized host labels without replacing the ter
   act(() => setLang("en"));
   expect(app.querySelector(".full-terminal-host")?.getAttribute("aria-label")).toBe(t("title.terminal"));
   expect(app.querySelector(".full-terminal-scroll")?.getAttribute("aria-label")).toBe(t("keys.scrollAria"));
-  expect(app.querySelector(".full-terminal-canvas")).toBe(canvas);
-  expect(app.querySelector(".xterm")).toBe(terminal);
+  expectSameNode(app.querySelector(".full-terminal-canvas"), canvas);
+  expectSameNode(app.querySelector(".xterm"), terminal);
 });

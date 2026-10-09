@@ -9,6 +9,7 @@ import type { ListWorktreesInput, OperationCapability } from "../../lib/operatio
 import type { LiveSession } from "../../lib/protocol/session-types";
 import { ProtocolError } from "../../lib/protocol/errors";
 import { messageOf } from "../../lib/notices";
+import type { SheetOutcome } from "./operation-form-model";
 import {
   ownsComputer,
   ownsOperationView,
@@ -114,6 +115,23 @@ export async function reportOwnedError(
   if (!stillOwns(owner, ports)) return;
   showError(messageOf(error), owner.scope);
   ports.commitView();
+}
+
+/** A form's operation that never ran (offline, busy or superseded): its own disabled reason already says so. */
+export const NOT_RUN: SheetOutcome = { ok: false, message: "" };
+
+/**
+ * Run a notice-reporting operation for a form that stays open: `done` marks
+ * success from inside the operation's `after`; a failure is the error notice
+ * the runner raised meanwhile.
+ */
+export async function sheetOutcome(run: (done: () => void) => Promise<void>): Promise<SheetOutcome> {
+  const before = noticesStore.get().notice;
+  let ok = false;
+  await run(() => { ok = true; });
+  if (ok) return { ok: true };
+  const notice = noticesStore.get().notice;
+  return { ok: false, message: notice && notice !== before && notice.tone === "error" ? notice.text : "" };
 }
 
 export { operationOwner, ownsComputer, ownsOperationView, type OperationOwner };

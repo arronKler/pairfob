@@ -171,6 +171,13 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
+/* 36px of ink, 44px of target: a finger's hit area reaches into the strip's
+   own padding and margin, and stops short of the header and the list. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .workspace-tab { position: relative; }
+  .workspace-tab::after { content: ""; position: absolute; inset: -4px 0; }
+}
+
 .workspace-count {
   min-width: 20px;
   padding: 1px 6px;
@@ -263,6 +270,12 @@
 }
 .workspace-feedback-bar p { flex: 1; min-width: 0; color: #ffb0a8; font-size: var(--text-caption); }
 .workspace-feedback-bar .btn { flex: none; width: auto; min-height: 36px; padding: 0 12px; font-size: var(--text-caption); }
+/* A small button (36px) in the bar's 10px of padding, or under the pane's
+   message with 14px between them: a finger's 44px stays clear of both. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .workspace-feedback .btn { position: relative; }
+  .workspace-feedback .btn::after { content: ""; position: absolute; inset: min(0px, calc(50% - 22px)) 0; }
+}
 
 .workspace-limit {
   margin: 0;

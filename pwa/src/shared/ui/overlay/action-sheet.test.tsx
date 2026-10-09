@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
@@ -55,7 +56,7 @@ test("a later backdrop click dismisses and restores the triggering control", asy
   act(() => showActionSheet("Actions", modal => <MenuItem modal={modal}>Cancel</MenuItem>));
   await act(async () => { await pause(410); sheet().click(); await Promise.resolve(); });
   expect(document.querySelector("dialog.sheet")).toBeNull();
-  expect(document.activeElement === trigger).toBeTrue();
+  expectSameNode(document.activeElement, trigger);
   trigger.remove();
 });
 
@@ -98,7 +99,7 @@ test("a pushed page replaces the body inside the same dialog and Back or Escape 
   const dialog = sheet();
   expect(dialog.querySelector(".sheet-subtitle")?.textContent).toBe("api-server");
   act(() => dialog.querySelector<HTMLButtonElement>(".menu-row")!.click());
-  expect(sheet()).toBe(dialog);
+  expectSameNode(sheet(), dialog);
   expect(dialog.querySelector("h2")?.textContent).toBe("Details");
   expect(dialog.querySelector(".sheet-subtitle")).toBeNull();
   expect(document.activeElement?.textContent).toBe("Inside");

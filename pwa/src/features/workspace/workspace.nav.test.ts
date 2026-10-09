@@ -534,7 +534,7 @@ describe("mobile workspace navigation", () => {
     act(() => buttonNamed("更多操作").click());
     await settle();
     const close = [...document.querySelectorAll<HTMLButtonElement>("dialog.sheet .menu-row")]
-      .find((row) => row.textContent?.includes("关闭工作区"));
+      .find((row) => row.textContent?.includes("关闭文件与更改"));
     expect(close).toBeTruthy();
     await actRun(async () => {
       close!.click();

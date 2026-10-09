@@ -5,7 +5,7 @@ import { resetBoardTestDOM } from "../../../test-support/dom";
 import { mountTestApp, commitTest, unmountTestApp } from "../../../test-support/react-harness";
 import { appRoot } from "../../app/dom-root";
 import { setPhase } from "../connection/connection-store";
-import { setScreen } from "../../app/navigation-store";
+import { currentScreen, setScreen } from "../../app/navigation-store";
 import { selectPane } from "../session/session-store";
 import { applyCapabilities } from "../operations/capabilities-store";
 import { attachLiveSession } from "../computers/catalog-store";
@@ -48,7 +48,10 @@ async function settle(): Promise<void> {
   await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, 0)); });
 }
 
-async function boot(live: ReturnType<typeof liveFixture>, options: { prompt_agent: boolean; hasAgent: boolean }): Promise<void> {
+async function boot(
+  live: ReturnType<typeof liveFixture>,
+  options: { prompt_agent: boolean; hasAgent: boolean; returnView?: "guided" | "full" | "agent" },
+): Promise<void> {
   await act(async () => {
     setLang("zh");
     setPhase("live");
@@ -67,7 +70,7 @@ async function boot(live: ReturnType<typeof liveFixture>, options: { prompt_agen
     attachLiveSession(live as never);
     mountTestApp();
     commitTest();
-    await enterWorkspace("p1");
+    await enterWorkspace("p1", options.returnView);
   });
 }
 
@@ -166,6 +169,69 @@ describe("React diff notes", () => {
     expect(sent[0]?.text).toContain("为什么是 false？");
     expect(diffNotesFor("src/app.ts", "worktree")).toHaveLength(0);
     expect(appRoot().querySelector(".workspace-notes-send")).toBeNull();
+  });
+
+  // Back, the ⋯ menu's close row and the receipt's chip all leave for the view
+  // the screen was opened from, and say which.
+  for (const [returnView, back, action] of [
+    ["agent", "返回对话", "返回对话"],
+    ["guided", "返回终端", "返回终端"],
+    ["full", "返回终端", "返回终端"],
+  ] as const) {
+    test(`opened from the ${returnView} view, every way out names it`, async () => {
+      const live = liveFixture(async () => ({ operation_id: "op-1" }));
+      await boot(live, { prompt_agent: true, hasAgent: true, returnView });
+      expect(appRoot().querySelector(".workspace-chrome .back")?.getAttribute("aria-label")).toBe(back);
+      await act(async () => { await loadGitDiff("src/app.ts", "worktree"); });
+      await act(() => { appRoot().querySelector<HTMLButtonElement>(".workspace-detail-more")!.click(); });
+      const menu = document.querySelector<HTMLDialogElement>("dialog.workspace-file-menu")!;
+      const close = [...menu.querySelectorAll(".menu-row-label")].find((label) => label.textContent?.includes("关闭文件与更改"));
+      expect(close?.querySelector("small")?.textContent).toBe(action);
+      await act(async () => { menu.close("cancel"); });
+      await settle();
+      await addNote(rowContaining("false"), "为什么是 false？");
+      await act(async () => { appRoot().querySelector<HTMLButtonElement>(".workspace-notes-send")!.click(); });
+      await settle();
+      await settle();
+      expect(appRoot().querySelector(".workspace-notes-bar.is-sent .workspace-notes-terminal")?.textContent).toBe(action);
+    });
+  }
+
+  test("the receipt's way back pressed twice leaves once, and the second press reaches nothing on the session", async () => {
+    await boot(liveFixture(async () => ({ operation_id: "op-1" })), { prompt_agent: true, hasAgent: true });
+    await act(async () => { await loadGitDiff("src/app.ts", "worktree"); });
+    await addNote(rowContaining("false"), "为什么是 false？");
+    await act(async () => { appRoot().querySelector<HTMLButtonElement>(".workspace-notes-send")!.click(); });
+    await settle();
+    await settle();
+    const view = appRoot().ownerDocument.defaultView!;
+    const at = { clientX: 292, clientY: 759 };
+    const chip = appRoot().querySelector<HTMLButtonElement>(".workspace-notes-terminal")!;
+    await act(async () => {
+      chip.dispatchEvent(new view.PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true, ...at }));
+      chip.dispatchEvent(new view.MouseEvent("click", { bubbles: true, cancelable: true, detail: 1, ...at }));
+    });
+    await settle();
+    expect(currentScreen()).toBe("pane");
+    // The session's key row stands where the chip was, and a key there is sent as it is
+    // pressed: neither the press nor its click may reach it.
+    const under = document.createElement("button");
+    appRoot().append(under);
+    const heard: string[] = [];
+    const hear = (event: Event) => heard.push(event.type);
+    under.addEventListener("pointerdown", hear);
+    under.addEventListener("click", hear);
+    const press = new view.PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, ...at });
+    under.dispatchEvent(press);
+    expect(press.defaultPrevented).toBeTrue();
+    expect(under.dispatchEvent(new view.MouseEvent("click", { bubbles: true, cancelable: true, detail: 1, ...at }))).toBeFalse();
+    expect(heard).toEqual([]);
+    // A press somewhere else is the reader's own, at once.
+    const elsewhere = { clientX: at.clientX - 200, clientY: at.clientY - 300 };
+    under.dispatchEvent(new view.PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, ...elsewhere }));
+    under.dispatchEvent(new view.MouseEvent("click", { bubbles: true, cancelable: true, detail: 1, ...elsewhere }));
+    expect(heard).toEqual(["pointerdown", "click"]);
+    under.remove();
   });
 
   test("a second send while the first is in flight does not unlock the batch", async () => {

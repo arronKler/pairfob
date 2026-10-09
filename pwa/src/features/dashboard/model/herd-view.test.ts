@@ -6,6 +6,7 @@ import { PINNED_GROUP_ID } from "../../../lib/ranking";
 import {
   blockedElsewhere,
   buildHerdViewModel,
+  canCreateSession,
   herdAgo,
   herdCardClassName,
   herdCardPill,
@@ -57,7 +58,6 @@ function input(overrides: Partial<HerdModelInput> = {}): HerdModelInput {
     runtimeKind: "herdr",
     createConversation: false,
     operationBusy: false,
-    computerCount: 1,
     morphingPaneId: null,
     host: { name: "studio", line: "connected", tone: "live" },
     createTab: true,
@@ -171,7 +171,7 @@ describe("herd list projection", () => {
     expect(view.stagger).toBe(true);
   });
 
-  test("unverifiable status does not claim fresh attention counts", () => {
+  test("unverifiable status does not claim fresh attention", () => {
     const view = buildHerdViewModel(input({
       agents: [agent("p1", "alpha", "done")],
       status: { tone: "warn", text: t("chrome.unverifiable") },
@@ -179,28 +179,51 @@ describe("herd list projection", () => {
       connected: false,
     }));
     expect(view.status).toEqual({ tone: "warn", text: t("chrome.unverifiable") });
-    expect(view.doneCount).toBe(0);
-    expect(view.pendingCount).toBe(0);
+    expect(view.attention).toEqual([]);
     expect(view.groups[0].cards[0].className).toContain("unverifiable");
   });
 });
 
 describe("herd chrome gates", () => {
-  test("create follows its capability, then busy and connection", () => {
+  test("create follows its capability, then whether a session can be started now", () => {
     expect(buildHerdViewModel(input()).create).toBeNull();
     const advertised = buildHerdViewModel(input({ createConversation: true }));
     expect(advertised.create).toEqual({ label: t("home.new"), aria: t("home.newAria"), disabled: false });
+    expect(advertised.creatable).toBe(true);
     expect(buildHerdViewModel(input({ createConversation: true, operationBusy: true })).create)
       .toEqual({ label: t("home.creating"), aria: t("home.newAria"), disabled: true });
-    expect(buildHerdViewModel(input({ createConversation: true, connected: false })).create?.disabled).toBe(true);
+    const blocked = (overrides: Partial<HerdModelInput>) => {
+      const view = buildHerdViewModel(input({ createConversation: true, ...overrides }));
+      expect(view.create?.disabled).toBe(!view.creatable);
+      return !view.creatable;
+    };
+    // The connection is down, or this device is offline: nothing can be confirmed.
+    expect(blocked({ connected: false, liveness: "unverifiable" })).toBe(true);
+    expect(blocked({ networkOnline: false, liveness: "unverifiable" })).toBe(true);
+    // Connected, and Herdr did not answer or is not running.
+    expect(blocked({ runtimeKind: "", liveness: "unverifiable" })).toBe(true);
+    expect(blocked({ runtimeKind: "offline", liveness: "exited" })).toBe(true);
+    // Still being read: the runtime first, then the first snapshot.
+    expect(blocked({ runtimeKind: "", liveness: "unverifiable", reading: true })).toBe(true);
+    expect(blocked({ snapshotLoaded: false })).toBe(true);
+    // Rows that outlived Herdr's answer do not make it possible either.
+    expect(blocked({ agents: [agent("p1", "w1")], runtimeKind: "", liveness: "unverifiable" })).toBe(true);
+    expect(blocked({ agents: [agent("p1", "w1")] })).toBe(false);
   });
 
-  test("the computers link needs a second computer; board and settings are always there", () => {
-    expect(buildHerdViewModel(input()).computers).toBeNull();
-    expect(buildHerdViewModel(input({ computerCount: 2 })).computers).toEqual({ label: t("home.computers") });
+  test("one predicate: live, read and idle", () => {
+    expect(canCreateSession({ liveness: "live", loading: false, operationBusy: false })).toBe(true);
+    expect(canCreateSession({ liveness: "live", loading: true, operationBusy: false })).toBe(false);
+    expect(canCreateSession({ liveness: "live", loading: false, operationBusy: true })).toBe(false);
+    expect(canCreateSession({ liveness: "unverifiable", loading: false, operationBusy: false })).toBe(false);
+    expect(canCreateSession({ liveness: "exited", loading: false, operationBusy: false })).toBe(false);
+  });
+
+  test("board and settings are always there", () => {
     const view = buildHerdViewModel(input());
     expect(view.board).toEqual({ label: t("home.board"), current: false });
-    expect(view.settings).toEqual({ label: t("home.settings") });
+    expect(view.settings).toEqual({ label: t("home.settings"), current: false });
+    expect(buildHerdViewModel(input({ settingsOpen: true })).settings.current).toBe(true);
   });
 
   test("the board beside the rail makes its link current and marks its tab's rows", () => {
@@ -250,7 +273,6 @@ describe("phone list projection", () => {
     expect(sh.statusLabel).toBe("");
     expect(sh.blocked).toBe(false);
     expect(view.attention.map((item) => item.paneId)).toEqual(["wait"]);
-    expect(view.pendingCount).toBe(1);
   });
 
   test("the needs-you list puts waiting first, then the newest unread completions", () => {
@@ -259,7 +281,6 @@ describe("phone list projection", () => {
       paneTouched: { old: 1, new: 5, wait: 2 },
     }));
     expect(view.attention.map((item) => `${item.kind}:${item.paneId}`)).toEqual(["blocked:wait", "done:new", "done:old"]);
-    expect(view.doneCount).toBe(2);
   });
 
   test("workspace groups carry the root path, marks and the create-tab gate", () => {

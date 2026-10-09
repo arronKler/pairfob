@@ -1,5 +1,6 @@
 import { locale, t } from "../../lib/i18n";
 import type { GitChange, GitChangeKind, GitLayer, WorkspaceRepository } from "../../lib/workspace";
+import type { WorkspaceReturnView } from "./model";
 
 let modifiedDateLocale = "";
 let modifiedDateFormatter: Intl.DateTimeFormat | null = null;
@@ -17,6 +18,21 @@ export function formatModified(value: number): string {
     modifiedDateFormatter = new Intl.DateTimeFormat(activeLocale, { month: "short", day: "numeric" });
   }
   return modifiedDateFormatter.format(new Date(value));
+}
+
+/**
+ * Where leaving the workspace screen lands. The screen returns to the view it
+ * was opened from, so its ways out name that view: the conversation, or the
+ * terminal (guided control and the complete terminal alike). The view is fixed
+ * when the screen opens; nothing changes it underneath.
+ */
+export function backLabel(returnView: WorkspaceReturnView): string {
+  return t(returnView === "agent" ? "workspace.backChat" : "workspace.back");
+}
+
+/** The same destination as a visible action: the receipt's chip, the menu row's detail. */
+export function returnLabel(returnView: WorkspaceReturnView): string {
+  return t(returnView === "agent" ? "workspace.backToChat" : "workspace.backToTerminal");
 }
 
 export function branchLabel(git: WorkspaceRepository | null | undefined): string {

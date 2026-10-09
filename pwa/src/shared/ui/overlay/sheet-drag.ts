@@ -1,13 +1,20 @@
 import { haptic } from "../dom/feedback";
 import { prefersReducedMotion } from "../dom/motion";
+import { CARD } from "./desk-form";
 
 /**
  * Drag-to-dismiss for bottom sheets.
  *
  * The close button sits in the top-right corner, which is exactly where a thumb
  * cannot reach on a phone held in one hand. Below the desk breakpoint the modal
- * is already a bottom sheet (see `settings.scss`), so a downward drag there means
+ * is already a bottom sheet (see `overlay.scss`), so a downward drag there means
  * "put it away" — the same gesture both mobile platforms train.
+ *
+ * A dialog a mouse or the keyboard opened beside the list is a card below that
+ * width too (`desk-form`). Nothing here applies to it for as long as it is one:
+ * it is asked on every gesture and every time its class changes, because a
+ * window dragged down to the phone layout turns the open card into the sheet,
+ * and widening it again turns the sheet back into the card.
  */
 
 /** Only below this width is the modal a bottom sheet, so only there can it be dragged down. */
@@ -61,11 +68,28 @@ export type SheetDrag = {
   detents?: { expanded(): boolean; set(expanded: boolean): void };
 };
 
+/**
+ * The sheets that hold the page back right now. A sheet may open over another
+ * as its next step (`DIALOG_STEP`): the page stays back until the last of them
+ * lets go, so putting the step away leaves the first one's page where it was.
+ */
+const holding = new Set<HTMLDialogElement>();
+
+function holdPage(dialog: HTMLDialogElement, held: boolean): void {
+  if (held) holding.add(dialog);
+  else holding.delete(dialog);
+  // A sheet that went away without its close being heard holds nothing.
+  for (const other of holding) if (!other.isConnected || !other.open) holding.delete(other);
+  document.body.classList.toggle("sheet-open", holding.size > 0);
+}
+
 export function bindSheetDrag({ dialog, form, scroller, close, detents }: SheetDrag): () => void {
   const bindings = new AbortController();
   const signal = bindings.signal;
   let retired = false;
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
+  /** This sheet is what holds the page back. */
+  let receded = false;
   const cleanup = () => {
     if (retired) return;
     retired = true;
@@ -73,16 +97,11 @@ export function bindSheetDrag({ dialog, form, scroller, close, detents }: SheetD
     clearTimeout(closeTimer);
     form.classList.remove("is-sheet-dragging", "is-sheet-closing");
     form.style.transform = "";
-    document.body.classList.remove("sheet-open", "sheet-dragging");
+    // Only what this sheet pushed back comes forward: another one may still be up.
+    if (receded) holdPage(dialog, false);
+    document.body.classList.remove("sheet-dragging");
     document.body.style.removeProperty("--sheet-lift");
   };
-  // The page behind recedes for as long as the sheet is up. The class rides the
-  // dialog's own lifecycle so no caller has to remember to clear it.
-  queueMicrotask(() => {
-    if (!retired && dialog.open) document.body.classList.add("sheet-open");
-  });
-  dialog.addEventListener("close", cleanup, { signal });
-
   let startY = 0;
   let startX = 0;
   let lastY = 0;
@@ -103,6 +122,27 @@ export function bindSheetDrag({ dialog, form, scroller, close, detents }: SheetD
     form.style.transform = "";
     lift(1);
   };
+
+  // The page behind recedes for as long as the sheet is up. The class rides the
+  // dialog's own lifecycle so no caller has to remember to clear it. A card
+  // leaves the page where it is; its owner can hand it to the sheet and take it
+  // back, and a drag caught by that change is let go where it started.
+  const present = () => {
+    if (retired || !dialog.open) return;
+    const card = dialog.matches(CARD);
+    if (card === !receded) return;
+    receded = !card;
+    holdPage(dialog, receded);
+    if (!card) return;
+    tracking = false;
+    if (engaged) settle();
+    engaged = false;
+  };
+  queueMicrotask(present);
+  const presented = typeof MutationObserver === "function" ? new MutationObserver(present) : null;
+  presented?.observe(dialog, { attributes: true, attributeFilter: ["class"] });
+  signal.addEventListener("abort", () => presented?.disconnect());
+  dialog.addEventListener("close", cleanup, { signal });
 
   const dismiss = () => {
     form.classList.remove("is-sheet-dragging");
@@ -130,7 +170,7 @@ export function bindSheetDrag({ dialog, form, scroller, close, detents }: SheetD
   dialog.addEventListener(
     "touchstart",
     (event) => {
-      if (!window.matchMedia(PHONE).matches || event.touches.length !== 1) return;
+      if (!window.matchMedia(PHONE).matches || dialog.matches(CARD) || event.touches.length !== 1) return;
       const target = event.target as Element | null;
       // Typing in an operation dialog must not be interrupted by a drag.
       if (target?.closest?.("input, textarea, select")) return;

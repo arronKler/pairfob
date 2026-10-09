@@ -82,6 +82,9 @@
   }
 
   .topbar-create:active:not(:disabled)::after { background: rgba(110, 168, 254, 0.2); }
+  /* The keyboard's ring goes round the chip that is drawn, not the taller target around it. */
+  .topbar-create:focus-visible { outline: none; }
+  .topbar-create:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .topbar-create:disabled { opacity: 0.4; }
 }

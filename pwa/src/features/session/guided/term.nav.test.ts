@@ -141,10 +141,10 @@ describe("guided pane no longer overlays earlier output", () => {
     expect(app.querySelector(".term")).toBeTruthy();
     expect(app.querySelector(".full-terminal-scroll")).toBeTruthy();
     expect([...app.querySelectorAll(".full-terminal-scroll-btn")].map((el) => el.getAttribute("aria-label"))).toEqual([
-      "鼠标滚轮向上",
+      "向上滚动",
       "上一页",
       "下一页",
-      "鼠标滚轮向下",
+      "向下滚动",
     ]);
   });
 
@@ -207,8 +207,8 @@ describe("control-mode TUI page rail", () => {
       commitView();
     });
     const rail = [...app.querySelectorAll(".full-terminal-scroll-btn")] as HTMLButtonElement[];
-    const wheelUp = rail.find((el) => el.getAttribute("aria-label") === "鼠标滚轮向上");
-    const wheelDown = rail.find((el) => el.getAttribute("aria-label") === "鼠标滚轮向下");
+    const wheelUp = rail.find((el) => el.getAttribute("aria-label") === "向上滚动");
+    const wheelDown = rail.find((el) => el.getAttribute("aria-label") === "向下滚动");
     if (!wheelUp || !wheelDown) throw new Error("missing wheel buttons");
     const tap = () =>
       new PointerEvent("pointerdown", { pointerId: 1, isPrimary: true, button: 0, bubbles: true, cancelable: true });

@@ -7,7 +7,7 @@ import { composeDraft, setComposeDraft } from "../features/session/compose-store
 import { selectPane, setAgentChat, setFullTerminal, setTermSelect } from "../features/session/session-store";
 import { attachLiveSession } from "../features/computers/catalog-store";
 import { setLang } from "../lib/i18n";
-import { bindPaneKeys } from "./bootstrap";
+import { bindPaneKeys } from "./pane-keys";
 import { dropQueuedKeys, flushKeys } from "../features/session/guided/keys";
 
 /**

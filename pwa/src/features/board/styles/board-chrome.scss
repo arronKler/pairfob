@@ -2,8 +2,8 @@
    The board's header, tab strip and zoom control, in the session list's
    grammar: the host title (workspace over path and counts), a scrollable
    segmented strip of tabs beside a square "+", and zoom that stays out of the
-   way — a pill on a phone only once the camera left the fit, a small bar on the
-   desk. Declared after the canvas styles so these rules settle the chrome.
+   way — a pill on a phone only once the camera left the fit, a small bar in the
+   desk shell. Declared after the canvas styles so these rules settle the chrome.
    ------------------------------------------------------------------------------ */
 
 .board-shell .board-chrome {
@@ -16,7 +16,8 @@
   background: var(--bg);
 }
 
-.board-shell .board-chrome:has(> .back) { padding-left: 6px; }
+.board-shell .board-chrome:has(> .back),
+.board-shell .board-chrome:has(> .chrome-back) { padding-left: 6px; }
 
 .board-title { flex: 1 1 auto; min-width: 0; }
 .board-title.is-static { cursor: default; }
@@ -25,6 +26,14 @@
 .board-title-line > * + *::before { content: "·"; margin: 0 5px; color: var(--muted); font-weight: 400; }
 .board-title-path { font-size: var(--text-caption); }
 .board-mark { font-weight: 650; }
+
+/* A workspace in the switcher says what the header says of the one on show:
+   its path, then who waits and what is done, a dot between each. The path is
+   the part that gives way on a narrow sheet; the marks are never cut. */
+.board-space-line { display: flex; align-items: baseline; min-width: 0; }
+.board-space-line > * { flex: none; }
+.board-space-line > * + *::before { content: "·"; margin: 0 5px; color: var(--muted); font-weight: 400; }
+.board-space-line > .board-space-path { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .board-mark.is-blocked { color: var(--warn); }
 .board-mark.is-done { color: var(--ok); }
 
@@ -86,6 +95,96 @@
   color: var(--ink);
 }
 .board-shell .board-tab-new:disabled { opacity: 0.45; }
+/* --- Canvas modes --------------------------------------------------------------
+   Picking where a split goes or whom to swap with, and a tile lifted by a hold,
+   are modes of the canvas, and their hint takes the tab row for as long as
+   they last. The tabs are of no use meanwhile (another tab ends the mode), and
+   no place on the canvas is clear of every pane head and every target at every
+   size: the stage fills its window on a phone on its side and beside the list.
+   The row keeps its height, so the canvas under it never moves. The hint is the
+   height of the tab strip's line, whatever stands under that line. */
+.board-mode {
+  position: absolute;
+  inset: 2px 16px auto;
+  height: 46px;
+  display: none;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.board-rail:has(.board-mode > .board-place-banner) > .board-mode,
+.board-shell:has(.board-pane[data-board-lift]) .board-mode { display: flex; }
+.board-rail:has(.board-mode > .board-place-banner) > :not(.board-mode),
+.board-shell:has(.board-pane[data-board-lift]) .board-rail > :not(.board-mode) { visibility: hidden; }
+
+/* One bar in the tab strip's own box, tinted so it reads as a mode and not as a field:
+   a mark, one line (or a line and its reason), and the way out at its end. */
+.board-mode-bar {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 46px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid rgba(110, 168, 254, 0.32);
+  border-radius: 14px;
+  background: rgba(110, 168, 254, 0.12);
+  color: var(--ink);
+}
+.board-mode-bar > svg { flex: none; color: var(--accent); }
+.board-mode-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  margin: 0;
+  font: 620 var(--text-body) var(--font);
+  line-height: 1.25;
+}
+.board-mode-text > small { font-size: var(--text-caption); font-weight: 500; color: var(--muted); }
+
+/* A lifted tile: what a release does now, in place or once it has been dragged. */
+.board-mode-lift { display: none; }
+.board-shell:has(.board-pane[data-board-lift=""]) .board-mode-lift.is-held,
+.board-shell:has(.board-pane[data-board-lift="moved"]) .board-mode-lift.is-moved { display: flex; }
+
+/* Cancel is a 44px target inside the bar. */
+.board-place-banner { padding-right: 1px; }
+.board-mode-cancel {
+  flex: none;
+  min-width: 60px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--accent);
+  font: 650 var(--text-body) var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* --- Zoomed on the computer -----------------------------------------------------
+   A pane shown alone is a state the computer keeps, not a moment, so its bar
+   stands in the tab row beside the tabs instead of in their place: another tab
+   is still one tap away. It is the last in the row and takes what the strip
+   and "+" leave. Where that is less than its own line it wraps under them and
+   the canvas starts a line lower. */
+.board-shell .board-rail:has(> .board-zoom-bar) { flex-wrap: wrap; row-gap: var(--space-2); }
+/* The row breaks by what its parts measure, not by a width someone guessed:
+   the strip asks for the room its tabs take, so the bar shares the line only
+   while every tab still shows, in any language and beside the list or not.
+   On its line the strip takes all there is to spare. With more tabs than the
+   row holds it stops short of "+" and scrolls as it always does. */
+.board-rail:has(> .board-zoom-bar) > .board-tabs { flex: 9999 1 auto; max-width: 100%; }
+.board-rail:has(> .board-zoom-bar):has(> .board-tab-new) > .board-tabs { max-width: calc(100% - 46px - var(--space-2)); }
+.board-zoom-bar { flex: 1 1 auto; padding-right: 1px; }
+.board-zoom-bar .board-mode-cancel:disabled { opacity: 0.45; cursor: default; }
 
 /* Phone: one pill, bottom centre, only while the camera is off the fit. */
 .board-body .board-zoom {
@@ -139,30 +238,41 @@
   cursor: pointer;
 }
 
-/* Desk: a small bar, bottom right, always there. */
-@media (min-width: 900px) {
-  .board-body .board-zoom,
-  .board-body .board-zoom[data-at-fit],
-  .board-body .board-zoom[data-at-fit]:not(:has(:focus-visible)) {
-    position: absolute;
-    display: flex;
-    width: auto;
-    margin: 0;
-    overflow: visible;
-    clip-path: none;
-    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    left: auto;
-    right: 14px;
-    height: 40px;
-    padding: 0;
-    border-radius: var(--r-md);
-    transform: none;
-  }
-  .board-zoom .board-zoom-step,
-  .board-zoom:not(:has(:focus-visible)) .board-zoom-step {
-    position: static; display: grid; width: auto; height: auto; min-width: 40px; min-height: 40px;
-    margin: 0; overflow: visible; clip-path: none; color: var(--ink);
-  }
-  .board-zoom-pct { min-width: 50px; font-size: var(--text-secondary); color: var(--muted); }
-  .board-body .board-zoom-fit { margin-left: 0; min-height: 40px; border-radius: 0 var(--r-md) var(--r-md) 0; }
+/* Desk: a small bar, bottom right, always there. The shell decides, not the
+   width: the board beside or in place of the list has the bar from 720px, and
+   a phone on its side, which is wide but keeps the phone layout, keeps the pill. */
+.desk .board-body .board-zoom,
+.desk .board-body .board-zoom[data-at-fit],
+.desk .board-body .board-zoom[data-at-fit]:not(:has(:focus-visible)) {
+  position: absolute;
+  display: flex;
+  width: auto;
+  margin: 0;
+  overflow: visible;
+  clip-path: none;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  left: auto;
+  right: 14px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--r-md);
+  transform: none;
+}
+.desk .board-zoom .board-zoom-step,
+.desk .board-zoom:not(:has(:focus-visible)) .board-zoom-step {
+  position: static; display: grid; width: auto; height: auto; min-width: 40px; min-height: 40px;
+  margin: 0; overflow: visible; clip-path: none; color: var(--ink);
+}
+.desk .board-zoom-pct { min-width: 50px; font-size: var(--text-secondary); color: var(--muted); }
+.desk .board-body .board-zoom-fit { margin-left: 0; min-height: 40px; border-radius: 0 var(--r-md) var(--r-md) 0; }
+
+/* Under a finger each zoom control's target is 44px, drawn as before. Fit grows
+   past the pill's edges; the desk bar's steps take theirs from the bar's edge
+   and the percentage, never from a neighbouring button. */
+@media (any-pointer: coarse) {
+  .board-body .board-zoom-fit { position: relative; }
+  .board-body .board-zoom-fit::after { content: ""; position: absolute; inset: calc((100% - 44px) / 2) 0; }
+  .desk .board-zoom .board-zoom-step,
+  .desk .board-zoom:not(:has(:focus-visible)) .board-zoom-step { position: relative; }
+  .desk .board-zoom .board-zoom-step::after { content: ""; position: absolute; inset: -2px 0 -2px -4px; }
 }

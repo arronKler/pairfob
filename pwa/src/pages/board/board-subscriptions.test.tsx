@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { resetBoardTestDOM } from "../../../test-support/dom";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act, createElement, StrictMode } from "react";
@@ -199,7 +200,7 @@ describe("mounted board updates from typed domain actions", () => {
     // No commit happened: the stage still carries the transform of the last render,
     // and the gesture adapter is the only thing that paints a camera mid-gesture.
     expect(stage.style.transform).toBe("translate(0px, 0px) scale(1)");
-    expect(appRoot().querySelector(".board-pane")).toBe(tiles[0]);
+    expectSameNode(appRoot().querySelector(".board-pane"), tiles[0]);
     expect(committed).toBe(0);
     expect(requested).toBe(0);
 

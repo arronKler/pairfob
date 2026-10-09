@@ -12,14 +12,16 @@ import { herdStatusOf } from "../../features/connection/herd-status";
 import { AppNotice } from "../../app/notice";
 import { BackBar } from "../../shared/ui/primitives";
 import { linkState } from "./computer-panel";
+import { useNameUnderBar } from "./name-under-bar";
 import { ComputerSection } from "./settings-computer";
 import { SettingsOverview } from "./settings-overview";
 
 /**
  * Settings: the overview, and the computer page behind its computer panel. On
  * a phone the overview is a tab root (no back); on the desktop it keeps its
- * back bar. The computer page's name lives in its panel, so its bar carries
- * only the back control and a hidden heading.
+ * back bar. The computer page's panel names the computer, so its bar says only
+ * "Computer" at rest; the bar stays in place while the page scrolls, and takes
+ * the name over once the panel has carried it out of sight (`name-under-bar`).
  */
 function useSettingsView() {
   const connection = useConnection();
@@ -64,10 +66,11 @@ export function SettingsContent({ withBack }: { withBack: boolean }) {
   const computerName = runtime.herdHost || (computers.credential ? computerTitle(computers.credential) : t("settings.currentComputer"));
   const link = linkState(status, network, connected);
   const back = section === "overview" ? (withBack ? leaveSettings : null) : () => setSettingsSection("overview");
-  const title = section === "connection" ? computerName : t("settings.title");
+  const named = useNameUnderBar(section === "connection");
+  const title = section === "connection" ? (named ? computerName : t("settings.computer")) : t("settings.title");
   return (
     <>
-      {back ? <BackBar title={title} hideTitle={section === "connection"} onBack={back} />
+      {back ? <BackBar title={title} onBack={back} />
         : <h1 className="settings-title">{title}</h1>}
       <AppNotice />
       {section === "connection" ? (

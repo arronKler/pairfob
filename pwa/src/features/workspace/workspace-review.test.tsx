@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -178,7 +179,7 @@ describe("independent React workspace review", () => {
     await act(async () => {
       applyCapabilities({ ...NO_OPERATION_CAPABILITIES, rename_file: true }, []);
     });
-    expect(appRoot().querySelector(".workspace-file .workspace-row-main") === row).toBe(true);
+    expectSameNode(appRoot().querySelector(".workspace-file .workspace-row-main"), row);
     await act(() => { row.dispatchEvent(new window.KeyboardEvent("keydown", {
       key: "ContextMenu", bubbles: true, cancelable: true,
     })); });
@@ -272,9 +273,9 @@ describe("independent React workspace review", () => {
     field.focus();
     await act(async () => { commitTest(); });
     expect(document.querySelectorAll(".diff-note-modal")).toHaveLength(1);
-    expect(document.querySelector(".diff-note-modal textarea") === field).toBe(true);
+    expectSameNode(document.querySelector(".diff-note-modal textarea"), field);
     expect(field.value).toBe("保留输入中的批注");
-    expect(document.activeElement === field).toBe(true);
+    expectSameNode(document.activeElement, field);
     expect([field.selectionStart, field.selectionEnd]).toEqual([2, 5]);
     await act(() => { field.form!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); });
     expect(diffNotesFor("app.ts", "worktree")[0]?.body).toBe("保留输入中的批注");

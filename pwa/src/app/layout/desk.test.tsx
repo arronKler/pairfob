@@ -82,6 +82,39 @@ describe("desk shell", () => {
     expect(container.querySelector(".main-empty")).not.toBeNull();
   });
 
+  test("a doubled tap on the way back to the board does not open the board title under it", () => {
+    const AT = { clientX: 60, clientY: 26 };
+    /** A tap as the browser delivers it: the press, then its click. False when the click was swallowed. */
+    const tap = (target: Element, at = AT): boolean => {
+      let delivered = true;
+      act(() => {
+        target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true, ...at }));
+        delivered = target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1, ...at }));
+      });
+      return delivered;
+    };
+    const open = () => root!.render(<DeskShell deskPage={null} onReturn={() => root!.render(<DeskShell deskPage="board" />)}>
+      <div className="pane-root" /></DeskShell>);
+    act(open);
+    expect(tap(container.querySelector(".desk-return")!)).toBeTrue();
+    // The board is back, and its title stands where the strip was.
+    const title = container.querySelector<HTMLButtonElement>(".board-title")!;
+    expect(title).not.toBeNull();
+    expect(tap(title)).toBeFalse();
+    expect(document.querySelector("dialog[open]")).toBeNull();
+    // A key ends the guard as the interval would; the reader's own tap on the title opens the switcher.
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", bubbles: true }));
+    expect(tap(title)).toBeTrue();
+    expect(document.querySelector("dialog[open]")).not.toBeNull();
+    act(() => document.querySelector<HTMLDialogElement>("dialog[open]")!.close());
+
+    // The keyboard goes back without arming anything: Enter clicks with `detail` 0.
+    act(open);
+    act(() => container.querySelector<HTMLButtonElement>(".desk-return")!.click());
+    expect(tap(container.querySelector(".board-title")!)).toBeTrue();
+    act(() => document.querySelector<HTMLDialogElement>("dialog[open]")?.close());
+  });
+
   test("off the board the rail's Board link is not current", () => {
     act(() => setScreen("home"));
     publishAllDomains();

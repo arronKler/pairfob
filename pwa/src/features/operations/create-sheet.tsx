@@ -1,9 +1,14 @@
 import { Pencil, Plus } from "lucide-react";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../lib/i18n";
 import { OPERATION_INPUT_LIMITS } from "../../lib/operations";
 import { SheetFrame } from "../../shared/ui/overlay/action-sheet";
-import { presentModal, type ModalController } from "../../shared/ui/overlay/modal";
+import { useDeskEnter } from "../../shared/ui/overlay/desk-form";
+import { useEscapeStep } from "../../shared/ui/overlay/escape-steps";
+import { focusRefused } from "../../shared/ui/overlay/form-focus";
+import { DeskCancel, presentModal, type ModalController } from "../../shared/ui/overlay/modal";
+import { deskInput } from "../../shared/ui/overlay/popover";
+import { SheetFooter } from "../../shared/ui/overlay/sheet-content";
 import { AgentAvatar, Button } from "../../shared/ui/primitives";
 import { AgentKindGrid, kindName } from "./agent-kind-grid";
 import { AgentKindPickerPanel } from "./agent-kind-picker";
@@ -50,9 +55,21 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
   const [base, setBase] = useState("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
+  // A refusal is about the directory: a mouse or keyboard reader is put in
+  // its chooser, or in the path being typed (`form-focus`), instead of left on
+  // the button. A finger left no keyboard position to move.
+  const root = useRef<HTMLDivElement>(null);
+  const [refused, setRefused] = useState({ field: "", count: 0 });
+  useLayoutEffect(() => { if (refused.count && deskInput()) focusRefused(root.current, refused.field); }, [refused]);
+  const refuse = (message: string) => {
+    setError(message);
+    setRefused(last => ({ field: otherPath === null ? "dir" : "path", count: last.count + 1 }));
+  };
   // The full list replaces the form in place (not a pushed sheet page), so the
   // form keeps everything already chosen while the reader browses.
   const [picking, setPicking] = useState(false);
+  // Escape takes back the list first, then the sheet.
+  useEscapeStep(picking, () => setPicking(false));
   const isNew = where === NEW_WORKSPACE;
   // Start on the chosen place, not on whichever chip happens to come first.
   const initialWhere = useRef(where).current;
@@ -76,8 +93,8 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
       modal.close({ kind: "tab", workspaceId: workspace.id, agentKind: kind, label: name });
       return;
     }
-    if (!path) { setError(t("create.needDir")); return; }
-    if (path.length > OPERATION_INPUT_LIMITS.cwd) { setError(t("form.needCwd")); return; }
+    if (!path) { refuse(t("create.needDir")); return; }
+    if (path.length > OPERATION_INPUT_LIMITS.cwd) { refuse(t("form.needCwd")); return; }
     if (openHere) {
       modal.close({ kind: "tab", workspaceId: openHere.id, agentKind: kind, label: name });
       return;
@@ -90,6 +107,9 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
     modal.close({ kind: "conversation", cwd: path, agentKind: kind, label: name });
   };
 
+  // The desk form submits on Enter from its fields and its choices (`useDeskEnter`).
+  const submitOnEnter = useDeskEnter(submit);
+
   if (picking) {
     return <AgentKindPickerPanel kinds={input.kinds} memory={memory} selected={kind} onBack={() => setPicking(false)}
       onPick={(next) => { setKind(next); setPicking(false); }} onPinsChange={setMemory} />;
@@ -100,7 +120,7 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
 
   const dirRow = (value: string, open: boolean) => (
     <Button key={value} className={`menu-item create-dir${otherPath === null && dir === value ? " is-selected" : ""}`}
-      aria-pressed={otherPath === null && dir === value}
+      aria-pressed={otherPath === null && dir === value} data-choice=""
       onClick={() => { setDir(value); setOtherPath(null); setError(""); }}>
       <span className="create-dir-path">{value}</span>
       {open ? <span className="create-dir-tag">{t("create.dirOpenTag")}</span> : null}
@@ -108,7 +128,7 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
   );
 
   return (
-    <div className="create-sheet-body">
+    <div ref={root} className="create-sheet-body" onKeyDown={submitOnEnter}>
       {recents.length ? <>
         <h3 className="create-label">{t("create.recent")}</h3>
         <div className="create-scroll">
@@ -116,7 +136,7 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
             const space = input.workspaces.find((item) => item.id === combo.workspaceId)!;
             const on = where === combo.workspaceId && kind === combo.kind;
             return (
-              <Button key={`${combo.kind}@${combo.workspaceId}`} className={`create-chip is-combo${on ? " on" : ""}`} aria-pressed={on}
+              <Button key={`${combo.kind}@${combo.workspaceId}`} className={`create-chip is-combo${on ? " on" : ""}`} aria-pressed={on} data-choice=""
                 onClick={() => { setWhere(combo.workspaceId); setKind(combo.kind); setError(""); }}>
                 <AgentAvatar kind={combo.kind} size="sm" />
                 <span>{kindName(combo.kind)}</span>
@@ -146,7 +166,7 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
       {!isNew && workspace?.path ? <p className="create-path">{workspace.path}</p> : null}
 
       {isNew ? <>
-        <div className="create-dirs">
+        <div className="create-dirs" data-field="dir">
           {recentDirs.length ? <p className="create-dir-group">{t("create.dirRecent")}</p> : null}
           {recentDirs.map((value) => dirRow(value, false))}
           {openDirs.length ? <p className="create-dir-group">{t("create.dirOpen")}</p> : null}
@@ -157,7 +177,7 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
             <span className="create-dir-path">{t("create.dirOther")}</span>
           </Button>
           {otherPath !== null ? (
-            <input className="create-input is-mono" type="text" value={otherPath} autoFocus
+            <input className="create-input is-mono" type="text" name="path" value={otherPath} autoFocus
               placeholder={t("create.pathPlaceholder")} aria-label={t("create.dirOther")} maxLength={OPERATION_INPUT_LIMITS.cwd}
               autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false}
               onChange={(event) => { setOtherPath(event.currentTarget.value); setError(""); }} />
@@ -206,11 +226,14 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
           onChange={(event) => setLabel(event.currentTarget.value)} />
       </label>
 
-      <div className="create-footer">
-        <p className="create-summary">{summary}</p>
-        {error ? <p className="notice notice-error" role="alert">{error}</p> : null}
-        <Button className="btn btn-primary create-submit" onClick={submit}>{t("create.submit")}</Button>
-      </div>
+      <SheetFooter>
+        <div className="create-footer">
+          <p className="create-summary">{summary}</p>
+          {error ? <p className="notice notice-error" role="alert">{error}</p> : null}
+          <DeskCancel />
+          <Button className="btn btn-primary create-submit" onClick={submit}>{t("create.submit")}</Button>
+        </div>
+      </SheetFooter>
     </div>
   );
 }

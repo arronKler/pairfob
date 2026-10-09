@@ -108,7 +108,7 @@ function paintPad(): { sendCompose: (text: string, enter: boolean) => boolean; s
   const sendKey = (key: string): void => {
     sent.push({ kind: "sendKey", payload: key });
   };
-  const options: FullTerminalControlsOptions = { sendKey, sendCompose, keyboard: keyboard(), desk: false };
+  const options: FullTerminalControlsOptions = { sendKey, sendCompose, keyboard: keyboard(), hardwareKeyboard: false };
   renderReact(<FullTerminalPad options={options} />);
   return { sendCompose, sendKey };
 }

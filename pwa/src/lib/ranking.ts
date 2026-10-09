@@ -110,6 +110,35 @@ export function touchPane(current: TouchedAt, paneId: string, now = Date.now()):
   return { ...current, [paneId]: now };
 }
 
+/**
+ * The activation stamps a list that stays on screen is ordered by.
+ *
+ * Beside the session the list is in view while the reader opens one pane after
+ * another; re-sorting it on every open would move the row out from under the
+ * pointer. So the order is held as it stood when the list was built (`scope`
+ * names that build: the computer, the grouping). A pane that turns up later
+ * joins with the stamp it has at that moment and then keeps its place too.
+ * Opens still stamp the live record, which the next build adopts.
+ */
+export type ActivationHold = { scope: string; stamps: TouchedAt; seen: ReadonlySet<string> };
+
+export function holdActivation(
+  held: ActivationHold | null,
+  scope: string,
+  live: TouchedAt,
+  paneIds: readonly string[],
+): ActivationHold {
+  if (!held || held.scope !== scope) return { scope, stamps: { ...live }, seen: new Set(paneIds) };
+  const arrived = paneIds.filter((paneId) => !held.seen.has(paneId));
+  if (!arrived.length) return held;
+  const stamps = { ...held.stamps };
+  for (const paneId of arrived) {
+    if (live[paneId]) stamps[paneId] = live[paneId];
+    else delete stamps[paneId];
+  }
+  return { scope, stamps, seen: new Set([...held.seen, ...arrived]) };
+}
+
 export type ListGroup = "flat" | "space" | "agent";
 
 export type AgentGroup = {
@@ -118,9 +147,12 @@ export type AgentGroup = {
   items: AgentCard[];
 };
 
+/** The grouping a list opens with until the user picks another one. */
+export const DEFAULT_LIST_GROUP: ListGroup = "space";
+
 export function parseListGroup(raw: string | null | undefined): ListGroup {
-  if (raw === "space" || raw === "agent") return raw;
-  return "flat";
+  if (raw === "space" || raw === "agent" || raw === "flat") return raw;
+  return DEFAULT_LIST_GROUP;
 }
 
 function groupKey(agent: AgentCard, mode: Exclude<ListGroup, "flat">): { id: string; title: string } {

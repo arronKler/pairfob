@@ -1,8 +1,9 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { happy, resetTestDOM } from "../../../test-support/boot-dom";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { beforeEach, afterEach, expect, test } from "bun:test";
 import { act } from "react";
-import { askAgentPrompt, askCreateConversation, askCreateTab, askSplitPane, askWorktree } from "./operation-forms";
+import { askAgentPrompt, askCreateConversation, askCreateTab, askSplitPane } from "./operation-forms";
 import { LAST_AGENT_KIND_KEY } from "./operation-form-model";
 import { setLang, t } from "../../lib/i18n";
 import { messageOf } from "../../lib/notices";
@@ -26,14 +27,14 @@ test("conversation validation keeps the field stable and returns a trimmed typed
   const buttons = form().querySelectorAll(".action-row button");
   expect(buttons[0]?.classList.contains("btn-primary")).toBeTrue();
   expect(buttons[1]?.classList.contains("btn-ghost")).toBeTrue();
-  expect(document.activeElement === cwd).toBeTrue();
+  expectSameNode(document.activeElement, cwd);
   submit();
   expect(cwd.getAttribute("aria-invalid")).toBe("true");
   expect(form().querySelector('[role="alert"]')?.textContent).toBe(t("form.needCwd"));
-  expect(document.activeElement === cwd).toBeTrue();
+  expectSameNode(document.activeElement, cwd);
   cwd.value = " /work/project ";
   act(() => cwd.dispatchEvent(new happy.Event("input", { bubbles: true }) as unknown as Event));
-  expect(field("cwd")).toBe(cwd);
+  expectSameNode(field("cwd"), cwd);
   expect(cwd.hasAttribute("aria-invalid")).toBeFalse();
   field("agent_kind").value = "claude";
   field("label").value = " Review ";
@@ -44,6 +45,39 @@ test("conversation validation keeps the field stable and returns a trimmed typed
   expect(field("agent_kind").value).toBe("claude");
   click(t("cancel"));
   expect(await result).toBeNull();
+});
+
+test("the desk form's footer reads Cancel then the action and is written that way; the sheet keeps the action on top", async () => {
+  const labels = () => [...form().querySelectorAll("button")].map(button => button.textContent);
+  let sheet!: ReturnType<typeof askCreateTab>;
+  act(() => { sheet = askCreateTab([]); });
+  expect(labels()).toEqual([t("form.create"), t("cancel")]);
+  expect(form().querySelector(".desk-actions, .desk-close")).toBeNull();
+  click(t("cancel"));
+  expect(await sheet).toBeNull();
+
+  const { bindOverlayOrigin } = await import("../../shared/ui/overlay/origin");
+  happy.happyDOM.setWindowSize({ width: 1024, height: 768 });
+  const release = bindOverlayOrigin(document);
+  document.body.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true }) as unknown as Event);
+  try {
+    let card!: ReturnType<typeof askCreateTab>;
+    act(() => { card = askCreateTab([]); });
+    expect(form().closest("dialog")!.className).toBe("modal operation-modal desk-form");
+    // Fields first, then the footer, then the corner close.
+    expect(labels()).toEqual([t("cancel"), t("form.create"), ""]);
+    expect(form().querySelector(".action-row")).toBeNull();
+    expectSameNode(form().lastElementChild, form().querySelector(".desk-close"));
+    click(t("cancel"));
+    expect(await card).toBeNull();
+    // The list has nothing to confirm: one button puts it away.
+    await act(async () => { await showWorktrees(async () => ({ worktrees: [] })); });
+    expect(labels()).toEqual([t("close"), ""]);
+    expectSameNode(document.activeElement, form().querySelector(".worktree-close"));
+  } finally {
+    release();
+    happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+  }
 });
 
 test("plain tabs omit optional fields and split panes keep fixed half ratios", async () => {
@@ -61,35 +95,13 @@ test("plain tabs omit optional fields and split panes keep fixed half ratios", a
   expect(await split).toEqual({ direction: "down", ratio: 0.5, cwd: "/work", agent_kind: "codex" });
 });
 
-test("opening a worktree validates exactly one target; creating accepts blank targets", async () => {
-  let opened!: ReturnType<typeof askWorktree>;
-  act(() => { opened = askWorktree("open", { cwd: "/repo" }); });
-  expect(field("path").parentElement?.textContent).toContain(t("form.pathEither"));
-  expect(field("branch").parentElement?.textContent).toContain(t("form.branchEither"));
-  submit();
-  expect(field("path").getAttribute("aria-invalid")).toBe("true");
-  field("path").value = "/repo/feature";
-  field("branch").value = "feature";
-  submit();
-  expect(field("branch").getAttribute("aria-invalid")).toBe("true");
-  expect(form().querySelector('[role="alert"]')?.textContent).toBe(t("form.pathXorBranch"));
-  field("path").value = "";
-  submit();
-  expect(await opened).toEqual({ cwd: "/repo", branch: "feature" });
-  let created!: ReturnType<typeof askWorktree>;
-  act(() => { created = askWorktree("create", { cwd: "/repo" }); });
-  expect(form().textContent).toContain(t("form.worktreeBlank"));
-  submit();
-  expect(await created).toEqual({ cwd: "/repo" });
-});
-
 test("prompt validation applies UTF-8 limits and retains the editable draft", async () => {
   let result!: ReturnType<typeof askAgentPrompt>;
   act(() => { result = askAgentPrompt(); });
   const input = field("text");
   input.value = "界".repeat(17000);
   submit();
-  expect(field("text")).toBe(input);
+  expectSameNode(field("text"), input);
   expect(input.getAttribute("aria-invalid")).toBe("true");
   expect(form().textContent).toContain(t("form.taskTooBig"));
   input.value = "  完成代码审查\n保留测试  ";
@@ -116,7 +128,7 @@ test("worktree loading is one read; an explicit failed open leaves the same row 
   expect(opens).toBe(0);
   await act(async () => { row.click(); await Promise.resolve(); });
   expect(opens).toBe(1);
-  expect(form().querySelector(".worktree-card")).toBe(row);
+  expectSameNode(form().querySelector(".worktree-card"), row);
   expect(row.disabled).toBeFalse();
   expect(form().querySelector('[role="alert"]')?.textContent).toBe(messageOf(new Error("open failed")));
 });
@@ -132,7 +144,7 @@ test("a late worktree list cannot resurrect its closed modal or steal newer focu
   const focused = field("cwd");
   await act(async () => { finish(trees); await pending; });
   expect(document.querySelectorAll("dialog")).toHaveLength(1);
-  expect(document.activeElement === focused).toBeTrue();
+  expectSameNode(document.activeElement, focused);
   expect(document.querySelector(".worktree-list")).toBeNull();
   click(t("cancel"));
   expect(await next).toBeNull();

@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { beforeEach, afterEach, describe, expect, test } from "bun:test";
 import { act } from "react";
@@ -354,7 +355,7 @@ test("quota refresh keeps focus on the refresh button across a loading repaint",
   const refresh = appRoot().querySelector<HTMLButtonElement>(".quota-refresh");
   if (!(refresh instanceof HTMLButtonElement)) throw new Error("missing refresh");
   act(() => refresh.focus());
-  expect(document.activeElement).toBe(refresh);
+  expectSameNode(document.activeElement, refresh);
   // A subscription-driven re-render does not move focus.
   await act(async () => {
     useSession(async () => [{ ...sample(), plan: "pro2" }]);
@@ -363,7 +364,7 @@ test("quota refresh keeps focus on the refresh button across a loading repaint",
   await settle();
   const again = appRoot().querySelector(".quota-refresh");
   expect(again).toBeInstanceOf(HTMLButtonElement);
-  expect(document.activeElement).toBe(again);
+  expectSameNode(document.activeElement, again);
 });
 
 describe("Cursor CLI quota auth states", () => {

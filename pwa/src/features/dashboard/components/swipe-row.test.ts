@@ -83,4 +83,27 @@ describe("swipe row", () => {
     drag(blocked.main, 300, 100, "mouse");
     expect(blocked.row.classList.contains("is-open")).toBe(false);
   });
+
+  test("only a row pulled to the right is marked as showing its leading action", () => {
+    const { row, main } = build(true);
+    pointer(main, "pointerdown", 100);
+    pointer(main, "pointermove", 160);
+    expect(row.classList.contains("is-leading")).toBe(true);
+    // Back across the rest position and on to the left: the trailing pair's side.
+    pointer(main, "pointermove", 40);
+    expect(row.classList.contains("is-leading")).toBe(false);
+    pointer(main, "pointerup", 0);
+    drag(main, 300, 120);
+    expect(row.classList.contains("is-open")).toBe(true);
+    expect(row.classList.contains("is-leading")).toBe(false);
+  });
+
+  test("releasing the binding settles a row it left open", () => {
+    const { row, main } = build();
+    drag(main, 300, 120);
+    expect(row.classList.contains("is-open")).toBe(true);
+    release();
+    expect(row.classList.contains("is-open")).toBe(false);
+    expect(main.style.transform).toBe("");
+  });
 });

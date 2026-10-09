@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { commitTest, mountTestApp, unmountTestApp } from "../../../test-support/react-harness";
@@ -190,7 +191,9 @@ describe("React herd list", () => {
     paint();
     expect(reactOwned(app().firstElementChild!)).toBe(true);
     expect([...app().querySelectorAll(".group-name")].map(node => node.textContent)).toEqual([t("group.pinned"), "alpha", "beta"]);
-    expect(preferencesStore.get().paneTouched.p1).toBeGreaterThan(preferencesStore.get().paneTouched.p2!);
+    // The opens are the list order's stamps; they no longer date the rows.
+    expect(preferencesStore.get().paneActivated.p1).toBeGreaterThan(preferencesStore.get().paneActivated.p2!);
+    expect(preferencesStore.get().paneTouched).toEqual({});
     expect(preferencesStore.get().listGroupCollapsed).toEqual({ [PINNED_GROUP_ID]: false, alpha: false, beta: true });
     const headings = [...app().querySelectorAll<HTMLButtonElement>(".group-title")];
     expect(headings.map(node => node.getAttribute("aria-haspopup"))).toEqual([null, "menu", "menu"]);
@@ -201,9 +204,9 @@ describe("React herd list", () => {
     headings[2].focus();
     act(() => headings[2].click());
     expect(preferencesStore.get().listGroupCollapsed.beta).toBe(false);
-    expect(app().querySelectorAll(".group-title")[2]).toBe(headings[2]);
-    expect(document.activeElement).toBe(headings[2]);
-    expect(app().querySelectorAll(".card")[2]).toBe(cards[2]);
+    expectSameNode(app().querySelectorAll(".group-title")[2], headings[2]);
+    expectSameNode(document.activeElement, headings[2]);
+    expectSameNode(app().querySelectorAll(".card")[2], cards[2]);
     expect((app().querySelectorAll(".herd-group-body")[2] as HTMLElement).hidden).toBe(false);
     paint();
     expect(preferencesStore.get().listGroupCollapsed.beta).toBe(false);
@@ -254,7 +257,7 @@ describe("React herd list", () => {
     const card = app().querySelector<HTMLButtonElement>(".card-main")!;
     seed([agent("p1", "alpha", "idle", "Renamed pane")]);
     paint();
-    expect(app().querySelector(".card-main")).toBe(card);
+    expectSameNode(app().querySelector(".card-main"), card);
     act(() => setOperationBusy(true));
     menu(card);
     expect(document.querySelector("dialog")).toBeNull();
@@ -355,7 +358,9 @@ describe("React desktop routing", () => {
     expect(app().querySelector(".main .notice")?.textContent).toBe("choose a pane");
     expect(app().querySelector(".main-empty")).not.toBeNull();
     expect(app().querySelectorAll(".daemon-update-host")).toHaveLength(1);
-    expect(app().querySelector(".rail .daemon-update-host + .seg")).not.toBeNull();
+    // The compact update notice scrolls with the list; grouping is the head's button.
+    expect(app().querySelector(".rail .rail-list > .daemon-update-host")).not.toBeNull();
+    expect(app().querySelector(".rail .rail-head .herd-mode")).not.toBeNull();
   });
 
   test("desktop settings pages take precedence over a remembered selected pane", () => {
@@ -378,7 +383,7 @@ describe("React desktop routing", () => {
     const main = app().querySelector<HTMLElement>(".main")!;
     main.scrollTop = 280;
     paint();
-    expect(app().querySelector(".main")).toBe(main);
+    expectSameNode(app().querySelector(".main"), main);
     expect(main.scrollTop).toBe(280);
     setScreen("settings");
     paint();

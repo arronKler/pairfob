@@ -42,5 +42,5 @@ export function openHostMenu(host: HerdHostView): void {
           action={openComputers} />
       ) : null}
     </>
-  ), { subtitle: host.line });
+  ), { subtitle: host.line, popover: "menu" });
 }

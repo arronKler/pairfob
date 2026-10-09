@@ -60,19 +60,26 @@ export function ansiPreviewModel(
   return { lines, width: grid.width, height: grid.height };
 }
 
-/** Fit the TUI grid into the cell; keep glyph aspect (no X/Y stretch). */
-export function previewFillScale(
+/**
+ * Fit the TUI grid into the cell: the scale each side of the cell alone would
+ * allow. The smaller of the two is the fit, one number for both axes, so the
+ * glyph aspect is kept (no X/Y stretch). They are told apart because the room
+ * the pane's chrome needs comes off each side separately (`.board-pane-buffer`).
+ * A grid that cannot be fitted is drawn as it is: 1 on both.
+ */
+export function previewFit(
   sw: number,
   sh: number,
   cw: number,
   ch: number,
-): { x: number; y: number } {
-  if (sw <= 1 || cw <= 1) return { x: 1, y: 1 };
+): { byWidth: number; byHeight: number } {
+  const asIs = { byWidth: 1, byHeight: 1 };
+  if (sw <= 1 || cw <= 1) return asIs;
   const byWidth = cw / sw;
   const byHeight = sh > 1 && ch > 1 ? ch / sh : byWidth;
   const scale = Math.min(byWidth, byHeight);
-  if (!Number.isFinite(scale) || scale <= 0 || scale > 2) return { x: 1, y: 1 };
-  return { x: scale, y: scale };
+  if (!Number.isFinite(scale) || scale <= 0 || scale > 2) return asIs;
+  return { byWidth, byHeight };
 }
 
 /** Normalize a wire read; anything unexpected degrades to an empty screen. */

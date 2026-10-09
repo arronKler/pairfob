@@ -2,14 +2,18 @@ import { TriangleAlert, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { t } from "../../../lib/i18n";
 import { Button } from "../primitives/button";
-import { ModalFrame, presentModal, type ModalController } from "./modal";
+import { useDeskCancel } from "./desk-form";
+import { DeskCancel, ModalFrame, presentModal, type ModalController } from "./modal";
 
 /**
- * A single-field editor. Cancel and Save sit in the heading, above the field,
- * so an on-screen keyboard never covers them. Save stays disabled until the
- * value changes. Enter commits the same way: an unchanged value dismisses with
- * `null` and a blank required value stays open. A disabled default button would
- * otherwise swallow the browser's implicit submission.
+ * A single-field editor. In the sheet Cancel and Save sit in the heading, above
+ * the field, so an on-screen keyboard never covers them. The desk form draws
+ * them as its footer, and writes them there too: after the field in the
+ * document, so Tab and a screen reader meet them where the eye does. Save
+ * stays disabled until the value changes. Enter commits the same way: an
+ * unchanged value dismisses with `null` and a blank required value stays open.
+ * A disabled default button would otherwise swallow the browser's implicit
+ * submission.
  */
 export type TextRequest = {
   title: string;
@@ -27,6 +31,26 @@ export type TextRequest = {
   validate?: (value: string) => string | null;
 };
 
+/** The sheet's bar (Cancel · title · Save); in the desk form the title alone. */
+function TextHead({ modal, title, canSave }: { modal: ModalController<string>; title: string; canSave: boolean }) {
+  const heading = <h2 id={modal.titleId} className="modal-title">{title}</h2>;
+  if (useDeskCancel()) return heading;
+  return <div className="text-edit-head">
+    <Button className="text-edit-action" onClick={modal.dismiss}>{t("cancel")}</Button>
+    {heading}
+    <button type="submit" className="text-edit-action text-edit-save" disabled={!canSave}>{t("text.save")}</button>
+  </div>;
+}
+
+/** The desk form's footer; the sheet has its bar instead. */
+function TextFooter({ canSave }: { canSave: boolean }) {
+  if (!useDeskCancel()) return null;
+  return <div className="desk-actions">
+    <DeskCancel />
+    <button type="submit" className="desk-action is-primary text-edit-save" disabled={!canSave}>{t("text.save")}</button>
+  </div>;
+}
+
 function TextDialog({ modal, request }: { modal: ModalController<string>; request: TextRequest }) {
   const { title, initial = "", maxLength, label, hint, emptyHint, allowEmpty = true, validate } = request;
   const input = useRef<HTMLInputElement>(null);
@@ -42,13 +66,9 @@ function TextDialog({ modal, request }: { modal: ModalController<string>; reques
     else if (validate?.(next)) return;
     else if (allowEmpty || next.trim()) modal.close(next);
   };
-  return <ModalFrame modal={modal} title={title} className="modal text-edit" describedBy={guidance ? hintId : undefined}
+  return <ModalFrame modal={modal} title={title} className="modal text-edit" describedBy={guidance ? hintId : undefined} deskClose
     focus={form => { const field = form.querySelector("input")!; field.focus(); field.select(); }}
-    heading={<div className="text-edit-head">
-      <Button className="text-edit-action" onClick={modal.dismiss}>{t("cancel")}</Button>
-      <h2 id={modal.titleId} className="modal-title">{title}</h2>
-      <button type="submit" className="text-edit-action text-edit-save" disabled={!canSave}>{t("text.save")}</button>
-    </div>}
+    heading={<TextHead modal={modal} title={title} canSave={canSave} />}
     onSubmit={event => {
       event.preventDefault();
       commit((event.currentTarget.elements.namedItem("value") as HTMLInputElement).value);
@@ -70,6 +90,7 @@ function TextDialog({ modal, request }: { modal: ModalController<string>; reques
       }}><X size={14} aria-hidden="true" /></Button>}
     </div>
     {guidance && <p id={hintId} className={`text-edit-hint${problem ? " is-invalid" : ""}`} role={problem ? "alert" : undefined}>{guidance}</p>}
+    <TextFooter canSave={canSave} />
   </ModalFrame>;
 }
 
@@ -81,17 +102,33 @@ export function askText(request: TextRequest): Promise<string | null> {
 
 export type HelpBlock = string | { before: string; code: string; after: string };
 
+/** The centred card's own head with its close; the desk form has the shared title and corner close. */
+function HelpHead({ titleId, title, onDismiss }: { titleId: string; title: string; onDismiss: () => void }) {
+  const heading = <h2 id={titleId} className="modal-title">{title}</h2>;
+  if (useDeskCancel()) return heading;
+  return <div className="help-head">{heading}
+    <button type="button" className="icon-btn help-close" aria-label={t("close")} onClick={onDismiss}><X size={20} aria-hidden="true" /></button>
+  </div>;
+}
+
+/** Nothing to confirm or cancel: the desk form's footer is the one button that puts it away. */
+function HelpFooter({ onDismiss }: { onDismiss: () => void }) {
+  if (!useDeskCancel()) return null;
+  return <div className="desk-actions">
+    <Button className="desk-action is-primary help-done" onClick={onDismiss}>{t("desk.gotIt")}</Button>
+  </div>;
+}
+
 export function showHelp(title: string, blocks: HelpBlock[]): void {
   presentModal<never>(modal => {
     const ids = blocks.map((_, i) => `${modal.titleId}-copy-${i}`);
-    return <ModalFrame modal={modal} title={title} className="modal help" describedBy={ids.join(" ") || undefined}
-      focus={form => form.querySelector<HTMLButtonElement>(".help-close")!.focus()}
-      heading={<div className="help-head"><h2 id={modal.titleId} className="modal-title">{title}</h2>
-        <button type="button" className="icon-btn help-close" aria-label={t("close")} onClick={modal.dismiss}><X size={20} aria-hidden="true" /></button>
-      </div>}>
+    return <ModalFrame modal={modal} title={title} className="modal help" describedBy={ids.join(" ") || undefined} deskClose
+      focus={form => form.querySelector<HTMLButtonElement>(".help-done, .help-close")!.focus()}
+      heading={<HelpHead titleId={modal.titleId} title={title} onDismiss={modal.dismiss} />}>
       {blocks.map((block, i) => <p key={i} id={ids[i]} className="help-copy">
         {typeof block === "string" ? block : <>{block.before}<code>{block.code}</code>{block.after}</>}
       </p>)}
+      <HelpFooter onDismiss={modal.dismiss} />
     </ModalFrame>;
   }, { replaceKey: "help" });
 }
@@ -100,6 +137,10 @@ export function showHelp(title: string, blocks: HelpBlock[]): void {
  * A confirmation that names its action and its object. The title is the
  * question itself; `subject` shows what is affected and its state; `warning`
  * calls out a consequence the reader might not expect (e.g. running work).
+ *
+ * It opens on Cancel, the safe answer, so Enter straight away changes nothing.
+ * A confirmed destructive action usually removes the row it was asked from;
+ * focus follows to that row's successor (`removal-focus.ts`).
  */
 export type ConfirmRequest = {
   title: string;
@@ -115,7 +156,7 @@ export function askConfirm(request: ConfirmRequest): Promise<boolean> {
   const { title, message, subject, warning, confirmLabel, tone = "danger" } = request;
   return presentModal<boolean>(modal => {
     const copyId = `${modal.titleId}-copy`;
-    return <ModalFrame modal={modal} title={title} className="modal confirm" describedBy={message || warning ? copyId : undefined}
+    return <ModalFrame modal={modal} title={title} className="modal confirm" describedBy={message || warning ? copyId : undefined} deskClose
       focus={form => form.querySelector<HTMLButtonElement>(".confirm-cancel")!.focus()}>
       {subject && <div className="confirm-subject">
         <strong className="confirm-name">{subject.name}</strong>
@@ -132,5 +173,5 @@ export function askConfirm(request: ConfirmRequest): Promise<boolean> {
           onClick={() => modal.close(true)}>{confirmLabel}</button>
       </div>
     </ModalFrame>;
-  }, { cancelValue: false, readClose: dialog => dialog.returnValue === "confirm" }).result;
+  }, { cancelValue: false, readClose: dialog => dialog.returnValue === "confirm", removes: tone === "danger" }).result;
 }

@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { act } from "react";
@@ -171,7 +172,7 @@ describe("desk pane reads repaint the installed App once", () => {
     commits = 0;
     await act(async () => { await refreshPaneRead(); });
     expect(commits).toBe(0);
-    expect(composeField()).toBe(before);
+    expectSameNode(composeField(), before);
     expect(sessionStore.get().paneText).toBe("hello");
   });
 
@@ -193,7 +194,7 @@ describe("desk pane reads repaint the installed App once", () => {
     await act(async () => { await refreshPaneRead(); });
     expect(dashboardStore.get().completionSeen).toEqual({ p1: true });
     expect(commits).toBe(0);
-    expect(composeField()).toBe(before);
+    expectSameNode(composeField(), before);
   });
 
   test("a fresh completion repaints exactly once when not composing, then goes quiet", async () => {
@@ -215,12 +216,12 @@ describe("desk pane reads repaint the installed App once", () => {
     await act(async () => { await refreshPaneRead(); });
     expect(commits).toBe(1);
     expect(dashboardStore.get().completionSeen).toEqual({ p1: true });
-    expect(composeField()).toBe(before);
+    expectSameNode(composeField(), before);
 
     commits = 0;
     await act(async () => { await refreshPaneRead(); });
     expect(commits).toBe(0);
-    expect(composeField()).toBe(before);
+    expectSameNode(composeField(), before);
   });
 
   afterEach(async () => {

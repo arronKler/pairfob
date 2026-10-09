@@ -2,6 +2,7 @@ import { ChevronRight, Minus, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "../primitives/button";
 import type { ActionSheetController, SheetAction } from "./action-sheet";
+import { useMenuItemRole } from "./popover-frame";
 
 /**
  * Action-sheet controls by weight. Settings (`MenuSetting`, `MenuStepper`,
@@ -64,7 +65,7 @@ export function MenuTile({ icon, label, aria, disabled = false, ...target }: Tar
 export function MenuRow({ icon, label, detail, next = false, danger = false, disabled = false, ...target }: Target & {
   icon?: ReactNode; label: string; detail?: string; next?: boolean; danger?: boolean; disabled?: boolean;
 }) {
-  return <Button className={`menu-row${danger ? " menu-danger" : ""}`} disabled={disabled} onClick={() => activate(target)}>
+  return <Button className={`menu-row${danger ? " menu-danger" : ""}`} role={useMenuItemRole()} disabled={disabled} onClick={() => activate(target)}>
     {icon && <span className="menu-row-icon" aria-hidden="true">{icon}</span>}
     <span className="menu-row-label">{label}{detail && <small>{detail}</small>}</span>
     {next && <ChevronRight className="menu-row-next" size={18} aria-hidden="true" />}

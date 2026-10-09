@@ -10,7 +10,7 @@ import { t } from "../../../lib/i18n";
 import { capabilityEnabled } from "../../operations/capabilities-store";
 import { useStatusUnverifiable } from "../guided/session-chrome";
 import { openStepSheet } from "./step-sheet";
-import { chatDockNotice, copyAgentReply, currentAgentTraceOwnerKey, emptySpec, jumpToLatest, leaveAgentChat,
+import { chatTraceNote, copyAgentReply, currentAgentTraceOwnerKey, emptySpec, jumpToLatest, leaveAgentChat,
   refreshAgentTrace, rememberAgentPosture, rememberAgentViewport, restoreAgentViewport, streamSig, visibleItems,
 } from "./agent-chat-controller";
 import { agentChatUIRevision, publishAgentChatUI, subscribeAgentChatUI } from "./agent-chat-ui";
@@ -22,7 +22,8 @@ import { sessionOwner } from "../identity";
 import { subscribeVisibleNotice, visibleNotice } from "../../../app/notices-store";
 import { AgentCompose } from "./agent-compose";
 import { AgentStream } from "./agent-stream";
-import { Button, Feedback } from "../../../shared/ui/primitives";
+import { Button } from "../../../shared/ui/primitives";
+import { noticeKeepsItsPlace, SessionNotice } from "../session-notice";
 import { SessionIdentity } from "../guided/session-chrome";
 
 function AgentChatChrome({ includeBack, handlers }: { includeBack: boolean; handlers: SessionHandlers }) {
@@ -55,7 +56,11 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   const verified = capabilityEnabled("trace_labels") && recordsStepResults(agent?.agent);
   const progress = usePromptProgressNote();
   const items = visibleItems();
-  const notice = chatDockNotice();
+  // What stays keeps its place in the page: an error raised to stay, else the chat's own note about its
+  // history. A passing notice floats under it, so the note it used to replace does not leave and come back.
+  const appNotice = visibleNotice();
+  const passing = appNotice && !noticeKeepsItsPlace(appNotice) ? appNotice : null;
+  const standing = appNotice && !passing ? appNotice : chatTraceNote();
   // Steps that arrived since the reader scrolled away, for the jump button.
   const seen = useRef(items.length);
   if (chat.agentTraceFollow) seen.current = items.length;
@@ -82,7 +87,8 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   }, [paneId, chat.agentTraceLoadState]);
   return <div className="pane-root agent-chat-root" data-react-agent-chat="" data-back={includeBack ? "1" : "0"}>
     <AgentChatChrome includeBack={includeBack} handlers={handlers} />
-    {notice && <Feedback value={notice} appNotice />}
+    <SessionNotice value={standing} inPage />
+    <SessionNotice value={passing} />
     <div className="agent-stream-wrap">
       <AgentStream streamRef={stream} items={items} working={working} waiting={status === "blocked"} stale={stale}
         verified={verified} progress={progress} follow={chat.agentTraceFollow} hasOlder={chat.agentTraceNext !== null}

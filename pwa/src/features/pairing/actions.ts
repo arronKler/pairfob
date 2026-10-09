@@ -6,7 +6,8 @@ import {
   addingComputer, computers, liveSession, setAddingComputer, setCredential,
 } from "../computers/catalog-store";
 import {
-  pairAbortHandle, setPairAbort, setPairAwaitingApproval, setPairCodeDraft, setPairFailure, setPairManualOpen,
+  pairAbortHandle, pairCodeDraft, pairErrorTarget, pairFailedStep, setPairAbort, setPairAwaitingApproval, setPairCodeDraft,
+  setPairFailure, setPairManualOpen,
 } from "./form-store";
 import { clearNotice, showError, showStatus } from "../../app/notices-store";
 import { batch, type DomainView } from "../../shared/model/domain-store";
@@ -19,12 +20,11 @@ import { t } from "../../lib/i18n";
 import { fragmentUsableOnOrigin, parseCodeAndLocator, parsePairingCode, resolveHandPairing } from "../../lib/pairing-input";
 import { requestPairIntent } from "../../lib/pair-intent";
 import { PairingScanError, scanPairingCode } from "../../lib/pairing-scanner";
-import { normalizeCrockford } from "../../lib/protocol/bytes";
 import { pairOverWS, ProtocolError, type PairInput } from "../../lib/protocol/client";
 import { friendlyDeviceLabel, pairErrorField, shouldForgetPairFragment, type PairErrorField, type PairStepKey } from "../../lib/ui-model";
 import { saveCredential } from "../../lib/credentials";
 import { track } from "../../lib/telemetry";
-import type { ConnectNotice, ConnectViewInput } from "./model";
+import { pairCodeProblem, type ConnectNotice, type ConnectViewInput } from "./model";
 import {
   claimPairingAttempt, claimPairingTransport, clearPairingTransport, pairingPageOwner, pairingTransportAbortFor,
   pairingWorkId, retirePairingWork,
@@ -78,12 +78,13 @@ function runIfCurrentWork(work: number, run: () => void): void {
  * the initiating work before any notification/render: render can install a
  * replacement page, and re-reading the generation afterwards would authorize
  * the old callback's document-global selector on the new page. The field lives
- * in the code sheet, a dialog portaled to the document body, not under #app.
+ * in the connect form: the code sheet (a dialog portaled to the document body,
+ * not under #app) or the page's own card.
  */
 function focusPairField(name: PairErrorField, work: number): void {
   if (!name) return;
   runIfCurrentWork(work, () => {
-    document.querySelector<HTMLInputElement>(`dialog [name="${name}"]`)?.focus();
+    document.querySelector<HTMLInputElement>(`.connect-form [name="${name}"]`)?.focus();
   });
 }
 
@@ -115,8 +116,21 @@ export async function onPairSubmit(event: Event): Promise<void> {
   await beginPairing(String(data.get("code") || ""));
 }
 
+/**
+ * The reader changed the code in the field (a keystroke, or a paste into it).
+ * A recorded failure describes the code that was tried, so a different draft
+ * drops it: the field mark, the failed step and the notice that carries the
+ * reason, as the paste button and the next attempt already do. Only the form's
+ * own failure goes; the connection's `connectFailure` is not this field's.
+ */
 export function setPairCode(code: string): void {
-  setPairCodeDraft(code);
+  if (code === pairCodeDraft()) return;
+  batch(() => {
+    setPairCodeDraft(code);
+    if (pairErrorTarget() === null && pairFailedStep() === null) return;
+    setPairFailure(null, null);
+    clearNotice();
+  });
 }
 
 export function setManualPairOpen(open: boolean): void {
@@ -144,8 +158,7 @@ export async function beginPairing(rawCode: string): Promise<void> {
 
   const resolved = resolveHandPairing(2, rawCode, Boolean(scanned));
   if (!resolved.ok) {
-    const length = normalizeCrockford(rawCode).length;
-    rejectLocal("code", rawCode ? t("err.pairIncomplete", { n: length }) : FRIENDLY_ERROR.locator_required, work);
+    rejectLocal("code", pairCodeProblem(rawCode), work);
     return;
   }
   pairAbortHandle()?.abort();
@@ -345,7 +358,7 @@ export async function pastePairCode(): Promise<void> {
     });
     commitView();
     runIfCurrentWork(work, () => {
-      document.querySelector<HTMLButtonElement>("dialog .btn-connect")?.focus();
+      document.querySelector<HTMLButtonElement>(".connect-form .btn-connect")?.focus();
     });
   } catch {
     if (work !== currentWork()) return;
@@ -405,7 +418,9 @@ export type ConnectPageSnapshots = {
  * the same published phase as its frame; action-time canonical readers stay
  * with the click/async handlers, never with JSX.
  */
-export function connectPageInput(desk: boolean, notice: ConnectNotice | null, snapshots: ConnectPageSnapshots): ConnectViewInput {
+export function connectPageInput(
+  device: Pick<ConnectViewInput, "wide" | "finePointer">, notice: ConnectNotice | null, snapshots: ConnectPageSnapshots,
+): ConnectViewInput {
   const { connection, computers: computersSnapshot, pairing } = snapshots;
   return {
     phase: connection.phase,
@@ -418,6 +433,6 @@ export function connectPageInput(desk: boolean, notice: ConnectNotice | null, sn
     pairFailedStep: pairing.pairFailedStep,
     pairAwaitingApproval: pairing.pairAwaitingApproval,
     notice,
-    desk,
+    ...device,
   };
 }

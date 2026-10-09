@@ -1,0 +1,73 @@
+/* --- Connect / pairing, wide ------------------------------------------------------
+   Two columns once there is room: what to do on the computer on the left, the
+   way in on the right — the code card for a mouse, the terminal miniature and
+   the scan for a touch screen. Both columns stay through every stage, so a
+   handshake only swaps copy and the control under the field. The steps and the
+   card themselves are in connect-steps.
+
+   Every rule sits behind the 900px breakpoint and the page's `is-wide` class
+   (or a class only the wide page renders): no one-column page matches one.
+   -------------------------------------------------------------------------------- */
+
+@mixin connect-wide {
+  @media (min-width: 900px) {
+    .page.connect-page.is-wide {
+      max-width: none;
+      padding: calc(env(safe-area-inset-top, 0px) + 14px) 28px calc(24px + env(safe-area-inset-bottom, 0px));
+      /* The page's one ornament when the miniature is not there to carry it. */
+      background: radial-gradient(640px 420px at 50% 46%, rgba(61, 123, 253, 0.1), transparent 70%);
+    }
+
+    /* "Add a computer" leads back from above the columns it belongs to. */
+    .connect-page.is-wide > .topbar:not(.connect-top),
+    .connect-wide {
+      width: 100%;
+      max-width: 58rem;
+      margin-inline: auto;
+    }
+
+    .connect-wide {
+      flex: 1 1 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+      align-content: center;
+      align-items: center;
+      gap: clamp(40px, 6vw, 72px);
+      /* Sits a little above the true centre, where the eye puts the middle. */
+      padding-block: 24px max(6vh, 44px);
+    }
+
+    /* --- Left: title, lede and the two steps ------------------------------------ */
+
+    .connect-intro .brand { margin-bottom: 26px; }
+    .connect-intro .wordmark { font-size: 1.3rem; }
+
+    .is-wide .connect-copy { margin-top: 0; }
+
+    .is-wide .connect-title {
+      font-size: 1.85rem;
+      font-weight: 780;
+      line-height: 1.15;
+    }
+
+    /* Two lines are always reserved, so a shorter stage lede moves nothing. */
+    .is-wide .connect-lede {
+      max-width: 30rem;
+      min-height: 3.2em;
+      margin-top: 12px;
+    }
+
+    /* --- Right, scanned: the miniature over the scan actions --------------------- */
+
+    .connect-side .term-mini { margin-top: 0; }
+
+    /* Room for both actions is kept while only Cancel shows, so the miniature
+       stays where it is through the handshake. */
+    .is-wide .connect-actions {
+      align-content: start;
+      min-height: 150px;
+      margin-top: 0;
+      padding-top: 22px;
+    }
+  }
+}

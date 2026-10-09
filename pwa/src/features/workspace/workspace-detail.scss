@@ -83,6 +83,16 @@
 }
 .workspace-layer-switch button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
 
+/* Drawn as small as the info bar needs; under a finger the hit area is 44px
+   high, centred on the control and inside the bar. Where the control is
+   already that tall (the inspector's column) it adds nothing. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .workspace-chip,
+  .workspace-layer-switch button { position: relative; }
+  .workspace-chip::after,
+  .workspace-layer-switch button::after { content: ""; position: absolute; inset: min(0px, calc(50% - 22px)) 0; }
+}
+
 .workspace-layer-label { color: var(--muted); font-size: var(--text-caption); white-space: nowrap; flex: none; }
 .workspace-additions,
 .workspace-deletions {
@@ -246,6 +256,34 @@ button.diff-line-number {
   color: var(--muted);
   font-size: var(--text-caption);
 }
+/* Edit and Delete are 34px high under the note. A finger presses 44px: up to
+   the note's words (the 4px between them) and down through the card's padding
+   and edge, a pixel into the 8px that part the card from the next line. Where
+   they are already 44px (the inspector's column, a note not saved yet) the
+   area is the button. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .btn.diff-note-action { position: relative; }
+  .btn.diff-note-action::after {
+    content: "";
+    position: absolute;
+    inset: min(0px, calc((100% - 44px) * 0.4)) 0 min(0px, calc((100% - 44px) * 0.6));
+  }
+}
+/* A note that is not saved yet waits in the saved card's place: the same card,
+   unfilled and dashed, and its words are the way back into the editor. */
+.workspace-diff-note.is-draft { border-style: dashed; border-color: rgba(110, 168, 254, 0.6); background: none; }
+/* Says what the dashed card is: a note still to be saved, not one already kept. */
+.diff-note-state { flex: none; color: var(--accent); font-size: var(--text-caption); font-weight: 620; white-space: nowrap; }
+.diff-note-resume { width: 100%; min-height: 34px; padding: 0; align-items: center; border-radius: var(--r-sm); color: var(--muted); text-align: left; }
+.btn.diff-note-keep { color: var(--accent); }
+@media (hover: hover) and (pointer: fine) {
+  .diff-note-resume:hover { color: var(--ink); }
+}
+/* New on the screen, so a finger gets whole targets from the start. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .diff-note-resume,
+  .workspace-diff-note.is-draft .btn.diff-note-action { min-height: 44px; }
+}
 
 /* --- Footer: notes bar or receipt, then the stepper -------------------------------- */
 
@@ -275,6 +313,23 @@ button.diff-line-number {
 .workspace-notes-copy small.workspace-notes-hint { color: var(--warn); }
 .btn.workspace-notes-send { flex: none; width: auto; min-height: 40px; margin: 0; padding: 0 16px; font-size: var(--text-body); }
 .workspace-notes-send .spinner { width: 14px; height: 14px; }
+/* 40px of button in a bar with 8px of padding: a finger's 44px fits inside the
+   bar. The button is a ripple surface and clips what leaves it, so its hit area
+   cannot be a pseudo-element reaching past it, as for the controls above. Its
+   own box is the area instead: 2px of clear border above and below, which the
+   margins take back out of the layout, around a padding box that is the button
+   as drawn (the side borders folded into the padding, the corner radius kept
+   on the inside). The inspector's column draws it 44px high and is left alone. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .workspace-shell .btn.workspace-notes-send {
+    min-height: 44px;
+    margin-block: -2px;
+    padding-inline: 17px;
+    border-width: 2px 0;
+    border-radius: 14px / 16px;
+    background-clip: padding-box;
+  }
+}
 .workspace-notes-bar.is-sent { background: rgba(70, 214, 140, 0.08); }
 .workspace-notes-ok { flex: none; color: var(--ok); }
 .workspace-notes-dismiss { flex: none; color: var(--muted); }

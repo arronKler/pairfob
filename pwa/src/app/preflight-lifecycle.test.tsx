@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../test-support/node-identity";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
 import { resetBoardTestDOM } from "../../test-support/dom";
@@ -135,7 +136,7 @@ test("held old-computer close success cannot clear a new computer's same-id pane
   expect(liveSession() === newer).toBeTrue();
   expect(openPaneId()).toBe("p1");
   expect(currentScreen()).toBe("pane");
-  expect(appRoot().querySelector("textarea") === newField).toBeTrue();
+  expectSameNode(appRoot().querySelector("textarea"), newField);
   expect(composeDraft()).toBe("new computer draft");
 });
 

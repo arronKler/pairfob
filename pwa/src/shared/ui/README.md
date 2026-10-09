@@ -26,6 +26,23 @@ Use these existing modules before adding another visually equivalent control:
   Controlled portals opt into `restoreFocus`; do not give both layers ownership.
 - `overlay/sheet-content`: the shared sheet handle, heading, close target and
   scrollable body. Keep forms and validation in their owning feature.
+- The desk form (a dialog a mouse or the keyboard opened beside the list) has
+  one anatomy and one order, the document's and the eye's alike: title, form,
+  footer (`DeskCancel`, then the action), corner close (`DeskClose`, which
+  `ModalFrame deskClose` and `SheetContent` write last). `DeskCancel` draws
+  nothing in a sheet; a footer button of your own takes the `desk-action`
+  mixins. `useDeskEnter` gives a form Enter from its fields and its choices.
+  Tab is kept inside every dialog by the lifecycle; do not add a trap.
+- A sheet's pinned footer is written through `SheetFooter`
+  (`overlay/sheet-content`): the bottom sheet keeps it inside the scroller, the
+  desk card places it under the scrolling body, so a scrollbar never moves it.
+- Escape undoes the last step first. A step taken inside a dialog (a question
+  asked in place, a list that took the form's place) registers with
+  `useEscapeStep` (`overlay/escape-steps`); a pushed page and the dialog follow.
+  A dialog opened over another as its next step takes `stepClass()`.
+- A refused submit leaves the reader in the field it is about and a form that
+  locks while it runs never drops focus onto the page: `focusRefused` and
+  `holdFocus` (`overlay/form-focus`).
 
 Reuse `Button`, `EmptyState`, `StatusLine`, setting rows and menu primitives as
 appropriate. `Button` deliberately retains native props and only defaults the

@@ -7,6 +7,7 @@ import { beginAddComputer, forgetComputer, resumeComputer } from "../../features
 import { computers, credential } from "../../features/computers/catalog-store";
 import { unreachableHop } from "../../features/connection/connection-path";
 import { connectFailure, setRetryingUnreachable } from "../../features/connection/connection-store";
+import { pointerFine } from "../../app/input-mode";
 import { MenuChoice, showActionSheet } from "../../shared/ui/overlay";
 import { Button, StatusDot } from "../../shared/ui/primitives";
 import { CommandLine } from "../../features/dashboard/components/herd-empty";
@@ -28,8 +29,21 @@ export function retryUnreachable(): void {
   void resumeComputer(pair);
 }
 
-function openUnreachableSheet(name: string, line: string): void {
+/** The computer this page is about and what broke on the way to it, in the header's words. */
+export function unreachableHost(): { name: string; line: string; relay: boolean } {
   const pair = target();
+  const relay = (unreachableHop(connectFailure()) ?? "computer") === "relay";
+  return {
+    name: pair ? computerTitle(pair) : t("boot.computer"),
+    line: relay ? t("unreach.lineRelay") : t("unreach.lineComputer", { when: formatDeviceAge(pair?.lastSeen) }),
+    relay,
+  };
+}
+
+/** The computer panel behind the title: retry, add another computer, forget this one. */
+export function openUnreachableSheet(): void {
+  const pair = target();
+  const { name, line } = unreachableHost();
   showActionSheet(t("host.sheetTitle"), (modal) => (
     <>
       <MenuChoice modal={modal} icon={<RefreshCw size={18} aria-hidden="true" />} title={t("host.retry")} action={retryUnreachable} />
@@ -39,20 +53,16 @@ function openUnreachableSheet(name: string, line: string): void {
           action={() => void forgetComputer(pair.daemonId)} />
       ) : null}
     </>
-  ), { subtitle: `${name} · ${line}` });
+  ), { subtitle: `${name} · ${line}`, popover: "menu" });
 }
 
 /**
- * The only paired computer could not be reached. The same frame as the list —
- * header, then the route with the broken hop, then only the steps that help on
- * that side — and a retry at thumb height that also runs by itself.
+ * The explanation itself, the same at every width: the route with the broken
+ * hop, only the steps that help on that side, and a retry that also runs by
+ * itself. The frame around it decides where the retry sits.
  */
-export function UnreachableShell({ retrying = false }: { retrying?: boolean }) {
-  const pair = target();
-  const name = pair ? computerTitle(pair) : t("boot.computer");
-  const hop = unreachableHop(connectFailure()) ?? "computer";
-  const relay = hop === "relay";
-  const line = relay ? t("unreach.lineRelay") : t("unreach.lineComputer", { when: formatDeviceAge(pair?.lastSeen) });
+export function UnreachableBody({ retrying }: { retrying: boolean }) {
+  const { name, relay } = unreachableHost();
   const [left, setLeft] = useState(AUTO_RETRY_S);
   // Count down while idle; the retry itself runs from an effect, never from a
   // state updater (which React may call twice).
@@ -69,7 +79,8 @@ export function UnreachableShell({ retrying = false }: { retrying?: boolean }) {
   const failNote = retrying ? t("path.retrying") : relay ? t("path.unreachable") : t("path.offline");
   const steps = relay
     ? [
-        { title: t("unreach.network"), detail: t("unreach.networkDetail") },
+        // A computer has no cellular data to switch to; it has a cable or a phone to tether.
+        { title: t("unreach.network"), detail: t(pointerFine() ? "unreach.networkDetailDesk" : "unreach.networkDetail") },
         { title: t("unreach.vpn"), detail: t("unreach.vpnDetail") },
       ]
     : [
@@ -78,20 +89,7 @@ export function UnreachableShell({ retrying = false }: { retrying?: boolean }) {
         { title: t("unreach.restart"), command: "pairfob service restart" },
       ];
   return (
-    <div className="page herd-page unreachable-shell">
-      <h1 className="sr-only">{t("tabs.sessions")}</h1>
-      <header className="herd-head">
-        <div className="herd-head-row">
-          <Button className="host-title is-off" aria-haspopup="dialog" aria-label={t("host.aria", { host: name, status: line })}
-            onClick={() => openUnreachableSheet(name, line)}>
-            <StatusDot tone="off" />
-            <span className="host-title-text">
-              <span className="host-title-name">{name}<MoreHorizontal size={16} aria-hidden="true" /></span>
-              <span className="host-title-line">{line}</span>
-            </span>
-          </Button>
-        </div>
-      </header>
+    <>
       <ConnectionPathCard host={name}
         phone={node("ok", relay ? t("path.phoneOnline") : t("path.phoneOk"))}
         link1={relay ? "fail" : "ok"}
@@ -121,10 +119,38 @@ export function UnreachableShell({ retrying = false }: { retrying?: boolean }) {
           {retrying ? t("unreach.retrying") : t("unreach.retryNow")}
         </Button>
         <small className="conn-retry-note" aria-live="polite">
-          {retrying ? " " : t("unreach.autoRetry", { n: String(left) })}
+          {retrying ? " " : t("unreach.autoRetry", { n: String(left) })}
           {retrying ? null : <>{" · "}<Button className="text-link conn-retry-add" onClick={beginAddComputer}>{t("unreach.add")}</Button></>}
         </small>
       </div>
+    </>
+  );
+}
+
+/**
+ * The only paired computer could not be reached, on the phone: the list's own
+ * frame — its header, then the explanation — with the retry at thumb height
+ * above the tab bar. The desk keeps the list beside it instead
+ * (`unreachable-desk.tsx`).
+ */
+export function UnreachableShell({ retrying = false }: { retrying?: boolean }) {
+  const { name, line } = unreachableHost();
+  return (
+    <div className="page herd-page unreachable-shell">
+      <h1 className="sr-only">{t("tabs.sessions")}</h1>
+      <header className="herd-head">
+        <div className="herd-head-row">
+          <Button className="host-title is-off" aria-haspopup="dialog" aria-label={t("host.aria", { host: name, status: line })}
+            onClick={openUnreachableSheet}>
+            <StatusDot tone="off" />
+            <span className="host-title-text">
+              <span className="host-title-name">{name}<MoreHorizontal size={16} aria-hidden="true" /></span>
+              <span className="host-title-line">{line}</span>
+            </span>
+          </Button>
+        </div>
+      </header>
+      <UnreachableBody retrying={retrying} />
     </div>
   );
 }

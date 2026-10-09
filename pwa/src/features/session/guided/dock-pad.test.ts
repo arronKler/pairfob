@@ -1,3 +1,4 @@
+import { expectDifferentNode, expectSameNode } from "../../../../test-support/node-identity";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resetBoardTestDOM } from "../../../../test-support/dom";
@@ -123,8 +124,8 @@ describe("session pad morphs", () => {
         act(() => { button.dispatchEvent(down); });
         expect(down.defaultPrevented).toBe(true);
         await act(() => { button.click(); });
-        expect(appRoot().querySelector("textarea") === input).toBeTrue();
-        expect(document.activeElement === input).toBeTrue();
+        expectSameNode(appRoot().querySelector("textarea"), input);
+        expectSameNode(document.activeElement, input);
         expect([input.selectionStart, input.selectionEnd]).toEqual([1, 4]);
         expect(input.value).toBe("正在编辑的文字");
         expect(composeIME()).toBe(true);
@@ -177,7 +178,8 @@ describe("session pad morphs", () => {
     expect(appRoot().querySelector('[aria-label="Alt / Option"]')?.textContent).toBe("Alt");
     // A chord reads as one full name even though it is drawn on two lines.
     expect(appRoot().querySelector('[aria-label="Ctrl+C"] small')?.textContent).toBe("Ctrl");
-    expect(appRoot().querySelector(".pad-page-name")?.textContent).toBe("控制");
+    expect(appRoot().querySelector(".pad-pagination-start .pad-page-name")?.textContent).toBe("控制");
+    expect(appRoot().querySelector(".pad-pagination-end .pad-kind")).not.toBeNull();
   });
 
   test("expanded command morph fills compose chips and not SendKeys", async () => {
@@ -190,7 +192,7 @@ describe("session pad morphs", () => {
     expect(chips).toEqual(SLASH_COMMANDS.map((command) => command.label));
     expect(appRoot().textContent).not.toContain("Tab");
     expect(kindOption("命令").getAttribute("aria-pressed")).toBe("true");
-    expect(appRoot().querySelector(".pad-pagination-end")?.textContent).toBe("编辑");
+    expect(appRoot().querySelector(".pad-pagination-start")?.textContent).toBe("编辑");
   });
 });
 test("while the soft keyboard is up only the primary row renders; ⋯ puts the keyboard away first", async () => {
@@ -207,7 +209,7 @@ test("while the soft keyboard is up only the primary row renders; ⋯ puts the k
     expect(appRoot().querySelectorAll('[aria-label="终端快捷键"] > .key')).toHaveLength(7);
     expect(keysExpanded()).toBe(true);
     await act(() => { appRoot().querySelector<HTMLButtonElement>(".key-more")!.click(); });
-    expect(document.activeElement === field).toBeFalse();
+    expectDifferentNode(document.activeElement, field);
     expect(keysExpanded()).toBe(true);
     await act(async () => { root.dataset.kb = "closed"; await Promise.resolve(); });
     expect(appRoot().querySelector(".pad-pages")).toBeTruthy();

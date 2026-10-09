@@ -1,3 +1,4 @@
+import { expectDifferentNode, expectSameNode } from "../../../../test-support/node-identity";
 import { act } from "react";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -55,8 +56,8 @@ describe("React session compose", () => {
     act(() => { input.dispatchEvent(new view.Event("compositionstart")); });
     expect(appRoot().querySelector("textarea")?.id).toBe("compose-text-mobile");
     await act(() => { paint(true); });
-    expect(appRoot().querySelector("textarea")).toBe(input);
-    expect(document.activeElement).toBe(input);
+    expectSameNode(appRoot().querySelector("textarea"), input);
+    expectSameNode(document.activeElement, input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([1, 4]);
     expect(input.value).toBe("正在编辑的文字");
     const more = appRoot().querySelector<HTMLButtonElement>(".key-more")!;
@@ -65,8 +66,8 @@ describe("React session compose", () => {
     expect(down.defaultPrevented).toBe(true);
     await act(() => { more.click(); });
     expect(keysExpanded()).toBe(true);
-    expect(appRoot().querySelector("textarea")).toBe(input);
-    expect(document.activeElement).toBe(input);
+    expectSameNode(appRoot().querySelector("textarea"), input);
+    expectSameNode(document.activeElement, input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([1, 4]);
     expect(composeIME()).toBe(true);
   });
@@ -99,6 +100,27 @@ describe("React session compose", () => {
     expect(input.placeholder).toBe("实时 · 边打边进终端");
   });
 
+  test("the field grows by the lines of a wrapped pending echo and returns to one line when it clears", async () => {
+    selectPane("p1");
+    setScreen("home");
+    setComposeLive(true);
+    attachLiveSession({ isConnected: () => true, sendText: async () => undefined } as unknown as LiveSession);
+    await act(() => { paint(); });
+    const input = appRoot().querySelector("textarea")!;
+    const view = appRoot().ownerDocument.defaultView!;
+    // A test DOM lays nothing out: the echo wraps to three lines, the hint is one.
+    Object.defineProperty(input, "scrollHeight", { configurable: true, get: () => input.placeholder.startsWith("本机待回显") ? 82 : 44 });
+    act(() => flushSync(() => {
+      input.value = "echo a long line of live input that the terminal has not echoed yet";
+      input.dispatchEvent(new view.Event("input", { bubbles: true }));
+    }));
+    expect(input.placeholder.startsWith("本机待回显")).toBeTrue();
+    expect(Number.parseFloat(input.style.height)).toBeGreaterThanOrEqual(82);
+    expect(await act(() => flushLiveInput())).toBeTrue();
+    expect(input.placeholder).toBe("实时 · 边打边进终端");
+    expect(input.style.height).toBe("46px");
+  });
+
   test("desktop field id stays the full-terminal-compatible compose selector", async () => {
     await act(() => { paint(false); });
     expect(appRoot().querySelector("textarea")?.id).toBe("compose-text-desktop");
@@ -124,8 +146,8 @@ describe("React session compose", () => {
     const full = appRoot().ownerDocument.createElement("textarea");
     full.className = "full-terminal-compose-input";
     appRoot().append(full);
-    expect(composeField()).toBe(full);
-    expect(appRoot().querySelector(".dock-form textarea")).not.toBe(full);
+    expectSameNode(composeField(), full);
+    expectDifferentNode(appRoot().querySelector(".dock-form textarea"), full);
   });
 
   test("the view snapshot does not create a live pump", async () => {

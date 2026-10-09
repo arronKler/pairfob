@@ -1,0 +1,167 @@
+/*
+  Anchored presentation for menus and panels opened with a mouse.
+
+  The same action-sheet dialog, placed at what opened it (overlay/popover.ts
+  sets left, top and the height that is left) instead of centred over a dimmed
+  app. Everything here sits on the desk tier and under `.popover`, which only a
+  mouse or keyboard open on a desk layout adds: a finger, and every phone, keeps
+  the sheet rules untouched. Below 900px the sheet rules in overlay.scss step
+  aside for the same class, so the card is the one a wide window draws.
+*/
+
+@media (min-width: 720px) {
+  dialog.modal.popover {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    max-height: calc(100dvh - 16px);
+    box-shadow: var(--shadow-2);
+    animation: popover-in var(--dur-1) var(--ease);
+  }
+
+  /* Nothing drags a popover, and a sheet class that caps its travelling form
+     does not get to cap this one: the placement owns the height. */
+  .popover .sheet-grab { display: none; }
+  dialog.modal.sheet.popover > form { max-height: none; }
+
+  /* The page stays readable: a menu belongs to the row under it, not to a dimmed app. */
+  dialog.modal.popover::backdrop {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* --- Panel: a whole sheet under its trigger ------------------------------- */
+
+  dialog.modal.popover-panel {
+    width: min(22.5rem, calc(100vw - 16px));
+    border-radius: var(--r-lg);
+  }
+
+  /* Its settings apply to the pane behind it, so the scrim only sets it apart. */
+  dialog.modal.popover-panel::backdrop { background: rgba(4, 6, 10, 0.16); }
+
+  /* --- Menu: a flat list of commands ---------------------------------------- */
+
+  dialog.modal.popover-menu {
+    width: max-content;
+    min-width: 12.5rem;
+    max-width: min(20rem, calc(100vw - 16px));
+    border-radius: var(--r-md);
+  }
+
+  /* The row it opened from already names the object; the title still labels
+     the dialog and the menu for assistive tech. A pushed page keeps its bar. */
+  .popover-menu .sheet-head:not(.has-back) { display: none; }
+
+  .popover-menu .sheet-body { padding: 5px; }
+
+  .popover-menu .menu-item,
+  dialog.modal.popover-menu .menu-row {
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 10px;
+    gap: 10px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    font-size: var(--text-body);
+    font-weight: 500;
+  }
+
+  .popover-menu .menu-choice:has(.menu-choice-detail),
+  .popover-menu .menu-row:has(small) { padding-block: 4px; }
+
+  /* Arrow keys move real focus, so the focused command carries the app's ring. */
+  .popover-menu .menu-item:focus-visible,
+  .popover-menu .menu-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    background: var(--surface-2);
+  }
+
+  .popover-menu .menu-item:active:not(:disabled),
+  .popover-menu .menu-row:active:not(:disabled) { background: var(--line-strong); }
+
+  .popover-menu .menu-choice-detail,
+  .popover-menu .menu-row-label small { font-size: var(--text-caption); }
+
+  .popover-menu .menu-choice-icon svg,
+  .popover-menu .menu-row-icon svg,
+  .popover-menu .menu-choice-check {
+    width: 16px;
+    height: 16px;
+  }
+
+  .popover-menu .menu-choice-check { margin-left: 6px; }
+
+  /* Sheet cards become ruled runs: a menu has no room for nested surfaces. */
+  .popover-menu .menu-group {
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .popover-menu .menu-group + .menu-group,
+  .popover-menu .menu-section {
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px solid var(--line);
+  }
+
+  .popover-menu .menu-section:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  /* Facts above the commands end in a rule of their own. */
+  .popover-menu .sheet-facts + .menu-section {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  dialog.modal.popover-menu .menu-section-title {
+    margin: 4px 10px 3px;
+    padding: 0;
+    border: 0;
+  }
+
+  .popover-menu .sheet-facts {
+    margin: 0 0 5px;
+    padding: 4px 10px 6px;
+  }
+
+  .popover-menu .sheet-fact {
+    grid-template-columns: 4rem minmax(0, 1fr);
+    padding: 2px 0;
+  }
+
+  .popover-menu .sheet-fact-val { font-size: var(--text-secondary); }
+}
+
+/* Rows keep the finger-sized target unless the pointer is a mouse: a popover
+   opened from the keyboard on a tablet is still touched afterwards. */
+@media (min-width: 720px) and (hover: hover) and (pointer: fine) {
+  .popover-menu .menu-item,
+  dialog.modal.popover-menu .menu-row { min-height: 32px; }
+
+  /* A second line needs the room; one line stays a 32px row. */
+  .popover-menu .menu-choice:has(.menu-choice-detail),
+  dialog.modal.popover-menu .menu-row:has(small) { min-height: 40px; }
+
+  .popover-menu .menu-item:hover:not(:disabled),
+  .popover-menu .menu-row:hover:not(:disabled) { background: var(--surface-2); }
+}
+
+@keyframes popover-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog.modal.popover { animation: none; }
+}

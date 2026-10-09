@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { t } from "../../../lib/i18n";
+import { guardBackTap } from "../dom/back-tap";
 import { Button } from "./button";
 
 /** Decorative disclosure mark; the owning control provides its accessible name. */
@@ -8,8 +9,16 @@ export function Chevron({ className = "chev" }: { className?: string }) {
   return <ChevronRight className={className} size={16} aria-hidden="true" />;
 }
 
+/**
+ * Every screen's way back. A pointer press arms the double-tap guard before the
+ * screen changes, so the second half of a doubled tap presses nothing on the
+ * screen that comes up under it (`dom/back-tap.ts`); a key goes straight back.
+ */
 export function BackButton({ onBack, label }: { onBack: () => void; label?: string }) {
-  return <Button className="icon-btn back" onClick={onBack} aria-label={label ?? t("chrome.back")}><ChevronLeft size={24} aria-hidden="true" /></Button>;
+  return <Button className="icon-btn back" aria-label={label ?? t("chrome.back")} onClick={(event) => {
+    if (event.detail !== 0) guardBackTap(event.currentTarget.ownerDocument, { x: event.clientX, y: event.clientY });
+    onBack();
+  }}><ChevronLeft size={24} aria-hidden="true" /></Button>;
 }
 
 /** `hideTitle` keeps the heading for assistive tech when the page shows its name in its own content. */

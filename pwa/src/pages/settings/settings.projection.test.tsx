@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { act } from "react";
@@ -142,7 +143,8 @@ test("mobile settings is a tab root: a page title, no back bar, and the tab bar"
   expect(app.querySelector(".tab-bar .tab-bar-item.on")?.textContent).toContain(t("tabs.settings"));
   // A sub-page brings its own back bar, which returns to the overview.
   act(() => app.querySelector<HTMLButtonElement>("button.cp-main")!.click());
-  expect(app.querySelector(".topbar-title")?.textContent).toBe("Test Host");
+  // The panel names the computer; the bar above it does not say it again.
+  expect(app.querySelector(".topbar-title")?.textContent).toBe(t("settings.computer"));
   expect(app.querySelector(".cp-name")?.textContent).toBe("Test Host");
   act(() => app.querySelector<HTMLButtonElement>(`button[aria-label="${t("chrome.back")}"]`)!.click());
   expect(app.querySelector(".settings-title")?.textContent).toBe("Settings");
@@ -157,7 +159,7 @@ test("a domain-driven re-render keeps focus on the network radio", () => {
     throw new Error("missing Relay radio");
   }
   act(() => relay.focus());
-  expect(document.activeElement).toBe(relay);
+  expectSameNode(document.activeElement, relay);
   // An unrelated notice publication re-renders the subscribed settings subtree.
   act(() => {
     showStatus("re-render focus probe", true);
@@ -185,7 +187,7 @@ test("persistent settings notice updates and clears through the mounted subscrip
   act(() => showStatus("review status"));
   expect(appRoot().querySelector("[data-react-notice]")?.textContent).toBe("review status");
   // The notice updates in place; the page root node is not replaced.
-  expect(appRoot().firstElementChild).toBe(page);
+  expectSameNode(appRoot().firstElementChild, page);
   act(() => clearNotice());
   expect(appRoot().querySelector("[data-react-notice]")).toBeNull();
 });

@@ -4,7 +4,9 @@ import QrScanner from "qr-scanner";
 import { t } from "./i18n.ts";
 import { haptic, prefersReducedMotion } from "./dom.ts";
 import { parsePairingURL, type FragmentPairing } from "./pairing-input.ts";
+import { dialogClass, useDeskForm } from "../shared/ui/overlay/desk-form";
 import { presentModal, type ModalController } from "../shared/ui/overlay/modal";
+import { useQuietFocus } from "../shared/ui/overlay/quiet-focus";
 import { SheetContent } from "../shared/ui/overlay/sheet-content";
 import { bindSheetDrag } from "../shared/ui/overlay/sheet-drag";
 
@@ -48,6 +50,9 @@ export function PairingScanner({ modal, expectedOrigin, factory = createScanner,
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(unavailable);
   const [hit, setHit] = useState(false);
+  const deskForm = useDeskForm();
+  // This dialog shows itself, so it asks for what the shared lifecycle gives every other one.
+  useQuietFocus(modal.dialog);
 
   useLayoutEffect(() => {
     const dialog = modal.dialog.current!;
@@ -115,7 +120,7 @@ export function PairingScanner({ modal, expectedOrigin, factory = createScanner,
     };
   }, [modal, expectedOrigin, factory, unavailable]);
 
-  return <dialog ref={modal.dialog} className="modal sheet scanner-modal" aria-labelledby="scanner-title" data-react-modal="">
+  return <dialog ref={modal.dialog} className={dialogClass("modal sheet scanner-modal", deskForm)} aria-labelledby="scanner-title" data-react-modal="">
     <form ref={modal.form} method="dialog" onSubmit={event => event.preventDefault()}>
       <SheetContent title={t("scan.title")} titleId="scanner-title" onDismiss={() => cancel.current()} bodyRef={body}>
         {blocked ? <>

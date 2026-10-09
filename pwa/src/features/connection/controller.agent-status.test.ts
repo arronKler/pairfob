@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { act, createElement, type ReactNode } from "react";
 import { flushSync } from "react-dom";
@@ -266,5 +267,5 @@ test("mobile full-terminal controls follow status without remounting the termina
   await act(async () => { runtime.change("done"); await settle(); });
   expect(app().querySelector(".full-terminal-chrome .chrome-status")?.textContent).toBe(t("status.done"));
   expect(app().querySelector(".icon-stop") === null).toBeTrue();
-  expect(app().querySelector(".full-terminal-host")).toBe(host);
+  expectSameNode(app().querySelector(".full-terminal-host"), host);
 });

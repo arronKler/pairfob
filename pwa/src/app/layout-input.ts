@@ -1,4 +1,4 @@
-import { isDesk } from "./viewport";
+import { handheld, isDesk, isRoomy, isWide, ROOMY_QUERY } from "./viewport";
 import { computeLayout, type LayoutDescriptor, type LayoutInput } from "./layout";
 import { capabilitiesStore, operationBusy } from "../features/operations/capabilities-store";
 import { connectionStore, phase } from "../features/connection/connection-store";
@@ -7,9 +7,15 @@ import { currentScreen, navigationStore } from "./navigation-store";
 import { preferencesStore, termFontPx } from "../features/settings/preferences-store";
 import { isAgentChat, isFullTerminal, openPaneId, sessionStore } from "../features/session/session-store";
 import { computers, computersStore } from "../features/computers/catalog-store";
-import { connectFailure } from "../features/connection/connection-store";
+import { connectFailure, retryingUnreachable } from "../features/connection/connection-store";
 import { unreachableHop } from "../features/connection/connection-path";
 import { boardReturn, boardStore } from "../features/board/layout-store";
+import { inspectorOpen, inspectorStore } from "../features/workspace/inspector-store";
+
+/** Below the roomy tier's width, whatever the device: a handheld that wide keeps the list beside its board. */
+function narrow(): boolean {
+  return !window.matchMedia(ROOMY_QUERY).matches;
+}
 
 /**
  * The layout input, read from the domains that own it.
@@ -30,6 +36,12 @@ export function currentLayoutInput(): LayoutInput {
     operationBusy: operationBusy(),
     unreachable: computers().length === 1 && unreachableHop(connectFailure()) !== null,
     boardReturn: boardReturn(),
+    wide: isWide(),
+    handheld: handheld(),
+    // Below the roomy tier the files open as a page of their own, never beside the session.
+    inspector: isRoomy() && inspectorOpen(),
+    narrow: narrow(),
+    retrying: retryingUnreachable(),
   };
 }
 
@@ -53,6 +65,11 @@ export function publishedLayoutInput(): LayoutInput {
     unreachable: computersStore.get().computers.length === 1
       && unreachableHop(connectionStore.get().connectFailure) !== null,
     boardReturn: boardStore.get().boardReturn,
+    wide: isWide(),
+    handheld: handheld(),
+    inspector: isRoomy() && inspectorStore.get().open,
+    narrow: narrow(),
+    retrying: connectionStore.get().retryingUnreachable,
   };
 }
 

@@ -295,7 +295,17 @@
   margin: 0.65em 0;
 }
 
-.md-code > pre { margin: 0; padding-top: 30px; }
+// Named with `.agent-md` so the strip above the first line outranks the block's
+// own padding below: without it a long first line ran under the button.
+.agent-md .md-code > pre { margin: 0; padding-top: 30px; }
+
+// One line that fits beside the button (agent-stream measures it) needs no
+// strip: the block is one row as tall as the button, the line ends clear of it,
+// and a one-line command is not drawn three lines high.
+.agent-md .md-code.is-inline > pre {
+  min-height: 44px;
+  padding: 10px calc(var(--md-copy-w, 84px) + 4px) 10px 12px;
+}
 
 .md-copy {
   position: absolute;
@@ -308,6 +318,9 @@
   color: var(--muted);
   font: 500 var(--text-caption)/1 var(--font);
 }
+
+// In the one row the button is as tall as the row, so its label sits on the line's own centre.
+.md-code.is-inline > .md-copy { bottom: 0; }
 
 .agent-md pre {
   background: var(--term-bg);
@@ -421,6 +434,10 @@
 @media (hover: hover) and (pointer: fine) {
   .agent-reply-copy:hover { color: var(--ink); }
 }
+
+// A copy is confirmed on the button that was pressed (copy-confirm.ts), under the pointer too.
+.md-copy[data-copied],
+.agent-reply-copy[data-copied] { color: var(--ok); }
 
 // Delivery status for the last prompt, on the stream's gutter above compose.
 .agent-progress {

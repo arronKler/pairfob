@@ -1,3 +1,4 @@
+import { expectDifferentNode, expectSameNode } from "../../../../test-support/node-identity";
 import { applySnapshot as seedPadSnapshot } from "../../dashboard/catalog-store";
 import { selectPane as selectPadPane } from "../session-store";
 import { act, createElement } from "react";
@@ -29,8 +30,8 @@ function keyboard() {
 
 // Isolated single-component boundary via the shared harness: renderReact mounts
 // one FullTerminalPad in its own root; unmountReact releases it. Never the App.
-function paint(sendKey: (key: string) => void = () => undefined, sendCompose: (text: string, enter: boolean) => boolean = () => true, desk = false) {
-  const options = { sendKey, sendCompose, keyboard: keyboard(), desk };
+function paint(sendKey: (key: string) => void = () => undefined, sendCompose: (text: string, enter: boolean) => boolean = () => true, hardwareKeyboard = false) {
+  const options = { sendKey, sendCompose, keyboard: keyboard(), hardwareKeyboard };
   renderReact(createElement(FullTerminalPad, { options }));
   return options;
 }
@@ -82,8 +83,8 @@ describe("React full-terminal pad", () => {
     expect(down.defaultPrevented).toBe(true);
     await act(() => { more.click(); });
     expect(keysExpanded()).toBe(true);
-    expect(appRoot().querySelector("textarea") === input).toBeTrue();
-    expect(document.activeElement === input).toBeTrue();
+    expectSameNode(appRoot().querySelector("textarea"), input);
+    expectSameNode(document.activeElement, input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
     expect(appRoot().querySelector('[aria-label="Ctrl+C"]')).toBeTruthy();
     expect(appRoot().querySelector('[aria-label="Alt / Option"]')?.textContent).toBe("Alt");
@@ -97,7 +98,7 @@ describe("React full-terminal pad", () => {
     selectPadPane("shortcut-test");
     act(() => { setKeysExpanded(true); setPadKind("keys"); });
     const sent: Array<[string, boolean]> = [];
-    const options = { sendKey: () => undefined, sendCompose: (text: string, enter: boolean) => { sent.push([text, enter]); return true; }, keyboard: keyboard(), desk: false };
+    const options = { sendKey: () => undefined, sendCompose: (text: string, enter: boolean) => { sent.push([text, enter]); return true; }, keyboard: keyboard(), hardwareKeyboard: false };
     renderReact(createElement(FullTerminalPad, { options }));
     await act(() => { kindOption("命令").click(); });
     expect(padKind()).toBe("slash");
@@ -117,7 +118,7 @@ describe("React full-terminal pad", () => {
   test("live keyboard is a named control and updates from notifyFullTerminalKeyboard", async () => {
     act(() => { setComposeLive(true); });
     const kb = keyboard();
-    const options = { sendKey: () => undefined, sendCompose: () => true, keyboard: kb, desk: false };
+    const options = { sendKey: () => undefined, sendCompose: () => true, keyboard: kb, hardwareKeyboard: false };
     renderReact(createElement(FullTerminalPad, { options }));
     const button = appRoot().querySelector(".full-terminal-kb") as HTMLButtonElement;
     expect(button.textContent).toBe("点这里输入");
@@ -142,7 +143,7 @@ describe("React full-terminal pad", () => {
     try {
       setComposeLive(true);
       renderReact(createElement(FullTerminalPad, {
-        options: { sendKey: () => undefined, sendCompose: () => true, keyboard: kb, desk: false },
+        options: { sendKey: () => undefined, sendCompose: () => true, keyboard: kb, hardwareKeyboard: false },
       }));
       const button = appRoot().querySelector<HTMLButtonElement>(".full-terminal-kb")!;
       const view = document.defaultView!;
@@ -152,7 +153,7 @@ describe("React full-terminal pad", () => {
       // An interrupted touch/drag must neither focus nor claim the keyboard is open.
       await act(() => { dispatch("pointerdown"); dispatch("pointercancel"); });
       expect(kb.isOpen()).toBe(false);
-      expect(document.activeElement).not.toBe(field);
+      expectDifferentNode(document.activeElement, field);
       expect(button.getAttribute("aria-pressed")).toBe("false");
 
       await act(() => { dispatch("pointerdown"); dispatch("pointerup"); });
@@ -161,18 +162,18 @@ describe("React full-terminal pad", () => {
       await act(() => {
         dispatch("click");
         // Focus must happen inside the click handler, without a timer/effect.
-        expect(document.activeElement).toBe(field);
+        expectSameNode(document.activeElement, field);
         expect(field.readOnly).toBe(false);
       });
       expect(button.getAttribute("aria-pressed")).toBe("true");
 
       await act(() => { dispatch("pointerdown"); dispatch("pointerup"); dispatch("click"); });
       expect(kb.isOpen()).toBe(false);
-      expect(document.activeElement).not.toBe(field);
+      expectDifferentNode(document.activeElement, field);
       expect(button.getAttribute("aria-pressed")).toBe("false");
       // Keyboard/assistive activation remains supported without pointer events.
       await act(() => { button.click(); });
-      expect(document.activeElement).toBe(field);
+      expectSameNode(document.activeElement, field);
     } finally {
       kb.destroy();
       host.remove();
@@ -228,7 +229,7 @@ test("custom prompts fill and focus a draft in both input modes without transmit
     expect(composeDraft()).toBe("Review this change");
     const field = appRoot().querySelector<HTMLTextAreaElement>("textarea")!;
     expect(field.value).toBe("Review this change");
-    expect(document.activeElement).toBe(field);
+    expectSameNode(document.activeElement, field);
     await act(() => { setQuickCommands([{ id: "custom", label: "Custom", text: "Next draft", pinned: true }]); });
     await act(() => { appRoot().querySelector<HTMLButtonElement>(".quick-cmd")!.click(); });
     // A saved command goes in at the caret; it never replaces the draft.

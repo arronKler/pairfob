@@ -1,3 +1,4 @@
+import { macPlatform } from "../../app/input-mode";
 import { composeEnterSends } from "../settings/preferences-store";
 
 /**
@@ -11,6 +12,20 @@ import { composeEnterSends } from "../settings/preferences-store";
 export function returnAddsNewline(event: KeyboardEvent, phoneField: boolean): boolean {
   if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
   return phoneField && !composeEnterSends();
+}
+
+/**
+ * Control chords typed in the compose field go to the program on the computer
+ * (Ctrl+C, Ctrl+D, Ctrl+R…). Off macOS a few of them are also how a text field
+ * is edited, and a reader with words in the field means the field: paste always,
+ * and select-all, cut, undo and redo while there is a draft to act on. On macOS
+ * those are Command chords, so every Control chord stays the program's.
+ */
+export function fieldKeepsControlChord(letter: string, hasDraft: boolean): boolean {
+  if (macPlatform()) return false;
+  const key = letter.toLowerCase();
+  if (key === "v") return true;
+  return hasDraft && (key === "a" || key === "x" || key === "z" || key === "y");
 }
 
 /** The phone field's keyboard hint follows what Return will do. */

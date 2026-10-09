@@ -33,6 +33,7 @@ export class LiveInputPump {
   private scheduled: unknown | null = null;
   private sending: Promise<unknown> | null = null;
   private readonly waiters: Array<(sent: boolean) => void> = [];
+  private readonly writtenWaiters: Array<() => void> = [];
   private stopped = false;
   private failed = false;
 
@@ -61,6 +62,16 @@ export class LiveInputPump {
     return new Promise<boolean>((resolve) => this.waiters.push(resolve));
   }
 
+  /**
+   * Settles when everything queued so far has been written to the session (not
+   * acknowledged: the session keeps the order it is written in), or dropped.
+   * A key typed after this text waits for it (`live-order`).
+   */
+  written(): Promise<void> {
+    if (!this.queuedText || this.stopped || this.failed) return Promise.resolve();
+    return new Promise<void>((resolve) => this.writtenWaiters.push(resolve));
+  }
+
   stop(): void {
     if (this.stopped) return;
     this.stopped = true;
@@ -70,6 +81,7 @@ export class LiveInputPump {
     this.inFlightText = "";
     this.sending = null;
     this.notify();
+    this.resolveWritten();
     this.resolveWaiters(false);
   }
 
@@ -106,6 +118,7 @@ export class LiveInputPump {
       return;
     }
     this.sending = request;
+    this.resolveWritten();
     // send() writes its encrypted frame synchronously before returning its
     // promise. The read therefore lands behind this mutation in session order.
     // A read failure never changes the delivery outcome of the mutation.
@@ -141,6 +154,7 @@ export class LiveInputPump {
     this.failed = true;
     this.cancelScheduled();
     this.notify();
+    this.resolveWritten();
     let handled: Promise<void>;
     try {
       handled = Promise.resolve(this.options.onError(error, { failedText, queuedText }));
@@ -155,6 +169,10 @@ export class LiveInputPump {
 
   private notify(): void {
     this.options.onChange?.(this.snapshot());
+  }
+
+  private resolveWritten(): void {
+    for (const resolve of this.writtenWaiters.splice(0)) resolve();
   }
 
   private resolveWaiters(sent: boolean): void {

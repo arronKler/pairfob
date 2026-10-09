@@ -7,9 +7,12 @@ import { blockedElsewhere, paneHeaderLine, paneIdentity } from "../../dashboard/
 import { usePreferences } from "../../settings/hooks";
 import { useConnection, useRuntime } from "../../connection/hooks";
 import { operationBusy } from "../../operations/capabilities-store";
-import { herdLiveness } from "../../connection/runtime-status";
+import { currentHerdStatusInput, herdLiveness } from "../../connection/runtime-status";
 import type { SessionHandlers } from "./view";
 import { AgentAvatar, BackButton, Button } from "../../../shared/ui/primitives";
+import { useDomain } from "../../../shared/react/use-domain";
+import { isDesk, isRoomy } from "../../../app/viewport";
+import { inspectorStore } from "../../workspace/inspector-store";
 
 /**
  * Whether the agent statuses on screen can no longer be confirmed. Subscribes to
@@ -24,15 +27,34 @@ export function useStatusUnverifiable(): boolean {
 }
 
 /**
+ * Why a status cannot be confirmed, when the reason is this device: it has no
+ * network, or its connection to the computer is down. "Unknown" alone reads as
+ * a fault of the session; beside the list the header says what is true. The
+ * status word stays the list row's own, so the two never disagree.
+ */
+function useContactLost(): boolean {
+  useConnection();
+  useRuntime();
+  const input = currentHerdStatusInput();
+  return !input.networkOnline || !input.connected;
+}
+
+/**
  * Shared trailing actions for guided, terminal and agent chat chrome. Always the
  * same two targets: stopping a task lives on the send button, so nothing here
  * appears or disappears with the agent's status.
+ *
+ * Beside the list the files button opens and closes the inspector instead of
+ * leaving for the files screen, so there it reads as pressed while that column
+ * is open. The phone button navigates and carries no pressed state.
  */
 export function SessionActions({ onWorkspace, onMenu }: { onWorkspace: () => void; onMenu: () => void }) {
+  const inspector = useDomain(inspectorStore).open;
+  const pressed = isRoomy() ? inspector : undefined;
   return <div className="chrome-actions">
     <Button className="icon-btn icon-workspace" aria-label={t("workspace.open")} title={t("workspace.open")}
-      onClick={onWorkspace}><FolderOpen size={20} aria-hidden="true" /></Button>
-    <Button className="icon-btn icon-more" aria-label={t("pane.menuTitle")} disabled={operationBusy()}
+      aria-pressed={pressed} onClick={onWorkspace}><FolderOpen size={20} aria-hidden="true" /></Button>
+    <Button className="icon-btn icon-more" aria-label={t("pane.menuTitle")} aria-haspopup="dialog" disabled={operationBusy()}
       onClick={onMenu}><Ellipsis size={20} aria-hidden="true" /></Button>
   </div>;
 }
@@ -66,8 +88,12 @@ export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, c
   const agents = useDashboard().agents;
   const listGroup = usePreferences().listGroup;
   const stale = useStatusUnverifiable();
+  const contactLost = useContactLost();
   const identity = agent ? paneIdentity(agent, listGroup, stale) : null;
-  const line = agent && identity ? paneHeaderLine(identity, agent) : "";
+  const facts = agent && identity ? paneHeaderLine(identity, agent) : "";
+  // The phone header keeps its line as it is.
+  const reason = identity?.statusLabel && stale && contactLost && isDesk() ? t("deskChrome.notConnected") : "";
+  const line = [reason, facts].filter(Boolean).join(" · ");
   const waiting = blockedElsewhere(agents, agent?.paneId ?? "", stale);
   const title = identity?.title ?? fallbackTitle;
   const full = [title, identity?.statusLabel, line].filter(Boolean).join(" · ");

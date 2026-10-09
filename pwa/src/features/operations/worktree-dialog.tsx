@@ -5,7 +5,8 @@ import { t } from "../../lib/i18n";
 import { messageOf } from "../../lib/notices";
 import { parseWorktrees, type WorktreeSummary } from "../../lib/operations";
 import { OperationFrame } from "./operation-form";
-import { presentModal, type ModalController } from "../../shared/ui/overlay/modal";
+import { useDeskCancel } from "../../shared/ui/overlay/desk-form";
+import { presentModal, stepClass, type ModalController } from "../../shared/ui/overlay/modal";
 
 function worktreeTitle(item: WorktreeSummary): string {
   if (item.label) return item.label;
@@ -27,14 +28,22 @@ function WorktreeCard({ item, actionable }: { item: WorktreeSummary; actionable:
   </>;
 }
 
+/** The list has nothing to confirm: one button puts it away, the desk form's at the footer's right end. */
+function CloseAction({ onDismiss }: { onDismiss: () => void }) {
+  if (useDeskCancel()) return <div className="desk-actions">
+    <button type="button" className="desk-action is-primary worktree-close" onClick={onDismiss}>{t("close")}</button>
+  </div>;
+  return <button type="button" className="btn btn-small btn-ghost worktree-close" onClick={onDismiss}>{t("close")}</button>;
+}
+
 type WorktreeView = { items: WorktreeSummary[]; message: string; error: boolean; loading: boolean; opening: Set<WorktreeSummary> };
 type WorktreeStore = { subscribe(listener: () => void): () => void; snapshot(): WorktreeView };
 
-function WorktreesDialog({ modal, store, open }: {
-  modal: ModalController<never>; store: WorktreeStore; open?: (item: WorktreeSummary) => Promise<void>;
+function WorktreesDialog({ modal, store, open, step }: {
+  modal: ModalController<never>; store: WorktreeStore; open?: (item: WorktreeSummary) => Promise<void>; step: string;
 }) {
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
-  return <OperationFrame modal={modal} title={t("menu.worktrees")} focusDialog>
+  return <OperationFrame modal={modal} title={t("menu.worktrees")} focusDialog step={step}>
     <div className="operation-body" aria-busy={view.loading || view.opening.size > 0}>
       <p className={`notice notice-${view.error ? "error" : "status"}`} role={view.error ? "alert" : "status"} aria-live="polite">{view.message}</p>
       <ul className="worktree-list">
@@ -45,13 +54,19 @@ function WorktreesDialog({ modal, store, open }: {
           </button> : <div className="worktree-card worktree-card-static"><WorktreeCard item={item} actionable={false} /></div>}
         </li>)}
       </ul>
-      <button type="button" className="btn btn-small btn-ghost" onClick={modal.dismiss}>{t("close")}</button>
+      <CloseAction onDismiss={modal.dismiss} />
     </div>
   </OperationFrame>;
 }
 
-/** Load once from the caller action; closing the view retires late UI updates. */
-export async function showWorktrees(load: () => Promise<unknown>, open?: (item: WorktreeSummary) => Promise<void>): Promise<void> {
+/**
+ * Load once from the caller action; closing the view retires late UI updates.
+ * `closed` hears how the dialog went away: on a Worktree opened from it, or
+ * put away having only been read.
+ */
+export async function showWorktrees(load: () => Promise<unknown>, open?: (item: WorktreeSummary) => Promise<void>,
+  closed?: (opened: boolean) => void): Promise<void> {
+  let opened = false;
   let view: WorktreeView = { items: [], message: t("form.worktreesLoading"), error: false, loading: true, opening: new Set() };
   const listeners = new Set<() => void>();
   const store: WorktreeStore = {
@@ -68,6 +83,7 @@ export async function showWorktrees(load: () => Promise<unknown>, open?: (item: 
     update({ opening: new Set([...view.opening, item]), error: false, message: t("form.openingNamed", { title: worktreeTitle(item) }) });
     try {
       await open(item);
+      opened = true;
       modal.dismiss();
     } catch (error) {
       const opening = new Set(view.opening);
@@ -75,12 +91,15 @@ export async function showWorktrees(load: () => Promise<unknown>, open?: (item: 
       update({ opening, error: true, message: messageOf(error) });
     }
   } : undefined;
-  const modal = presentModal<never>(controller => <WorktreesDialog modal={controller} store={store} open={choose} />);
+  // Asked from a row of a dialog that stays open, the list is that dialog's next step.
+  const step = stepClass();
+  const modal = presentModal<never>(controller => <WorktreesDialog modal={controller} store={store} open={choose} step={step} />);
+  void modal.result.then(() => closed?.(opened));
   try {
     const items = parseWorktrees(await load());
     update({ items, loading: false, message: items.length ? t("form.worktreesCount", { n: items.length }) : t("form.worktreesEmpty") });
   } catch (error) {
     update({ loading: false, error: true, message: messageOf(error) });
   }
-  modal.form.current?.querySelector<HTMLButtonElement>(".btn-ghost")?.focus();
+  modal.form.current?.querySelector<HTMLButtonElement>(".worktree-close")?.focus();
 }

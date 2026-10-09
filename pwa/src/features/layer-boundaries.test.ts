@@ -15,7 +15,7 @@ import { preProcessFile } from "typescript";
 
 const srcRoot = fileURLToPath(new URL("..", import.meta.url));
 
-const FEATURE_DIRS = ["features/dashboard", "features/board", "features/connection"];
+const FEATURE_DIRS = ["features/dashboard", "features/board", "features/connection", "features/command-palette"];
 
 /**
  * Owned page modules, listed explicitly. `pages/` is shared ground — other

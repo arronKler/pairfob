@@ -1,3 +1,4 @@
+import { expectSameNodes } from "../../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
@@ -352,7 +353,7 @@ describe("complete-terminal remembers its mode per pane", () => {
     const host = root.querySelector<HTMLElement>(".full-terminal-host")!;
     const rail = root.querySelector<HTMLElement>(".full-terminal-scroll")!;
     const pad = root.querySelector<HTMLElement>(".full-terminal-pad")!;
-    expect([...root.children]).toEqual([chrome, host, pad]);
+    expectSameNodes(root.children, [chrome, host, pad]);
     expect(host.contains(rail)).toBeTrue();
     expect(pad.contains(rail)).toBeFalse();
     expect(rail.querySelectorAll(".full-terminal-scroll-btn")).toHaveLength(4);
@@ -360,7 +361,7 @@ describe("complete-terminal remembers its mode per pane", () => {
     click('.full-terminal-pad [aria-label="更多按键"]');
     const expandedPad = root.querySelector<HTMLElement>(".full-terminal-pad")!;
     expect(keysExpanded()).toBeTrue();
-    expect([...root.children]).toEqual([chrome, host, expandedPad]);
+    expectSameNodes(root.children, [chrome, host, expandedPad]);
     expect(host.contains(rail)).toBeTrue();
     expect(expandedPad.querySelectorAll(".keys")).toHaveLength(1);
     expect(expandedPad.querySelectorAll(".pad-page .key")).toHaveLength(14);
@@ -368,7 +369,7 @@ describe("complete-terminal remembers its mode per pane", () => {
     click('.full-terminal-pad [aria-label="更多按键"]');
     const collapsedPad = root.querySelector<HTMLElement>(".full-terminal-pad")!;
     expect(keysExpanded()).toBeFalse();
-    expect([...root.children]).toEqual([chrome, host, collapsedPad]);
+    expectSameNodes(root.children, [chrome, host, collapsedPad]);
     expect(collapsedPad.querySelectorAll(".keys")).toHaveLength(1);
   });
 

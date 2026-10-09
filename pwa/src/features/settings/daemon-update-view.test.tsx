@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { expect, test, beforeEach, afterEach } from "bun:test";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { act, createElement, Fragment } from "react";
@@ -162,7 +163,7 @@ test("manual check bypasses release cache and updates a mounted sidebar without 
   globalThis.fetch = (async () => new Response("1.2.0")) as typeof fetch;
   await act(async () => { await checkDaemonRelease(true); });
   expect(host!.textContent).toContain("1.2.0");
-  expect(host!.querySelector("textarea") === input).toBe(true);
+  expectSameNode(host!.querySelector("textarea"), input);
   expect(input.value).toBe("unfinished draft");
   paintDaemon(true);
   let reads = 0;
@@ -407,7 +408,7 @@ test("daemon update subscription preserves the React host across a release check
   expect(check).toBeTruthy();
   await act(async () => { await checkDaemonRelease(true); });
   // The same host and check node survive the subscription update.
-  expect(host!.querySelector(".daemon-update-host")?.querySelector(".daemon-update-check")).toBe(check);
+  expectSameNode(host!.querySelector(".daemon-update-host")?.querySelector(".daemon-update-check"), check);
   expect(host!.querySelector("[data-daemon-update]")).toBeNull();
 });
 
@@ -420,11 +421,26 @@ test("the persistent manual update copy label follows the language on the same n
   expect(host!.querySelector("code")?.textContent).toContain("pairfob update");
   act(() => setLang("en"));
   act(() => { root!.render(createElement(ManualUpdateHelp)); });
-  expect(host!.querySelector("button")).toBe(before);
+  expectSameNode(host!.querySelector("button"), before);
   expect(before.textContent).toBe(t("update.copyCommand"));
   expect(before.textContent).not.toBe("复制更新命令");
   act(() => setLang("zh"));
   act(() => { root!.render(createElement(ManualUpdateHelp)); });
+});
+
+test("the manual update help is a disclosure that says so: its question ends in the family's chevron", () => {
+  paintManualHelp();
+  const help = host!.querySelector("details.daemon-update-help")!;
+  const summary = help.querySelector("summary")!;
+  expect(help.hasAttribute("open")).toBe(false);
+  expect(summary.textContent).toBe(t("update.helpTitle"));
+  // Decoration beside the words: it adds nothing to the summary's name.
+  const chevron = summary.querySelector("svg.set-disclosure")!;
+  expect(chevron.getAttribute("aria-hidden")).toBe("true");
+  expectSameNode(summary.lastElementChild, chevron);
+  // The same row inside the computer page's card.
+  render(createElement(ManualUpdateHelp, { inline: true }));
+  expect(host!.querySelector("details.set-item-block summary svg.set-disclosure")).toBeTruthy();
 });
 
 test("compact later hides even when browser storage is unavailable", async () => {

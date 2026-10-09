@@ -2,6 +2,7 @@ import { Ellipsis, WrapText } from "lucide-react";
 import { Fragment, useMemo } from "react";
 import { highlightSource, type SyntaxToken } from "../../lib/syntax-highlight";
 import { t } from "../../lib/i18n";
+import type { GitChangeKind } from "../../lib/workspace";
 import { Button } from "../../shared/ui/primitives";
 import { loadWorkspaceFile, refreshWorkspace } from "./actions";
 import { openDetailMenu } from "./detail-menu";
@@ -47,38 +48,60 @@ export function DetailMoreButton() {
     onClick={() => openDetailMenu()}><Ellipsis size={18} aria-hidden="true" /></Button>;
 }
 
-export function FileDetail({ snapshot }: { snapshot: WorkspaceSnapshot }) {
+/** The open file, derived once for whichever arrangement shows it: the page or the inspector. */
+export type FileView = {
+  file: WorkspaceSnapshot["file"];
+  path: string;
+  text: boolean;
+  lines: SyntaxToken[][];
+  wrap: boolean;
+  mark: GitChangeKind | undefined;
+  viewChanges: (() => void) | undefined;
+  meta: string | null;
+};
+
+export function useFileView(snapshot: WorkspaceSnapshot): FileView {
   const file = snapshot.file;
   const wrap = useWorkspaceWrap();
-  const reveal = Boolean(file && snapshot.revealFile);
   const path = file?.path || snapshot.detailPath;
   const text = file?.kind === "text" ? file : null;
   const lines = useMemo(() => text ? sourceLines(text.path, text.content) : [], [text]);
   const mark = gitMarks(snapshot.status).files.get(path);
-  const viewChanges = mark ? viewWorkspaceChanges(path) : undefined;
-  const retry = () => {
-    if (snapshot.view === "file" && snapshot.detailPath) void loadWorkspaceFile(snapshot.detailPath);
-    else void refreshWorkspace();
-  };
   const meta = file
     ? [formatBytes(file.size), formatModified(file.modified_ms), text && `${t("workspace.lines", { count: lines.length })}${file.truncated ? "+" : ""}`]
       .filter(Boolean).join(" · ")
     : null;
-  return <section className="workspace-detail-view" aria-label={t("workspace.file")}>
-    <div className="workspace-detail-head">
-      <DetailIdentity path={path} />
-      {meta ? <span className="workspace-row-meta">{meta}</span>
-        : snapshot.loading ? <ReservedStat className="workspace-row-meta" text={null} /> : null}
-      <span className="workspace-detail-actions">
-        {viewChanges && mark && <Button className="workspace-chip is-change" onClick={viewChanges}>
-          <GitMark kind={mark} />{t("workspace.viewChanges")}
-        </Button>}
-        {text && <Button className="workspace-chip" aria-pressed={wrap} onClick={() => setWorkspaceWrap(!wrap)}>
-          <WrapText size={14} aria-hidden="true" />{t("workspace.wrap")}
-        </Button>}
-        <DetailMoreButton />
-      </span>
-    </div>
+  return { file, path, text: text !== null, lines, wrap, mark, viewChanges: mark ? viewWorkspaceChanges(path) : undefined, meta };
+}
+
+/** Size, age and line count, with their room held while the file is still on its way. */
+export function FileMeta({ snapshot, view }: { snapshot: WorkspaceSnapshot; view: FileView }) {
+  if (view.meta) return <span className="workspace-row-meta">{view.meta}</span>;
+  return snapshot.loading ? <ReservedStat className="workspace-row-meta" text={null} /> : null;
+}
+
+/** The file's own actions: its changes when it has any, wrapping for text, then ⋯. */
+export function FileActions({ view }: { view: FileView }) {
+  return <span className="workspace-detail-actions">
+    {view.viewChanges && view.mark && <Button className="workspace-chip is-change" onClick={view.viewChanges}>
+      <GitMark kind={view.mark} />{t("workspace.viewChanges")}
+    </Button>}
+    {view.text && <Button className="workspace-chip" aria-pressed={view.wrap} onClick={() => setWorkspaceWrap(!view.wrap)}>
+      <WrapText size={14} aria-hidden="true" />{t("workspace.wrap")}
+    </Button>}
+    <DetailMoreButton />
+  </span>;
+}
+
+/** Everything below the info bar: the source, the media surface, or the state that stands in for them. */
+export function FileBody({ snapshot, view }: { snapshot: WorkspaceSnapshot; view: FileView }) {
+  const { file, lines, wrap } = view;
+  const reveal = Boolean(file && snapshot.revealFile);
+  const retry = () => {
+    if (snapshot.view === "file" && snapshot.detailPath) void loadWorkspaceFile(snapshot.detailPath);
+    else void refreshWorkspace();
+  };
+  return <>
     {snapshot.error ? (
       <div className="workspace-feedback workspace-error workspace-feedback-pane" role="alert">
         <p>{snapshot.error}</p>
@@ -106,5 +129,17 @@ export function FileDetail({ snapshot }: { snapshot: WorkspaceSnapshot }) {
       </>
     )}
     {file?.truncated && <p className="workspace-limit">{t("workspace.previewTruncated")}</p>}
+  </>;
+}
+
+export function FileDetail({ snapshot }: { snapshot: WorkspaceSnapshot }) {
+  const view = useFileView(snapshot);
+  return <section className="workspace-detail-view" aria-label={t("workspace.file")}>
+    <div className="workspace-detail-head">
+      <DetailIdentity path={view.path} />
+      <FileMeta snapshot={snapshot} view={view} />
+      <FileActions view={view} />
+    </div>
+    <FileBody snapshot={snapshot} view={view} />
   </section>;
 }

@@ -230,6 +230,7 @@ export type SendInput = {
   unfinished?: number;
   submitting: boolean;
   waiting: boolean;
+  /** Live input typed on glass: the button is the field's Enter key and never turns into stop. */
   live: boolean;
   /** `canInterruptAgent(status)` for the open pane. */
   working: boolean;

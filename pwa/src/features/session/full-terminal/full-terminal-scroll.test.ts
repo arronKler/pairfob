@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act, createElement } from "react";
 import { setLang } from "../../../lib/i18n";
 import { appRoot } from "../../../app/dom-root";
-import { SCROLL_LINE_PX, bindHostScroll, bindScrollHold, pageLineCount, type RemoteScroll } from "./full-terminal-scroll";
+import { SCROLL_LINE_PX, bindHostScroll, bindScrollHold, pageLineCount, reportsWheel, type RemoteScroll } from "./full-terminal-scroll";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { SessionScrollRail } from "../guided/session-scroll";
 
@@ -209,6 +209,41 @@ describe("complete-terminal remote scroll", () => {
     host.remove();
   });
 
+  test("a quick tap is a whole press that can open a link; a held one clicks without the moves", () => {
+    const host = document.createElement("div");
+    const xterm = document.createElement("div");
+    xterm.className = "xterm";
+    const screen = document.createElement("div");
+    screen.className = "xterm-screen";
+    xterm.append(screen);
+    host.append(xterm);
+    document.body.append(host);
+    const seen: string[] = [];
+    for (const type of ["mousemove", "mousedown", "mouseup"]) screen.addEventListener(type, () => seen.push(type));
+    const stop = bindHostScroll(host, () => undefined, () => undefined);
+    const clock = performance.now;
+    let now = 1000;
+    performance.now = () => now;
+    try {
+      const point = touchPoint(7, 80, 120, host);
+      host.dispatchEvent(touchEvent("touchstart", [point]));
+      now += 90;
+      host.dispatchEvent(touchEvent("touchend", [], [point]));
+      // Two moves: from elsewhere, so the link layer sees a new cell, then onto the spot (full-terminal-input.test).
+      expect(seen).toEqual(["mousemove", "mousemove", "mousedown", "mouseup"]);
+      seen.length = 0;
+      host.dispatchEvent(touchEvent("touchstart", [point]));
+      now += 700;
+      host.dispatchEvent(touchEvent("touchend", [], [point]));
+      // Still a click for a TUI that reads the mouse; nothing for the link layer to open.
+      expect(seen).toEqual(["mousedown", "mouseup"]);
+    } finally {
+      performance.now = clock;
+      stop();
+      host.remove();
+    }
+  });
+
   test("a vertical finger pan is forwarded as TUI wheel lines", () => {
     const host = document.createElement("div");
     document.body.append(host);
@@ -309,6 +344,143 @@ describe("complete-terminal remote scroll", () => {
     expect(calls).toEqual([]);
     stop();
     host.remove();
+  });
+
+  /**
+   * A host with xterm's own wheel listener below it; `wide` holds 300px of
+   * terminal in a 100px pan row. `reporting` is an app that asked for the mouse.
+   */
+  function xtermHost({ wide = true, reporting = false } = {}) {
+    const host = document.createElement("div");
+    const pan = document.createElement("div");
+    const xterm = document.createElement("div");
+    Object.defineProperty(pan, "clientWidth", { value: 100 });
+    Object.defineProperty(pan, "scrollWidth", { value: wide ? 300 : 100 });
+    pan.append(xterm);
+    host.append(pan);
+    document.body.append(host);
+    const seen: WheelEvent[] = [];
+    // xterm answers every wheel it receives, with a mouse report or an arrow key, and stops it.
+    xterm.addEventListener("wheel", (event) => {
+      seen.push(event as WheelEvent);
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    const calls: Call[] = [];
+    const stop = bindHostScroll(host, (direction, lines, source) => {
+      calls.push({ direction, lines, source });
+    }, () => undefined, { panXScroller: () => wide ? pan : null, wheelReported: () => reporting });
+    const wheel = (init: WheelEventInit): WheelEvent => {
+      const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, ...init });
+      // The test DOM's wheel event does not carry the modifier keys it was made with.
+      Object.defineProperties(event, {
+        shiftKey: { value: init.shiftKey === true },
+        ctrlKey: { value: init.ctrlKey === true },
+        metaKey: { value: init.metaKey === true },
+      });
+      xterm.dispatchEvent(event);
+      return event;
+    };
+    return { pan, seen, calls, wheel, done() { stop(); host.remove(); } };
+  }
+
+  test("a trackpad's sideways swipe pans the columns the host cannot show", () => {
+    const view = xtermHost();
+    const event = view.wheel({ deltaX: 80, deltaY: 4 });
+    expect(view.pan.scrollLeft).toBe(80);
+    expect(event.defaultPrevented).toBeTrue();
+    // Taken before xterm, which would have stopped it.
+    expect(view.seen).toEqual([]);
+    expect(view.calls).toEqual([]);
+    view.done();
+  });
+
+  test("Shift turns a mouse wheel on its side", () => {
+    const view = xtermHost();
+    view.wheel({ deltaY: 120, shiftKey: true });
+    expect(view.pan.scrollLeft).toBe(120);
+    view.wheel({ deltaY: -40, shiftKey: true });
+    expect(view.pan.scrollLeft).toBe(80);
+    // A wheel that counts in lines moves a readable distance per line.
+    view.wheel({ deltaY: 1, deltaMode: 1, shiftKey: true });
+    expect(view.pan.scrollLeft).toBe(112);
+    expect(view.seen).toEqual([]);
+    view.done();
+  });
+
+  test("a vertical wheel over a panned terminal scrolls the pane and pans nothing", () => {
+    const view = xtermHost();
+    const event = view.wheel({ deltaY: SCROLL_LINE_PX, deltaX: 2 });
+    expect(view.pan.scrollLeft).toBe(0);
+    expect(event.defaultPrevented).toBeTrue();
+    expect(view.seen).toEqual([]);
+    expect(view.calls).toEqual([{ direction: "down", lines: 1, source: "wheel" }]);
+    view.done();
+  });
+
+  test("a pinch-zoom or browser-zoom wheel is never a pan", () => {
+    const view = xtermHost();
+    const event = view.wheel({ deltaX: 80, ctrlKey: true });
+    expect(view.pan.scrollLeft).toBe(0);
+    expect(event.defaultPrevented).toBeFalse();
+    view.done();
+  });
+
+  test("a wheel over xterm scrolls the pane on the computer instead of typing arrow keys", () => {
+    const view = xtermHost({ wide: false });
+    const down = view.wheel({ deltaY: SCROLL_LINE_PX * 2 });
+    const up = view.wheel({ deltaY: -SCROLL_LINE_PX });
+    // xterm keeps no scrollback, so any wheel it saw here would be an arrow key in the shell.
+    expect(view.seen).toEqual([]);
+    expect(down.defaultPrevented).toBeTrue();
+    expect(up.defaultPrevented).toBeTrue();
+    expect(view.calls).toEqual([
+      { direction: "down", lines: 2, source: "wheel" },
+      { direction: "up", lines: 1, source: "wheel" },
+    ]);
+    view.done();
+  });
+
+  test("a wheel too short for a line is still kept from xterm", () => {
+    const view = xtermHost({ wide: false });
+    view.wheel({ deltaY: SCROLL_LINE_PX / 2 });
+    expect(view.calls).toEqual([]);
+    view.wheel({ deltaY: SCROLL_LINE_PX / 2 });
+    expect(view.calls).toEqual([{ direction: "down", lines: 1, source: "wheel" }]);
+    expect(view.seen).toEqual([]);
+    view.done();
+  });
+
+  test("an app that asked for mouse reports keeps the wheel", () => {
+    const view = xtermHost({ wide: false, reporting: true });
+    const event = view.wheel({ deltaY: SCROLL_LINE_PX * 2 });
+    expect(view.seen).toEqual([event]);
+    expect(view.calls).toEqual([]);
+    view.done();
+  });
+
+  test("a sideways pan comes before an app's mouse reports", () => {
+    const view = xtermHost({ reporting: true });
+    view.wheel({ deltaX: 80, deltaY: 4 });
+    expect(view.pan.scrollLeft).toBe(80);
+    expect(view.seen).toEqual([]);
+    view.done();
+  });
+
+  test("a pinch or browser zoom over xterm is the browser's, not arrow keys", () => {
+    const view = xtermHost({ wide: false });
+    for (const event of [view.wheel({ deltaY: -120, ctrlKey: true }), view.wheel({ deltaY: 120, metaKey: true })]) {
+      expect(event.defaultPrevented).toBeFalse();
+    }
+    expect(view.seen).toEqual([]);
+    expect(view.calls).toEqual([]);
+    view.done();
+  });
+
+  test("only the mouse protocols that carry the wheel count as reporting it", () => {
+    expect(["vt200", "drag", "any"].map(reportsWheel)).toEqual([true, true, true]);
+    // X10 reports presses only, so its wheel would still be typed as arrows.
+    expect(["none", "x10", undefined].map(reportsWheel)).toEqual([false, false, false]);
   });
 
   test("mouse selection does not become a drag-to-pan gesture", () => {
@@ -458,10 +630,10 @@ describe("complete-terminal remote scroll", () => {
     }, () => pageLines);
     const buttons = [...rail.querySelectorAll("button")] as HTMLButtonElement[];
     expect(buttons.map((el) => el.getAttribute("aria-label"))).toEqual([
-      "鼠标滚轮向上",
+      "向上滚动",
       "上一页",
       "下一页",
-      "鼠标滚轮向下",
+      "向下滚动",
     ]);
     act(() => buttons[1].dispatchEvent(pointer("pointerdown", 10, 10)));
     pageLines = 31;

@@ -204,4 +204,23 @@ describe("board screen projection", () => {
     expect(buildBoardViewModel(input({ workspaceId: "w1", canCreateTab: true, connected: false })).create?.disabled).toBe(true);
     expect(buildBoardViewModel(input({ workspaceId: "", canCreateTab: true })).create?.disabled).toBe(true);
   });
+
+  test("an empty board's create is the list's own: a new workspace will do, and it is held when the list's is", () => {
+    const empty = (overrides: Partial<BoardModelInput> = {}) => buildBoardViewModel(input({ canCreateWorkspace: true, ...overrides })).create;
+    // No tab and no workspace: the first session goes in a workspace of its own.
+    expect(empty()).toEqual({ label: t("board.newTab"), disabled: false });
+    expect(empty({ canCreateTab: true, creatable: true })).toEqual({ label: t("board.newTab"), disabled: false });
+    // Held exactly when the list's create is: still reading, Herdr gone or silent, offline, another change in flight.
+    expect(empty({ creatable: false })?.disabled).toBe(true);
+    expect(empty({ connected: false })?.disabled).toBe(true);
+    expect(empty({ operationBusy: true })).toEqual({ label: t("home.creating"), disabled: true });
+    // A computer that only takes tabs still needs a workspace to add one to.
+    expect(empty({ canCreateWorkspace: false, canCreateTab: true })?.disabled).toBe(true);
+    expect(empty({ canCreateWorkspace: false })).toBeNull();
+    // Beside its tabs "+" is the tab's own: it needs the capability and the board's workspace, as before.
+    const beside = (overrides: Partial<BoardModelInput> = {}) => empty({ workspaceList: spaces, tabList: tabs, workspaceId: "w1", tabId: "w1:t1", ...overrides });
+    expect(beside()).toBeNull();
+    expect(beside({ canCreateTab: true })).toEqual({ label: t("board.newTab"), disabled: false });
+    expect(beside({ canCreateTab: true, creatable: false })?.disabled).toBe(true);
+  });
 });

@@ -1,0 +1,513 @@
+/* --- Desktop list rail -------------------------------------------------------------
+   The list column of the desk layout: a fixed head (computer, grouping, create),
+   the search entry and the "needs you" strip, the list scrolling beneath them,
+   and Board / Settings fixed at the bottom. The grid that places the column, and
+   its width, live in desk.scss.
+
+   Width decides that this layout exists; the pointer decides its density. The
+   base rules are the touch sizes. The block under `(hover: hover) and
+   (pointer: fine)` tightens the rows and trades the swipe for hover actions.
+   ------------------------------------------------------------------------------ */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: var(--bg);
+}
+
+/* --- Head ------------------------------------------------------------------------ */
+
+/* As tall as the session header beside it, so the computer's name and the
+   session's title share a line across the columns. The fifth pixel below stands
+   in for that header's rule; the rail draws none, the search field follows. */
+.rail-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 53px;
+  padding: calc(env(safe-area-inset-top, 0px) + 4px) 8px 5px 14px;
+}
+
+.rail-head .host-title { gap: 9px; }
+.rail-head .host-title .dot { width: 8px; height: 8px; }
+
+.rail-head .host-title-name {
+  gap: 4px;
+  font-size: var(--text-subhead);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+/* The name gives way to the controls beside it; the chevron stays in view. */
+.rail-head .host-title-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rail-head .host-title-name svg { width: 14px; height: 14px; }
+.rail-head .host-title-line { max-height: none; font-size: var(--text-caption); line-height: 1.4; }
+
+/* The title's text takes the head's whole room, so the status line is as wide
+   as what the sentence may use, whatever it is showing now. */
+.rail-head .host-title-text { flex: 1 1 auto; }
+
+/* The status, part by part. The line is one row high and wraps: a part that
+   does not fit goes to a row that is not shown, with the dot it starts with
+   (`white-space: pre` keeps that dot's spaces), so the line never
+   ends in half a number or a unit on its own. Only a first part longer than the
+   whole line is cut, and that is always words. */
+.rail-head .host-title-line.is-brief {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  height: 1.4em;
+  text-overflow: clip;
+}
+
+/* The whole sentence on one row, out of sight and out of the flow: only its
+   width is read, to tell whether the line can show it (`host-title.tsx`). */
+.rail-head .host-title-whole {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
+
+.rail-head .host-title-whole::before { content: attr(data-sentence); }
+
+.rail-head .host-title-fact {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.rail-head .herd-mode,
+.rail-create {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--muted);
+}
+
+/* The create target is 44px; the tinted chip drawn inside it is smaller. */
+.rail-create {
+  position: relative;
+  isolation: isolate;
+  color: var(--accent);
+}
+
+.rail-create::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  z-index: -1;
+  border: 1px solid rgba(110, 168, 254, 0.22);
+  border-radius: 10px;
+  background: rgba(110, 168, 254, 0.12);
+}
+
+.rail-create:active:not(:disabled)::after { background: rgba(110, 168, 254, 0.2); }
+/* Its menu makes the page inert, so the button holds the pressed look itself. */
+.rail-create[data-popover-open]::after { background: rgba(110, 168, 254, 0.2); }
+.rail-create:disabled { opacity: 0.4; }
+/* The keyboard's ring goes round the chip, not the finger's target around it. */
+.rail-create:focus-visible { outline: none; }
+.rail-create:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rail-head .herd-mode:active { background: var(--surface-2); }
+
+/* --- Herdr session ---------------------------------------------------------------- */
+
+/* Which Herdr session the list below is read from, while there is a choice: a
+   row of its own, so the head keeps the computer's name whole. Its icon sits
+   under the status dot and its words under the name. */
+.rail > .herd-session-switch {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  margin: -3px 6px 5px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--r-md);
+  color: var(--ink);
+  font: 550 var(--text-secondary) var(--font);
+  text-align: left;
+}
+
+.rail > .herd-session-switch svg { flex: none; color: var(--muted); }
+.rail > .herd-session-switch .herd-session-kind { flex: none; color: var(--muted); font-weight: 500; }
+.rail > .herd-session-switch .herd-session-name { flex: 1 1 auto; min-width: 0; margin-left: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail > .herd-session-switch:active { background: var(--surface-2); }
+
+/* --- Search entry ------------------------------------------------------------------ */
+
+.rail-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 0 10px 8px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-body);
+  text-align: left;
+}
+
+.rail-search:active { background: var(--surface-2); }
+.rail-search-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.rail-search kbd {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  font: 600 var(--text-caption) var(--font);
+}
+
+/* --- "Needs you" ------------------------------------------------------------------- */
+
+.rail .attn-wrap { flex: none; }
+
+/* One row that scrolls sideways; the fade says there is more past the edge. */
+.rail .attn-strip {
+  gap: 6px;
+  margin: 0;
+  padding: 0 22px 8px 10px;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+
+/* The label stays put while the tickets scroll under it: it is the way to walk
+   through every waiting row when the strip holds more than fits. A sticky edge
+   is measured inside the strip's padding, so the label reaches back over those
+   10px itself; left at zero a ticket would show through beside it. */
+.rail .attn-strip-label {
+  position: sticky;
+  left: -10px;
+  z-index: 1;
+  min-height: 44px;
+  margin: 0 6px 0 -10px;
+  padding: 0 4px 0 10px;
+  background: var(--bg);
+}
+
+/* A ticket comes out from under the label through a fade, like the far edge. */
+.rail .attn-strip-label::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 100%;
+  width: 12px;
+  background: linear-gradient(to right, var(--bg), transparent);
+  pointer-events: none;
+}
+
+.rail .attn-ticket { min-height: 44px; max-width: 172px; }
+/* The row itself sits under its workspace heading a few lines below. */
+.rail .attn-ticket-ws { display: none; }
+
+.rail > .banner { flex: none; margin: 0 10px 8px; }
+
+/* The update reminder above the list: a compact card with its two actions on
+   one line. It is set in the rail's own sizes — a row's name and its meta line —
+   so a long note (an incompatible page) costs the list a few lines, not a screen. */
+.rail .set-card.daemon-update { margin: 0 4px 8px; border-radius: var(--r-md); }
+.rail .daemon-update .set-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 10px 10px 8px 12px;
+}
+.rail .daemon-update .set-row > strong { flex: 1 1 100%; font-size: var(--text-body); }
+.rail .daemon-update .set-row > .set-note {
+  flex: 1 1 100%;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  text-wrap: balance;
+}
+
+/* --- List -------------------------------------------------------------------------- */
+
+.rail-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 8px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.rail .section-title { margin: 14px 2px 6px; }
+.rail .herd-list .herd-group:first-child .section-title { margin-top: 6px; }
+
+/* A workspace heading is one line: name, root path, what waits inside, tools.
+   The path takes what is left and is the first to give way; a long name
+   truncates next. Nothing wraps. */
+.rail .group-head { flex-wrap: nowrap; margin: 12px 0 4px; }
+.rail .herd-list .herd-group:first-child .group-head { margin-top: 2px; }
+.rail .group-head .group-title { flex: 0 1 auto; min-width: 3.25rem; gap: 6px; font-size: var(--text-body); }
+
+.rail .group-path {
+  order: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0 0 0 4px;
+  text-overflow: clip;
+  container-type: inline-size;
+}
+
+.rail .group-path > span { display: block; overflow: hidden; text-overflow: ellipsis; }
+
+/* A path squeezed down to its first characters says nothing; leave the gap. */
+@container (max-width: 3.4rem) {
+  .rail .group-path > span { display: none; }
+}
+
+.rail .group-marks { order: 2; gap: 2px; margin-left: auto; }
+.rail .group-mark { padding-inline: 3px; white-space: nowrap; }
+/* Finger-sized by default; a mouse gets the compact tools further down. */
+.rail .group-head .group-tool { order: 3; width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+
+.rail .empty-sub { margin: 4px 2px 0; }
+
+.rail .herd-group-body { border-radius: var(--r-md); }
+
+.rail .card-main { padding: 8px 12px; }
+
+/* Rows in the tab the board beside the rail shows: a light wash, below the selection and waiting grounds. */
+.rail .card.in-board:not(.sel) .card-main { background-color: #141b26; }
+.rail .card.in-board.is-blocked:not(.sel) .card-main { background-color: #221f16; }
+
+.rail .card-name { font-size: var(--text-lead); }
+.rail .card-meta { font-size: var(--text-caption); }
+
+/* --- Foot: Board and Settings ------------------------------------------------------ */
+
+.rail-nav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px calc(4px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+}
+
+.rail-nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font: 550 var(--text-secondary) var(--font);
+  white-space: nowrap;
+}
+
+.rail-nav-item:active { background: var(--surface-2); }
+/* The page beside the rail (the board) reads as the current destination. */
+.rail-nav-item.is-current { background: var(--surface); color: var(--ink); }
+.rail-nav-icon { position: relative; display: grid; place-items: center; }
+
+.rail-nav-dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* The on-screen keyboard takes half a tablet's height: the list gets the foot's. */
+html[data-kb="open"] .rail-nav { display: none; }
+
+/* --- Precise pointer --------------------------------------------------------------- */
+
+@media (hover: hover) and (pointer: fine) {
+  .rail-head { gap: 4px; padding-right: 10px; }
+  .rail-head .host-title { margin-right: 2px; }
+
+  .rail-head .herd-mode,
+  .rail-create {
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: var(--r-sm);
+  }
+
+  .rail-create::after { inset: 0; border-radius: var(--r-sm); }
+  .rail-create:hover:not(:disabled)::after { background: rgba(110, 168, 254, 0.2); }
+
+  .rail-head .herd-mode:hover { background: var(--surface); color: var(--ink); }
+  .rail-head .herd-mode:hover svg { color: inherit; }
+
+  .rail > .herd-session-switch { min-height: 30px; margin: -4px 8px 6px; padding-left: 2px; border-radius: var(--r-sm); }
+  .rail > .herd-session-switch:hover { background: var(--surface); }
+
+  .rail-search { min-height: 34px; border-radius: 9px; }
+  .rail-search:hover { border-color: rgba(233, 237, 243, 0.26); color: var(--ink); }
+
+  .rail .attn-strip-label { min-height: 28px; }
+  .rail .attn-strip-label:hover { text-decoration: underline; }
+
+  .rail .attn-ticket {
+    min-height: 28px;
+    gap: 6px;
+    padding: 0 9px 0 4px;
+    border-radius: var(--r-sm);
+    font-size: var(--text-secondary);
+  }
+
+  .rail .attn-ticket .agent-avatar.is-sm { width: 20px; height: 20px; border-radius: 6px; }
+  .rail .attn-ticket:hover { border-color: var(--muted); }
+
+  .rail .daemon-update .btn-small { min-height: 30px; padding: 0 10px; border-radius: var(--r-sm); font-size: var(--text-secondary); }
+
+  /* Headings: 30px controls, and the tools step aside until the heading is
+     pointed at or holds keyboard focus. They collapse instead of leaving the
+     layout so a menu that closes can still hand focus back to its button. */
+  .rail .group-head .group-title,
+  .rail .group-mark { min-height: 30px; }
+
+  /* A mouse needs no finger's width: the count is as wide as its words. */
+  .rail .group-mark { min-width: 0; }
+
+  .rail .group-head .group-title { border-radius: 6px; }
+  .rail .group-mark:hover { text-decoration: underline; }
+
+  .rail .group-head .group-tool {
+    width: 0;
+    min-width: 0;
+    height: 30px;
+    min-height: 30px;
+    overflow: hidden;
+    border-radius: var(--r-sm);
+    opacity: 0;
+  }
+
+  /* A menu opened from a tool makes the page behind it inert, so hover is lost:
+     the trigger's mark keeps its tools drawn until the menu closes. */
+  .rail .group-head:hover .group-tool,
+  .rail .group-head:has(:focus-visible) .group-tool,
+  .rail .group-head:has([data-popover-open]) .group-tool { width: 30px; min-width: 30px; opacity: 1; }
+
+  .rail .group-head .group-tool:hover { background: var(--surface); color: var(--ink); }
+
+  /* Rows: 46px with a 28px mark, laid straight on the rail instead of in an
+     inset card. Nothing slides here, so a row needs no opaque ground. */
+  .rail .herd-group-body { overflow: visible; border-radius: 0; background: none; }
+  .rail .card { background: none; }
+
+  .rail .card-main {
+    min-height: 46px;
+    gap: 10px;
+    padding: 5px 8px;
+    border-radius: var(--r-sm);
+    background-color: transparent;
+  }
+
+  .rail .card + .card .card-main { background-image: none; }
+  .rail .card:not(.sel):not(.is-blocked) .card-main:hover { background-color: var(--surface); }
+  .rail .card:not(.sel):not(.is-blocked) .card-main:active { background-color: var(--surface-2); }
+
+  .rail .card-name { font-size: var(--text-body); }
+
+  .rail .card .agent-avatar { width: 28px; height: 28px; border-radius: 8px; }
+
+  .rail .card .agent-avatar-status {
+    right: -2px;
+    bottom: -2px;
+    width: 10px;
+    height: 10px;
+    border-width: 2px;
+    border-color: var(--bg);
+  }
+
+  .rail .card.sel .agent-avatar-status { border-color: #16202e; }
+  .rail .card.is-blocked:not(.sel) .agent-avatar-status { border-color: #1c1a13; }
+  .rail .card-dot { width: 7px; height: 7px; }
+
+  /* Row actions: the buttons a swipe uncovers on touch, as a cluster over the
+     row's trailing edge. Shown while the row is pointed at or holds keyboard
+     focus; the row's text makes room and its dot steps aside. Always laid out,
+     so a closing menu can return focus to "more"; until shown they take no
+     click, so a finger on a touch-screen laptop still opens the row. */
+  .rail .card-actions {
+    inset: 0 6px 0 auto;
+    z-index: 2;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .rail .card:not(.is-open):not(.is-dragging) .card-actions { visibility: visible; }
+
+  .rail .card:hover .card-actions,
+  .rail .card:has(:focus-visible) .card-actions,
+  .rail .card:has([data-popover-open]) .card-actions { opacity: 1; pointer-events: auto; }
+
+  .rail .card-action,
+  .rail .card-action.is-read {
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 7px;
+    background: var(--surface-2);
+    color: var(--muted);
+  }
+
+  /* Here it is one of the row's buttons, not the layer behind a swipe. */
+  .rail .card:not(.is-leading) .card-action.is-read { visibility: inherit; }
+
+  .rail .card-action:hover { background: var(--line-strong); color: var(--ink); }
+  .rail .card-action svg { width: 15px; height: 15px; }
+
+  /* An icon here; the name stays for assistive technology and the tooltip. */
+  .rail .card-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .rail .card:hover .card-main,
+  .rail .card:has(:focus-visible) .card-main,
+  .rail .card:has([data-popover-open]) .card-main { padding-right: 72px; }
+
+  .rail .card.is-unread:hover .card-main,
+  .rail .card.is-unread:has(:focus-visible) .card-main,
+  .rail .card.is-unread:has([data-popover-open]) .card-main { padding-right: 102px; }
+
+  .rail .card:hover .card-side,
+  .rail .card:has(:focus-visible) .card-side,
+  .rail .card:has([data-popover-open]) .card-side { display: none; }
+
+  .rail-nav { padding-block: 6px; }
+  .rail-nav-item { min-height: 32px; }
+  .rail-nav-item:hover { background: var(--surface); color: var(--ink); }
+}

@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -170,8 +171,8 @@ test("a held session-only composition defers the patch and never notifies/rewrit
     // Key observations INSIDE the same act hold-window, before any release:
     expect(deferred).toBeTrue();
     expect(getAppFrame().session?.paneId).toBe(frameBefore);     // frame not advanced
-    expect(appRoot().querySelector(".term")).toBe(term);         // DOM node not replaced
-    expect(appRoot().querySelector(".term-line > span")?.firstChild).toBe(textNode);
+    expectSameNode(appRoot().querySelector(".term"), term);         // DOM node not replaced
+    expectSameNode(appRoot().querySelector(".term-line > span")?.firstChild, textNode);
     expect(sessionUIRevision()).toBe(revisionBefore);             // no stale notify bumped revision
     expect(sessionStore.get().paneId).toBe("p1");                // published pane still p1
   });
@@ -272,8 +273,8 @@ test("a subscriber staging a fresh composition during the patch's internal publi
       expect(outcome).toBe("deferred");
       expect(stagedInsidePatch).toBeTrue();
       // The stale DOM/frame/selection were NOT written:
-      expect(appRoot().querySelector(".term")).toBe(term);
-      expect(appRoot().querySelector(".term-line > span")?.firstChild).toBe(textNode);
+      expectSameNode(appRoot().querySelector(".term"), term);
+      expectSameNode(appRoot().querySelector(".term-line > span")?.firstChild, textNode);
       expect(window.getSelection()?.toString()).toBe(selectionText);
       expect(getAppFrame().session?.paneId).toBe(framePane);
     } finally {
@@ -314,8 +315,8 @@ test("echo settle subscriber staging mid-patch defers; subscriber follow/unread 
       };
       expect(actual).toEqual({ triggered: 1, outcome: "deferred", hold: true, pane: "p1", canonicalFollow: true, canonicalUnread: false });
       // Stale DOM/frame/selection untouched:
-      expect(appRoot().querySelector(".term")).toBe(term);
-      expect(appRoot().querySelector(".term-line > span")?.firstChild).toBe(textNode);
+      expectSameNode(appRoot().querySelector(".term"), term);
+      expectSameNode(appRoot().querySelector(".term-line > span")?.firstChild, textNode);
       expect(window.getSelection()?.toString()).toBe(selectionText);
       expect(getAppFrame().session?.paneId).toBe(framePane);
     } finally {
@@ -357,7 +358,7 @@ test("real empty-row prune subscriber staging mid-patch defers; follow/unread ca
       };
       expect(actual).toEqual({ triggered: 1, outcome: "deferred", hold: true, pane: "p1", canonicalFollow: true, canonicalUnread: false });
       // Stale DOM/frame/selection untouched:
-      expect(appRoot().querySelector(".term-line > span")?.firstChild).toBe(textNode);
+      expectSameNode(appRoot().querySelector(".term-line > span")?.firstChild, textNode);
       expect(window.getSelection()?.toString()).toBe(selectionText);
       expect(getAppFrame().session?.paneId).toBe(framePane);
     } finally {
@@ -404,8 +405,8 @@ test("compose-view subscriber staging between syncSendButton and notifySessionUI
       expect(staged).toBeTrue();
       expect(outcome).toBe("deferred");
       expect(sessionUIRevision()).toBe(revisionBefore); // stale revision delta 0
-      expect(appRoot().querySelector(".term")).toBe(term);
-      expect(appRoot().querySelector(".term-line > span")?.firstChild).toBe(textNode);
+      expectSameNode(appRoot().querySelector(".term"), term);
+      expectSameNode(appRoot().querySelector(".term-line > span")?.firstChild, textNode);
       expect(window.getSelection()?.toString()).toBe(selectionText);
       expect(getAppFrame().session?.paneId).toBe(framePane);
     } finally {

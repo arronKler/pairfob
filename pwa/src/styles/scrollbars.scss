@@ -1,0 +1,24 @@
+/* --- Scrollbars under a precise pointer --------------------------------------------
+   A mouse brings the platform's classic scrollbars (always on Windows and
+   Linux, on macOS while a mouse is attached): a 15px track in the system's
+   grey on every scroller, drawn even where there is nothing to scroll. One
+   rule gives every scroller the thin bar in the app's own line colour over no
+   track at all: pages, columns, sheets, text fields, and the dialogs and
+   popovers in the top layer, which are elements like any other.
+
+   Without a precise pointer nothing here applies, so a finger keeps the
+   platform's overlay scrollbars on the phone and the tablet alike. A scroller
+   that hides its bar says so on its own class, which outranks the universal
+   selector wherever it is declared.
+   ------------------------------------------------------------------------------ */
+
+@media (hover: hover) and (pointer: fine) {
+  /* The colour is inherited; the width is not. */
+  :root { scrollbar-color: var(--line-strong) transparent; }
+  * { scrollbar-width: thin; }
+
+  /* The chat stream is a centred column over a centred dock. A bar that takes
+     room on one side only sets the messages off the compose field's axis; the
+     same room on both sides keeps the two concentric. */
+  .agent-stream { scrollbar-gutter: stable both-edges; }
+}

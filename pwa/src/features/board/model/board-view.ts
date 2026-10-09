@@ -32,10 +32,21 @@ export type BoardModelInput = {
   selectedPaneId: string;
   status: HerdStatus;
   canCreateTab: boolean;
+  /**
+   * A session can be started in a workspace of its own (`create_conversation`),
+   * which is what the list's create offers. Absent means it cannot.
+   */
+  canCreateWorkspace?: boolean;
   /** The advertised layout capabilities; absent keys mean the daemon cannot. */
   layoutCaps: { resize: boolean; swap: boolean; split: boolean; zoom: boolean };
   operationBusy: boolean;
   connected: boolean;
+  /**
+   * Whether a session can be created right now, as the list decides it
+   * (`canCreateSession`): false while the computer is still being read, or its
+   * Herdr is gone or silent. Absent means the caller did not ask.
+   */
+  creatable?: boolean;
 };
 
 export type BoardRailChip = { id: string; label: string; selected: boolean };
@@ -83,7 +94,7 @@ export type BoardCanvasModel = {
   canvasAria: string;
   /** The pane herdr is showing alone ("在电脑上铺满"); "" when the tab is split. */
   zoomedPaneId: string;
-  /** Canvas banner while zoomed: what the computer shows and how to restore the split. */
+  /** The tab row's bar while zoomed: what the computer shows and how to restore the split. */
   zoomBanner: { text: string; restore: string };
   /**
    * Divider handles show only when the computer advertises resize_pane and the
@@ -206,6 +217,21 @@ export function boardCanvasModel(input: BoardModelInput): BoardCanvasModel {
   };
 }
 
+/**
+ * The board's create entry. Beside its tabs it is "+ tab", which needs the
+ * board's workspace. A board with no tab draws it as the empty card's action,
+ * and there it is the list's own create: the first session goes in a workspace
+ * of its own, so it answers whenever the list's does (`creatable`) and is held
+ * exactly when that one is. A computer that only takes tabs still needs a
+ * workspace to add one to.
+ */
+function boardCreate(input: BoardModelInput, hasTabs: boolean): BoardViewModel["create"] {
+  const label = input.operationBusy ? t("home.creating") : t("board.newTab");
+  const held = input.operationBusy || !input.connected || input.creatable === false;
+  if (!hasTabs && input.canCreateWorkspace) return { label, disabled: held };
+  return input.canCreateTab ? { label, disabled: held || !input.workspaceId } : null;
+}
+
 export function buildBoardViewModel(input: BoardModelInput): BoardViewModel {
   const spaces = [...input.workspaceList];
   const agents = [...input.agents];
@@ -244,12 +270,7 @@ export function buildBoardViewModel(input: BoardModelInput): BoardViewModel {
       };
     }),
     tabAria: t("board.tabAria"),
-    create: input.canCreateTab
-      ? {
-          label: input.operationBusy ? t("home.creating") : t("board.newTab"),
-          disabled: input.operationBusy || !input.connected || !input.workspaceId,
-        }
-      : null,
+    create: boardCreate(input, tabs.length > 0),
     status: input.status,
     canvas: boardCanvasModel(input),
   };

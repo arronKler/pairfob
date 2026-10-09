@@ -4,12 +4,15 @@ import { composeStore, setComposeDraft } from "../session/compose-store";
 import { chatStore } from "../session/chat/trace-store";
 import { attachLiveSession, currentDaemonId, setCredential } from "../computers/catalog-store";
 import { setPhase } from "./connection-store";
+import { adoptPreparedFrame, resetFrame } from "../../app/frame";
+import { computeLayout } from "../../app/layout";
 import { currentScreen, setScreen } from "../../app/navigation-store";
-import { openPaneId, selectPane, sessionStore } from "../session/session-store";
-import { preferencesStore } from "../settings/preferences-store";
+import { applySnapshot, dashboardStore, resetDashboard } from "../dashboard/catalog-store";
+import { openPaneId, selectPane, sessionStore, setAgentChat, setFullTerminal } from "../session/session-store";
+import { paneTermMode, preferencesStore, setPaneTermMode } from "../settings/preferences-store";
 import { readStoredDraft, writeStoredDraft } from "../session/drafts/state-drafts";
 import { openPaneWithOwner, type OpenPanePorts } from "./open-pane";
-import { resetGenerationsForTests } from "./generations";
+import { nextPaneNavigation, paneNavigationIsCurrent, resetGenerationsForTests } from "./generations";
 import type { LiveSession } from "../../lib/protocol/session-types";
 import type { PairResult } from "../../lib/protocol/client";
 
@@ -52,6 +55,7 @@ function ports(over: Partial<OpenPanePorts> = {}): OpenPanePorts {
 
 afterEach(() => {
   resetGenerationsForTests();
+  resetFrame();
 });
 
 describe("openPane atomic transition", () => {
@@ -257,5 +261,203 @@ describe("openPane atomic transition", () => {
     }));
     expect(composeStore.get().composeDraft).toBe("RETRY");
     expect(chatStore.get().agentTraceNote).toBe("retry error");
+  });
+});
+
+/**
+ * The committed frame shows `paneId` under `session`, the way a commit on the
+ * pane screen leaves it: beside the list, or on a phone's own pane screen.
+ */
+function display(
+  paneId: string,
+  session: LiveSession,
+  kind: "guided" | "chat" | "terminal" = "guided",
+  incarnation = 1,
+  desk = true,
+): void {
+  selectPane(paneId);
+  setScreen("pane");
+  setFullTerminal(kind === "terminal");
+  setAgentChat(kind === "chat");
+  adoptPreparedFrame({
+    layout: computeLayout({
+      phase: "live", screen: "pane", fullTerminal: kind === "terminal", agentChat: kind === "chat", desk,
+      hasSelectedPane: true, termFontPx: 12, operationBusy: false,
+    }),
+    scroll: null,
+    session: { kind, paneId, incarnation },
+    sessionOwner: session,
+  });
+}
+
+/** Ports that count every step an open takes, and read the real screen. */
+function counting(session: LiveSession, over: Partial<OpenPanePorts> = {}) {
+  const steps: string[] = [];
+  const step = (name: string) => () => { steps.push(name); };
+  return {
+    steps,
+    ports: ports({
+      currentLive: () => session,
+      currentScreen: () => currentScreen(),
+      isFullTerminal: () => sessionStore.get().fullTerminal,
+      parkComposeView: step("park"),
+      dropQueuedKeys: step("drop keys"),
+      disposeGuidedScroll: step("dispose scroll"),
+      leaveFullTerminal: async () => { steps.push("leave terminal"); return { from: 1, to: 1 }; },
+      restoreAgentTrace: step("restore trace"),
+      commitView: step("commit"),
+      refreshPane: async () => { steps.push("read"); },
+      ...over,
+    }),
+  };
+}
+
+describe("choosing the pane that is already on screen beside the list", () => {
+  async function boot(): Promise<LiveSession> {
+    await resetBoardTestDOM();
+    setPhase("live");
+    setCredential(credential());
+    const session = { isConnected: () => true } as LiveSession;
+    attachLiveSession(session);
+    return session;
+  }
+
+  test("a complete terminal is not left, re-resolved or reopened, and its draft stays", async () => {
+    const session = await boot();
+    display("pA", session, "terminal");
+    // The stored mode differs from the one on screen: a second open would drop to it.
+    setPaneTermMode("pA", "guided");
+    setComposeDraft("half a command");
+    writeStoredDraft({ daemonId: currentDaemonId(), paneId: "pA", mode: "guided" }, { text: "stored", revision: 1 });
+    const { steps, ports: counted } = counting(session, { resolvedTermMode: () => "guided" });
+
+    const nav = await openPaneWithOwner("pA", counted);
+
+    expect(steps).toEqual([]);
+    expect(sessionStore.get().fullTerminal).toBeTrue();
+    expect(sessionStore.get().agentChat).toBeFalse();
+    expect(paneTermMode("pA")).toBe("guided");
+    expect(composeStore.get().composeDraft).toBe("half a command");
+    expect(openPaneId()).toBe("pA");
+    expect(currentScreen()).toBe("pane");
+    // The caller still gets an owner for the pane it asked for.
+    expect(nav?.isCurrent()).toBeTrue();
+    expect(nav?.scope.paneId).toBe("pA");
+    expect(nav?.incarnation).toBe(1);
+  });
+
+  test("a chat stays a chat and a guided session stays guided", async () => {
+    const session = await boot();
+    display("pA", session, "chat");
+    setComposeDraft("a question");
+    const chat = counting(session, { resolvedTermMode: () => "guided" });
+    await openPaneWithOwner("pA", chat.ports);
+    expect(chat.steps).toEqual([]);
+    expect(sessionStore.get().agentChat).toBeTrue();
+    expect(composeStore.get().composeDraft).toBe("a question");
+
+    display("pA", session, "guided");
+    const guided = counting(session, { resolvedTermMode: () => "full" });
+    await openPaneWithOwner("pA", guided.ports);
+    expect(guided.steps).toEqual([]);
+    expect(sessionStore.get().fullTerminal).toBeFalse();
+  });
+
+  test("it supersedes no navigation that is still finishing", async () => {
+    const session = await boot();
+    display("pA", session);
+    const inFlight = nextPaneNavigation();
+    await openPaneWithOwner("pA", counting(session).ports);
+    expect(paneNavigationIsCurrent(inFlight)).toBeTrue();
+  });
+
+  test("the row still acknowledges an unread completion", async () => {
+    const session = await boot();
+    resetDashboard();
+    applySnapshot({
+      panes: [{ pane_id: "pA", workspace_id: "w1", tab_id: "t1", agent: "codex", agent_status: "done", state_change_seq: 1 }],
+    });
+    expect(dashboardStore.get().agents[0]?.status).toBe("done");
+    display("pA", session, "terminal");
+
+    const { steps, ports: counted } = counting(session);
+    await openPaneWithOwner("pA", counted);
+
+    expect(dashboardStore.get().agents[0]?.status).toBe("idle");
+    expect(steps).toEqual([]);
+    resetDashboard();
+  });
+
+  test("its navigation ends when the reader goes somewhere else", async () => {
+    const session = await boot();
+    display("pA", session);
+    const nav = await openPaneWithOwner("pA", counting(session).ports);
+    expect(nav?.isCurrent()).toBeTrue();
+    setScreen("home");
+    expect(nav?.isCurrent()).toBeFalse();
+  });
+
+  test("another pane runs the whole open, leaving the terminal first", async () => {
+    const session = await boot();
+    display("pA", session, "terminal");
+    const { steps, ports: counted } = counting(session);
+
+    const nav = await openPaneWithOwner("pB", counted);
+
+    expect(steps).toEqual(["park", "drop keys", "dispose scroll", "leave terminal", "restore trace", "commit", "read"]);
+    expect(openPaneId()).toBe("pB");
+    expect(sessionStore.get().fullTerminal).toBeFalse();
+    expect(nav?.isCurrent()).toBeTrue();
+  });
+
+  test("the same pane chosen while another page fills the column opens as it always did", async () => {
+    const session = await boot();
+    display("pA", session, "terminal");
+    // Settings took the main column; the terminal is still the pane's mode.
+    setScreen("settings");
+    const { steps, ports: counted } = counting(session, { resolvedTermMode: () => "full" });
+
+    await openPaneWithOwner("pA", counted);
+
+    expect(steps).toEqual(["park", "drop keys", "dispose scroll", "leave terminal", "restore trace", "commit", "read"]);
+    expect(currentScreen()).toBe("pane");
+  });
+
+  test("a phone, whose list is a screen of its own, opens as it always did", async () => {
+    const session = await boot();
+    // From the list: the pane was left for it, and the list still remembers it.
+    display("pA", session, "guided", 1, false);
+    setScreen("home");
+    const fromList = counting(session);
+    await openPaneWithOwner("pA", fromList.ports);
+    expect(fromList.steps).toEqual(["park", "drop keys", "dispose scroll", "restore trace", "commit", "read"]);
+    expect(currentScreen()).toBe("pane");
+
+    // And asked for again while it is the whole screen (a notification for it).
+    display("pA", session, "terminal", 1, false);
+    const onScreen = counting(session, { resolvedTermMode: () => "full" });
+    await openPaneWithOwner("pA", onScreen.ports);
+    expect(onScreen.steps).toEqual(["park", "drop keys", "dispose scroll", "leave terminal", "restore trace", "commit", "read"]);
+  });
+
+  test("a frame from another live session or an older view is not this pane on screen", async () => {
+    const session = await boot();
+    display("pA", { isConnected: () => true } as LiveSession);
+    const stale = counting(session);
+    await openPaneWithOwner("pA", stale.ports);
+    expect(stale.steps).toContain("commit");
+
+    display("pA", session, "guided", 1);
+    const moved = counting(session, { currentIncarnation: () => 2 });
+    await openPaneWithOwner("pA", moved.ports);
+    expect(moved.steps).toContain("commit");
+
+    // And a pane selected with nothing committed for it yet.
+    resetFrame();
+    selectPane("pA");
+    setScreen("pane");
+    const unpainted = counting(session);
+    await openPaneWithOwner("pA", unpainted.ports);
+    expect(unpainted.steps).toContain("commit");
   });
 });

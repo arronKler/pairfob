@@ -1,3 +1,4 @@
+import { expectDifferentNode, expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { afterEach, beforeEach, expect, test } from "bun:test";
@@ -49,8 +50,8 @@ test("a replacement opened by native close cannot lose focus to the retiring she
   expect(first.isConnected).toBeFalse();
   expect(document.querySelectorAll("dialog.sheet")).toHaveLength(1);
   expect(second.open).toBeTrue();
-  expect(document.activeElement === pageTrigger).toBeFalse();
-  expect(document.activeElement === second.querySelector(".menu-item")).toBeTrue();
+  expectDifferentNode(document.activeElement, pageTrigger);
+  expectSameNode(document.activeElement, second.querySelector(".menu-item"));
 });
 
 test("a picked action opens its text dialog only after sheet teardown and keeps that input focused", async () => {
@@ -71,7 +72,7 @@ test("a picked action opens its text dialog only after sheet teardown and keeps 
   const next = document.querySelector<HTMLDialogElement>("dialog")!;
   const input = next.querySelector<HTMLInputElement>("input")!;
   expect(input.value).toBe("Original");
-  expect(document.activeElement === input).toBeTrue();
+  expectSameNode(document.activeElement, input);
   act(() => next.close("cancel"));
   expect(await pending).toBeNull();
 });

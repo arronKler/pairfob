@@ -21,6 +21,9 @@ import { closePaneConfirmed, layoutSelectedPane, paneIsRunning } from "../../../
 import { fullTerminalScreenText, retryFullTerminal } from "../full-terminal/full-terminal";
 import { showActionSheet, type ActionSheetController } from "../../../shared/ui/overlay/action-sheet";
 import { MenuGroup, MenuRow, MenuTile, MenuTiles } from "../../../shared/ui/overlay/menu-controls";
+import { useEscapeStep } from "../../../shared/ui/overlay/escape-steps";
+import { deskPresentation } from "../../../shared/ui/overlay/popover";
+import { followRemoval } from "../../../shared/ui/overlay/removal-focus";
 import { useSheetNav, type SheetNav } from "../../../shared/ui/overlay/sheet-stack";
 import { AgentAvatar, Button } from "../../../shared/ui/primitives";
 import { PanePage } from "./pane-page";
@@ -79,17 +82,32 @@ function IdentityHead({ modal, agent, onCopied }: { modal: ActionSheetController
 /**
  * Closing asks in place: the subject, what closing does and, while an agent
  * is still busy, a louder warning. No dialog stacked on the sheet.
+ *
+ * It behaves as the confirmation dialog does: the question opens on Cancel,
+ * the safe answer, and Cancel or Escape gives focus back to the row that asked. Once
+ * confirmed under a mouse or the keyboard, focus follows the closed session's
+ * row to its neighbour in the list (`removal-focus.ts`).
  */
 function CloseZone({ modal, agent }: { modal: ActionSheetController; agent: AgentCard }) {
   const [asking, setAsking] = useState(false);
   const { listGroup } = usePreferences();
   const confirm = useRef<HTMLDivElement>(null);
+  const zone = useRef<HTMLDivElement>(null);
+  const asked = useRef(false);
+  // Escape takes the question back first, as Cancel does, and only then the panel.
+  useEscapeStep(asking, () => setAsking(false));
   // The zone sits at the foot of a tall sheet: without this the question opens
   // below the fold on a phone and the tap looks like it did nothing.
   useLayoutEffect(() => {
-    if (asking) confirm.current?.scrollIntoView?.({ block: "nearest" });
+    if (asking) {
+      confirm.current?.scrollIntoView?.({ block: "nearest" });
+      confirm.current?.querySelector<HTMLElement>(".pane-confirm-cancel")?.focus({ preventScroll: true });
+    } else if (asked.current) {
+      zone.current?.querySelector<HTMLElement>(".menu-row")?.focus({ preventScroll: true });
+    }
+    asked.current = asking;
   }, [asking]);
-  return <MenuGroup className="menu-danger-zone">
+  return <div ref={zone} className="menu-group menu-danger-zone">
     <MenuRow icon={<Trash2 size={18} />} label={t("pm.closePane")} danger onClick={() => setAsking((value) => !value)} />
     {asking && <div ref={confirm} className="pane-confirm" role="group" aria-label={t("confirm.closePaneTitle")}>
       <div className="pane-confirm-subject">
@@ -99,11 +117,14 @@ function CloseZone({ modal, agent }: { modal: ActionSheetController; agent: Agen
       <p>{t("confirm.closePaneEffect")}</p>
       {paneIsRunning(agent) ? <p className="pane-confirm-warn">{t("confirm.closeRunning")}</p> : null}
       <div className="pane-confirm-actions">
-        <Button className="btn" onClick={() => setAsking(false)}>{t("cancel")}</Button>
-        <Button className="btn btn-danger" data-autofocus="" onClick={() => modal.close(() => closePaneConfirmed(agent))}>{t("pm.closePane")}</Button>
+        <Button className="btn pane-confirm-cancel" onClick={() => setAsking(false)}>{t("cancel")}</Button>
+        <Button className="btn btn-danger" onClick={() => {
+          if (deskPresentation()) followRemoval(null, { of: agent.paneId });
+          modal.close(() => closePaneConfirmed(agent));
+        }}>{t("pm.closePane")}</Button>
       </div>
     </div>}
-  </MenuGroup>;
+  </div>;
 }
 
 function pushPage(nav: SheetNav, key: string, title: string, render: () => ReactNode): void {
@@ -146,7 +167,7 @@ function PaneMenu({ modal, agent, full, chat }: MenuContext) {
       {caps.split_pane && agent && <MenuTile icon={<Columns2 size={22} />} label={t("pm.tileSplit")} aria={t("menu.split")}
         onClick={() => pushPage(nav, "split", t("pm.splitTitle"), () => <SplitPage modal={modal} agent={agent} />)} />}
       {agent && <MenuTile icon={<Pencil size={22} />} label={t("pm.tileRename")} aria={t("menu.renamePane")}
-        onClick={() => pushPage(nav, "rename", t("pm.renameTitle"), () => <RenamePage modal={modal} agent={agent} />)} />}
+        onClick={() => pushPage(nav, "rename", t("menu.renamePane"), () => <RenamePage modal={modal} agent={agent} />)} />}
     </MenuTiles>
     <p className="pane-menu-status" role="status">{status || (!chat ? t("pm.copyHint") : "")}</p>
     {!chat && <h3 className="pane-group-title">{t("pm.groupDisplay")}</h3>}
@@ -169,6 +190,8 @@ export function openPaneMenu(): void {
   const agent = selectedAgent();
   const full = isFullTerminal();
   const chat = isAgentChat();
+  // One panel everywhere. A mouse on a desk layout gets it under the header's
+  // "more" button, beside the pane its settings change; a finger gets the sheet.
   showActionSheet(t("pane.menuTitle"), modal => <PaneMenu modal={modal} agent={agent} full={full} chat={chat} />,
-    { className: "pane-menu-sheet" });
+    { className: "pane-menu-sheet", popover: "panel" });
 }

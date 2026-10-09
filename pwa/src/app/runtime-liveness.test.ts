@@ -73,7 +73,7 @@ describe("herdStatus verdict copy", () => {
     applyRuntimeIdentity({ herdHost: "", runtimeKind: "herdr" });
     const status = herdStatus();
     expect(status.tone).toBe("warn");
-    expect(status.text).toBe("手机没有网络 · 联网后自动恢复");
+    expect(status.text).toBe("当前没有网络 · 联网后自动恢复");
     expect(herdLiveness()).toBe("unverifiable");
   });
 

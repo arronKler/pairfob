@@ -209,6 +209,20 @@ export function trace(): AgentTraceItem[] {
   ];
 }
 
+/**
+ * The finished turn of `trace()`, its reply carrying the three shapes a code
+ * block takes: one short line, one line longer than any column, and several
+ * lines. `chat-complete` shows it; the other chat scenes keep `trace()`.
+ */
+export function completeTrace(): AgentTraceItem[] {
+  const turn = trace().slice(0, 4);
+  const reply = turn[3]!;
+  const long = "PAIRFOB_ALLOWED_ROOTS=/work/pairfob:/work/dashboard pairfob daemon --origin https://pairfob.com --log-level debug --no-color";
+  const several = "git switch -c layout/phone\nbun run typecheck\nbun test src/app src/features/session";
+  turn[3] = { ...reply, text: `${reply.text}\n\nStart the daemon with both roots:\n\n\`\`\`sh\n${long}\n\`\`\`\n\nThen check it:\n\n\`\`\`sh\n${several}\n\`\`\`` };
+  return turn;
+}
+
 export function descriptor(): WorkspaceDescriptor {
   return { name: "pairfob", root: ROOT, features: { files: true, git_status: true, git_diff: true, git_branches: true },
     git: { name: "pairfob", branch: "main", head: "1234567890abcdef", detached: false } };

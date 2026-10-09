@@ -1,7 +1,8 @@
 /* --- Phone herd page ------------------------------------------------------------
    Option B header (computer title, grouping button, "needs you" strip), the
    workspace section headings and the floating create button. The desktop rail
-   keeps its compact top bar; nothing here applies inside `.rail`.
+   reuses the title, the grouping button, the strip and the headings; its frame
+   and its sizes for them are in app/layout/styles/desk-rail.scss.
    ------------------------------------------------------------------------------ */
 
 .herd-page {
@@ -211,6 +212,17 @@
   cursor: pointer;
 }
 
+/* Drawn 36px tall so the strip keeps its height; on the phone page the target
+   reaches 4px further above and below, into the strip's own padding. (The
+   rail's ticket is a full 44px, `desk-rail.scss`.) */
+.herd-page .attn-ticket { position: relative; }
+
+.herd-page .attn-ticket::after {
+  content: "";
+  position: absolute;
+  inset: -5px -1px;
+}
+
 .attn-ticket.is-blocked { border-color: rgba(255, 178, 36, 0.4); background: #1a1812; }
 .attn-ticket .agent-avatar.is-sm { width: 24px; height: 24px; }
 .attn-ticket-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
@@ -274,10 +286,36 @@ html:has(.herd-page) { scroll-padding-top: calc(var(--herd-head-h, 0px) + 64px);
 
 .group-marks { flex: none; display: inline-flex; align-items: center; gap: 4px; }
 
+/* Flat sections share the group heading's hierarchy without a fold control. */
+.herd-group > .section-title {
+  align-items: center;
+  color: var(--ink);
+  font-size: var(--text-lead);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.herd-section-name {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.rail .herd-group > .section-title { font-size: var(--text-body); }
+
+/* A finger-sized target whatever the count's width ("1 等你" alone is 40px).
+   Positioned, so the path line that wraps under the title on the phone does
+   not lie over the mark's lower edge and take the tap. */
 .group-mark {
+  position: relative;
+  min-width: 44px;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 0 4px;
   border: 0;
   background: none;
@@ -289,12 +327,18 @@ html:has(.herd-page) { scroll-padding-top: calc(var(--herd-head-h, 0px) + 64px);
 .group-mark.is-blocked { color: var(--warn); }
 .group-mark.is-done { color: var(--ok); }
 
-.group-head .section-count {
+.group-head .section-count,
+.herd-group > .section-title .section-count {
   color: var(--muted);
   background: transparent;
 }
 
 .group-tool { color: var(--muted); }
+
+/* The path line is pulled up under the title's row and lies over the lower
+   edge of the title and the tools beside it. It is only read, so on the phone
+   page it lets the press through to the 44px control it overlaps. */
+.herd-page .group-path { pointer-events: none; }
 
 .group-path {
   flex-basis: 100%;

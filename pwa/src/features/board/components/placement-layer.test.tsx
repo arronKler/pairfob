@@ -97,3 +97,32 @@ test("placement ends by itself when its pane leaves or the tab is another one", 
   act(() => startBoardPlacement("split", "wide", "w1:t9"));
   expect(r.placement()).toBe("");
 });
+
+test("the hint and Cancel take the tab row of the board the canvas belongs to, clear of every pane", () => {
+  const controller = { pickSplit: () => {}, commitSwap: async () => {} } as unknown as BoardCanvasController;
+  function Board() {
+    const viewportRef = useRef<HTMLDivElement>(null);
+    return <div className="board-shell">
+      <div className="board-rail"><div className="board-tabs" /><div className="board-mode" /></div>
+      <div ref={viewportRef} className="board-canvas"><div className="board-stage">
+        <PlacementLayer layout={layout} controller={controller} viewportRef={viewportRef} />
+      </div></div>
+    </div>;
+  }
+  renderReact(<Board />);
+  act(() => startBoardPlacement("split", "narrow", "w1:t1"));
+  const banner = document.querySelector(".board-rail > .board-mode > .board-place-banner")!;
+  expect(document.querySelector(".board-canvas .board-place-banner")).toBeNull();
+  // The line and its reason are two elements, so the reason can sit under it instead of running off a phone.
+  expect(banner.querySelector(".board-mode-text > span")?.textContent).toBe(t("boardCanvas.placeSplit"));
+  expect(banner.querySelector(".board-mode-text > small")?.textContent).toBe(t("boardCanvas.placeNarrow"));
+  act(() => banner.querySelector<HTMLButtonElement>(".board-mode-cancel")!.click());
+  expect(boardInteractionStore.get().placementKind).toBe("");
+  expect(document.querySelector(".board-place-banner")).toBeNull();
+});
+
+test("a canvas shown without that row keeps the hint on itself", () => {
+  rig();
+  act(() => startBoardPlacement("swap", "narrow", "w1:t1"));
+  expect(document.querySelector(".board-canvas > .board-place-banner .board-mode-cancel")).not.toBeNull();
+});

@@ -1,8 +1,11 @@
 import { ChevronDown, Ellipsis, GitBranch, RefreshCw } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { ROOMY_QUERY } from "../../app/viewport";
 import { t } from "../../lib/i18n";
 import { BackButton, Button } from "../../shared/ui/primitives";
 import { closeWorkspaceDetail, leaveWorkspace, refreshWorkspace } from "./actions";
 import { openDetailMenu } from "./detail-menu";
+import { backLabel } from "./format";
 import type { WorkspaceSnapshot } from "./model";
 
 /** `main ↑2 ↓1`, or `HEAD 1a2b3c4d` when detached. */
@@ -17,7 +20,8 @@ function branchParts(snapshot: WorkspaceSnapshot): { branch: string; sync: strin
   return { branch, sync };
 }
 
-function RepoTitle({ snapshot, onBranches }: { snapshot: WorkspaceSnapshot; onBranches: () => void }) {
+/** The repository's name over its branch and root; a button to the branch sheet when the daemon lists branches. */
+export function RepoTitle({ snapshot, onBranches }: { snapshot: WorkspaceSnapshot; onBranches: () => void }) {
   const name = snapshot.descriptor?.name || t("workspace.title");
   const root = snapshot.descriptor?.root || "";
   const parts = branchParts(snapshot);
@@ -49,16 +53,38 @@ function DetailTitle({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   </div>;
 }
 
+function subscribeSideBySide(listener: () => void): () => void {
+  if (typeof window.matchMedia !== "function") return () => {};
+  const media = window.matchMedia(ROOMY_QUERY);
+  media.addEventListener("change", listener);
+  return () => media.removeEventListener("change", listener);
+}
+
+const sideBySide = (): boolean => typeof window.matchMedia === "function" && window.matchMedia(ROOMY_QUERY).matches;
+
 /**
- * Browse: back to the terminal, the repository title (opens branches), refresh.
+ * The screen shows the list and the open file together. The style sheet makes
+ * that arrangement on the same query (`workspace.scss`), so the header and the
+ * layout change together.
+ */
+function useSideBySide(): boolean {
+  return useSyncExternalStore(subscribeSideBySide, sideBySide);
+}
+
+/**
+ * Browse: back to the session, the repository title (opens branches), refresh.
  * Detail on a phone: back to the list, the file's name over its folder, ⋯.
- * The desktop keeps the repository header and puts ⋯ on the detail pane.
+ * Side by side the list never left, so back has only the session to go to;
+ * the header keeps the repository and puts ⋯ on the detail pane.
  */
 export function WorkspaceHeader({ snapshot, onBranches }: { snapshot: WorkspaceSnapshot; onBranches: () => void }) {
   const detail = snapshot.view !== "browser";
+  const together = useSideBySide();
+  /** One pane at a time and the detail is on top: back uncovers the list. */
+  const stacked = detail && !together;
   return <header className={`workspace-chrome${detail ? " is-detail" : ""}`}>
-    <BackButton onBack={() => detail ? closeWorkspaceDetail() : leaveWorkspace()}
-      label={detail ? t("workspace.closeDetail") : t("workspace.back")} />
+    <BackButton onBack={() => stacked ? closeWorkspaceDetail() : leaveWorkspace()}
+      label={stacked ? t("workspace.closeDetail") : backLabel(snapshot.returnView)} />
     <RepoTitle snapshot={snapshot} onBranches={onBranches} />
     {detail && <DetailTitle snapshot={snapshot} />}
     <div className="workspace-actions">

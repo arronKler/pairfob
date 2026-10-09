@@ -9,12 +9,19 @@ import { fullTerminalHostIsPan } from "./model";
  * that owner: it disposes the renderer it attached and never calls
  * `leaveFullTerminal` (route/session close stays the coordinator).
  *
+ * Beside the list the host can unmount while the mode stays on: Settings or the
+ * computer list takes the main column, or the window crosses the phone width.
+ * Retiring an attached host therefore releases its bridge too, so the computer
+ * stops streaming to a renderer that is gone and the next host opens its own.
+ *
  * Host class bits `is-pan`, `kb-on`, and `kb-off` are engine-owned. React
  * must not pass a changing `className` on `.full-terminal-host`.
  */
 export type FullTerminalEngineHost = {
   scheduleMount: (host: HTMLElement) => void;
   disposeRenderer: () => void;
+  /** Close the open (or opening) bridge without leaving the mode. */
+  releaseBridge: () => void;
   rendererBusy: () => boolean;
   setShellActive: (active: boolean) => void;
 };
@@ -65,6 +72,7 @@ export function attachFullTerminalHost(_root: HTMLElement, host: HTMLElement): (
   }
 
   if (attached && attached.host === host && attached.paneId !== paneId) {
+    engine?.releaseBridge();
     engine?.disposeRenderer();
   }
 
@@ -78,6 +86,7 @@ export function attachFullTerminalHost(_root: HTMLElement, host: HTMLElement): (
 function retireAttach(id: number): void {
   if (!attached || attached.id !== id) return;
   attached = null;
+  engine?.releaseBridge();
   engine?.disposeRenderer();
   engine?.setShellActive(false);
 }

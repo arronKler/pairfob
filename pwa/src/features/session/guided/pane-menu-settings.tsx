@@ -18,6 +18,10 @@ import { MenuGroup, MenuSetting, MenuStepper, MenuSwitch } from "../../../shared
  * The pane sheet's mode choice. Mode changes the whole screen, so choosing one
  * closes the sheet. The line under it says what Auto picked right now, and why
  * a mode that cannot be chosen is off.
+ *
+ * It is the panel's first control proper, and where a mouse or the keyboard
+ * starts in it: the identity above only names the session, and a ring on its
+ * small path line would crowd the name and the status around it.
  */
 export function PaneModeSetting({ modal, mode }: { modal: ActionSheetController; mode: TermMode }) {
   const agentOff = mode !== "agent" && !canEnterAgentChat();
@@ -26,7 +30,7 @@ export function PaneModeSetting({ modal, mode }: { modal: ActionSheetController;
   return <div className="pane-mode">
     <SegmentedControl className="menu-mode" activation="manual" aria-label={t("mode.aria")}>
       {TERM_MODE_OPTIONS.map(option => <MenuRadio key={option} modal={modal} label={TERM_MODE_LABEL[option]} aria={TERM_MODE_MENU[option]}
-        selected={mode === option} disabled={option === "agent" && agentOff}
+        selected={mode === option} disabled={option === "agent" && agentOff} start
         action={() => selectPaneTermMode(option)} />)}
     </SegmentedControl>
     <p className="pane-mode-hint">{hint}{agentOff ? ` ${t("pm.modeAgentOff")}` : ""}</p>
@@ -59,7 +63,7 @@ export function PaneDisplaySettings({ modal, full, chat }: { modal: ActionSheetC
       canDecrease={prefs.termFontPx > TERM_FONT_MIN} canIncrease={prefs.termFontPx < TERM_FONT_MAX} />
     {!full && <MenuSwitch label={t("menu.wrap")} checked={prefs.termWrap} onChange={toggleTermWrap} />}
     {full && <MenuSetting label={t("pane.width")} stacked>
-      <SegmentedControl className="menu-mode" activation="manual" aria-label={t("pane.width")}>
+      <SegmentedControl className="menu-mode pane-width-options" activation="manual" aria-label={t("pane.width")}>
         <MenuRadio modal={modal} stay label={t("pane.fit")} aria={t("pane.fitAria")} selected={prefs.termFit === "fit"}
           action={() => { setTermFit("fit"); commitView(); }} />
         {TERM_COL_PRESETS.map(cols => <MenuRadio key={cols} modal={modal} stay label={t("pane.colsShort", { cols })}

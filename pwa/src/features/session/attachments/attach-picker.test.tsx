@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
@@ -157,7 +158,7 @@ describe("attach picker", () => {
     deliver(input, []);
     await settle();
     expect(queueSnapshot(KEY)?.items ?? []).toHaveLength(0);
-    expect(await openPicker()).toBe(input);
+    expectSameNode(await openPicker(), input);
     deliver(input, [new File(["d"], "d.txt")]);
     await settle();
     expect(queueSnapshot(KEY)?.items.map((row) => row.name)).toEqual(["d.txt"]);

@@ -30,7 +30,24 @@ export type HerdTone = "live" | "warn" | "off" | "demo" | "pending";
 export type HerdStatus = { tone: HerdTone; text: string };
 
 /** Option B header: the computer's name, and one line for how it is reached. */
-export type HerdHostView = { name: string; line: string; tone: HerdTone };
+export type HerdHostView = {
+  name: string;
+  line: string;
+  tone: HerdTone;
+  /**
+   * The same status for the rail's head, which is too narrow for the sentence:
+   * its parts, the most telling first. The head shows as many as fit and leaves
+   * the rest out whole. Absent, the line's own parts.
+   */
+  brief?: readonly string[];
+};
+
+/** What joins the parts of a status line, and what a narrow head splits it on. */
+export const STATUS_JOIN = " · ";
+
+export function hostBrief(host: HerdHostView): readonly string[] {
+  return host.brief ?? host.line.split(STATUS_JOIN);
+}
 
 export type HerdModelInput = {
   /** The published card list; a domain snapshot is read-only by contract. */
@@ -57,7 +74,6 @@ export type HerdModelInput = {
   runtimeKind: string;
   createConversation: boolean;
   operationBusy: boolean;
-  computerCount: number;
   /** Pane whose title currently shares the view-transition name, if any. */
   morphingPaneId: string | null;
   host: HerdHostView;
@@ -66,6 +82,8 @@ export type HerdModelInput = {
   now: number;
   /** The board is the page beside the rail: its link is current and its tab's rows are marked. */
   boardOpen?: boolean;
+  /** A settings-family page is the page beside the rail. */
+  settingsOpen?: boolean;
   boardTabId?: string;
 };
 
@@ -162,16 +180,19 @@ export type HerdViewModel = {
   loading: boolean;
   status: HerdStatus;
   host: HerdHostView;
-  doneCount: number;
-  pendingCount: number;
   /** "Needs you" strip: waiting first, then unread completions. */
   attention: HerdAttentionItem[];
   listGroup: ListGroup;
+  /**
+   * A session can be started right now (`canCreateSession`), whatever this
+   * computer allows from here. Every entry that offers one reads this.
+   */
+  creatable: boolean;
+  /** The create entry: absent without the capability, disabled while `creatable` is false. */
   create: { label: string; aria: string; disabled: boolean } | null;
-  /** Desktop rail links; the phone reaches these through the tab bar. */
-  computers: { label: string } | null;
+  /** Desktop rail destinations; the phone reaches these through the tab bar. */
   board: { label: string; current: boolean };
-  settings: { label: string };
+  settings: { label: string; current: boolean };
 };
 
 export function herdCardClassName(input: {
@@ -199,6 +220,20 @@ export function herdCardPill(status: AgentCard["status"], stale: boolean): { cla
 
 export function herdDoneCount(agents: readonly AgentCard[]): number {
   return agents.filter((agent) => agent.status === "done").length;
+}
+
+/**
+ * Whether a session can be started right now: the computer is reached and its
+ * Herdr answered and is running (`liveness`), the list has been read, and no
+ * other change is in flight.
+ *
+ * One answer for every place that offers a new session: the rail's create and
+ * the main column's, search and jump, a workspace heading's own, the phone's
+ * button, the board's. None of them then invites what another has just said
+ * cannot work.
+ */
+export function canCreateSession(input: { liveness: RuntimeLiveness; loading: boolean; operationBusy: boolean }): boolean {
+  return input.liveness === "live" && !input.loading && !input.operationBusy;
 }
 
 const RECENT_DIRS_SHOWN = 3;
@@ -231,7 +266,9 @@ export function herdEmptyView(input: {
   if (!input.createConversation) return { ...base, kind: "noCreate", title, sub: t("empty.openSub"), command: "herdr" };
   return {
     ...base, kind: "none", title, sub: t("empty.createSub"),
-    actions: [{ label: t("empty.actionCreate"), kind: "create", primary: true, disabled: input.operationBusy }],
+    // An empty list is only shown once it has been read.
+    actions: [{ label: t("empty.actionCreate"), kind: "create", primary: true,
+      disabled: !canCreateSession({ liveness: verdict, loading: false, operationBusy: input.operationBusy }) }],
     recentDirs: input.recentDirs.slice(0, RECENT_DIRS_SHOWN),
   };
 }
@@ -274,13 +311,14 @@ export type PaneIdentity = {
 export function paneIdentity(agent: DashboardAgentCard, listGroup: ListGroup, stale: boolean): PaneIdentity {
   const isAgent = agent.hasAgent;
   const meta = isAgent ? agentMeta(agent, listGroup) : terminalMeta(agent, listGroup);
+  const title = agentTitle(agent, listGroup);
   return {
     kind: isAgent ? "agent" : "terminal",
     agentKind: agent.agent,
-    title: agentTitle(agent, listGroup),
+    title,
     statusLabel: isAgent ? (stale ? t("status.unverifiable") : agentStatusLabel(agent)) : "",
     statusTone: stale ? "unknown" : agent.status,
-    line: agentDisplaySummary(agent) || meta,
+    line: agentDisplaySummary(agent, title) || meta,
     meta,
   };
 }
@@ -373,6 +411,7 @@ export function buildHerdViewModel(input: HerdModelInput): HerdViewModel {
   // failed keeps its explanatory empty state.
   const loading = reachable && !input.agents.length
     && (reading || (!input.snapshotLoaded && input.liveness === "live"));
+  const creatable = canCreateSession({ liveness: input.liveness, loading, operationBusy: input.operationBusy });
   const grouped = input.listGroup !== "flat";
   const richAgents = new Map(input.agents.map((agent) => [agent.paneId, agent]));
   let position = 0;
@@ -420,17 +459,11 @@ export function buildHerdViewModel(input: HerdModelInput): HerdViewModel {
     host: input.host,
     attention,
     listGroup: input.listGroup,
-    doneCount: attention.filter((item) => item.kind === "done").length,
-    pendingCount: attention.filter((item) => item.kind === "blocked").length,
+    creatable,
     create: input.createConversation
-      ? {
-          label: input.operationBusy ? t("home.creating") : t("home.new"),
-          aria: t("home.newAria"),
-          disabled: input.operationBusy || !input.connected,
-        }
+      ? { label: input.operationBusy ? t("home.creating") : t("home.new"), aria: t("home.newAria"), disabled: !creatable }
       : null,
-    computers: input.computerCount > 1 ? { label: t("home.computers") } : null,
     board: { label: t("home.board"), current: input.boardOpen === true },
-    settings: { label: t("home.settings") },
+    settings: { label: t("home.settings"), current: input.settingsOpen === true },
   };
 }

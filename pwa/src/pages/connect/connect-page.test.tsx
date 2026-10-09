@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act } from "react";
@@ -7,7 +8,7 @@ import { commitView } from "../../app/host";
 import { appRoot } from "../../app/dom-root";
 import { registerSessionOwnerPreparer } from "../../app/frame";
 import { registerSessionView } from "../../features/session/register";
-import { applyPairingFragment, clearPairingFragment, connectionStore, phase, setPhase } from "../../features/connection/connection-store";
+import { clearPairingFragment, connectionStore, phase, setPhase } from "../../features/connection/connection-store";
 import { setAddingComputer, setComputers, setCredential, attachLiveSession } from "../../features/computers/catalog-store";
 import {
   setPairAwaitingApproval, setPairCodeDraft, setPairFailure, setPairManualOpen, pairManualOpen,
@@ -19,14 +20,28 @@ import { onPairSubmit } from "../../features/pairing/actions";
 import { setLang, setLangPref, t } from "../../lib/i18n";
 import { resetTransitionState } from "../../app/transition";
 import { stopPolling } from "../../features/connection/controller";
+import { keepPhrases } from "../../features/pairing/phrases";
 
 /**
- * Connect surface against the actual mounted App: one skeleton (top bar,
+ * The phone connect page against the actual mounted App: one skeleton (top bar,
  * terminal miniature, title + lede, bottom actions) whose stages swap copy in
  * place, the typed-code sheet (a dialog portaled to the body), add-computer
  * chrome and the compact language select — setup through the named
- * pairing/connection domains.
+ * pairing/connection domains. The two-column page is `connect-page.wide.test`;
+ * the one a mouse gets in a narrow window is `connect-page.typed.test`.
  */
+
+const FINE_POINTER = "(hover: hover) and (pointer: fine)";
+const realMatchMedia = happy.matchMedia;
+
+/** Happy DOM always reports a mouse; the phone page belongs to a finger. */
+function setTouchPointer(): void {
+  const answer = (query: string) => query === FINE_POINTER
+    ? { matches: false, media: query, addEventListener() {}, removeEventListener() {} } as unknown as MediaQueryList
+    : realMatchMedia.call(happy, query);
+  (happy as unknown as { matchMedia: typeof answer }).matchMedia = answer;
+  (globalThis as unknown as { matchMedia: typeof answer }).matchMedia = answer;
+}
 
 async function mountConnect(): Promise<void> {
   act(() => {
@@ -46,6 +61,7 @@ async function mountConnect(): Promise<void> {
 beforeEach(async () => {
   await resetBoardTestDOM();
   Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+  setTouchPointer();
   registerSessionOwnerPreparer(registerSessionView);
   resetTransitionState();
   // Reset the language preference a previous case may have pinned (the English
@@ -107,6 +123,8 @@ afterEach(async () => {
       setLang("zh");
     });
   });
+  // The next suite's reset re-binds the global.
+  (happy as unknown as { matchMedia: typeof realMatchMedia }).matchMedia = realMatchMedia;
 });
 
 /** The code sheet is a dialog portaled to the body, outside #app. */
@@ -126,7 +144,7 @@ test("typed draft updates keep the pair-code node without a remount", async () =
   input.focus();
   input.setSelectionRange(0, 0);
   act(() => setPairCodeDraft("ABCD-EFGH-123456"));
-  expect(field()).toBe(input);
+  expectSameNode(field(), input);
   expect(input.value).toBe("ABCD-EFGH-123456");
   expect(sheet()?.querySelector(".field-count")?.textContent).toBe("14/14");
 });
@@ -149,12 +167,15 @@ test("one skeleton: miniature, title, lede and one primary action", async () => 
   expect(app.querySelector(".page.connect-page.is-idle")).toBeTruthy();
   expect(app.querySelector(".term-mini[aria-hidden=true]")).toBeTruthy();
   expect(app.querySelector(".connect-title")?.textContent).toBe(t("connect.title"));
-  expect(app.querySelector(".connect-lede")?.textContent).toContain(t("connect.ledeIdle"));
+  expect(app.querySelector(".connect-lede")?.textContent).toContain(keepPhrases(t("connect.ledeIdle")));
   expect(app.querySelectorAll(".btn-primary")).toHaveLength(1);
   expect(app.querySelector(".connect-scan")?.textContent).toBe(t("connect.scan"));
   expect(app.querySelector(".connect-manual")?.textContent).toBe(t("connect.manual"));
   expect(app.querySelector("details")).toBeNull();
   expect(sheet()).toBeNull();
+  // Nothing of the spelled-out pages: their styles are not behind a width query.
+  expect(app.querySelector(".is-stacked, .is-wide, .connect-steps, .connect-command, .connect-card, .connect-phone-note")).toBeNull();
+  expect(app.contains(document.activeElement)).toBeFalse();
 });
 
 test("the manual action opens the code sheet; dismissing keeps the draft and its error", async () => {
@@ -171,7 +192,7 @@ test("the manual action opens the code sheet; dismissing keeps the draft and its
   expect(pairManualOpen()).toBeFalse();
   expect(sheet()).toBeNull();
   // A code error stays on the field: the page lede does not repeat it.
-  expect(app.querySelector(".connect-lede")?.textContent).toContain(t("connect.ledeIdle"));
+  expect(app.querySelector(".connect-lede")?.textContent).toContain(keepPhrases(t("connect.ledeIdle")));
   await act(async () => app.querySelector<HTMLButtonElement>(".connect-manual")!.click());
   expect(field()?.value).toBe("ABCD");
   expect(field()?.getAttribute("aria-invalid")).toBe("true");
@@ -214,24 +235,6 @@ test("pairing trust copy explains the server without relay jargon", async () => 
   const text = appRoot().textContent;
   expect(text).toContain(t("connect.trust"));
   expect(text).not.toContain("relay 服务器");
-});
-
-test("wide screens say the page belongs on the phone, only for first-run idle", async () => {
-  happy.happyDOM.setWindowSize({ width: 1440, height: 900 });
-  await mountConnect();
-  const lede = () => appRoot().querySelector(".connect-lede")?.textContent ?? "";
-  expect(lede()).toContain(t("connect.ledeDesk"));
-  await act(async () => { setAddingComputer(true); commitView(); });
-  expect(lede()).toContain(t("connect.ledeIdle"));
-  await act(async () => { setAddingComputer(false); setPhase("pairing"); commitView(); });
-  expect(lede()).toBe(t("connect.connectingLede"));
-  // A scanned (QR) connect intent opens on the phone, not the desk surface.
-  await act(async () => {
-    setPhase("connect");
-    applyPairingFragment({ v: 2, pairRef: "qa", code: "7K3M9H2P", loc: "123456" });
-    commitView();
-  });
-  expect(lede()).toContain(t("connect.ledeIdle"));
 });
 
 test("the first-run top bar carries a compact language select", async () => {
@@ -332,7 +335,7 @@ describe("stages and notices (actual App)", () => {
     await act(async () => { clearNotice(); showError("新的错误", true); });
     expect(appRoot().querySelector(".connect-lede.is-error")?.textContent).toBe("新的错误");
     await act(async () => { clearNotice(); });
-    expect(appRoot().querySelector(".connect-lede")?.textContent).toContain(t("connect.ledeIdle"));
+    expect(appRoot().querySelector(".connect-lede")?.textContent).toContain(keepPhrases(t("connect.ledeIdle")));
     expect(appRoot().querySelector(".connect-install")).toBeTruthy();
   });
 
@@ -346,8 +349,8 @@ describe("stages and notices (actual App)", () => {
     act(() => input.focus());
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 2850)); });
     expect(sheet()?.querySelector("#pair-feedback")?.textContent).toBe(t("connect.pairHelp"));
-    expect(field()).toBe(input);
-    expect(input.ownerDocument.activeElement).toBe(input);
+    expectSameNode(field(), input);
+    expectSameNode(input.ownerDocument.activeElement, input);
   });
 
   test("a blank submission stays local and reveals an accessible error", async () => {
@@ -365,7 +368,32 @@ describe("stages and notices (actual App)", () => {
     expect(document.querySelectorAll('[role="alert"]').length).toBe(1);
   });
 
-  test("typing at the end groups the code 4-4-6 as the computer prints it", async () => {
+  test("editing the code clears the error the last submission left under the field", async () => {
+    await mountConnect();
+    act(() => setPairManualOpen(true));
+    await act(async () => { commitView(); });
+    const form = sheet()!.querySelector("form")!;
+    await act(async () => { form.dispatchEvent(new happy.Event("submit", { bubbles: true, cancelable: true }) as unknown as Event); });
+    const input = field()!;
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(sheet()?.querySelector(".pair-help.is-error")).toBeTruthy();
+    act(() => {
+      input.focus();
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")!.set!.call(input, "7k3m");
+      input.setSelectionRange(4, 4);
+      input.dispatchEvent(new happy.Event("input", { bubbles: true }) as unknown as Event);
+      input.dispatchEvent(new happy.KeyboardEvent("keyup", { bubbles: true }) as unknown as Event);
+    });
+    // The error described the blank submission; the sheet and its field stay.
+    expectSameNode(field(), input);
+    expect(pairingStore.get().pairCodeDraft).toBe("7k3m");
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    expect(document.querySelectorAll('[role="alert"]')).toHaveLength(0);
+    expect(sheet()?.querySelector(".pair-help.is-error")).toBeNull();
+    expect(sheet()?.querySelector("#pair-feedback")?.textContent).toBe(t("connect.pairHelp"));
+  });
+
+  test("typing at the end preserves the browser's text for the input method", async () => {
     await mountConnect();
     act(() => setPairManualOpen(true));
     const input = field()!;
@@ -378,6 +406,6 @@ describe("stages and notices (actual App)", () => {
       input.dispatchEvent(new happy.Event("input", { bubbles: true }) as unknown as Event);
       input.dispatchEvent(new happy.KeyboardEvent("keyup", { bubbles: true }) as unknown as Event);
     });
-    expect(pairingStore.get().pairCodeDraft).toBe("7K3M-9H2P-WJ3K9M");
+    expect(pairingStore.get().pairCodeDraft).toBe("7k3m9h2pwj3k9m");
   });
 });

@@ -246,8 +246,15 @@ const zh: Record<AttachCopyKey, string> = {
   "editor.exportFailed": "无法生成编辑后的图片，已保留原文件。",
 };
 
+/** English singular forms, used when `n` is one; `en` supplies every other count. */
+const enSingular: Partial<Record<AttachCopyKey, string>> = {
+  "tray.restored": "{n} file from last time did not finish",
+  "tray.willAttach": "Attaches {n} path on send",
+};
+
 export function attachT(key: AttachCopyKey, vars?: Record<string, string | number>): string {
-  let text = (lang() === "zh" ? zh[key] : en[key]) ?? en[key] ?? key;
+  const one = lang() !== "zh" && (vars?.n === 1 || vars?.n === "1") ? enSingular[key] : undefined;
+  let text = one ?? (lang() === "zh" ? zh[key] : en[key]) ?? en[key] ?? key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
   }

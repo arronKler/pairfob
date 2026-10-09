@@ -13,8 +13,13 @@
  * reorder itself without a repaint. The mutation helpers keep their current
  * ownership.
  */
-import { capabilityEnabled } from "../../features/operations/capabilities-store";
+import { capabilityEnabled, operationBusy } from "../../features/operations/capabilities-store";
+import { liveSession } from "../../features/computers/catalog-store";
+import { networkOnline } from "../../features/connection/connection-store";
+import { runtimeStore } from "../../features/connection/runtime-store";
 import { liveAgents } from "../../features/dashboard/catalog-store";
+import { herdLivenessModel } from "../../features/dashboard/model/herd-status";
+import { canCreateSession } from "../../features/dashboard/model/herd-view";
 import { listGroup, panePinned, togglePanePin } from "../../features/settings/preferences-store";
 import type { DashboardAgentCard } from "../../lib/dashboard";
 import { openObjectMenu } from "../../features/dashboard/components/object-menu";
@@ -31,6 +36,17 @@ import {
 import { openBoard } from "../board/board-bridge";
 import { openCreateSheet } from "./create-bridge";
 
+/**
+ * Whether a menu offers its "new tab" row: the capability, and the list's own
+ * answer to "can a session be started now", read when the press lands. A menu
+ * opens from a row, so the list has been read.
+ */
+function offersNewTab(): boolean {
+  const liveness = herdLivenessModel({ connected: liveSession()?.isConnected() === true, networkOnline: networkOnline(),
+    runtimeKind: runtimeStore.get().runtimeKind });
+  return capabilityEnabled("create_tab") && canCreateSession({ liveness, loading: false, operationBusy: operationBusy() });
+}
+
 export function openListPaneMenu(agent: AgentCard): void {
   const model = paneMenuModel({
     agent,
@@ -38,13 +54,13 @@ export function openListPaneMenu(agent: AgentCard): void {
     agents: liveAgents() as DashboardAgentCard[],
     listGroup: listGroup(),
     pinned: paneIsPinned(panePinned(), agent.paneId),
-    createTab: capabilityEnabled("create_tab"),
+    createTab: offersNewTab(),
   });
   openObjectMenu(model, agent, runObjectMenuAction);
 }
 
 export function openListWorkspaceMenu(agent: AgentCard): void {
-  const model = workspaceMenuModel({ agent, createTab: capabilityEnabled("create_tab") });
+  const model = workspaceMenuModel({ agent, createTab: offersNewTab() });
   if (!model) return;
   openObjectMenu(model, agent, runObjectMenuAction);
 }

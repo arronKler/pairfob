@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { Window } from "happy-dom";
 import { afterEach, expect, test } from "bun:test";
 import { act } from "react";
@@ -28,7 +29,7 @@ test("native menu gestures and React clicks remain distinct across repaint and u
   await act(() => root.render(<Card label="old" />));
   const button = host.querySelector("button")!;
   await act(() => root.render(<Card label="new" />));
-  expect(host.querySelector("button")).toBe(button);
+  expectSameNode(host.querySelector("button"), button);
   await act(() => {
     button.dispatchEvent(new happy.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     button.click();

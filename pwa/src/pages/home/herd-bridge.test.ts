@@ -264,13 +264,11 @@ describe("herd presenter", () => {
   test("the projection carries the record's gates into the model", () => {
     seed([seedAgent("p1", "alpha", "done")]);
     selectPane("p1");
-    setComputers([{ daemonId: "a" }, { daemonId: "b" }] as never);
     nextTransition("expand", "p1");
     const view = presentHerdView();
     expect(view.groups[0].cards[0].selected).toBe(true);
     expect(view.groups[0].cards[0].sharesTransition).toBe(true);
-    expect(view.doneCount).toBe(1);
-    expect(view.computers).toEqual({ label: t("home.computers") });
+    expect(view.attention.map((item) => `${item.kind}:${item.paneId}`)).toEqual(["done:p1"]);
     expect(view.create).toEqual({ label: t("home.new"), aria: t("home.newAria"), disabled: false });
     // Another pane morphing leaves this card's title alone.
     nextTransition("expand", "other");
@@ -336,7 +334,7 @@ describe("herd presenter", () => {
     const attention = { stagger: false, markOf: () => "" as const, isDismissing: () => false, completed: [] };
     expect(readHerdInput(attention)).toMatchObject({
       liveness: "live", connected: true, networkOnline: true, runtimeKind: "herdr",
-      createConversation: true, operationBusy: false, computerCount: 0, morphingPaneId: null,
+      createConversation: true, operationBusy: false, morphingPaneId: null,
     });
     liveHandle(false);
     setNetworkOnline(false);

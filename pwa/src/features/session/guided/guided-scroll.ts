@@ -1,4 +1,5 @@
 import type { LiveSession, SessionEvent } from "../../../lib/protocol/client";
+import { registerLivePath } from "./live-order";
 
 export const GUIDED_SCROLL_IDLE_MS = 1_500;
 
@@ -38,6 +39,9 @@ export class GuidedScrollController {
   private opening: OpeningBridge | null = null;
   private version = 0;
   private idleTimer: Timer | null = null;
+  /** Scrolls asked for and not yet written: the bridge is opening, or an earlier scroll is in flight. */
+  private unwritten = 0;
+  private readonly writtenWaiters: Array<() => void> = [];
   private readonly schedule: ScheduleTimer;
   private readonly cancel: CancelTimer;
 
@@ -53,24 +57,50 @@ export class GuidedScrollController {
   }
 
   async scroll(target: GuidedScrollTarget, direction: "up" | "down", lines: number): Promise<boolean> {
-    const bridge = await this.ensureBridge(target);
-    if (!bridge || this.active !== bridge) return false;
-    this.clearIdleTimer();
-    const activity = ++bridge.activity;
-    const count = Number.isFinite(lines) ? Math.min(160, Math.max(1, Math.round(lines))) : 1;
-    const request = bridge.tail.then(async () => {
-      if (this.active !== bridge) return;
-      const sequence = bridge.nextSequence;
-      await bridge.session.terminalScroll(bridge.terminalId, sequence, direction, count, "wheel");
-      bridge.nextSequence += 1;
-    });
-    bridge.tail = request.then(
-      () => undefined,
-      () => this.dropBridge(bridge, true),
-    );
-    await request;
-    if (this.active === bridge && bridge.activity === activity) this.scheduleIdleRelease(bridge);
-    return this.active === bridge;
+    // Counted from the press to the write (or to giving up), for the session's order (`live-order`).
+    this.unwritten += 1;
+    let counted = true;
+    const written = (): void => {
+      if (!counted) return;
+      counted = false;
+      this.unwritten -= 1;
+      if (this.unwritten === 0) for (const resolve of this.writtenWaiters.splice(0)) resolve();
+    };
+    try {
+      const bridge = await this.ensureBridge(target);
+      if (!bridge || this.active !== bridge) return false;
+      this.clearIdleTimer();
+      const activity = ++bridge.activity;
+      const count = Number.isFinite(lines) ? Math.min(160, Math.max(1, Math.round(lines))) : 1;
+      const request = bridge.tail.then(async () => {
+        if (this.active !== bridge) return;
+        const sequence = bridge.nextSequence;
+        const sent = bridge.session.terminalScroll(bridge.terminalId, sequence, direction, count, "wheel");
+        written();
+        await sent;
+        bridge.nextSequence += 1;
+      });
+      bridge.tail = request.then(
+        () => undefined,
+        () => this.dropBridge(bridge, true),
+      );
+      await request;
+      if (this.active === bridge && bridge.activity === activity) this.scheduleIdleRelease(bridge);
+      return this.active === bridge;
+    } finally {
+      written();
+    }
+  }
+
+  /** A scroll has been asked for and not written yet. */
+  unsent(): boolean {
+    return this.unwritten > 0;
+  }
+
+  /** Settles when every scroll asked for so far has been written, or dropped. */
+  written(): Promise<void> {
+    if (!this.unwritten) return Promise.resolve();
+    return new Promise<void>((resolve) => this.writtenWaiters.push(resolve));
   }
 
   handleEvent(event: SessionEvent): boolean {
@@ -155,3 +185,9 @@ export class GuidedScrollController {
 }
 
 export const guidedScrollController = new GuidedScrollController();
+
+// A wheel notch is one of the paths of the session's order: a key pressed after it waits for the bridge to open.
+registerLivePath("wheel", {
+  unsent: () => guidedScrollController.unsent(),
+  written: () => guidedScrollController.written(),
+});

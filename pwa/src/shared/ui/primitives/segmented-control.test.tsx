@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act, useState } from "react";
@@ -24,20 +25,20 @@ test("arrows skip disabled choices, wrap and update one tab stop with the contro
   const [a, b, c] = buttons();
   expect(buttons().map(b => b.tabIndex)).toEqual([0, -1, -1]);
   a.focus(); key(a, "ArrowRight");
-  expect(document.activeElement).toBe(c);
+  expectSameNode(document.activeElement, c);
   expect(c.getAttribute("aria-checked")).toBe("true");
   expect(b.disabled).toBeTrue();
   expect(buttons().map(b => b.tabIndex)).toEqual([-1, -1, 0]);
-  key(c, "ArrowRight"); expect(document.activeElement).toBe(a);
-  key(a, "End"); expect(document.activeElement).toBe(c);
-  key(c, "Home"); expect(document.activeElement).toBe(a);
+  key(c, "ArrowRight"); expectSameNode(document.activeElement, a);
+  key(a, "End"); expectSameNode(document.activeElement, c);
+  key(c, "Home"); expectSameNode(document.activeElement, a);
 });
 
 test("manual groups move focus without invoking an action or changing selection", () => {
   renderReact(<Choices manual />);
   const [a, , c] = buttons();
   a.focus(); key(a, "ArrowRight");
-  expect(document.activeElement).toBe(c);
+  expectSameNode(document.activeElement, c);
   expect(a.getAttribute("aria-checked")).toBe("true");
   expect(c.getAttribute("aria-checked")).toBe("false");
   act(() => c.click());
@@ -61,7 +62,7 @@ test("controlled publications preserve DOM identity and expose the new selected 
   </SegmentedControl>;
   renderReact(view(true)); const first = buttons()[0];
   renderReact(view(false));
-  expect(buttons()[0]).toBe(first);
+  expectSameNode(buttons()[0], first);
   expect(buttons().map(b => b.tabIndex)).toEqual([-1, 0]);
 });
 
@@ -74,7 +75,7 @@ test("nested groups retain independent tab stops and do not handle each other's 
   expect(outer.tabIndex).toBe(0);
   expect(a.tabIndex).toBe(0);
   a.focus(); key(a, "ArrowRight");
-  expect(document.activeElement).toBe(c);
+  expectSameNode(document.activeElement, c);
   expect(outer.tabIndex).toBe(0);
 });
 
@@ -89,9 +90,9 @@ test("RTL horizontal navigation reverses while modified shortcuts remain untouch
   const shortcut = new happy.KeyboardEvent("keydown", { key: "ArrowRight", ctrlKey: true, bubbles: true, cancelable: true });
   act(() => a.dispatchEvent(shortcut as unknown as Event));
   expect(shortcut.defaultPrevented).toBeFalse();
-  expect(document.activeElement).toBe(a);
+  expectSameNode(document.activeElement, a);
   key(a, "ArrowLeft");
-  expect(document.activeElement).toBe(b);
+  expectSameNode(document.activeElement, b);
   key(b, "ArrowLeft");
-  expect(document.activeElement).toBe(c);
+  expectSameNode(document.activeElement, c);
 });

@@ -119,7 +119,8 @@ afterEach(() => {
 describe("terminal rows stay faithful to the live TUI", () => {
   test("the tap handler reports rows and never interprets terminal text", () => {
     const tap = body("bindTap");
-    expect(tap).toContain("onRow(rowIndex(event.target))");
+    // The row and where it was pressed (a mouse gets its actions at the pointer), nothing read from the text.
+    expect(tap).toContain('onRow(rowIndex(event.target), { x: event.clientX, mouse: event.pointerType === "mouse" });');
     expect(tap).toContain("HOLD_MS");
     expect(tap).not.toContain("answerPrompt");
     expect(tap).not.toContain("prompt-select");
@@ -189,10 +190,10 @@ describe("terminal rows stay faithful to the live TUI", () => {
     paint();
     expect(appRoot().querySelector(".full-terminal-scroll")).toBeTruthy();
     expect([...appRoot().querySelectorAll(".full-terminal-scroll-btn")].map((el) => el.getAttribute("aria-label"))).toEqual([
-      "鼠标滚轮向上",
+      "向上滚动",
       "上一页",
       "下一页",
-      "鼠标滚轮向下",
+      "向下滚动",
     ]);
     expect(termSource).toContain("sendGuidedTuiScroll");
     expect(termSource).not.toContain('"pageup"');

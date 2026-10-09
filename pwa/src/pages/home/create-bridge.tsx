@@ -10,6 +10,7 @@
  * is never retried here.
  */
 import { Plus } from "lucide-react";
+import { useContext } from "react";
 import { capabilityEnabled, advertisedAgentKinds } from "../../features/operations/capabilities-store";
 import { computersStore, liveSession } from "../../features/computers/catalog-store";
 import { liveAgents, selectedAgent } from "../../features/dashboard/catalog-store";
@@ -23,7 +24,8 @@ import { loadLastAgentKind } from "../../features/operations/operation-form-mode
 import { computerTitle } from "../../lib/computer-catalog";
 import type { DashboardAgentCard } from "../../lib/dashboard";
 import { t } from "../../lib/i18n";
-import { MenuChoice, showActionSheet } from "../../shared/ui/overlay";
+import { MenuChoice, MenuGroup, showActionSheet, type ActionSheetController } from "../../shared/ui/overlay";
+import { PopoverKindContext } from "../../shared/ui/overlay/popover-frame";
 import { AgentAvatar } from "../../shared/ui/primitives";
 import { currentScreen } from "../../app/navigation-store";
 
@@ -119,11 +121,42 @@ export async function openCreateSheet(options: { workspaceId?: string; newWorksp
   run(request, anchors);
 }
 
+type QuickCombo = { key: string; kind: string; workspace: string; create: () => void };
+
 /**
- * A hold on the create button: the last few "kind in workspace" combinations,
- * each created in one step, plus the full sheet.
+ * The recent combinations and the way to the full sheet. As a menu its title is
+ * not drawn, so the recents carry their own caption and the last row says what
+ * it creates; the sheet keeps the short list under its title.
  */
-export function openQuickCreate(): void {
+function QuickCreateList({ modal, combos }: { modal: ActionSheetController; combos: QuickCombo[] }) {
+  const menu = useContext(PopoverKindContext) === "menu";
+  const recents = combos.map((combo) => (
+    <MenuChoice key={combo.key} modal={modal} icon={<AgentAvatar kind={combo.kind} size="sm" />}
+      title={combo.kind || t("create.terminal")} detail={combo.workspace} action={combo.create} />
+  ));
+  const more = (
+    <MenuChoice modal={modal} icon={<Plus size={18} aria-hidden="true" />}
+      title={t(menu ? "rail.createMore" : "create.quickMore")} action={() => openCreateSheet()} />
+  );
+  if (!menu) return <>{recents}{more}</>;
+  return (
+    <>
+      <MenuGroup label={t("create.recent")}>
+        <h3 className="menu-section-title" aria-hidden="true">{t("create.recent")}</h3>
+        {recents}
+      </MenuGroup>
+      <MenuGroup>{more}</MenuGroup>
+    </>
+  );
+}
+
+/**
+ * The last few "kind in workspace" combinations, each created in one step, plus
+ * the full sheet. A hold on a create button opens it as a sheet; a mouse or the
+ * keyboard on the desk gets a menu under `anchor`, or at the pointer without one.
+ * With nothing to offer it is the full sheet.
+ */
+export function openQuickCreate(anchor?: Element | null): void {
   if (liveSession()?.isConnected() !== true) return;
   if (!capabilityEnabled("create_tab")) {
     void openCreateSheet();
@@ -137,19 +170,12 @@ export function openQuickCreate(): void {
     void openCreateSheet();
     return;
   }
-  showActionSheet(t("create.quickTitle"), (modal) => (
-    <>
-      {combos.map((combo) => {
-        const space = options.find((item) => item.id === combo.workspaceId)!;
-        return (
-          <MenuChoice key={`${combo.kind}@${combo.workspaceId}`} modal={modal}
-            icon={<AgentAvatar kind={combo.kind} size="sm" />}
-            title={combo.kind || t("create.terminal")} detail={space.label}
-            action={() => run({ kind: "tab", workspaceId: combo.workspaceId, agentKind: combo.kind, label: "" }, anchors)} />
-        );
-      })}
-      <MenuChoice modal={modal} icon={<Plus size={18} aria-hidden="true" />} title={t("create.quickMore")}
-        action={() => openCreateSheet()} />
-    </>
-  ));
+  const list = combos.map((combo): QuickCombo => ({
+    key: `${combo.kind}@${combo.workspaceId}`,
+    kind: combo.kind,
+    workspace: options.find((item) => item.id === combo.workspaceId)!.label,
+    create: () => run({ kind: "tab", workspaceId: combo.workspaceId, agentKind: combo.kind, label: "" }, anchors),
+  }));
+  showActionSheet(t("create.quickTitle"), (modal) => <QuickCreateList modal={modal} combos={list} />,
+    { popover: "menu", anchor });
 }

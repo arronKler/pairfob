@@ -1,6 +1,7 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { resetBoardTestDOM } from "../../../../test-support/dom";
+import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { WorkspaceSnapshotRestorer } from "../../../../test-support/workspace-snapshot-restore";
 import { appRoot } from "../../../app/dom-root";
@@ -21,6 +22,7 @@ const { dropQueuedKeys, flushKeys } = await import("./keys");
 const { cancelStop, STOP_WATCH_MS } = await import("./session-stop");
 const { SessionCompose } = await import("./session-compose");
 const { STOP_ARM_MS } = await import("./compose-controls");
+const { emulateTouchDevice } = await import("../touch-realm");
 
 const restorer = new WorkspaceSnapshotRestorer();
 let runtimeBefore = runtimeIdentity();
@@ -159,7 +161,7 @@ describe("multi-line compose", () => {
     const unfold = field.querySelector<HTMLButtonElement>(".compose-unfold")!;
     expect(unfold.getAttribute("aria-label")).toBe(t("compose2.unfoldAria", { n: 3 }));
     act(() => { unfold.click(); });
-    expect(input.ownerDocument.activeElement).toBe(input);
+    expectSameNode(input.ownerDocument.activeElement, input);
     expect(field.classList.contains("is-folded")).toBeFalse();
     expect(input.selectionStart).toBe(4);
     // Sending still works while folded: the button is outside the fold.
@@ -193,6 +195,39 @@ describe("send button", () => {
     seed("idle");
     expect(sendButton().dataset.sendKind).toBe("enter");
     expect(visibleNotice()?.text).toBe(t("compose2.stopped"));
+  });
+
+  test("live input keeps ⏎ on glass while the pane works; beside the list a mouse keeps stop", async () => {
+    seed("working");
+    act(() => { setComposeLive(true); });
+    // The phone, and a touch tablet's wide layout: the button is the only Enter key on screen.
+    paint(true);
+    expect(sendButton().dataset.sendKind).toBe("enter");
+    const restorePointer = emulateTouchDevice();
+    try {
+      act(() => { unmountReact(); });
+      happy.happyDOM.setWindowSize({ width: 1180, height: 820 });
+      paint(false);
+      expect(sendButton().dataset.sendKind).toBe("enter");
+    } finally {
+      restorePointer();
+    }
+    // A mouse comes with a keyboard that has Enter, so the button can stop the agent.
+    try {
+      act(() => { unmountReact(); });
+      happy.happyDOM.setWindowSize({ width: 1440, height: 900 });
+      paint(false);
+      expect(sendButton().dataset.sendKind).toBe("stop");
+      act(() => { sendButton().click(); });
+      await act(async () => { await flushKeys(); });
+      expect(sentKeys).toEqual([["esc"]]);
+      // Once the agent rests the button is the terminal's Enter again.
+      seed("idle");
+      expect(sendButton().dataset.sendKind).toBe("enter");
+    } finally {
+      act(() => { unmountReact(); });
+      happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+    }
   });
 
   test("still working after the watch window: force stop sends Ctrl+C once", async () => {

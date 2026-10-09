@@ -1,5 +1,5 @@
 import { parseQuickCommands, type QuickCommand } from "./quick-command-model";
-import { parseListGroup, parsePinnedAt, prunePinnedAt, togglePinnedAt, touchPane, nextTouchedAt,
+import { DEFAULT_LIST_GROUP, parseListGroup, parsePinnedAt, prunePinnedAt, togglePinnedAt, touchPane, nextTouchedAt,
   type AgentCard, type ListGroup, type PinnedAt, type TouchedAt } from "../../lib/ranking";
 import { parseTermMode, TERM_MODE_OPTIONS, type TermMode } from "../../lib/terminal-mode";
 import { batch, createDomain, detach } from "../../shared/model/domain-store";
@@ -206,7 +206,7 @@ export function initialPreferences(): PreferencesRecord {
     keysExpanded: false,
     padKind: "keys",
     quickCommands: null,
-    listGroup: "flat",
+    listGroup: DEFAULT_LIST_GROUP,
     listGroupCollapsed: {},
     paneTouched: {},
     paneActivated: {},
@@ -352,15 +352,19 @@ export function savePaneTouched(): void {
   writeStorage(paneTouchedKey(), JSON.stringify(read().paneTouched));
 }
 
-/** The reader opened this pane: it becomes the most recent in its workspace. */
+/**
+ * The reader opened this pane: it becomes the most recent in its workspace
+ * (`paneActivated`, the order of the list). `paneTouched` is left alone. It
+ * dates the row, "changed n ago", and looking at a session changes nothing in
+ * it: a row that read 刚刚 because it had just been opened said the session
+ * had just done something.
+ */
 export function rememberPane(paneId: string): void {
   const now = Date.now();
   batch(() => {
     write((record) => {
-      record.paneTouched = touchPane(record.paneTouched, paneId, now);
       record.paneActivated = touchPane(record.paneActivated, paneId, now);
     });
-    savePaneTouched();
     writeStorage(paneActivatedKey(), JSON.stringify(read().paneActivated));
   });
 }
@@ -371,8 +375,9 @@ function sameTouched(left: TouchedAt, right: TouchedAt): boolean {
 }
 
 /**
- * Fold herd status transitions into recency. Uses the same `nextTouchedAt`
- * map `rememberPane` writes; never a raw field assign.
+ * Fold herd status transitions into recency: a pane seen for the first time
+ * and a status that changed are what date a row. This is the only writer of
+ * `paneTouched`, through `nextTouchedAt`; never a raw field assign.
  */
 export function applyHerdTouches(previous: readonly AgentCard[], next: readonly AgentCard[], now = Date.now()): void {
   const current = read().paneTouched;

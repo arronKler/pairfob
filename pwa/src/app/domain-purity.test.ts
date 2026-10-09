@@ -92,7 +92,7 @@ describe("domain models import without a browser", () => {
     expect(initialPreferences().termWrap).toBeFalse();
     expect(initialPreferences().termFit).toBe("pan");
     expect(initialPreferences().termCols).toBe(80);
-    expect(initialPreferences().listGroup).toBe("flat");
+    expect(initialPreferences().listGroup).toBe("space");
     expect(initialPreferences().defaultTermMode).toBe("auto");
     expect(initialPreferences().defaultComposeLive).toBeFalse();
     expect(initialPreferences().paneTermModes).toEqual({});
@@ -161,7 +161,7 @@ describe("boot hydration", () => {
     expect(preferencesStore.get().termFontPx).toBe(12);
     expect(preferencesStore.get().termCols).toBe(80);
     expect(preferencesStore.get().termFit).toBe("pan");
-    expect(preferencesStore.get().listGroup).toBe("flat");
+    expect(preferencesStore.get().listGroup).toBe("space");
     expect(preferencesStore.get().defaultTermMode).toBe("auto");
     expect(connectionStore.get().networkMode).toBe("auto");
   });

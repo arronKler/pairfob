@@ -1,3 +1,4 @@
+import { expectSameNode } from "./node-identity";
 import { closeTestDialogs } from "./close-dialogs";
 import { afterEach, expect, test } from "bun:test";
 import { act } from "react";
@@ -182,7 +183,7 @@ test("phase2 narrow compose preserves focused multiline IME selection", async ()
   expect(input).not.toBeNull();
   expect(innerWidth).toBe(320);
   expect(input.value.split("\n")).toHaveLength(3);
-  expect(document.activeElement).toBe(input);
+  expectSameNode(document.activeElement, input);
   expect([input.selectionStart, input.selectionEnd]).toEqual([22, 25]);
   const nodeId = a.snapshot().inputs.find((entry) => entry.focused)?.nodeId;
   const initialTurns = (document.querySelector(".agent-stream")?.textContent?.match(/Turn \d+ complete/g) ?? []).length;

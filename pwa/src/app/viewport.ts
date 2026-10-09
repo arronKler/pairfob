@@ -1,8 +1,10 @@
 import { isPageZoomed } from "../lib/gesture-boundary";
 
-export function isDesk(): boolean {
-  return window.matchMedia("(min-width: 900px)").matches;
-}
+/**
+ * Width tiers live in `shared/` so the overlays can ask the same questions the
+ * shell does; the application layer keeps importing them from here.
+ */
+export { DESK_QUERY, ROOMY_QUERY, WIDE_QUERY, handheld, isDesk, isRoomy, isWide } from "../shared/ui/dom/width-tier";
 
 /**
  * Fit fullscreen shells above the software keyboard, including iOS focus pan.

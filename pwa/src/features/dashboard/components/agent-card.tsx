@@ -19,8 +19,25 @@ const TRAILING_WIDTH = 144;
  * opens the object menu. On a touch screen a left swipe reveals pin / more, and
  * a right swipe marks an unread completion as read; every swipe action is also
  * in the menu.
+ *
+ * With `hoverActions` (the desktop rail under a precise pointer) the same three
+ * buttons are a cluster the style sheet shows on hover or focus: they follow
+ * the row's button in the document, the keyboard reaches them with Right from
+ * the row (`list-keys.ts`: the rail's list is one Tab stop), they are exposed
+ * to assistive technology, and the row takes no swipe.
+ *
+ * Every row's menu controls look alike, so the two a menu can hang from (the
+ * row itself and "more") say which session they are for (`data-trigger-of`,
+ * `overlay/trigger.ts`): an open menu finds its own row again after the shell
+ * redrew the list.
  */
-export function AgentCard({ card, actions }: { card: HerdCardView; actions: HerdActions }) {
+export function AgentCard({ card, actions, hoverActions = false, listed = false }: {
+  card: HerdCardView;
+  actions: HerdActions;
+  hoverActions?: boolean;
+  /** The row is an item of a counted list (the rail, whose list is one keyboard stop: `list-keys.ts`). */
+  listed?: boolean;
+}) {
   const title = useRef<HTMLSpanElement>(null);
   const row = useRef<HTMLElement>(null);
   const press = useObjectPress(() => actions.openPaneMenu(card.agent));
@@ -28,36 +45,46 @@ export function AgentCard({ card, actions }: { card: HerdCardView; actions: Herd
   unread.current = card.unread;
   const paneId = card.paneId;
   useLayoutEffect(() => {
-    if (!row.current) return;
+    if (!row.current || hoverActions) return;
     return bindSwipeRow(row.current, {
       foreground: () => press.current,
       trailingWidth: TRAILING_WIDTH,
       canCommitRight: () => unread.current,
       onCommitRight: () => actions.markRead(paneId),
     });
-  }, [actions, paneId, press]);
+  }, [actions, hoverActions, paneId, press]);
   const classes = [card.className, card.kind === "terminal" ? "is-terminal" : "",
     card.blocked ? "is-blocked" : "", card.unread ? "is-unread" : ""].filter(Boolean).join(" ");
+  const pinLabel = card.pinned ? t("list.swipeUnpin") : t("list.swipePin");
+  // Behind the sliding row the buttons are out of reach until a swipe uncovers
+  // them, and the menu holds the same actions; as a hover cluster they are
+  // icons, so each carries its name as a tooltip.
+  const reach = (label: string) => hoverActions ? { title: label } : { tabIndex: -1 };
+  const trailing = (
+    <div className="card-actions" aria-hidden={hoverActions ? undefined : true}>
+      {card.unread ? (
+        <button type="button" {...reach(t("list.swipeRead"))} className="card-action is-read" onClick={() => actions.markRead(paneId)}>
+          <Check size={18} aria-hidden="true" /><span className="card-action-label">{t("list.swipeRead")}</span>
+        </button>
+      ) : null}
+      <button type="button" {...reach(pinLabel)} className="card-action is-pin" onClick={() => actions.togglePin(paneId)}>
+        {card.pinned ? <PinOff size={18} aria-hidden="true" /> : <Pin size={18} aria-hidden="true" />}
+        <span className="card-action-label">{pinLabel}</span>
+      </button>
+      <button type="button" {...reach(t("list.swipeMore"))} className="card-action is-more" data-trigger-of={paneId}
+        aria-haspopup={hoverActions ? "menu" : undefined} onClick={() => actions.openPaneMenu(card.agent)}>
+        <MoreHorizontal size={18} aria-hidden="true" /><span className="card-action-label">{t("list.swipeMore")}</span>
+      </button>
+    </div>
+  );
   return (
-    <article ref={row} className={classes} style={indexedStyle(card.index)}>
-      <div className="card-actions" aria-hidden="true">
-        {card.unread ? (
-          <button type="button" tabIndex={-1} className="card-action is-read" onClick={() => actions.markRead(paneId)}>
-            <Check size={18} aria-hidden="true" />{t("list.swipeRead")}
-          </button>
-        ) : null}
-        <button type="button" tabIndex={-1} className="card-action is-pin" onClick={() => actions.togglePin(paneId)}>
-          {card.pinned ? <PinOff size={18} aria-hidden="true" /> : <Pin size={18} aria-hidden="true" />}
-          {card.pinned ? t("list.swipeUnpin") : t("list.swipePin")}
-        </button>
-        <button type="button" tabIndex={-1} className="card-action is-more" onClick={() => actions.openPaneMenu(card.agent)}>
-          <MoreHorizontal size={18} aria-hidden="true" />{t("list.swipeMore")}
-        </button>
-      </div>
+    <article ref={row} className={classes} role={listed ? "listitem" : undefined} style={indexedStyle(card.index)}>
+      {hoverActions ? null : trailing}
       <Button
         ref={press}
         className="card-main"
         data-pane-id={paneId}
+        data-trigger-of={paneId}
         aria-pressed={card.selected}
         aria-haspopup="menu"
         onClick={() => actions.openPaneFromCard(paneId, title.current)}
@@ -83,6 +110,7 @@ export function AgentCard({ card, actions }: { card: HerdCardView; actions: Herd
           {card.blocked || card.unread ? <span className={`card-dot${card.blocked ? " is-blocked" : ""}`} aria-hidden="true" /> : null}
         </span>
       </Button>
+      {hoverActions ? trailing : null}
     </article>
   );
 }

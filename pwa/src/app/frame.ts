@@ -57,7 +57,7 @@ export function getAppFrame(): FrameSnapshot {
 
 /** Which session controller the composition displays, phone or desk alike. */
 export function displayedSession(layout: LayoutDescriptor): SessionKind | null {
-  if (layout.mode === "full-terminal") return "terminal";
+  if (layout.mode === "full-terminal" || layout.deskChild === "full") return "terminal";
   if (layout.mode === "chat" || layout.deskChild === "chat") return "chat";
   if (layout.mode === "pane" || layout.deskChild === "session") return "guided";
   return null;

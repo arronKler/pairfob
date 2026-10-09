@@ -33,8 +33,12 @@ import {
   snapCellLineHeight,
   terminalGridSize,
   terminalViewportSize,
+  type TermFitMode,
 } from "./full-terminal-fit";
 import { deferHostMinimumHeight } from "./full-terminal-lifecycle";
+import { followCursor, liftPanCanvas } from "./full-terminal-lift";
+import { syncPanBar } from "./full-terminal-pan-bar";
+import { terminalRoom } from "./full-terminal-room";
 
 export type FullTerminalFittedSize = {
   cols: number;
@@ -43,12 +47,42 @@ export type FullTerminalFittedSize = {
   cellHeight: number;
 };
 
+/**
+ * The columns last asked of the computer, and what they were measured against.
+ *
+ * Both width modes resize the real terminal on the computer: "fit" to the room
+ * the session column has, the fixed-column modes whenever that room is wider
+ * than their columns. Only the window resizing may move it. The room already
+ * leaves the inspector and the list's column out (see `terminalRoom`); the hold
+ * makes the same window width mean the same columns and type whatever else
+ * moved the host, so nothing is asked of the computer for a rounding difference.
+ * A new width mode, target or type size is the reader (or the computer's own
+ * layout) asking, and measures afresh.
+ */
+export type FullTerminalFitHold = {
+  viewportWidth: number;
+  /** The type size the reader asked for (settings, or a pinch) when this was measured. */
+  preferredFont: number;
+  mode: TermFitMode;
+  targetCols: number;
+  font: number;
+  cols: number;
+};
+
 export type FullTerminalFitResult = {
   size: FullTerminalFittedSize;
   remoteGrid: { cols: number; rows: number } | null;
+  /** What the next fit of this renderer holds on to; null while the cell could not be measured. */
+  hold: FullTerminalFitHold | null;
 };
 
-/** Fit xterm to its visible pan row; sibling chrome must never count as terminal space. */
+/**
+ * Fit xterm to its pan row; sibling chrome must never count as terminal space.
+ * The grid is measured against the terminal's room and may be larger than the
+ * row shows: extra columns pan sideways, and under the momentary key pad or a
+ * draft of several lines the rows slide up only as far as the cursor's row
+ * needs to stay in view.
+ */
 export function fitFullTerminal(args: {
   root: ParentNode;
   host: HTMLElement;
@@ -56,23 +90,45 @@ export function fitFullTerminal(args: {
   fitAddon: FitAddon;
   lockedFont: number | null;
   remoteGrid: { cols: number; rows: number } | null;
+  /** The previous fit's hold. Omit it to measure the columns afresh. */
+  hold?: FullTerminalFitHold | null;
 }): FullTerminalFitResult | null {
   const { root, host, terminal, fitAddon, lockedFont } = args;
   const hostBox = hostInnerSize(host);
   const inner = terminalViewportSize(host, hostBox);
   if (inner.width < 8 || inner.height < 8) return null;
+  const drawn = cssCellOf(terminal);
+  // The grid never has fewer rows than the protocol's least. A row too short
+  // for them (a small phone on its side with its pad open) shows the part the
+  // cursor is in, by the lift that serves a covered row, so the room is never
+  // shorter than those rows are.
+  const leastRows = (cell: { height: number } | null | undefined): number => Math.ceil(TERMINAL_MIN_ROWS * (cell?.height ?? 0));
+  const visibleRoom = terminalRoom(host, inner);
+  const room = { width: visibleRoom.width, height: Math.max(visibleRoom.height, leastRows(drawn)) };
   const canvas = panCanvas(host);
-  const pan = termFit() === "pan";
-  host.classList.toggle("is-pan", pan);
-  probePanCanvas(canvas, inner.width);
+  const mode = termFit();
+  const pan = mode === "pan";
+  const paneSize = panePtySize(openPaneId(), boardLayouts(), liveAgents());
+  const targetCols = paneSize ? clamp(paneSize.cols, TERMINAL_MIN_COLS, TERMINAL_MAX_COLS) : termCols();
+  const targetRows = paneSize ? clamp(paneSize.rows, TERMINAL_MIN_ROWS, TERMINAL_MAX_ROWS) : null;
+  const preferredFont = lockedFont ?? termFontPx();
+  const viewportWidth = window.innerWidth;
+  const previous = args.hold;
+  const held = previous && previous.viewportWidth === viewportWidth && previous.preferredFont === preferredFont
+    && previous.mode === mode && previous.targetCols === targetCols ? previous : null;
+  // xterm's own fit runs against the canvas and drops whatever that box cannot
+  // hold. Nothing repaints it when the computer is not asked to resize, so the
+  // box is never narrower than the grid already drawn, nor shorter than the room.
+  probePanCanvas(canvas, Math.max(room.width, drawn ? terminal.cols * drawn.width : 0));
+  liftPanCanvas(canvas, room.height, inner.height);
   const measureCellWidth = (fontSize: number): number => {
     if (terminal.options.fontSize !== fontSize) terminal.options.fontSize = fontSize;
     return cssCellOf(terminal)?.width || fontSize * 0.6;
   };
-  let font = pickFontSize({
-    hostWidth: inner.width,
+  let font = held ? held.font : pickFontSize({
+    hostWidth: room.width,
     cellWidthAt: measureCellWidth,
-    preferred: lockedFont ?? termFontPx(),
+    preferred: preferredFont,
     locked: lockedFont !== null || pan,
   });
   terminal.options.fontSize = font;
@@ -89,7 +145,7 @@ export function fitFullTerminal(args: {
   const dpr = window.devicePixelRatio || 1;
   const glyphHeight = measureGlyphHeight(FULL_TERM_FONT_FAMILY, font);
   const rowsGuess = clamp(
-    Math.floor(inner.height / Math.max(1, font * 1.5)),
+    Math.floor(room.height / Math.max(1, font * 1.5)),
     TERMINAL_MIN_ROWS,
     TERMINAL_MAX_ROWS,
   );
@@ -103,22 +159,23 @@ export function fitFullTerminal(args: {
     // callback or pageshow will fit again.
   }
   const cell = cssCellOf(terminal);
-  const visibleCols = clamp(
-    cell ? Math.floor(inner.width / cell.width) : terminal.cols || 80,
+  const colsIn = (width: number): number => clamp(
+    cell ? Math.floor(width / cell.width) : terminal.cols || 80,
     TERMINAL_MIN_COLS,
     TERMINAL_MAX_COLS,
   );
-  const paneSize = panePtySize(openPaneId(), boardLayouts(), liveAgents());
-  const targetCols = paneSize ? clamp(paneSize.cols, TERMINAL_MIN_COLS, TERMINAL_MAX_COLS) : termCols();
-  const targetRows = paneSize ? clamp(paneSize.rows, TERMINAL_MIN_ROWS, TERMINAL_MAX_ROWS) : null;
   let remoteGrid = args.remoteGrid;
   if (targetRows && !remoteGrid) remoteGrid = { cols: targetCols, rows: targetRows };
-  const cols = clamp(ptyCols(visibleCols, termFit(), targetCols), TERMINAL_MIN_COLS, TERMINAL_MAX_COLS);
+  const cols = held ? held.cols : clamp(ptyCols(colsIn(room.width), mode, targetCols), TERMINAL_MIN_COLS, TERMINAL_MAX_COLS);
+  // Columns the host cannot show right now pan sideways, whether the width mode
+  // fixed them or the inspector is covering part of the column.
+  const wide = pan || cols > colsIn(inner.width);
+  host.classList.toggle("is-pan", wide);
   // Snapshot rows can reflect the smaller PTY requested while the keypad was
-  // expanded. Only the visible host determines the next request, so closing
+  // expanded. Only the terminal's room determines the next request, so closing
   // the pad can grow it again; displayGrid still waits for the remote frame.
   const rows = clamp(
-    cell ? hostFitRows(inner.height, cell.height) : terminal.rows || 24,
+    cell ? hostFitRows(room.height, cell.height) : terminal.rows || 24,
     TERMINAL_MIN_ROWS,
     TERMINAL_MAX_ROWS,
   );
@@ -142,7 +199,13 @@ export function fitFullTerminal(args: {
     cellWidth: Math.max(1, Math.round(measured?.width || visual.cellWidth)),
     cellHeight: Math.max(1, Math.round(measured?.height || visual.cellHeight)),
   };
-  sizePanCanvas(canvas, pan, display.cols, measured?.width || size.cellWidth, inner.width);
+  sizePanCanvas(canvas, wide, display.cols, measured?.width || size.cellWidth, inner.width);
+  // A first fit, or a larger type, learns the cell only now.
+  if (leastRows(measured) > room.height) liftPanCanvas(canvas, leastRows(measured), inner.height);
+  followCursor(canvas, terminal);
+  syncPanBar(host);
   integerizeDomRows(host, size.cellHeight);
-  return { size, remoteGrid };
+  // A fit that could not measure a cell guessed its columns; never hold a guess.
+  const hold = cell ? { viewportWidth, preferredFont, mode, targetCols, font, cols } : null;
+  return { size, remoteGrid, hold };
 }

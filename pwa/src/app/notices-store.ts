@@ -12,8 +12,12 @@ import { openPaneId, sessionStore } from "../features/session/session-store";
  * A notice carries the scope it was raised in; `visibleNotice` hides it once the
  * reader has navigated away, so a message never follows the reader to another
  * pane, computer or screen.
+ *
+ * `persistent` marks a notice raised to stay until an action replaces or clears
+ * it; any other leaves by itself after `STATUS_NOTICE_MS`. A screen that floats
+ * its passing notices reads it to tell which kind it is placing.
  */
-export type Notice = { text: string; tone: "error" | "status"; scope?: NoticeScope };
+export type Notice = { text: string; tone: "error" | "status"; scope?: NoticeScope; persistent?: true };
 
 export const STATUS_NOTICE_MS = 2800;
 
@@ -64,11 +68,12 @@ export function visibleNotice(): Notice | null {
 }
 
 /** A notice and its scope are domain data: adopted detached and frozen. */
-function adoptNotice(text: string, tone: Notice["tone"], scope?: NoticeScope): Notice {
+function adoptNotice(text: string, tone: Notice["tone"], scope: NoticeScope | undefined, persistent: boolean): Notice {
   return Object.freeze({
     text,
     tone,
     ...(scope ? { scope: Object.freeze({ ...scope }) } : {}),
+    ...(persistent ? { persistent: true as const } : {}),
   });
 }
 
@@ -138,7 +143,7 @@ export function showError(text: string, scopeOrPersist?: NoticeScope | boolean, 
   const scope = typeof scopeOrPersist === "object" && scopeOrPersist ? scopeOrPersist : undefined;
   const keep = typeof scopeOrPersist === "boolean" ? scopeOrPersist : persist;
   write((record) => {
-    record.notice = adoptNotice(text, "error", scope);
+    record.notice = adoptNotice(text, "error", scope, keep);
   });
   if (keep || !text) return;
   scheduleNoticeDismiss(text, "error");
@@ -147,7 +152,7 @@ export function showError(text: string, scopeOrPersist?: NoticeScope | boolean, 
 export function showStatus(text: string, persist = false, scope?: NoticeScope): void {
   stopNoticeTimer();
   write((record) => {
-    record.notice = adoptNotice(text, "status", scope);
+    record.notice = adoptNotice(text, "status", scope, persist);
   });
   if (persist || !text) return;
   scheduleNoticeDismiss(text, "status");

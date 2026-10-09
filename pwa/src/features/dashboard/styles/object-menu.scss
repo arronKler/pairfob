@@ -1,0 +1,48 @@
+/*
+  The row and heading menus as a sheet.
+
+  The menu names what each run of rows acts on (this session, its tab, its
+  workspace). On a phone every pixel a heading takes pushes an action off the
+  sheet, so here a heading is its caption set into the rule that already
+  divides the runs, and the facts above the commands are set tight: with all
+  three headings the nine actions of a full menu still fit a 390x844 screen.
+
+  Scoped to this menu's own class and to its sheet form. Anchored as a popover
+  it keeps the ruled groups of `popover.scss`, and every other sheet keeps the
+  shared heading.
+*/
+
+.object-menu-sheet:not(.popover) .menu-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 9px 0 -1px;
+  padding: 0;
+  border: 0;
+  line-height: 14px;
+}
+
+.object-menu-sheet:not(.popover) .menu-section-title::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--line);
+}
+
+.object-menu-sheet:not(.popover) .sheet-facts {
+  margin: 6px 0;
+  padding: 0 0 6px;
+}
+
+/* The first heading's rule closes the facts; they do not draw a second one above it. */
+.object-menu-sheet:not(.popover) .sheet-facts:has(+ .menu-section-title) {
+  margin-bottom: 0;
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+
+.object-menu-sheet:not(.popover) .sheet-fact { padding: 3px 0; }
+
+/* Both cells of a row, named by their place so the shared `.sheet-fact-val` rule
+   stays the only one that ends in that class. */
+.object-menu-sheet:not(.popover) .sheet-fact > * { line-height: 1.35; }

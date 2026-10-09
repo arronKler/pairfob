@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { resetTestDOM } from "../../../../test-support/boot-dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
@@ -49,7 +50,7 @@ describe("action sheet", () => {
     expect(form.querySelector(".sheet-body > .menu-section-title")?.textContent).toBe("Workspace");
     expect(form.querySelectorAll(".sheet-body > .menu-item")).toHaveLength(2);
     const enabled = form.querySelector<HTMLButtonElement>(".menu-item:not(:disabled)")!;
-    expect(document.activeElement === enabled).toBeTrue();
+    expectSameNode(document.activeElement, enabled);
     const close = form.querySelector<HTMLButtonElement>(".sheet-head > .sheet-close")!;
     expect(close.type).toBe("button");
     expect(close.getAttribute("aria-label")).toBe(t("close"));

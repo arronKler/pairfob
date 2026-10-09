@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { commitTest, mountTestApp, unmountTestApp } from "../../../test-support/react-harness";
@@ -135,7 +136,7 @@ test("clearing previews and changing session rejects the old in-flight read befo
     complete({ text: "old computer private output", hash: "old" });
     await pending;
   });
-  expect(appRoot().querySelector(".board-pane") === tile).toBeTrue();
+  expectSameNode(appRoot().querySelector(".board-pane"), tile);
   expect(tile.querySelector(".board-pane-screen")!.textContent).not.toContain("old computer private output");
   expect(boardPreviewText("w1:p1")).toBe("");
 });
@@ -147,7 +148,7 @@ test("an empty tab gaining fallback panes binds gestures despite the unchanged e
   expect(appRoot().querySelector(".board-stage")).toBeNull();
   act(() => replaceAgentsFromSnapshot(snapshot(true)));
   expect(boardStore.get().lastLayoutSig).toBe(signature);
-  expect(appRoot().querySelector(".board-canvas") === viewport).toBeTrue();
+  expectSameNode(appRoot().querySelector(".board-canvas"), viewport);
   expect(appRoot().querySelector(".board-stage") !== null).toBeTrue();
   const before = boardStore.get().boardScale;
   act(() => viewport.dispatchEvent(new happy.WheelEvent("wheel", {
@@ -163,7 +164,7 @@ test("removing a fallback stage retires the in-progress gesture on its retained 
     bubbles: true, cancelable: true, pointerId: 1, clientX: 10, clientY: 10,
   }) as unknown as Event));
   act(() => replaceAgentsFromSnapshot(snapshot(false)));
-  expect(appRoot().querySelector(".board-canvas") === viewport).toBeTrue();
+  expectSameNode(appRoot().querySelector(".board-canvas"), viewport);
   expect(appRoot().querySelector(".board-stage")).toBeNull();
   const before = boardStore.get().boardPanX;
   act(() => viewport.dispatchEvent(new happy.PointerEvent("pointermove", {
@@ -192,7 +193,7 @@ test("the actual board route keeps capability and connection gates before openin
   act(() => setOperationBusy(false));
   connected = false;
   commitTest();
-  expect(appRoot().querySelector(".board-tab-new") === create).toBeTrue();
+  expectSameNode(appRoot().querySelector(".board-tab-new"), create);
   expect(create.disabled).toBeTrue();
   connected = true;
   commitTest();

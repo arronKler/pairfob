@@ -1,3 +1,4 @@
+import { expectDifferentNode, expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { renderReact, unmountReact, mountTestApp, commitTest, unmountTestApp } from "../../../../test-support/react-harness";
@@ -186,15 +187,15 @@ test("the real React HomeScreen underlay keeps sibling order and leaves no node 
   expect(layer.getAttribute("aria-hidden")).toBe("true");
   expect(layer.querySelector(".page .card-name")?.textContent).toBe("Owned conversation");
   expect(Object.keys(layer.querySelector(".page")!).some(key => key.startsWith("__reactFiber$"))).toBe(true);
-  expect(appRoot().firstChild).toBe(layer);
-  expect(layer.nextSibling).toBe(root);
+  expectSameNode(appRoot().firstChild, layer);
+  expectSameNode(layer.nextSibling, root);
   expect(root.style.transform).toBe("translateX(102px)");
   const values = layer.style.transform.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
   expect(values[0]).toBeCloseTo(-18 * (1 - 120 / 390), 10);
   expect(values[1]).toBeCloseTo(0.94 + 0.06 * (120 / 390), 10);
   act(commitTest);
-  expect(pane()).toBe(root);
-  expect(under()).toBe(layer);
+  expectSameNode(pane(), root);
+  expectSameNode(under(), layer);
   touch("touchend", 130, 20, root, 0);
   await tick(319);
   expect(backs).toBe(0);
@@ -276,7 +277,7 @@ test("a repeated gesture cancels the old navigation and retires only its own und
   drag(40);
   const next = under()!;
   expect(old.isConnected).toBe(false);
-  expect(next).not.toBe(old);
+  expectDifferentNode(next, old);
   expect(appRoot().querySelectorAll(".pane-under")).toHaveLength(1);
   touch("touchend", 50, 20, root, 0);
   await tick(400);

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { NO_OPERATION_CAPABILITIES } from "../../../lib/operations";
 import type { TabLayout } from "../../../lib/layout";
 import { directionalPanes, herdrNeighbor, layoutActionReason, paneMenuEntries, panePosition, type PaneMenuModel } from "./pane-menu";
-import { setLang } from "../../../lib/i18n";
+import { setLang, t } from "../../../lib/i18n";
 
 setLang("zh");
 
@@ -23,6 +23,27 @@ test("missing capabilities never invent layout actions; reconnect keeps actions 
     ["open", "pane"], ["rename", "pane"], ["split", "layout"], ["resize", "layout"], ["swap", "layout"], ["zoom", "layout"], ["close", "manage"],
   ]);
   expect(paneMenuEntries(caps, layout, "offline").every(entry => entry.reason === "offline")).toBe(true);
+});
+test("the swap row's hint is the shortcut its reader has: the lift for a finger, the canvas keys otherwise", () => {
+  const detail = (...by: Array<"press" | "keys">) => paneMenuEntries(caps, layout, "", ...by).find(entry => entry.id === "swap")?.detail;
+  expect(detail()).toBe(t("boardMenu.swapDetail"));
+  expect(detail("press")).toBe(t("boardMenu.swapDetail"));
+  expect(detail("keys")).toBe(t("boardMenu.swapDetailKeys"));
+  expect(detail("keys")).not.toBe(detail("press"));
+  // Only that row changes with the reader.
+  const others = (by: "press" | "keys") => paneMenuEntries(caps, layout, "", by).filter(entry => entry.id !== "swap");
+  expect(others("keys")).toEqual(others("press"));
+});
+test("rows that suit every reader name no gesture: only the swap row follows the input, in both languages", () => {
+  try {
+    for (const lang of ["zh", "en"] as const) {
+      setLang(lang);
+      const details = paneMenuEntries(caps, layout, "", "keys").filter(entry => entry.id !== "swap").map(entry => entry.detail ?? "");
+      for (const detail of details) expect(detail).not.toMatch(/\b(tap|click|long-press)\b|轻触|长按|单击/i);
+      expect(t("boardMenu.stepHint")).not.toMatch(/\b(tap|click)\b|轻触|单击/i);
+      expect(t("boardCanvas.placeSwap")).not.toMatch(/\b(tap|click)\b|轻触|单击/i);
+    }
+  } finally { setLang("zh"); }
 });
 test("zoomed layout still offers restore with a single visible pane and hides unusable sizing", () => {
   const zoomed = { ...layout, zoomed: true, panes: [layout.panes[0]] };

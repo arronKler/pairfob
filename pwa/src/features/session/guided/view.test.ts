@@ -1,5 +1,6 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { agentStatusLabel } from "../../../lib/dashboard";
-import { resetBoardTestDOM } from "../../../../test-support/dom";
+import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { WorkspaceSnapshotRestorer } from "../../../../test-support/workspace-snapshot-restore";
 import { ScalarPreferenceState } from "../../../../test-support/preferences-scalar-restore";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -14,11 +15,12 @@ import { setScreen } from "../../../app/navigation-store";
 import { applyRuntimeIdentity, runtimeIdentity } from "../../connection/runtime-store";
 import { applyPaneRead, selectPane, setAgentChat, setFullTerminal, setPaneFollow, setPaneRow, setPaneUnread, setTermSelect } from "../session-store";
 import { setComposeDraft, setComposeFocused, setComposeIME, setComposeLive } from "../compose-store";
-import { setDefaultComposeLive, setKeysExpanded, setPadKind, setPaneComposeLive } from "../../settings/preferences-store";
+import { listGroup, setDefaultComposeLive, setKeysExpanded, setPadKind, setPaneComposeLive } from "../../settings/preferences-store";
 import { setOperationBusy } from "../../operations/capabilities-store";
 import { attachLiveSession } from "../../computers/catalog-store";
 import { applySnapshot, selectedAgent } from "../../dashboard/catalog-store";
-import { paneIdentity } from "../../dashboard/model/herd-view";
+import { setInspectorOpen } from "../../workspace/inspector-store";
+import { paneHeaderLine, paneIdentity } from "../../dashboard/model/herd-view";
 import { patchChromeTitle, type SessionHandlers } from "./view";
 import { SessionPane } from "./session-pane";
 import type { LiveSession } from "../../../lib/protocol/client";
@@ -120,7 +122,7 @@ describe("pane header keeps status surfaces in step", () => {
       });
       patchChromeTitle();
     });
-    expect(appRoot().querySelector(".chrome-title") === title).toBeTrue();
+    expectSameNode(appRoot().querySelector(".chrome-title"), title);
     const idle = agentStatusLabel({ paneId: "p1", agent: "codex", status: "idle", cwd: "", workspaceId: "" });
     expect(title.querySelector(".chrome-status")?.textContent).toBe(idle);
     expect(title.getAttribute("title")).toContain(idle);
@@ -191,6 +193,30 @@ describe("pane header keeps status surfaces in step", () => {
     expect(menu).toBeGreaterThan(workspace);
   });
 
+  test("the files button reads as pressed only beside the list, while the inspector is open", () => {
+    const files = () => appRoot().querySelector(".icon-workspace");
+    try {
+      // The phone navigates to the files screen: the button has no state to show.
+      act(() => { setInspectorOpen(true); });
+      paint();
+      expect(files()?.hasAttribute("aria-pressed")).toBeFalse();
+
+      act(() => { unmountReact(); });
+      happy.happyDOM.setWindowSize({ width: 1440, height: 900 });
+      paint(false);
+      expect(files()?.getAttribute("aria-pressed")).toBe("true");
+      act(() => { setInspectorOpen(false); });
+      expect(files()?.getAttribute("aria-pressed")).toBe("false");
+      // Same place, same label, same two actions.
+      expect(files()?.getAttribute("aria-label")).toBe(t("workspace.open"));
+      expect([...appRoot().querySelectorAll(".chrome-actions button")].map((button) => button.className))
+        .toEqual(["icon-btn icon-workspace", "icon-btn icon-more"]);
+    } finally {
+      act(() => { setInspectorOpen(false); });
+      happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+    }
+  });
+
   test("in-place pane reads keep the terminal Enter control in sync", () => {
     expect(viewSource).toContain("syncSendButton()");
     expect(viewSource).not.toContain("promptPanel");
@@ -200,12 +226,14 @@ describe("pane header keeps status surfaces in step", () => {
     paint();
     const pane = appRoot().querySelector(".pane-root");
     act(() => showStatus("session notice", true));
-    expect(appRoot().querySelector(".pane-root") === pane).toBeTrue();
-    const notice = appRoot().querySelector("[data-react-notice]")!;
-    expect(notice.previousElementSibling?.className).toBe("chrome");
-    expect(notice.nextElementSibling?.classList.contains("term-stage")).toBeTrue();
-    expect(notice.nextElementSibling?.firstElementChild?.classList.contains("term-wrap")).toBeTrue();
-    expect(paneSource).toContain("<AppNotice />");
+    expectSameNode(appRoot().querySelector(".pane-root"), pane);
+    // A status floats from its anchor (session-notice.tsx); the anchor holds the notice's old place.
+    const anchor = appRoot().querySelector("[data-react-notice]")!.parentElement!;
+    expect(anchor.className).toBe("session-notice");
+    expect(anchor.previousElementSibling?.className).toBe("chrome");
+    expect(anchor.nextElementSibling?.classList.contains("term-stage")).toBeTrue();
+    expect(anchor.nextElementSibling?.firstElementChild?.classList.contains("term-wrap")).toBeTrue();
+    expect(paneSource).toContain("<SessionAppNotice />");
     expect(viewSource).not.toContain("appendNotice");
     expect(viewSource).not.toContain("selectBar");
     expect(viewSource).not.toContain("noteNode");
@@ -218,7 +246,7 @@ describe("pane header keeps status surfaces in step", () => {
     const meta = title.querySelector(".chrome-meta");
     expect(name !== null).toBeTrue();
     expect(meta !== null).toBeTrue();
-    expect(name!.nextElementSibling === meta).toBeTrue();
+    expectSameNode(name!.nextElementSibling, meta);
     expect(title.querySelector(".chrome-avatar .agent-avatar .agent-avatar-status") !== null).toBeTrue();
     expect(meta!.querySelector(".chrome-status") !== null).toBeTrue();
     expect(meta!.querySelector(".chrome-meta-text") !== null).toBeTrue();
@@ -227,13 +255,16 @@ describe("pane header keeps status surfaces in step", () => {
 
   test("the header shows the list card's own title and line, with no header-only facts", () => {
     paint();
-    const card = paneIdentity(selectedAgent()!, "flat", false);
+    const card = paneIdentity(selectedAgent()!, listGroup(), false);
+    // The list groups by workspace by default, so the card leaves "demo" to its
+    // group heading; the header has no heading and names it after the card's line.
+    const line = paneHeaderLine(card, selectedAgent()!);
+    expect(line).toBe(`${card.line} · demo`);
     expect(appRoot().querySelector(".chrome-name")?.textContent).toBe(card.title);
     expect(appRoot().querySelector(".chrome-status")?.textContent).toBe(card.statusLabel);
-    // The workspace "demo" is already the title here, so it is not repeated.
-    expect(appRoot().querySelector(".chrome-meta-text")?.textContent).toBe(card.line);
+    expect(appRoot().querySelector(".chrome-meta-text")?.textContent).toBe(line);
     expect(appRoot().querySelector<HTMLElement>(".chrome-title")!.title)
-      .toBe(`${card.title} · ${card.statusLabel} · ${card.line}`);
+      .toBe(`${card.title} · ${card.statusLabel} · ${line}`);
     act(() => {
       applySnapshot({
         ...AGENT_SNAPSHOT,

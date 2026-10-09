@@ -1,0 +1,128 @@
+/* The desk main column when no session is open: the sessions that need the
+   reader as one column of large entries, then create and search. `.main-empty`
+   (desk.scss) centers the block; with nobody to attend to it keeps that
+   centered two-line prompt and only gains the buttons. An empty list reads
+   the same way, whatever emptied it: a heading, one line, the actions that
+   fit (none while the device is offline or reconnecting). */
+
+.main .desk-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 31.75rem);
+  min-height: 0;
+}
+
+.main .desk-empty-title {
+  align-self: stretch;
+  margin: 0 0 14px;
+  color: var(--ink);
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: start;
+}
+
+/* Many sessions can ask at once: the entries scroll, the buttons stay put. */
+.main .desk-ticket-list {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.main .desk-ticket-list > li { flex: none; }
+
+/* A destination-sized entry. A waiting one takes the waiting ground and edge of
+   its list row; a finished one stays on the plain surface. */
+.main .desk-ticket {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--muted);
+  text-align: start;
+  transition: background var(--dur-1) var(--ease);
+}
+
+.main .desk-ticket:active { background: var(--surface-2); }
+.main .desk-ticket.is-blocked { border-color: rgba(255, 178, 36, 0.28); background: #1c1a13; }
+.main .desk-ticket.is-blocked:active { background: #24211a; }
+.main .desk-ticket.is-blocked .agent-avatar-status { border-color: #1c1a13; }
+.main .desk-ticket > svg { flex: none; }
+
+.main .desk-ticket-copy { flex: 1 1 auto; min-width: 0; }
+
+.main .desk-ticket-name,
+.main .desk-ticket-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main .desk-ticket-name { color: var(--ink); font-size: var(--text-subhead); font-weight: 650; }
+.main .desk-ticket-meta { margin-top: 2px; font-size: var(--text-caption); }
+
+.main .desk-ticket-status { font-weight: 650; }
+.main .desk-ticket-status.is-blocked { color: var(--warn); }
+.main .desk-ticket-status.is-done { color: var(--ok); }
+
+.main .desk-empty-actions {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* Under the entries the buttons start where the entries start. */
+.main .desk-ticket-list + .desk-empty-actions { align-self: stretch; justify-content: flex-start; }
+
+/* The line is one sentence; where the column is too narrow for it, it breaks into even rows. */
+.main .desk-empty .empty-sub { text-wrap: balance; }
+
+/* A command to run on the computer sits under the line that asks for it, as
+   wide as it needs and no wider than the column. */
+.main .desk-empty .herd-empty-command {
+  width: auto;
+  max-width: 100%;
+  margin-top: 16px;
+  text-align: start;
+}
+
+.main .desk-empty-actions .btn { gap: 6px; }
+.main .desk-empty-actions .btn:disabled { opacity: 0.45; }
+
+.main .desk-empty-search {
+  border-color: var(--line-strong);
+  background: transparent;
+  color: var(--muted);
+}
+
+.main .desk-empty-search kbd {
+  margin-left: 2px;
+  padding: 2px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  font: 500 var(--text-caption) var(--mono);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .main .desk-ticket:hover { background: var(--surface-2); }
+  .main .desk-ticket.is-blocked:hover { background: #24211a; }
+  .main .desk-empty-actions .btn { min-height: 36px; }
+  .main .desk-empty-search:hover { color: var(--ink); }
+}

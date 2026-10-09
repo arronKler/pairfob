@@ -2,12 +2,16 @@ import { Monitor, Plus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { t } from "../../lib/i18n";
 import { BackBar, Brand, Button, SelectionRow, SetAction, SetGroup, SetItem, SetTag, Spinner, TopbarActions } from "../../shared/ui/primitives";
+import { keepPhrases } from "../../lib/keep-phrases";
 import type { ComputersViewModel } from "./model";
 
 /**
  * The computer picker list. Pure: every string and the back target arrive in the
  * view model, mutations are callbacks the caller owns, and chrome the page still
  * hosts (`AppNotice`, daemon-update help) arrives as slots.
+ *
+ * The add hint names a command; it wraps in even lines and the command stays
+ * whole on one of them (`keepPhrases`).
  *
  * Inside the app (a back bar) it is one icon list: the current computer is
  * tagged, the others carry a Connect action, and Forget waits behind Edit so
@@ -42,7 +46,7 @@ export function ComputerListView({ view, onSwitch, onForget, onAdd, onBack, noti
             </div>
           ))}
         </div>
-        <SelectionRow className="computer-add" onClick={onAdd} title={view.addLabel} description={view.addHint}
+        <SelectionRow className="computer-add" onClick={onAdd} title={view.addLabel} description={keepPhrases(view.addHint)}
           leading={<span className="add-mark" aria-hidden="true"><Plus size={18} /></span>} />
         {footer}
       </>
@@ -73,7 +77,7 @@ export function ComputerListView({ view, onSwitch, onForget, onAdd, onBack, noti
                 }}>{t("set.connect")}</SetAction>} />
         ))}
       </SetGroup>
-      <SetGroup className="computer-add-group" icons note={view.addHint}>
+      <SetGroup className="computer-add-group" icons note={keepPhrases(view.addHint)}>
         <Button className="set-item set-nav computer-add-item" onClick={onAdd}>
           <span className="set-icon is-accent" aria-hidden="true"><Plus size={17} /></span>
           <span className="set-item-text"><span className="set-item-label">{view.addLabel}</span></span>

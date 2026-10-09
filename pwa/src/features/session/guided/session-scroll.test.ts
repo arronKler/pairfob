@@ -97,8 +97,8 @@ describe("react session scroll rail", () => {
     }) as unknown as LiveSession);
     renderReact(createElement(SessionTerminal));
     const rail = [...appRoot().querySelectorAll(".full-terminal-scroll-btn")] as HTMLButtonElement[];
-    const wheelUp = rail.find((el) => el.getAttribute("aria-label") === "鼠标滚轮向上");
-    const wheelDown = rail.find((el) => el.getAttribute("aria-label") === "鼠标滚轮向下");
+    const wheelUp = rail.find((el) => el.getAttribute("aria-label") === "向上滚动");
+    const wheelDown = rail.find((el) => el.getAttribute("aria-label") === "向下滚动");
     if (!wheelUp || !wheelDown) throw new Error("missing wheel buttons");
     wheelUp.dispatchEvent(pointer("pointerdown"));
     wheelDown.dispatchEvent(pointer("pointerdown"));

@@ -1,3 +1,5 @@
+@use "../../../shared/ui/styles/desk-action" as action;
+
 /* --- Create sheet -----------------------------------------------------------------
    Where → what → optional name, one summary line and the primary action pinned
    to the sheet's bottom edge so it stays above the keyboard.
@@ -176,6 +178,47 @@
 
 .create-summary { margin: 0 0 8px; font-size: var(--text-secondary); color: var(--muted); }
 .create-submit { width: 100%; }
+
+/* The desk form (shared/ui/styles/desk-dialog.scss): what will be made, and a
+   reason it cannot be, each read on a line of their own above the footer's two
+   buttons, Cancel and the action that makes it, at its right end. The same
+   footer closes a page pushed inside the session panel. */
+$desk: ":is(.desk-form, .popover-panel)";
+
+dialog.modal#{$desk} .create-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px var(--space-2);
+  margin: 14px calc(var(--desk-pad, 18px) * -1) 0;
+  padding: 12px var(--desk-pad, 18px) var(--desk-pad, 18px);
+}
+
+/* Under a scrolling form it is ruled off only while more of the form waits
+   beneath it (`data-below`, overlay/sheet-content.tsx). The card writes it
+   after the scroller (`.sheet-foot`, desk-dialog.scss), where it needs neither
+   the pin nor the margins that reached across the scroller's padding. */
+dialog.modal#{$desk} :is(.sheet-body, .sheet-foot) .create-footer { border-top-color: transparent; }
+dialog.modal#{$desk} .sheet-body[data-below] .create-footer,
+dialog.modal#{$desk} .sheet-body[data-below] + .sheet-foot .create-footer { border-top-color: var(--line); }
+
+dialog.modal#{$desk} .sheet-foot .create-footer {
+  position: static;
+  margin: 0;
+}
+
+dialog.modal#{$desk} .create-footer > * { flex: 0 0 100%; order: -1; margin: 0; }
+
+dialog.modal#{$desk} .create-footer > .desk-cancel { flex: none; order: 0; }
+
+/* Guidance sits on the form's own column edge, under the field it explains. */
+dialog.modal#{$desk} .create-hint { margin-inline: 0; }
+
+dialog.modal#{$desk} .create-footer > .create-submit {
+  @include action.desk-action;
+  order: 0;
+}
 
 /* Full agent list pushed inside the sheet. Scoped like the form's inputs so
    the pairing screen's global text-input rule does not win. */

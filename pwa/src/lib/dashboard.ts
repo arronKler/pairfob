@@ -211,9 +211,22 @@ function cleanOscTitle(text: string, agent: AgentCard): string {
 function usefulTerminalTitle(agent: AgentCard): string {
   const raw = agent.terminalTitle?.trim() ?? "";
   if (!raw) return "";
-  const text = cleanOscTitle(raw, agent);
+  const text = cleanOscTitle(agent.agent.trim().toLowerCase() === "codex" ? cleanCodexTitle(raw, agent) : raw, agent);
   if (!text || looksLikeMachineTitle(text, agent)) return "";
   return text.length > 256 ? text.slice(0, 256) : text;
+}
+
+/** Codex OSC fields include activity and project context, not just the task name. */
+function cleanCodexTitle(raw: string, agent: AgentCard): string {
+  const parts = raw.split(/\s+\|\s+/).map(part => part.trim());
+  // Also tolerate an already-stripped activity field ("| project"). Screen
+  // encodes the braille animation as ASCII | / - \\ instead.
+  parts[0] = parts[0].replace(/^(?:[●*]\s+)?[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏|/\\-](?:\s+|$)/, "").trim();
+  if (/^(?:\[\s*[!.]\s*\]\s*Action Required|Starting|Ready|Working|Thinking|Waiting)$/i.test(parts[0])) parts.shift();
+  while (parts.length && !parts[0]) parts.shift();
+  if (parts.length > 1 && (same(parts.at(-1)!, cwdName(agent.cwd)) || same(parts.at(-1)!, cwdName(agent.workspaceCwd || "")))) parts.pop();
+  // A generated thread name may itself carry a progress spinner while pending.
+  return parts.join(" | ").replace(/\s+[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]$/, "").trim();
 }
 
 export function visibleTabLabel(label: string | undefined): string {
@@ -226,6 +239,11 @@ function whoLabel(agent: AgentCard): string {
   return agent.agent.trim() || t("title.terminal");
 }
 
+function taskTitle(agent: AgentCard): string {
+  const task = agent.agent === "codex" ? agent.tokens?.task?.trim() : "";
+  return task || usefulTerminalTitle(agent);
+}
+
 export function agentTitle(agent: AgentCard, group: ListGroup = "flat"): string {
   const named = cleanOscTitle(agent.paneLabel?.trim() ?? "", agent);
   if (named && !looksLikeMachineTitle(named, agent)) return named;
@@ -233,7 +251,9 @@ export function agentTitle(agent: AgentCard, group: ListGroup = "flat"): string 
     const conversation = conversationLabel(agent);
     if (conversation) return conversation;
   }
-  const hint = usefulTerminalTitle(agent);
+  // The daemon resolves this from the bound Codex session, including a stable
+  // first-request excerpt while native automatic naming is unavailable.
+  const hint = taskTitle(agent);
   if (hint) return hint;
   return whoLabel(agent);
 }
@@ -322,7 +342,7 @@ export function agentDetailRows(agent: AgentCard, agents: AgentCard[] = [], grou
   push(t("detail.path"), agent.cwd, "path");
   push(t("detail.workspace"), agent.workspaceLabel);
   push(t("detail.tab"), visibleTabLabel(agent.tabLabel));
-  push(t("detail.task"), usefulTerminalTitle(agent));
+  push(t("detail.task"), taskTitle(agent));
   if (tabIsSplit(agent, agents)) {
     push(t("detail.layout"), t("detail.splitCount", { n: tabSiblings(agent, agents).length }));
   }
@@ -335,6 +355,7 @@ export function herdSignature(agents: DashboardAgentCard[]): string {
       agent.paneId,
       agent.paneLabel ?? null,
       agent.terminalTitle ?? null,
+      agent.tokens?.task ?? null,
       agent.tabId ?? null,
       agent.tabLabel ?? null,
       agent.workspaceId ?? null,

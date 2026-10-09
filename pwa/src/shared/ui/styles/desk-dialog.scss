@@ -1,0 +1,174 @@
+/*
+  The desk form's anatomy: what every dialog a mouse or the keyboard opens
+  beside the list has in common (`.desk-form`, overlay/desk-form.ts), and the
+  panel anchored under its trigger with it (`.popover-panel`).
+
+  One chrome. The title sits at the top left, 18px in, in the title type; the
+  close control is the same quiet 32px button in the top right corner; the
+  form follows; the actions are a footer at the bottom right, the confirming
+  one filled and Cancel quiet before it. A dialog with nothing to confirm has
+  the one button that puts it away. The document is written in that order too
+  (title, form, footer, close), so Tab and a screen reader walk what the eye
+  reads. The page behind is set apart by a light scrim and stays sharp: a card
+  in the middle of a wide window is not a sheet that covers a phone.
+
+  Everything here is under `.desk-form` or `.popover-panel`, which a finger
+  never gets, so the bottom sheet and the phone keep their bar (Cancel · title
+  · Save above the field, where an on-screen keyboard cannot cover it). The one
+  wider rule is the scrim of the centred card from 900px, which is the same
+  card for a finger. A feature dialog whose buttons are also its sheet's dresses
+  them with the mixins in desk-action.scss beside its other rules.
+*/
+
+@use "./desk-action" as action;
+
+$desk: ":is(.desk-form, .popover-panel)";
+
+/* --- Scrim ------------------------------------------------------------------------ */
+
+@mixin desk-scrim {
+  background: rgba(4, 6, 10, 0.38);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+dialog.modal.desk-form::backdrop { @include desk-scrim; }
+
+@media (min-width: 900px) {
+  dialog.modal::backdrop { @include desk-scrim; }
+}
+
+/* --- Head ------------------------------------------------------------------------- */
+
+/* Finger-sized until the pointer is known to be a mouse: a card the keyboard
+   opened on a tablet is touched afterwards. */
+.desk-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  /* Above a head that stays put while its body scrolls. */
+  z-index: 3;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+}
+
+/* A title that is the form's own first line leaves the corner its room; a head
+   that holds its title (a sheet's, an editor's) pads itself. */
+dialog.modal.desk-form:has(> form > .desk-close) > form > .modal-title { padding-right: 34px; }
+
+/* --- Footer ----------------------------------------------------------------------- */
+
+.desk-actions { @include action.desk-actions; }
+
+.desk-action,
+.desk-cancel { @include action.desk-action; }
+
+.desk-cancel { @include action.desk-action-quiet; }
+
+.desk-action.is-primary { @include action.desk-action-primary; }
+
+/* The confirmation's two buttons keep their order and stop sharing the width. */
+dialog.modal.desk-form .confirm-actions { justify-content: flex-end; }
+
+dialog.modal.desk-form .confirm-actions .btn { @include action.desk-action; }
+
+dialog.modal.desk-form .confirm-actions .btn-ghost { @include action.desk-action-quiet; }
+
+/* --- Information ------------------------------------------------------------------ */
+
+/* The help card joins the family: the shared width, padding, title and corner
+   close, and one button to put it away. */
+dialog.modal.help.desk-form {
+  width: min(23rem, calc(100vw - 32px));
+  padding: 18px;
+}
+
+.desk-form .help-copy { margin-top: 12px; }
+
+.desk-form .help-copy + .help-copy { margin-top: 8px; }
+
+/* --- A card with a head and a scrolling body -------------------------------------- */
+
+/* The sheet's bar becomes the same title block: no rule under it and no fill,
+   until the body has scrolled beneath (`data-above`, overlay/sheet-content.tsx).
+   `:where` keeps a feature's own head (the session panel hides its root one)
+   in charge. */
+:where(#{$desk}) .sheet-head {
+  align-items: flex-start;
+  padding: 18px 52px 12px 18px;
+  border-bottom-color: transparent;
+  background: transparent;
+}
+
+:where(#{$desk}) .sheet-head:has(+ .sheet-body[data-above]) { border-bottom-color: var(--line); }
+
+:where(.desk-form) .sheet-body { padding: 2px 18px 18px; }
+
+/* The card's footer stands under the scrolling body, not inside it
+   (`SheetFooter`, overlay/sheet-content.tsx): the scrollbar ends where the
+   footer begins, so the actions sit where every other desk dialog has them
+   whether or not the form scrolls. The body gives up its bottom padding for the
+   gap above the footer's rule, which is drawn only while more of the form waits
+   beneath it (`data-below`). */
+.sheet-foot { flex: none; }
+
+.sheet-foot:empty { display: none; }
+
+dialog.modal#{$desk} .sheet-body:has(+ .sheet-foot:not(:empty)) { padding-bottom: 14px; }
+
+/* A page pushed into the dialog brings its footer with it. */
+.sheet-body:has(> .sheet-page.is-push) + .sheet-foot > * { animation: sheet-page-push var(--dur-3) var(--ease); }
+
+.sheet-body:has(> .sheet-page.is-pop) + .sheet-foot > * { animation: sheet-page-pop var(--dur-3) var(--ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-foot > * { animation: none !important; }
+}
+
+/* A page pushed inside the dialog: the way back, then its title where a
+   dialog's title is, at the left. The name of the page behind is the back
+   button's own label for assistive tech; a mouse does not need it spelled. */
+dialog.modal#{$desk} .sheet-head.has-back {
+  align-items: center;
+  gap: 2px;
+  padding: 4px 52px 4px 4px;
+}
+
+dialog.modal#{$desk} .sheet-head.has-back .sheet-back {
+  width: 44px;
+  max-width: none;
+  padding: 0;
+  color: var(--muted);
+}
+
+dialog.modal#{$desk} .sheet-head.has-back .sheet-back-label { display: none; }
+
+dialog.modal#{$desk} .sheet-head.has-back .modal-title {
+  font-size: var(--text-title);
+  text-align: left;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .desk-close {
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .desk-close:hover { background: var(--surface-2); color: var(--ink); }
+
+  dialog.modal#{$desk} .sheet-head.has-back { padding: 10px 52px 8px 10px; }
+
+  dialog.modal#{$desk} .sheet-head.has-back .sheet-back {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: var(--r-sm);
+  }
+
+  dialog.modal#{$desk} .sheet-head.has-back .sheet-back:hover { background: var(--surface-2); color: var(--ink); }
+}

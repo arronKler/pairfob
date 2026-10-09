@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { applySnapshot as seedPadSnapshot } from "../../dashboard/catalog-store";
 import { selectPane as selectPadPane } from "../session-store";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -31,7 +32,7 @@ function render(sendCompose: (text: string, enter: boolean) => boolean) {
     sendKey: () => undefined,
     sendCompose,
     keyboard: keyboard(),
-    desk: false,
+    hardwareKeyboard: false,
   };
   renderReact(createElement(FullTerminalPad, { options }));
   return appRoot();
@@ -102,13 +103,13 @@ describe("complete-terminal compose input", () => {
     more.dispatchEvent(down);
     expect(down.defaultPrevented).toBe(true);
     act(() => { more.click(); });
-    expect(root.querySelector("textarea") === input).toBeTrue();
-    expect(document.activeElement === input).toBeTrue();
+    expectSameNode(root.querySelector("textarea"), input);
+    expectSameNode(document.activeElement, input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
     const enter = root.querySelector<HTMLButtonElement>('[aria-label="Enter"]')!;
     act(() => { enter.click(); });
     expect(sent).toEqual(["draft"]);
-    expect(document.activeElement === input).toBeTrue();
+    expectSameNode(document.activeElement, input);
     const send = root.querySelector<HTMLButtonElement>(".full-terminal-compose-send")!;
     const sendDown = new PointerEvent("pointerdown", { button: 0, cancelable: true });
     act(() => { send.dispatchEvent(sendDown); });
@@ -295,7 +296,7 @@ describe("complete-terminal compose input", () => {
         return true;
       },
       keyboard: keyboard(),
-      desk: false,
+      hardwareKeyboard: false,
     };
     renderReact(createElement(FullTerminalPad, { options }));
     const root = appRoot();

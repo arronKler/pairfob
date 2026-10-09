@@ -10,15 +10,21 @@
  * a subscriber installed. A subscriber that completes a newer navigation or
  * leaves the pane route during publication ends this transition quietly, and
  * a stale generation does not refresh.
+ *
+ * Asking for the pane that is already on screen beside the list is not a
+ * transition: see `chooseDisplayedPane`.
  */
 import { rememberPane, paneComposeLive, paneTermMode } from "../settings/preferences-store";
 import { setComposeDraft, setComposeLive } from "../session/compose-store";
 import { setTraceNote } from "../session/chat/trace-store";
 import { currentDaemonId } from "../computers/catalog-store";
+import { getAppFrame } from "../../app/frame";
 import { setScreen } from "../../app/navigation-store";
 import { readStoredDraft } from "../session/drafts/state-drafts";
 import { acknowledgePaneCompletion } from "../dashboard/catalog-store";
+import { handKeyboardToSession } from "../session/keyboard-handover";
 import {
+  openPaneId,
   resetPaneView,
   selectPane,
   setAgentChat,
@@ -60,7 +66,51 @@ export type OpenPanePorts = {
   refreshPane(): Promise<void>;
 };
 
+/**
+ * The pane asked for is the one on screen beside the list: the committed frame
+ * shows it in the desk's session column, in the view that is current, under the
+ * live session that is current. A phone has the list on a screen of its own, so
+ * a pane chosen there is never this one on screen.
+ */
+function paneIsDisplayed(paneId: string, ports: OpenPanePorts): boolean {
+  const session = ports.currentLive();
+  const frame = getAppFrame();
+  return session !== null
+    && ports.currentScreen() === "pane"
+    && openPaneId() === paneId
+    && frame.layout?.deskChild != null
+    && frame.session?.paneId === paneId
+    && frame.session.incarnation === ports.currentIncarnation()
+    && frame.sessionOwner === session;
+}
+
+/**
+ * Beside the list the open pane's own row is one click away, and choosing it
+ * must not cost the session anything. Nothing is parked, left or re-resolved:
+ * a complete terminal keeps its bridge, the mode stays what the reader made it
+ * and the draft stays in its field. No navigation is started either, so one
+ * still finishing for this pane is not superseded. The two things a click on
+ * the row still means are kept: its completion is acknowledged, and the
+ * session gets the keyboard, as it does when the row opens it.
+ */
+function chooseDisplayedPane(paneId: string, ports: OpenPanePorts): PaneNavigation {
+  const session = ports.currentLive();
+  const viewVersion = liveView();
+  const incarnation = ports.currentIncarnation();
+  const scope: NoticeScope = { ...captureNoticeScope(), screen: "pane", paneId };
+  acknowledgePaneCompletion(paneId);
+  handKeyboardToSession();
+  const isCurrent = () =>
+    ports.currentLive() === session &&
+    liveView() === viewVersion &&
+    ports.currentIncarnation() === incarnation &&
+    noticeScopeIsCurrent(scope) &&
+    ports.currentScreen() === "pane";
+  return { scope, incarnation, isCurrent };
+}
+
 export async function openPaneWithOwner(paneId: string, ports: OpenPanePorts): Promise<PaneNavigation | null> {
+  if (paneIsDisplayed(paneId, ports)) return chooseDisplayedPane(paneId, ports);
   const request = nextPaneNavigation();
   const session = ports.currentLive();
   const viewVersion = liveView();

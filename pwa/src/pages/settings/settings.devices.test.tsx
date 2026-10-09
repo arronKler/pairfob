@@ -142,7 +142,7 @@ describe("settings paired devices (actual App)", () => {
     // The devices are listed on the computer page, under their own group.
     expect(app.querySelector(".devices-group .set-group-label")?.textContent).toBe("已配对设备 · 2");
     expect([...app.querySelectorAll(".device-item .set-item-label")].map((el) => el.textContent)).toEqual(["Phone", "旧手机"]);
-    expect(app.querySelector(".device-item .set-tag")?.textContent).toBe("这台手机");
+    expect(app.querySelector(".device-item .set-tag")?.textContent).toBe("这台设备");
     expect(app.textContent).toContain("离线");
     expect(app.textContent).not.toContain("已解除配对");
     expect(app.textContent).not.toContain("dev_gone");
@@ -166,7 +166,7 @@ describe("settings paired devices (actual App)", () => {
     expect(visibleNotice()?.text).toBe(success);
     expect(app.textContent).toContain(success);
     // Unpairing this phone sits on the same page, as a quiet danger row.
-    const selfUnpair = [...app.querySelectorAll("button")].find((el) => el.textContent?.trim() === "解除这台手机的配对");
+    const selfUnpair = [...app.querySelectorAll("button")].find((el) => el.textContent?.trim() === "解除这台设备的配对");
     expect(selfUnpair?.classList.contains("set-danger")).toBeTrue();
   });
 });

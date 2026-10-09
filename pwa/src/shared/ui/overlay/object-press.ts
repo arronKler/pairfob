@@ -1,10 +1,15 @@
 import { haptic } from "../dom/feedback";
+import { contextOrigin, noteOverlayOrigin, pointerOrigin, type OverlayOrigin } from "./origin";
 
 const HOLD_MS = 450;
 const SLOP_PX = 8;
 
-/** Long-press, right-click, and the context-menu key open an object menu. */
-export function bindObjectPress(el: HTMLElement, open: () => void): () => void {
+/**
+ * Long-press, right-click, and the context-menu key open an object menu. The
+ * opener learns what asked and where, and the same origin is left for the
+ * overlay layer, so a menu opened by a mouse can appear at the pointer.
+ */
+export function bindObjectPress(el: HTMLElement, open: (origin: OverlayOrigin) => void): () => void {
   const lifetime = new AbortController();
   const on = <K extends keyof HTMLElementEventMap>(type: K, listener: (event: HTMLElementEventMap[K]) => void, capture = false) => {
     el.addEventListener(type, listener, { capture, signal: lifetime.signal });
@@ -14,6 +19,7 @@ export function bindObjectPress(el: HTMLElement, open: () => void): () => void {
   let startY = 0;
   let eatClick = false;
   let pointerId: number | null = null;
+  let press: OverlayOrigin | null = null;
 
   const clearTimer = () => {
     if (!timer) return;
@@ -21,11 +27,12 @@ export function bindObjectPress(el: HTMLElement, open: () => void): () => void {
     timer = 0;
   };
 
-  const fire = (fromHold = false) => {
+  const fire = (origin: OverlayOrigin, fromHold = false) => {
     if (!el.isConnected || eatClick) return;
     eatClick = true;
     haptic(8);
-    open();
+    noteOverlayOrigin(origin);
+    open(origin);
     if (fromHold && pointerId !== null) swallowReleaseClick(el.ownerDocument, pointerId);
   };
 
@@ -36,11 +43,13 @@ export function bindObjectPress(el: HTMLElement, open: () => void): () => void {
     clearTimer();
     if (event.pointerType === "mouse" && event.button !== 0) return;
     pointerId = event.pointerId;
+    press = pointerOrigin(event);
     startX = event.clientX;
     startY = event.clientY;
     timer = window.setTimeout(() => {
       timer = 0;
-      fire(true);
+      // A held mouse button asks for the object's menu the way a right-click does.
+      if (press) fire({ ...press, atPointer: press.input === "mouse" }, true);
     }, HOLD_MS);
   });
   on("pointermove", (event) => {
@@ -68,7 +77,7 @@ export function bindObjectPress(el: HTMLElement, open: () => void): () => void {
     event.preventDefault();
     clearTimer();
     if (pointerId === null) eatClick = false;
-    fire();
+    fire(contextOrigin(event));
   });
   return () => {
     clearTimer();
@@ -77,9 +86,16 @@ export function bindObjectPress(el: HTMLElement, open: () => void): () => void {
 }
 
 /** showModal can retarget the opening gesture's click onto its backdrop or an
- * action. Capture that click above both targets, until the next user gesture. */
-function swallowReleaseClick(doc: Document, pointerId: number): void {
+ * action. Capture that click above both targets, until the next user gesture.
+ *
+ * `release` is for a guard armed as the pointer lifts, when the release itself
+ * replaced the screen under it and its click would press whatever sits there
+ * now. That click is the browser's own and comes at once, so the guard lapses
+ * after `withinMs` and lets a scripted or assistive activation (detail 0) by. */
+export function swallowReleaseClick(doc: Document, pointerId: number, release?: { withinMs: number }): void {
+  let lapse = 0;
   const cleanup = () => {
+    if (lapse) clearTimeout(lapse);
     doc.removeEventListener("click", swallow, true);
     doc.removeEventListener("pointerdown", nextPress, true);
     doc.removeEventListener("pointercancel", cancel, true);
@@ -87,6 +103,7 @@ function swallowReleaseClick(doc: Document, pointerId: number): void {
     doc.defaultView?.removeEventListener("blur", cleanup);
   };
   const swallow = (event: MouseEvent) => {
+    if (release && event.detail === 0) return;
     cleanup();
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -102,4 +119,5 @@ function swallowReleaseClick(doc: Document, pointerId: number): void {
   doc.addEventListener("pointercancel", cancel, true);
   doc.addEventListener("keydown", cleanup, true);
   doc.defaultView?.addEventListener("blur", cleanup, { once: true });
+  if (release) lapse = setTimeout(cleanup, release.withinMs) as unknown as number;
 }

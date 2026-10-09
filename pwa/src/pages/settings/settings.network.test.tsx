@@ -224,7 +224,7 @@ describe("settings network transport (actual App)", () => {
     mountSettings();
     await act(async () => choice("仅 P2P").click());
     await settle();
-    expect(visibleNotice()?.text).toContain("手机浏览器未能收集直连地址");
+    expect(visibleNotice()?.text).toContain("这个浏览器未能收集直连地址");
     expect(visibleNotice()?.text).not.toContain("192.0.2.1");
   });
 
@@ -258,7 +258,7 @@ describe("settings network transport (actual App)", () => {
     expect(app.textContent).toContain("Relay 中继 · 24 毫秒");
     // The failure reads under the link it explains, inside the computer panel.
     const fail = app.querySelector(".computer-panel .cp-note");
-    expect(fail?.textContent).toContain("手机浏览器未能收集直连地址");
+    expect(fail?.textContent).toContain("这个浏览器未能收集直连地址");
     expect(app.textContent).not.toContain("ice_timeout");
   });
 

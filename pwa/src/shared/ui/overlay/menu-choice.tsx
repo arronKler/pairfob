@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ActionSheetController, SheetAction } from "./action-sheet";
+import { useMenuItemRole } from "./popover-frame";
 
 /**
  * A sheet row that names one choice: leading mark, title, optional detail line
@@ -20,6 +21,7 @@ export function MenuChoice({ modal, icon, title, detail, selected = false, actio
   return (
     <button
       type="button"
+      role={useMenuItemRole()}
       className={`menu-item menu-choice${danger ? " menu-danger" : ""}${selected ? " is-selected" : ""}`}
       aria-current={selected ? "true" : undefined}
       disabled={disabled}

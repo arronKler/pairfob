@@ -1,4 +1,5 @@
 import { PanelsTopLeft, LayoutGrid, Unplug, Smartphone } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "./button";
 
 /**
@@ -14,7 +15,8 @@ export type EmptySpec = {
   title: string;
   sub: string;
   figure?: EmptyFigure;
-  action?: { label: string; run: () => void; disabled?: boolean };
+  /** `icon` leads the label, for an action the app draws with one elsewhere (a create's "+"). */
+  action?: { label: string; run: () => void; disabled?: boolean; icon?: ReactNode };
 };
 
 const EMPTY_FIGURES = { panes: PanelsTopLeft, grid: LayoutGrid, link: Unplug, device: Smartphone };
@@ -27,6 +29,6 @@ export function EmptyState({ spec }: { spec: EmptySpec }) {
     </div>}
     <p className="empty-title">{spec.title}</p><p className="empty-sub">{spec.sub}</p>
     {spec.action && <Button className="btn btn-small btn-primary empty-action" disabled={spec.action.disabled === true}
-      onClick={spec.action.run}>{spec.action.label}</Button>}
+      onClick={spec.action.run}>{spec.action.icon}{spec.action.label}</Button>}
   </div>;
 }

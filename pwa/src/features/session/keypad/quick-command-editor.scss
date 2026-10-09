@@ -86,7 +86,8 @@ dialog.modal.sheet.quick-command-sheet > form { max-height: min(78dvh, calc(100d
     outline: none;
   }
 
-  textarea { min-height: 128px; resize: vertical; white-space: pre-wrap; }
+  /* A fixed four lines that scroll inside: no corner grip under a mouse, as in the note editor. */
+  textarea { min-height: 128px; resize: none; white-space: pre-wrap; }
   input:focus, textarea:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
 }
 
@@ -122,3 +123,18 @@ dialog.modal.sheet.quick-command-sheet > form { max-height: min(78dvh, calc(100d
 }
 
 .quick-sheet-draft:focus-visible, .quick-sheet-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The desk form (shared/ui/styles/desk-dialog.scss): the title at the top
+   left, the fields in the card's 18px column with their labels on its edge,
+   and the footer under them. */
+.desk-form .quick-sheet-title { flex: none; padding: 18px 52px 10px 18px; }
+
+.desk-form .quick-sheet-body { padding: var(--space-1) 18px 0; }
+
+.desk-form .quick-sheet-field-head,
+.desk-form .quick-sheet-hint { padding: 0; }
+
+.desk-form .quick-sheet-actions {
+  flex: none;
+  padding: 0 18px 18px;
+}

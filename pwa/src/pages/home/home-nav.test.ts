@@ -201,12 +201,12 @@ describe("session list object controls", () => {
     expect(facts).toContain("alpha");
     expect(facts).not.toContain("p1");
     expect(plain?.textContent).toContain("改会话名");
-    expect(plain?.textContent).toContain("关闭这个会话");
+    expect(plain?.textContent).toContain("关闭会话");
     expect(plain?.textContent).not.toContain("改标签页名");
-    expect(plain?.textContent).not.toContain("关闭整个标签页");
+    expect(plain?.textContent).not.toContain("关闭标签页");
     expect(plain?.textContent).toContain("改工作区名");
-    expect(plain?.textContent).toContain("关闭这个工作区");
-    expect(plain?.textContent).not.toContain("在同一工作区再开一页");
+    expect(plain?.textContent).toContain("关闭工作区");
+    expect(plain?.textContent).not.toContain("新建标签页");
     expect(plain?.textContent).not.toContain("分屏");
     expect(plain?.textContent).not.toContain("取消");
     (plain as HTMLDialogElement | null)?.close("cancel");
@@ -216,7 +216,7 @@ describe("session list object controls", () => {
     expect(split?.querySelector(".sheet-facts")?.textContent).toContain("review");
     expect(split?.querySelector(".sheet-facts")?.textContent).toContain("2 格");
     expect(split?.textContent).toContain("改标签页名");
-    expect(split?.textContent).toContain("关闭整个标签页");
+    expect(split?.textContent).toContain("关闭标签页");
   }));
 
   test("a hold opens the menu and does not navigate", async () => await act(async () => {
@@ -244,16 +244,16 @@ describe("session list object controls", () => {
     const sheet = document.querySelector("dialog.sheet");
     expect(sheet?.querySelector(".modal-title")?.textContent).toBe("alpha");
     expect(sheet?.textContent).toContain("改工作区名");
-    expect(sheet?.textContent).toContain("关闭这个工作区");
+    expect(sheet?.textContent).toContain("关闭工作区");
     expect(sheet?.textContent).not.toContain("改会话名");
-    expect(sheet?.textContent).not.toContain("在这个工作区新建标签页");
+    expect(sheet?.textContent).not.toContain("新建标签页");
     (sheet as HTMLDialogElement | null)?.close("cancel");
 
     cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const cardSheet = document.querySelector("dialog.sheet");
     expect(cardSheet?.textContent).toContain("改会话名");
     expect(cardSheet?.textContent).not.toContain("改工作区名");
-    expect(cardSheet?.textContent).not.toContain("关闭这个工作区");
+    expect(cardSheet?.textContent).not.toContain("关闭工作区");
   }));
 
   test("create_tab offers another tab on the card and the workspace heading", async () => await act(async () => {
@@ -262,9 +262,9 @@ describe("session list object controls", () => {
     commitTest();
     cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const card = document.querySelector("dialog.sheet");
-    expect(card?.textContent).toContain("在同一工作区再开一页");
+    // One name for the action wherever it is offered: the card's menu and the heading's.
+    expect(card?.textContent).toContain("新建标签页");
     expect(card?.textContent).not.toContain("分屏");
-    expect(card?.textContent).not.toContain("在这个工作区新建标签页");
     (card as HTMLDialogElement | null)?.close("cancel");
 
     setListGroup("space");
@@ -273,9 +273,9 @@ describe("session list object controls", () => {
     if (!(heading instanceof HTMLButtonElement)) throw new Error("missing workspace heading");
     heading.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const group = document.querySelector("dialog.sheet");
-    expect(group?.textContent).toContain("在这个工作区新建标签页");
+    expect(group?.textContent).toContain("新建标签页");
     expect(group?.textContent).toContain("改工作区名");
-    expect(group?.textContent).toContain("关闭这个工作区");
+    expect(group?.textContent).toContain("关闭工作区");
     expect(group?.textContent).not.toContain("分屏");
     expect(group?.textContent).not.toContain("改会话名");
   }));

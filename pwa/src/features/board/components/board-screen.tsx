@@ -1,5 +1,5 @@
-import { ChevronDown, Folder, Minus, MoreHorizontal, Plus } from "lucide-react";
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { ChevronDown, Folder, Maximize, Minus, MoreHorizontal, Move, Plus } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { BackButton, Button, StatusDot, StatusLine } from "../../../shared/ui/primitives";
 import { MenuChoice, showActionSheet, useObjectPress } from "../../../shared/ui/overlay";
 import { t } from "../../../lib/i18n";
@@ -7,7 +7,8 @@ import { t } from "../../../lib/i18n";
 // connection feature's own pure banner component.
 import { AppNotice } from "../../../app/notice";
 import { HerdBanners } from "../../../features/connection/herd-banners";
-import type { BoardSpaceView, BoardTabChip, BoardViewModel } from "../model/board-view";
+import type { BoardCanvasModel, BoardSpaceView, BoardTabChip, BoardViewModel } from "../model/board-view";
+import { handFocusOn, paneOpenButton } from "../canvas/pane-focus";
 import { scheduleRailVisibility } from "../rail/visibility";
 import { BoardCanvasView, type BoardCanvasController } from "./board-canvas";
 
@@ -36,19 +37,23 @@ function SpaceMarks({ space }: { space: BoardSpaceView }) {
 /** The workspace switcher behind the board title, with the same marks as the list. */
 function openWorkspaceSheet(view: BoardViewModel, select: (workspaceId: string) => void): void {
   showActionSheet(view.spaceAria, (modal) => (
-    <>
+    <div className="board-sheet">
       {view.spaces.map((space) => (
         <MenuChoice key={space.id} modal={modal} icon={<Folder size={18} aria-hidden="true" />}
           title={space.label}
           detail={space.path || space.blockedCount || space.doneCount
-            ? <><SpaceMarks space={space} />{space.path ? <span className="mono">{space.path}</span> : null}</>
+            // The header's own line: the path, which gives way first, then the marks, a dot between each.
+            ? <span className="board-space-line">
+              {space.path ? <span className="mono board-space-path">{space.path}</span> : null}
+              <SpaceMarks space={space} />
+            </span>
             : undefined}
           selected={space.selected}
           action={space.selected ? undefined : () => select(space.id)} />
       ))}
       {!view.spaces.length ? <p className="empty-sub">{view.spacesEmpty}</p> : null}
-    </>
-  ));
+    </div>
+  ), { popover: "menu" });
 }
 
 /** One tab of the strip; a hold, right-click or the context-menu key opens its menu. */
@@ -72,6 +77,37 @@ function NewTabButton({ create, actions }: { create: NonNullable<BoardViewModel[
       disabled={create.disabled} onClick={actions.createTab}>
       <Plus size={20} aria-hidden="true" />
     </Button>
+  );
+}
+
+/**
+ * herdr shows one pane alone: the tab row says so and offers the way back.
+ * Unlike a placement or a lift this lasts as long as the computer keeps it, so
+ * the bar stands beside the tabs instead of in their place, and they stay in
+ * reach. On the canvas it lay over the pane's own head wherever the stage
+ * fills its window.
+ */
+function BoardZoomBar({ canvas, controller }: { canvas: BoardCanvasModel; controller: BoardCanvasController }) {
+  const reason = controller.layoutReason("zoom");
+  const bar = useRef<HTMLDivElement>(null);
+  const shown = useRef(canvas.zoomedPaneId);
+  shown.current = canvas.zoomedPaneId;
+  // The bar leaves with the zoom. Focus that its button held (a click or Enter
+  // restored the split) goes to the pane that was shown alone, where the reader
+  // was looking, before the button is gone and focus with it.
+  useLayoutEffect(() => {
+    const node = bar.current;
+    return () => { handFocusOn(node, paneOpenButton(node?.closest(".board-shell"), shown.current)); };
+  }, []);
+  return (
+    <div ref={bar} className="board-mode-bar board-zoom-bar" role="status">
+      <Maximize size={18} aria-hidden="true" />
+      <p className="board-mode-text">{canvas.zoomBanner.text}</p>
+      <Button className="board-mode-cancel" disabled={!!reason} title={reason || undefined}
+        onClick={() => { void controller.toggleZoom(canvas.zoomedPaneId, "off"); }}>
+        {canvas.zoomBanner.restore}
+      </Button>
+    </div>
   );
 }
 
@@ -113,11 +149,17 @@ export function BoardZoomControls({ percent, atFit, actions, view }: {
  * Everything it shows comes from `view`; everything it does goes through
  * `actions` and `controller`. The title follows the session list's host title:
  * the workspace (tap to switch) over its path and waiting/done counts, with the
- * tab menu on ⋯. The tabs are a scrollable segmented strip beside "+". The
+ * tab menu on ⋯. The tabs are a scrollable segmented strip beside "+"; a board
+ * with no tab has no such row, and its empty card offers the new session. The
+ * row also carries the canvas modes' hints (`.board-mode`, filled by the
+ * placement layer and shown for a lifted tile by the styles) and the bar of a
+ * pane shown alone on the computer, and status feedback floats in the shell,
+ * clear of the stage (`.board-float`). The
  * connected page may hand in its own zoom control (it follows the camera);
  * without one the fit-only control shows. On a phone tab root there is no back
  * button — the tab bar leaves the board — while elsewhere the board keeps back
- * and the status line. The two DOM lifecycles it owns are explicit effects with
+ * and the status line; the desk board that took the list's column gets
+ * `listBack` instead. The two DOM lifecycles it owns are explicit effects with
  * cleanup: strip measurement after each commit, and releasing the remote scroll
  * controller when the board is really being left.
  */
@@ -126,6 +168,7 @@ export function BoardScreenView({
   actions,
   controller,
   showBack = true,
+  listBack,
   zoomControl,
   notices,
 }: {
@@ -133,6 +176,12 @@ export function BoardScreenView({
   actions: BoardScreenActions;
   controller: BoardCanvasController;
   showBack?: boolean;
+  /**
+   * The list gave its column to the board (the desk's narrowest tier): the
+   * header leads back to it, carrying how many sessions wait on the reader as
+   * the session header does. The status stays with the float, as beside the list.
+   */
+  listBack?: { waiting: number };
   zoomControl?: ReactNode;
   /** Page-owned notices (the new-split offer) that float with the rest, above the tab bar. */
   notices?: ReactNode;
@@ -156,6 +205,11 @@ export function BoardScreenView({
     <div ref={rootRef} className="board-shell">
       <header className="board-chrome">
         {showBack ? <BackButton onBack={actions.back} label={view.back} /> : <h1 className="sr-only">{view.title}</h1>}
+        {listBack && !showBack ? <span className="chrome-back">
+          <BackButton onBack={actions.back}
+            label={listBack.waiting ? t("chrome.backWaiting", { n: String(listBack.waiting) }) : view.back} />
+          {listBack.waiting ? <span className="chrome-back-badge" aria-hidden="true">{listBack.waiting > 9 ? "9+" : listBack.waiting}</span> : null}
+        </span> : null}
         {/* No workspace yet: a plain title, not a switcher with nothing in it. */}
         {space ? (
           <Button className="host-title board-title" aria-haspopup="dialog" aria-label={view.spaceAria}
@@ -183,27 +237,42 @@ export function BoardScreenView({
         ) : null}
       </header>
       {showBack ? <StatusLine status={view.status} /> : null}
-      {view.tabs.length || view.create ? (
+      {view.tabs.length ? (
         <div ref={tabRailRef} className="board-rail">
           <div ref={tabsRef} className="seg is-scroll board-tabs" role="tablist" aria-label={view.tabAria} onKeyDown={stripKeys}>
             {view.tabs.map((tab) => <BoardTabButton key={tab.id} tab={tab} actions={actions} />)}
           </div>
           {view.create ? <NewTabButton create={view.create} actions={actions} /> : null}
+          {view.canvas.layout && view.canvas.zoomedPaneId ? <BoardZoomBar canvas={view.canvas} controller={controller} /> : null}
+          {/* The row a canvas mode speaks in. A lifted tile is marked on the canvas at pointer speed,
+              so its two lines wait here and the styles show the one that applies. */}
+          <div className="board-mode">
+            {(["held", "moved"] as const).map((state) => (
+              <p key={state} className={`board-mode-bar board-mode-lift is-${state}`} aria-hidden="true">
+                <Move size={18} aria-hidden="true" />
+                <span className="board-mode-text">{t(state === "held" ? "boardCanvas.liftHeld" : "boardCanvas.liftMoved")}</span>
+              </p>
+            ))}
+          </div>
         </div>
       ) : null}
       {/* Stale: the picture is the last snapshot, and every layout action is refused with a reason. */}
       <div className={`board-body${stale ? " is-stale" : ""}`}>
-        <BoardCanvasView canvas={view.canvas} controller={controller} />
-        {/* Notices float over the canvas, so an operation's feedback never reflows it (and never moves the camera off fit). */}
-        <div className="board-float">
-          {stale && !showBack ? <p className={`board-status is-${view.status.tone}`} role="status"><StatusDot tone={view.status.tone} />{view.status.text}</p> : null}
-          <HerdBanners tone={view.status.tone} />
-          <AppNotice />
-          {notices}
-        </div>
+        {/* Without a tab there is no row for "+": the empty card offers the same sheet, drawn as the app's other create actions are. */}
+        <BoardCanvasView canvas={view.canvas} controller={controller}
+          emptyAction={!view.tabs.length && view.create
+            ? { label: t("empty.actionCreate"), run: actions.createTab, disabled: view.create.disabled,
+              icon: <Plus size={16} aria-hidden="true" /> } : undefined} />
         {view.canvas.layout
           ? zoomControl ?? <BoardZoomControls percent={null} atFit={false} actions={actions} view={view} />
           : null}
+      </div>
+      {/* Notices float, so an operation's feedback never reflows the canvas (and never moves the camera off fit). */}
+      <div className="board-float">
+        {stale && !showBack ? <p className={`board-status is-${view.status.tone}`} role="status"><StatusDot tone={view.status.tone} />{view.status.text}</p> : null}
+        <HerdBanners tone={view.status.tone} />
+        <AppNotice />
+        {notices}
       </div>
     </div>
   );

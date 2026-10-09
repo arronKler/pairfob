@@ -145,6 +145,17 @@
 }
 
 .card-action.is-pin { background: #34548c; }
+
+/* Pulled past its stop the row uncovers more than the pair is wide: up to 48px
+   more (swipe-row.ts). The first action's colour runs on under the row that
+   far and a little further, as a native swipe action's does, so the pull never
+   shows an empty strip of the card. Its icon and label keep the 72px they rest
+   in; the rest is padding on the side the row comes from. */
+.card-action.is-pin {
+  width: 132px;
+  padding: 0 0 0 60px;
+}
+
 .card-action.is-more { background: #454d5b; }
 .card-action.is-read {
   position: absolute;
@@ -158,6 +169,9 @@
 }
 
 .card:not(.is-open):not(.is-dragging) .card-actions { visibility: hidden; }
+/* The leading action fills the row behind a right swipe. Pulled left, the row
+   uncovers the trailing pair instead, which it would otherwise paint over. */
+.card:not(.is-leading) .card-action.is-read { visibility: hidden; }
 
 /* --- Agent mark --------------------------------------------------------------- */
 

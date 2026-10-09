@@ -211,36 +211,16 @@
 .board-place-ghost:active,
 .board-place-target:active { background: rgba(110, 168, 254, 0.28); }
 
-.board-place-banner {
+/* The hint and its Cancel belong to the tab row (`.board-mode` in board-chrome.scss).
+   Only a canvas shown without that row draws them on itself. */
+.board-canvas > .board-place-banner {
   position: absolute;
   top: 10px;
   left: 50%;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 4px;
   max-width: calc(100% - 20px);
-  min-height: 40px;
-  padding: 0 4px 0 14px;
-  border-radius: var(--r-md);
+  border-color: var(--line-strong);
   background: rgba(26, 32, 41, 0.95);
   box-shadow: var(--shadow-1);
-  font: 600 var(--text-secondary) var(--font);
-  color: var(--ink);
   transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-.board-place-banner span { overflow: hidden; text-overflow: ellipsis; }
-
-.board-place-banner button {
-  flex: none;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 9px;
-  background: none;
-  color: var(--accent);
-  font: 700 var(--text-secondary) var(--font);
-  cursor: pointer;
 }

@@ -31,6 +31,7 @@ const {
   terminalGridSize,
   visualCells,
   terminalViewportSize,
+  usedWidth,
   xtermCssCellHeight,
 } = await import("./full-terminal-fit.ts");
 
@@ -121,6 +122,21 @@ describe("complete-terminal fit keeps a web-terminal column count", () => {
     expect(canvas.style.width).toBe("770px");
     sizePanCanvas(canvas, false, 80, 9, 382);
     expect(canvas.style.width).toBe("");
+  });
+
+  test("a grid the host shows gets no pixel width that could overflow it", () => {
+    const canvas = document.createElement("div");
+    // 140 columns of 8px in a 1121.6px column: the style sheet's 100% is the whole fit.
+    sizePanCanvas(canvas, true, 140, 8, 1121.6);
+    expect(canvas.style.width).toBe("");
+    sizePanCanvas(canvas, true, 141, 8, 1121.6);
+    expect(canvas.style.width).toBe("1128px");
+  });
+
+  test("xterm fits against the whole room, rounded up so the last column survives the probe", () => {
+    const canvas = document.createElement("div");
+    probePanCanvas(canvas, 1121.6);
+    expect(canvas.style.width).toBe("1122px");
   });
 
   test("row pitch is at least 1.5 so CJK fallback glyphs fit the cell", () => {
@@ -220,6 +236,20 @@ describe("complete-terminal host metrics", () => {
     Object.defineProperty(pan, "clientHeight", { value: 120 });
     expect(terminalViewportSize(host, { width: 836, height: 174 })).toEqual({ width: 836, height: 120 });
     expect(hostFitRows(terminalViewportSize(host).height, 24)).toBe(5);
+  });
+
+  test("the terminal row's width is the one layout gave it, not clientWidth's rounding of it", () => {
+    const host = document.createElement("div");
+    const pan = document.createElement("div");
+    pan.className = "full-terminal-pan";
+    pan.style.width = "1121.6px";
+    host.append(pan);
+    document.body.append(host);
+    Object.defineProperty(pan, "clientWidth", { value: 1122 });
+    Object.defineProperty(pan, "clientHeight", { value: 722 });
+    expect(usedWidth(pan)).toBe(1121.6);
+    expect(terminalViewportSize(host, { width: 0, height: 0 })).toEqual({ width: 1121.6, height: 722 });
+    host.remove();
   });
 
   test("visual cells read the screen box, not the padded host", () => {

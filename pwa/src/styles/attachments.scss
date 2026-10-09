@@ -1,4 +1,5 @@
-/* Universal attachments: compose affordance, picker sheet, image editor.
+/* Universal attachments: the compose affordance, the tray and its action bar.
+   The viewer and the image editor are attachment-viewer.scss.
    Owned by the session attachment UI leaf. */
 
 /* --- Compose affordance ---------------------------------------------------------------- */
@@ -76,6 +77,23 @@
 }
 
 .attach-strip::-webkit-scrollbar { display: none; }
+
+/* The strip hides its scrollbar, and a column can end exactly on a thumbnail's
+   edge with the next one wholly out of sight. Where it continues (the tray
+   sets `data-more`, strip-overflow.ts) that edge fades out, so the last
+   thumbnail in view reads as cut, not as the last one. */
+.attach-strip[data-more="end"] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.attach-strip[data-more="start"] {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+}
+.attach-strip[data-more="both"] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
 
 .attach-chip-wrap {
   position: relative;
@@ -306,6 +324,32 @@
 .attach-lead-btn { position: relative; }
 .attach-lead-btn::before { content: ""; position: absolute; inset: -6px -3px; }
 
+/* Under a finger each of these is a 44px target. The lead's two buttons reach
+   up over their own label. A thumbnail's × reaches 44 by 44 around the mark:
+   outward as far as the dock's padding goes (the strip's box is moved out to it,
+   or the strip would clip the area at its own edge), and 26 by 28 of the
+   thumbnail's corner at most, less the two corners cut from it below; the
+   middle of the thumbnail stays the thumbnail's. The small thumbnails beside an open keyboard
+   are 40px, where such an area would be most of one: there the × keeps its
+   size, and removing is also in the thumbnail's own actions. */
+@media (any-pointer: coarse) {
+  .attach-lead-btn::before { inset: -10px -3px -6px; }
+  .attach-undo-btn { position: relative; }
+  .attach-undo-btn::before { content: ""; position: absolute; inset: -6px -4px; }
+  .attach-tray:not(.is-compact) > .attach-strip { margin: -8px 0 0 -10px; padding: 16px 2px 4px 18px; }
+  /* Measured from inside the mark's 2px border. Two corners of that square are
+     not the mark's to take. The one deep in the thumbnail (20 by 20, cut on the
+     diagonal) goes back to the thumbnail, which keeps five sixths of itself for
+     opening its actions. The one past the 8px gap would lie on the thumbnail
+     before this one, or on the lead's buttons, and a press there removed the
+     wrong file: the area stops at the gap from the thumbnail's top down. It is
+     still 44px across over the padding above and 44px tall beside the corner. */
+  .attach-tray:not(.is-compact) .attach-chip-x::before {
+    inset: -12px -14px -16px;
+    clip-path: polygon(0 0, 100% 0, 100% 24px, 24px 100%, 10px 100%, 10px 16px, 0 16px);
+  }
+}
+
 .attach-lead-btn.is-quiet {
   background: transparent;
   color: var(--muted);
@@ -361,6 +405,20 @@
   font-size: var(--text-secondary);
   font-weight: 600;
 }
+
+/* Beside the list a session column can be narrower than the strip is long, and
+   a mouse cannot fling the strip to find what ran off its end. The count and the
+   note leave the strip there (see the tray): beside it while there is room,
+   under it when there is not, and only the thumbnails scroll. */
+.attach-tray.is-beside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+}
+
+.attach-tray.is-beside > .attach-strip { flex: 0 1 auto; min-width: 0; }
+.attach-tray.is-beside > .attach-meta-col { flex: 0 0 auto; padding: 0 2px 4px 8px; }
 
 /* --- Action bar ------------------------------------------------------------------------ */
 
@@ -444,289 +502,10 @@
 
 .attach-pop-act.is-danger { color: var(--danger-bright); }
 
-/* --- Viewer ----------------------------------------------------------------------------- */
-
-dialog.attach-viewer {
-  width: 100vw;
-  max-width: none;
-  height: 100dvh;
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: #000;
-  color: var(--ink);
+/* A thumbnail's actions are pressed with the finger that opened them. */
+@media (any-pointer: coarse) {
+  .attach-pop-act { min-height: 44px; }
 }
-
-dialog.attach-viewer::backdrop { background: #000; }
-
-dialog.attach-viewer > form {
-  height: 100%;
-  margin: 0;
-}
-
-.attach-viewer-body {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
-}
-
-.attach-viewer-bar {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
-  align-items: center;
-  padding: 6px;
-}
-
-.attach-viewer-title {
-  display: grid;
-  margin: 0;
-  text-align: center;
-  font-size: var(--text-secondary);
-  font-weight: 500;
-}
-
-.attach-viewer-count { color: var(--muted); }
-
-.attach-viewer-name {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.attach-viewer-icon,
-.attach-viewer-nav {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--ink);
-}
-
-.attach-viewer-stage {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  touch-action: pan-y pinch-zoom;
-}
-
-.attach-viewer-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  user-select: none;
-}
-
-.attach-viewer-nav {
-  position: absolute;
-  top: 50%;
-  z-index: 1;
-  margin-top: -22px;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.attach-viewer-nav.is-prev { left: 8px; }
-.attach-viewer-nav.is-next { right: 8px; }
-
-.attach-viewer-file {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-3);
-  width: min(100%, 560px);
-  padding: 0 var(--space-4);
-  color: var(--muted);
-  font-size: var(--text-secondary);
-}
-
-.attach-viewer-text {
-  width: 100%;
-  max-height: 55dvh;
-  margin: 0;
-  padding: var(--space-3);
-  overflow: auto;
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--ink);
-  font: 12px/1.5 var(--mono);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.attach-info {
-  display: grid;
-  gap: 4px;
-  margin: 0 var(--space-4);
-  padding: var(--space-3);
-  list-style: none;
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: var(--text-caption);
-  line-height: 1.45;
-}
-
-.attach-info .attach-info-path { font-family: var(--mono); overflow-wrap: anywhere; }
-.attach-info .is-error { color: var(--error); }
-.attach-info .is-warn { color: var(--warn); }
-
-.attach-viewer-foot {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: 10px 10px 16px;
-}
-
-.attach-viewer-act {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-size: var(--text-secondary);
-  font-weight: 500;
-}
-
-/* --- Image editor modal ---------------------------------------------------------------- */
-
-.imgedit {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.imgedit-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.imgedit-tool {
-  min-height: 38px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line-strong);
-  background: transparent;
-  color: var(--ink);
-  font-size: var(--text-caption);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.imgedit-tool.on {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(110, 168, 254, 0.14);
-}
-
-.imgedit-text {
-  min-height: 40px;
-  padding: 0 12px;
-  background: #0a0d12;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  color: var(--term-ink);
-  font-size: 16px;
-}
-
-.imgedit-frame {
-  display: flex;
-  justify-content: center;
-  padding: 8px;
-  background: #07090d;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  touch-action: none;
-}
-
-.imgedit-canvas {
-  display: block;
-  /* Width AND height are always set together from the measured frame, so the
-     preview keeps the source aspect ratio; never let CSS shrink one side. */
-  max-width: none;
-  border-radius: 4px;
-  touch-action: none;
-}
-
-.imgedit-hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--text-caption);
-  line-height: 1.4;
-}
-
-/* Two action rows: secondary actions share one nowrap row, the long primary
-   button gets the next full-width row. This stops Chinese labels (撤销/重置/
-   取消) being squeezed into one-character columns on 390px phones. */
-.imgedit-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.imgedit-actions-secondary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.imgedit-actions-secondary button,
-.imgedit-apply {
-  min-width: 0;
-  min-height: 44px;
-  white-space: nowrap;
-}
-
-.imgedit-actions-secondary button {
-  padding-left: 6px;
-  padding-right: 6px;
-}
-
-.imgedit-apply {
-  width: 100%;
-  justify-content: center;
-}
-
-.imgedit-error {
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid rgba(214, 59, 49, 0.45);
-  border-radius: var(--r-sm);
-  background: rgba(214, 59, 49, 0.1);
-  color: var(--danger-bright);
-  font-size: var(--text-caption);
-  line-height: 1.4;
-}
-
-/* Generic modal cards make every .btn full width; attachment modals lay their
-   own footer rows out. */
-dialog.modal.attach-modal .attach-footer .btn,
-dialog.modal.imgedit-modal .imgedit-apply,
-dialog.modal.imgedit-modal .imgedit-actions-secondary .btn {
-  width: auto;
-  margin: 0;
-  flex: 1 1 0;
-  min-height: 44px;
-  justify-content: center;
-}
-
-dialog.modal.imgedit-modal .imgedit-apply {
-  width: 100%;
-  flex: none;
-}
-
-.imgedit-modal .modal-title { margin-bottom: 2px; }
 
 /* --- Full-terminal live mode (no compose field mounted) ------------------------------- */
 

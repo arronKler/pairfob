@@ -5,21 +5,24 @@ import { act } from "react";
 import type { AgentCard } from "../../../lib/ranking";
 import { setLang, t } from "../../../lib/i18n";
 import { openObjectMenu, type ObjectMenuRunner } from "./object-menu";
-import type { ObjectMenuKind, ObjectMenuModel } from "../model/object-menu";
+import type { ObjectMenuKind, ObjectMenuModel, ObjectMenuScope } from "../model/object-menu";
 
 const agent: AgentCard = {
   paneId: "p2", paneLabel: "Target", agent: "codex", status: "idle", workspaceId: "w2",
   workspaceLabel: "Two", tabId: "t2", cwd: "/two/project",
 };
 
-function model(items: Array<{ kind: ObjectMenuKind; label: string; danger?: boolean }>): ObjectMenuModel {
+type Row = { kind: ObjectMenuKind; label: string; danger?: boolean; scope?: ObjectMenuScope };
+
+/** Rows about this session unless a case says otherwise. */
+function model(items: Row[]): ObjectMenuModel {
   return {
     title: "Target",
     facts: [
       { key: t("detail.status"), value: t("status.idle") },
       { key: t("detail.path"), value: "/two/project", kind: "path" },
     ],
-    items,
+    items: items.map(item => ({ scope: "pane", ...item })),
   };
 }
 
@@ -63,10 +66,12 @@ describe("object menu sheet", () => {
     expect(body.querySelector(".sheet-fact-path")?.textContent).toBe("/two/project");
     expect(body.querySelector(".sheet-fact-val")?.classList.contains("sheet-fact-path")).toBe(false);
     expect(document.querySelector(".modal-title")?.textContent).toBe("Target");
+    // The sheet's tight facts and ruled headings hang on this class (`styles/object-menu.scss`).
+    expect(document.querySelector("dialog.sheet")?.classList.contains("object-menu-sheet")).toBe(true);
   });
 
   test("a model without facts renders only the actions", () => {
-    act(() => openObjectMenu({ title: "Two", facts: [], items: [{ kind: "renameWorkspace", label: t("menu.renameWorkspace") }] }, agent, run));
+    act(() => openObjectMenu({ title: "Two", facts: [], items: [{ kind: "renameWorkspace", label: t("menu.renameWorkspace"), scope: "workspace" }] }, agent, run));
     expect(document.querySelector(".sheet-facts")).toBeNull();
     expect([...document.querySelectorAll(".sheet-body button")].map((node) => node.textContent))
       .toEqual([t("menu.renameWorkspace")]);
@@ -81,6 +86,31 @@ describe("object menu sheet", () => {
     const items = [...document.querySelectorAll<HTMLButtonElement>(".sheet-body .menu-item")];
     expect(items.map((node) => node.textContent)).toEqual([t("menu.pin"), t("menu.renamePane"), t("op.closePane")]);
     expect(items.map((node) => node.classList.contains("menu-danger"))).toEqual([false, false, true]);
+  });
+
+  test("rows about different objects are headed runs, each ending in its destructive row", () => {
+    act(() => openObjectMenu(model([
+      { kind: "pin", label: t("menu.pin") },
+      { kind: "closePane", label: t("op.closePane"), danger: true },
+      { kind: "renameTab", label: t("menu.renameTab"), scope: "tab" },
+      { kind: "closeTab", label: t("op.closeTab"), danger: true, scope: "tab" },
+      { kind: "closeWorkspace", label: t("op.closeWorkspace"), danger: true, scope: "workspace" },
+    ]), agent, run));
+    const body = document.querySelector(".sheet-body")!;
+    // The sheet: a heading, then that object's rows.
+    expect([...body.children].slice(1).map((node) => node.matches(".menu-section-title") ? `# ${node.textContent}` : node.textContent)).toEqual([
+      `# ${t("menu.thisPane")}`, t("menu.pin"), t("op.closePane"),
+      `# ${t("menu.tab")}`, t("menu.renameTab"), t("op.closeTab"),
+      `# ${t("menu.workspace")}`, t("op.closeWorkspace"),
+    ]);
+  });
+
+  test("a menu about one object has no heading", () => {
+    act(() => openObjectMenu(model([
+      { kind: "pin", label: t("menu.pin") },
+      { kind: "closePane", label: t("op.closePane"), danger: true },
+    ]), agent, run));
+    expect(document.querySelector(".sheet-body .menu-section-title")).toBeNull();
   });
 
   test("an action closes the sheet and routes its kind and card to the runner exactly once", async () => {

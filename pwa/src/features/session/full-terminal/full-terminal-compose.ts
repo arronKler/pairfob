@@ -21,7 +21,8 @@ import { acceptComposePaste, attachmentMessage, markSentAttachments, requestSend
 
 export type TerminalKeyboardControl = {
   toggle: () => void;
-  open: () => void;
+  /** Hand xterm the keys, and the caret too unless `take` is false (another column or a dialog has it). */
+  open: (take?: boolean) => void;
   close: () => void;
   isOpen: () => boolean;
 };
@@ -30,7 +31,12 @@ export type FullTerminalControlsOptions = {
   sendKey: (key: string) => void;
   sendCompose: (text: string, enter: boolean) => boolean;
   keyboard: TerminalKeyboardControl;
-  desk: boolean;
+  /** Keys reach the page without an on-screen keyboard, so live input goes straight to xterm. */
+  hardwareKeyboard: boolean;
+  /** Switch 组字 / 实时 through the controller, which also republishes the terminal view. */
+  setLive?: (live: boolean) => void;
+  /** Copy what is selected in the terminal; false when nothing is (see full-terminal-copy). */
+  copySelection?: () => boolean;
 };
 
 export type ComposeEnterPolicyState = Readonly<{
@@ -181,7 +187,7 @@ export type FullTerminalComposeOptions = {
 
 const padComposeBindings = new WeakMap<HTMLFormElement, () => void>();
 
-function setComposeText(root: ParentNode, text: string): void {
+function setComposeText(root: ParentNode, text: string, tap = true): void {
   const next = fitOperationPrompt(text).text;
   setComposeDraft(next);
   const input = root.querySelector<HTMLTextAreaElement>(".full-terminal-compose-input");
@@ -192,7 +198,15 @@ function setComposeText(root: ParentNode, text: string): void {
   if (EventCtor) input.dispatchEvent(new EventCtor("input", { bubbles: true }));
   input.focus({ preventScroll: true });
   input.setSelectionRange(next.length, next.length);
-  haptic(4);
+  if (tap) haptic(4);
+}
+
+/**
+ * A key typed with the terminal or the page focused joins the draft and moves
+ * the caret into the field, as the guided session does.
+ */
+export function typeIntoFullTerminalCompose(root: ParentNode, text: string): void {
+  setComposeText(root, composeDraft() + text, false);
 }
 
 /**

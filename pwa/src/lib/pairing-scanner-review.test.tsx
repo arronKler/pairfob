@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../test-support/node-identity";
 import { happy, resetTestDOM } from "../../test-support/boot-dom";
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { act } from "react";
@@ -149,7 +150,7 @@ test("scanner rejects changed origins, paths and query material without changing
   for (const rejected of [qr.replace(origin, "http://pairfob.com"), qr.replace(origin, "https://pairfob.com:8443"), qr.replace("/pair#", "/other#"), qr.replace("/pair#", "/pair?source=qr#"), qr.replace("&fp=AAAAAAAAAAAAAAAAAAAAAA", "")]) {
     act(() => camera.decode(rejected));
     expect(dialog.querySelector("[role=alert]")?.textContent).toBe(t("scan.wrongSite"));
-    expect(dialog.querySelector("video") === video).toBeTrue();
+    expectSameNode(dialog.querySelector("video"), video);
     expect(camera.calls.stop).toBe(0);
   }
   act(() => camera.decode(qr.slice(origin.length)));

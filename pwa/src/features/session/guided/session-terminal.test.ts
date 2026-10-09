@@ -1,3 +1,4 @@
+import { expectSameNode, expectSameNodes } from "../../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { beforeEach, afterEach, describe, expect, test } from "bun:test";
 import { act, createElement, Fragment } from "react";
@@ -147,15 +148,15 @@ describe("react guided terminal", () => {
     expect(wrap?.contains(term!)).toBeTrue();
     expect(term?.contains(inner!)).toBeTrue();
     expect(term?.getAttribute("role")).toBe("log");
-    expect(term?.parentElement).toBe(wrap);
+    expectSameNode(term?.parentElement, wrap);
     expect(rows.map((row) => row.getAttribute("data-row"))).toEqual(["0", "1"]);
     expect(rows[0]?.textContent).toContain("hello");
     expect(appRoot().querySelector(".full-terminal-scroll")).toBeTruthy();
     expect([...appRoot().querySelectorAll(".full-terminal-scroll-btn")].map((el) => el.getAttribute("aria-label"))).toEqual([
-      "鼠标滚轮向上",
+      "向上滚动",
       "上一页",
       "下一页",
-      "鼠标滚轮向下",
+      "向下滚动",
     ]);
     expect(wrap?.hasAttribute("data-react-session-terminal")).toBeTrue();
     const source = await Bun.file(new URL("./session-terminal.tsx", import.meta.url)).text();
@@ -171,8 +172,8 @@ describe("react guided terminal", () => {
     const inner = appRoot().querySelector(".term-inner");
     applyPaneRead("hello\nnext", "h0");
     paint();
-    expect(appRoot().querySelector(".term")).toBe(term);
-    expect(appRoot().querySelector(".term-inner")).toBe(inner);
+    expectSameNode(appRoot().querySelector(".term"), term);
+    expectSameNode(appRoot().querySelector(".term-inner"), inner);
     expect(appRoot().querySelectorAll(".term-line")).toHaveLength(2);
   });
 
@@ -187,7 +188,7 @@ describe("react guided terminal", () => {
     expect(ghost?.getAttribute("aria-hidden")).toBe("true");
     expect(ghost?.className).toBe("term-ghost");
     expect(ghost?.closest(".term-line")?.getAttribute("data-row")).toBe("0");
-    expect(appRoot().querySelector(".term")).toBe(term);
+    expectSameNode(appRoot().querySelector(".term"), term);
     act(() => {
       settleEcho("p1", ["$ something else"], "h1");
     });
@@ -202,7 +203,7 @@ describe("react guided terminal", () => {
     expect(term?.classList.contains("selecting")).toBeTrue();
     applyPaneRead("CHANGED\nNOW", "h0");
     paint();
-    expect(appRoot().querySelector(".term")).toBe(term);
+    expectSameNode(appRoot().querySelector(".term"), term);
     expect([...appRoot().querySelectorAll(".term-line")].map((row) => row.textContent)).toEqual(["hello", "world"]);
     unmountReact();
     paint();
@@ -218,8 +219,8 @@ describe("react guided terminal", () => {
     act(() => {
       fillTerm(term, paneModel());
     });
-    expect(appRoot().querySelector(".term-inner")).toBe(inner);
-    expect(appRoot().querySelector(".term")).toBe(term);
+    expectSameNode(appRoot().querySelector(".term-inner"), inner);
+    expectSameNode(appRoot().querySelector(".term"), term);
     expect(appRoot().textContent).toContain("should-not-vanilla-replace");
   });
 
@@ -274,12 +275,48 @@ describe("react guided terminal", () => {
       term.dispatchEvent(new happy.Event("scroll", { bubbles: true }));
     });
     expect(paneFollow()).toBeFalse();
-    expect(appRoot().querySelector(".term")).toBe(term);
+    expectSameNode(appRoot().querySelector(".term"), term);
     term.scrollTop = 400;
     act(() => {
       term.dispatchEvent(new happy.Event("scroll", { bubbles: true }));
     });
     expect(paneFollow()).toBeTrue();
+  });
+});
+
+describe("the buffer's box changing under it", () => {
+  /** A ResizeObserver the test fires by hand: a test DOM lays nothing out. */
+  function observed(run: () => void): () => void {
+    const view = window as unknown as { ResizeObserver?: unknown };
+    const real = view.ResizeObserver;
+    let fire = () => {};
+    view.ResizeObserver = class { constructor(callback: () => void) { fire = callback; } observe() {} disconnect() { fire = () => {}; } };
+    try { run(); } finally { view.ResizeObserver = real; }
+    return () => fire();
+  }
+
+  test("a buffer at its end stays at its end when the pad opens over it", () => {
+    const resize = observed(() => boot("ready"));
+    const term = appRoot().querySelector(".term") as HTMLElement;
+    // The pad took 48px: the box is shorter, the offset is what it was, and no scroll event fires.
+    Object.defineProperty(term, "scrollHeight", { configurable: true, value: 234 });
+    Object.defineProperty(term, "clientHeight", { configurable: true, value: 136 });
+    term.scrollTop = 50;
+    setPaneFollow(true);
+    act(() => resize());
+    expect(term.scrollTop).toBe(234);
+    expect(paneFollow()).toBeTrue();
+  });
+
+  test("a reader who scrolled back keeps their place", () => {
+    const resize = observed(() => boot("ready"));
+    const term = appRoot().querySelector(".term") as HTMLElement;
+    Object.defineProperty(term, "scrollHeight", { configurable: true, value: 234 });
+    Object.defineProperty(term, "clientHeight", { configurable: true, value: 136 });
+    term.scrollTop = 20;
+    setPaneFollow(false);
+    act(() => resize());
+    expect(term.scrollTop).toBe(20);
   });
 });
 
@@ -379,7 +416,7 @@ describe("react guided terminal gestures", () => {
     try {
       row.dispatchEvent(pointer("pointerdown", row));
       row.dispatchEvent(pointer("pointerup", row));
-      expect(blurred).toEqual([field]);
+      expectSameNodes(blurred, [field]);
       expect(opened).toEqual([]);
       document.documentElement.dataset.kb = "closed";
       row.dispatchEvent(pointer("pointerdown", row));

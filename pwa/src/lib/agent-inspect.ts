@@ -34,10 +34,10 @@ export function displayWorktree(v: unknown): DisplayMetadata["worktree"] {
 export function agentObservationKey(agent: AgentCard): string {
   return JSON.stringify([agent.runtimeSession || "", agent.paneId, agent.terminalId || "", agent.agentInstanceId || ""]);
 }
-export function agentDisplaySummary(agent: AgentCard): string {
+export function agentDisplaySummary(agent: AgentCard, title = ""): string {
   // Presentation only: never replace the canonical kind or semantic status.
   return [agent.displayAgent, agent.worktree?.repo_name, agent.tokens?.task, agent.tokens?.phase]
-    .filter((value, index, all) => value && all.indexOf(value) === index).join(" · ");
+    .filter((value, index, all) => value && value !== title && all.indexOf(value) === index).join(" · ");
 }
 export function parseAgentInspection(value: unknown): AgentInspection {
   const bad = (): never => { throw new ProtocolError("invalid_response", "Invalid agent inspection"); };

@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../test-support/node-identity";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -49,7 +50,7 @@ describe("DiffScroller key lifecycle", () => {
     el.scrollTop = 99;
     el.scrollLeft = 8;
     const next = render("b.ts:worktree");
-    expect(next).toBe(el);
+    expectSameNode(next, el);
     expect(next.dataset.diffKey).toBe("b.ts:worktree");
     expect(next.scrollTop).toBe(0);
     expect(next.scrollLeft).toBe(0);
@@ -60,7 +61,7 @@ describe("DiffScroller key lifecycle", () => {
     el.scrollTop = 40;
     el.scrollLeft = 6;
     const next = render("a.ts:worktree", "two");
-    expect(next).toBe(el);
+    expectSameNode(next, el);
     expect(next.scrollTop).toBe(40);
     expect(next.scrollLeft).toBe(6);
   });
@@ -83,7 +84,7 @@ describe("DiffScroller key lifecycle", () => {
     before.dispatchEvent(new window.Event("scroll"));
     act(() => { root.render(<DiffDetail snapshot={diffSnapshot("b.ts")} onEditNote={() => {}} />); });
     const after = host.querySelector<HTMLElement>(".workspace-diff")!;
-    expect(after).toBe(before);
+    expectSameNode(after, before);
     expect(after.dataset.diffKey).toBe("b.ts:worktree");
     expect(after.scrollTop).toBe(0);
     expect(after.scrollLeft).toBe(0);

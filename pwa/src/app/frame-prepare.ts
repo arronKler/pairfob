@@ -35,7 +35,7 @@ export function prepareFrame(): FrameSnapshot {
   const session = described ? detach(described) : null;
   const sessionOwner = session ? liveSession() : null;
   if (described) notifySessionOwnerPreparer(Object.freeze(detach(described)), sessionOwner);
-  if (layout.mode === "full-terminal") {
+  if (layout.mode === "full-terminal" || layout.deskChild === "full") {
     // The full-terminal screen is composed declaratively by <App/> via
     // FullTerminalRoute. Preparation (document mode, renderer reset, status,
     // initial view) runs here before React renders; it creates no screen.

@@ -74,7 +74,7 @@ export function ComputersScreen() {
   useSession();
   const live = connection.phase === "live";
   return (
-    <div className={live ? "page settings-page" : "page"}>
+    <div className={live ? "page settings-page" : "page computer-pick"}>
       <ComputersContent withBack={live} />
     </div>
   );

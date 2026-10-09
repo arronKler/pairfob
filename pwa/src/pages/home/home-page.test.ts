@@ -14,6 +14,7 @@ import { clearNotice, showStatus } from "../../app/notices-store";
 import { attachLiveSession } from "../../features/computers/catalog-store";
 import { applyCapabilities, setOperationBusy } from "../../features/operations/capabilities-store";
 import { setNetworkOnline, setPhase } from "../../features/connection/connection-store";
+import { applyRuntimeIdentity } from "../../features/connection/runtime-store";
 import { replaceAgentsFromSnapshot, resetDashboard } from "../../features/dashboard/catalog-store";
 import { setScreen } from "../../app/navigation-store";
 import { selectPane } from "../../features/session/session-store";
@@ -73,6 +74,8 @@ beforeEach(async () => {
   setListGroup("flat");
   setOperationBusy(false);
   setNetworkOnline(true);
+  // A computer whose Herdr answered: the only state in which a session can be started.
+  applyRuntimeIdentity({ herdHost: "", runtimeKind: "herdr" });
   applyCapabilities({ ...NO_OPERATION_CAPABILITIES, create_conversation: true }, []);
   seed([agent("p1", "alpha"), agent("p2", "beta"), agent("p3", "gamma")]);
   attachLiveSession({ isConnected: () => connected } as unknown as LiveSession);
@@ -91,6 +94,7 @@ afterEach(async () => {
   clearNotice();
   resetHerdAttention();
   attachLiveSession(null);
+  applyRuntimeIdentity({ herdHost: "", runtimeKind: "" });
   setPhase("boot");
   resetDashboard();
   resetHerdPresentationChoices();
@@ -129,6 +133,16 @@ describe("home new session", () => {
     connected = false;
     paint();
     expect(create().disabled).toBe(true);
+    // Connected again, but Herdr does not answer or has exited: the rows stay, and nothing can be started.
+    connected = true;
+    for (const runtimeKind of ["", "offline"]) {
+      act(() => applyRuntimeIdentity({ herdHost: "", runtimeKind }));
+      paint();
+      expect(create().disabled).toBe(true);
+    }
+    act(() => applyRuntimeIdentity({ herdHost: "", runtimeKind: "herdr" }));
+    paint();
+    expect(create().disabled).toBe(false);
     expect(operationsSource).toContain("askCreateConversation([...advertisedAgentKinds()], defaults)");
     expect(operationsSource).not.toContain("!state.agentKinds.length");
   });

@@ -5,6 +5,7 @@ import { phase as currentPhase } from "../../features/connection/connection-stor
 import { Brand, Spinner } from "../../shared/ui/primitives";
 import { useConnection } from "../../features/connection/hooks";
 import { BootRecovery } from "./boot-recovery";
+import { UnreachableShell } from "./unreachable-shell";
 
 /**
  * Boot route.
@@ -13,6 +14,10 @@ import { BootRecovery } from "./boot-recovery";
  * the resuming phase shows the computer the boot decision is connecting to.
  * The commit pipeline prepares the composition before this renders, so the
  * canonical reads here are the values the page was composed for.
+ *
+ * A retry started from the "cannot reach" page never reaches this splash: the
+ * layout keeps that page's frame up for it (`UnreachableDesk`), as the phone's
+ * boot frame does, since a splash between attempts would hide the explanation.
  */
 export function BootScreen() {
   const { bootBlocked } = useConnection();
@@ -26,4 +31,5 @@ export function BootScreen() {
 }
 
 export { BootShell } from "./boot-shell";
-export { UnreachableShell } from "./unreachable-shell";
+export { UnreachableDesk } from "./unreachable-desk";
+export { UnreachableShell };

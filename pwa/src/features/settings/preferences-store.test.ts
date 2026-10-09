@@ -167,7 +167,8 @@ describe("per-pane preferences", () => {
     expect(preferencesStore.get().paneTermModes).toEqual({ p1: "full" });
     expect(preferencesStore.get().paneComposeLive).toEqual({});
     expect(preferencesStore.get().panePinned).toEqual({});
-    expect(preferencesStore.get().paneTouched.p2).toBeNumber();
+    // The open order is not a per-pane choice these two prune; a snapshot without the pane drops it.
+    expect(preferencesStore.get().paneActivated.p2).toBeNumber();
     expect(localStorage.getItem("pairfob:paneTermMode:d_aaaaaaaaaaaaaaaaaaaa")).toBe('{"p1":"full"}');
 
     // An empty live list means "no snapshot yet", not "everything is gone".
@@ -175,7 +176,31 @@ describe("per-pane preferences", () => {
     expect(preferencesStore.get().paneTermModes).toEqual({ p1: "full" });
   });
 
-  test("applyHerdTouches stamps status changes through the same map rememberPane writes", () => {
+  test("opening a session does not move the time its row shows", () => {
+    setCredential(credential("d_aaaaaaaaaaaaaaaaaaaa"));
+    adoptDaemonPreferences();
+    const card = (paneId: string, status: "idle" | "working") => ({
+      paneId, paneLabel: paneId, agent: "codex", status, workspaceId: "w", workspaceLabel: "w", cwd: "/tmp",
+    });
+    // The session last changed at 10: that is what "… ago" on its row counts from.
+    applyHerdTouches([], [card("p1", "idle"), card("p2", "idle")], 10);
+    const stored = localStorage.getItem("pairfob:paneTouched:d_aaaaaaaaaaaaaaaaaaaa");
+    expect(JSON.parse(stored!)).toEqual({ p1: 10, p2: 10 });
+
+    // Looking at it is not a change in it.
+    rememberPane("p1");
+    expect(preferencesStore.get().paneTouched).toEqual({ p1: 10, p2: 10 });
+    expect(localStorage.getItem("pairfob:paneTouched:d_aaaaaaaaaaaaaaaaaaaa")).toBe(stored);
+    // The open is remembered where the list order reads it.
+    expect(preferencesStore.get().paneActivated.p1).toBeGreaterThan(10);
+    expect(preferencesStore.get().paneActivated.p2).toBeUndefined();
+
+    // A pane the phone never saw change has no time to show, opened or not.
+    rememberPane("p3");
+    expect(preferencesStore.get().paneTouched.p3).toBeUndefined();
+  });
+
+  test("applyHerdTouches stamps a new pane and a status change, and nothing else dates a row", () => {
     setCredential(credential("d_aaaaaaaaaaaaaaaaaaaa"));
     adoptDaemonPreferences();
     const card = (paneId: string, status: "idle" | "working") => ({

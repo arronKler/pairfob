@@ -93,7 +93,8 @@
   text-align: center;
 }
 
-.conn-path-note { margin: 0; color: var(--muted); font-size: var(--text-secondary); line-height: 1.55; }
+/* Notes of a line or two break into even lines (see `.herd-empty-sub`). */
+.conn-path-note { margin: 0; color: var(--muted); font-size: var(--text-secondary); line-height: 1.55; text-wrap: balance; }
 .conn-path-actions { display: flex; align-items: center; gap: 6px; color: var(--line-strong); }
 .conn-path-actions .text-link { min-height: 36px; padding: 0 2px; }
 
@@ -115,11 +116,12 @@
 
 .conn-step-body { display: grid; gap: 4px; min-width: 0; }
 .conn-step-body b { color: var(--ink); font-size: var(--text-body); font-weight: 620; }
-.conn-step-body small { color: var(--muted); font-size: var(--text-caption); line-height: 1.5; }
+.conn-step-body small { color: var(--muted); font-size: var(--text-caption); line-height: 1.5; text-wrap: balance; }
 .conn-step-body .herd-empty-command { margin-top: 4px; }
 
-/* Retry at thumb height, above the tab bar. */
-.unreachable-shell { padding-bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom, 0px) + 120px); }
+/* Retry at thumb height, above the tab bar. The page keeps room for the dock
+   under its last step; named as the tab-bar page so its shorter floor does not win. */
+#app.tabs .page.unreachable-shell { padding-bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom, 0px) + 132px); }
 
 .conn-retry-dock {
   position: fixed;
@@ -138,6 +140,67 @@
 .conn-retry-spin { width: 16px; height: 16px; }
 .conn-retry-note { color: var(--muted); font-size: var(--text-caption); }
 .conn-retry-add { min-height: 32px; padding: 0 2px; font-size: inherit; }
+
+/* The links under the route and beside the countdown are drawn as words in a
+   caption, 36 and 32px tall, and pressed as buttons. Under a finger each takes
+   an unseen box that brings it to 44px; nothing drawn moves. The one under the
+   retry button grows downwards, into the dock's own floor, so it never lies
+   over the button above it. */
+@media (any-pointer: coarse) {
+  .conn-path-actions .text-link,
+  .conn-retry-add { position: relative; }
+
+  .conn-path-actions .text-link::before,
+  .conn-retry-add::before {
+    content: "";
+    position: absolute;
+    inset: -4px -2px;
+  }
+
+  .conn-retry-add::before { inset: -4px -4px -8px; }
+  /* Beside the list the link is 44px tall already. */
+  .main-unreachable .conn-retry-add::before { inset: 0 -4px; }
+}
+
+/* --- Cannot reach, beside the list -------------------------------------------------
+   The desk shell keeps the rail's frame and the explanation is the main
+   column's page: one centred column, set by the shell like Settings
+   (desk.scss). Nothing is pinned to the floor there: the retry follows the
+   steps, with its note beside it.
+
+   `.main` exists only in the desk shell and the phone's page is never inside
+   one, so none of this reaches it.
+   -------------------------------------------------------------------------------- */
+
+.main-unreachable .unreachable-title {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.main-unreachable .conn-path-card { margin-top: 10px; padding: 20px 18px 14px; }
+
+.main-unreachable .conn-retry-dock {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 20px;
+  padding: 0;
+  background: none;
+}
+
+.main-unreachable .conn-retry { width: auto; min-width: 11rem; padding-inline: 22px; }
+.main-unreachable .conn-retry-note { font-size: var(--text-secondary); }
+/* Beside the button the link is its own target, not a word in a caption. */
+.main-unreachable .conn-retry-add { min-height: 44px; }
 
 @media (prefers-reduced-motion: reduce) {
   .conn-node.is-wait .conn-node-icon,

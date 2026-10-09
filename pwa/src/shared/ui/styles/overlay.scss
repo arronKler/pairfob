@@ -21,6 +21,26 @@ dialog.modal {
   box-shadow: var(--shadow-3);
 }
 
+/* Opened by a finger or a pen: the control the dialog focuses is no keyboard
+   position until a key is pressed (`overlay/quiet-focus.ts`). Every dialog is
+   marked the same way, and a control's own ring rule, however specific, gives
+   way: a field's border and glow are not a ring and stay. */
+dialog[data-quiet-focus] :focus-visible { outline: none !important; }
+
+/* Focus resting on the dialog itself (a press that landed on no control) is not
+   a control to ring: the card already says where the reader is. */
+dialog.modal:focus-visible { outline: none; }
+
+/* A heading or a list that took the keyboard because the row beside it is gone
+   (`overlay/removal-focus.ts`): the ring a control has, for as long as focus
+   rests there. */
+[data-focus-landing]:focus-visible {
+  outline: 2px solid var(--accent);
+  /* Inside its own box: a heading sits flush on the list it names. */
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
 @keyframes help-in {
   from { transform: scale(0.97); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
@@ -296,8 +316,16 @@ dialog.modal.pane-menu-sheet::backdrop {
     padding and the scroll — has to live on the form too, or the sheet slides out
     from under its own frame. The dialog is reduced to a bottom-anchored,
     non-clipping box.
+
+    A dialog a mouse or the keyboard opened beside the list is not a sheet at
+    any width: an anchored `.popover`, or the `.desk-form` every other dialog
+    takes there (overlay/desk-form.ts), keeps the card above. `:where` leaves
+    the weight of these selectors as it was, so every override written against
+    them still wins.
   */
-  dialog.modal {
+  $sheet: ":where(:not(.popover, .desk-form))";
+
+  dialog.modal#{$sheet} {
     margin: auto auto 0;
     width: calc(100vw - 14px);
     max-height: calc(100dvh - 24px);
@@ -309,7 +337,7 @@ dialog.modal.pane-menu-sheet::backdrop {
     overflow: visible;
   }
 
-  dialog.modal > form {
+  dialog.modal#{$sheet} > form {
     border: 1px solid var(--line-strong);
     border-bottom: 0;
     border-radius: var(--r-xl) var(--r-xl) 0 0;
@@ -322,7 +350,7 @@ dialog.modal.pane-menu-sheet::backdrop {
 
   /* Sheets already scroll inside .sheet-body; every other modal scrolls itself,
      and that scroller has to move with the card. */
-  dialog.modal:not(.sheet) > form {
+  dialog.modal:not(.sheet)#{$sheet} > form {
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -331,7 +359,7 @@ dialog.modal.pane-menu-sheet::backdrop {
 
   /* The base rule clips the dialog so a long list cannot escape the rounded
      head; on a phone that clip belongs to the form, which is what travels. */
-  dialog.modal.sheet {
+  dialog.modal.sheet#{$sheet} {
     overflow: visible;
     display: flex;
   }
@@ -350,9 +378,12 @@ dialog.modal.pane-menu-sheet::backdrop {
     cursor: grab;
   }
 
-  dialog.modal.sheet.is-expandable > form { max-height: min(64dvh, calc(100dvh - 24px)); }
+  /* A card is not dragged, so it has no handle, as above the breakpoint. */
+  .desk-form .sheet-grab { display: none; }
 
-  dialog.modal.sheet.is-expandable.is-expanded > form { max-height: calc(100dvh - 24px); }
+  dialog.modal.sheet.is-expandable#{$sheet} > form { max-height: min(64dvh, calc(100dvh - 24px)); }
+
+  dialog.modal.sheet.is-expandable.is-expanded#{$sheet} > form { max-height: calc(100dvh - 24px); }
 
   /* A finger-tracked sheet must not fight a transition, and a released one
      springs back or continues off-screen. */
@@ -405,6 +436,12 @@ dialog.modal.pane-menu-sheet::backdrop {
 @media (prefers-reduced-motion: reduce) {
   body.sheet-open #app { transform: none; }
 }
+
+/* A dialog that opened over another as its next step (`DIALOG_STEP`,
+   overlay/modal.tsx) is the one card on screen: the dialog beneath and its
+   scrim wait undrawn, and are there again when the step is put away. */
+dialog.modal:has(~ dialog.modal.dialog-step[open]),
+dialog.modal:has(~ dialog.modal.dialog-step[open])::backdrop { visibility: hidden; }
 
 /* Native close removes [open] before its queued close event unmounts the
    portal. Override the sheet's flex display during that gap so the closed

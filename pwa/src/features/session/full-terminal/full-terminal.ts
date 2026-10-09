@@ -22,7 +22,8 @@ import { commitView } from "../../../app/host";
 import { applyComposeDraft, bumpViewIncarnation, captureComposeDraft, currentViewIncarnation, switchComposeView } from "../drafts/compose-drafts";
 import { haptic } from "../../../lib/dom";
 import { messageCopy } from "../../../lib/notices";
-import { isDesk } from "../../../app/viewport";
+import { hardwareKeyboard, hasTouch } from "../../../app/input-mode";
+import { sessionMayTakeFocus } from "../focus";
 import {
   bindFontPinch,
   clamp,
@@ -30,10 +31,12 @@ import {
   FULL_TERM_FONT_FAMILY,
   measureGlyphHeight,
   pitchLineHeight,
+  terminalCellAt,
+  terminalCellPoint,
   terminalGridSize,
   terminalMount,
 } from "./full-terminal-fit";
-import { fitFullTerminal, type FullTerminalFittedSize } from "./full-terminal-fit-controller";
+import { fitFullTerminal, type FullTerminalFitHold, type FullTerminalFittedSize } from "./full-terminal-fit-controller";
 import { flyKeyToCursor } from "../guided/key-flight";
 import {
   bindXtermKeyboard,
@@ -44,15 +47,19 @@ import {
   type TerminalKeyboard,
 } from "./full-terminal-input";
 import { setFullTerminalInputMode, submitFullTerminalCompose, type FullTerminalControlsOptions } from "./full-terminal-compose";
-import { bindHostScroll, pageLineCount, type ScrollAt } from "./full-terminal-scroll";
+import { bindTerminalCopyKey, copyTerminalSelection } from "./full-terminal-copy";
+import { bindHostScroll, pageLineCount, reportsWheel, type ScrollAt } from "./full-terminal-scroll";
 import { attachFullTerminalHost, clearFullTerminalAttach, connectFullTerminalEngine, fullTerminalOwnerKey } from "./full-terminal-engine";
 import { releaseFullTerminalScreen } from "./full-terminal-screen";
 import { TerminalCommandPump, type TerminalCommand, type TerminalInputQueueOptions } from "./full-terminal-command";
 import { loadFullTerminalXterm, terminalWebglSupported } from "./full-terminal-loader";
 import { afterNextPaint, observeHostResize } from "./full-terminal-lifecycle";
+import { followCursor } from "./full-terminal-lift";
 import { fullTerminalPerf } from "./full-terminal-perf";
 import { FullTerminalFrameGate } from "./full-terminal-frame-gate";
 import { FullTerminalOpenTracker } from "./full-terminal-open-tracker";
+import { FullTerminalResizeGate } from "./full-terminal-resize";
+import { terminalRoomHeight } from "./full-terminal-room";
 import { fullTerminalOptions, terminalScreenText, openWebglTerminal, WEBGL_CONTEXT_LOST, WEBGL_UNAVAILABLE } from "./full-terminal-renderer";
 import {
   FullTerminalStatus,
@@ -72,6 +79,7 @@ let fitAddon: FitAddon | null = null;
 let resizeObserver: ReturnType<typeof observeHostResize> = null;
 let unbindScroll: (() => void) | null = null;
 let unbindPinch: (() => void) | null = null;
+let unbindCopy: (() => void) | null = null;
 let keyboard: TerminalKeyboard | null = null;
 let lockedFont: number | null = null;
 let fitting = false;
@@ -90,6 +98,7 @@ let leaveSeq = 0;
 let commandPump: TerminalCommandPump | null = null;
 const frameGate = new FullTerminalFrameGate();
 const openTracker = new FullTerminalOpenTracker();
+const resizeGate = new FullTerminalResizeGate();
 let pendingWriteBytes = 0;
 /** The mounted shell still belongs to this controller, even during a visible load error. */
 let terminalShellActive = false;
@@ -97,6 +106,8 @@ let terminalShellActive = false;
 let remoteGrid: { cols: number; rows: number } | null = null;
 /** Latest phone-sized PTY request and cell metrics. */
 let fittedSize: FullTerminalFittedSize | null = null;
+/** Requested columns kept until the window itself resizes; a new renderer measures afresh. */
+let fitHold: FullTerminalFitHold | null = null;
 const assembler = new TerminalFrameAssembler();
 const MAX_RENDER_QUEUE_BYTES = 8 * 1024 * 1024;
 const terminalStatus = new FullTerminalStatus(() => {
@@ -135,10 +146,11 @@ function fit(): { cols: number; rows: number; cellWidth: number; cellHeight: num
   if (fitting) return fittedSize ?? terminalGridSize(app, terminal, terminal.cols || 80, terminal.rows || 24);
   fitting = true;
   try {
-    const result = fitFullTerminal({ root: app, host, terminal, fitAddon, lockedFont, remoteGrid });
+    const result = fitFullTerminal({ root: app, host, terminal, fitAddon, lockedFont, remoteGrid, hold: fitHold });
     if (!result) return fallback;
     remoteGrid = result.remoteGrid;
     fittedSize = result.size;
+    fitHold = result.hold;
     return result.size;
   } finally {
     fitting = false;
@@ -191,6 +203,12 @@ function startCommandPump(
   });
 }
 
+/** Ask the computer for `size` unless it was already asked; `remote` is the grid its newest frame reported. */
+function requestResize(size: FullTerminalFittedSize, remote?: { cols: number; rows: number }): void {
+  if (!bridgeId || opening || !commandPump || !resizeGate.admit(size, remote)) return;
+  commandPump.enqueueResize({ cols: size.cols, rows: size.rows, cellWidth: size.cellWidth, cellHeight: size.cellHeight });
+}
+
 function sendInput(data: Uint8Array, options?: TerminalInputQueueOptions): void {
   commandPump?.enqueueInput(data, options);
 }
@@ -199,19 +217,14 @@ function sendComposedInput(text: string, enter: boolean): boolean {
   return submitFullTerminalCompose(text, enter, Boolean(bridgeId && !opening && commandPump), sendInput);
 }
 
+function terminalGrid(): { cols: number; rows: number } {
+  return { cols: terminal?.cols || 80, rows: terminal?.rows || 24 };
+}
+
 function cellAt(clientX: number, clientY: number): ScrollAt | undefined {
-  const app = appRoot();
-  const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
+  const host = appRoot().querySelector(".full-terminal-host") as HTMLElement | null;
   if (!terminal || !host) return;
-  const cols = terminal.cols || 80;
-  const rows = terminal.rows || 24;
-  const screen = host.querySelector(".xterm-screen") as HTMLElement | null;
-  const rect = (screen ?? host).getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return;
-  return {
-    column: clamp(Math.floor((clientX - rect.left) / (rect.width / cols)), 0, cols - 1),
-    row: clamp(Math.floor((clientY - rect.top) / (rect.height / rows)), 0, rows - 1),
-  };
+  return terminalCellAt(host, terminalGrid(), clientX, clientY);
 }
 
 function closeTerminalKeyboard(): void {
@@ -232,18 +245,10 @@ export function pageScrollLines(): number {
 
 /** The caret in viewport coordinates. xterm draws it on canvas, so read the buffer. */
 function caretPoint(): { x: number; y: number } | null {
-  const app = appRoot();
-  const host = app.querySelector(".full-terminal-host") as HTMLElement | null;
+  const host = appRoot().querySelector(".full-terminal-host") as HTMLElement | null;
   if (!terminal || !host) return null;
-  const screen = host.querySelector(".xterm-screen") as HTMLElement | null;
-  const rect = (screen ?? host).getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return null;
-  const cell = { w: rect.width / (terminal.cols || 80), h: rect.height / (terminal.rows || 24) };
   const buffer = terminal.buffer.active;
-  return {
-    x: rect.left + (buffer.cursorX + 0.5) * cell.w,
-    y: rect.top + (buffer.cursorY + 0.5) * cell.h,
-  };
+  return terminalCellPoint(host, terminalGrid(), { column: buffer.cursorX, row: buffer.cursorY });
 }
 
 function sendPadKey(key: string, source?: HTMLElement | null): void {
@@ -265,18 +270,16 @@ function bindInput(host: HTMLElement): void {
     sendInput(bytes);
   });
   terminal.onResize(() => {
-    if (!bridgeId || opening || fitting || !commandPump || !fittedSize) return;
-    commandPump.enqueueResize({
-      cols: fittedSize.cols,
-      rows: fittedSize.rows,
-      cellWidth: fittedSize.cellWidth,
-      cellHeight: fittedSize.cellHeight,
-    });
+    if (!fitting && fittedSize) requestResize(fittedSize);
   });
   unbindScroll?.();
   unbindScroll = bindHostScroll(host, sendFullTerminalScroll, cellAt, {
-    panXScroller: () => termFit() === "pan" ? host.querySelector<HTMLElement>(".full-terminal-pan") : null,
+    // Fixed columns pan, and so do columns the inspector is covering.
+    panXScroller: () => host.classList.contains("is-pan") ? host.querySelector<HTMLElement>(".full-terminal-pan") : null,
+    wheelReported: () => reportsWheel(terminal?.modes.mouseTrackingMode),
   });
+  unbindCopy?.();
+  unbindCopy = bindTerminalCopyKey(host, () => terminal);
   unbindPinch?.();
   unbindPinch = bindFontPinch(
     host,
@@ -286,18 +289,11 @@ function bindInput(host: HTMLElement): void {
       fit();
       window.clearTimeout(pinchResizeTimer);
       pinchResizeTimer = window.setTimeout(() => {
-        if (!bridgeId || opening || !terminal || !commandPump) return;
-        const size = terminalGridSize(app, terminal, terminal.cols || 80, terminal.rows || 24);
-        commandPump.enqueueResize({
-          cols: size.cols,
-          rows: size.rows,
-          cellWidth: size.cellWidth,
-          cellHeight: size.cellHeight,
-        });
+        if (terminal) requestResize(terminalGridSize(app, terminal, terminal.cols || 80, terminal.rows || 24));
       }, 120);
     },
   );
-  keyboard = bindXtermKeyboard(host, composeLive() && isDesk());
+  keyboard = bindXtermKeyboard(host, composeLive() && hardwareKeyboard(), sessionMayTakeFocus);
   emitFullTerminalView();
 }
 
@@ -375,20 +371,14 @@ async function mount(host: HTMLElement): Promise<void> {
     fit();
     terminal?.registerLinkProvider(httpLinkProvider(terminal));
     bindInput(host);
-    resizeObserver = observeHostResize(host, () => {
-      const previousCols = terminal?.cols;
-      const previousRows = terminal?.rows;
-      const size = fit();
-      if (!bridgeId || opening || !commandPump || (size.cols === previousCols && size.rows === previousRows)) return;
-      commandPump.enqueueResize({
-        cols: size.cols,
-        rows: size.rows,
-        cellWidth: size.cellWidth,
-        cellHeight: size.cellHeight,
-      });
-    }, { settleHeight: !isDesk() });
-    if (composeLive() && isDesk()) terminal?.focus();
-    else closeTerminalKeyboard();
+    // The host also resizes when the inspector opens, the list gives way, a
+    // mouse calls up the key pad or a draft grows a line. Those leave the
+    // fitted size as it was, and the computer's terminal alone.
+    resizeObserver = observeHostResize(host, () => requestResize(fit()),
+      // An on-screen keyboard slides the height over several frames; wait for it.
+      { settleHeight: hasTouch(), roomHeight: () => terminalRoomHeight(host) });
+    if (!(composeLive() && hardwareKeyboard())) closeTerminalKeyboard();
+    else if (sessionMayTakeFocus()) terminal?.focus();
     void openTracker.run(() => openBridge(false));
   };
   void start();
@@ -404,10 +394,13 @@ function disposeRenderer(): void {
   unbindScroll = null;
   unbindPinch?.();
   unbindPinch = null;
+  unbindCopy?.();
+  unbindCopy = null;
   lockedFont = null;
   fitting = false;
   remoteGrid = null;
   fittedSize = null;
+  fitHold = null;
   window.clearTimeout(pinchResizeTimer);
   pinchResizeTimer = 0;
   keyboard?.close();
@@ -438,6 +431,7 @@ async function openBridge(takeover: boolean): Promise<void> {
   const recovery = new TerminalRecoveryDiagnostics(session.connectionRecovery?.());
   try {
     const size = fittedSize ?? fit();
+    resizeGate.opened(size);
     const opened = await session.terminalOpen(paneId, size.cols, size.rows, takeover);
     if (version !== bridgeVersion || !isFullTerminal() || liveSession() !== session || openPaneId() !== paneId) {
       await session.terminalClose(opened.terminalId).catch(() => undefined);
@@ -452,8 +446,10 @@ async function openBridge(takeover: boolean): Promise<void> {
     assembler.reset();
     frameGate.reset();
     terminalStatus.start(copy("ft.live"), "live");
-    if (isDesk() || keyboard?.isOpen()) terminal?.focus();
-    else closeTerminalKeyboard();
+    // A hardware keyboard types into the terminal once it is live, unless the
+    // list, the inspector or a dialog holds it; touch waits to be asked for keys.
+    if (hardwareKeyboard() ? sessionMayTakeFocus() : keyboard?.isOpen()) terminal?.focus();
+    else if (!hardwareKeyboard()) closeTerminalKeyboard();
   } catch (error) {
     if (version !== bridgeVersion || !isFullTerminal() || liveSession() !== session || openPaneId() !== paneId) return;
     if (error instanceof ProtocolError && error.code === "conflict" && !takeover
@@ -526,16 +522,7 @@ export function setTermFit(next: TermFit, cols: TermCols = termCols()): void {
     if (scroller instanceof HTMLElement) scroller.scrollLeft = 0;
   }
   if (!isFullTerminal() || !terminal) return;
-  const previous = fittedSize;
-  const size = fit();
-  if (!bridgeId || opening || !commandPump) return;
-  if (previous && size.cols === previous.cols && size.rows === previous.rows) return;
-  commandPump.enqueueResize({
-    cols: size.cols,
-    rows: size.rows,
-    cellWidth: size.cellWidth,
-    cellHeight: size.cellHeight,
-  });
+  requestResize(fit());
 }
 
 export function enterFullTerminal(): void {
@@ -621,7 +608,9 @@ export function fullTerminalControlOptions(): FullTerminalControlsOptions {
   return {
     sendKey: sendPadKey,
     sendCompose: sendComposedInput,
-    desk: isDesk(),
+    hardwareKeyboard: hardwareKeyboard(),
+    setLive: setFullTerminalComposeLive,
+    copySelection: () => copyTerminalSelection(terminal),
     keyboard: {
       toggle: () => {
         const host = appRoot().querySelector<HTMLElement>(".full-terminal-host");
@@ -629,15 +618,20 @@ export function fullTerminalControlOptions(): FullTerminalControlsOptions {
         keyboard?.toggle();
         emitFullTerminalView();
       },
-      open: () => {
-        keyboard?.open();
-        terminal?.focus();
+      open: (take = true) => {
+        keyboard?.open(take);
+        if (take) terminal?.focus();
         emitFullTerminalView();
       },
       close: closeTerminalKeyboard,
       isOpen: () => keyboard?.isOpen() === true,
     },
   };
+}
+
+/** The reader chose this terminal again. One that is still opening takes the keyboard itself once it is live. */
+export function focusFullTerminal(): void {
+  terminal?.focus();
 }
 
 export function syncFullTerminalChrome(): void {
@@ -695,17 +689,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
       const nextRemote = { cols: frame.width, rows: frame.height };
       const remoteChanged = !remoteGrid || remoteGrid.cols !== nextRemote.cols || remoteGrid.rows !== nextRemote.rows;
       remoteGrid = nextRemote;
-      if (remoteChanged) {
-        const size = fit();
-        if (bridgeId && !opening && commandPump) {
-          commandPump.enqueueResize({
-            cols: size.cols,
-            rows: size.rows,
-            cellWidth: size.cellWidth,
-            cellHeight: size.cellHeight,
-          });
-        }
-      }
+      if (remoteChanged) requestResize(fit(), nextRemote);
       const writer = terminal;
       if (frameGate.settle(sequence, frame.full, Boolean(writer && frameMatchesGrid(frame, writer))) === "wait") return true;
       if (frame.full) writer?.reset();
@@ -715,6 +699,8 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
         pendingWriteBytes += frame.data.byteLength;
         fullTerminalPerf.writeStarted(frame.data.byteLength, pendingWriteBytes);
         writer.write(frame.data, () => {
+          // The frame may have left the cursor under what covers the last rows, or back above it.
+          if (terminal === writer) followCursor(writer.element?.parentElement ?? null, writer);
           if (terminal === writer && bridgeVersion === writeVersion) {
             pendingWriteBytes = Math.max(0, pendingWriteBytes - frame.data.byteLength);
             fullTerminalPerf.writeCompleted(performance.now() - writeStartedAt, commandMarker);
@@ -773,9 +759,11 @@ export function handleFullTerminalVisibility(hidden: boolean): void {
 connectFullTerminalEngine({
   scheduleMount,
   disposeRenderer,
+  releaseBridge: () => void suspendBridge(true, undefined, false),
   rendererBusy: () => Boolean(terminal || mounting || cancelMount),
   setShellActive: (active) => {
     terminalShellActive = active;
+    setFullTerminalDocumentMode(active);
   },
 });
 

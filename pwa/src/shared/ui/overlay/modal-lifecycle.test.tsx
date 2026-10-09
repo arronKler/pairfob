@@ -1,11 +1,13 @@
+import { expectDifferentNode, expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { act, useLayoutEffect } from "react";
 import { askConfirm, askText, showHelp } from "./basic-dialogs";
 import { setLang } from "../../../lib/i18n";
-import { ModalFrame, presentModal } from "./modal";
+import { DeskClose, ModalFrame, presentModal } from "./modal";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
+import { createRoot } from "react-dom/client";
 
 let pending: HTMLDialogElement[] = [];
 let restoreClose: (() => void) | undefined;
@@ -70,7 +72,7 @@ test("text result waits for native close delivery, then releases its portal and 
   expect(await result).toBe("edited");
   expect(settlements).toBe(1);
   expect(dialog.isConnected).toBeFalse();
-  expect(document.activeElement).toBe(opener);
+  expectSameNode(document.activeElement, opener);
   act(() => deliverClose(dialog));
   await Promise.resolve();
   expect(settlements).toBe(1);
@@ -91,7 +93,7 @@ test("simultaneous text and confirmation dialogs keep results and cleanup scoped
   expect(await confirm).toBeTrue();
   expect(confirmDialog.isConnected).toBeFalse();
   expect(textDialog.open).toBeTrue();
-  expect(textDialog.querySelector("input")).toBe(input);
+  expectSameNode(textDialog.querySelector("input"), input);
   expect(input.value).toBe("retained draft");
   act(() => textDialog.close("cancel"));
   act(() => deliverClose(textDialog));
@@ -106,7 +108,7 @@ test("late help close events neither remove a replacement nor clear its replacem
   act(() => showHelp("Second", ["two"]));
   const second = openDialog();
   expect(first.open).toBeFalse();
-  expect(second).not.toBe(first);
+  expectDifferentNode(second, first);
   expect(document.querySelectorAll("dialog.help[open]")).toHaveLength(1);
   act(() => deliverClose(first));
   expect(first.isConnected).toBeFalse();
@@ -134,12 +136,12 @@ test("app-root replacement and unmount preserve the separate modal input and ski
   act(() => unmountReact());
   expect(opener.isConnected).toBeFalse();
   expect(dialog.isConnected).toBeTrue();
-  expect(document.activeElement).toBe(input);
+  expectSameNode(document.activeElement, input);
   expect(input.value).toBe("unsaved draft");
   expect([input.selectionStart, input.selectionEnd]).toEqual([2, 7]);
   act(() => dialog.querySelector<HTMLButtonElement>(".text-edit-action:not(.text-edit-save)")!.click());
   expect(await result).toBeNull();
-  expect(document.activeElement).not.toBe(opener);
+  expectDifferentNode(document.activeElement, opener);
 });
 
 test("a native close releases component effects and controller refs exactly once", async () => {
@@ -187,4 +189,27 @@ test("native confirmation accepts only its legacy confirm return value", async (
     act(() => openDialog().close(returnValue));
     expect(await result).toBe(returnValue === "confirm");
   }
+});
+
+test("the corner close takes a dialog's own name for it, as its label and its tooltip; unnamed it is the generic close", () => {
+  let dismissed = 0;
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  act(() => root.render(<>
+    <DeskClose onDismiss={() => { dismissed += 1; }} />
+    <DeskClose onDismiss={() => { dismissed += 10; }} label="先放一边，留作未保存的批注" />
+  </>));
+  const [plain, named] = [...host.querySelectorAll<HTMLButtonElement>(".desk-close")];
+  expect(plain.className).toBe("icon-btn desk-close");
+  expect(named.className).toBe(plain.className);
+  expect(plain.getAttribute("aria-label")).toBe("关闭");
+  expect(plain.hasAttribute("title")).toBeFalse();
+  expect(named.getAttribute("aria-label")).toBe("先放一边，留作未保存的批注");
+  expect(named.getAttribute("title")).toBe("先放一边，留作未保存的批注");
+  expect(named.type).toBe("button");
+  act(() => { plain.click(); named.click(); });
+  expect(dismissed).toBe(11);
+  act(() => root.unmount());
+  host.remove();
 });

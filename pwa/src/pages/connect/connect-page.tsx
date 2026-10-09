@@ -1,5 +1,5 @@
 import { Globe } from "lucide-react";
-import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { useComputers } from "../../features/computers/hooks";
 import { useConnection } from "../../features/connection/hooks";
 import { usePairing } from "../../features/pairing/hooks";
@@ -13,7 +13,8 @@ import { connectViewModel } from "../../features/pairing/model";
 import { claimPairingPage, releasePairingPage } from "../../features/pairing/work";
 import { LanguageSelect } from "../../features/settings/language";
 import { useAppNotice } from "../../app/notice";
-import { isDesk } from "../../app/viewport";
+import { pointerFine } from "../../app/input-mode";
+import { isRoomy, ROOMY_QUERY } from "../../app/viewport";
 import { appRoot } from "../../app/dom-root";
 import { langRevision, subscribeLang, t } from "../../lib/i18n";
 import { showHelp } from "../../shared/ui/overlay";
@@ -44,15 +45,35 @@ function useLang(): void {
   useSyncExternalStore(subscribeLang, langRevision);
 }
 
+/**
+ * A device fact that follows its media query. Nothing else repaints this page
+ * when the window crosses the breakpoint or a trackpad joins a tablet; the value
+ * still comes from the fact's own reader.
+ */
+function useMediaFact(query: string, read: () => boolean): boolean {
+  const subscribe = useCallback((notify: () => void) => {
+    const media = window.matchMedia(query);
+    media.addEventListener("change", notify);
+    return () => media.removeEventListener("change", notify);
+  }, [query]);
+  return useSyncExternalStore(subscribe, read);
+}
+
 function useConnectView() {
   const pairing = usePairing();
   const connection = useConnection();
   const computers = useComputers();
   useLang();
   const notice = useAppNotice();
+  // Width decides the layout and the pointer decides the way in: a landscape
+  // tablet is wide and still scans; a mouse types the code at any width.
+  const device = {
+    wide: useMediaFact(ROOMY_QUERY, isRoomy),
+    finePointer: useMediaFact("(hover: hover) and (pointer: fine)", pointerFine),
+  };
   // Project from the subscribed snapshots: a staged phase hold keeps the form's
   // busy state on the same published phase as its frame.
-  return { view: connectViewModel(connectPageInput(isDesk(), notice, { connection, computers, pairing })) };
+  return { view: connectViewModel(connectPageInput(device, notice, { connection, computers, pairing })) };
 }
 
 function usePairingPageOwner(): void {
@@ -82,12 +103,14 @@ function showPairfobInstall(): void {
 export function ConnectScreen() {
   const { view } = useConnectView();
   usePairingPageOwner();
-  // On a desk the keyboard lands on the primary action; the code sheet focuses
-  // its own field when it opens.
+  // Where the code is typed on the page, the keyboard lands on its field: on
+  // load, and again when a handshake hands the page back. A touch screen gets
+  // no focus it did not ask for; the code sheet focuses its own field.
+  const typed = view.entry === "code";
   useLayoutEffect(() => {
-    if (view.busy || view.sheetOpen || !isDesk()) return;
-    appRoot().querySelector<HTMLButtonElement>(".connect-scan")?.focus({ preventScroll: true });
-  }, [view.busy, view.sheetOpen]);
+    if (view.busy || !typed) return;
+    appRoot().querySelector<HTMLInputElement>("#pair-code")?.focus({ preventScroll: true });
+  }, [view.busy, typed]);
 
   return (
     <ConnectView

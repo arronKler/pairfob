@@ -26,6 +26,17 @@ export function closeOpenSwipeRow(): void {
   openRow?.close();
 }
 
+/**
+ * Close the open row for a press that landed on `target`, unless the press is
+ * on that row: its own swipe, a tap that settles it, or one of the actions it
+ * uncovered. The press is only observed, so whatever it hit still acts.
+ */
+export function closeSwipeRowOutside(target: EventTarget | null): void {
+  if (!openRow) return;
+  const inside = typeof (target as Node | null)?.nodeType === "number" && openRow.row.contains(target as Node);
+  if (!inside) openRow.close();
+}
+
 export function bindSwipeRow(row: HTMLElement, options: SwipeRowOptions): () => void {
   const lifetime = new AbortController();
   const signal = lifetime.signal;
@@ -41,6 +52,9 @@ export function bindSwipeRow(row: HTMLElement, options: SwipeRowOptions): () => 
     const fg = options.foreground();
     if (!fg) return;
     row.classList.toggle("is-dragging", !animate);
+    // Only a row pulled to the right shows the leading action: it spans the whole
+    // row, so under a left swipe it would cover the trailing pair.
+    row.classList.toggle("is-leading", x > 0);
     fg.style.transform = x ? `translateX(${x}px)` : "";
   };
   const close = () => {
@@ -138,7 +152,9 @@ export function bindSwipeRow(row: HTMLElement, options: SwipeRowOptions): () => 
   }, { capture: true, signal });
 
   return () => {
-    if (openRow?.row === row) openRow = null;
+    // A row released while open (its actions moved out from behind it) must not
+    // stay slid aside with nothing left to close it.
+    if (openRow?.row === row) close();
     lifetime.abort();
   };
 }

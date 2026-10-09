@@ -4,8 +4,12 @@ import { tapAsMouse } from "./full-terminal-input";
 /** Pixels of finger or wheel travel that map to one remote TUI line. */
 export const SCROLL_LINE_PX = 36;
 const ENGAGE_PX = 12;
+/** A wheel that reports lines instead of pixels pans this far per line. */
+const WHEEL_LINE_PX = 32;
 const REPEAT_DELAY_MS = 380;
 const REPEAT_EVERY_MS = 90;
+/** A still press held this long is a hold, not a tap: it opens no link. */
+const TAP_HOLD_MS = 500;
 
 export type ScrollAt = { column: number; row: number };
 export type RemoteScroll = (
@@ -24,7 +28,16 @@ export type HostScrollOptions = {
   capturePan?: (fingerDy: number) => boolean;
   /** Synthesize xterm mouse clicks on a still touch tap. */
   tapAsClick?: boolean;
+  /** Return false for a pointer type whose drag belongs to something else (a mouse selecting text). */
+  pansWith?: (pointerType: string) => boolean;
+  /** True while the app in the terminal asked for mouse reports that include the wheel. */
+  wheelReported?: () => boolean;
 };
+
+/** Whether xterm reports the wheel to the app under this mouse protocol; X10 reports presses only. */
+export function reportsWheel(mouseTrackingMode: string | undefined): boolean {
+  return mouseTrackingMode === "vt200" || mouseTrackingMode === "drag" || mouseTrackingMode === "any";
+}
 
 export function pageLineCount(viewportRows: number): number {
   if (!Number.isFinite(viewportRows)) return 1;
@@ -54,6 +67,7 @@ export function bindHostScroll(
   let horizontal = false;
   let panXScroller: HTMLElement | null = null;
   let at: ScrollAt | undefined;
+  let startedAt = 0;
 
   const resetGesture = () => {
     source = null;
@@ -78,6 +92,7 @@ export function bindHostScroll(
     else touch = id;
     lastX = point.clientX;
     lastY = point.clientY;
+    startedAt = performance.now();
     panRemainder = 0;
     at = cellAt(point.clientX, point.clientY);
     if (canPanX) {
@@ -122,6 +137,7 @@ export function bindHostScroll(
     if (event.pointerType !== "mouse" && isPageZoomed(host.ownerDocument)) return;
     if (source !== null || !event.isPrimary || event.button !== 0) return;
     if ((event.target as HTMLElement | null)?.closest?.("button")) return;
+    if (opts.pansWith?.(event.pointerType) === false) return;
     beginGesture(
       "pointer",
       event.pointerId,
@@ -154,12 +170,40 @@ export function bindHostScroll(
     if (source !== "pointer" || event.pointerId !== pointer) return;
     const tap = event.type === "pointerup" && tapAsClick && !engaged && !isPageZoomed(host.ownerDocument)
       && (event.pointerType === "touch" || event.pointerType === "pen");
+    const held = performance.now() - startedAt >= TAP_HOLD_MS;
     resetGesture();
-    if (tap) tapAsMouse(host, event);
+    if (tap) tapAsMouse(host, event, held);
   };
 
+  // A trackpad's sideways swipe, or Shift turning a mouse wheel on its side,
+  // pans columns the host cannot show.
+  const panSideways = (event: WheelEvent): boolean => {
+    const scroller = opts.panXScroller?.();
+    if (!scroller || scroller.scrollWidth <= scroller.clientWidth) return false;
+    const sideways = event.shiftKey && !event.deltaX ? event.deltaY
+      : Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : 0;
+    if (!sideways) return false;
+    const unit = event.deltaMode === 1 ? WHEEL_LINE_PX : event.deltaMode === 2 ? scroller.clientWidth : 1;
+    scroller.scrollLeft += sideways * unit;
+    return true;
+  };
+
+  // Capture: xterm keeps no scrollback here, so a wheel it is not reporting to
+  // the app it answers by typing an arrow key per notch, and stops the event.
+  // That walks shell history or moves an editor's cursor, so the host takes
+  // the wheel before xterm sees it and scrolls the pane on the computer.
   const onWheel = (event: WheelEvent) => {
-    if (event.ctrlKey || event.metaKey) return;
+    const zoom = event.ctrlKey || event.metaKey;
+    if (!zoom && panSideways(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    // An app that asked for the mouse gets the wheel from xterm, as reports.
+    if (opts.wheelReported?.()) return;
+    event.stopPropagation();
+    // A pinch or a browser zoom stays the browser's.
+    if (zoom) return;
     if (opts.panXScroller?.() && Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
     if (opts.capturePan && !opts.capturePan(-event.deltaY)) return;
     event.preventDefault();
@@ -218,8 +262,9 @@ export function bindHostScroll(
     const point = findTouch(event.changedTouches, touch);
     if (!point) return;
     const tap = tapAsClick && !engaged && !isPageZoomed(host.ownerDocument);
+    const held = performance.now() - startedAt >= TAP_HOLD_MS;
     resetGesture();
-    if (tap) tapAsMouse(host, point);
+    if (tap) tapAsMouse(host, point, held);
   };
 
   const onTouchCancel = () => {
@@ -231,7 +276,7 @@ export function bindHostScroll(
   host.addEventListener("pointerup", onUp);
   host.addEventListener("pointercancel", onUp);
   host.addEventListener("lostpointercapture", onUp);
-  host.addEventListener("wheel", onWheel, { passive: false });
+  host.addEventListener("wheel", onWheel, { passive: false, capture: true });
   host.addEventListener("touchstart", onTouchStart, { passive: false });
   host.addEventListener("touchmove", onTouchMove, { passive: false });
   host.addEventListener("touchend", onTouchEnd);
@@ -242,7 +287,7 @@ export function bindHostScroll(
     host.removeEventListener("pointerup", onUp);
     host.removeEventListener("pointercancel", onUp);
     host.removeEventListener("lostpointercapture", onUp);
-    host.removeEventListener("wheel", onWheel);
+    host.removeEventListener("wheel", onWheel, { capture: true } as AddEventListenerOptions);
     host.removeEventListener("touchstart", onTouchStart);
     host.removeEventListener("touchmove", onTouchMove);
     host.removeEventListener("touchend", onTouchEnd);

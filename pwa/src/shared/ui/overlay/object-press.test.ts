@@ -54,3 +54,22 @@ test("rebinding after cleanup keeps only the latest menu action", () => {
   button.dispatchEvent(new happy.MouseEvent("contextmenu", { bubbles: true, cancelable: true }) as unknown as Event);
   expect(calls).toEqual(["new"]);
 });
+
+test("the opener learns what asked and where: a mouse menu belongs at the pointer, a finger's does not", async () => {
+  const button = target();
+  const origins: Array<{ input: string; x: number; y: number; atPointer: boolean; target: unknown }> = [];
+  cleanup = bindObjectPress(button, origin => origins.push(origin));
+  button.dispatchEvent(new happy.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 34 }) as unknown as Event);
+  expect(origins[0]).toEqual({ input: "mouse", target: button, x: 12, y: 34, atPointer: true });
+  for (const pointerType of ["touch", "mouse"]) {
+    button.dispatchEvent(new happy.PointerEvent("pointerdown", {
+      bubbles: true, isPrimary: true, pointerId: 1, pointerType, clientX: 50, clientY: 60,
+    }) as unknown as Event);
+    await new Promise(resolve => setTimeout(resolve, 480));
+    button.dispatchEvent(new happy.PointerEvent("pointerup", { bubbles: true, isPrimary: true, pointerId: 1, pointerType }) as unknown as Event);
+  }
+  expect(origins.slice(1)).toEqual([
+    { input: "touch", target: button, x: 50, y: 60, atPointer: false },
+    { input: "mouse", target: button, x: 50, y: 60, atPointer: true },
+  ]);
+});

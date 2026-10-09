@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
-import { Button, EmptyState, AgentAvatar } from "../../../shared/ui/primitives";
+import { Button, EmptyState, AgentAvatar, type EmptySpec } from "../../../shared/ui/primitives";
 import { paneBoxes, type PaneBox, type TabLayout } from "../../../lib/layout";
 import { tileFillScale } from "../model/camera";
 import { layoutDraft, subscribeLayoutDraft } from "../model/draft-store";
@@ -91,7 +91,8 @@ function BoardPaneTile({
         );
       }}
     >
-      <Button className="board-pane-open" aria-label={tile.aria} />
+      {/* Named for its pane like the ⋯, so focus finds it again on a board drawn anew (`overlay/trigger.ts`). */}
+      <Button className="board-pane-open" aria-label={tile.aria} data-trigger-of={tile.paneId} />
       {/* The pane's real screen, scaled with the camera at every zoom. */}
       <BoardAnsiPreview paneId={tile.paneId} cols={tile.cols} rows={tile.rows} paint={previewPaint} />
       {/* herdr's border title, at a fixed on-screen size whatever the zoom. */}
@@ -104,23 +105,8 @@ function BoardPaneTile({
       </span>
       {/* Its own layer at the bar's right end, above the divider strips that run
           along the pane's edges, so a tap on it is never taken for a divider. */}
-      <Button className="board-pane-more" aria-label={t("boardMenu.more", { title: tile.title })}
+      <Button className="board-pane-more" aria-label={t("boardMenu.more", { title: tile.title })} data-trigger-of={tile.paneId}
         aria-haspopup="menu" onClick={(event) => { event.stopPropagation(); menu(); }}>⋯</Button>
-    </div>
-  );
-}
-
-/** herdr shows one pane alone: say so on the canvas and offer the way back. */
-function ZoomBanner({ canvas, controller }: { canvas: BoardCanvasModel; controller: BoardCanvasController }) {
-  const reason = controller.layoutReason("zoom");
-  // An overlay control: the gesture adapter leaves presses on it alone, or its capture would swallow the click.
-  return (
-    <div className="board-zoom-banner" role="status" data-board-overlay="">
-      <span>{canvas.zoomBanner.text}</span>
-      <Button disabled={!!reason} title={reason || undefined}
-        onClick={() => { void controller.toggleZoom(canvas.zoomedPaneId, "off"); }}>
-        {canvas.zoomBanner.restore}
-      </Button>
     </div>
   );
 }
@@ -128,9 +114,12 @@ function ZoomBanner({ canvas, controller }: { canvas: BoardCanvasModel; controll
 export function BoardCanvasView({
   canvas,
   controller,
+  emptyAction,
 }: {
   canvas: BoardCanvasModel;
   controller: BoardCanvasController;
+  /** What the empty card offers when the screen around it has no control for it. */
+  emptyAction?: EmptySpec["action"];
 }) {
   // A fresh token per canvas model: see BoardAnsiPreview's font timing. A
   // draft-only render keeps it, so dragging a divider never re-measures fonts.
@@ -164,7 +153,7 @@ export function BoardCanvasView({
   return (
     <div ref={viewportRef} className="board-canvas" role="application" aria-label={canvas.canvasAria}>
       {!canvas.layout ? (
-        <EmptyState spec={{ figure: "grid", title: canvas.emptyTitle, sub: canvas.emptySub }} />
+        <EmptyState spec={{ figure: "grid", title: canvas.emptyTitle, sub: canvas.emptySub, action: emptyAction }} />
       ) : (
         <div
           ref={stageRef}
@@ -186,7 +175,6 @@ export function BoardCanvasView({
           <BoardCanvasOverlays canvas={canvas} controller={controller} viewportRef={viewportRef} stageRef={stageRef} />
         </div>
       )}
-      {canvas.layout && canvas.zoomedPaneId ? <ZoomBanner canvas={canvas} controller={controller} /> : null}
     </div>
   );
 }

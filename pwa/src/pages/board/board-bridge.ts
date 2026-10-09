@@ -52,6 +52,7 @@ import { bindBoardCanvasGestures, type BoardCanvasPorts } from "../../features/b
 import {
   applyCameraTransform,
   fitCameraToViewport,
+  settleCamera,
   viewportCenter,
   zoomCameraAtPoint,
 } from "../../features/board/canvas/transform";
@@ -67,6 +68,7 @@ import { dropQueuedKeys } from "../../features/session/guided/keys";
 import { focusCompose } from "../../features/session/guided/compose";
 import { morphingPane, nextTransition, queuedKind, shareOpening } from "../../app/transition";
 import { herdLivenessModel, herdStatusModel } from "../../features/dashboard/model/herd-status";
+import { canCreateSession } from "../../features/dashboard/model/herd-view";
 import { releaseBoardScroll, schedulePanePreview, scrollBoardPane } from "./pane-scroll";
 import { refreshBoardPreviews } from "../../features/board/preview/refresh";
 import { openBoardPaneMenu } from "./pane-menu";
@@ -127,10 +129,11 @@ export function readBoardInput(): BoardModelInput {
   const runtime = runtimeStore.get();
   const connected = liveSession()?.isConnected() === true;
   const online = networkOnline();
+  const agents = publishedAgents();
   return {
     workspaceList: catalog.workspaceList,
     tabList: catalog.tabList,
-    agents: publishedAgents(),
+    agents,
     layouts: catalog.layouts,
     workspaceId: catalog.workspaceId,
     tabId: catalog.tabId,
@@ -144,6 +147,14 @@ export function readBoardInput(): BoardModelInput {
       liveness: herdLivenessModel({ connected, networkOnline: online, runtimeKind: runtime.runtimeKind }),
     }),
     canCreateTab: capabilityEnabled("create_tab"),
+    canCreateWorkspace: capabilityEnabled("create_conversation"),
+    // The list's own answer to "can a session be started now", so the board's + never invites what the list refuses.
+    // With no session at all the list is unknown until its first snapshot is read, and so is the empty board.
+    creatable: canCreateSession({
+      liveness: herdLivenessModel({ connected, networkOnline: online, runtimeKind: runtime.runtimeKind }),
+      loading: agents.length ? runtime.identityPending : !dashboardStore.get().snapshotLoaded,
+      operationBusy: operationBusy(),
+    }),
     layoutCaps: {
       resize: capabilityEnabled("resize_pane"),
       swap: capabilityEnabled("swap_pane"),
@@ -212,9 +223,7 @@ export function applyBoardTransform(stage: HTMLElement): void {
 }
 
 export function placeBoardStage(viewport: HTMLElement, stage: HTMLElement, layout: TabLayout): void {
-  const fitted = fitCameraToViewport(viewport, layout);
-  writeBoardCamera(fitted);
-  applyCameraTransform(stage, fitted);
+  settleCamera(stage, fitCameraToViewport(viewport, layout), writeBoardCamera);
 }
 
 export function zoomBoardAt(
@@ -225,9 +234,7 @@ export function zoomBoardAt(
   nextScale: number,
 ): void {
   const next = zoomCameraAtPoint(readBoardCamera(), viewport, clientX, clientY, nextScale);
-  if (!next) return;
-  writeBoardCamera(next);
-  applyCameraTransform(stage, next);
+  if (next) settleCamera(stage, next, writeBoardCamera);
 }
 
 export function fitCurrentBoard(): void {
@@ -257,10 +264,15 @@ export function openBoardPane(paneId: string, tile?: HTMLElement): void {
   });
 }
 
+/** The fit the camera was last checked against; it belongs to the camera, not to one mounted canvas. */
+let fitSeen: BoardCamera | null = null;
+
 function canvasPorts(): BoardCanvasPorts {
   return {
     readCamera: readBoardCamera,
     writeCamera: writeBoardCamera,
+    readFit: () => fitSeen,
+    writeFit: (fit) => { fitSeen = fit; },
     scrollPane: (layout, paneId, direction, lines) => scrollBoardPane(layout, paneId, direction, lines),
     requestPanePreview: schedulePanePreview,
     openPane: (paneId, tile) => openBoardPane(paneId, tile),
@@ -287,9 +299,8 @@ export function revealBoardPane(paneId: string): void {
   const delta = (start: number, end: number, min: number, max: number) =>
     end - start > max - min ? min - start : start < min ? min - start : end > max ? max - end : 0;
   const camera = readBoardCamera();
-  writeBoardCamera({ ...camera, panX: camera.panX + delta(rect.left, rect.right, view.left + 8, view.right - 8),
-    panY: camera.panY + delta(rect.top, rect.bottom, view.top + 8, view.bottom - 8) });
-  applyBoardTransform(host.stage);
+  settleCamera(host.stage, { ...camera, panX: camera.panX + delta(rect.left, rect.right, view.left + 8, view.right - 8),
+    panY: camera.panY + delta(rect.top, rect.bottom, view.top + 8, view.bottom - 8) }, writeBoardCamera);
 }
 
 /** Placement picked a side; the split sheet asks what to start there. */
@@ -379,6 +390,23 @@ export function closeBoard(): void {
 }
 
 /**
+ * Back from the board that had the row to itself (the desk's narrowest tier).
+ * The list returns beside the session it stood beside before the board took
+ * the row, opened as choosing its row would open it; without one, beside the
+ * empty main column.
+ */
+export function leaveBoardForList(): void {
+  // The pane it showed is still open and still reported; anything else is the plain list.
+  const pane = selectedAgent();
+  if (!pane) {
+    closeBoard();
+    return;
+  }
+  clearBoardReturn();
+  void openPane(pane.paneId);
+}
+
+/**
  * Drop the board's scroll ownership and return flag before a sibling tab takes
  * the screen. The caller navigates; nothing here commits.
  */
@@ -403,12 +431,16 @@ export function selectTab(tabId: string): void {
   void refreshBoardPreviews();
 }
 
-/** The board's "+ tab" opens the shared create sheet on the board's workspace. */
+/**
+ * The board's "+ tab" opens the shared create sheet on the board's workspace.
+ * A board with no workspace has nothing to add a tab to: its empty card's
+ * action opens the sheet as the list's own create does, on a new workspace.
+ */
 export function newTabInBoard(): void {
   const catalog = liveCatalog();
   const agent =
     boardTabAnchor(liveAgents() as DashboardAgentCard[], catalog.workspaceId, catalog.tabId) || selectedAgent();
-  void openCreateSheet({ workspaceId: agent?.workspaceId || catalog.workspaceId });
+  void openCreateSheet({ workspaceId: agent?.workspaceId || catalog.workspaceId || undefined });
 }
 
 export function boardScreenActions(): BoardScreenActions {
@@ -417,7 +449,7 @@ export function boardScreenActions(): BoardScreenActions {
     selectWorkspace,
     selectTab,
     createTab: newTabInBoard,
-    quickCreate: openQuickCreate,
+    quickCreate: () => openQuickCreate(),
     tabMenu: (tabId) => openBoardTabMenu(tabId, newTabInBoard),
     fit: fitCurrentBoard,
     zoom: nudgeBoardZoom,
@@ -426,6 +458,8 @@ export function boardScreenActions(): BoardScreenActions {
 
 /** One instance each: the route and the compatibility canvas share them. */
 export const boardActions = boardScreenActions();
+/** The same intents for the board that took the list's column: back returns the list. */
+export const boardAloneActions: BoardScreenActions = { ...boardActions, back: leaveBoardForList };
 export const boardCanvasController = createBoardCanvasController();
 
 export { releaseBoardScroll };

@@ -20,7 +20,27 @@
 .board-sheet .menu-section-title:first-child { margin-top: 2px; }
 .board-sheet-note:empty { display: none; }
 .board-sheet-note { margin: 10px 2px 0; font-size: var(--text-secondary); line-height: 1.5; color: var(--muted); }
+/* As a menu at the tile (a mouse or the keyboard on the desk board) the note lines up with the rows. */
+.popover-menu .board-sheet-note { margin: 6px 10px 5px; font-size: var(--text-caption); }
 .board-sheet-done { width: 100%; margin-top: var(--space-4); }
+
+/* The desk form (shared/ui/styles/desk-dialog.scss): the sheet's one action is
+   the card's footer, at its right end and as wide as its word. Under a finger
+   the sheet keeps the full-width button its thumb reaches. */
+dialog.modal.desk-form .board-sheet-done {
+  display: flex;
+  width: fit-content;
+  min-width: 5.5rem;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: var(--text-body);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  dialog.modal.desk-form .board-sheet-done { min-height: 36px; }
+}
 .board-resize .menu-setting-label small { display: block; margin-top: 2px; font-weight: 400; color: var(--muted); }
 .board-resize .menu-stepper-value { min-width: 64px; font-variant-numeric: tabular-nums; }
 

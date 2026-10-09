@@ -30,7 +30,8 @@ export type LayoutMode =
 export type DeskPage = "settings" | "quota" | "computers" | "board" | null;
 /** Where the desk's pane leads back to: the board it was opened from, or nowhere. */
 export type DeskReturn = "board" | null;
-export type DeskChild = "chat" | "session" | null;
+/** The session the desk main column shows: agent chat, the guided pane or the complete terminal. */
+export type DeskChild = "chat" | "session" | "full" | null;
 
 export type LayoutInput = {
   phase: Phase;
@@ -41,8 +42,8 @@ export type LayoutInput = {
   desk: boolean;
   /**
    * The only paired computer could not be reached (a network failure, not a
-   * refusal): the phone explains it inside the list frame instead of the
-   * computer picker. Optional so older callers keep the picker.
+   * refusal): the page explains it instead of showing the computer picker, on
+   * the phone inside the list frame. Optional so older callers keep the picker.
    */
   unreachable?: boolean;
   /** A pane is open and still reported by the daemon, so the desk can show it. */
@@ -51,6 +52,16 @@ export type LayoutInput = {
   operationBusy: boolean;
   /** The open pane was opened from the board, so leaving it goes back there. */
   boardReturn?: boolean;
+  /** Room for three columns: the list, the session and the inspector side by side. */
+  wide?: boolean;
+  /** The reader opened the files-and-changes inspector beside the session. */
+  inspector?: boolean;
+  /** A phone-sized screen: wide when turned on its side, but with no height to share. */
+  handheld?: boolean;
+  /** The desk's narrowest tier: the list fits beside a session, not beside the board's canvas. */
+  narrow?: boolean;
+  /** A retry started from the "cannot reach" page is in flight; the phase is `resuming` meanwhile. */
+  retrying?: boolean;
 };
 
 export type ShellFlags = {
@@ -62,8 +73,15 @@ export type ShellFlags = {
   booting: boolean;
   /** Phone tab roots (home / board / settings) carry the bottom tab bar. */
   tabs: boolean;
-  /** The pick phase renders the single-computer "cannot reach" page in the list frame. */
+  /**
+   * The pick phase renders the single-computer "cannot reach" page in the list
+   * frame: the phone's tab bar, or the desk's rail with the page in its main column.
+   */
   unreachable: boolean;
+  /** The inspector column sits beside the desk session. */
+  inspector: boolean;
+  /** The list gave its column to the inspector or the board; that page's header leads back to it. */
+  railHidden: boolean;
 };
 
 export type LayoutDescriptor = {
@@ -89,28 +107,42 @@ export function computeLayout(input: LayoutInput): LayoutDescriptor {
   // The phone board owns the whole screen; the wide board sits in the desk's
   // main column beside the list, like any other desk page.
   const board = live && input.screen === "board" && !input.desk;
-  const desk = live && input.desk && !input.fullTerminal && !workspace;
-  const session = live && input.screen === "pane" && (!desk || input.fullTerminal);
+  // Every session mode, the complete terminal included, stays beside the list.
+  // A phone on its side is the exception: its terminal keeps the whole screen.
+  const desk = live && input.desk && !workspace && !(input.fullTerminal && input.handheld === true);
+  const session = live && input.screen === "pane" && !desk;
   const deskPage: DeskPage = desk && (input.screen === "settings" || input.screen === "quota"
     || input.screen === "computers" || input.screen === "board") ? input.screen : null;
-  const deskChild: DeskChild = desk && !deskPage && input.hasSelectedPane
-    ? input.agentChat ? "chat" : "session"
+  // The complete terminal keeps its page while its pane is briefly unreported,
+  // exactly as it did when it owned the whole viewport.
+  const deskChild: DeskChild = desk && !deskPage && input.fullTerminal ? "full"
+    : desk && !deskPage && input.hasSelectedPane ? input.agentChat ? "chat" : "session"
     : null;
+  // The inspector belongs to the session it sits beside; without three columns'
+  // worth of room the list gives way to it.
+  const inspector = deskChild !== null && input.inspector === true;
+  // The board keeps its canvas: in the narrowest tier the list gives way to it
+  // too, and the board's own header leads back.
+  const railHidden = (inspector && input.wide !== true) || (deskPage === "board" && input.narrow === true);
   const deskReturn: DeskReturn = deskChild && input.boardReturn === true ? "board" : null;
 
+  // The explanation of what cannot be reached keeps the list's frame at every
+  // width: the phone's tab bar, the desk's rail beside it. The desk frame also
+  // stays while the page's own retry runs, where the phone's boot frame takes over.
+  const unreachable = input.phase === "pick" && input.unreachable === true;
+  const offline = input.desk && (unreachable || (input.phase === "resuming" && input.retrying === true));
   // The phone boots and reconnects inside the list's own frame (header,
   // placeholder rows, tab bar) so nothing jumps when the session goes live.
-  const splash = booting && input.desk;
-  const unreachable = input.phase === "pick" && input.unreachable === true && !input.desk;
-  const tabs = (booting && !input.desk) || unreachable || (live && !input.desk && !input.fullTerminal
+  const splash = booting && input.desk && !offline;
+  const tabs = (booting && !input.desk) || (unreachable && !input.desk) || (live && !input.desk && !input.fullTerminal
     && (input.screen === "home" || input.screen === "board" || input.screen === "settings"));
   const mode: LayoutMode = booting ? "boot"
     : input.phase === "connect" || input.phase === "pairing" ? "connect"
     : input.phase === "pick" ? "pick"
     : workspace ? "workspace"
     : board ? "board"
-    : live && input.fullTerminal ? "full-terminal"
     : desk ? "desk"
+    : live && input.fullTerminal ? "full-terminal"
     : input.screen === "settings" ? "settings"
     : input.screen === "quota" ? "quota"
     : input.screen === "computers" ? "computers"
@@ -122,12 +154,12 @@ export function computeLayout(input: LayoutInput): LayoutDescriptor {
     deskPage,
     deskChild,
     deskReturn,
-    shell: { session, desk, workspace, board, booting: splash, tabs, unreachable },
-    lockScroll: session || desk || workspace || board || splash,
+    shell: { session, desk: desk || offline, workspace, board, booting: splash, tabs, unreachable, inspector, railHidden },
+    lockScroll: session || desk || offline || workspace || board || splash,
     termFontPx: input.termFontPx,
     termLineHeightPx: termLineHeightPx(input.termFontPx),
     operationBusy: input.operationBusy,
-    key: `${mode}:${input.phase}:${deskPage ?? "-"}:${deskChild ?? "-"}${tabs ? ":tabs" : ""}`,
+    key: `${mode}:${input.phase}:${deskPage ?? "-"}:${deskChild ?? "-"}${tabs ? ":tabs" : ""}${offline ? ":offline" : ""}`,
   };
 }
 
@@ -149,5 +181,7 @@ export function layoutsEqual(left: LayoutDescriptor | null | undefined, right: L
     && left.shell.board === right.shell.board
     && left.shell.booting === right.shell.booting
     && left.shell.tabs === right.shell.tabs
-    && left.shell.unreachable === right.shell.unreachable;
+    && left.shell.unreachable === right.shell.unreachable
+    && left.shell.inspector === right.shell.inspector
+    && left.shell.railHidden === right.shell.railHidden;
 }

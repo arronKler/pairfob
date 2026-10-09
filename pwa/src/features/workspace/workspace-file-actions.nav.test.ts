@@ -91,13 +91,13 @@ test("old daemon offers only capability-free file actions", async () => await ac
   await boot(false); menu(); await pause();
   const sheet = document.querySelector("dialog.sheet");
   expect(sheet?.textContent).toContain("复制路径");
-  expect(sheet?.textContent).not.toContain("重命名");
+  expect(sheet?.textContent).not.toContain("改文件名");
   expect(sheet?.textContent).not.toContain("删除文件");
 }));
 test("long hold opens once and releasing after a second does not open the file", async () => await act(async () => {
   await boot(); const target = row();
   pointer(target, "pointerdown"); await pause(1000);
-  expect(document.querySelector("dialog.sheet")?.textContent).toContain("重命名");
+  expect(document.querySelector("dialog.sheet")?.textContent).toContain("改文件名");
   pointer(target, "pointerup"); target.click();
   expect(workspaceModel.view).toBe("browser");
   expect(calls).toHaveLength(0);
@@ -110,7 +110,7 @@ test("scroll and cancelled gestures do not open actions", async () => await act(
   expect(document.querySelector("dialog")).toBeNull();
 }));
 test("rename pre-fills filename and refreshes once after submitting", async () => await act(async () => {
-  await boot(); menu(); button("重命名").click(); await pause();
+  await boot(); menu(); button("改文件名").click(); await pause();
   const input = document.querySelector<HTMLInputElement>("dialog input")!;
   expect(input.value).toBe("a.txt"); input.value = "b.txt";
   document.querySelector<HTMLDialogElement>("dialog")!.close("confirm"); await pause(60);
@@ -162,7 +162,7 @@ test("long-hold release retargeted to the sheet cannot dismiss it or select an a
   expect(dialog.open).toBe(true);
   expect(calls).toHaveLength(0);
   // The next intentional press must work normally.
-  const rename = button("重命名");
+  const rename = button("改文件名");
   pointer(rename, "pointerdown"); pointer(rename, "pointerup"); rename.click(); await pause();
   expect(document.querySelector<HTMLInputElement>('dialog input')?.value).toBe("a.txt");
 }));

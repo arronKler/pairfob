@@ -55,3 +55,47 @@ test("Space is a named pad key that always travels as one PTY write", () => {
   expect(encodeTerminalKey(mapPadKey("space", { ...none, alt: true })[0]!)).toBe("\x1b ");
   expect(requiresTerminalText(mapPadKey("space", { ...none, shift: true })[0]!)).toBe(true);
 });
+
+test("navigation and function keys are written as xterm's own keyboard table writes them", () => {
+  const plain: Record<string, string> = {
+    home: "\x1b[H", end: "\x1b[F", insert: "\x1b[2~", delete: "\x1b[3~", pageup: "\x1b[5~", pagedown: "\x1b[6~",
+    f1: "\x1bOP", f2: "\x1bOQ", f3: "\x1bOR", f4: "\x1bOS", f5: "\x1b[15~", f6: "\x1b[17~", f7: "\x1b[18~",
+    f8: "\x1b[19~", f9: "\x1b[20~", f10: "\x1b[21~", f11: "\x1b[23~", f12: "\x1b[24~",
+  };
+  for (const [key, bytes] of Object.entries(plain)) {
+    expect(encodeTerminalKey(key), key).toBe(bytes);
+    // Herdr's SendKeys names none of them: each travels as one PTY write.
+    expect(requiresTerminalText(key), key).toBe(true);
+  }
+  // Home and End follow the cursor-key mode a program set, like the arrows; nothing else does.
+  expect(encodeTerminalKey("home", true)).toBe("\x1bOH");
+  expect(encodeTerminalKey("end", true)).toBe("\x1bOF");
+  expect(encodeTerminalKey("delete", true)).toBe("\x1b[3~");
+  expect(encodeTerminalKey("f1", true)).toBe("\x1bOP");
+});
+
+test("their modifiers ride in the sequence, in both cursor modes", () => {
+  for (const application of [false, true]) {
+    expect(encodeTerminalKey("shift+home", application)).toBe("\x1b[1;2H");
+    expect(encodeTerminalKey("ctrl+end", application)).toBe("\x1b[1;5F");
+    expect(encodeTerminalKey("alt+delete", application)).toBe("\x1b[3;3~");
+    expect(encodeTerminalKey("ctrl+shift+delete", application)).toBe("\x1b[3;6~");
+    expect(encodeTerminalKey("shift+f1", application)).toBe("\x1b[1;2P");
+    expect(encodeTerminalKey("ctrl+f5", application)).toBe("\x1b[15;5~");
+    expect(encodeTerminalKey("ctrl+alt+shift+f12", application)).toBe("\x1b[24;8~");
+    expect(encodeTerminalKey("ctrl+pageup", application)).toBe("\x1b[5;5~");
+    expect(encodeTerminalKey("ctrl+alt+pagedown", application)).toBe("\x1b[6;7~");
+  }
+  // xterm sends a page key with Alt alone as the plain key.
+  expect(encodeTerminalKey("alt+pageup")).toBe("\x1b[5~");
+});
+
+test("the chords an emulator keeps for itself are not sent", () => {
+  // Shift or Ctrl with Insert is copy and paste on some systems; Shift with a page key scrolls the emulator.
+  for (const key of ["shift+insert", "ctrl+insert", "shift+pageup", "shift+pagedown", "ctrl+shift+pageup"]) {
+    expect(encodeTerminalKey(key), key).toBe("");
+  }
+  expect(encodeTerminalKey("alt+insert")).toBe("\x1b[2~");
+  // A name that only looks like one is still nothing.
+  for (const key of ["f13", "f0", "homes", "pageleft"]) expect(encodeTerminalKey(key), key).toBe("");
+});

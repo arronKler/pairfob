@@ -33,5 +33,5 @@ export function openGroupModeSheet(): void {
           action={() => foldAll(true)} />
       </> : null}
     </>
-  ));
+  ), { popover: "menu" });
 }

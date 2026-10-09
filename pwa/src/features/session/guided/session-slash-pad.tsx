@@ -21,7 +21,7 @@ import { PadChromeButton } from "../compose-focus";
 /** How long a deleted command can be brought back from the pad itself. */
 const UNDO_MS = 5000;
 
-/** 按键 | 命令, on the left of the pagination row so the primary row never changes shape. */
+/** 按键 | 命令, on the right of the pagination row so the primary row never changes shape. */
 export function SessionPadModeBar({ onRepaint = () => undefined }: { onRepaint?: () => void }) {
   const current = padKind();
   return <div className="pad-kind" role="group" aria-label={t("slash.padKind")}>
@@ -60,8 +60,8 @@ function EditableCommand({ command, index, handlers }: { command: QuickCommand; 
  * edits in place: what the reader arranges here is exactly where each command
  * shows up. Edit mode is local, so collapsing the pad leaves it.
  */
-function CommandPad({ agent, slash, commands, onSelect, onCustomSelect, memory }: {
-  agent: string; slash: SlashCommand[]; commands: readonly QuickCommand[]; memory: PageMemory;
+function CommandPad({ agent, slash, commands, onSelect, onCustomSelect, memory, rows }: {
+  agent: string; slash: SlashCommand[]; commands: readonly QuickCommand[]; memory: PageMemory; rows: 1 | 2;
   onSelect: (token: string) => void; onCustomSelect: (text: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -137,14 +137,14 @@ function CommandPad({ agent, slash, commands, onSelect, onCustomSelect, memory }
           aria-disabled="true" title={t("pad.slashLocked")}>{command.label}</span>
         : <PadChromeButton key={command.token} type="button" className="key slash-cmd" data-pad-index={index}
           aria-label={command.ariaKey ? t(command.ariaKey) : t("slash.insert", { label: command.label })}
-          onClick={() => onSelect(command.token)}>{command.label}</PadChromeButton>;
+          onClick={() => onSelect(command.token)}><span className="pad-cmd-name">{command.label}</span></PadChromeButton>;
     }
     const command = cell.command;
     return editing
       ? <EditableCommand key={`custom:${command.id}`} command={command} index={index} handlers={handlers} />
       : <PadChromeButton key={`custom:${command.id}`} type="button" className="key quick-cmd" data-pad-index={index}
         title={command.text} aria-label={t("quick.insert", { label: command.label })}
-        onClick={() => onCustomSelect(command.text)}>{command.label}</PadChromeButton>;
+        onClick={() => onCustomSelect(command.text)}><span className="pad-cmd-name">{command.label}</span></PadChromeButton>;
   })];
   const header = editing && <p className="pad-edit-hint" role="status">
     {removed
@@ -153,35 +153,46 @@ function CommandPad({ agent, slash, commands, onSelect, onCustomSelect, memory }
       }}>{t("pad.undo")}</button></>
       : t("pad.editHint")}
   </p>;
-  return <PadPages items={items} columns={4} kind={`slash:${agent}`} label={t("slash.agentCmds")}
+  return <PadPages items={items} columns={4} rows={rows} kind={`slash:${agent}`} label={t("slash.agentCmds")}
     className={`slash-pad${editing ? " is-editing" : ""}`} header={header} memory={memory}
     leading={editing
       ? <PadChromeButton type="button" className="pad-text-btn" aria-label={t("pad.newAria")}
         disabled={commands.length >= QUICK_COMMAND_LIMIT} onClick={() => void create()}>
         <Plus size={13} aria-hidden="true" />{t("pad.new")}</PadChromeButton>
-      : <SessionPadModeBar />}
+      : <PadChromeButton type="button" className="pad-text-btn" aria-label={t("pad.editAria")}
+        onClick={() => setEditing(true)}>{t("pad.edit")}</PadChromeButton>}
     trailing={editing
       ? <PadChromeButton type="button" className="pad-text-btn is-strong"
         onClick={() => { setEditing(false); setRemoved(null); }}>{t("pad.done")}</PadChromeButton>
-      : <PadChromeButton type="button" className="pad-text-btn" aria-label={t("pad.editAria")}
-        onClick={() => setEditing(true)}>{t("pad.edit")}</PadChromeButton>} />;
+      : <SessionPadModeBar />} />;
+}
+
+/** The key page an item belongs to, whatever number of rows a screen shows of it at a time. */
+function keyPageName(firstItem: number): (typeof KEY_PAGES)[number]["name"] {
+  let end = 0;
+  for (const page of KEY_PAGES) {
+    end += page.keys.length;
+    if (firstItem < end) return page.name;
+  }
+  return KEY_PAGES[0].name;
 }
 
 /**
  * The expanded pad body: key pages or the command pad. A slash command goes to
  * the start of the draft; a saved command goes in at the caret. Neither sends.
+ * `rows` is how many rows a page shows: one on a short landscape screen.
  */
-export function SessionSlashPad({ onSelect = insertSlashCommand, onCustomSelect = insertQuickCommand, keyItems }: {
-  onSelect?: (text: string) => void; onCustomSelect?: (text: string) => void; keyItems?: ReactNode[];
+export function SessionSlashPad({ onSelect = insertSlashCommand, onCustomSelect = insertQuickCommand, keyItems, rows = 2 }: {
+  onSelect?: (text: string) => void; onCustomSelect?: (text: string) => void; keyItems?: ReactNode[]; rows?: 1 | 2;
 }) {
   const { paneId } = useSession();
   const agent = useDashboard().agents.find(item => item.paneId === paneId)?.agent ?? "";
   const preferences = usePreferences();
   const memory = useState<Record<string, number>>({});
   const commands = !keyItems || preferences.padKind === "slash";
-  if (commands) return <CommandPad agent={agent} slash={slashCommandsForAgent(agent)} memory={memory}
+  if (commands) return <CommandPad agent={agent} slash={slashCommandsForAgent(agent)} memory={memory} rows={rows}
     commands={preferences.quickCommands ?? defaultQuickCommands()} onSelect={onSelect} onCustomSelect={onCustomSelect} />;
-  return <PadPages items={keyItems} columns={7} kind="keys" label={t("keys.more")} memory={memory}
-    leading={<SessionPadModeBar />}
-    trailing={page => <span className="pad-page-name">{t(KEY_PAGES[page]?.name ?? KEY_PAGES[0].name)}</span>} />;
+  return <PadPages items={keyItems} columns={7} rows={rows} kind="keys" label={t("keys.more")} memory={memory}
+    leading={(_page, firstItem) => <span className="pad-page-name">{t(keyPageName(firstItem))}</span>}
+    trailing={<SessionPadModeBar />} />;
 }

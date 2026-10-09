@@ -2,7 +2,9 @@ import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { act, createElement, StrictMode, useLayoutEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
-import { connectionStore, applyPairingFragment, applyOriginConfig, phase, setPhase, p2pEnabled } from "../connection/connection-store";
+import {
+  connectionStore, applyPairingFragment, applyOriginConfig, phase, setConnectFailure, setPhase, p2pEnabled,
+} from "../connection/connection-store";
 import { attachLiveSession, setAddingComputer, setCredential, setComputers } from "../computers/catalog-store";
 import { setScreen } from "../../app/navigation-store";
 import { pairingStore, resetPairingInput, setPairManualOpen, setPairFailure } from "./form-store";
@@ -133,6 +135,10 @@ afterEach(async () => {
     setComputers([]);
     setCredential(null);
     attachLiveSession(null);
+    // Both cases pair and then resume into the mocked `disconnected` session,
+    // which lands on the connection domain's failure reason. That reason picks
+    // the single-computer unreachable page, so it must not outlive this file.
+    setConnectFailure("");
     setPhase("boot");
     setScreen("home");
   });

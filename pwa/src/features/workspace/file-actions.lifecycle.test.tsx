@@ -17,7 +17,7 @@ const seedRestorer = new WorkspaceSnapshotRestorer();
 
 const pause = (ms = 0) => new Promise<void>(resolve => setTimeout(resolve, ms));
 const sheet = () => document.querySelector<HTMLDialogElement>("dialog.sheet")!;
-const action = () => [...sheet().querySelectorAll<HTMLButtonElement>(".menu-row")].find(button => button.textContent === "重命名…")!;
+const action = () => [...sheet().querySelectorAll<HTMLButtonElement>(".menu-row")].find(button => button.textContent === "改文件名")!;
 const rowDisposers: Array<() => void> = [];
 
 function trigger(): HTMLButtonElement {
@@ -75,7 +75,7 @@ afterEach(async () => {
 
 test("a file action cannot open a confirmation on a new session after the sheet closes", async () => {
   const { mutations } = fileRow();
-  const remove = [...sheet().querySelectorAll<HTMLButtonElement>(".menu-row")].find(button => button.textContent === "删除文件…")!;
+  const remove = [...sheet().querySelectorAll<HTMLButtonElement>(".menu-row")].find(button => button.textContent === "删除文件")!;
   await act(async () => {
     remove.click();
     attachLiveSession({} as unknown as LiveSession);

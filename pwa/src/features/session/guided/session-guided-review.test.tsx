@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetTestDOM } from "../../../../test-support/boot-dom";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
@@ -268,7 +269,7 @@ test("frozen native range survives output and echo repaint, then exit shows curr
   applyPaneRead("replacement\nnew output", "1".repeat(64));
   paint();
   act(() => predictText("p1", "x", livePaneHash()));
-  expect(appRoot().querySelector(".term-line > span")?.firstChild === textNode).toBeTrue();
+  expectSameNode(appRoot().querySelector(".term-line > span")?.firstChild, textNode);
   expect(selection.toString()).toBe("irst");
   expect(appRoot().querySelector(".term")?.textContent).toContain("first line");
   act(() => toggleTermSelect(false));
@@ -306,8 +307,8 @@ test("actual guided route patches output without replacing focused IME compose o
     expect(patchSessionScreen()).toBe("patched");
   });
   expect(field() === input).toBeTrue();
-  expect(appRoot().querySelector(".term") === term).toBeTrue();
-  expect(document.activeElement === input).toBeTrue();
+  expectSameNode(appRoot().querySelector(".term"), term);
+  expectSameNode(document.activeElement, input);
   expect([input.selectionStart, input.selectionEnd]).toEqual([1, 4]);
   expect(input.value).toBe("正在编辑的文字");
   expect(composeIME()).toBeTrue();

@@ -319,7 +319,12 @@ export function issueTicket(opts?: {
   });
 }
 
-export function beginEnter(session: Session, paneId: string, returnView: WorkspaceReturnView): {
+/**
+ * Rebind the model to a pane. The workspace screen repaints through its own
+ * navigation; a rebind with no navigation behind it (the inspector beside the
+ * session) passes `announce` so subscribers see the loading model at once.
+ */
+export function beginEnter(session: Session, paneId: string, returnView: WorkspaceReturnView, announce = false): {
   ticket: WorkspaceTicket;
   cached: WorkspaceNavigation | null;
 } {
@@ -330,11 +335,9 @@ export function beginEnter(session: Session, paneId: string, returnView: Workspa
   notesEpoch++;
   model = loadingWorkspaceModel(paneId, returnView);
   armPendingReveal();
-  emit(false);
-  return {
-    ticket: makeTicket(capture(session, paneId), {}),
-    cached,
-  };
+  const ticket = makeTicket(capture(session, paneId), {});
+  emit(announce);
+  return { ticket, cached };
 }
 
 export function bindScope(ticket: WorkspaceTicket, scope: WorkspaceScope): boolean {

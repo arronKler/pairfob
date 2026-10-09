@@ -1,0 +1,286 @@
+/* Looking at an attachment and editing an image before it is sent: the full-screen
+   viewer and the image editor. The tray that lists attachments is attachments.scss. */
+
+/* --- Viewer ----------------------------------------------------------------------------- */
+
+dialog.attach-viewer {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #000;
+  color: var(--ink);
+}
+
+dialog.attach-viewer::backdrop { background: #000; }
+
+dialog.attach-viewer > form {
+  height: 100%;
+  margin: 0;
+}
+
+.attach-viewer-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+
+.attach-viewer-bar {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  padding: 6px;
+}
+
+.attach-viewer-title {
+  display: grid;
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-secondary);
+  font-weight: 500;
+}
+
+.attach-viewer-count { color: var(--muted); }
+
+.attach-viewer-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.attach-viewer-icon,
+.attach-viewer-nav {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+}
+
+.attach-viewer-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  touch-action: pan-y pinch-zoom;
+}
+
+.attach-viewer-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.attach-viewer-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  margin-top: -22px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.attach-viewer-nav.is-prev { left: 8px; }
+.attach-viewer-nav.is-next { right: 8px; }
+
+.attach-viewer-file {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  width: min(100%, 560px);
+  padding: 0 var(--space-4);
+  color: var(--muted);
+  font-size: var(--text-secondary);
+}
+
+.attach-viewer-text {
+  width: 100%;
+  max-height: 55dvh;
+  margin: 0;
+  padding: var(--space-3);
+  overflow: auto;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.attach-info {
+  display: grid;
+  gap: 4px;
+  margin: 0 var(--space-4);
+  padding: var(--space-3);
+  list-style: none;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+}
+
+.attach-info .attach-info-path { font-family: var(--mono); overflow-wrap: anywhere; }
+.attach-info .is-error { color: var(--error); }
+.attach-info .is-warn { color: var(--warn); }
+
+.attach-viewer-foot {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 10px 10px 16px;
+}
+
+.attach-viewer-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* --- Image editor modal ---------------------------------------------------------------- */
+
+.imgedit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.imgedit-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.imgedit-tool {
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.imgedit-tool.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(110, 168, 254, 0.14);
+}
+
+.imgedit-text {
+  min-height: 40px;
+  padding: 0 12px;
+  background: #0a0d12;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--term-ink);
+  font-size: 16px;
+}
+
+.imgedit-frame {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  background: #07090d;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  touch-action: none;
+}
+
+.imgedit-canvas {
+  display: block;
+  /* Width AND height are always set together from the measured frame, so the
+     preview keeps the source aspect ratio; never let CSS shrink one side. */
+  max-width: none;
+  border-radius: 4px;
+  touch-action: none;
+}
+
+.imgedit-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+/* Two action rows: secondary actions share one nowrap row, the long primary
+   button gets the next full-width row. This stops Chinese labels (撤销/重置/
+   取消) being squeezed into one-character columns on 390px phones. */
+.imgedit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.imgedit-actions-secondary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.imgedit-actions-secondary button,
+.imgedit-apply {
+  min-width: 0;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.imgedit-actions-secondary button {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.imgedit-apply {
+  width: 100%;
+  justify-content: center;
+}
+
+.imgedit-error {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(214, 59, 49, 0.45);
+  border-radius: var(--r-sm);
+  background: rgba(214, 59, 49, 0.1);
+  color: var(--danger-bright);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+/* Generic modal cards make every .btn full width; attachment modals lay their
+   own footer rows out. */
+dialog.modal.attach-modal .attach-footer .btn,
+dialog.modal.imgedit-modal .imgedit-apply,
+dialog.modal.imgedit-modal .imgedit-actions-secondary .btn {
+  width: auto;
+  margin: 0;
+  flex: 1 1 0;
+  min-height: 44px;
+  justify-content: center;
+}
+
+dialog.modal.imgedit-modal .imgedit-apply {
+  width: 100%;
+  flex: none;
+}
+
+.imgedit-modal .modal-title { margin-bottom: 2px; }

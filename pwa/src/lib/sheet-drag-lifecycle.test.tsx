@@ -76,6 +76,36 @@ test("dispose before the opening microtask cannot leave a stale sheet-open class
   dialog.remove();
 });
 
+test("a sheet opened over a sheet leaves the page back when it is put away; the last one brings it forward", async () => {
+  const raw = () => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "modal sheet";
+    const form = document.createElement("form");
+    dialog.append(form);
+    document.body.append(dialog);
+    dialog.showModal();
+    return { dialog, release: bindSheetDrag({ dialog, form, close: () => dialog.close() }) };
+  };
+  const first = raw();
+  await Promise.resolve();
+  const step = raw();
+  await Promise.resolve();
+  expect(document.body.classList.contains("sheet-open")).toBeTrue();
+  step.release();
+  expect(document.body.classList.contains("sheet-open")).toBeTrue();
+  first.release();
+  expect(document.body.classList.contains("sheet-open")).toBeFalse();
+  // Closed in the other order, the page still waits for the last of them.
+  const under = raw();
+  const over = raw();
+  await Promise.resolve();
+  under.release();
+  expect(document.body.classList.contains("sheet-open")).toBeTrue();
+  over.release();
+  expect(document.body.classList.contains("sheet-open")).toBeFalse();
+  for (const sheet of [first, step, under, over]) { sheet.dialog.close(); sheet.dialog.remove(); }
+});
+
 test("content with its own drag (data-sheet-gesture) never moves or closes the sheet", async () => {
   const dialog = document.createElement("dialog");
   const form = document.createElement("form");

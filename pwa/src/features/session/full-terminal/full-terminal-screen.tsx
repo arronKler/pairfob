@@ -21,6 +21,7 @@ export type FullTerminalScreenProps = {
   pageLines: () => number;
   controls: FullTerminalControlsOptions;
   engineActive?: boolean;
+  includeBack?: boolean;
 };
 
 /**
@@ -40,7 +41,7 @@ export function FullTerminalScreen(props: FullTerminalScreenProps) {
   return <FullTerminalBody key={view.owner} view={view} {...props} />;
 }
 
-function FullTerminalBody({ view, onBack, onWorkspace, onMenu, onRetry, scroll, pageLines, controls, engineActive }: FullTerminalScreenProps & { view: FullTerminalViewSnapshot }) {
+function FullTerminalBody({ view, onBack, onWorkspace, onMenu, onRetry, scroll, pageLines, controls, engineActive, includeBack = true }: FullTerminalScreenProps & { view: FullTerminalViewSnapshot }) {
   // The fallback follows the session domain's frozen snapshot: the terminal
   // shell is active exactly while the session domain says the complete
   // terminal is mounted.
@@ -51,7 +52,7 @@ function FullTerminalBody({ view, onBack, onWorkspace, onMenu, onRetry, scroll, 
   // terminal; the header only says whose terminal this is.
   return (
     <div className="pane-root full-terminal-root" data-pane-id={view.paneId} data-terminal-owner={view.owner} data-react-full-terminal="">
-      <SessionIdentity agent={selected} fallbackTitle={view.title || t("title.terminal")} includeBack
+      <SessionIdentity agent={selected} fallbackTitle={view.title || t("title.terminal")} includeBack={includeBack}
         handlers={{ onBack, onWorkspace, onMenu }} className="full-terminal-chrome" />
       <FullTerminalHost
         paneId={view.paneId}
@@ -60,7 +61,7 @@ function FullTerminalBody({ view, onBack, onWorkspace, onMenu, onRetry, scroll, 
         scroll={scroll}
         pageLines={pageLines}
       />
-      <FullTerminalPad options={controls} />
+      <FullTerminalPad options={controls} onPage={(direction) => scroll(direction, pageLines(), "page_key")} />
     </div>
   );
 }

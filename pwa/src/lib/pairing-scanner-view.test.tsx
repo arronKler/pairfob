@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../test-support/node-identity";
 import { happy, resetTestDOM } from "../../test-support/boot-dom";
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { act } from "react";
@@ -5,6 +6,7 @@ import { openPairingScanner, PairingScanError, type ScannerFactory, type ScanRes
 import { scanPairingCode } from "./pairing-scanner";
 import { parsePairingURL, type FragmentPairing } from "./pairing-input";
 import { setLang, t } from "./i18n";
+import { bindOverlayOrigin } from "../shared/ui/overlay";
 
 const origin = "https://pairfob.com";
 const qr = `${origin}/pair#v=2&d=d_0123456789abcdefabcd&r=4f7a2c9e1b0d88aa55cc3311abde7001&c=7K3M-9H2P&fp=AAAAAAAAAAAAAAAAAAAAAA`;
@@ -59,7 +61,7 @@ test("scanner preserves the frame, inline error and video identity across a reje
   expect(video.muted).toBeTrue();
   await act(async () => engine.decode(qr.replace(origin, "https://example.com")));
   expect(modal.querySelector("[role=alert]")?.textContent).toBe(t("scan.wrongSite"));
-  expect(engine.video() === modal.querySelector("video")).toBeTrue();
+  expectSameNode(engine.video(), modal.querySelector("video"));
   expect(engine.calls).toEqual({ create: 1, start: 1, stop: 0, destroy: 0 });
   await act(async () => modal.querySelector<HTMLButtonElement>("button")!.click());
   expect(await result).toBeNull();
@@ -80,7 +82,7 @@ test("a valid hit stops once, lights the frame, then resolves exact pairing and 
   expect(await result).toEqual(parsePairingURL(qr, origin));
   expect(dialog()).toBeNull();
   expect(engine.calls.destroy).toBe(1);
-  expect(document.activeElement === trigger).toBeTrue();
+  expectSameNode(document.activeElement, trigger);
   trigger.remove();
 });
 
@@ -188,5 +190,31 @@ test("the public scan entry explains unavailable camera access without starting 
   } finally {
     if (descriptor) Object.defineProperty(navigator, "mediaDevices", descriptor);
     else Reflect.deleteProperty(navigator, "mediaDevices");
+  }
+});
+
+test("the scanner follows the gesture: the card for a key beside the list, the sheet for a finger", async () => {
+  const release = bindOverlayOrigin(document);
+  try {
+    happy.happyDOM.setWindowSize({ width: 820, height: 1180 });
+    document.body.dispatchEvent(new happy.KeyboardEvent("keydown", { key: "Enter", bubbles: true }) as unknown as Event);
+    let result = open(camera().factory);
+    await act(async () => { await Promise.resolve(); });
+    expect(dialog().className).toBe("modal sheet scanner-modal desk-form");
+    expect(document.body.classList.contains("sheet-open")).toBeFalse();
+    // The card closes from its corner, as every desk dialog does; the sheet from its head.
+    expect(dialog().querySelector(".sheet-close")).toBeNull();
+    await act(async () => dialog().querySelector<HTMLButtonElement>(".desk-close")!.click());
+    expect(await result).toBeNull();
+    document.body.dispatchEvent(new happy.PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }) as unknown as Event);
+    result = open(camera().factory);
+    await act(async () => { await Promise.resolve(); });
+    expect(dialog().className).toBe("modal sheet scanner-modal");
+    expect(document.body.classList.contains("sheet-open")).toBeTrue();
+    await act(async () => dialog().querySelector<HTMLButtonElement>(".sheet-close")!.click());
+    expect(await result).toBeNull();
+  } finally {
+    release();
+    happy.happyDOM.setWindowSize({ width: 390, height: 844 });
   }
 });

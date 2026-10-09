@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../test-support/node-identity";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { happy, resetBoardTestDOM } from "../../test-support/dom";
 import { appRoot } from "./dom-root";
@@ -251,7 +252,7 @@ describe("list ↔ pane transition", () => {
       void navigateWithTransition(() => { commits += 1; panePage(); }, { direction: "open", paneId: "p1", source: card });
       expect(commits).toBe(1);
       const under = document.querySelector(".pane-morph-under");
-      expect(under?.nextElementSibling).toBe(appRoot());
+      expectSameNode(under?.nextElementSibling, appRoot());
       expect(under?.querySelector(".card-main")).not.toBeNull();
       expect(document.documentElement.dataset.morph).toBe("open");
       const pane = animated.find((entry) => entry.className === "pane-root")!;

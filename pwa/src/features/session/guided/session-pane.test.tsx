@@ -1,4 +1,6 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { resetTestDOM } from "../../../../test-support/boot-dom";
+import { happy } from "../../../../test-support/dom";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
@@ -6,7 +8,7 @@ import { WorkspaceSnapshotRestorer } from "../../../../test-support/workspace-sn
 import { appRoot } from "../../../app/dom-root";
 import { bindSessionOwnerFromLive } from "../bind-live";
 import { setLang, t } from "../../../lib/i18n";
-import { clearNotice, showStatus } from "../../../app/notices-store";
+import { clearNotice, showError, showStatus } from "../../../app/notices-store";
 import { setPhase, setNetworkOnline } from "../../connection/connection-store";
 import { setScreen } from "../../../app/navigation-store";
 import { applyRuntimeIdentity, runtimeIdentity } from "../../connection/runtime-store";
@@ -97,12 +99,40 @@ test("losing contact updates the header by itself, with no session repaint", () 
   expect(appRoot().querySelector(".icon-stop")).toBeNull();
 });
 
+test("beside the list a status lost with the connection says so: the row's word, then the reason", () => {
+  happy.happyDOM.setWindowSize({ width: 1440, height: 900 });
+  try {
+    paint();
+    const title = appRoot().querySelector<HTMLElement>(".chrome-title")!;
+    const facts = title.querySelector(".chrome-meta-text")!.textContent!;
+    expect(facts).not.toContain(t("deskChrome.notConnected"));
+    act(() => setNetworkOnline(false));
+    // The same word the list row shows for this session, and why.
+    expect(title.querySelector(".chrome-status")?.textContent).toBe(t("status.unverifiable"));
+    expect(title.querySelector(".chrome-meta-text")?.textContent).toBe(`${t("deskChrome.notConnected")} · ${facts}`);
+    expect(title.getAttribute("title")).toContain(`${t("status.unverifiable")} · ${t("deskChrome.notConnected")}`);
+    act(() => setNetworkOnline(true));
+    expect(title.querySelector(".chrome-meta-text")?.textContent).toBe(facts);
+  } finally {
+    happy.happyDOM.setWindowSize({ width: 390, height: 844 });
+  }
+});
+
+test("the phone header keeps its line when contact is lost", () => {
+  paint();
+  const title = appRoot().querySelector<HTMLElement>(".chrome-title")!;
+  const facts = title.querySelector(".chrome-meta-text")!.textContent!;
+  act(() => setNetworkOnline(false));
+  expect(title.querySelector(".chrome-status")?.textContent).toBe(t("status.unverifiable"));
+  expect(title.querySelector(".chrome-meta-text")?.textContent).toBe(facts);
+});
+
 test("status publication keeps header identity while updating the visible status and its full text together", () => {
   paint();
   const title = appRoot().querySelector<HTMLElement>(".chrome-title")!;
   expect(title.getAttribute("title")).toContain(t("status.working"));
   act(() => { applySnapshot(SNAPSHOT("idle")); notifySessionUI(); });
-  expect(appRoot().querySelector(".chrome-title") === title).toBeTrue();
+  expectSameNode(appRoot().querySelector(".chrome-title"), title);
   expect(title.querySelector(".chrome-status")?.textContent).toBe(t("status.waitingInput"));
   expect(title.getAttribute("title")).toContain(t("status.waitingInput"));
   connected = false;
@@ -118,8 +148,8 @@ test("snapshot updates preserve the focused draft and selection while selection 
   field.setSelectionRange(2, 7);
   act(() => { applyPaneRead("next output", "hash"); });
   act(notifySessionUI);
-  expect(appRoot().querySelector("textarea") === field).toBeTrue();
-  expect(document.activeElement === field).toBeTrue();
+  expectSameNode(appRoot().querySelector("textarea"), field);
+  expectSameNode(document.activeElement, field);
   expect([field.value, field.selectionStart, field.selectionEnd]).toEqual(["draft under edit", 2, 7]);
   expect(appRoot().querySelector('[data-testid="buffer"]')?.textContent).toBe("next output");
   act(() => { setTermSelect(true); });
@@ -156,16 +186,34 @@ test("header actions and busy gating remain available in the expected order", ()
   expect(appRoot().querySelector(".back")).toBeNull();
 });
 
-test("notices update between chrome and buffer without resetting the pane", () => {
+test("a passing notice floats between chrome and buffer without resetting the pane or the buffer", () => {
   paint();
   const pane = appRoot().querySelector(".pane-root");
-  act(() => showStatus("session notice", true));
-  expect(appRoot().querySelector(".pane-root") === pane).toBeTrue();
+  const stage = appRoot().querySelector(".term-stage");
+  const buffer = appRoot().querySelector("[data-testid=buffer]");
+  act(() => showStatus("session notice"));
+  expectSameNode(appRoot().querySelector(".pane-root"), pane);
   const notice = appRoot().querySelector("[data-react-notice]")!;
-  expect(notice.previousElementSibling?.className).toBe("chrome");
-  expect(notice.nextElementSibling?.className).toBe("term-stage");
-  expect(notice.nextElementSibling?.firstElementChild?.getAttribute("data-testid")).toBe("buffer");
+  // It hangs from an anchor of no height (session-shell.scss), so the buffer under it is not laid out again.
+  const anchor = notice.parentElement!;
+  expect(anchor.className).toBe("session-notice");
+  expect(anchor.previousElementSibling?.className).toBe("chrome");
+  expectSameNode(anchor.nextElementSibling, stage);
+  expectSameNode(stage?.firstElementChild, buffer);
   act(clearNotice);
   expect(appRoot().querySelector("[data-react-notice]")).toBeNull();
-}
-);
+  expect(appRoot().querySelector(".session-notice")).toBeNull();
+  expectSameNode(appRoot().querySelector(".term-stage"), stage);
+  expectSameNode(appRoot().querySelector("[data-testid=buffer]"), buffer);
+});
+
+test("an error that stays until the reader acts keeps its place in the page, between chrome and buffer", () => {
+  paint();
+  const stage = appRoot().querySelector(".term-stage");
+  act(() => showError("send not confirmed", true));
+  const notice = appRoot().querySelector("[data-react-notice]")!;
+  expectSameNode(notice.parentElement, appRoot().querySelector(".pane-root"));
+  expect(notice.previousElementSibling?.className).toBe("chrome");
+  expectSameNode(notice.nextElementSibling, stage);
+  expect(appRoot().querySelector(".session-notice")).toBeNull();
+});

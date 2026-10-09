@@ -1,15 +1,16 @@
 import { ChevronRight, GitBranch, Plus } from "lucide-react";
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useState } from "react";
 import { t } from "../../../lib/i18n";
 import { messageOf } from "../../../lib/notices";
-import { OPERATION_INPUT_LIMITS, type WorktreeSummary } from "../../../lib/operations";
+import type { WorktreeSummary } from "../../../lib/operations";
 import type { DashboardAgentCard as AgentCard } from "../../../lib/dashboard";
 import { createPaneWorktree, loadPaneWorktrees, openPaneWorktree, type SheetOutcome } from "../../operations/controller";
 import { useCapabilities } from "../../operations/hooks";
+import { WorktreeCreateForm, WorktreeOpenForm } from "../../operations/worktree-forms";
 import { useSheetNav } from "../../../shared/ui/overlay/sheet-stack";
 import type { ActionSheetController } from "../../../shared/ui/overlay/action-sheet";
-import { Button, SegmentedControl, SegmentedOption, Spinner } from "../../../shared/ui/primitives";
-import { PageFooter, useOperationGate, useSheetRun } from "./pane-menu-pages";
+import { Button, Spinner } from "../../../shared/ui/primitives";
+import { useOperationGate } from "./pane-menu-pages";
 import { PanePage } from "./pane-page";
 
 /**
@@ -75,7 +76,7 @@ export function WorktreePage({ modal, agent }: { modal: ActionSheetController; a
   return <PanePage tall className="pane-worktrees">
     {caps.create_worktree && <div className="menu-group">
       <Button className="menu-row pane-row-accent" onClick={() => nav.push({ key: "wt-new", title: t("pm.wtNew"),
-        render: () => <WorktreeCreatePage agent={agent} /> })}>
+        render: () => <WorktreeCreatePage modal={modal} agent={agent} /> })}>
         <span className="menu-row-icon" aria-hidden="true"><Plus size={18} /></span>
         <span className="menu-row-label">{t("pm.wtNew")}</span>
         <ChevronRight className="menu-row-next" size={18} aria-hidden="true" />
@@ -118,87 +119,18 @@ export function WorktreePage({ modal, agent }: { modal: ActionSheetController; a
   </PanePage>;
 }
 
-function enterSubmits(submit: () => void) {
-  return (event: KeyboardEvent) => {
-    if (event.key !== "Enter" || !(event.target instanceof HTMLInputElement) || event.nativeEvent.isComposing) return;
-    event.preventDefault();
-    submit();
-  };
-}
-
-const MONO = { className: "create-input is-mono", type: "text", autoComplete: "off", autoCapitalize: "off", autoCorrect: "off", spellCheck: false } as const;
-
-/**
- * Create runs as the existing background job card, so the page does not wait
- * for it: the button says it is under way and the sheet can be closed.
- */
-function WorktreeCreatePage({ agent }: { agent: AgentCard }) {
-  const [fields, setFields] = useState({ branch: "", base: "", label: "", path: "" });
-  const [state, setState] = useState<{ started: boolean; error: string }>({ started: false, error: "" });
+/** The shared create form as a page of the panel, on this session's repository. */
+function WorktreeCreatePage({ modal, agent }: { modal: ActionSheetController; agent: AgentCard }) {
   const reason = useOperationGate();
-  const set = (key: keyof typeof fields) => (event: { currentTarget: HTMLInputElement }) => {
-    const value = event.currentTarget.value;
-    setFields(current => ({ ...current, [key]: value }));
-    setState(current => ({ ...current, error: "" }));
-  };
-  const submit = () => {
-    if (state.started || reason) return;
-    if (createPaneWorktree(agent, fields)) setState({ started: true, error: "" });
-    else setState({ started: false, error: t("op.worktreeJobLimit") });
-  };
-  const dir = agent.workspaceCwd || agent.cwd;
   return <PanePage>
-    <div className="create-sheet-body pane-create" onKeyDown={enterSubmits(submit)}>
-      <fieldset className="pane-fieldset" disabled={state.started}>
-        <label className="create-field">{t("create.branch")}
-          <input {...MONO} value={fields.branch} placeholder={t("create.branchHint")} maxLength={OPERATION_INPUT_LIMITS.branch} onChange={set("branch")} />
-        </label>
-        <label className="create-field">{t("create.base")}
-          <input {...MONO} value={fields.base} placeholder={t("create.baseHint")} maxLength={OPERATION_INPUT_LIMITS.base} onChange={set("base")} />
-        </label>
-        <label className="create-field">
-          <span>{t("pm.wtName")} <span className="create-optional">{t("create.optional")}</span></span>
-          <input className="create-input" type="text" autoComplete="off" value={fields.label} placeholder={t("pm.wtNameHint")}
-            maxLength={OPERATION_INPUT_LIMITS.label} onChange={set("label")} />
-        </label>
-        <details className="pane-precise">
-          <summary>{t("pm.wtAdvanced")}</summary>
-          <input {...MONO} value={fields.path} placeholder={t("create.pathPlaceholder")} aria-label={t("pm.wtAdvanced")}
-            maxLength={OPERATION_INPUT_LIMITS.path} onChange={set("path")} />
-        </details>
-        <p className="create-hint">{t("pm.wtCreateHint")}</p>
-      </fieldset>
-      <PageFooter summary={dir ? t("pm.wtCreateSummary", { dir }) : undefined} label={t(state.started ? "pm.wtCreateStarted" : "pm.wtCreate")}
-        busyLabel={t("pm.creating")} run={{ pending: false, error: state.error }} disabled={state.started} reason={state.started ? "" : reason}
-        onSubmit={submit} />
-    </div>
+    <WorktreeCreateForm modal={modal} reason={reason} dir={agent.workspaceCwd || agent.cwd} start={fields => createPaneWorktree(agent, fields)} />
   </PanePage>;
 }
 
-/** One target, named one way: a branch or a path, never both. */
+/** The shared open form as a page of the panel. */
 function WorktreeOpenPage({ modal, agent }: { modal: ActionSheetController; agent: AgentCard }) {
-  const [by, setBy] = useState<"branch" | "path">("branch");
-  const [value, setValue] = useState("");
-  const run = useSheetRun(modal);
   const reason = useOperationGate();
-  const submit = () => {
-    if (reason) return;
-    void run.submit(() => openPaneWorktree(agent, by === "path" ? { path: value } : { branch: value }));
-  };
   return <PanePage>
-    <div className="create-sheet-body pane-create" onKeyDown={enterSubmits(submit)}>
-      <fieldset className="pane-fieldset" disabled={run.pending}>
-        <SegmentedControl className="create-seg" aria-label={t("menu.openWorktree")}>
-          {(["branch", "path"] as const).map(option => <SegmentedOption key={option} selected={by === option}
-            onClick={() => { setBy(option); run.clearError(); }}>{t(option === "branch" ? "pm.wtByBranch" : "pm.wtByPath")}</SegmentedOption>)}
-        </SegmentedControl>
-        <input {...MONO} value={value} aria-label={t(by === "branch" ? "pm.wtByBranch" : "pm.wtByPath")} data-autofocus=""
-          placeholder={by === "branch" ? t("pm.wtBranchPlaceholder") : t("create.pathPlaceholder")}
-          maxLength={by === "branch" ? OPERATION_INPUT_LIMITS.branch : OPERATION_INPUT_LIMITS.path}
-          onChange={(event) => { setValue(event.currentTarget.value); run.clearError(); }} />
-        <p className="create-hint">{t("pm.wtOpenHint")}</p>
-      </fieldset>
-      <PageFooter label={t("pm.wtOpen")} busyLabel={t("pm.opening")} run={run} reason={reason} onSubmit={submit} />
-    </div>
+    <WorktreeOpenForm modal={modal} reason={reason} open={target => openPaneWorktree(agent, target)} />
   </PanePage>;
 }

@@ -4,15 +4,17 @@ import { ProtocolError } from "../../lib/protocol/errors";
 import type { WorkspaceEntry } from "../../lib/workspace";
 import { capabilityEnabled, operationBusy, setOperationBusy } from "../operations/capabilities-store";
 import { liveSession } from "../computers/catalog-store";
-import { currentScreen } from "../../app/navigation-store";
 import { showError, showStatus } from "../../app/notices-store";
 import { messageOf } from "../../lib/notices";
 import { bindObjectPress } from "../../shared/ui/overlay/object-press";
 import { openFileMenu, type FileMenuSpec } from "./file-menu";
 import { clearWorkspaceError, loadGitDiff, markWorkspaceBrowser, refreshWorkspace } from "./actions";
+import { noteRowRenamed } from "./focus-landing";
 import { fileNameProblem, gitMarks, layersFor } from "./git-marks";
 import { notifyWorkspaceApp } from "./navigation";
 import { getWorkspaceSnapshot, invalidateWorkspaceFiles, setWorkspaceError, workspacePaneCwd } from "./store";
+import { ownFilesDialog } from "./surface-dialogs";
+import { workspacePresented } from "./surface";
 import "./workspace-file-actions.scss";
 
 /** The file a rename/delete is in flight for, so its row can show busy. */
@@ -71,7 +73,7 @@ export function workspaceFileMutations(entry: WorkspaceEntry): { rename?: () => 
   if (!session || !root || !revision || entry.kind !== "file") return {};
   const current = () => {
     const now = getWorkspaceSnapshot();
-    return liveSession() === session && currentScreen() === "workspace"
+    return liveSession() === session && workspacePresented()
       && now.paneId === paneId && now.descriptor?.root === root
       && now.directory === directory
       && workspacePaneCwd(paneId) === cwd;
@@ -81,16 +83,16 @@ export function workspaceFileMutations(entry: WorkspaceEntry): { rename?: () => 
     if (!current() || operationBusy() || !capabilityEnabled(capability)) return;
     let newName = "";
     if (rename) {
-      const value = await askText({ title: t("fileActions.rename"), initial: entry.name, maxLength: 255,
-        label: t("text.fileName"), allowEmpty: false, hint: t("workspace.nameRule"), validate: nameProblemText });
+      const value = await ownFilesDialog(() => askText({ title: t("fileActions.rename"), initial: entry.name, maxLength: 255,
+        label: t("text.fileName"), allowEmpty: false, hint: t("workspace.nameRule"), validate: nameProblemText }));
       if (value === null || value === entry.name) return;
       if (fileNameProblem(value)) {
         if (current()) setWorkspaceError(t("fileActions.invalidName"));
         return;
       }
       newName = value;
-    } else if (!await askConfirm({ title: t("confirm.deleteFileTitle"), subject: { name: entry.name, detail: entry.path && entry.path !== entry.name ? entry.path : undefined },
-      message: t("confirm.deleteFileEffect"), confirmLabel: t("fileActions.delete") })) return;
+    } else if (!await ownFilesDialog(() => askConfirm({ title: t("confirm.deleteFileTitle"), subject: { name: entry.name, detail: entry.path && entry.path !== entry.name ? entry.path : undefined },
+      message: t("confirm.deleteFileEffect"), confirmLabel: t("fileActions.delete") }))) return;
     if (!current() || operationBusy() || !capabilityEnabled(capability)) return;
     mutationTarget = entry.path;
     setOperationBusy(true);
@@ -121,6 +123,8 @@ export function workspaceFileMutations(entry: WorkspaceEntry): { rename?: () => 
       if (liveSession() === session) notifyWorkspaceApp();
       return;
     }
+    // The row keeps the reader's place under its new name.
+    if (rename && !errorText) noteRowRenamed(entry.path, `${entry.path.slice(0, entry.path.length - entry.name.length)}${newName}`);
     // Refresh even on an uncertain result; never replay the mutation.
     markWorkspaceBrowser();
     await refreshWorkspace();
@@ -155,7 +159,7 @@ export function openWorkspaceFileMenu(entry: WorkspaceEntry, extra: Partial<File
 export function bindWorkspaceFileActions(row: HTMLElement, entry: WorkspaceEntry): () => void {
   if (entry.kind !== "file") return () => {};
   const open = () => {
-    if (currentScreen() !== "workspace" || operationBusy()) return;
+    if (!workspacePresented() || operationBusy()) return;
     openWorkspaceFileMenu(entry);
   };
   row.classList.add("workspace-file-actionable");

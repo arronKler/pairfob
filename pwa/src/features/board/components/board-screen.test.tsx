@@ -1,5 +1,6 @@
 import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act } from "react";
 import type { DashboardAgentCard } from "../../../lib/dashboard";
@@ -191,8 +192,10 @@ describe("board screen presentation", () => {
     expect(busy.getAttribute("aria-label")).toBe(t("home.creating"));
     paint(model({ connected: false }));
     expect(appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!.disabled).toBe(true);
-    paint(model({ workspaceId: "" }));
-    expect(appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!.disabled).toBe(true);
+    // Without a workspace there is no tab and so no row: the empty card's offer is the one left, and it is closed.
+    paint(model({ workspaceId: "", tabId: "", layouts: [], agents: [] }));
+    expect(appRoot().querySelector(".board-tab-new")).toBeNull();
+    expect(appRoot().querySelector<HTMLButtonElement>(".board-canvas .empty-action")!.disabled).toBe(true);
     paint(model());
     expect(appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!.disabled).toBe(false);
     expect(appRoot().querySelector<HTMLButtonElement>(".board-tab-new")!.getAttribute("aria-label")).toBe(t("board.newTab"));
@@ -208,10 +211,103 @@ describe("board screen presentation", () => {
     expect(appRoot().querySelector(".board-zoom")).toBeNull();
     expect(appRoot().querySelector(".board-stage")).toBeNull();
     expect(appRoot().querySelector(".board-canvas .empty-title")?.textContent).toBe(t("board.emptyTitle"));
+    // No tab, so no strip and no row for one: an empty strip used to draw as a thin bar.
+    expect(appRoot().querySelector(".board-rail, .board-tabs")).toBeNull();
     // No stage means no camera write and no gesture binding at all.
     expect(calls).toContain("host");
     expect(calls).not.toContain("transform");
     expect(calls).not.toContain("bind");
+  });
+
+  test("a board with no tab offers the new session on its empty card, and only there", () => {
+    paint(model({ tabList: [], layouts: [], agents: [], tabId: "" }));
+    expect(appRoot().querySelector(".board-rail")).toBeNull();
+    const offer = appRoot().querySelector<HTMLButtonElement>(".board-canvas .empty-action")!;
+    expect(offer.textContent).toBe(t("empty.actionCreate"));
+    // A create action as the list and the empty main draw theirs: a "+" before the word.
+    expect(offer.firstElementChild?.tagName.toLowerCase()).toBe("svg");
+    expect(offer.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
+    expect(offer.disabled).toBe(false);
+    act(() => offer.click());
+    expect(calls).toContain("createTab");
+    // Where the row has "+", the card repeats nothing; without the capability it offers nothing.
+    paint(model({ layouts: [], agents: [] }));
+    expect(appRoot().querySelector(".board-tab-new")).not.toBeNull();
+    expect(appRoot().querySelector(".board-canvas .empty-title")).not.toBeNull();
+    expect(appRoot().querySelector(".board-canvas .empty-action")).toBeNull();
+    paint(model({ tabList: [], layouts: [], agents: [], tabId: "", canCreateTab: false }));
+    expect(appRoot().querySelector(".board-canvas .empty-action")).toBeNull();
+  });
+
+  test("the tab row keeps the place a canvas mode speaks in, and feedback floats outside the canvas", () => {
+    paint(model());
+    const mode = appRoot().querySelector(".board-rail > .board-mode")!;
+    // A lifted tile is marked on the canvas at pointer speed; both of its lines wait here for the styles.
+    expect([...mode.querySelectorAll(".board-mode-lift")].map((line) => [line.className, line.textContent, line.getAttribute("aria-hidden")]))
+      .toEqual([
+        ["board-mode-bar board-mode-lift is-held", t("boardCanvas.liftHeld"), "true"],
+        ["board-mode-bar board-mode-lift is-moved", t("boardCanvas.liftMoved"), "true"],
+      ]);
+    // The float is the shell's, after the canvas: nothing in it is drawn inside the canvas or its body.
+    paint(model({ status: { tone: "off", text: t("chrome.herdrOff") } }));
+    const float = appRoot().querySelector(".board-shell > .board-float")!;
+    expect(float.previousElementSibling?.className).toContain("board-body");
+    expect(float.querySelector(".banner-off")).not.toBeNull();
+    expect(appRoot().querySelector(".board-body .banner, .board-body .notice, .board-canvas .board-float")).toBeNull();
+  });
+
+  test("a pane shown alone on the computer says so in the tab row, beside the tabs, with the way back", () => {
+    const zoomed = { ...layout, zoomed: true, panes: [...layout.panes, { paneId: "w1:p2", focused: false, rect: { x: 50, y: 0, width: 50, height: 40 } }] };
+    const view = model({ agents: [agent("w1:p1"), agent("w1:p2")], layouts: [zoomed] });
+    let reason = "";
+    const owner = { ...controller(), layoutReason: () => reason, toggleZoom: async (paneId: string, mode: "on" | "off") => { calls.push(`zoom:${paneId}:${mode}`); } };
+    paint(view, owner);
+    const rail = appRoot().querySelector(".board-rail")!;
+    // After the strip and "+", which stay in reach: another tab is one tap away while this one is zoomed.
+    expect([...rail.children].map((node) => node.className.split(" ").at(-1))).toEqual(["board-tabs", "board-tab-new", "board-zoom-bar", "board-mode"]);
+    const bar = rail.querySelector(".board-zoom-bar")!;
+    expect(bar.className).toBe("board-mode-bar board-zoom-bar");
+    expect(bar.getAttribute("role")).toBe("status");
+    expect(bar.querySelector(".board-mode-text")!.textContent).toBe(t("boardCanvas.zoomedBanner"));
+    // Nothing is drawn on the canvas: there it lay over the zoomed pane's own head.
+    expect(appRoot().querySelector(".board-body")!.textContent).not.toContain(t("boardCanvas.zoomedBanner"));
+    const restore = bar.querySelector<HTMLButtonElement>("button.board-mode-cancel")!;
+    expect(restore.textContent).toBe(t("boardMenu.restore"));
+    act(() => restore.click());
+    act(() => chip("logs").click());
+    expect(calls).toContain("zoom:w1:p1:off");
+    expect(calls).toContain("tab:w1:t2");
+
+    // Offline or busy the way back is refused with its reason, like every layout action.
+    reason = t("boardMenu.offline");
+    paint(view, owner);
+    const refused = appRoot().querySelector<HTMLButtonElement>(".board-zoom-bar button")!;
+    expect([refused.disabled, refused.title]).toEqual([true, t("boardMenu.offline")]);
+
+    paint(model(), owner);
+    expect(appRoot().querySelector(".board-zoom-bar")).toBeNull();
+  });
+
+  test("restoring the split keeps the keyboard on the board: focus goes from the bar to the pane that was shown alone", () => {
+    const split = { ...layout, focusedPaneId: "w1:p2", panes: [...layout.panes, { paneId: "w1:p2", focused: false, rect: { x: 50, y: 0, width: 50, height: 40 } }] };
+    const both = [agent("w1:p1"), agent("w1:p2")];
+    const zoomed = model({ agents: both, layouts: [{ ...split, zoomed: true }] });
+    const restored = model({ agents: both, layouts: [split] });
+    const openOf = (paneId: string) => [...appRoot().querySelectorAll<HTMLElement>(".board-pane")]
+      .find((tile) => tile.dataset.paneId === paneId)!.querySelector<HTMLButtonElement>(".board-pane-open")!;
+    paint(zoomed);
+    expect(zoomed.canvas.zoomedPaneId).toBe("w1:p2");
+    // A click or Enter on the button leaves focus on it; the snapshot then takes the bar away.
+    act(() => appRoot().querySelector<HTMLButtonElement>(".board-zoom-bar button")!.focus());
+    paint(restored);
+    expect(appRoot().querySelector(".board-zoom-bar")).toBeNull();
+    expectSameNode(document.activeElement, openOf("w1:p2"));
+
+    // Focus the reader put somewhere else is theirs: the bar leaving moves nothing.
+    paint(zoomed);
+    act(() => chip("logs").focus());
+    paint(restored);
+    expectSameNode(document.activeElement, chip("logs"));
   });
 
   test("the status line and banners follow the projected tone", () => {
@@ -235,6 +331,23 @@ describe("board screen presentation", () => {
       await settle();
     });
     expect(calls).toContain("workspace:w2");
+  });
+
+  test("a switcher row reads like the header's line: the path on its own span, then the marks", () => {
+    paint(model({ agents: [agent("w1:p1", "blocked"), { ...agent("w1:p2", "done"), tabId: "w1:t2" }] }));
+    act(() => appRoot().querySelector<HTMLButtonElement>(".board-title")!.click());
+    const line = document.querySelector(".sheet-body .menu-choice .menu-choice-detail > .board-space-line")!;
+    // Each part is an element of its own, so the styles put a dot between them and only the path gives way.
+    expect([...line.children].map((part) => [part.className, part.textContent])).toEqual([
+      ["mono board-space-path", "/work/alpha"],
+      ["board-mark is-blocked", t("list.markBlocked", { count: "1" })],
+      ["board-mark is-done", t("list.markDone", { count: "1" })],
+    ]);
+    expect(line.childNodes).toHaveLength(3);
+    // The same parts, in the same order, as the header says of the workspace on show.
+    expect([...appRoot().querySelectorAll(".board-title-line > *")].map((part) => part.textContent))
+      .toEqual([...line.children].map((part) => part.textContent));
+    act(() => document.querySelector<HTMLDialogElement>("dialog[open]")!.close());
   });
 
   test("on a phone tab root the board has no back and no status line", () => {

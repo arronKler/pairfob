@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../test-support/node-identity";
 import { afterAll, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { resetTestDOM } from "../../test-support/boot-dom";
@@ -31,9 +32,9 @@ test("ordinary connected reset retains the bound real app root", async () => {
   await freshRealm();
   const first = appRoot();
   await resetTestDOM();
-  expect(appRoot()).toBe(first);
+  expectSameNode(appRoot(), first);
   expect(first.isConnected).toBeTrue();
-  expect(first.ownerDocument).toBe(document);
+  expectSameNode(first.ownerDocument, document);
 });
 
 test("a body cleared to no app reconnects the already bound root", async () => {
@@ -41,7 +42,7 @@ test("a body cleared to no app reconnects the already bound root", async () => {
   const retained = appRoot();
   document.body.replaceChildren();
   await resetTestDOM();
-  expect(appRoot()).toBe(retained);
+  expectSameNode(appRoot(), retained);
   expect(retained.isConnected).toBeTrue();
 });
 
@@ -52,7 +53,7 @@ test("a replacement <main id=app> does not steal the cached bound root identity"
   await resetTestDOM();
   // The bound node is the identity restored even beside a replacement.
   expect(retained.isConnected).toBeTrue();
-  expect(appRoot()).toBe(retained);
+  expectSameNode(appRoot(), retained);
 });
 
 test("a connected bound root adopted by another realm is restored to the helper realm", async () => {
@@ -62,10 +63,10 @@ test("a connected bound root adopted by another realm is restored to the helper 
   const foreign = new Window({ url: "https://pairfob.com/pair" });
   foreign.document.body.append(retained);
   Object.assign(globalThis, { window: foreign, document: foreign.document });
-  expect(retained.ownerDocument).toBe(foreign.document);
+  expectSameNode(retained.ownerDocument, foreign.document);
   await resetTestDOM();
-  expect(appRoot()).toBe(retained);
+  expectSameNode(appRoot(), retained);
   expect(retained.isConnected).toBeTrue();
-  expect(retained.ownerDocument).toBe(document);
+  expectSameNode(retained.ownerDocument, document);
   await foreign.happyDOM.abort();
 });

@@ -3,6 +3,7 @@ import { termFit } from "../../settings/preferences-store";
 import { haptic } from "../../../lib/dom";
 import { langRevision, subscribeLang, t } from "../../../lib/i18n";
 import { attachFullTerminalHost } from "./full-terminal-engine";
+import { bindPanBar } from "./full-terminal-pan-bar";
 import type { RemoteScroll } from "./full-terminal-scroll";
 import { SessionScrollRail } from "../guided/session-scroll";
 import { FullTerminalStateLayer } from "./full-terminal-state-layer";
@@ -36,6 +37,12 @@ export const FullTerminalHost = memo(function FullTerminalHost({
   useSyncExternalStore(subscribeLang, langRevision);
   const rootRef = useRef<HTMLElement | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
+  const panRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (panRef.current && barRef.current) return bindPanBar(barRef.current, panRef.current);
+  }, []);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -58,8 +65,12 @@ export const FullTerminalHost = memo(function FullTerminalHost({
         }}
         pageLines={pageLines}
       />
-      <div className="full-terminal-pan">
+      <div ref={panRef} className="full-terminal-pan">
         <FullTerminalCanvas />
+      </div>
+      {/* Shown only where the pan row has no scrollbar of its own; the binding hides it otherwise. */}
+      <div ref={barRef} className="full-terminal-pan-bar" aria-hidden="true">
+        <span className="full-terminal-pan-thumb" />
       </div>
     </div>
   );

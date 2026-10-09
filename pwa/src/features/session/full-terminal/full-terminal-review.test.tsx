@@ -1,6 +1,8 @@
+import { expectDifferentNode, expectSameNode } from "../../../../test-support/node-identity";
 import { beforeEach, afterEach, describe, expect, mock, test } from "bun:test";
 import { act } from "react";
 import { resetBoardTestDOM } from "../../../../test-support/dom";
+import { emulateTouchDevice } from "../touch-realm";
 
 class ReviewTerminal {
   cols = 80;
@@ -171,19 +173,34 @@ afterEach(async () => {
 
 describe("independent complete-terminal React review", () => {
   test("remote scroll closes the helper and updates the keyboard control", async () => {
-    const live = session();
-    await act(() => boot(live, true));
+    // A touch device: the terminal waits to be asked for its on-screen keyboard.
+    const restorePointer = emulateTouchDevice();
+    try {
+      const live = session();
+      await act(() => boot(live, true));
+      await until(() => getFullTerminalView().stage === "live", "live terminal");
+      const button = app.querySelector<HTMLButtonElement>(".full-terminal-kb")!;
+      await act(() => button.click());
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+      expect(app.querySelector(".full-terminal-host")?.classList.contains("kb-on")).toBeTrue();
+      await act(() => sendFullTerminalScroll("down", 3, "wheel"));
+      expect(live.calls).toContain("scroll");
+      expect(app.querySelector(".full-terminal-host")?.classList.contains("kb-off")).toBeTrue();
+      expect((app.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement).readOnly).toBeTrue();
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+      expect(button.textContent).toBe("点这里输入");
+    } finally {
+      restorePointer();
+    }
+  });
+
+  test("a hardware keyboard owns a live terminal from the start, at any width", async () => {
+    // The same phone-wide window driven by keys: nothing has to be called up.
+    await act(() => boot(session(), true));
     await until(() => getFullTerminalView().stage === "live", "live terminal");
-    const button = app.querySelector<HTMLButtonElement>(".full-terminal-kb")!;
-    await act(() => button.click());
-    expect(button.getAttribute("aria-pressed")).toBe("true");
-    expect(app.querySelector(".full-terminal-host")?.classList.contains("kb-on")).toBeTrue();
-    await act(() => sendFullTerminalScroll("down", 3, "wheel"));
-    expect(live.calls).toContain("scroll");
-    expect(app.querySelector(".full-terminal-host")?.classList.contains("kb-off")).toBeTrue();
-    expect((app.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement).readOnly).toBeTrue();
-    expect(button.getAttribute("aria-pressed")).toBe("false");
-    expect(button.textContent).toBe("点这里输入");
+    const host = app.querySelector(".full-terminal-host");
+    expect(host?.classList.contains("kb-on")).toBeTrue();
+    expect((app.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement).readOnly).toBeFalse();
   });
 
   test("chrome, full paint and pad expansion retain the active IME field and engine", async () => {
@@ -208,10 +225,10 @@ describe("independent complete-terminal React review", () => {
     });
     const more = app.querySelector<HTMLButtonElement>(".key-more")!;
     await act(() => { pointer(more); more.click(); });
-    expect(app.querySelector(".full-terminal-host") === host).toBeTrue();
-    expect(app.querySelector(".xterm-helper-textarea") === helper).toBeTrue();
-    expect(app.querySelector(".full-terminal-compose-input") === field).toBeTrue();
-    expect(document.activeElement === field).toBeTrue();
+    expectSameNode(app.querySelector(".full-terminal-host"), host);
+    expectSameNode(app.querySelector(".xterm-helper-textarea"), helper);
+    expectSameNode(app.querySelector(".full-terminal-compose-input"), field);
+    expectSameNode(document.activeElement, field);
     expect(field.value).toBe("输入中文");
     expect([field.selectionStart, field.selectionEnd]).toEqual([1, 3]);
     expect(composeIME()).toBeTrue();
@@ -231,14 +248,14 @@ describe("independent complete-terminal React review", () => {
     await act(() => { commitView(); syncFullTerminalChrome(); });
     expect(live.calls.filter((call) => call.startsWith("input:"))).toEqual(["input:send once"]);
     expect(app.querySelector(".full-terminal-compose-input")).toBeNull();
-    expect(app.querySelector(".full-terminal-host") === host).toBeTrue();
-    expect(app.querySelector(".xterm-helper-textarea") === helper).toBeTrue();
+    expectSameNode(app.querySelector(".full-terminal-host"), host);
+    expectSameNode(app.querySelector(".xterm-helper-textarea"), helper);
     await act(() => setFullTerminalComposeLive(false));
     // Drain the live-mode switch and any trailing engine/view publication so
     // they never flush outside act.
     await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, 0)); });
-    expect(app.querySelector(".full-terminal-host") === host).toBeTrue();
-    expect(app.querySelector(".xterm-helper-textarea") === helper).toBeTrue();
+    expectSameNode(app.querySelector(".full-terminal-host"), host);
+    expectSameNode(app.querySelector(".xterm-helper-textarea"), helper);
     expect((app.querySelector(".full-terminal-compose-input") as HTMLTextAreaElement).value).toBe("");
     expect(live.calls.filter((call) => call.startsWith("input:"))).toHaveLength(1);
   });
@@ -290,7 +307,7 @@ describe("independent complete-terminal React review", () => {
     await act(() => boot(newSession));
     await until(() => getFullTerminalView().stage === "live", "new live terminal");
     expect(getFullTerminalView().owner === oldOwner).toBeFalse();
-    expect(app.querySelector(".full-terminal-host") === oldHost).toBeFalse();
+    expectDifferentNode(app.querySelector(".full-terminal-host"), oldHost);
     expect(oldSession.calls.filter((call) => call.startsWith("close:"))).toHaveLength(1);
     expect(newSession.calls.filter((call) => call.startsWith("open:"))).toEqual(["open:p1"]);
     expect(oldHost?.isConnected).toBeFalse();

@@ -11,6 +11,10 @@ import { setScreen } from "../../app/navigation-store";
 import { setListGroup, resetHerdPresentationChoices, preferencesStore } from "../../features/settings/preferences-store";
 import { selectPane } from "../../features/session/session-store";
 import type { DashboardAgentCard } from "../../lib/dashboard";
+import { attachLiveSession } from "../../features/computers/catalog-store";
+import { setNetworkOnline } from "../../features/connection/connection-store";
+import { applyRuntimeIdentity } from "../../features/connection/runtime-store";
+import type { LiveSession } from "../../lib/protocol/session-types";
 import { openListPaneMenu, openListWorkspaceMenu } from "./object-menu";
 
 type SeedRow = {
@@ -70,12 +74,21 @@ beforeEach(async () => {
   // explicitly rather than relying on leftover state.
   selectPane("p1");
   applyCapabilities({ ...NO_OPERATION_CAPABILITIES }, []);
+  // A computer that is reached and whose Herdr answered: the state a menu's "new tab" rows need.
+  setNetworkOnline(true);
+  applyRuntimeIdentity({ herdHost: "MacBook Pro", runtimeKind: "herdr" });
+  attachLiveSession({ isConnected: () => true } as unknown as LiveSession);
   seed([
     { paneId: "p1", agent: "codex", status: "working", workspaceId: "w1", workspaceLabel: "One", tabId: "t1", cwd: "/one" },
     { paneId: "p2", paneLabel: "Target", agent: "codex", status: "idle", workspaceId: "w2", workspaceLabel: "Two", tabId: "t2", cwd: "/two/project" },
   ]);
 });
-afterEach(async () => await act(async () => { closeTestDialogs(); await pause(); }));
+afterEach(async () => {
+  await act(async () => { closeTestDialogs(); await pause(); });
+  attachLiveSession(null);
+  applyRuntimeIdentity({ herdHost: "", runtimeKind: "" });
+  setOperationBusy(false);
+});
 
 test("object actions keep full facts above the list and pin the card rather than the selected pane", async () => {
   act(() => openListPaneMenu(targetCard()));
@@ -137,4 +150,23 @@ test("new-tab capability gates both card and workspace entry without offering sp
   await act(async () => { closeTestDialogs(); await pause(); });
   act(() => openListWorkspaceMenu(targetCard()));
   expect(labels()[0]).toBe(t("menu.newTabInWorkspace"));
+});
+
+test("the new-tab rows are offered only while a session can be started: not once Herdr stops answering or exits", async () => {
+  act(() => applyCapabilities({ ...NO_OPERATION_CAPABILITIES, create_tab: true }, []));
+  for (const runtimeKind of ["", "offline"]) {
+    act(() => applyRuntimeIdentity({ herdHost: "MacBook Pro", runtimeKind }));
+    act(() => openListPaneMenu(targetCard()));
+    // The rows that are not about starting anything stay.
+    expect(labels()).toContain(t("menu.renamePane"));
+    expect(labels()).not.toContain(t("menu.newTabBeside"));
+    await act(async () => { closeTestDialogs(); await pause(); });
+    act(() => openListWorkspaceMenu(targetCard()));
+    expect(labels()).toEqual([t("menu.openInBoard"), t("menu.renameWorkspace"), t("op.closeWorkspace")]);
+    await act(async () => { closeTestDialogs(); await pause(); });
+  }
+  act(() => applyRuntimeIdentity({ herdHost: "MacBook Pro", runtimeKind: "herdr" }));
+  act(() => setOperationBusy(true));
+  act(() => openListWorkspaceMenu(targetCard()));
+  expect(labels()).not.toContain(t("menu.newTabInWorkspace"));
 });

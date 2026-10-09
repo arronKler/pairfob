@@ -104,10 +104,11 @@ describe("session lifecycle source contracts", () => {
     expect(register).toContain("Never from a React render function");
   });
 
-  test("full-terminal wins composition over desk and is declaratively composed; desk and pane stay declarative", () => {
-    // Layout derivation gives a full terminal its own mode ahead of desk. The
-    // mounted App composes that mode declaratively via <FullTerminalRoute/> (it
-    // no longer returns null for an adopted screen); preparation runs the
+  test("the desk keeps the list beside a full terminal; the phone full terminal is declaratively composed", () => {
+    // Layout derivation keeps every session mode beside the list on a wide
+    // layout, so desk is decided ahead of the phone's own full-terminal mode.
+    // The mounted App composes both declaratively via <FullTerminalRoute/> (it
+    // never returns null for an adopted screen); preparation runs the
     // controller's prepareFullTerminal before React renders. The desktop shell
     // and guided pane remain declarative composition.
     const layout = source("../../app/layout.ts");
@@ -115,7 +116,7 @@ describe("session lifecycle source contracts", () => {
     const desk = layout.indexOf('? "desk"');
     expect(fullTerminal).toBeGreaterThan(-1);
     expect(desk).toBeGreaterThan(-1);
-    expect(fullTerminal).toBeLessThan(desk);
+    expect(desk).toBeLessThan(fullTerminal);
     const app = source("../../app/App.tsx");
     const pageFor = app.slice(app.indexOf("export function pageFor"));
     // full-terminal is the last case; slice to the end of pageFor.

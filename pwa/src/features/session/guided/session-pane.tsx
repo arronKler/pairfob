@@ -5,12 +5,12 @@ import { agentFromDashboardSnapshot } from "../agents";
 import { sessionOwner } from "../identity";
 import { t } from "../../../lib/i18n";
 import { paneModel, type PaneModel } from "./pane-model";
-import { toggleTermSelect } from "./term";
 import { finishSessionPaint, type SessionHandlers } from "./view";
 import { sessionUIRevision, subscribeSessionUI } from "./ui-revision";
 import { morphingPane, queuedKind, shareOpening } from "../../../app/transition";
-import { AppNotice } from "../../../app/notice";
-import { Button } from "../../../shared/ui/primitives";
+import { useHardwareKeyboard } from "../../../app/input-mode";
+import { SessionAppNotice } from "../session-notice";
+import { SelectHint } from "./select-hint";
 import { SessionChrome } from "./session-chrome";
 import { SessionTerminal } from "./session-terminal";
 import { SessionRowBar } from "./session-rowbar";
@@ -19,7 +19,7 @@ import { SessionDock } from "./session-dock";
 type SessionParts = {
   Terminal: ComponentType<{ model: PaneModel }>;
   RowBar: ComponentType<{ model: PaneModel }>;
-  Dock: ComponentType<{ includeBack: boolean }>;
+  Dock: ComponentType<{ includeBack: boolean; phone?: boolean }>;
 };
 
 const defaultParts: SessionParts = {
@@ -49,6 +49,9 @@ function SessionPaneView({ includeBack, handlers, scroll, parts = defaultParts }
   const shown = useRef(model);
   if (!session.termSelect) shown.current = model;
   const { Terminal, RowBar, Dock } = parts;
+  // The field follows the keyboard, not the layout: a landscape tablet is wide
+  // and still types on glass, and a back button can sit beside a mouse.
+  const phone = !useHardwareKeyboard();
 
   useLayoutEffect(() => {
     const host = root.current;
@@ -62,19 +65,16 @@ function SessionPaneView({ includeBack, handlers, scroll, parts = defaultParts }
   return <div ref={root} className="pane-root" data-react-guided-pane="">
     <SessionChrome selected={selected} includeBack={includeBack} handlers={handlers} />
     {!selected ? <p className="empty-sub">{t("err.paneGone")}</p> : <>
-      <AppNotice />
+      <SessionAppNotice />
       <div className="term-stage">
         <Terminal model={shown.current} />
         <RowBar model={shown.current} />
-        {session.termSelect ? <div className="select-hint" role="status">
-          <span className="select-hint-label"><b>{t("rowbar.selecting")}</b> · {t("rowbar.selectingHint")}</span>
-          <Button className="select-done" onClick={() => toggleTermSelect(false)}>{t("rowbar.done")}</Button>
-        </div> : null}
+        {session.termSelect ? <SelectHint /> : null}
       </div>
       {/* The dock keeps its place while selecting so the buffer does not jump under the
           finger; it is inert until selection ends. */}
       <div className="dock-slot" inert={session.termSelect || undefined}>
-        <Dock includeBack={includeBack} />
+        <Dock includeBack={includeBack} phone={phone} />
       </div>
     </>}
   </div>;

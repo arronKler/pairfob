@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetChatDOM } from "../../../../test-support/chat-dom";
 import { beforeEach, afterEach, describe, expect, test } from "bun:test";
 import { act } from "react";
@@ -28,6 +29,10 @@ const { paneTermMode, setPaneTermMode, resetPreferences } = await import("../../
 const { composeDraft, setComposeDraft, resetComposeField } = await import("../compose-store.ts");
 const { clearNotice } = await import("../../../app/notices-store.ts");
 import { happy as happyDom } from "../../../../test-support/dom";
+import { emulateTouchDevice } from "../touch-realm";
+
+/** Set by a case that pins touch behaviour; the realm goes back to a mouse after it. */
+let restorePointer: (() => void) | null = null;
 
 const app = appRoot();
 
@@ -151,6 +156,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => await act(async () => {
+  restorePointer?.();
+  restorePointer = null;
   closeTestDialogs();
   // Drop any in-flight trace read and reset the chat view synchronously, then
   // let leaked read/detail continuations settle before unmount so they cannot
@@ -530,21 +537,25 @@ describe("agent-chat remembers its mode per pane", () => {
     closeTestDialogs();
   }));
 
-  test("copies only the completed final reply", async () => await act(async () => {
+  test("copies only the completed final reply", async () => {
     let copied = "";
     Object.defineProperty(happy.navigator, "clipboard", {
       configurable: true,
       value: { writeText: async (text: string) => { copied = text; } },
     });
-    bootAgentChat();
-    setAgents([{ ...(selectedAgent() ?? { paneId: "p1" }), status: "idle" }]);
-    expect(patchAgentChat({ follow: true })).toBe(true);
-    click(".agent-reply-copy");
-    await Promise.resolve();
-    await Promise.resolve();
+    await act(async () => {
+      bootAgentChat();
+      setAgents([{ ...(selectedAgent() ?? { paneId: "p1" }), status: "idle" }]);
+      expect(patchAgentChat({ follow: true })).toBe(true);
+      click(".agent-reply-copy");
+      for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
+    });
     expect(copied).toBe("looks fine");
-    expect(app.querySelector(".agent-chat-root > [data-app-notice]")?.textContent).toContain("已复制回答");
-  }));
+    // Confirmed on the button: a banner above the transcript would move it under the next press.
+    expect(app.querySelector(".agent-chat-root > [data-app-notice]")).toBeNull();
+    const button = app.querySelector(".agent-reply-copy")!;
+    expect([button.textContent, button.getAttribute("aria-label"), button.hasAttribute("data-copied")]).toEqual(["已复制", "已复制回答", true]);
+  });
 
   test("older history sits in the stream so it scrolls away from the latest turn", async () => await act(async () => {
     bootAgentChat();
@@ -557,7 +568,7 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(older.hidden).toBe(false);
     expect(older.textContent).toBe("加载更早内容");
     expect(older.disabled).toBe(false);
-    expect(older).toBe(app.querySelector(".agent-stream-inner")?.firstElementChild);
+    expectSameNode(older, app.querySelector(".agent-stream-inner")?.firstElementChild);
   }));
 
   test("‹ returns to the session list and keeps agent-chat as the pane mode", async () => await act(async () => {
@@ -596,6 +607,7 @@ describe("agent-chat remembers its mode per pane", () => {
   }));
 
   test("a phone's Return adds a line; the send button sends and keeps the same compose field", async () => await act(async () => {
+    restorePointer = emulateTouchDevice();
     bootAgentChat();
     const field = app.querySelector(".agent-dock textarea");
     if (!(field instanceof HTMLTextAreaElement)) throw new Error("missing compose");
@@ -608,7 +620,7 @@ describe("agent-chat remembers its mode per pane", () => {
     app.querySelector<HTMLButtonElement>(".agent-dock .send-btn")!.click();
     await Promise.resolve();
     await Promise.resolve();
-    expect(app.querySelector(".agent-dock textarea")).toBe(field);
+    expectSameNode(app.querySelector(".agent-dock textarea"), field);
     expect(composeDraft()).toBe("");
     expect(app.textContent).toContain("hello there");
     expect(app.querySelector(".agent-user-role")).toBeNull();
@@ -623,7 +635,7 @@ describe("agent-chat remembers its mode per pane", () => {
     field.value = "keep me";
     field.dispatchEvent(new happy.Event("input", { bubbles: true }));
     expect(patchAgentChat({ follow: true })).toBe(true);
-    expect(app.querySelector(".agent-dock textarea")).toBe(field);
+    expectSameNode(app.querySelector(".agent-dock textarea"), field);
     expect(field.value).toBe("keep me");
   }));
 
@@ -671,7 +683,7 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.textContent).not.toContain("没有发送");
     expect(app.textContent).toContain("looks fine");
     expect(patchAgentChat({ follow: true })).toBe(true);
-    expect(app.querySelector(".agent-chat-root > [data-app-notice]")).toBe(notice);
+    expectSameNode(app.querySelector(".agent-chat-root > [data-app-notice]"), notice);
   }));
 
   test("blocked agents get a way back to the guided confirm UI", async () => await act(async () => {

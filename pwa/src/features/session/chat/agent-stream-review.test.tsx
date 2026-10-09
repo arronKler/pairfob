@@ -1,3 +1,4 @@
+import { expectSameNode } from "../../../../test-support/node-identity";
 import { resetTestDOM } from "../../../../test-support/boot-dom";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
@@ -162,7 +163,7 @@ test("a retained final reply copies its updated raw text after sanitized Markdow
   const button = appRoot().querySelector<HTMLButtonElement>(".agent-reply-copy")!;
   const next = "**Latest** <iframe src='https://example.com'></iframe> [bad](javascript:alert(1))";
   render(next);
-  expect(appRoot().querySelector(".agent-reply-copy") === button).toBeTrue();
+  expectSameNode(appRoot().querySelector(".agent-reply-copy"), button);
   act(() => button.click());
   expect(copied).toEqual([next]);
   expect(appRoot().querySelector("iframe")).toBeNull();

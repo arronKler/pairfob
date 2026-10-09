@@ -1,3 +1,4 @@
+import { expectSameNode } from "./node-identity";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 import { act } from "react";
 
@@ -19,6 +20,10 @@ import { act } from "react";
  * 5. the live mock engine keeps its helper node through render and is retired
  *    exactly once when the next scene replaces the session;
  * 6. a held pending read fails once without replay and retires on navigation.
+ *
+ * Plus the workbench scenes' own teardown: what a scene opens beside or over
+ * the page (the inspector, search and jump, live input, the key pad, a drawn
+ * terminal) is gone by the time the next scene is ready.
  */
 
 let disposals = 0;
@@ -108,6 +113,10 @@ const { formatDeviceAge } = await import("../src/lib/ui-model");
 const { isAppMounted } = await import("../src/app/mount");
 const { appHost } = await import("../src/app/host");
 const { getFullTerminalView } = await import("../src/features/session/full-terminal/full-terminal");
+const { inspectorOpen } = await import("../src/features/workspace/inspector-store");
+const { composeLive } = await import("../src/features/session/compose-store");
+const { keysExpanded, paneActivated } = await import("../src/features/settings/preferences-store");
+const { diffNotes } = await import("../src/lib/diff-notes");
 
 type FixtureAPI = Awaited<ReturnType<typeof createFixtureAPI>>;
 let api: FixtureAPI | undefined;
@@ -153,10 +162,10 @@ test("actual API guided edit, focus/selection, hold/release and one send survive
     input.setSelectionRange(2, 7);
     await a.render();
   });
-  expect(document.querySelector(".dock textarea") === input).toBeTrue();
+  expectSameNode(document.querySelector(".dock textarea"), input);
   expect(appHost() === host).toBeTrue();
   expect(composeDraft()).toBe("QA input exactly once");
-  expect(document.activeElement === input).toBeTrue();
+  expectSameNode(document.activeElement, input);
   expect([input.selectionStart, input.selectionEnd]).toEqual([2, 7]);
   a.clearCalls();
   a.hold("sendText");
@@ -175,10 +184,10 @@ test("actual API guided edit, focus/selection, hold/release and one send survive
 test("actual API IME survives render and visible language changes", async () => {
   const a = await start("guided-ime");
   const input = document.querySelector<HTMLTextAreaElement>(".dock textarea")!;
-  expect(document.activeElement === input).toBeTrue();
+  expectSameNode(document.activeElement, input);
   expect([input.selectionStart, input.selectionEnd]).toEqual([1, 4]);
   await act(async () => { await a.render(); });
-  expect(document.querySelector(".dock textarea") === input).toBeTrue();
+  expectSameNode(document.querySelector(".dock textarea"), input);
   expect(input.value).toBe("正在编辑的文字");
   expect([input.selectionStart, input.selectionEnd]).toEqual([1, 4]);
   await scene("home-populated");
@@ -256,7 +265,7 @@ test("actual API live engine keeps helper through render then retires on next sc
   expect(document.querySelector(".full-terminal-root")?.getAttribute("data-pane-id")).toBe("w1:p1");
   expect(a.terminalFrame("QA injected frame")).toBeTrue();
   await act(async () => { await a.render(); });
-  expect(document.querySelector(".xterm-helper-textarea") === helper).toBeTrue();
+  expectSameNode(document.querySelector(".xterm-helper-textarea"), helper);
   expect(disposals).toBe(before);
   await scene("home-populated");
   expect(session?.isConnected()).toBeFalse();
@@ -333,5 +342,59 @@ test("actual API terminal-open-error ready resolves only after the rejected Term
   } finally {
     gate.resolve();
     loaderGate = null;
+  }
+});
+
+test("actual API scene reset closes the inspector, search and jump, live input and the drawn terminal", async () => {
+  const before = { width: happy.innerWidth, height: happy.innerHeight };
+  await act(async () => { happy.happyDOM.setWindowSize({ width: 1440, height: 900 }); });
+  try {
+    const a = await start("inspector-chat-diff-note");
+    expect(a.snapshot().appClass.split(" ")).toContain("inspector");
+    expect(a.snapshot().rects[".workspace-inspector"]).toHaveLength(1);
+    expect(document.querySelector(".inspector .workspace-diff-note")).not.toBeNull();
+    expect(diffNotes()).toHaveLength(1);
+
+    // The column and its note go with the session; search and jump opens over the list.
+    await scene("palette-recent");
+    expect(inspectorOpen()).toBeFalse();
+    expect(document.querySelector(".inspector")).toBeNull();
+    expect(a.snapshot().appClass.split(" ")).not.toContain("inspector");
+    expect(diffNotes()).toHaveLength(0);
+    expect(document.querySelector<HTMLDialogElement>("dialog.command-palette")?.open).toBeTrue();
+    expect(Object.keys(paneActivated())).toHaveLength(4);
+
+    // The dialog is closed through its own lifecycle, never pulled from under React.
+    await scene("guided-live-expanded");
+    await settle(() => document.querySelector("dialog.command-palette") === null);
+    expect(document.querySelector("dialog[open]")).toBeNull();
+    expect(paneActivated()).toEqual({});
+    expect(composeLive()).toBeTrue();
+    expect(keysExpanded()).toBeTrue();
+
+    // Ready on a terminal with a screen means the screen was delivered.
+    await scene("terminal-inspector");
+    expect(composeLive()).toBeFalse();
+    expect(keysExpanded()).toBeFalse();
+    expect(getFullTerminalView().stage).toBe("live");
+    expect(a.calls.filter((c) => c.method === "terminalOpen")).toHaveLength(1);
+    expect(inspectorOpen()).toBeTrue();
+    expect(document.querySelector(".inspector .inspector-list")).not.toBeNull();
+
+    await scene("palette-query");
+    expect(inspectorOpen()).toBeFalse();
+    expect(document.querySelector(".full-terminal-root")).toBeNull();
+    expect(document.querySelector<HTMLInputElement>("dialog.command-palette input")?.value).toBe("dash");
+
+    // The same scene again starts from a closed palette, not a second dialog.
+    await scene("palette-query");
+    await settle(() => document.querySelectorAll("dialog.command-palette").length === 1);
+    expect(document.querySelector<HTMLDialogElement>("dialog.command-palette")?.open).toBeTrue();
+
+    await scene("home-populated");
+    await settle(() => document.querySelector("dialog.command-palette") === null);
+    expect(a.snapshot().errors).toEqual([]);
+  } finally {
+    await act(async () => { happy.happyDOM.setWindowSize(before); });
   }
 });

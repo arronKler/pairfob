@@ -1,0 +1,4 @@
+# A failed matcher prints a DOM node as one line, not as the object graph behind
+# it: see test-support/node-inspect.ts.
+[test]
+preload = ["./test-support/node-inspect.ts"]

@@ -1,3 +1,4 @@
+import { expectDifferentNode, expectSameNode } from "../../../../test-support/node-identity";
 import { applySnapshot } from "../../dashboard/catalog-store";
 import { selectPane } from "../session-store";
 import { act, createElement } from "react";
@@ -26,7 +27,7 @@ afterEach(() => {
 function paint() {
   const sent: string[] = [];
   renderReact(createElement(FullTerminalPad, { options: {
-    sendKey: key => { sent.push(key); }, sendCompose: () => true, desk: false,
+    sendKey: key => { sent.push(key); }, sendCompose: () => true, hardwareKeyboard: false,
     keyboard: { open() {}, close() {}, toggle() {}, isOpen: () => false },
   } }));
   return sent;
@@ -88,8 +89,8 @@ test("page dots and mode toggle retain each mode's position and the compose fiel
   expect(kind("命令").getAttribute("aria-pressed")).toBe("true");
   act(() => { kind("按键").click(); });
   expect(button("Ctrl+A")).toBeTruthy();
-  expect(appRoot().querySelector("textarea")).toBe(input);
-  expect(document.activeElement).toBe(input);
+  expectSameNode(appRoot().querySelector("textarea"), input);
+  expectSameNode(document.activeElement, input);
   act(() => { appRoot().querySelector<HTMLButtonElement>(".key-more")!.click(); });
   expect(appRoot().querySelector(".pad-pages")).toBeNull();
   expect(appRoot().querySelector(".pad-kind")).toBeNull();
@@ -183,7 +184,7 @@ test("the soft keyboard and the pad are never shown together", async () => {
   const more = appRoot().querySelector<HTMLButtonElement>(".key-more")!;
   expect(more.getAttribute("aria-expanded")).toBe("false");
   act(() => { more.click(); });
-  expect(document.activeElement === input).toBe(false);
+  expectDifferentNode(document.activeElement, input);
   expect(keysExpanded()).toBe(true);
   await act(async () => { root.dataset.kb = "closed"; await Promise.resolve(); });
   expect(appRoot().querySelector(".pad-pages")).toBeTruthy();

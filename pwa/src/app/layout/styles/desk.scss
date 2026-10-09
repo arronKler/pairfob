@@ -6,6 +6,10 @@
   dock sits below the fold and the page itself starts to scroll.
 */
 #app.desk {
+  /* Column widths. The list narrows a little so the session and the inspector
+     have room; the inspector takes the larger share once the list gives way. */
+  --rail-w: clamp(17.5rem, 21vw, 20rem);
+  --inspector-w: clamp(27.5rem, 36vw, 45rem);
   position: fixed;
   top: var(--vv-top, 0px);
   right: 0;
@@ -20,60 +24,41 @@
   padding: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: clamp(19.5rem, 25vw, 24rem) minmax(0, 1fr);
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
   background: var(--bg);
   color: var(--ink);
 }
 
-.rail {
-  overflow-y: auto;
-  padding: calc(env(safe-area-inset-top, 0px) + 18px) 14px calc(28px + env(safe-area-inset-bottom, 0px));
-  border-right: 1px solid var(--line);
-  background: var(--bg);
+/* A viewport-relative width lands on fractions of a pixel, and a column that
+   ends on a half pixel makes its neighbour overflow by the other half. */
+@supports (width: round(1.5px, 1px)) {
+  #app.desk { --rail-w: round(clamp(17.5rem, 21vw, 20rem), 1px); }
 }
 
-.rail .section-title,
-.rail .group-head { margin-top: 18px; }
+/* Three columns: list, session, inspector. Without room for all three the list
+   gives way and the session header leads back to it. */
+#app.desk.inspector { grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--inspector-w); }
+#app.desk.inspector.rail-hidden {
+  --inspector-w: clamp(27.5rem, 49vw, 36.5rem);
+  grid-template-columns: minmax(0, 1fr) var(--inspector-w);
+}
+#app.desk.rail-hidden .rail { display: none; }
+/* The narrowest tier's board is the other page the list gives way to: it takes
+   the whole row, and its own header leads back. */
+#app.desk.rail-hidden:not(.inspector) { grid-template-columns: minmax(0, 1fr); }
 
-.rail .herd-list .herd-group:first-child .section-title,
-.rail .herd-list .herd-group:first-child .group-head { margin-top: 8px; }
-
-/* Brand and 新建 share the top row; the destinations get a row of their own. */
-.rail .herd-topbar { flex-wrap: nowrap; }
-.rail-nav {
+/* The shell class on #app shares the column's name, so the box is the child only. */
+#app > .inspector {
   display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin: 2px -8px 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
 }
-.rail-nav .text-link { padding-inline: 8px; }
-/* The Herdr-session switch closes the row: icon and name, the name truncating. */
-.rail-nav .herd-session-switch { gap: 4px; min-width: 0; margin-left: auto; }
-.rail-nav .herd-session-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The page beside the rail (the board) reads as the current destination. */
-.rail-nav .text-link.is-current { color: var(--ink); background: var(--surface); border-radius: var(--r-md); }
 
-/* Pointer targets in the narrow rail: smaller heading tools leave the
-   workspace name room on the heading's single line. The name keeps a floor so
-   the counts and tools can never squeeze it down to its first letter. */
-.rail .group-head .group-tool { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
-/* Wrapping is decided on the basis, so the name bids small and then grows. */
-.rail .group-head .group-title { flex: 1 1 5rem; min-width: min(5rem, 30%); }
-.rail .group-head .group-marks { gap: 2px; }
-.rail .group-head .group-mark { padding-inline: 3px; }
-
-.rail .empty-sub { margin: 4px 2px 0; }
-
-.rail .herd-group-body { border-radius: var(--r-md); }
-
-.rail .card-main { padding: 8px 12px; }
-
-/* Rows in the tab the board beside the rail shows: a light wash, below the selection and waiting grounds. */
-.rail .card.in-board:not(.sel) .card-main { background-color: #141b26; }
-.rail .card.in-board.is-blocked:not(.sel) .card-main { background-color: #221f16; }
-
-.rail .card-name { font-size: var(--text-lead); }
-.rail .card-meta { font-size: var(--text-caption); }
 
 .main {
   display: flex;
@@ -95,7 +80,10 @@
 
 .main-empty .empty-title { font-size: var(--text-title); font-weight: 650; color: var(--ink); }
 
-.main-settings {
+/* The pages that are one centred column: the settings family, and the
+   explanation of a computer that cannot be reached. */
+.main-settings,
+.main-unreachable {
   background: var(--bg);
   color: var(--ink);
   overflow-y: auto;
@@ -120,12 +108,26 @@
   font-weight: 620;
 }
 
-/* Settings scroll as a page; cards must retain their full content height. */
-.main-settings > * { flex-shrink: 0; }
+/* Under a finger the strip is a 44px target; the height it gains comes out of its top margin. */
+@media (any-pointer: coarse) {
+  .desk-return { min-height: 44px; margin-top: 2px; }
+}
 
-/* One column: the bar, every group and the notice share the same width and edges. */
-.main-settings > * { width: 100%; max-width: 40rem; }
+/* Settings scroll as a page; cards must retain their full content height. */
+.main-settings > *,
+.main-unreachable > * { flex-shrink: 0; }
+
+/* One centered column: the bar, every group and the notice share the same width and edges. */
+.main-settings > *,
+.main-unreachable > * { width: 100%; max-width: 40rem; align-self: center; }
+
+/* The rail's frame with no session behind it (the computer cannot be reached):
+   search and the destinations keep their places, locked. */
+.rail-search:disabled,
+.rail-nav-item:disabled { opacity: 0.45; pointer-events: none; }
 
 .desk .key { min-width: 0; min-height: 44px; font-size: var(--text-body); }
 
-.desk .dock-form textarea { font-size: 15px; }
+/* Every compose field beside the list is set in the same size, whichever view of the session it belongs to. */
+.desk .dock-form textarea,
+.desk .full-terminal-compose-form textarea { font-size: 15px; }

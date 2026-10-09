@@ -10,7 +10,7 @@ import { t } from "../src/lib/i18n";
 import { openPaneId } from "../src/features/session/session-store";
 import { composeLive } from "../src/features/session/compose-store";
 import { selectedAgent } from "../src/features/dashboard/catalog-store";
-import { isDesk } from "../src/app/viewport";
+import { hardwareKeyboard } from "../src/app/input-mode";
 import { registerSessionView } from "../src/features/session/register";
 import { FullTerminalScreen } from "../src/features/session/full-terminal/full-terminal-screen";
 import { setFullTerminalDocumentMode } from "../src/features/session/full-terminal/full-terminal-state";
@@ -60,7 +60,10 @@ export function renderTerminalShell(error: boolean): void {
     keyboardOpen: false,
   });
   if (!shellRoot) shellRoot = createRoot(appRoot());
-  shellRoot.render(
+  // Beside the list the App puts the terminal in the desk's main column. This
+  // fixture has no list, so the same section takes the whole desk grid.
+  const desk = currentLayout().shell.desk;
+  const screen =
     createElement(FullTerminalScreen, {
       onBack: action("back"),
       onWorkspace: action("workspace"),
@@ -70,7 +73,7 @@ export function renderTerminalShell(error: boolean): void {
       pageLines: () => 23,
       engineActive: false,
       controls: {
-        desk: isDesk(),
+        hardwareKeyboard: hardwareKeyboard(),
         sendKey: (key) => record("lifecycle", "terminalShell.key", [key]),
         sendCompose: () => false,
         keyboard: {
@@ -78,8 +81,9 @@ export function renderTerminalShell(error: boolean): void {
           isOpen: () => false,
         },
       },
-    }),
-  );
+      includeBack: !desk,
+    });
+  shellRoot.render(desk ? createElement("section", { className: "main", style: { gridColumn: "1 / -1" } }, screen) : screen);
 }
 
 /**

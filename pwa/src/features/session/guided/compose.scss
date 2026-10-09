@@ -24,6 +24,48 @@
   transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
 }
 
+/* The grey of a line that stands in an empty field. */
+$field-hint: #757575;
+
+/* A line that tells the reader what a field is for stays one line. */
+@mixin one-line {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Beside the list, where such a line can be longer than its room, the cut fades
+   out instead of stopping mid-letter. One treatment for every such line in a
+   dock there: the compose and live fields' placeholders, and the label where a
+   live terminal's field stands. */
+@mixin one-line-fade {
+  @include one-line;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+}
+
+/* A field can be narrower than its placeholder: an English one beside the list
+   at 720px or with the inspector open, a phone at a large text size. Left to wrap, the placeholder counted as a
+   second line of content: the field grew for a draft that was not there and
+   scrolled under it. So it never wraps, anywhere. The phone's copy is written
+   to fit 320px (see i18n and compose-placeholder.test), so there this is only
+   the floor under it, and it carries no mask: a mask composites the text, which
+   would redraw a placeholder that fits. Chromium fixes a textarea placeholder's
+   `text-overflow` at `clip`, so there is no ellipsis to ask for. */
+.compose-field > textarea::placeholder { @include one-line; }
+#app.desk .compose-field > textarea::placeholder { @include one-line-fade; }
+
+/* The echo a live field is waiting for is not such a line: it is what the
+   reader just typed, and they read it to see what has gone. It wraps, on a
+   phone and beside the list alike, and the field grows by its lines and comes
+   back when the terminal has caught up (session-compose sizes it). */
+.dock-form.live-pending .compose-field > textarea::placeholder,
+#app.desk .dock-form.live-pending .compose-field > textarea::placeholder {
+  overflow: visible;
+  white-space: pre-wrap;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
 /* Live input: green border and a small tag riding the top edge. */
 .compose-field.is-live > textarea,
 .dock-form.live .compose-field > textarea {
@@ -53,6 +95,30 @@
   opacity: 0.72;
   font: 500 10px/1 var(--mono);
   pointer-events: none;
+}
+
+/* A field one or two lines tall over a longer draft (a phone on its side, the
+   pad open) shows whole lines only: compose-size scrolls it to a line's top and
+   says how much of its box above and below those lines is not them. A field's
+   padding scrolls with its text, so that is where the line before showed cut
+   in half; the frame covers the two strips in the field's own colour, inside
+   its border. */
+.compose-field[data-cut]::before,
+.compose-field[data-cut]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 1px;
+  background: var(--compose-cut-bg, #0a0d12);
+  pointer-events: none;
+}
+.compose-field[data-cut]::before { top: 1px; height: var(--compose-cut-top, 0); border-radius: 12px 12px 0 0; }
+.compose-field[data-cut]::after { bottom: 1px; height: var(--compose-cut-bottom, 0); border-radius: 0 0 12px 12px; }
+.compose-field[data-cut] > .compose-lines { z-index: 1; }
+
+/* A mouse's scrollbar takes the field's right edge once a draft reaches the cap.
+   The count stands clear of it at every length, so it never has to move. */
+@media (hover: hover) and (pointer: fine) {
+  #app.desk .compose-lines { right: 18px; }
 }
 
 /* Folded: two lines, fading out, so the terminal gets the room back. `!important`
@@ -241,4 +307,149 @@
 @media (prefers-reduced-motion: reduce) {
   .send-issue { animation: none; }
   .compose-field > textarea { transition: none; }
+}
+
+/* --- Mouse-driven dock: "按键" and the input-mode switch -------------------------------
+   Rendered only for a mouse beside the list (see desk-pointer.ts), so these are
+   pointer-sized; a finger never meets them and keeps the key row and the panel. */
+
+.dock-keys-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-body);
+  font-weight: 560;
+  white-space: nowrap;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+
+.dock-keys-btn:hover,
+.dock-keys-btn[aria-expanded="true"] {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.dock-mode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-top: var(--space-2);
+}
+
+.dock-mode-switch {
+  flex: none;
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.dock-mode-option {
+  min-height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 var(--text-caption) var(--font);
+  cursor: pointer;
+}
+
+.dock-mode-option[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
+
+/* Live is the mode that types into the session; it wears the field's live colour. */
+.dock-mode-option:last-child[aria-pressed="true"] { color: var(--ok); }
+
+.dock-mode-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* One line of whole phrases. A phrase that does not fit beside the one before
+   it wraps onto a second line, and the line box is one line tall, so it is left
+   out instead of being cut mid-word; the first phrase alone still ends in an
+   ellipsis if even it cannot fit. */
+.dock-mode-hint {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  min-width: 0;
+  max-height: 1lh;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-caption);
+  white-space: nowrap;
+}
+
+.dock-mode-hint span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+/* Where a live terminal's keys go, drawn in the compose field's place. The row
+   stands off the pad above by the compose form's own margin, so the tag riding
+   the field's top edge clears it. */
+.full-terminal-live-field { align-self: stretch; }
+/* Exactly the compose form's height: a row two pixels taller either side would
+   resize the terminal on the computer every time the mode is switched. */
+.full-terminal-live-actions:has(> .full-terminal-live-field) { margin-top: var(--space-2); padding-block: 0; }
+
+/* The same box as the guided live field beside the list (desk.scss sets that
+   one's 15px), so the line in it sits where that field's placeholder does. */
+.full-terminal-live-focus {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid rgba(70, 214, 140, 0.6);
+  border-radius: 13px;
+  background: #0a0d12;
+  box-shadow: 0 0 0 3px rgba(70, 214, 140, 0.08);
+  color: $field-hint;
+  font: 400 15px/1.3 var(--font);
+  text-align: left;
+  cursor: text;
+  /* A button centres what it holds; a field's first line starts at its padding. */
+  display: flex;
+  align-items: flex-start;
+}
+
+/* The label is the guided live field's placeholder in another element, and is
+   cut the same way. On its own box: a mask on the button would fade its border. */
+.full-terminal-live-label {
+  flex: 1 1 0;
+  min-width: 0;
+  @include one-line-fade;
+}
+
+/* Beside the list the two live fields can be seen one after the other, so the
+   placeholder takes the label's colour by name instead of each engine's default. */
+#app.desk .compose-field > textarea::placeholder { color: $field-hint; opacity: 1; }
+#app.desk .dock-form.live-pending .compose-field > textarea::placeholder { color: var(--accent); opacity: 0.82; }
+
+.full-terminal-live-focus:focus-visible { outline: 2px solid var(--ok); outline-offset: -2px; }
+
+/* What the keyboard does in a live terminal, on a tablet that has one: said in
+   the row that is already there (desk-pointer.ts), inside its height, so the
+   first key typed never resizes the terminal. The attach button gives it the
+   row's width; two lines at most, and what leads is the way out. */
+.full-terminal-live-hint {
+  flex: 1 1 0;
+  align-self: center;
+  min-width: 0;
+  max-height: 2lh;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-caption);
+  line-height: 1.35;
+}
+.attach-btn-labeled:has(+ .full-terminal-live-hint) { flex: 0 0 auto; padding-inline: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dock-keys-btn { transition: none; }
 }
