@@ -83,6 +83,8 @@ export async function handleRoomFetch(
 
   const upgrade = (req.headers.get("Upgrade") || "").toLowerCase() === "websocket" || path === "/v2/ws";
   if (upgrade && req.method === "GET") {
+    const signal = req.signal;
+    signal.throwIfAborted();
     const role = url.searchParams.get("role") || "";
     const daemonId = url.searchParams.get("daemon_id") || "";
     if (url.searchParams.has("pair_loc")) return unpairedJson(build, noStore());
@@ -97,6 +99,9 @@ export async function handleRoomFetch(
     if (!consumed.ok) return unpairedJson(build, noStore());
     if (!hooks) return errorJson(build, 500, "internal", noStore());
     await armHello(room, bytesToHex(room.random(8)), consumed.attachment.created_ms);
+    // Cancellation can arrive while the alarm write awaits storage. Accepting
+    // that upgrade leaves an orphan whose timeout close can prevent hibernation.
+    signal.throwIfAborted();
     const headers = new Headers({ "Sec-WebSocket-Protocol": "pairfob.v2" });
     applySecurityHeaders(headers, build);
     return hooks.upgrade(consumed.attachment, consumed.tags, headers);
