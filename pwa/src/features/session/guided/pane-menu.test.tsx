@@ -400,6 +400,8 @@ test("Worktree lists in place, marks the current checkout, and opens a row with 
   act(() => dialog.querySelector<HTMLButtonElement>(".sheet-back")!.click());
   act(() => pageRow(t("pm.wtOpenBy")).click());
   expect(dialog.querySelectorAll(".create-seg [role=radio]")).toHaveLength(2);
+  // This page names its field for any width, as the same form does in a sheet of its own.
+  expect((document.activeElement as HTMLInputElement | null)?.name).toBe("target");
   expect(document.querySelectorAll("dialog[open]")).toHaveLength(1);
 });
 

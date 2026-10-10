@@ -115,37 +115,45 @@ export const LONG_PRESS_MS = 500;
 export const STOP_ARM_MS = 700;
 
 /**
- * A swap this soon after the reader emptied a field is that edit's doing: they
- * deleted the draft and saw 停止 take the slot, so the tap that follows is meant
- * for it. The store publishes inside the input event, well inside this window.
- * An edit that leaves text behind does not count: the swap after it is a send.
+ * A swap this soon after the reader's own action is that action's doing: they
+ * deleted the draft, or took the last attachment out of the tray, and saw 停止
+ * take the slot, so the tap that follows is meant for it. The stores publish
+ * inside the event, well inside this window. An edit that leaves text behind
+ * does not count, and neither does a press on the button itself: the swap
+ * after those is a send.
  */
-const OWN_EDIT_MS = 150;
+const OWN_ACTION_MS = 150;
 
 /** False while a freshly swapped-in stop is still arming; true otherwise. */
-function useStopArmed(kind: SendKind): boolean {
+function useStopArmed(kind: SendKind, button: RefObject<HTMLButtonElement | null>): boolean {
   const previous = useRef(kind);
-  const emptiedAt = useRef(Number.NEGATIVE_INFINITY);
+  const actedAt = useRef(Number.NEGATIVE_INFINITY);
   const [armed, setArmed] = useState(true);
   useLayoutEffect(() => {
-    // Capture on the document runs before the field's own listener empties the draft.
+    // Capture on the document runs before the control's own listener changes the message.
     const edited = (event: Event) => {
       const field = event.target;
       const emptied = (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) && !field.value.trim();
-      emptiedAt.current = emptied ? performance.now() : Number.NEGATIVE_INFINITY;
+      actedAt.current = emptied ? performance.now() : Number.NEGATIVE_INFINITY;
+    };
+    const pressed = (event: Event) => {
+      if (event.target instanceof Node && button.current?.contains(event.target)) return;
+      actedAt.current = performance.now();
     };
     document.addEventListener("input", edited, true);
     document.addEventListener("compositionend", edited, true);
+    document.addEventListener("click", pressed, true);
     return () => {
       document.removeEventListener("input", edited, true);
       document.removeEventListener("compositionend", edited, true);
+      document.removeEventListener("click", pressed, true);
     };
-  }, []);
+  }, [button]);
   useLayoutEffect(() => {
     const from = previous.current;
     previous.current = kind;
-    const ownEdit = performance.now() - emptiedAt.current < OWN_EDIT_MS;
-    if (kind !== "stop" || from === "stop" || from === "stopping" || from === "force" || ownEdit) {
+    const ownAction = performance.now() - actedAt.current < OWN_ACTION_MS;
+    if (kind !== "stop" || from === "stop" || from === "stopping" || from === "force" || ownAction) {
       setArmed(true);
       return;
     }
@@ -245,7 +253,12 @@ export function SendButton({ kind, percent, className, onSend, submitsForm = fal
   useSendPointer(ref, longPressStops && kind === "send" && stopTarget ? () => startStop(stopTarget) : undefined);
   const { label, aria } = sendContent(kind, percent);
   // A stop still arming keeps its look (no grey flash) and only ignores taps.
-  const armed = useStopArmed(kind);
+  const armed = useStopArmed(kind, ref);
+  // Once a stop is under way the button already has the width of its widest
+  // step, 强制停止: it does not grow under the finger when that step is offered.
+  const content = kind === "stopping" || kind === "force"
+    ? <span className="send-reserve" data-widest={t("compose2.force")}><span>{label}</span></span>
+    : label;
   const inert = kind === "busy" || kind === "stopping";
   const submits = submitsForm && (kind === "send" || kind === "enter");
   return <Button
@@ -267,7 +280,7 @@ export function SendButton({ kind, percent, className, onSend, submitsForm = fal
       else if (kind === "force") forceStop();
       else if (kind === "send" || kind === "enter") onSend();
     }}
-  >{label}</Button>;
+  >{content}</Button>;
 }
 
 /** Above the send button: blocked attachments need a choice before the message goes. */

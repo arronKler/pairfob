@@ -329,6 +329,33 @@ describe("send button", () => {
     expect(sentKeys).toEqual([["esc"]]);
   });
 
+  test("a stop brought up by a press elsewhere takes the next tap", async () => {
+    seed("working");
+    act(() => { setComposeDraft("one attachment's worth"); });
+    paint(true);
+    // Taking the last thing out of the message somewhere else (the tray's ×) is the reader's own doing.
+    const elsewhere = appRoot().ownerDocument.createElement("button");
+    appRoot().append(elsewhere);
+    act(() => { elsewhere.click(); setComposeDraft(""); });
+    elsewhere.remove();
+    expect(sendButton().dataset.sendKind).toBe("stop");
+    expect(sendButton().hasAttribute("aria-disabled")).toBeFalse();
+    act(() => { sendButton().click(); });
+    await act(async () => { await flushKeys(); });
+    expect(sentKeys).toEqual([["esc"]]);
+  });
+
+  test("once a stop is under way the button holds the width of 强制停止 and still reads as one label", async () => {
+    seed("working");
+    paint(true);
+    expect(sendButton().querySelector(".send-reserve")).toBeNull();
+    act(() => { sendButton().click(); });
+    await act(async () => { await flushKeys(); });
+    expect(sendButton().dataset.sendKind).toBe("stopping");
+    expect(sendButton().querySelector(".send-reserve")?.getAttribute("data-widest")).toBe(t("compose2.force"));
+    expect(sendButton().textContent).toBe(t("compose2.stopping"));
+  });
+
   test("live input never offers stop", () => {
     seed("working");
     act(() => { setComposeLive(true); });

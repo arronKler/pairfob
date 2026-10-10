@@ -13,6 +13,19 @@
   min-height: 52px;
 }
 
+/*
+  Beside the list the terminal runs the width of the column, which is no width
+  for a line of text: the notice over it is as wide as the one a guided session
+  shows (dock.scss), centred under the header.
+*/
+#app.desk .full-terminal-root > .session-notice {
+  align-self: center;
+  width: calc(100% - 2 * var(--space-4));
+  max-width: calc(60rem - 2 * var(--space-4));
+}
+
+#app.desk .full-terminal-root > .session-notice > .notice { margin-inline: 0; }
+
 .full-terminal-action {
   flex: none;
   min-width: 44px;

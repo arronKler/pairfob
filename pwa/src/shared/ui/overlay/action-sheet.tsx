@@ -46,14 +46,17 @@ const DESK_START = ".sheet-body [data-desk-autofocus]:not(:disabled)";
 const PAGE_START = ".sheet-page [data-desk-autofocus]:not(:disabled), .sheet-page [data-autofocus]:not(:disabled)";
 
 /**
- * Where a pushed page starts a finger. Its first control, unless that is a
- * field the page did not name with `data-autofocus`: focus there raises the
- * on-screen keyboard over a form the reader has not read yet, so the page's
- * first button takes it, as it does when the same form is a sheet of its own.
+ * Where a pushed page starts a finger. The control it names for any width
+ * (`data-autofocus`), as the same form does in a sheet of its own; else its
+ * first control, unless that is a field: focus there raises the on-screen
+ * keyboard over a form the reader has not read yet, so the page's first button
+ * takes it.
  */
 function touchPageStart(body: HTMLElement): HTMLElement | null {
+  const named = body.querySelector<HTMLElement>(".sheet-page [data-autofocus]:not(:disabled)");
+  if (named) return named;
   const first = body.querySelector<HTMLElement>(`.sheet-page ${PAGE_FOCUS}`);
-  if (!first?.matches("input, textarea") || first.matches("[data-autofocus]")) return first;
+  if (!first?.matches("input, textarea")) return first;
   return body.querySelector<HTMLElement>(".sheet-page button:not(:disabled)") ?? first;
 }
 
