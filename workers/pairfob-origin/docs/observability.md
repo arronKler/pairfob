@@ -87,6 +87,12 @@ Live sockets are **not** AE gauges. Sample them with `GET /v2/admin/stats` (up t
   `hibernation` invocations. The latter controls for event volume, not changes
   in connection churn or message mix. Resource reductions are not the same as
   reductions in the total invoice.
+- Reconcile recent-window minute sums with an independent total and a coarser
+  grouping. Repeating an unchanged query is not proof that ingestion has
+  settled: fixed-window queries have returned different totals with only a
+  non-binding result limit changed, including an immediate A/B/A repeat.
+  Retain conflicting responses and their capture times. A limit variant is a
+  cross-check, not a guaranteed freshness mechanism or proof of caching.
 - GraphQL invocation `wallTime` is in microseconds; Workers Logs
   `$workers.wallTimeMs` is in milliseconds. GraphQL sums already account for
   adaptive sampling: do not multiply them by `sampleInterval` again. A
@@ -108,9 +114,32 @@ Live sockets are **not** AE gauges. Sample them with `GET /v2/admin/stats` (up t
   result from an unverified field or event-type filter is not evidence.
 - Correlate by object, deployed version, and a surrounding time window before
   narrowing to seconds. The two sources can assign corresponding invocations
-  to different seconds. If GraphQL wall time is long while logs are short,
-  check the object's surrounding active time and a controlled client RTT.
-  Do not treat either source alone as proof of user latency or billable time.
+  to different seconds. Invocation log timestamps can be near completion;
+  subtract `wallTimeMs` to estimate the start before matching a GraphQL bucket.
+  If GraphQL wall time is long while logs are short, check the object's
+  surrounding active time and a controlled client RTT. Do not treat either
+  source alone as proof of user latency or billable time.
+
+### Check the idle boundary before attributing a long tail
+
+Cloudflare currently documents a [10-second idle wait before hibernation](https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/).
+An idle object eligible for hibernation does not incur duration charges during
+that wait ([pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/)).
+This is a runtime policy, not a Pairfob timeout to tune.
+
+For a long GraphQL event with a short invocation log, estimate its start from
+the log, then add GraphQL wall time. Compare this endpoint with the last
+activity before an idle gap, plus the documented hibernation delay. Include
+intervening messages, fetches, alarms, and close events; a later activity can
+extend the idle boundary. Keep sampling and unmatched events visible.
+
+In the October 10 investigation, 19 of 20 consecutive long-tail buckets from
+one room matched that boundary within 4 ms; the remaining residual was 65 ms.
+A separate 60-second maximum matched a candidate invocation within 5 ms.
+This strongly supports a lifecycle boundary in those metrics, but does not
+prove the private metrics implementation or establish client latency. Check
+subrequest response-body ownership as well as handler completion, and validate
+any proposed cleanup with an isolated control before changing production.
 
 ### Validate canceled upgrade cleanup
 
