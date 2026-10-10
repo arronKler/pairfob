@@ -13,6 +13,7 @@ export function watchUpgradeCancellation(
   client: UpgradeEndpoint,
   server: RoomEndpoint,
   onCanceled: () => void,
+  onHandedOff?: () => void,
 ): void {
   const cancel = () => {
     try {
@@ -20,7 +21,10 @@ export function watchUpgradeCancellation(
       // readyState cannot distinguish an unclaimed endpoint from a handed-off one.
       client.accept();
     } catch (error) {
-      if (error instanceof TypeError && error.message === "Can't accept() WebSocket that was already used in a response.") return;
+      if (error instanceof TypeError && error.message === "Can't accept() WebSocket that was already used in a response.") {
+        onHandedOff?.();
+        return;
+      }
       throw error;
     }
     // Closing only the client leaves its read loop waiting for the server's close

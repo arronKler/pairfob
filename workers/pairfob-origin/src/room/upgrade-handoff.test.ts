@@ -41,10 +41,12 @@ describe("upgrade response handoff cancellation", () => {
   test("a successful response handoff prevents cleanup from closing the established server", () => {
     const controller = new AbortController();
     const pair = endpoints(true);
-    watchUpgradeCancellation(controller.signal, pair.client, pair.server, () => { throw new Error("unexpected cleanup"); });
+    let handedOff = 0;
+    watchUpgradeCancellation(controller.signal, pair.client, pair.server, () => { throw new Error("unexpected cleanup"); }, () => { handedOff++; });
     controller.abort();
     expect(pair.calls).toEqual([]);
     expect(pair.server.isRetired()).toBe(false);
+    expect(handedOff).toBe(1);
   });
 
   test("an uncanceled connection is not accepted locally or retired", () => {
