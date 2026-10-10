@@ -11,4 +11,5 @@ export interface Env {
   INTENT_PAD_MS?: string;
   ROOM_DIAGNOSTICS_SAMPLE_RATE?: string;
   ROOM_DIAGNOSTICS_UNTIL?: string;
+  ROOM_DIAGNOSTICS_OBJECT_IDS?: string;
 }

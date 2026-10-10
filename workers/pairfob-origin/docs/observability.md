@@ -172,6 +172,28 @@ client. Include normal connections and successful delayed delivery as controls.
 Record PONG correctness/RTT, execution logs, and periodic duration together.
 Remove the isolated Worker and namespace after collecting their metrics.
 
+### Abandoned alarm queues
+
+Compare SQL `alarms` row counts and oldest deadlines with actual alarm
+invocations. A past timestamp returned by `getAlarm()` is not evidence that
+the scheduler will still deliver it: platform retries are bounded. The store
+only skips an unchanged alarm while its deadline is in the future; overdue
+work is rearmed after the current time. `room_alarm_rearmed` records the old,
+due and newly scheduled timestamps without row contents.
+
+The queue has indexes on `at` and `(kind, ref)`. Each invocation drains at most
+128 rows; socket-wide hello/resume sweeps run once per batch. Future rows and
+established sockets survive historical backlog recovery. Do not delete the
+queue directly: its pairing expiry and pending-session actions still matter.
+Deletion matches the complete harvested row, since SQLite can reuse a row ID
+while a TTL handler waits for a concurrent pairing refresh.
+
+For remaining lifecycle failures, `room_close_failed.stage` distinguishes
+attachment, cleanup and native close-reply failures while preserving the
+original exception. `ROOM_DIAGNOSTICS_OBJECT_IDS` enables full metadata traces
+and constructor boundaries for exact platform object IDs until the existing
+diagnostic expiry. It never enables payload or credential logging.
+
 ### Operational actions
 
 1. GB-s / connection jump: `rg "acceptWebSocket|server\\.accept\\(|setTimeout" workers/` and confirm `server.accept(` is absent from the bundle.

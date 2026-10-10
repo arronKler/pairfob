@@ -12,7 +12,11 @@ export class CfStore implements RoomStore {
   readonly stats: StoreStats = { sql: 0, getAlarm: 0, setAlarm: 0, deleteAlarm: 0 };
   private schemed = false;
 
-  constructor(private readonly storage: DurableObjectStorage) {}
+  constructor(
+    private readonly storage: DurableObjectStorage,
+    private readonly now: () => number = Date.now,
+    private readonly onAlarmRepair?: (previous: number, due: number, scheduled: number) => void,
+  ) {}
 
   private get sql(): SqlExec {
     return this.storage.sql;
@@ -48,7 +52,15 @@ export class CfStore implements RoomStore {
       if (cur != null) await this.deleteAlarm();
       return;
     }
-    if (cur !== nextAt) await this.setAlarm(nextAt);
+    const now = this.now();
+    // A past timestamp can survive exhausted platform retries. Equality is
+    // only evidence of a useful alarm while it is still in the future.
+    if (cur === nextAt && nextAt > now) return;
+    const scheduled = Math.max(nextAt, now + 1);
+    await this.setAlarm(scheduled);
+    if (cur !== null && cur <= now) {
+      try { this.onAlarmRepair?.(cur, nextAt, scheduled); } catch { /* diagnostics only */ }
+    }
   }
 
   ensureSchema(): void {
@@ -157,9 +169,17 @@ export class CfStore implements RoomStore {
     this.exec("DELETE FROM alarms WHERE kind = ? AND ref = ?", kind, ref);
   }
 
-  deleteAlarmIds(ids: number[]): void {
+  deleteAlarmRows(rows: AlarmRow[]): void {
     this.ensureSchema();
-    for (const id of ids) this.exec("DELETE FROM alarms WHERE id = ?", id);
+    // SQLite may reuse a deleted rowid while harvestDue awaits the pairing
+    // lock. Delete only the original snapshot, never a refreshed task.
+    // Four binds per row keeps each batch below the SQL parameter limit.
+    const persisted = rows.filter((row) => row.id !== undefined);
+    for (let i = 0; i < persisted.length; i += 16) {
+      const batch = persisted.slice(i, i + 16);
+      const where = batch.map(() => "(id = ? AND at = ? AND kind = ? AND ref IS ?)").join(" OR ");
+      this.exec(`DELETE FROM alarms WHERE ${where}`, ...batch.flatMap((row) => [row.id, row.at, row.kind, row.ref]));
+    }
   }
 
   minAlarmAt(): number | null {
@@ -171,7 +191,7 @@ export class CfStore implements RoomStore {
 
   dueAlarms(now: number): AlarmRow[] {
     this.ensureSchema();
-    return this.exec<AlarmRow>("SELECT id, at, kind, ref FROM alarms WHERE at <= ?", now).toArray() as AlarmRow[];
+    return this.exec<AlarmRow>("SELECT id, at, kind, ref FROM alarms WHERE at <= ? ORDER BY at, id LIMIT 128", now).toArray() as AlarmRow[];
   }
 
   upsertBind(row: BindRow): void {

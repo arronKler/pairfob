@@ -73,7 +73,7 @@ export interface RoomStore {
   listAlarms(): AlarmRow[];
   upsertAlarm(kind: AlarmKind, ref: string, at: number): void;
   deleteAlarmsByKindRef(kind: AlarmKind, ref: string): void;
-  deleteAlarmIds(ids: number[]): void;
+  deleteAlarmRows(rows: AlarmRow[]): void;
   minAlarmAt(): number | null;
   dueAlarms(now: number): AlarmRow[];
 

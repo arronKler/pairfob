@@ -23,13 +23,17 @@ export async function harvestDue(room: RoomCore): Promise<TeardownNotifications>
   const notifications = new TeardownNotifications();
   const now = room.now();
   const due = room.store.dueAlarms(now);
-  const ids: number[] = [];
+  const swept = new Set<AlarmKind>();
   for (const row of due) {
     room.noteAlarmLate(Math.max(0, now - row.at));
-    if (row.id !== undefined) ids.push(row.id);
+    // These kinds inspect all live sockets, not the row's individual ref.
+    if (row.kind === "hello_5s" || row.kind === "resume_15s") {
+      if (swept.has(row.kind)) continue;
+      swept.add(row.kind);
+    }
     await applyAlarm(room, row.kind, row.ref, now, notifications);
   }
-  if (ids.length) room.store.deleteAlarmIds(ids);
+  if (due.length) room.store.deleteAlarmRows(due);
   room.store.expireTickets(now);
   return notifications;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { closeReason, diagnosticsEnabled, frameLabel, traceHandler } from "./diagnostics.ts";
+import { closeReason, diagnosticsEnabled, frameLabel, isDiagnosticTarget, traceHandler } from "./diagnostics.ts";
 import { encodeRaw } from "../frames.ts";
 import { Typ } from "../envelope.ts";
 import { DaemonRoom } from "./room.ts";
@@ -15,6 +15,15 @@ async function capture(work: (logs: string[]) => void | Promise<void>) {
 }
 
 describe("room diagnostics", () => {
+  test("targeted traces require exact opaque IDs and expire with ordinary tracing", () => {
+    const targeted = { ...env, ROOM_DIAGNOSTICS_OBJECT_IDS: objectId };
+    expect(isDiagnosticTarget(targeted, objectId)).toBe(true);
+    expect(isDiagnosticTarget(targeted, "ab".repeat(31))).toBe(false);
+    expect(isDiagnosticTarget(targeted, "cd".repeat(32))).toBe(false);
+    expect(isDiagnosticTarget({ ...targeted, ROOM_DIAGNOSTICS_UNTIL: "2020-01-01" }, objectId)).toBe(false);
+    expect(isDiagnosticTarget({ ...targeted, ROOM_DIAGNOSTICS_SAMPLE_RATE: "0" }, objectId)).toBe(false);
+  });
+
   test("sampling is opt-in, bounded and expires", () => {
     const now = Date.parse("2026-10-08T00:00:00Z");
     expect(diagnosticsEnabled({}, now, () => 0)).toBe(false);

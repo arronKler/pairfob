@@ -6,6 +6,7 @@ export interface DiagnosticsEnv {
   BUILD?: string;
   ROOM_DIAGNOSTICS_SAMPLE_RATE?: string;
   ROOM_DIAGNOSTICS_UNTIL?: string;
+  ROOM_DIAGNOSTICS_OBJECT_IDS?: string;
 }
 
 const frameNames = new Map<number, string>(Object.entries(Typ).map(([name, typ]) => [typ, name]));
@@ -33,6 +34,13 @@ export function diagnosticsEnabled(env: DiagnosticsEnv, now = Date.now(), random
     && now < until && random() < rate;
 }
 
+/** Exact platform object IDs only; targeted traces retain the same expiry. */
+export function isDiagnosticTarget(env: DiagnosticsEnv, objectId: string): boolean {
+  return /^[0-9a-f]{64}$/.test(objectId)
+    && (env.ROOM_DIAGNOSTICS_OBJECT_IDS ?? "").split(",").includes(objectId)
+    && diagnosticsEnabled(env, Date.now(), () => 0);
+}
+
 type Fields = Record<string, string | number | boolean>;
 
 export function diagnosticLog(env: DiagnosticsEnv, objectId: string, fields: Fields): void {
@@ -54,7 +62,7 @@ export function traceHandler(
   role: string,
   work: () => void | Promise<void>,
 ): void | Promise<void> {
-  if (!diagnosticsEnabled(env)) return work();
+  if (!isDiagnosticTarget(env, objectId) && !diagnosticsEnabled(env)) return work();
   const start = Date.now();
   const event_id = crypto.randomUUID();
   const base = { event: "room_handler", event_id, frame, role };

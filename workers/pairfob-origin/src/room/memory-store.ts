@@ -118,10 +118,11 @@ export class MemoryStore implements RoomStore {
     this.alarms = this.alarms.filter((a) => !(a.kind === kind && a.ref === ref));
   }
 
-  deleteAlarmIds(ids: number[]): void {
+  deleteAlarmRows(rows: AlarmRow[]): void {
     this.sql();
-    const drop = new Set(ids);
-    this.alarms = this.alarms.filter((a) => a.id === undefined || !drop.has(a.id));
+    this.alarms = this.alarms.filter((alarm) => !rows.some((row) =>
+      row.id !== undefined && row.id === alarm.id && row.at === alarm.at &&
+      row.kind === alarm.kind && row.ref === alarm.ref));
   }
 
   minAlarmAt(): number | null {
@@ -132,7 +133,9 @@ export class MemoryStore implements RoomStore {
 
   dueAlarms(now: number): AlarmRow[] {
     this.sql();
-    return this.alarms.filter((a) => a.at <= now).map((a) => ({ ...a }));
+    return this.alarms.filter((a) => a.at <= now)
+      .sort((a, b) => a.at - b.at || (a.id ?? 0) - (b.id ?? 0))
+      .slice(0, 128).map((a) => ({ ...a }));
   }
 
   upsertBind(row: BindRow): void {

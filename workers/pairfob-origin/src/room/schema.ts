@@ -31,5 +31,7 @@ export const ROOM_DDL = [
     created_at INTEGER NOT NULL,
     pair_ref TEXT
   )`,
+  `CREATE INDEX IF NOT EXISTS alarms_at ON alarms (at)`,
+  `CREATE INDEX IF NOT EXISTS alarms_kind_ref ON alarms (kind, ref)`,
   `INSERT OR IGNORE INTO _sql_schema_migrations (id, applied_at) VALUES (1, 0)`,
 ] as const;
