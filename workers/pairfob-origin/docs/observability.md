@@ -78,6 +78,58 @@ Live sockets are **not** AE gauges. Sample them with `GET /v2/admin/stats` (up t
 
 ## Runbook
 
+### Compare cost and slow events separately
+
+- Use `durableObjectsPeriodicGroups.sum.duration` (GB-s) for DO duration
+  consumption. `activeTime` and `cpuTime` are microseconds. Scope the query to
+  the intended namespace; account totals can include unrelated Workers.
+- Compare complete windows using both GB-s/hour and GB-s per 1,000
+  `hibernation` invocations. The latter controls for event volume, not changes
+  in connection churn or message mix. Resource reductions are not the same as
+  reductions in the total invoice.
+- GraphQL invocation `wallTime` is in microseconds; Workers Logs
+  `$workers.wallTimeMs` is in milliseconds. GraphQL sums already account for
+  adaptive sampling: do not multiply them by `sampleInterval` again. A
+  group's request count is not the count of requests equal to its maximum.
+  Sampled maxima can miss unsampled long events; retain each group's sampling
+  metadata when interpreting the tail.
+- Keep message, close, alarm, and fetch outcomes separate. A canceled upgrade
+  or closed WebSocket is not by itself an application exception. Entry Worker
+  and DO errors can describe the same failed operation; do not add them as
+  independent user failures.
+  In particular, a fetch marked `canceled` can have successfully delivered its
+  101 and exchanged messages before the WebSocket closed. That outcome alone
+  does not prove the upgrade handoff failed. Correlate client handshake/frame
+  evidence or explicit handoff instrumentation before attributing a slow burst
+  to an unclaimed endpoint.
+- Check both GraphQL and invocation logs before declaring slow events absent.
+  Split log queries until `abr_level` is 1 and results do not hit the row
+  limit; also check account ingestion sampling and quota status. An empty
+  result from an unverified field or event-type filter is not evidence.
+- Correlate by object, deployed version, and a surrounding time window before
+  narrowing to seconds. The two sources can assign corresponding invocations
+  to different seconds. If GraphQL wall time is long while logs are short,
+  check the object's surrounding active time and a controlled client RTT.
+  Do not treat either source alone as proof of user latency or billable time.
+
+### Validate canceled upgrade cleanup
+
+`room_upgrade_cancelled` records completion of the local two-endpoint cleanup
+routine. It is emitted after both close calls return, not after a completed
+close handshake or confirmed hibernation. No marker does not prove that
+cancellation was never attempted. Check exceptions too. An endpoint
+already handed off in a response must not be reclaimed by the DO's abort
+listener, since that can close a healthy connection.
+
+For a cancellation regression, use an isolated namespace and test both sides
+of the handoff: cancellation before the DO returns its 101, and cancellation
+after the outer Worker receives that 101 but before it delivers it to the
+client. Include normal connections and successful delayed delivery as controls.
+Record PONG correctness/RTT, execution logs, and periodic duration together.
+Remove the isolated Worker and namespace after collecting their metrics.
+
+### Operational actions
+
 1. GB-s / connection jump: `rg "acceptWebSocket|server\\.accept\\(|setTimeout" workers/` and confirm `server.accept(` is absent from the bundle.
 2. Emergency cost stop: kick daemons (`POST /v2/admin/daemons/:id/kick`).
 3. Kick: `POST /v2/admin/daemons/:id/kick`.
