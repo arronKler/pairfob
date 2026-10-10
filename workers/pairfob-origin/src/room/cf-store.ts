@@ -160,7 +160,16 @@ export class CfStore implements RoomStore {
 
   upsertAlarm(kind: AlarmKind, ref: string, at: number): void {
     this.ensureSchema();
-    this.exec("DELETE FROM alarms WHERE kind = ? AND ref = ?", kind, ref);
+    const rows = this.exec<{ id: number; at: number }>(
+      "SELECT id, at FROM alarms WHERE kind = ? AND ref = ? LIMIT 2", kind, ref,
+    ).toArray();
+    if (rows.length === 1) {
+      if (rows[0].at !== at) this.exec("UPDATE alarms SET at = ? WHERE id = ?", at, rows[0].id);
+      return;
+    }
+    // Preserve the old deduplication behavior for legacy queues. This entire
+    // read/write sequence is synchronous and cannot interleave with a refresh.
+    if (rows.length > 1) this.exec("DELETE FROM alarms WHERE kind = ? AND ref = ?", kind, ref);
     this.exec("INSERT INTO alarms (at, kind, ref) VALUES (?, ?, ?)", at, kind, ref);
   }
 

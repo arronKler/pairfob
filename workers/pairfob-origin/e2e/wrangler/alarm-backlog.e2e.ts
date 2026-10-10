@@ -5,7 +5,7 @@ import { CfStore } from "../../src/room/cf-store.ts";
 import { RoomCore } from "../../src/room/core.ts";
 import { ROOM_DDL } from "../../src/room/schema.ts";
 
-it("keeps a refreshed TTL when SQLite reuses its rowid during a pairing lock wait", async () => {
+it.each(["refresh", "rowid_reuse"])("keeps a refreshed TTL during a pairing lock wait (%s)", async (mode) => {
   const stub = env.DAEMON_ROOM.get(env.DAEMON_ROOM.idFromName(`refresh-${crypto.randomUUID()}`));
   const result = await runInDurableObject(stub, async (_instance, ctx) => {
     const now = Date.now();
@@ -21,7 +21,11 @@ it("keeps a refreshed TTL when SQLite reuses its rowid during a pairing lock wai
     const harvesting = core.alarm();
     const future = now + 3_600_000;
     store.putSlot({ pair_ref: "pair", pair_loc: "loc", deadline: future });
-    store.upsertAlarm("pair_ttl", "pair", future);
+    if (mode === "rowid_reuse") {
+      // Exercise the historical DELETE/INSERT race even when upsert updates in place.
+      ctx.storage.sql.exec("DELETE FROM alarms WHERE kind = 'pair_ttl' AND ref = 'pair'");
+      ctx.storage.sql.exec("INSERT INTO alarms(at,kind,ref) VALUES(?,'pair_ttl','pair')", future);
+    } else store.upsertAlarm("pair_ttl", "pair", future);
     const refreshedId = store.listAlarms()[0].id;
     unlock();
     await held;

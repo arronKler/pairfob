@@ -186,7 +186,10 @@ The queue has indexes on `at` and `(kind, ref)`. Each invocation drains at most
 established sockets survive historical backlog recovery. Do not delete the
 queue directly: its pairing expiry and pending-session actions still matter.
 Deletion matches the complete harvested row, since SQLite can reuse a row ID
-while a TTL handler waits for a concurrent pairing refresh.
+while a TTL handler waits for a concurrent pairing refresh. An unchanged
+deadline avoids SQL writes; a refreshed deadline updates the existing row
+instead of deleting and rebuilding both indexes. Duplicate legacy references
+still use the original replacement path to retain deduplication.
 
 For remaining lifecycle failures, `room_close_failed.stage` distinguishes
 attachment, cleanup and native close-reply failures while preserving the
