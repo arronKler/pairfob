@@ -1,7 +1,26 @@
 const CACHE = "pairfob-shell-v10";
 const PREF = "pairfob-pref";
+const NOTIFY_DIAGNOSTICS = "pairfob-notification-diagnostics-v1";
+const NOTIFY_LOG = "/__pairfob_notification_diagnostics__";
 const SHELL = ["/", "/pair", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 const SHELL_NETWORK_GRACE_MS = 750;
+
+// Content-free evidence survives a worker restart and is exported by Settings.
+// Storage work never gates focus/navigation, whose user activation is short-lived.
+let diagnosticWrite = Promise.resolve();
+function recordNotificationDiagnostic(event, details = {}) {
+  const record = { at: Date.now(), event, ...details };
+  diagnosticWrite = diagnosticWrite.then(async () => {
+    const cache = await caches.open(NOTIFY_DIAGNOSTICS);
+    const response = await cache.match(NOTIFY_LOG);
+    let previous = [];
+    try { previous = response ? await response.json() : []; } catch { /* Replace corrupt evidence. */ }
+    const recent = Array.isArray(previous) ? previous.filter(row =>
+      row && Number.isFinite(row.at) && row.at >= record.at - 86400000 && row.at <= record.at + 60000) : [];
+    await cache.put(NOTIFY_LOG, Response.json([...recent.slice(-99), record]));
+  }).catch(() => { /* Diagnostics must never break notification delivery. */ });
+  return diagnosticWrite;
+}
 
 function detectLang() {
   const nav = self.navigator;
@@ -67,8 +86,9 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim()),
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE && key !== NOTIFY_DIAGNOSTICS).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+      .then(() => recordNotificationDiagnostic("notify_sw_active")),
   );
 });
 
@@ -168,12 +188,13 @@ self.addEventListener("push", (event) => {
       badge: "/icon.svg",
       data: { url: safeNotificationURL(data.url) },
     });
+    await recordNotificationDiagnostic("notify_sw_shown");
   })());
 });
 
 // Older pages do not speak the message protocol. Only fall back to navigation
 // when capture was not acknowledged; a warm current page never needs a reload.
-function deliverNotification(client, url) {
+function deliverNotification(client, url, note) {
   return new Promise((resolve) => {
     const channel = new MessageChannel();
     const finish = (captured) => {
@@ -182,32 +203,66 @@ function deliverNotification(client, url) {
       channel.port2.close();
       resolve(captured);
     };
-    const timer = setTimeout(() => finish(false), 1000);
+    const timer = setTimeout(() => { note("notify_sw_ack", { reason: "timeout" }); finish(false); }, 1000);
     channel.port1.onmessage = (event) => {
-      if (event.data?.type === "pairfob_notify_captured") finish(true);
+      if (event.data?.type === "pairfob_notify_captured") {
+        note("notify_sw_ack", { reason: "captured" });
+        finish(true);
+      }
     };
-    try { client.postMessage({ type: "pairfob_notify", url }, [channel.port2]); }
-    catch { finish(false); }
+    try {
+      client.postMessage({ type: "pairfob_notify", url }, [channel.port2]);
+      note("notify_sw_message", { reason: "sent" });
+    } catch { note("notify_sw_message", { reason: "error" }); finish(false); }
   });
 }
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = new URL(safeNotificationURL(event.notification.data?.url), self.location.origin).href;
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
+  const writes = [];
+  const deliveries = [];
+  const note = (stage, details) => { writes.push(recordNotificationDiagnostic(stage, details)); };
+  note("notify_sw_click", { reason: new URL(target).hash ? "ok" : "invalid_target" });
+  event.waitUntil((async () => {
+    try {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      note("notify_sw_clients", { usable_count: clients.filter(client => {
+        const url = new URL(client.url);
+        return url.origin === self.location.origin && url.pathname === "/pair" && "focus" in client;
+      }).length, stored_count: clients.length });
       for (const client of clients) {
         const url = new URL(client.url);
         if (url.origin !== self.location.origin || url.pathname !== "/pair" || !("focus" in client)) continue;
-        const delivered = deliverNotification(client, target);
+        note("notify_sw_selected", { hidden: client.visibilityState === "hidden" });
+        const delivered = deliverNotification(client, target, note);
+        deliveries.push(delivered);
         // Focus immediately, so a suspended app can receive and capture it.
         try {
+          note("notify_sw_focus", { reason: "pending" });
           await client.focus();
+          note("notify_sw_focus", { reason: "ok" });
           if (await delivered) return;
-          if ("navigate" in client && await client.navigate(target)) return;
-        } catch { /* A closing window must not lose the notification target. */ }
+          if ("navigate" in client) {
+            note("notify_sw_navigate", { reason: "pending" });
+            const navigated = await client.navigate(target);
+            note("notify_sw_navigate", { reason: navigated ? "ok" : "missing" });
+            if (navigated) return;
+          }
+        } catch {
+          note("notify_sw_client_error", { reason: "error" });
+        }
       }
-      return self.clients.openWindow(target);
-    }),
-  );
+      note("notify_sw_open", { reason: "pending" });
+      const opened = await self.clients.openWindow(target);
+      note("notify_sw_open", { reason: opened ? "ok" : "missing" });
+    } catch (error) {
+      note("notify_sw_error", { reason: "error" });
+      throw error;
+    }
+    finally {
+      await Promise.all(deliveries);
+      await Promise.all(writes);
+    }
+  })());
 });

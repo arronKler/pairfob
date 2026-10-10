@@ -235,7 +235,7 @@ export const zh = {
 
   "settings.title": "设置",
   "settings.exportConnectionDiagnostics": "导出连接诊断",
-  "settings.connectionDiagnosticsLocal": "本标签页 · 最近 24 小时",
+  "settings.connectionDiagnosticsLocal": "本标签页和通知 · 最近 24 小时",
   "settings.connection": "连接",
   "settings.computer": "电脑",
   "settings.status": "状态",

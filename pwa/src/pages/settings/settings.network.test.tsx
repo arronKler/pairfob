@@ -291,9 +291,11 @@ test("connection diagnostics export works from settings while disconnected", asy
   const timer = spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void) => { release = callback; return 1; }) as typeof setTimeout);
   try {
     button!.click();
+    for (let i = 0; i < 20; i++) await Promise.resolve();
     expect(downloaded).toMatch(/^pairfob-connection-\d+\.json$/);
     const report = JSON.parse(await blob!.text());
     expect(report.records.some((record: { reason?: string }) => record.reason === "heartbeat_timeout")).toBe(true);
+    expect(report.worker_notifications).toBeDefined();
     expect(revoke).not.toHaveBeenCalled();
     release();
     expect(revoke).toHaveBeenCalledWith("blob:diagnostics-test");

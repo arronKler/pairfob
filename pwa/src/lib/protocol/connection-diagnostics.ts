@@ -28,11 +28,16 @@ export type ConnectionDiagnostic = ConnectionDetails & {
   usable_count?: number;
   invalid_count?: number;
   other_origin_count?: number;
+  notification_id?: number;
 };
 const KEY = "pairfob.connection-diagnostics.v1";
 const LIMIT = 200;
 const TTL = 24 * 60 * 60 * 1000;
 const TOKENS = new Set((
+  "notify_sw_active notify_sw_shown notify_sw_click notify_sw_clients notify_sw_selected notify_sw_message notify_sw_ack " +
+  "notify_sw_focus notify_sw_navigate notify_sw_client_error notify_sw_open notify_sw_error captured sent missing " +
+  "notify_received notify_deferred notify_dispatch notify_resolve notify_open_result notify_error notify_settled " +
+  "worker_message hashchange invalid_target refresh switch_computer switch_default computer_missing pane_missing opened superseded pending consumed hidden " +
   "catalog_read catalog_failed catalog_hint_failed credential_deleted credential_delete_failed phase_changed boot_decision network_lifecycle online " +
   "boot connect pairing resuming live pick resume storage_unavailable bad_relay ok storage_error storage_timeout storage_security storage_unknown storage_empty online_hint_stale " +
   "unpaired invalid_credential bad_proof bad_signature fp_mismatch " +
@@ -55,7 +60,7 @@ let records: ConnectionDiagnostic[] = [];
 let loaded = false;
 
 // Project both new records and persisted input onto the same content-free schema.
-function sanitize(input: unknown, now: number): ConnectionDiagnostic | null {
+export function sanitizeConnectionDiagnostic(input: unknown, now: number): ConnectionDiagnostic | null {
   if (!input || typeof input !== "object") return null;
   const source = input as Record<string, unknown>;
   if (typeof source.at !== "number" || !Number.isFinite(source.at) || source.at < now - TTL || source.at > now + 60_000) return null;
@@ -67,7 +72,7 @@ function sanitize(input: unknown, now: number): ConnectionDiagnostic | null {
   if (typeof source.pwa_asset === "string" && assetPattern.test(source.pwa_asset)) out.pwa_asset = source.pwa_asset;
   if (typeof source.route_id === "string" && /^[a-f0-9]{32}$/.test(source.route_id)) out.route_id = source.route_id;
   for (const key of ["buffered_bytes", "ws_code", "pending_rpcs", "pong_wait_ms", "connect_id", "elapsed_ms", "recovery_id", "recovery_elapsed_ms",
-    "stored_count", "usable_count", "invalid_count", "other_origin_count"]) {
+    "stored_count", "usable_count", "invalid_count", "other_origin_count", "notification_id"]) {
     const value = source[key];
     if (typeof value === "number" && Number.isFinite(value) && value >= 0) out[key] = Math.round(value);
   }
@@ -81,7 +86,7 @@ export function connectionDiagnostics(): ConnectionDiagnostic[] {
     loaded = true;
     try {
       const raw: unknown = JSON.parse(sessionStorage.getItem(KEY) || "[]");
-      if (Array.isArray(raw)) records = raw.slice(-LIMIT).map((item) => sanitize(item, now)).filter((item): item is ConnectionDiagnostic => item !== null);
+      if (Array.isArray(raw)) records = raw.slice(-LIMIT).map((item) => sanitizeConnectionDiagnostic(item, now)).filter((item): item is ConnectionDiagnostic => item !== null);
     } catch { /* Memory-only diagnostics when storage is unavailable. */ }
   }
   records = records.filter((record) => record.at >= now - TTL).slice(-LIMIT);
@@ -90,7 +95,7 @@ export function connectionDiagnostics(): ConnectionDiagnostic[] {
 
 export function recordConnectionDiagnostic(input: Omit<ConnectionDiagnostic, "at">): void {
   connectionDiagnostics();
-  const record = sanitize({ ...input, pwa_asset: pwaAsset, at: Date.now() }, Date.now());
+  const record = sanitizeConnectionDiagnostic({ ...input, pwa_asset: pwaAsset, at: Date.now() }, Date.now());
   if (!record) return;
   records.push(record);
   records = records.slice(-LIMIT);

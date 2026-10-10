@@ -13,6 +13,7 @@ import { openPaneId, selectPane } from "../features/session/session-store";
 import { defaultTermMode, setDefaultTermMode } from "../features/settings/preferences-store";
 import { lang, setLang, t } from "../lib/i18n";
 import type { LiveSession, PairResult } from "../lib/protocol/client";
+import { connectionDiagnostics } from "../lib/protocol/connection-diagnostics";
 
 const pair = { daemonId: "d_aaaaaaaaaaaaaaaaaaaa", deviceId: "device", label: "test",
   relayOrigin: "https://pairfob.com", createdAt: 1, fp: "fp",
@@ -123,12 +124,30 @@ test("worker messages open a pane without navigating the page", async () => {
   expect(location.hash).toBe("");
 });
 
+test("a foreground notification opens its pane from the agent list", async () => {
+  await settle(() => { setScreen("home"); commitApp(); });
+  await settle(() => message(target()));
+  expect(currentScreen()).toBe("pane");
+  expect(openPaneId()).toBe("p1");
+  expect(reads).toContain("p1");
+  const received = connectionDiagnostics().findLast(row => row.event === "notify_received")!;
+  const trail = connectionDiagnostics().filter(row => row.notification_id === received.notification_id);
+  expect(trail.map(row => [row.event, row.reason])).toEqual([
+    ["notify_received", "worker_message"], ["notify_dispatch", "refresh"],
+    ["notify_resolve", "open"], ["notify_open_result", "opened"], ["notify_settled", "consumed"],
+  ]);
+  expect(JSON.stringify(trail)).not.toContain(pair.daemonId);
+  expect(JSON.stringify(trail)).not.toContain("p1");
+});
+
 test("a background click waits for visibility and then reads the fresh snapshot", async () => {
+  await settle(() => { setScreen("home"); commitApp(); });
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
   await settle(() => message(target()));
-  expect(currentScreen()).toBe("settings");
+  expect(currentScreen()).toBe("home");
   expect(notificationTarget()?.paneId).toBe("p1");
   expect(reads).toEqual([]);
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "notify_deferred", reason: "hidden" });
   await settle(() => {
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
     document.dispatchEvent(new happy.Event("visibilitychange"));

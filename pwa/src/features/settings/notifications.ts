@@ -4,7 +4,9 @@ import {
   clearNotificationTarget, notificationGeneration, notificationTarget,
 } from "../connection/connection-store";
 import { liveAgents } from "../dashboard/catalog-store";
-import { goToScreen } from "../../app/navigation-store";
+import { currentScreen, goToScreen } from "../../app/navigation-store";
+import { openPaneId } from "../session/session-store";
+import { recordConnectionDiagnostic } from "../../lib/protocol/connection-diagnostics";
 import { showError } from "../../app/notices-store";
 import { t } from "../../lib/i18n";
 import type { NotificationTarget } from "../../lib/notification-target";
@@ -29,6 +31,9 @@ export async function openPendingNotification(
   const target = notificationTarget();
   if (!target) return false;
   const generation = notificationGeneration();
+  const diagnose = (event: string, reason: string) => recordConnectionDiagnostic({
+    event, reason, notification_id: generation, hidden: document.visibilityState === "hidden",
+  });
   const ownerDaemonId = currentDaemonId();
   const ownerSession = liveSession();
   if (ownerDaemonId !== target.daemonId) return false;
@@ -43,6 +48,7 @@ export async function openPendingNotification(
     liveSession() === ownerSession &&
     (ownerSession?.herdSession?.() ?? null) === ownerHerdSession;
   if (ownerHerdSession !== null) {
+    diagnose("notify_resolve", "switch_default");
     // Push names default-session panes. Keep the intent untouched: the fresh
     // default snapshot consumes whichever generation is current after switching.
     if (stillCurrent()) await switchToDefault();
@@ -54,8 +60,9 @@ export async function openPendingNotification(
     liveAgents().map((agent) => agent.paneId),
   );
   clearNotificationTarget();
-  if (!stillCurrent()) return true;
+  if (!stillCurrent()) { diagnose("notify_open_result", "superseded"); return true; }
   if (resolution.kind === "missing") {
+    diagnose("notify_resolve", "pane_missing");
     const stillMissing = !liveAgents().some((agent) => agent.paneId === captured.paneId);
     if (stillMissing) {
       goToScreen("home");
@@ -68,6 +75,9 @@ export async function openPendingNotification(
     }
     return true;
   }
+  diagnose("notify_resolve", "open");
   await openPane(captured.paneId);
+  diagnose("notify_open_result", !stillCurrent() ? "superseded"
+    : currentScreen() === "pane" && openPaneId() === captured.paneId ? "opened" : "cancelled");
   return true;
 }

@@ -55,6 +55,15 @@ test("handshake timings preserve only finite nonnegative numbers", () => {
   expect(connectionDiagnostics().at(-1)?.elapsed_ms).toBeUndefined();
 });
 
+test("notification evidence correlates stages without persisting notification targets", () => {
+  recordConnectionDiagnostic({ event: "notify_received", reason: "worker_message", notification_id: 7,
+    url: "https://pairfob.com/pair#secret", pane_id: "private-pane", daemon_id: "private-daemon" } as never);
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "notify_received", reason: "worker_message", notification_id: 7 });
+  expect(JSON.stringify(connectionDiagnostics().at(-1))).not.toMatch(/secret|private/);
+  recordConnectionDiagnostic({ event: "notify_deferred", reason: "hidden", notification_id: Infinity });
+  expect(connectionDiagnostics().at(-1)?.notification_id).toBeUndefined();
+});
+
 test("catalog and boot evidence survives the sanitizer without accepting arbitrary fields", () => {
   recordConnectionDiagnostic({ event: "boot_decision", phase: "connect", previous_phase: "boot",
     reason: "connect", code: "ok", usable_count: 0 });
