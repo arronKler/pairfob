@@ -314,6 +314,21 @@ describe("send button", () => {
     expect(sentKeys).toEqual([["esc"]]);
   });
 
+  test("a stop the reader brought up by emptying the field takes the next tap", async () => {
+    seed("working");
+    act(() => { setComposeDraft("not sending this"); });
+    const field = paint(true);
+    expect(sendButton().dataset.sendKind).toBe("send");
+    // Their own edit, not a send: nothing went out that a second tap could interrupt.
+    field.value = "";
+    act(() => { field.dispatchEvent(new (field.ownerDocument.defaultView!.Event)("input", { bubbles: true })); });
+    expect(sendButton().dataset.sendKind).toBe("stop");
+    expect(sendButton().hasAttribute("aria-disabled")).toBeFalse();
+    act(() => { sendButton().click(); });
+    await act(async () => { await flushKeys(); });
+    expect(sentKeys).toEqual([["esc"]]);
+  });
+
   test("live input never offers stop", () => {
     seed("working");
     act(() => { setComposeLive(true); });

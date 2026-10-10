@@ -8,7 +8,7 @@ import {
   rememberCreate,
   togglePinnedKind,
 } from "./create-memory";
-import { LAST_AGENT_KIND_KEY } from "./operation-form-model";
+import { LAST_AGENT_KIND_KEY, loadLastAgentKind } from "./operation-form-model";
 
 beforeEach(async () => {
   await resetTestDOM();
@@ -16,6 +16,16 @@ beforeEach(async () => {
 });
 
 describe("create memory", () => {
+  test("a confirmed terminal remains distinct from no history or an unavailable agent", () => {
+    const kinds = ["agy", "codex"];
+    expect(loadLastAgentKind(kinds)).toBeNull();
+    rememberCreate({ kind: "" });
+    expect(loadLastAgentKind(kinds)).toBe("");
+    rememberCreate({ kind: "codex" });
+    expect(loadLastAgentKind(kinds)).toBe("codex");
+    expect(loadLastAgentKind(["agy"])).toBeNull();
+  });
+
   test("malformed storage falls back to an empty memory with the default pins instead of failing", () => {
     expect(parseCreateMemory(null)).toEqual({ pinned: ["claude", "codex"], uses: {}, lastUsed: {}, recents: [], dirs: [] });
     expect(parseCreateMemory("{not json")).toEqual({ pinned: ["claude", "codex"], uses: {}, lastUsed: {}, recents: [], dirs: [] });

@@ -13,6 +13,7 @@ import { AgentAvatar, Button } from "../../shared/ui/primitives";
 import { AgentKindGrid, kindName } from "./agent-kind-grid";
 import { AgentKindPickerPanel } from "./agent-kind-picker";
 import type { CreateMemory } from "./create-memory";
+import { defaultAgentKind } from "./operation-form-model";
 
 export const NEW_WORKSPACE = "pairfob:new-workspace";
 
@@ -27,7 +28,7 @@ export type CreateSheetInput = {
   /** Advertised agent kinds; the only kinds offered. */
   kinds: readonly string[];
   memory: CreateMemory;
-  lastKind: string;
+  lastKind: string | null;
   canCreateTab: boolean;
   canCreateWorkspace: boolean;
   canCreateWorktree: boolean;
@@ -46,7 +47,7 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
   const [where, setWhere] = useState(() => input.initial === NEW_WORKSPACE || !input.canCreateTab
     ? (canNew ? NEW_WORKSPACE : firstWorkspace ?? NEW_WORKSPACE)
     : input.initial);
-  const [kind, setKind] = useState(() => input.kinds.includes(input.lastKind) ? input.lastKind : input.kinds[0] ?? "");
+  const [kind, setKind] = useState(() => defaultAgentKind(input.kinds, input.lastKind));
   const [memory, setMemory] = useState(input.memory);
   const [dir, setDir] = useState(input.initialDir ?? "");
   const [otherPath, setOtherPath] = useState<string | null>(null);

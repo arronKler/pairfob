@@ -21,7 +21,7 @@ export function AgentKindGrid({ kinds, memory, selected, onSelect, onShowAll }: 
   memory: CreateMemory;
   selected: string;
   /** The preselected kind already shows the last choice; the grid no longer captions it. */
-  lastKind?: string;
+  lastKind?: string | null;
   onSelect: (kind: string) => void;
   onShowAll: () => void;
 }) {

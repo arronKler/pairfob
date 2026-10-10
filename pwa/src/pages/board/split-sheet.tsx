@@ -8,7 +8,7 @@ import { AgentKindPickerPanel } from "../../features/operations/agent-kind-picke
 import { advertisedAgentKinds } from "../../features/operations/capabilities-store";
 import { splitSelectedPane, type SheetOutcome } from "../../features/operations/controller";
 import { loadCreateMemory, rememberCreate } from "../../features/operations/create-memory";
-import { loadLastAgentKind } from "../../features/operations/operation-form-model";
+import { defaultAgentKind, loadLastAgentKind } from "../../features/operations/operation-form-model";
 import { useConnection } from "../../features/connection/hooks";
 import { liveSession } from "../../features/computers/catalog-store";
 import { useCapabilities } from "../../features/operations/hooks";
@@ -34,7 +34,7 @@ function BoardSplitSheet({ modal, card, direction, target, reveal }: {
   const [kinds] = useState(() => [...advertisedAgentKinds()]);
   const [memory, setMemory] = useState(loadCreateMemory);
   const [lastKind] = useState(() => loadLastAgentKind(kinds));
-  const [kind, setKind] = useState(() => kinds.includes(lastKind) ? lastKind : kinds[0] ?? "");
+  const [kind, setKind] = useState(() => defaultAgentKind(kinds, lastKind, card.agent));
   const [picking, setPicking] = useState(false);
   const { operationBusy } = useCapabilities();
   const { networkOnline } = useConnection();

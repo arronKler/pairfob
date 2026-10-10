@@ -10,6 +10,7 @@ import type { RemoteScroll } from "./full-terminal-scroll";
 import { FullTerminalPad } from "./full-terminal-pad";
 import { FullTerminalHost } from "./full-terminal-host";
 import { SessionIdentity } from "../guided/session-chrome";
+import { SessionAppNotice } from "../session-notice";
 import type { FullTerminalViewSnapshot } from "./full-terminal-view";
 
 export type FullTerminalScreenProps = {
@@ -30,6 +31,8 @@ export type FullTerminalScreenProps = {
  * DOM: `.pane-root.full-terminal-root[data-pane-id] > header.chrome.full-terminal-chrome`
  * (the shared `SessionIdentity`, so the header matches the list card and the other two modes)
  * then `.full-terminal-host` (state, scroll rail, pan/canvas) then `.full-terminal-pad`.
+ * A notice hangs under the header over the host and takes no room in the column
+ * (`SessionAppNotice afloat`): the host's box is the terminal's size.
  * Persist one React root; do not remount the canvas per snapshot. Engine attach
  * runs after commit. `finishSessionPaint` is not used here.
  *
@@ -54,6 +57,7 @@ function FullTerminalBody({ view, onBack, onWorkspace, onMenu, onRetry, scroll, 
     <div className="pane-root full-terminal-root" data-pane-id={view.paneId} data-terminal-owner={view.owner} data-react-full-terminal="">
       <SessionIdentity agent={selected} fallbackTitle={view.title || t("title.terminal")} includeBack={includeBack}
         handlers={{ onBack, onWorkspace, onMenu }} className="full-terminal-chrome" />
+      <SessionAppNotice afloat />
       <FullTerminalHost
         paneId={view.paneId}
         active={active}

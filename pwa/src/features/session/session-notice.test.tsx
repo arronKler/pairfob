@@ -87,6 +87,17 @@ describe("where a session puts its notice", () => {
     expect(anchor()).toBeNull();
   });
 
+  test("where the page's box is the terminal's size, an error raised to stay floats too", () => {
+    act(() => renderReact(<div className="pane-root full-terminal-root">
+      <header className="chrome" />
+      <SessionNotice value={{ text: "草稿过长", tone: "error", persistent: true }} afloat />
+      <div className="full-terminal-host" />
+    </div>));
+    expect(notice()?.parentElement?.className).toBe("session-notice");
+    expect(anchor()?.nextElementSibling?.className).toBe("full-terminal-host");
+    expect(appRoot().querySelector(".pane-root > .notice")).toBeNull();
+  });
+
   test("no notice leaves nothing behind", () => {
     act(() => renderReact(<Pane value={null} />));
     expect([...pane().children].map((child) => child.className)).toEqual(["chrome", "term-stage"]);

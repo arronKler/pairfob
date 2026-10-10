@@ -109,18 +109,43 @@ export const LONG_PRESS_MS = 500;
 
 /**
  * How long a stop button that just replaced a send stays inert. A quick second
- * tap on 发送 must not land on 停止 and interrupt the prompt it just sent.
+ * tap on 发送 must not land on 停止 and interrupt the prompt it just sent, and a
+ * tap aimed at the button must not find it changed under the finger.
  */
 export const STOP_ARM_MS = 700;
+
+/**
+ * A swap this soon after the reader emptied a field is that edit's doing: they
+ * deleted the draft and saw 停止 take the slot, so the tap that follows is meant
+ * for it. The store publishes inside the input event, well inside this window.
+ * An edit that leaves text behind does not count: the swap after it is a send.
+ */
+const OWN_EDIT_MS = 150;
 
 /** False while a freshly swapped-in stop is still arming; true otherwise. */
 function useStopArmed(kind: SendKind): boolean {
   const previous = useRef(kind);
+  const emptiedAt = useRef(Number.NEGATIVE_INFINITY);
   const [armed, setArmed] = useState(true);
+  useLayoutEffect(() => {
+    // Capture on the document runs before the field's own listener empties the draft.
+    const edited = (event: Event) => {
+      const field = event.target;
+      const emptied = (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) && !field.value.trim();
+      emptiedAt.current = emptied ? performance.now() : Number.NEGATIVE_INFINITY;
+    };
+    document.addEventListener("input", edited, true);
+    document.addEventListener("compositionend", edited, true);
+    return () => {
+      document.removeEventListener("input", edited, true);
+      document.removeEventListener("compositionend", edited, true);
+    };
+  }, []);
   useLayoutEffect(() => {
     const from = previous.current;
     previous.current = kind;
-    if (kind !== "stop" || from === "stop" || from === "stopping" || from === "force") {
+    const ownEdit = performance.now() - emptiedAt.current < OWN_EDIT_MS;
+    if (kind !== "stop" || from === "stop" || from === "stopping" || from === "force" || ownEdit) {
       setArmed(true);
       return;
     }

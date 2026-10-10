@@ -23,7 +23,7 @@ import { DIALOG_STEP, ModalFrame, presentModal } from "../../shared/ui/overlay/m
 import { applyCapabilities, setOperationBusy } from "./capabilities-store";
 import { createSelectedWorktree, listSelectedWorktrees, openSelectedWorktree, operationGate } from "./controller";
 import { followWorktreeJob } from "./worktree-outcome";
-import { runDialogStep, takesSheetPlace } from "./worktree-steps";
+import { runDialogStep } from "./worktree-steps";
 
 /**
  * The Worktree actions asked from outside the session panel (the branches
@@ -198,7 +198,7 @@ test("put away, a form says so; opened over a dialog that stays, it is that dial
   expect(closed).toEqual([false]);
 });
 
-test("a step run from a dialog's row keeps that dialog until something was done; only the list takes a finger's sheet's place", async () => {
+test("a step run from a dialog's row keeps that dialog until something was done, the list on a finger's sheet included", async () => {
   onDesk();
   boot();
   const calls: string[] = [];
@@ -229,17 +229,18 @@ test("a step run from a dialog's row keeps that dialog until something was done;
   expect(order).toEqual(["step"]);
   runDialogStep(closed => { order.push("done"); closed(true); }, () => order.push("close"));
   expect(order).toEqual(["step", "done", "close"]);
-  // The list is the one that takes the sheet's place there: the sheet closes
-  // first, the list opens on the next task and nothing leads back.
+  // The list is a step like the forms: the sheet that asked stays under it,
+  // and is closed only by a Worktree opened from the list.
   order.length = 0;
-  runDialogStep(takesSheetPlace(closed => { order.push("list"); closed(true); }), () => order.push("close"));
-  expect(order).toEqual(["close"]);
+  act(() => { presentModal<void>(modal => createElement(ModalFrame<void>, { modal, title: "Branches", children: createElement("button", { type: "button" }, "Worktree list") })); });
+  await act(async () => { runDialogStep(listSelectedWorktrees, () => order.push("closed for the list")); await settle(); });
+  const list = legacy()!;
+  expect(list.querySelector("h2")?.textContent).toBe(t("menu.worktrees"));
+  expect(list.classList.contains(DIALOG_STEP)).toBeTrue();
+  act(() => list.querySelector<HTMLButtonElement>(".worktree-close")!.click());
   await settle();
-  expect(order).toEqual(["close", "list"]);
-  runDialogStep(listSelectedWorktrees, () => order.push("closed for the list"));
-  expect(order).toEqual(["close", "list", "closed for the list"]);
-  await settle();
-  expect(legacy()?.querySelector("h2")?.textContent).toBe(t("menu.worktrees"));
+  expect(order).toEqual([]);
+  expect(dialogs().map(dialog => dialog.querySelector("h2")?.textContent)).toEqual(["Branches"]);
 });
 
 test("a finger gets the same two forms in a bottom sheet, over the sheet that offered them", async () => {

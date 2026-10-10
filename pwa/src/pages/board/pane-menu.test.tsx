@@ -26,6 +26,7 @@ import { pickBoardSplit } from "./board-bridge";
 import type { SnapshotWire } from "../../lib/dashboard";
 import { bindOverlayOrigin } from "../../shared/ui/overlay/origin";
 import { noticesStore } from "../../app/notices-store";
+import { LAST_AGENT_KIND_KEY } from "../../features/operations/operation-form-model";
 
 const caps = { ...NO_OPERATION_CAPABILITIES, split_pane: true, resize_pane: true, swap_pane: true, zoom_pane: true };
 let snapshot: SnapshotWire;
@@ -110,6 +111,27 @@ test("the menu groups this session, its layout and management, with the pane nam
   ]);
   expect(document.querySelector("dialog .sheet-subtitle")?.textContent).toContain(t("boardMenu.positionH", { h: t("boardMenu.h.right") }));
   expect(document.querySelector(".board-context-menu, .board-menu-overlay")).toBeNull();
+});
+
+test.each(["codex", ""])("board split inherits target kind %s instead of the selected pane or last choice", async (kind) => {
+  const previous = localStorage.getItem(LAST_AGENT_KIND_KEY);
+  try {
+    localStorage.setItem(LAST_AGENT_KIND_KEY, "claude");
+    act(() => {
+      applyCapabilities(caps, ["agy", "claude", "codex"]);
+      snapshot.panes![0].agent = "agy";
+      snapshot.panes![1].agent = kind;
+      replaceAgentsFromSnapshot(snapshot);
+    });
+    await splitSheet("right");
+    expect(document.querySelector('.create-kind[aria-checked="true"]')?.textContent).toBe(kind || t("create.terminal"));
+    await click(t("boardMenu.splitSubmit"));
+    expect(calls).toEqual([{ method: "split", value: { pane_id: "p2", direction: "right", ratio: 0.5,
+      cwd: "/tmp/demo", ...(kind ? { agent_kind: kind } : {}) } }]);
+  } finally {
+    if (previous === null) localStorage.removeItem(LAST_AGENT_KIND_KEY);
+    else localStorage.setItem(LAST_AGENT_KIND_KEY, previous);
+  }
 });
 
 test("split starts placement on the canvas; the picked side splits the pressed pane and stays on the board", async () => {

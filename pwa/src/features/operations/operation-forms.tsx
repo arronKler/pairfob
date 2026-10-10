@@ -2,12 +2,12 @@ import type { ReactNode } from "react";
 import { t } from "../../lib/i18n";
 import { fitOperationPrompt, type CreateConversationInput, type CreateTabInput, type LayoutDirection, type SplitDirection,
   type SplitPaneInput } from "../../lib/operations";
-import { accepted, loadLastAgentKind, readAgentKind, rejected, type FormResult } from "./operation-form-model";
+import { accepted, defaultAgentKind, loadLastAgentKind, readAgentKind, rejected, type FormResult } from "./operation-form-model";
 import { formDialog, OperationField, OperationPrompt, OperationSelect } from "./operation-form";
 
-function AgentKindField({ kinds }: { kinds: string[] }) {
+function AgentKindField({ kinds, sourceKind }: { kinds: string[]; sourceKind?: string }) {
   return <>
-    <OperationSelect label={t("form.kind")} name="agent_kind" selected={loadLastAgentKind(kinds)} choices={[
+    <OperationSelect label={t("form.kind")} name="agent_kind" selected={defaultAgentKind(kinds, loadLastAgentKind(kinds), sourceKind)} choices={[
       { value: "", label: t("form.plainTerminal") }, ...kinds.map(kind => ({ value: kind, label: kind })),
     ]} />
     {!kinds.length && <p className="operation-hint">{t("form.noAgentKinds")}</p>}
@@ -53,13 +53,13 @@ export function askCreateTab(agentKinds: string[], defaultCwd = ""): Promise<Omi
 }
 
 /** Split fields after the caller's own `direction` control (select, preview or tiles). */
-export function SplitPaneFields({ agentKinds, defaultCwd = "", direction, hint }: {
-  agentKinds: string[]; defaultCwd?: string; direction: ReactNode; hint: string;
+export function SplitPaneFields({ agentKinds, defaultCwd = "", direction, hint, sourceKind }: {
+  agentKinds: string[]; defaultCwd?: string; direction: ReactNode; hint: string; sourceKind?: string;
 }) {
   return <>
     {direction}
     <OperationField label={t("form.cwdOptional")} name="cwd" value={defaultCwd} />
-    <AgentKindField kinds={agentKinds} />
+    <AgentKindField kinds={agentKinds} sourceKind={sourceKind} />
     <p className="operation-hint">{hint}</p>
   </>;
 }
@@ -73,9 +73,9 @@ export function readSplitPane(data: FormData, agentKinds: string[]): FormResult<
   return accepted({ direction, ratio: 0.5, ...(cwd ? { cwd } : {}), ...(kind.value ? { agent_kind: kind.value } : {}) });
 }
 
-export function askSplitPane(agentKinds: string[], defaultCwd = "", target?: { direction: SplitDirection; title: string }): Promise<Omit<SplitPaneInput, "pane_id"> | null> {
+export function askSplitPane(agentKinds: string[], defaultCwd = "", target?: { direction: SplitDirection; title: string }, sourceKind?: string): Promise<Omit<SplitPaneInput, "pane_id"> | null> {
   return formDialog(t("form.split"), t(target ? "boardMenu.createSplit" : "form.splitAction"), <SplitPaneFields
-    agentKinds={agentKinds} defaultCwd={defaultCwd} hint={t(target ? "boardMenu.splitHint" : "form.splitHint")}
+    agentKinds={agentKinds} defaultCwd={defaultCwd} sourceKind={sourceKind} hint={t(target ? "boardMenu.splitHint" : "form.splitHint")}
     direction={target ? <>
       <p>{t("boardMenu.splitTarget", { title: target.title })}</p>
       <div className={`board-split-preview ${target.direction}`} aria-label={t(target.direction === "right" ? "boardMenu.right" : "boardMenu.down")}>

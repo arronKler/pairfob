@@ -41,9 +41,9 @@ async function copyRoot(root: string): Promise<void> {
 /**
  * Read-only branches plus the worktree actions that are the safe way to switch
  * work. Actions sit first; remote branches start folded because they are the
- * long list. Picking an action is a step of this dialog (`runDialogStep`): beside
- * the list it opens over the dialog and Escape comes back here; a finger's sheet
- * closes first and the step takes its place.
+ * long list. Picking an action is a step of this dialog (`runDialogStep`): it
+ * opens over the dialog, and putting it away comes back here, under a mouse and
+ * on a finger's sheet alike.
  */
 export function BranchSheet({ branches, onClose }: { branches: NonNullable<WorkspaceSnapshot["branches"]>; onClose: () => void }) {
   const dismiss = useCallback(() => onClose(), [onClose]);

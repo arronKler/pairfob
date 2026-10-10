@@ -86,6 +86,18 @@ afterEach(async () => {
 });
 
 describe("create sheet", () => {
+  test.each([
+    { lastKind: null, expected: "agy" },
+    { lastKind: "unavailable", expected: "agy" },
+    { lastKind: "codex", expected: "codex" },
+    { lastKind: "", expected: "" },
+  ])("last choice $lastKind selects $expected independently of pins", async ({ lastKind, expected }) => {
+    const { result } = await open({ kinds: ["agy", "codex"], lastKind, memory: { ...EMPTY, pinned: ["codex"] } });
+    expect(button(".create-kind.on").textContent).toBe(expected || t("create.terminal"));
+    await submit();
+    expect(await result).toMatchObject({ kind: "tab", agentKind: expected });
+  });
+
   test("opens on the entry's workspace with the last kind, says what will happen, and returns a tab", async () => {
     const { result } = await open();
     expect(sheet().querySelector(".modal-title")?.textContent).toBe(t("create.title"));

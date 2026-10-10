@@ -82,6 +82,7 @@ const {
   syncFullTerminalChrome,
 } = await import("./full-terminal.ts");
 const { FullTerminalScreen } = await import("./full-terminal-screen.tsx");
+const { clearNotice, showError, showStatus } = await import("../../../app/notices-store.ts");
 
 const app = appRoot();
 
@@ -141,7 +142,7 @@ beforeEach(async () => {
   await resetBoardTestDOM();
   resetTransitionState();
   registerSessionOwnerPreparer(registerSessionView);
-  act(() => mountApp());
+  act(() => { clearNotice(); mountApp(); });
 });
 
 afterEach(async () => {
@@ -150,6 +151,7 @@ afterEach(async () => {
     disposeFullTerminal();
     releaseFullTerminalScreen();
     unmountApp();
+    clearNotice();
     setLang("zh");
     registerSessionOwnerPreparer(null);
     attachLiveSession(null);
@@ -191,6 +193,25 @@ describe("react complete-terminal shell", () => {
     expect(app.querySelector(".full-terminal-canvas .xterm")).toBeTruthy();
     expect(app.querySelector(".full-terminal-canvas .xterm-helper-textarea")).toBeTruthy();
     expect(pad).toBeTruthy();
+  });
+
+  test("a notice hangs under the header and takes no place beside the host", async () => {
+    act(boot);
+    await waitUntil(() => getFullTerminalView().stage === "live", "live");
+    const root = app.querySelector(".full-terminal-root") as HTMLElement;
+    const host = root.querySelector(".full-terminal-host");
+    act(() => showStatus(t("compose2.stopped")));
+    const anchor = root.querySelector(":scope > .session-notice");
+    expect(anchor?.previousElementSibling?.classList.contains("full-terminal-chrome")).toBeTrue();
+    expectSameNode(anchor?.nextElementSibling ?? null, host);
+    expect(anchor?.querySelector("[data-app-notice]")?.textContent).toBe(t("compose2.stopped"));
+    // One raised to stay floats as well: in the column it would take rows from the terminal.
+    act(() => showError(t("compose2.tooLong"), true));
+    expect(root.querySelector(":scope > .notice")).toBeNull();
+    expect(root.querySelector(":scope > .session-notice > .notice-error")?.textContent).toBe(t("compose2.tooLong"));
+    expectSameNode(root.querySelector(".full-terminal-host"), host);
+    act(() => clearNotice());
+    expect([...root.children].map((el) => el.className.split(" ")[0])).toEqual(["chrome", "full-terminal-host", "full-terminal-pad"]);
   });
 
   test("keeps host and helper textarea across chrome subscription updates", async () => {

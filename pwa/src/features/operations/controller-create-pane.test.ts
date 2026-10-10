@@ -281,13 +281,13 @@ describe.each(["tab", "split"])("%s pane type form", (operation) => {
     dialog.close("cancel");
   }
 
-  test("offers every advertised kind and remembers the last supported choice", async () => await act(async () => {
+  test("offers every advertised kind, preferring the split source or the last tab choice", async () => await act(async () => {
     boot();
     applyCapabilities({ ...NO_OPERATION_CAPABILITIES, create_conversation: true, create_tab: true, split_pane: true, history: true }, ["codex", "claude"]);
     localStorage.setItem(LAST_AGENT_KIND_KEY, "claude");
     const done = open();
     expect([...kindField().options].map((option) => option.value)).toEqual(["", "codex", "claude"]);
-    expect(kindField().value).toBe("claude");
+    expect(kindField().value).toBe(operation === "split" ? "" : "claude");
     kindField().value = "codex";
     cancel();
     await done;

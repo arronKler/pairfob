@@ -8,7 +8,7 @@ import { createSelectedTab, operationGate, renamePaneTo, splitSelectedPane } fro
 import { AgentKindGrid, kindName } from "../../operations/agent-kind-grid";
 import { AgentKindPickerPanel } from "../../operations/agent-kind-picker";
 import { loadCreateMemory, rememberCreate } from "../../operations/create-memory";
-import { loadLastAgentKind } from "../../operations/operation-form-model";
+import { defaultAgentKind, loadLastAgentKind } from "../../operations/operation-form-model";
 import { PageFooter, usePageEnter, useSheetRun } from "../../operations/sheet-page";
 import { usePreferences } from "../../settings/hooks";
 import { useDashboard } from "../../dashboard/hooks";
@@ -41,11 +41,11 @@ function workspaceName(agent: AgentCard): string {
  * The kind choice both create pages share, with the home sheet's grid and its
  * full list swapped in place (not pushed), so the page keeps what was typed.
  */
-function useKindChoice() {
+function useKindChoice(sourceKind?: string) {
   const [kinds] = useState(() => [...advertisedAgentKinds()]);
   const [memory, setMemory] = useState(loadCreateMemory);
   const [lastKind] = useState(() => loadLastAgentKind(kinds));
-  const [kind, setKind] = useState(() => kinds.includes(lastKind) ? lastKind : kinds[0] ?? "");
+  const [kind, setKind] = useState(() => defaultAgentKind(kinds, lastKind, sourceKind));
   const [picking, setPicking] = useState(false);
   // Escape takes back the list first, then the page it stands in for.
   useEscapeStep(picking, () => setPicking(false));
@@ -101,7 +101,7 @@ export function NewTabPage({ modal, agent }: { modal: ActionSheetController; age
 }
 
 export function SplitPage({ modal, agent }: { modal: ActionSheetController; agent: AgentCard }) {
-  const { kind, grid, picker } = useKindChoice();
+  const { kind, grid, picker } = useKindChoice(agent.agent);
   const [direction, setDirection] = useState<SplitDirection>("right");
   const run = useSheetRun(modal);
   const reason = useOperationGate();

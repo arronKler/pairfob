@@ -37,22 +37,31 @@ export function resizeAmountError(raw: string): string | null {
 
 export const LAST_AGENT_KIND_KEY = "pairfob:lastAgentKind";
 
-export function loadLastAgentKind(agentKinds: string[]): string {
+/** null means no available remembered choice; "" is an explicit terminal choice. */
+export function loadLastAgentKind(agentKinds: readonly string[]): string | null {
   try {
     const raw = localStorage.getItem(LAST_AGENT_KIND_KEY);
-    if (!raw) return "";
+    if (raw === null || raw === "") return raw;
     const kind = raw.trim().slice(0, OPERATION_INPUT_LIMITS.agentKind);
-    return agentKinds.includes(kind) ? kind : "";
+    return agentKinds.includes(kind) ? kind : null;
   } catch {
-    return "";
+    return null;
   }
+}
+
+/** Splits inherit their source; otherwise use the last choice, then advertised order. */
+export function defaultAgentKind(agentKinds: readonly string[], lastKind: string | null, sourceKind?: string): string {
+  for (const kind of [sourceKind, lastKind]) {
+    if (kind === "" || (typeof kind === "string" && agentKinds.includes(kind))) return kind;
+  }
+  return agentKinds[0] ?? "";
 }
 
 function rememberAgentKind(kind: string): void {
   try {
     localStorage.setItem(LAST_AGENT_KIND_KEY, kind.slice(0, OPERATION_INPUT_LIMITS.agentKind));
   } catch {
-    /* storage blocked; the next form just starts from a terminal again */
+    /* storage blocked; the next form uses its normal fallback */
   }
 }
 

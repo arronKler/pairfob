@@ -56,7 +56,6 @@ import { resetPaneView } from "../session/session-store";
 import { openWorktreeTargetError, type SheetOutcome } from "./operation-form-model";
 import { followWorktreeJob } from "./worktree-outcome";
 import { showWorktreeForm, type OperationGate } from "./worktree-sheet";
-import { takesSheetPlace } from "./worktree-steps";
 import { disposeFullTerminal, leaveFullTerminalWithTransition } from "../session/full-terminal/full-terminal";
 import { dropQueuedKeys } from "../../features/session/guided/keys";
 import {
@@ -279,7 +278,7 @@ export async function splitSelectedPane(selected = selectedAgent(), options: Pan
   if (!session || !selected || !capabilityEnabled("split_pane") || options.valid?.() === false) return NOT_RUN;
   const owner = operationOwner(session);
   const input = options.input ?? await askSplitPane([...advertisedAgentKinds()], selected.cwd,
-    options.direction ? { direction: options.direction, title: agentTitle(selected) } : undefined);
+    options.direction ? { direction: options.direction, title: agentTitle(selected) } : undefined, selected.agent);
   if (!input || !ownsOperationView(owner) || !capabilityEnabled("split_pane")) return NOT_RUN;
   return sheetOutcome(done => runHerdOperation(
     t("op.creatingSplit"),
@@ -423,9 +422,8 @@ export const operationGate: OperationGate = {
  * The repository's Worktrees in a dialog. Resolves once the list is read;
  * `closed` hears how the dialog went away, as the two forms below tell it:
  * true when a Worktree was opened from it, false when it was only put away.
- * Asked from a finger's sheet it takes that sheet's place (`worktree-steps`).
  */
-export const listSelectedWorktrees = takesSheetPlace(async (closed?: (opened: boolean) => void): Promise<void> => {
+export async function listSelectedWorktrees(closed?: (opened: boolean) => void): Promise<void> {
   const session = liveSession();
   const defaults = selectedWorktreeDefaults();
   if (!session || !defaults || !capabilityEnabled("list_worktrees")) return closed?.(false);
@@ -457,7 +455,7 @@ export const listSelectedWorktrees = takesSheetPlace(async (closed?: (opened: bo
       : undefined,
     closed,
   );
-});
+}
 
 /**
  * New Worktree for the selected session's repository, asked from outside the

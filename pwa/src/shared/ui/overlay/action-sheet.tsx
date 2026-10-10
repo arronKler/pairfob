@@ -45,6 +45,18 @@ const START = ".sheet-body [data-autofocus]:not(:disabled)";
 const DESK_START = ".sheet-body [data-desk-autofocus]:not(:disabled)";
 const PAGE_START = ".sheet-page [data-desk-autofocus]:not(:disabled), .sheet-page [data-autofocus]:not(:disabled)";
 
+/**
+ * Where a pushed page starts a finger. Its first control, unless that is a
+ * field the page did not name with `data-autofocus`: focus there raises the
+ * on-screen keyboard over a form the reader has not read yet, so the page's
+ * first button takes it, as it does when the same form is a sheet of its own.
+ */
+function touchPageStart(body: HTMLElement): HTMLElement | null {
+  const first = body.querySelector<HTMLElement>(`.sheet-page ${PAGE_FOCUS}`);
+  if (!first?.matches("input, textarea") || first.matches("[data-autofocus]")) return first;
+  return body.querySelector<HTMLElement>(".sheet-page button:not(:disabled)") ?? first;
+}
+
 /** What makes a control that one among its page's: its kind, its classes and its name. */
 function signature(control: Element): string {
   return `${control.tagName}|${control.className}|${control.getAttribute("aria-label") ?? control.textContent ?? ""}`;
@@ -112,7 +124,8 @@ export function SheetFrame<T>({ modal, title, children, className = "", subtitle
     const controls = from ? [...body.current.querySelectorAll<HTMLElement>(PAGE_FOCUS)] : [];
     const opener = from ? controls.find(control => signature(control) === from.name) ?? controls[from.at] : undefined;
     const named = motion === "push" && deskRef.current ? body.current.querySelector<HTMLElement>(PAGE_START) : null;
-    (opener ?? named ?? body.current.querySelector<HTMLElement>(`.sheet-page ${PAGE_FOCUS}`))?.focus({ preventScroll: true });
+    const start = motion === "push" && !deskRef.current ? touchPageStart(body.current) : body.current.querySelector<HTMLElement>(`.sheet-page ${PAGE_FOCUS}`);
+    (opener ?? named ?? start)?.focus({ preventScroll: true });
   }, [pages.length, motion]);
   const top = pages.at(-1);
   // The root keeps its plain DOM until the reader first navigates, so sheets

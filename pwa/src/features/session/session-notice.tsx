@@ -27,15 +27,21 @@ export function noticeKeepsItsPlace(notice: Notice): boolean {
   return notice.persistent === true && notice.tone === "error";
 }
 
-/** `inPage` is for a note the session itself keeps on screen, whatever its tone. */
-export function SessionNotice({ value, inPage = false }: { value: Notice | null; inPage?: boolean }) {
+/**
+ * `inPage` is for a note the session itself keeps on screen, whatever its tone.
+ * `afloat` is for a screen whose box is not its own to resize: the complete
+ * terminal's rows are the computer's terminal rows, so a notice that took a
+ * place in its page would resize the program under it. There every notice
+ * floats, the ones that stay included.
+ */
+export function SessionNotice({ value, inPage = false, afloat = false }: { value: Notice | null; inPage?: boolean; afloat?: boolean }) {
   if (!value) return null;
   const notice = <Feedback value={value} appNotice />;
-  if (inPage || noticeKeepsItsPlace(value)) return notice;
+  if (!afloat && (inPage || noticeKeepsItsPlace(value))) return notice;
   return <div className="session-notice">{notice}</div>;
 }
 
 /** The application notice as a session places it; it repaints alone when the notice changes. */
-export function SessionAppNotice() {
-  return <SessionNotice value={useAppNotice()} />;
+export function SessionAppNotice({ afloat = false }: { afloat?: boolean }) {
+  return <SessionNotice value={useAppNotice()} afloat={afloat} />;
 }

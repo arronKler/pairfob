@@ -48,6 +48,7 @@ import { openPaneMenu } from "./pane-menu";
 import { ProtocolError } from "../../../lib/protocol/errors";
 import { bindOverlayOrigin } from "../../../shared/ui/overlay/origin";
 import { tabStops } from "../../../shared/ui/overlay/tab-stops";
+import { LAST_AGENT_KIND_KEY } from "../../operations/operation-form-model";
 
 const labels = () => [...document.querySelectorAll(".sheet-body button")].map((button) => button.textContent);
 const sections = () => [...document.querySelectorAll(".menu-section-title")].map((node) => node.textContent);
@@ -308,6 +309,28 @@ test("offline pages say why and keep the primary action off", () => {
   } finally { act(() => setNetworkOnline(true)); }
 });
 
+test.each([
+  { page: "tab", source: "codex", remembered: "claude", expected: "claude" },
+  { page: "tab", source: "codex", remembered: "", expected: "" },
+  { page: "split", source: "codex", remembered: "claude", expected: "codex" },
+  { page: "split", source: "", remembered: "claude", expected: "" },
+  { page: "split", source: "unavailable", remembered: "claude", expected: "claude" },
+  { page: "split", source: "unavailable", remembered: "retired", expected: "agy" },
+])("$page defaults to $expected with source $source and last choice $remembered", ({ page, source, remembered, expected }) => {
+  const previous = localStorage.getItem(LAST_AGENT_KIND_KEY);
+  try {
+    localStorage.setItem(LAST_AGENT_KIND_KEY, remembered);
+    applyCapabilities({ ...NO_OPERATION_CAPABILITIES, create_tab: true, split_pane: true }, ["agy", "claude", "codex"]);
+    seedAgents([{ ...card("p1"), agent: source }]);
+    act(openPaneMenu);
+    act(() => byLabel(t(page === "tab" ? "menu.newTab" : "menu.split")).click());
+    expect(document.querySelector('.create-kind[aria-checked="true"]')?.textContent).toBe(expected || t("create.terminal"));
+  } finally {
+    if (previous === null) localStorage.removeItem(LAST_AGENT_KIND_KEY);
+    else localStorage.setItem(LAST_AGENT_KIND_KEY, previous);
+  }
+});
+
 test("split picks its side on the preview and sends one split with the chosen kind", async () => {
   applyCapabilities({ ...NO_OPERATION_CAPABILITIES, split_pane: true }, ["codex"]);
   const calls: Array<Record<string, unknown>> = [];
@@ -370,6 +393,10 @@ test("Worktree lists in place, marks the current checkout, and opens a row with 
   act(() => pageRow(t("pm.wtNew")).click());
   expect(dialog.querySelector("h2")?.textContent).toBe(t("pm.wtNew"));
   expect(dialog.querySelector(".sheet-back-label")?.textContent).toBe(t("menu.worktree"));
+  // A finger's page starts on its button, not in the branch field it did not
+  // name: no keyboard comes up over a form that has not been read yet.
+  expect(document.activeElement?.tagName).toBe("BUTTON");
+  expect(dialog.querySelector(".sheet-page")?.contains(document.activeElement)).toBeTrue();
   act(() => dialog.querySelector<HTMLButtonElement>(".sheet-back")!.click());
   act(() => pageRow(t("pm.wtOpenBy")).click());
   expect(dialog.querySelectorAll(".create-seg [role=radio]")).toHaveLength(2);
