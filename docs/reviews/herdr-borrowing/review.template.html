@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Pairfob · 借鉴方案评审</title>
+  <style>/* REVIEW_CSS */</style>
+</head>
+<body>
+  <a class="skip" href="#detail">跳到方案详情</a>
+  <header class="masthead">
+    <a class="brand" href="#files"><span class="brand-mark">p<span>↗</span></span> pairfob <small> / 设计评审</small></a>
+    <div class="header-actions"><span class="local-indicator"><i></i>本机评审</span><button id="summary-open">评审清单 <span id="review-count">0/14</span></button><button class="dark" id="export">导出意见 ↗</button></div>
+  </header>
+  <section class="intro">
+    <div><p class="eyebrow">HERDR WEB UI → PAIRFOB · RESEARCH TO DESIGN</p><h1>值得借鉴的，<br><em>怎么变成更好的体验。</em></h1><p class="intro-copy">14 个方案，一次可操作的评审。先体验，再决定。<br>基于两轮源码审阅；所有演示均为本地模拟，不连接真实会话。</p></div>
+    <div class="intro-note"><span class="note-index">01—14</span><p>保留 Pairfob 的基础</p><strong>出站连接 · 端到端加密<br>每台电脑独立身份</strong><span>交互和可靠性借鉴，接入架构保持独立。</span></div>
+  </section>
+  <div class="review-layout">
+    <aside class="catalog" aria-label="方案列表">
+      <div class="catalog-title"><h2>方案目录</h2><span id="catalog-count">14 项</span></div>
+      <label class="search"><span>⌕</span><input id="search" type="search" placeholder="搜索方案或场景" aria-label="搜索方案"></label>
+      <div class="filters"><select id="category" aria-label="按主题筛选"><option>全部主题</option><option>工作流</option><option>移动体验</option><option>可观测性</option><option>质量保障</option></select><select id="decision-filter" aria-label="按评审状态筛选"><option value="all">全部状态</option><option value="pending">未评审</option><option value="accept">采纳</option><option value="adjust">调整</option><option value="defer">暂缓</option></select></div>
+      <nav id="proposal-list"></nav>
+      <div class="catalog-foot"><span>建议推进顺序</span><p><b>先做</b> 现有能力的衔接与验证<br><b>随后</b> 状态和跨模块能力<br><b>评估</b> 按使用需求补充</p></div>
+    </aside>
+    <main id="detail" tabindex="-1"></main>
+    <aside class="preview-column" aria-label="交互原型">
+      <div class="preview-heading"><span>交互试验台</span><div class="segmented" aria-label="预览宽度"><button id="phone-view" aria-pressed="true">手机</button><button id="wide-view" aria-pressed="false">宽屏</button></div></div>
+      <div class="prototype-wrap"><div class="prototype" id="prototype"><div class="device-bar"><span>9:41</span><span>••• ▰</span></div><div class="app-bar"><span class="mini-logo">p↗</span><div>Pairfob<small>MacBook · pairfob</small></div><span class="demo-tag">模拟</span></div><div id="demo"></div></div></div>
+      <div class="demo-footer"><span id="demo-hint"></span><button id="demo-reset">↻ 重置演示</button></div>
+      <p class="prototype-note">演示数据不会提交到 daemon。评审意见与演示状态分开保存。</p>
+    </aside>
+  </div>
+  <footer class="page-footer"><span>PAIRFOB / REVIEW LAB</span><p>研究来源：herdr-web-ui · 623d5c8。现状以两轮审阅记录为准，实施前核对最新工作区。</p><a href="https://github.com/devswha/herdr-web-ui/tree/623d5c88d43132a6cad185503794c2bb1caa4b96" target="_blank" rel="noopener noreferrer">查看来源仓库 ↗</a></footer>
+  <dialog id="summary"><div class="summary-head"><div><p class="eyebrow">YOUR REVIEW</p><h2>你的评审清单</h2></div><button id="summary-close" aria-label="关闭评审清单">✕</button></div><div id="summary-body"></div><div class="summary-actions"><span id="storage-status">意见保存在当前浏览器，建议导出留存。</span><button class="dark" id="summary-export">导出 JSON</button></div></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script>/* PROPOSALS_JS */</script>
+  <script>/* PROTOTYPES_JS */</script>
+  <script>/* REVIEW_JS */</script>
+</body>
+</html>

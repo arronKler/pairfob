@@ -110,6 +110,49 @@ package can express that duty.
 - The product loop is not a terminal emulator: read the rendered pane, send
   keys back to the PTY.
 
+## PWA: one app, three surfaces
+
+The PWA is used on a phone, on a tablet and in a desktop browser. They are one
+codebase and one set of screens, laid out by two independent questions. A UI
+change that is right on one surface is not done until the other two are
+checked.
+
+**Width decides the layout** (`pwa/src/shared/ui/dom/width-tier.ts`,
+re-exported from `app/viewport.ts`):
+
+| Window | Layout |
+| --- | --- |
+| under 720px | Phone: one screen at a time, tab bar at the bottom |
+| 720–899px | The list stays beside the session; files and the board take the whole page |
+| 900–1199px | Files and changes open beside the session, and the list gives way while they are open |
+| 1200px and up | List, session, files and changes side by side |
+
+A phone on its side keeps the phone layout below 900px (`handheld()` reads the
+screen's short side, not the window).
+
+**Input decides the interaction** (`pwa/src/app/input-mode.ts`,
+`shared/ui/overlay/popover.ts`): a mouse gets hover actions, right-click menus,
+popovers at the trigger and dialogs as cards; a finger gets swipes, long press,
+bottom sheets and 44px targets; a hardware keyboard, proven by its first
+physical key, gets Enter-to-send, F6 between columns and typing without a
+click.
+
+The two axes do not imply each other. A landscape tablet is a wide layout
+driven by touch, a narrow laptop window is a phone layout driven by a mouse,
+and a tablet may gain or lose a keyboard mid-session. So:
+
+- Do not read width to decide an interaction, or the pointer to decide a
+  layout. Ask the helper that owns the question.
+- Do not write "desktop" or "phone" as a single condition. Name the tier or
+  the input the rule is about.
+- A field must not take focus by itself under a finger unless the screen exists
+  to type into it: focus there raises the on-screen keyboard.
+- Whatever changes the complete terminal's box resizes the program on the
+  computer. Notices, side columns and drafts must float or pan, not take rows.
+- Shared pieces (sheets, popovers, forms, the compose field, the send and stop
+  button) serve all three surfaces. Changing one for a surface changes it for
+  the others unless the change is behind the right helper.
+
 ## Branch and release workflow
 
 Commit, push and deploy from the user's current local branch and checkout.
@@ -128,7 +171,7 @@ repository gate after every local edit or merely because a task is ending.
 | --- | --- |
 | Documentation or copy-only edit | Check the diff, links and affected rendering as relevant; no unrelated code suites. |
 | Local implementation iteration | Run affected module tests and relevant type/format checks. For shared code, include its affected consumers. |
-| UI behavior or layout change | Add focused browser checks for the changed interaction or viewport; fixtures, live transport and physical-device acceptance are distinct. |
+| UI behavior or layout change | Add focused browser checks for the changed interaction, on each surface it can reach: a phone with touch (390x844), a tablet with touch (about 1024x768, and 820 wide for the 720–899 tier when the change touches layout), and a desktop with a mouse and keyboard (1440x900). Shared components and anything keyed on width or input reach all three. Drive them with real touch and mouse input through the `pwa/qa` scenes; a unit test at one width does not cover the others. Fixtures, live transport and physical-device acceptance are distinct. |
 | Agent transcript adapter (`internal/journal`) or an agent CLI upgrade | Run `PAIRFOB_SCAN_LOCAL_TRANSCRIPTS=1 go test ./internal/journal -run LocalTranscripts -v` on a machine with real Claude Code / Codex / Grok / Pi / Cursor / Hermes / opencode sessions; a hit is injected context leaking into chat. |
 | PWA UI-only production release | Run `PAIRFOB_PACK_DL=1 ./scripts/verify.sh --pwa-only <verified-release-commit>` against a trustworthy baseline in the current checkout. |
 | Backend, protocol, cross-module contract or release-tooling delivery | Run the full `./scripts/verify.sh` once on the final candidate before handoff/merge/release. Use focused checks during iteration. |
