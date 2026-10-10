@@ -90,12 +90,28 @@ export class DaemonRoom {
   }
 
   webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): void {
-    const wrapped = this.wraps.get(ws) ?? new CfSocket(ws);
-    diagnosticLog(this.env, this.ctx.id.toString(), {
-      event: "room_socket_close", code, was_clean: wasClean, reason: closeReason(reason),
-      ...socketFields(this.core.att(wrapped), ws.readyState),
-    });
-    this.core.onClose(wrapped, closeReason(reason));
+    let cleanupFailed = false;
+    try {
+      const wrapped = this.wraps.get(ws) ?? new CfSocket(ws);
+      diagnosticLog(this.env, this.ctx.id.toString(), {
+        event: "room_socket_close", code, was_clean: wasClean, reason: closeReason(reason),
+        ...socketFields(this.core.att(wrapped), ws.readyState),
+      });
+      this.core.onClose(wrapped, closeReason(reason));
+    } catch (error) {
+      cleanupFailed = true;
+      throw error;
+    } finally {
+      // Hibernating sockets still need a reciprocal Close frame. Use the raw
+      // socket so retirement or an attachment/storage failure cannot skip it.
+      try {
+        if (code === 1005 || code === 1006) ws.close();
+        else ws.close(code);
+      } catch (error) {
+        // Preserve the first failure if cleanup and the close reply both fail.
+        if (!cleanupFailed) throw error;
+      }
+    }
   }
 
   webSocketError(ws: WebSocket, _error: unknown): void {

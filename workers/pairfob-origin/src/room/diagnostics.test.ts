@@ -80,7 +80,7 @@ describe("room diagnostics", () => {
       core: { att: () => ({ role: "phone" }), onClose: (_ws: unknown, reason: string) => closed.push(reason) },
     } as unknown as DaemonRoom;
     await capture((logs) => {
-      DaemonRoom.prototype.webSocketClose.call(room, {} as WebSocket, 1006, "reconnect_token=rt_secret", false);
+      DaemonRoom.prototype.webSocketClose.call(room, { close() {} } as WebSocket, 1006, "reconnect_token=rt_secret", false);
       DaemonRoom.prototype.webSocketError.call(room, {} as WebSocket, new Error("rt_secret"));
       const event = JSON.parse(logs[0]);
       expect(event).toMatchObject({ code: 1006, was_clean: false, reason: "other", role: "phone" });

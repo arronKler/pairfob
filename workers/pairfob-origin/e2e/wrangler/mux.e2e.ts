@@ -98,6 +98,25 @@ async function readJSONFrame(ws: WebSocket, typ: number): Promise<Record<string,
 }
 
 describe("wrangler enroll + HELLO + pairing ticket", () => {
+  it("completes a client-initiated close handshake", async () => {
+    const creds = await enroll();
+    const daemon = await openMux(`/v2/ws?role=daemon&daemon_id=${creds.daemon_id}`);
+    expect(daemon.status).toBe(101);
+    sendJSON(daemon.ws, Typ.HELLO_DAEMON, { v: 2, op: "RegisterDaemon", ...creds });
+    expect((await readJSONFrame(daemon.ws, Typ.HELLO_DAEMON)).ok).toBe(true);
+    const closed = new Promise<CloseEvent>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("server did not reply to Close")), 2_000);
+      daemon.ws.addEventListener("close", (event) => {
+        clearTimeout(timer);
+        resolve(event);
+      }, { once: true });
+    });
+    daemon.ws.close(1000, "done");
+    const event = await closed;
+    expect(event.code).toBe(1000);
+    expect(event.wasClean).toBe(true);
+  });
+
   it("enrolls, acks PAIR_OPEN loc, consumes ticket once, QR has no ticket", async () => {
     const creds = await enroll();
 
