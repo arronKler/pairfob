@@ -147,3 +147,12 @@ describe("worker static overlay", () => {
     expect(await res.json()).toEqual({ ok: false, error: { code: "unbound" } });
   });
 });
+
+test('the preview runner bypasses HTML canonicalization with its own response policy', async () => {
+  const env = testEnv({ assets: assets({ '/preview-runner.asset': '<title>Pairfob preview</title>' }, true) });
+  const res = await handleFetch(new Request('https://pairfob.com/preview/runner.html'), env);
+  expect(res.status).toBe(200);
+  expect(res.headers.get('Location')).toBeNull();
+  expect(res.headers.get('Content-Security-Policy')).toContain('sandbox allow-scripts');
+  expect(await res.text()).toContain('Pairfob preview');
+});

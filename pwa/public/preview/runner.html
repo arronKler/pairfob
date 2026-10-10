@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pairfob preview</title>
+<style>html,body,iframe{margin:0;border:0;width:100%;height:100%;display:block}body{overflow:hidden;background:white}</style></head><body>
+<script>
+(() => {
+  let port, frame, token;
+  const pending = new Set();
+  window.addEventListener('message', event => {
+    if (!port && event.source === parent && parent !== window && event.origin === new URL(location.href).origin
+      && typeof event.data?.token === 'string' && event.data.token.length >= 16 && event.data.token.length <= 128
+      && event.data?.type === 'pairfob-preview' && event.ports.length === 1 && typeof event.data.html === 'string') {
+      port = event.ports[0];
+      token = event.data.token;
+      frame = document.createElement('iframe');
+      frame.title = 'HTML content';
+      frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-downloads allow-popups');
+      frame.referrerPolicy = 'no-referrer';
+      port.onmessage = ({ data }) => {
+        if (data?.type !== 'file-response' || !pending.delete(data.id)) return;
+        frame.contentWindow.postMessage({ ...data, token }, '*');
+      };
+      frame.onload = () => port.postMessage({ type: 'preview-ready' });
+      frame.srcdoc = event.data.html;
+      document.body.append(frame);
+      return;
+    }
+    if (!port || event.source !== frame?.contentWindow) return;
+    const data = event.data;
+    if (data?.token !== token) return;
+    if (data?.type === 'file-read' && Number.isSafeInteger(data.id) && typeof data.url === 'string'
+      && data.url.length <= 8192 && pending.size < 16 && !pending.has(data.id)) {
+      pending.add(data.id);
+      port.postMessage({ type: 'file-read', id: data.id, url: data.url });
+    } else if (data?.type === 'preview-error' && typeof data.message === 'string') {
+      port.postMessage({ type: 'preview-error', message: data.message.slice(0, 1000) });
+    }
+  });
+})();
+</script></body></html>

@@ -108,3 +108,16 @@ describe("static content security policy", () => {
     }
   });
 });
+test('only the fixed preview runner allows network/scripts and stays sandboxed top-level', async () => {
+  const response = await handleFetch(new Request('https://pairfob.com/preview/runner.html'), testEnv({ assets: assets() }));
+  const csp = response.headers.get('Content-Security-Policy')!;
+  expect(csp).toContain("script-src https: http: data: blob: 'unsafe-inline'");
+  expect(csp).toContain('connect-src https: http: wss: ws:');
+  expect(csp).toContain('sandbox allow-scripts allow-forms allow-downloads allow-popups;');
+  expect(csp).not.toContain('allow-same-origin');
+  expect(csp).not.toContain('allow-top-navigation');
+  expect(response.headers.get('X-Frame-Options')).toBe('SAMEORIGIN');
+  expect(response.headers.get('Cache-Control')).toContain('no-store');
+  for (const path of ['/preview/other.html', '/preview/runner.html/extra', '/pair', '/api/config']) expect(await cspOf(path)).not.toContain("'unsafe-inline'");
+  expect(await cspOf('/pair')).toContain("frame-src 'self'");
+});

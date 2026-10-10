@@ -85,6 +85,7 @@ function freezeSnapshot(next: WorkspaceModel, reveal: boolean, epoch: number): W
     && snapshot.tab === next.tab
     && snapshot.view === next.view
     && snapshot.directory === next.directory
+    && snapshot.sourceLine === next.sourceLine
     && snapshot.detailPath === next.detailPath
     && snapshot.diffLayer === next.diffLayer
     && snapshot.entries === entriesSlot.frozen
@@ -115,6 +116,7 @@ function freezeSnapshot(next: WorkspaceModel, reveal: boolean, epoch: number): W
     view: next.view,
     directory: next.directory,
     detailPath: next.detailPath,
+    sourceLine: next.sourceLine,
     diffLayer: next.diffLayer,
     entries: entriesSlot.frozen,
     nextCursor: next.nextCursor,
@@ -148,6 +150,7 @@ function syncCompatibilityModel(): void {
   workspaceModel.view = snapshot.view;
   workspaceModel.directory = snapshot.directory;
   workspaceModel.detailPath = snapshot.detailPath;
+  workspaceModel.sourceLine = snapshot.sourceLine;
   workspaceModel.diffLayer = snapshot.diffLayer;
   workspaceModel.entries = entriesSlot.compat;
   workspaceModel.nextCursor = snapshot.nextCursor;

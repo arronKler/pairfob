@@ -1,4 +1,5 @@
-import { useLayoutEffect, useMemo, useRef, type MouseEvent, type ReactNode, type Ref } from "react";
+import { captureFileLinkOwner, openChatFile } from "../../workspace/file-links";
+import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import { groupAgentTurns, replyText, turnKey, type AgentTurn } from "../../../lib/agent-trace-view";
 import { pendingAsk, splitTurn, stepObject, turnOutcome, turnSpan, type TurnRef } from "../../../lib/agent-trace-steps";
@@ -107,12 +108,19 @@ function anchorData(anchor: TraceAnchor, part: string): TraceAnchorData {
 function AssistantReply({ items, final, anchor, part, onCopy }: {
   items: AgentTraceItem[]; final: boolean; anchor: TraceAnchor; part: string; onCopy?: CopyReply;
 }) {
+  const [fileOwner] = useState(captureFileLinkOwner);
   const text = replyText(items);
-  const html = renderMarkdown(text);
+  const html = renderMarkdown(text, true);
   const code = useCodeCopy(html, final ? onCopy : undefined);
   return <article {...anchorData(anchor, part)} className={`agent-assistant${final ? " agent-assistant-final" : " agent-assistant-intermediate"}`}>
     {/* The existing Markdown parser returns sanitized allowlisted HTML. */}
-    <div ref={code.root} className="agent-md" onClick={code.onClick} dangerouslySetInnerHTML={code.markup} />
+    <div ref={code.root} className="agent-md" onClick={event => {
+      const link = (event.target as Element).closest?.('a[data-file-ref]');
+      if (link && event.currentTarget.contains(link)) {
+        event.preventDefault();
+        void openChatFile(link.getAttribute('data-file-ref')!, fileOwner);
+      } else code.onClick(event);
+    }} dangerouslySetInnerHTML={code.markup} />
     {final && <ReplyActions text={text} onCopy={onCopy} />}
   </article>;
 }

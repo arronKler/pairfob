@@ -143,3 +143,41 @@ every chunk is read and the SHA-256 matches Open. Seeking uses that complete
 blob. Downloads use the same cap and blob path. Failures release the handle
 and revoke the blob URL. There is no resume across sessions, no Cache Storage,
 no IndexedDB, and no workspace text-cache entry for media bytes.
+
+## PWA HTML preview
+
+HTML files open in Preview, with Source and Reload controls. Switching to Source
+keeps an already running preview alive; Reload creates a fresh document. A chat
+reference with a line suffix (`path.html:12` or `path.html#L12`) opens Source first
+without executing the page. Explicit Markdown links, inline code paths and
+unambiguous paths in prose use the owning session's workspace. Absolute paths
+must fall below the daemon-reported workspace root, on a path-component boundary.
+A computer, pane, runtime session or cwd change retires the link's captured owner.
+
+The PWA reads the complete HTML using the existing media RPC and verifies its
+SHA-256. `WorkspaceRead`'s truncated text is never executed. Local dependencies
+use the same established session and bounded read-only media handles. A preview
+allows at most 128 distinct files and 32 MiB total. Static CSS (including imports
+and URLs), script/image/font/media references, local ES module imports (including
+cycles and literal dynamic imports), and local `fetch()` GETs are resolved inside
+the current workspace. `.git`, encoded traversal, and host filesystem paths are
+not accepted. No new wire operation, file server or origin upload is involved.
+
+`/preview/runner.html` is a fixed, source-free static document, packaged as an
+opaque asset to avoid Cloudflare HTML canonicalization. Only that exact route
+gets the preview CSP, including an HTTP `sandbox` directive, even when opened
+top-level. The app also sets iframe sandbox flags. Scripts, forms, downloads,
+popups, external HTTP(S) assets and HTTP(S)/WebSocket connections are allowed;
+same-origin access and top-level navigation are not. The main PWA retains its
+strict script/connect policy. The runner receives the document over a private
+MessagePort and gives a nested opaque-origin document only a bounded file-read
+bridge. Closing/changing the workspace retires readers, handles and ports.
+
+Browser CORS and mixed-content rules still apply: an opaque document sends
+`Origin: null`, and an API must permit that caller (for example a public API with
+`Access-Control-Allow-Origin: *`). Preview pages do not share Pairfob DOM,
+localStorage, IndexedDB or pairing credentials. This is a document preview, not
+a development server: computed local module specifiers, local XMLHttpRequest,
+and dynamically inserted local resource elements are not bundled. External URLs
+continue to use normal browser loading. Fragment navigation is supported; a
+history router that requires a normal origin/path must use its own hosted app.

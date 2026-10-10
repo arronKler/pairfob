@@ -206,7 +206,7 @@ async function loadDirectoryPage(
   return ticket.current() && ticket.sameContent() && now.directory === path && Boolean(now.nextCursor) && !now.error;
 }
 
-export async function loadWorkspaceFile(path: string): Promise<void> {
+export async function loadWorkspaceFile(path: string, sourceLine: number | null = null): Promise<void> {
   const snap = getWorkspaceSnapshot();
   const scope = activeScope();
   const ticket = issueTicket({ content: "bump" });
@@ -221,6 +221,7 @@ export async function loadWorkspaceFile(path: string): Promise<void> {
     error: "",
     view: "file",
     detailPath: path,
+    sourceLine,
     ...(keep ? {} : { file: null }),
   }, () => adoptDiffNoteScope(null));
   if (!keep && ticket.current()) armPendingReveal();

@@ -1,4 +1,4 @@
-const CACHE = "pairfob-shell-v9";
+const CACHE = "pairfob-shell-v10";
 const PREF = "pairfob-pref";
 const SHELL = ["/", "/pair", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 const SHELL_NETWORK_GRACE_MS = 750;
@@ -114,6 +114,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/v1/") || url.pathname.startsWith("/v2/")) return;
+  // Runner owns a distinct sandbox/CSP; never substitute a cached app shell.
+  if (url.pathname.startsWith("/preview/")) return;
   // Homepage Docs links to /doc/. Falling back to the cached marketing shell
   // makes that click look like it never left the landing page.
   if (url.pathname === "/doc" || url.pathname.startsWith("/doc/")) return;

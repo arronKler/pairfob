@@ -50,3 +50,21 @@ describe("agent markdown", () => {
     expect(el.querySelector("strong")?.textContent).toBe("edit");
   });
 });
+
+describe('opt-in chat file references', () => {
+  const links = (source: string) => {
+    const template = document.createElement('template');
+    template.innerHTML = renderMarkdown(source, true);
+    return [...template.content.querySelectorAll('a[data-file-ref]')].map(a => a.getAttribute('data-file-ref'));
+  };
+  test('explicit links, inline paths and unambiguous prose', () => {
+    expect(links('[Report](/work/My%20Project/report.html) `src/app.ts:12` See public/data.json')).toEqual(['/work/My%20Project/report.html', 'src/app.ts:12', 'public/data.json']);
+  });
+  test('keeps code blocks, web links and ordinary inline code alone', () => {
+    expect(links('```sh\ncat src/app.ts\n```\n\n[Web](https://example.com/a.html) `hello` `process.env` `v1.2.3` https://example.com/a.html')).toEqual([]);
+  });
+  test('raw data attributes cannot forge file actions; default renderer has no local links', () => {
+    expect(links('<a href="https://example.com" data-file-ref="/tmp/secret.txt">x</a>')).toEqual([]);
+    expect(renderMarkdown('`src/app.ts` [Local](src/app.ts)')).not.toContain('data-file-ref');
+  });
+});

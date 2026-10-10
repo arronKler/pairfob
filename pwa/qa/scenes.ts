@@ -1,3 +1,4 @@
+import { PREVIEW_TRACE } from "./preview-files";
 import { isDesk } from "../src/app/viewport";
 import { clearAgentTraceCache } from "../src/lib/agent-trace-cache";
 import { clearAllDiffNotes } from "../src/lib/diff-notes";
@@ -142,6 +143,7 @@ export const scenes: FixtureScene[] = [
   { name: "inspector-chat-file", description: "Inspector beside agent chat: highlighted source file" },
   { name: "inspector-chat-files", description: "Inspector beside agent chat: root file browser" },
   { name: "chat", description: "Streaming execution trace" },
+  { name: "chat-preview", description: "Chat file links and full HTML preview" },
   { name: "chat-complete", description: "Finished execution with Markdown reply" },
   { name: "chat-draft", description: "Multiline agent prompt draft" },
   { name: "chat-empty", description: "Empty agent history" },
@@ -529,6 +531,11 @@ export async function applyScene(name: string, session: FixtureSession): Promise
     if (name === "chat-pi-unread") applyTrace({ agentTraceFollow: false, agentTraceUnread: true });
     if (name === "chat-pi-compose") setComposeDraft("First line stays intact.\n第二行正在使用输入法组合。\nThird line verifies the narrow compose area.");
     if (name === "chat-draft") setComposeDraft("Review the interaction changes.\nKeep focus and selection stable.\nThen run the checks.");
+    if (name === "chat-preview") {
+      replaceAgentsFromSnapshot(idleFocusedSnapshot());
+      session.setTrace(PREVIEW_TRACE);
+      applyTrace({ agentTraceItems: PREVIEW_TRACE, agentTraceTail: PREVIEW_TRACE.length });
+    }
     if (name === "chat-complete") {
       replaceAgentsFromSnapshot(idleFocusedSnapshot());
       applyTrace({ agentTraceItems: data.completeTrace(), agentTraceTail: 4 });

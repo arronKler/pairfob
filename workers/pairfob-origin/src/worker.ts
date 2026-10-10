@@ -1,3 +1,4 @@
+import { PREVIEW_HEADERS, PREVIEW_PATH } from "./preview-policy";
 import { handleAdmin } from "./admin.ts";
 import { CSP_SITE, DAEMON_ID_RE, PROTOCOL, SUBPROTOCOL } from "./constants.ts";
 import { handleEnroll } from "./enroll.ts";
@@ -182,7 +183,9 @@ async function staticOrPlaceholder(req: Request, env: Env, build: string): Promi
   if (env.ASSETS) {
     const url = new URL(req.url);
     let assetReq = req;
-    if (isPairAppPath(url.pathname)) {
+    if (url.pathname === PREVIEW_PATH) {
+      assetReq = new Request(new URL("/preview-runner.asset", url.origin), req);
+    } else if (isPairAppPath(url.pathname)) {
       // HTML asset normalization redirects /pair/index.html back to /pair.
       // Fetch an opaque asset name so the Worker, not Assets, owns the public
       // canonical route and cannot create a self-redirect.
@@ -243,6 +246,7 @@ async function followDocAsset(assets: Fetcher, req: Request, url: URL, res: Resp
 
 function staticAssetHeaders(path: string, ok: boolean, contentType: string | null): Record<string, string> | undefined {
   if (!ok) return undefined;
+  if (path === PREVIEW_PATH) return PREVIEW_HEADERS;
   if (isPairAppPath(path)) {
     return { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, no-transform" };
   }

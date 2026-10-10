@@ -1,0 +1,27 @@
+/* HTML uses the file info bar's existing segmented control and icon actions. */
+.workspace-preview-switch button { min-width: 54px; }
+.workspace-preview-action { color: var(--muted); flex: none; }
+.workspace-preview-action[aria-pressed="true"] { color: var(--accent); background: var(--surface-2); }
+
+.workspace-html {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.workspace-html-frame { width: 100%; flex: 1; min-height: 0; border: 0; background: white; }
+.workspace-html .workspace-code { flex: 1; }
+.workspace-code-line.is-target { background: rgba(230, 173, 48, .2); }
+
+@media (hover: hover) and (pointer: fine) {
+  .workspace-preview-action {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: var(--r-sm);
+  }
+  .workspace-preview-action:hover { color: var(--ink); background: var(--surface-2); }
+}

@@ -30,7 +30,7 @@ fi
 # overlap: the original PWA shell is copied to /pair after the site replaces /.
 reserved_pwa_paths=(
   css doc dl home-i18n.js home-motion.js img install.sh lang.js og-en.png og.png
-  pair pair.html pair-shell.asset robots.txt site.js sitemap.xml zh zh-shell.asset
+  preview-runner.asset pair pair.html pair-shell.asset robots.txt site.js sitemap.xml zh zh-shell.asset
 )
 for path in "${reserved_pwa_paths[@]}"; do
   if [[ -e "$PWA/$path" ]]; then
@@ -97,3 +97,6 @@ cp "$PWA/index.html" "$DEST/pair/index.html"
 # Cloudflare Assets canonicalizes *.html and */index.html. The Worker fetches
 # this opaque copy so /pair cannot be redirected back to itself.
 cp "$PWA/index.html" "$DEST/pair-shell.asset"
+
+# Keep the preview URL and its CSP stable across Assets HTML canonicalization.
+cp "$PWA/preview/runner.html" "$DEST/preview-runner.asset"

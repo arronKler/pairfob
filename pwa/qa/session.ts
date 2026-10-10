@@ -1,3 +1,4 @@
+import { createPreviewFiles } from "./preview-files";
 import { boardLayoutFixture } from "./board-layout";
 import type { SplitPaneInput, ResizePaneInput, SwapPaneInput, ZoomPaneInput } from "../src/lib/operations";
 import { ProtocolError } from "../src/lib/protocol/errors";
@@ -44,6 +45,7 @@ export type SessionSource = {
 
 /** Every request is local and logged. Holds/errors allow deliberate async interaction probes. */
 export function createSession(source: SessionSource = {}): FixtureSession {
+  const preview = createPreviewFiles();
   let connected = true;
   let disposed = false;
   let operation = 0;
@@ -140,10 +142,10 @@ export function createSession(source: SessionSource = {}): FixtureSession {
     agentQuota: () => request("agentQuota", [], data.quotas),
     workspaceOpen: (paneId: string) => request("workspaceOpen", [paneId], data.descriptor),
     workspaceList: (paneId: string, path = "", cursor?: string) => request("workspaceList", [paneId, path, cursor], () => listed(data.directory(path))),
-    workspaceRead: (paneId: string, path: string) => request("workspaceRead", [paneId, path], () => data.file(path)),
-    workspaceMediaOpen: (paneId: string, path: string) => request("workspaceMediaOpen", [paneId, path], () => data.mediaOpen(path)),
-    workspaceMediaRead: (handle: string, offset: number, length: number) => request("workspaceMediaRead", [handle, offset, length], () => data.mediaChunk(handle, offset, length)),
-    workspaceMediaClose: (handle: string) => request("workspaceMediaClose", [handle], () => ({ handle, closed: true as const })),
+    workspaceRead: (paneId: string, path: string) => request("workspaceRead", [paneId, path], () => preview.has(path) ? preview.file(path) : data.file(path)),
+    workspaceMediaOpen: (paneId: string, path: string) => request("workspaceMediaOpen", [paneId, path], () => preview.has(path) ? preview.open(path) : data.mediaOpen(path)),
+    workspaceMediaRead: (handle: string, offset: number, length: number) => request("workspaceMediaRead", [handle, offset, length], () => preview.read(handle, offset, length) ?? data.mediaChunk(handle, offset, length)),
+    workspaceMediaClose: (handle: string) => request("workspaceMediaClose", [handle], () => { preview.close(handle); return { handle, closed: true as const }; }),
     gitStatus: (paneId: string) => request("gitStatus", [paneId], data.status),
     gitDiff: (paneId: string, path: string, layer: "staged" | "worktree") => request("gitDiff", [paneId, path, layer], () => data.diff(path, layer)),
     gitBranches: (paneId: string) => request("gitBranches", [paneId], () => ({ items: [

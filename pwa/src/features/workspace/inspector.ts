@@ -40,6 +40,7 @@ import { dismissFilesDialogs } from "./surface-dialogs";
 /** What the inspector bound the model to; null while the model is not its own. */
 let bound: { session: LiveSession; paneId: string } | null = null;
 let stopFollowing: (() => void) | null = null;
+let binding: Promise<void> = Promise.resolve();
 
 function release(): void {
   if (!bound) return;
@@ -87,7 +88,7 @@ function follow(): void {
   // Another pane's files take the column: a menu about the last pane's file has no list behind it.
   if (bound) dismissFilesDialogs();
   bound = { session, paneId };
-  void showWorkspaceBeside(paneId);
+  binding = showWorkspaceBeside(paneId);
 }
 
 function followSession(): () => void {
@@ -139,4 +140,11 @@ export async function expandWorkspaceInspector(): Promise<void> {
   if (isFullTerminal()) await leaveFullTerminal({ rememberGuided: false, paint: false });
   if (isAgentChat()) leaveAgentChat({ rememberGuided: false, paint: false });
   await enterWorkspace(openPaneId(), returnView);
+}
+
+/** Await the inspector binding before a chat reference opens its detail. */
+export async function openWorkspaceInspector(): Promise<void> {
+  if (!inspectorOpen()) toggleWorkspaceInspector();
+  else follow();
+  await binding;
 }

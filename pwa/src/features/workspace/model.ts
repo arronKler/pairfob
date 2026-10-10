@@ -24,6 +24,7 @@ export type WorkspaceModel = {
   view: WorkspaceView;
   directory: string;
   detailPath: string;
+  sourceLine: number | null;
   diffLayer: GitLayer;
   entries: WorkspaceEntry[];
   nextCursor: string | null;
@@ -58,6 +59,7 @@ export type WorkspaceSnapshot = Readonly<{
   view: WorkspaceView;
   directory: string;
   detailPath: string;
+  sourceLine: number | null;
   diffLayer: GitLayer;
   entries: ReadonlyArray<DeepReadonly<WorkspaceEntry>>;
   nextCursor: string | null;
@@ -91,6 +93,7 @@ export function emptyWorkspaceModel(): WorkspaceModel {
     view: "browser",
     directory: "",
     detailPath: "",
+    sourceLine: null,
     diffLayer: "worktree",
     entries: [],
     nextCursor: null,

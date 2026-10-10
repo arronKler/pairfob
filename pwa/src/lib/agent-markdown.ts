@@ -1,5 +1,6 @@
 import { marked } from "marked";
 import remend from "remend";
+import { linkFileText, parseFileReference } from "./file-reference";
 
 marked.use({ gfm: true, breaks: false });
 
@@ -27,7 +28,7 @@ function safeHref(value: string): boolean {
   return /^(https?:|mailto:)/i.test(value.trim());
 }
 
-function scrub(root: ParentNode): void {
+function scrub(root: ParentNode, files: boolean): void {
   for (const raw of [...root.querySelectorAll("*")]) {
     const el = raw as Element;
     const tag = el.tagName.toUpperCase();
@@ -49,6 +50,11 @@ function scrub(root: ParentNode): void {
     if (tag === "A") {
       const href = el.getAttribute("href") || "";
       if (!safeHref(href)) el.removeAttribute("href");
+      if (files && parseFileReference(href)) {
+        el.setAttribute("data-file-ref", href);
+        el.setAttribute("href", "#file");
+        continue;
+      }
       el.setAttribute("rel", "noopener noreferrer");
       el.setAttribute("target", "_blank");
     }
@@ -71,13 +77,15 @@ function remember(source: string, html: string): string {
   return html;
 }
 
-export function renderMarkdown(source: string): string {
+export function renderMarkdown(source: string, files = false): string {
   const text = source.trimEnd();
   if (!text) return "";
-  const hit = cache.get(text);
+  const key = `${files ? "files:" : "text:"}${text}`;
+  const hit = cache.get(key);
   if (hit !== undefined) return hit;
   const template = document.createElement("template");
   template.innerHTML = marked.parse(remend(text), { async: false });
-  scrub(template.content);
-  return remember(text, template.innerHTML);
+  scrub(template.content, files);
+  if (files) linkFileText(template.content);
+  return remember(key, template.innerHTML);
 }

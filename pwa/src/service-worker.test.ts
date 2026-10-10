@@ -50,7 +50,7 @@ describe("notification service worker", () => {
   });
 
   test("serves the repeat-load shell immediately and caches immutable assets first", () => {
-    expect(worker).toContain('const CACHE = "pairfob-shell-v9"');
+    expect(worker).toContain('const CACHE = "pairfob-shell-v10"');
     expect(worker).toContain("precacheShell()");
     expect(worker).toContain("shellAssetPaths(html)");
     expect(worker).toContain('request.mode === "navigate"');
@@ -130,5 +130,15 @@ test("release metadata bypasses offline cache fallback", () => {
   new Function("self", worker)(scope);
   let intercepted=false;
   handler!({request:new Request("https://pairfob.com/dl/VERSION"),respondWith:()=>{intercepted=true}});
+  expect(intercepted).toBeFalse();
+});
+
+
+test("preview navigation bypasses shell caching and fallback", () => {
+  let handler: ((event: unknown) => void) | undefined;
+  const scope = { location: { origin: "https://pairfob.com" }, addEventListener: (name: string, fn: (event: unknown) => void) => { if (name === "fetch") handler = fn; } };
+  new Function("self", worker)(scope);
+  let intercepted = false;
+  handler!({ request: new Request("https://pairfob.com/preview/runner.html"), respondWith: () => { intercepted = true; } });
   expect(intercepted).toBeFalse();
 });

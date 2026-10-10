@@ -1,5 +1,8 @@
-import { Ellipsis, WrapText } from "lucide-react";
-import { Fragment, useMemo } from "react";
+import { HTMLPreview, isHTMLFile } from "./html-preview";
+import { FileSource } from "./file-source";
+import { PreviewSwitch, usePreviewControls, type PreviewControls } from "./preview-controls";
+import { Ellipsis, RotateCw, WrapText } from "lucide-react";
+import { useMemo } from "react";
 import { highlightSource, type SyntaxToken } from "../../lib/syntax-highlight";
 import { t } from "../../lib/i18n";
 import type { GitChangeKind } from "../../lib/workspace";
@@ -55,6 +58,7 @@ export type FileView = {
   text: boolean;
   lines: SyntaxToken[][];
   wrap: boolean;
+  preview: PreviewControls | null;
   mark: GitChangeKind | undefined;
   viewChanges: (() => void) | undefined;
   meta: string | null;
@@ -63,6 +67,7 @@ export type FileView = {
 export function useFileView(snapshot: WorkspaceSnapshot): FileView {
   const file = snapshot.file;
   const wrap = useWorkspaceWrap();
+  const preview = usePreviewControls(snapshot);
   const path = file?.path || snapshot.detailPath;
   const text = file?.kind === "text" ? file : null;
   const lines = useMemo(() => text ? sourceLines(text.path, text.content) : [], [text]);
@@ -71,32 +76,37 @@ export function useFileView(snapshot: WorkspaceSnapshot): FileView {
     ? [formatBytes(file.size), formatModified(file.modified_ms), text && `${t("workspace.lines", { count: lines.length })}${file.truncated ? "+" : ""}`]
       .filter(Boolean).join(" · ")
     : null;
-  return { file, path, text: text !== null, lines, wrap, mark, viewChanges: mark ? viewWorkspaceChanges(path) : undefined, meta };
+  return { file, path, preview: file && isHTMLFile(path) ? preview : null, text: text !== null, lines, wrap, mark, viewChanges: mark ? viewWorkspaceChanges(path) : undefined, meta };
 }
 
-/** Size, age and line count, with their room held while the file is still on its way. */
+/** HTML selects its view here; other files show size, age and line count. */
 export function FileMeta({ snapshot, view }: { snapshot: WorkspaceSnapshot; view: FileView }) {
+  if (view.preview) return <PreviewSwitch controls={view.preview} />;
   if (view.meta) return <span className="workspace-row-meta">{view.meta}</span>;
   return snapshot.loading ? <ReservedStat className="workspace-row-meta" text={null} /> : null;
 }
 
-/** The file's own actions: its changes when it has any, wrapping for text, then ⋯. */
+/** File actions stay in one info bar; wrapping only applies to source. */
 export function FileActions({ view }: { view: FileView }) {
   return <span className="workspace-detail-actions">
     {view.viewChanges && view.mark && <Button className="workspace-chip is-change" onClick={view.viewChanges}>
       <GitMark kind={view.mark} />{t("workspace.viewChanges")}
     </Button>}
-    {view.text && <Button className="workspace-chip" aria-pressed={view.wrap} onClick={() => setWorkspaceWrap(!view.wrap)}>
-      <WrapText size={14} aria-hidden="true" />{t("workspace.wrap")}
+    {view.text && (!view.preview || view.preview.mode === "source") && <Button
+      className={view.preview ? "icon-btn workspace-preview-action" : "workspace-chip"}
+      aria-label={t("workspace.wrap")} title={t("workspace.wrap")}
+      aria-pressed={view.wrap} onClick={() => setWorkspaceWrap(!view.wrap)}>
+      <WrapText size={view.preview ? 16 : 14} aria-hidden="true" />{!view.preview && t("workspace.wrap")}
     </Button>}
+    {view.preview && <Button className="icon-btn workspace-preview-action" aria-label={t("preview.reload")}
+      title={t("preview.reload")} onClick={view.preview.refresh}><RotateCw size={16} aria-hidden="true" /></Button>}
     <DetailMoreButton />
   </span>;
 }
 
 /** Everything below the info bar: the source, the media surface, or the state that stands in for them. */
 export function FileBody({ snapshot, view }: { snapshot: WorkspaceSnapshot; view: FileView }) {
-  const { file, lines, wrap } = view;
-  const reveal = Boolean(file && snapshot.revealFile);
+  const { file, wrap } = view;
   const retry = () => {
     if (snapshot.view === "file" && snapshot.detailPath) void loadWorkspaceFile(snapshot.detailPath);
     else void refreshWorkspace();
@@ -109,26 +119,20 @@ export function FileBody({ snapshot, view }: { snapshot: WorkspaceSnapshot; view
       </div>
     ) : !file ? (
       snapshot.loading && snapshot.pendingReveal ? <FilePending /> : null
+    ) : view.preview ? (
+      <HTMLPreview key={view.preview.key} snapshot={snapshot} wrap={wrap} controls={view.preview} />
     ) : file.kind === "binary" ? (
       <WorkspaceMedia media={snapshot.media} />
     ) : (
       <>
-        <pre className={`workspace-code${wrap ? " is-wrap" : ""}${reveal ? " workspace-reveal" : ""}`}>
-          <code className="workspace-highlight">
-            {lines.map((line, index) => <span key={index} className="workspace-code-line">
-              {line.map((token, part) => <Fragment key={part}>
-                {token.kind ? <span className={`syntax-${token.kind}`}>{token.text}</span> : token.text}
-              </Fragment>)}
-            </span>)}
-          </code>
-        </pre>
+        <FileSource path={file.path} content={file.content} wrap={wrap} line={snapshot.sourceLine} reveal={snapshot.revealFile} />
         {/* SVG text keeps its safe source and also offers a full-download
             entry through the owned media surface (SvgHint -> loadWorkspaceMedia
             fetches the whole file); never injected inline. */}
         {snapshot.media.role === "svg" ? <WorkspaceMedia media={snapshot.media} /> : null}
       </>
     )}
-    {file?.truncated && <p className="workspace-limit">{t("workspace.previewTruncated")}</p>}
+    {file?.truncated && !isHTMLFile(file.path) && <p className="workspace-limit">{t("workspace.previewTruncated")}</p>}
   </>;
 }
 
