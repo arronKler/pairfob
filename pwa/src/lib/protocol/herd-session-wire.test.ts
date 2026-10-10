@@ -47,7 +47,7 @@ describe("Herdr session wire (isolated child process)", () => {
     const stderr = await new Response(proc.stderr).text();
     const exit = await proc.exited;
     if (exit !== 0) throw new Error(`isolated herd session wire test exited ${exit}\n${stdout}\n${stderr}`);
-    expect(stderr).toContain("6 pass");
+    expect(stderr).toContain("8 pass");
     expect(stderr).toContain("0 fail");
   }, 25_000);
 });

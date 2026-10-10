@@ -1,3 +1,4 @@
+import type { WorkspaceReference } from "./workspace-reference";
 import type { RecoveryClock } from "./recovery-diagnostics";
 import type { AgentInspection } from "../agent-inspect";
 import type { AgentQuota } from "../agent-quota";
@@ -38,6 +39,7 @@ import type {
   WorkspaceFile,
 } from "../workspace.ts";
 import type {
+  MediaReadOptions,
   WorkspaceMediaChunk,
   WorkspaceMediaClose,
   WorkspaceMediaOpen,
@@ -124,11 +126,12 @@ export type LiveSession = {
   listWorktrees: (params: ListWorktreesInput) => Promise<unknown>;
   workspaceRename: (paneId: string, root: string, path: string, newName: string, size: number, modifiedMS: number, revision: string) => Promise<unknown>;
   workspaceDelete: (paneId: string, root: string, path: string, size: number, modifiedMS: number, revision: string) => Promise<unknown>;
+  workspaceResolve?: (paneId: string, root: string, path: string) => Promise<WorkspaceReference>;
   workspaceOpen: (paneId: string) => Promise<WorkspaceDescriptor>;
-  workspaceList: (paneId: string, path?: string, cursor?: string, limit?: number) => Promise<WorkspaceDirectoryPage>;
-  workspaceRead: (paneId: string, path: string) => Promise<WorkspaceFile>;
-  workspaceMediaOpen: (paneId: string, path: string) => Promise<WorkspaceMediaOpen>;
-  workspaceMediaRead: (handle: string, offset: number, length: number) => Promise<WorkspaceMediaChunk>;
+  workspaceList: (paneId: string, path?: string, cursor?: string, limit?: number, root?: string) => Promise<WorkspaceDirectoryPage>;
+  workspaceRead: (paneId: string, path: string, root?: string) => Promise<WorkspaceFile>;
+  workspaceMediaOpen: (paneId: string, path: string, root?: string, options?: MediaReadOptions) => Promise<WorkspaceMediaOpen>;
+  workspaceMediaRead: (handle: string, offset: number, length: number, options?: MediaReadOptions) => Promise<WorkspaceMediaChunk>;
   workspaceMediaClose: (handle: string) => Promise<WorkspaceMediaClose>;
   /** Optional attachment uploads; absent on older daemons and mocks. */
   workspaceUploadBegin?: (input: UploadBeginInput) => Promise<UploadState>;

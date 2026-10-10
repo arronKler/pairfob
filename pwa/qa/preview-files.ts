@@ -6,7 +6,7 @@ import { MEDIA_CHUNK_BYTES, MEDIA_MAX_BYTES, MEDIA_MAX_PIXELS } from '../src/lib
 export const PREVIEW_FILE = 'public/report.html';
 export const PREVIEW_TRACE = [
   { type: 'user' as const, text: '生成一个交互式报告' },
-  { type: 'assistant' as const, text: '打开 [交互式报告](/work/pairfob/public/report.html)，也可以点击 `public/report.html`。\n\n定位 [第 4 行](/work/pairfob/public/report.html:4)。\n\n资源路径 public/app.js，外部链接 [Example](https://example.com)。' },
+  { type: 'assistant' as const, text: '打开 [交互式报告](/work/pairfob/public/report.html)，也可以点击 `public/report.html`。\n\n目录 ~/pairfob，绝对路径 /work/pairfob/public/report.html，主目录文件 `~/pairfob/public/report.html`。\n\n特殊文件 `/work/pairfob/public/report%20draft.html`，空格文件 [My Report](</work/pairfob/public/My Report.html>)。\n\n歧义示例 /work/My Project/report.html。\n\n本地链接 [file URI](file:///work/pairfob/public/report.html)，定位 [第 4 行](file:///work/pairfob/public/report.html:4)。\n\n资源路径 public/app.js，外部链接 [Example](https://example.com)。' },
 ];
 const html = `<!doctype html><html lang="zh"><head><title>Preview acceptance</title>
 <link rel="stylesheet" href="./report.css"></head><body>
@@ -23,6 +23,8 @@ ${'<!-- full-file integrity padding -->'.repeat(4300)}
 </body></html>`;
 const files: Record<string, string> = {
   [PREVIEW_FILE]: html,
+  "public/report%20draft.html": html,
+  "public/My Report.html": html,
   'public/report.css': '@import "./colors.css"; body { font: 16px system-ui; padding: 20px; margin: 0; } button, a { padding: 12px; display:inline-block; }',
   'public/colors.css': 'body { background: #eef6ff; color: #123; }',
   'public/icon.svg': '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="green"/></svg>',

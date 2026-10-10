@@ -2,16 +2,23 @@ import { ProtocolError } from "../../lib/protocol/errors";
 import {
   MEDIA_CHUNK_BYTES,
   imageExceedsPixelBudget,
+  type MediaReadOptions,
   type WorkspaceMediaKind,
   type WorkspaceMediaOpen,
 } from "../../lib/protocol/workspace-media";
 
 export type MediaSession = {
-  workspaceMediaOpen: (paneId: string, path: string) => Promise<WorkspaceMediaOpen>;
-  workspaceMediaRead: (handle: string, offset: number, length: number) => Promise<{
+  workspaceMediaOpen: (paneId: string, path: string, root?: string, options?: MediaReadOptions) => Promise<WorkspaceMediaOpen>;
+  workspaceMediaRead: (handle: string, offset: number, length: number, options?: MediaReadOptions) => Promise<{
     handle: string; offset: number; length: number; bytes: Uint8Array; eof: boolean;
   }>;
   workspaceMediaClose: (handle: string) => Promise<unknown>;
+};
+
+/** Receives only fully verified, immutable content; Open still authorizes every hit. */
+export type MediaContentCache = {
+  get(path: string, open: WorkspaceMediaOpen): Blob | undefined;
+  put(path: string, open: WorkspaceMediaOpen, blob: Blob): void;
 };
 
 export type LoadedMedia = {
@@ -71,6 +78,7 @@ export class WorkspaceMediaLoader {
     path: string,
     onProgress?: (progress: MediaProgress) => void,
     signal?: AbortSignal,
+    cache?: MediaContentCache,
   ): Promise<LoadedMedia> {
     const mine = this.begin(session);
     const onAbort = () => mine.abort.abort();
@@ -86,10 +94,19 @@ export class WorkspaceMediaLoader {
       if (imageExceedsPixelBudget(open.width, open.height, open.max_pixels)) {
         throw new ProtocolError("too_large", "image exceeds decode pixel limit");
       }
+      onProgress?.({ loaded: 0, total: open.size });
+      if (!this.isCurrent(mine)) throw cancelled();
+      const cached = cache?.get(path, open);
+      if (cached) {
+        onProgress?.({ loaded: open.size, total: open.size });
+        if (!this.isCurrent(mine)) throw cancelled();
+        mine.url = URL.createObjectURL(cached);
+        this.closeHandle(mine);
+        return { open, blob: cached, url: mine.url };
+      }
       const chunks: Uint8Array[] = [];
       let offset = 0;
       let eof = open.size === 0;
-      onProgress?.({ loaded: 0, total: open.size });
       while (!eof) {
         if (!this.isCurrent(mine)) throw cancelled();
         const chunk = await session.workspaceMediaRead(open.handle, offset, MEDIA_CHUNK_BYTES);
@@ -110,6 +127,7 @@ export class WorkspaceMediaLoader {
       if (!this.isCurrent(mine)) throw cancelled();
       if (digest !== open.sha256) throw new ProtocolError("conflict", "media digest mismatch");
       const blob = new Blob([buffer], { type: blobType(open.kind, open.mime) });
+      cache?.put(path, open, blob);
       const url = URL.createObjectURL(blob);
       mine.url = url;
       this.closeHandle(mine);

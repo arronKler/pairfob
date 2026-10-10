@@ -52,3 +52,26 @@ test('oversize and tampered sources fail before a page can execute', async () =>
     resources.close();
   }
 });
+
+test('HTML and later local resources use the original root even before a cwd notification', async () => {
+  const { rootBoundMedia } = await import('./root-bound-media');
+  const { ProtocolError } = await import('../../lib/protocol/errors');
+  const fake = fakeMedia();
+  const roots: Array<string | undefined> = [];
+  let liveRoot = '/original';
+  const session: MediaSession = {
+    ...fake.session,
+    workspaceMediaOpen: async (pane, path, root) => {
+      roots.push(root);
+      if (root !== liveRoot) throw new ProtocolError('conflict');
+      return fake.session.workspaceMediaOpen(pane, path);
+    },
+  };
+  const resources = new PreviewResources(rootBoundMedia(session, '/original'), 'pane', 'report%20draft.html', () => true);
+  await resources.read(resources.base);
+  liveRoot = '/replacement';
+  await expect(resources.read(new URL('./app.js', resources.base).href)).rejects.toThrow('conflict');
+  expect(roots).toEqual(['/original', '/original']);
+  expect(fake.opens).toEqual(['report%20draft.html']);
+  resources.close();
+});

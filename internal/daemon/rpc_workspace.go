@@ -78,6 +78,10 @@ func (e *Engine) dispatchWorkspaceRead(s *sess, id, op string, params json.RawMe
 	}
 	inspector := workspace.NewInspector()
 	switch op {
+	case "WorkspaceListAtRoot", "WorkspaceReadAtRoot":
+		e.rpcWorkspaceBound(s, id, op, params)
+	case "WorkspaceResolve":
+		e.rpcWorkspaceResolve(s, id, params)
 	case "WorkspaceOpen":
 		e.rpcWorkspaceOpen(s, id, params, inspector)
 	case "WorkspaceList":
@@ -124,7 +128,7 @@ func (e *Engine) rpcWorkspaceOpen(s *sess, id string, params json.RawMessage, in
 	e.reply(s, id, descriptor)
 }
 
-func (e *Engine) rpcWorkspaceList(s *sess, id string, params json.RawMessage, inspector *workspace.Inspector) {
+func (e *Engine) rpcWorkspaceList(s *sess, id string, params json.RawMessage, inspector *workspace.Inspector, expectedRoot ...string) {
 	var p struct {
 		workspacePaneParams
 		Path   string `json:"path"`
@@ -135,7 +139,7 @@ func (e *Engine) rpcWorkspaceList(s *sess, id string, params json.RawMessage, in
 		e.replyErr(s, id, "invalid_argument", "invalid workspace directory request")
 		return
 	}
-	root, ok := e.workspaceTarget(s, id, p.workspacePaneParams)
+	root, ok := e.workspaceReadTarget(s, id, p.workspacePaneParams, expectedRoot)
 	if !ok {
 		return
 	}
@@ -147,7 +151,7 @@ func (e *Engine) rpcWorkspaceList(s *sess, id string, params json.RawMessage, in
 	e.reply(s, id, page)
 }
 
-func (e *Engine) rpcWorkspaceRead(s *sess, id string, params json.RawMessage, inspector *workspace.Inspector) {
+func (e *Engine) rpcWorkspaceRead(s *sess, id string, params json.RawMessage, inspector *workspace.Inspector, expectedRoot ...string) {
 	var p struct {
 		workspacePaneParams
 		Path string `json:"path"`
@@ -156,7 +160,7 @@ func (e *Engine) rpcWorkspaceRead(s *sess, id string, params json.RawMessage, in
 		e.replyErr(s, id, "invalid_argument", "invalid workspace file request")
 		return
 	}
-	root, ok := e.workspaceTarget(s, id, p.workspacePaneParams)
+	root, ok := e.workspaceReadTarget(s, id, p.workspacePaneParams, expectedRoot)
 	if !ok {
 		return
 	}

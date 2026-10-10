@@ -470,6 +470,16 @@
       },
       "additionalProperties": false
     },
+    "workspaceResolveResult": {
+      "type": "object",
+      "required": ["root", "path", "kind"],
+      "properties": {
+        "root": { "$ref": "#/$defs/path" },
+        "path": { "type": "string", "maxLength": 4096 },
+        "kind": { "enum": ["file", "directory"] }
+      },
+      "additionalProperties": false
+    },
     "workspaceOpenResult": {
       "type": "object",
       "required": ["name", "root", "features", "git"],
@@ -982,9 +992,13 @@
             "PromptAgent",
             "ListWorktrees",
             "WorkspaceOpen",
+            "WorkspaceResolve",
             "WorkspaceList",
+            "WorkspaceListAtRoot",
             "WorkspaceRead",
+            "WorkspaceReadAtRoot",
             "WorkspaceMediaOpen",
+            "WorkspaceMediaOpenAtRoot",
             "WorkspaceMediaRead",
             "WorkspaceMediaClose",
             "WorkspaceUploadBegin",
@@ -1456,6 +1470,80 @@
                   { "required": ["workspace_id"] },
                   { "required": ["cwd"] }
                 ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceListAtRoot" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id", "root", "path"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "root": { "$ref": "#/$defs/path" },
+                  "path": { "type": "string", "maxLength": 4096 },
+                  "cursor": { "type": "string", "maxLength": 32 },
+                  "limit": { "type": "integer", "minimum": 0, "maximum": 240 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceReadAtRoot" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id", "root", "path"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "root": { "$ref": "#/$defs/path" },
+                  "path": { "type": "string", "maxLength": 4096, "minLength": 1 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceMediaOpenAtRoot" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id", "root", "path"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "root": { "$ref": "#/$defs/path" },
+                  "path": { "type": "string", "maxLength": 4096, "minLength": 1 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "WorkspaceResolve" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "required": ["pane_id", "root", "path"],
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "pane_id": { "$ref": "#/$defs/paneId" },
+                  "root": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                  "path": { "type": "string", "minLength": 1, "maxLength": 4096 }
+                },
                 "additionalProperties": false
               }
             }

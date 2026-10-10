@@ -38,6 +38,8 @@ let pendingRevealToken = 0;
 let pendingRevealTimer: ReturnType<typeof setTimeout> | null = null;
 let requestVersion = 0;
 let contentVersion = 0;
+/** A new read of the same file still replaces the preview's content owner. */
+export function workspaceContentVersion(): number { return contentVersion; }
 let directoryVersion = 0;
 let statusVersion = 0;
 let branchesVersion = 0;

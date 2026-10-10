@@ -69,6 +69,16 @@ class RootCache {
 
 /** One authenticated connection owns its directory data and pane-to-root bindings. */
 export class WorkspaceReadCache {
+  private rootBinding = false;
+
+  requireRootBinding(): void {
+    if (this.rootBinding) return;
+    this.rootBinding = true;
+    for (const cache of this.roots.values()) cache.clear();
+  }
+
+  boundRoot(root: string): string | undefined { return this.rootBinding ? root : undefined; }
+
   private roots = new Map<string, RootCache>();
   private bindings = new Map<string, Binding>();
 
@@ -94,6 +104,9 @@ export class WorkspaceReadCache {
     const valid = () => this.bindings.get(paneId) === binding && this.cwdOf(paneId) === cwd;
     const flight = this.session.workspaceOpen(paneId).then((descriptor) => {
       if (!valid()) throw movedWorkspace();
+      // A root resolved for a chat click cannot silently become another root
+      // when entering/reopening the viewer refreshes its descriptor.
+      if (!force && this.rootBinding && previous?.scope && previous.scope.descriptor.root !== descriptor.root) throw movedWorkspace();
       if (force) this.invalidate(descriptor.root);
       const target: Binding = binding.scope && binding.scope.descriptor.root !== descriptor.root ? { cwd, loadedAt: 0 } : binding;
       this.bindings.set(paneId, target);
@@ -140,28 +153,32 @@ export class WorkspaceScope {
     private cache: WorkspaceReadCache,
   ) {}
 
-  private read<T>(key: string, load: () => Promise<T>): WorkspaceRead<T> {
+  requireRootBinding(): void { this.cache.requireRootBinding(); }
+  get boundRoot(): string | undefined { return this.cache.boundRoot(this.descriptor.root); }
+
+  private read<T>(key: string, load: () => Promise<T>, bindsRoot = false): WorkspaceRead<T> {
     if (!this.valid()) return { cached: undefined, value: Promise.reject(movedWorkspace()) };
+    const boundRoot = this.boundRoot;
     const result = this.cache.read(this.descriptor.root, key, async () => {
       const value = await load();
-      if (!this.valid()) throw movedWorkspace();
+      if (!this.valid() || (bindsRoot && boundRoot !== this.boundRoot)) throw movedWorkspace();
       return value;
     });
     return {
       cached: result.cached,
       value: result.value.then((value) => {
-        if (!this.valid()) throw movedWorkspace();
+        if (!this.valid() || (bindsRoot && boundRoot !== this.boundRoot)) throw movedWorkspace();
         return value;
       }),
     };
   }
 
   directory(path: string, cursor = "") {
-    return this.read(JSON.stringify(["directory", path, cursor]), () => this.session.workspaceList(this.paneId, path, cursor, 120));
+    return this.read(JSON.stringify(["directory", path, cursor]), () => this.session.workspaceList(this.paneId, path, cursor, 120, this.boundRoot), true);
   }
 
   file(path: string) {
-    return this.read(JSON.stringify(["file", path]), () => this.session.workspaceRead(this.paneId, path));
+    return this.read(JSON.stringify(["file", path]), () => this.session.workspaceRead(this.paneId, path, this.boundRoot), true);
   }
 
   diff(path: string, layer: GitLayer) {

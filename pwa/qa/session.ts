@@ -1,3 +1,4 @@
+import type { MediaReadOptions } from "../src/lib/protocol/workspace-media";
 import { createPreviewFiles } from "./preview-files";
 import { boardLayoutFixture } from "./board-layout";
 import type { SplitPaneInput, ResizePaneInput, SwapPaneInput, ZoomPaneInput } from "../src/lib/operations";
@@ -5,7 +6,7 @@ import { ProtocolError } from "../src/lib/protocol/errors";
 import { NO_OPERATION_CAPABILITIES } from "../src/lib/operations";
 import type { HerdSessionSummary, LiveSession, SessionEvent } from "../src/lib/protocol/session-types";
 import type { AgentTraceItem } from "../src/lib/operations";
-import { setSessionTransport } from "../src/features/connection/connection-store";
+import { sessionTransport, setSessionTransport } from "../src/features/connection/connection-store";
 import { FIXED_NOW, record } from "./environment";
 import type { FixtureTerminalFrame } from "./types";
 import * as data from "./data";
@@ -64,7 +65,11 @@ export function createSession(source: SessionSource = {}): FixtureSession {
   let trace = data.trace();
   let appendedTurns = 0;
   const capabilities = Object.fromEntries(Object.keys(NO_OPERATION_CAPABILITIES).map((key) => [key, true]));
-  const emit = (event: SessionEvent) => { for (const listener of listeners) listener(event); };
+  const emit = (event: SessionEvent) => {
+    // The fixture has no production connection pool; publish its transport observation here.
+    if (event.type === "latency" && event.transport) setSessionTransport(event.transport);
+    for (const listener of listeners) listener(event);
+  };
   const op = () => `op_qa_${String(++operation).padStart(12, "0")}`;
   const created = () => ({ operation_id: op(), workspace_id: "w1", tab_id: "w1:t1", pane_id: data.PANE, outcome: "applied" });
   const sendFrame = (text: string, options: FixtureTerminalFrame = {}): boolean => {
@@ -140,11 +145,31 @@ export function createSession(source: SessionSource = {}): FixtureSession {
     }),
     agentInspect: (paneId: string) => request("agentInspect", [paneId], () => ({ status: "idle" as const, manifest_source: "builtin", manifest_version: "1.2.0", matched_rule: "ready-prompt", screen_detection_skipped: false, rules: [{ id: "ready-prompt", state: "idle" as const, matched: true }] })),
     agentQuota: () => request("agentQuota", [], data.quotas),
+    workspaceResolve: (paneId: string, root: string, input: string) => request("workspaceResolve", [paneId, root, input], () => {
+      const absolute = input.replace(/^~\//, '/work/');
+      if (root !== data.ROOT || (absolute !== root && !absolute.startsWith(root + '/'))) throw new ProtocolError('forbidden');
+      const path = absolute === root ? '' : absolute.slice(root.length + 1);
+      const kind = ['', 'public', 'src', 'proto', 'workers'].includes(path) ? 'directory' as const : 'file' as const;
+      return { root, path, kind };
+    }),
     workspaceOpen: (paneId: string) => request("workspaceOpen", [paneId], data.descriptor),
-    workspaceList: (paneId: string, path = "", cursor?: string) => request("workspaceList", [paneId, path, cursor], () => listed(data.directory(path))),
-    workspaceRead: (paneId: string, path: string) => request("workspaceRead", [paneId, path], () => preview.has(path) ? preview.file(path) : data.file(path)),
-    workspaceMediaOpen: (paneId: string, path: string) => request("workspaceMediaOpen", [paneId, path], () => preview.has(path) ? preview.open(path) : data.mediaOpen(path)),
-    workspaceMediaRead: (handle: string, offset: number, length: number) => request("workspaceMediaRead", [handle, offset, length], () => preview.read(handle, offset, length) ?? data.mediaChunk(handle, offset, length)),
+    workspaceList: (paneId: string, path = "", cursor?: string, _limit?: number, root?: string) => request("workspaceList", [paneId, path, cursor, ...(root === undefined ? [] : [root])], () => {
+      if (root !== undefined && root !== data.ROOT) throw new ProtocolError('conflict');
+      return listed(data.directory(path));
+    }),
+    workspaceRead: (paneId: string, path: string, root?: string) => request("workspaceRead", [paneId, path, ...(root === undefined ? [] : [root])], () => {
+      if (root !== undefined && root !== data.ROOT) throw new ProtocolError('conflict');
+      return preview.has(path) ? preview.file(path) : data.file(path);
+    }),
+    workspaceMediaOpen: (paneId: string, path: string, root?: string, options?: MediaReadOptions) => request("workspaceMediaOpen", [paneId, path, ...(root === undefined ? [] : [root])], () => {
+      if (root !== undefined && root !== data.ROOT) throw new ProtocolError('conflict');
+      if (options?.requireDirect && sessionTransport() !== 'p2p') throw new ProtocolError('p2p_required');
+      return preview.has(path) ? preview.open(path) : data.mediaOpen(path);
+    }),
+    workspaceMediaRead: (handle: string, offset: number, length: number, options?: MediaReadOptions) => request("workspaceMediaRead", [handle, offset, length], () => {
+      if (options?.requireDirect && sessionTransport() !== 'p2p') throw new ProtocolError('p2p_required');
+      return preview.read(handle, offset, length) ?? data.mediaChunk(handle, offset, length);
+    }),
     workspaceMediaClose: (handle: string) => request("workspaceMediaClose", [handle], () => { preview.close(handle); return { handle, closed: true as const }; }),
     gitStatus: (paneId: string) => request("gitStatus", [paneId], data.status),
     gitDiff: (paneId: string, path: string, layer: "staged" | "worktree") => request("gitDiff", [paneId, path, layer], () => data.diff(path, layer)),

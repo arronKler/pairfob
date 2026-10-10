@@ -1,3 +1,5 @@
+import { WorkspaceMediaRPC } from "./workspace-media-rpc";
+import { parseWorkspaceReference } from "./workspace-reference";
 import { RecoveryDiagnostics } from "./recovery-diagnostics";
 import { parseAgentInspection } from "../agent-inspect";
 import { pageHidden, watchPageVisibility } from "./page-activity.ts";
@@ -57,7 +59,6 @@ import { connectSession } from "./session-connect.ts";
 import { RelayWarmup } from "./relay-warmup.ts";
 import { isRecord } from "./session-message.ts";
 import {
-  MEDIA_OPEN_RPC_TIMEOUT_MS,
   MUTATION_RPC_TIMEOUT_MS,
   SessionTransport,
   TERMINAL_RPC_TIMEOUT_MS,
@@ -75,9 +76,7 @@ import {
   type GitLayer,
 } from "../workspace.ts";
 import {
-  parseWorkspaceMediaChunk,
   parseWorkspaceMediaClose,
-  parseWorkspaceMediaOpen,
 } from "./workspace-media.ts";
 import { TransportSwitchBarrier, type TransportSwitchLease } from "./transport-switch.ts";
 import {
@@ -394,39 +393,15 @@ class ReconnectingSession implements LiveSession {
     this.parsedMutation("WorkspaceRename", { pane_id: paneId, root, path, new_name: newName, size, modified_ms: modifiedMS, revision }, parseWorkspaceMutation);
   workspaceDelete = (paneId: string, root: string, path: string, size: number, modifiedMS: number, revision: string) =>
     this.parsedMutation("WorkspaceDelete", { pane_id: paneId, root, path, size, modified_ms: modifiedMS, revision }, parseWorkspaceMutation);
+  workspaceResolve = async (paneId: string, root: string, path: string) => parseWorkspaceReference(await this.readRPC("WorkspaceResolve", { pane_id: paneId, root, path }));
   workspaceOpen = async (paneId: string) => parseWorkspaceDescriptor(await this.readRPC("WorkspaceOpen", { pane_id: paneId }));
-  workspaceList = async (paneId: string, path = "", cursor = "", limit = 120) =>
-    parseWorkspaceDirectory(await this.readRPC("WorkspaceList", { pane_id: paneId, path, cursor, limit }));
-  workspaceRead = async (paneId: string, path: string) =>
-    parseWorkspaceFile(await this.readRPC("WorkspaceRead", { pane_id: paneId, path }));
-  workspaceMediaOpen = async (paneId: string, path: string) => {
-    const params = scopeHerdSession("WorkspaceMediaOpen", { pane_id: paneId, path }, this.herdSessionName);
-    const transport = await this.captureTransport();
-    if (!transport) return Promise.reject(new ProtocolError("reconnecting", "连接正在恢复"));
-    return parseWorkspaceMediaOpen(await transport.rpc(
-      "WorkspaceMediaOpen",
-      params,
-      MEDIA_OPEN_RPC_TIMEOUT_MS,
-      undefined,
-      (result) => {
-        // Close on the SAME epoch that performed the Open — never re-capture the
-        // current transport (a P2P commit may have moved this session to a new
-        // direct transport; closing on it would send WorkspaceMediaClose to the
-        // wrong epoch). If the Open epoch is already retired this Close fails on
-        // send; the orphaned remote handle is then reclaimed authoritatively by
-        // the daemon's own media handle lease (idle/absolute timer) or that
-        // session's teardown — never by any client assumption. A session can
-        // survive a P2P switch, so this does not rely on the old epoch being torn
-        // down on send.
-        if (!isRecord(result) || typeof result.handle !== "string") return;
-        if (!/^media_[0-9a-f]{32}$/u.test(result.handle)) return;
-        const handle = result.handle;
-        void transport.rpc("WorkspaceMediaClose", { handle }).catch(() => undefined);
-      },
-    ));
-  };
-  workspaceMediaRead = async (handle: string, offset: number, length: number) =>
-    parseWorkspaceMediaChunk(await this.readRPC("WorkspaceMediaRead", { handle, offset, length }));
+  workspaceList = async (paneId: string, path = "", cursor = "", limit = 120, root?: string) =>
+    parseWorkspaceDirectory(await this.readRPC(root === undefined ? "WorkspaceList" : "WorkspaceListAtRoot", { pane_id: paneId, path, cursor, limit, ...(root === undefined ? {} : { root }) }));
+  workspaceRead = async (paneId: string, path: string, root?: string) =>
+    parseWorkspaceFile(await this.readRPC(root === undefined ? "WorkspaceRead" : "WorkspaceReadAtRoot", { pane_id: paneId, path, ...(root === undefined ? {} : { root }) }));
+  private readonly mediaRPC = new WorkspaceMediaRPC(() => this.captureTransport(), () => this.herdSessionName);
+  workspaceMediaOpen = this.mediaRPC.open;
+  workspaceMediaRead = this.mediaRPC.read;
   workspaceMediaClose = async (handle: string) =>
     parseWorkspaceMediaClose(await this.readRPC("WorkspaceMediaClose", { handle }));
   workspaceUploadBegin = async (input: UploadBeginInput): Promise<UploadState> =>

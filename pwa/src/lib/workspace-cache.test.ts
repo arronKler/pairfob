@@ -189,3 +189,59 @@ describe("shared workspace reads", () => {
     await scope.file("0.ts").value;
   });
 });
+
+test('root binding retires unbound cache and persists through refresh and directory navigation', async () => {
+  const f = fixture();
+  const seen: Array<string | undefined> = [];
+  const session = { ...f.session,
+    workspaceRead: async (_pane: string, path: string, root?: string) => { seen.push(root); return f.file(path); },
+    workspaceList: async (_pane: string, path: string, _cursor?: string, _limit?: number, root?: string) => {
+      seen.push(root); return { path, entries: [], next_cursor: null, truncated: false, revision: 'r' };
+    },
+  };
+  const cache = new WorkspaceReadCache(session, () => '/repo');
+  const scope = await cache.open('p1');
+  await scope.file('a.ts').value;
+  scope.requireRootBinding();
+  await scope.file('a.ts').value;
+  await scope.directory('nested').value;
+  const refreshed = await cache.open('p1', true);
+  await refreshed.file('a.ts').value;
+  expect(seen).toEqual([undefined, '/repo', '/repo', '/repo']);
+});
+
+test('late unbound data cannot populate a scope after it becomes root-bound', async () => {
+  const f = fixture();
+  const pending = deferred<WorkspaceFile>();
+  const cache = new WorkspaceReadCache({ ...f.session, workspaceRead: () => pending.promise }, () => '/repo');
+  const scope = await cache.open('p1');
+  const read = scope.file('a.ts');
+  await Promise.resolve();
+  scope.requireRootBinding();
+  pending.resolve(f.file());
+  await expect(read.value).rejects.toThrow();
+});
+
+test('a descriptor refresh cannot replace a root confirmed for a chat link', async () => {
+  const f = fixture();
+  const scope = await f.cache.open('p1');
+  scope.requireRootBinding();
+  f.session.workspaceOpen = async () => ({ ...scope.descriptor, root: '/replacement' });
+  f.advance();
+  await expect(f.cache.open('p1')).rejects.toThrow();
+  expect(f.calls.file).toBe(0);
+  expect(f.calls.list).toBe(0);
+});
+
+test('enabling file root binding does not report a false move for pending Git metadata', async () => {
+  const f = fixture();
+  const result = await f.session.gitStatus();
+  const pending = deferred<typeof result>();
+  const cache = new WorkspaceReadCache({ ...f.session, gitStatus: () => pending.promise }, () => '/repo');
+  const scope = await cache.open('p1');
+  const status = scope.status();
+  await Promise.resolve();
+  scope.requireRootBinding();
+  pending.resolve(result);
+  expect(await status.value).toEqual(result);
+});

@@ -1,3 +1,6 @@
+/** Client-side admission policy; never serialized into daemon RPC parameters. */
+export type MediaReadOptions = { requireDirect?: boolean };
+
 import { base64Decode, base64Encode } from "./bytes.ts";
 
 export const MEDIA_CHUNK_BYTES = 65_536;

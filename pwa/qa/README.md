@@ -99,3 +99,11 @@ checks should cover 390×844 touch, 820×900 touch, 1024×768 touch and 1440×90
 mouse/keyboard, including Source/Preview state retention, source-line links,
 Reload, and returning to the original chat. These are fixture checks, not a real
 daemon/relay or physical-device acceptance result.
+
+The HTML preview also exercises P2P admission and page-lifetime content caching:
+reload or close/reopen a report and inspect `workspaceMediaOpen` versus
+`workspaceMediaRead` counts. Unchanged dependencies are opened for validation
+without chunk reads. Emit a relay latency event to retire the preview and show
+the P2P notice; Source remains available. Emit a P2P latency event to restore it.
+A source-line link must not open media until Preview is selected. These fixture
+checks complement the real encrypted relay admission and transport-switch tests.

@@ -50,8 +50,10 @@ function scrub(root: ParentNode, files: boolean): void {
     if (tag === "A") {
       const href = el.getAttribute("href") || "";
       if (!safeHref(href)) el.removeAttribute("href");
-      if (files && parseFileReference(href)) {
-        el.setAttribute("data-file-ref", href);
+      const reference = files ? parseFileReference(href, "url") : null;
+      if (reference) {
+        const location = reference.line ? `:${reference.line}${reference.column ? `:${reference.column}` : ""}` : "";
+        el.setAttribute("data-file-ref", reference.path + location);
         el.setAttribute("href", "#file");
         continue;
       }

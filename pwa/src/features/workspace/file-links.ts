@@ -6,11 +6,13 @@ import { dashboardStore } from '../dashboard/catalog-store';
 import { openPaneId } from '../session/session-store';
 import { currentScreen } from '../../app/navigation-store';
 import { isRoomy } from '../../app/viewport';
-import { parseFileReference, workspaceReferencePath } from '../../lib/file-reference';
+import { parseFileReference } from '../../lib/file-reference';
 import { t } from '../../lib/i18n';
-import { enterWorkspace, loadWorkspaceFile } from './actions';
+import { ProtocolError } from '../../lib/protocol/errors';
+import { messageOf } from '../../lib/notices';
+import { enterWorkspace, loadDirectory, showWorkspaceTab, loadWorkspaceFile } from './actions';
 import { openWorkspaceInspector } from './inspector';
-import { getWorkspaceSnapshot, issueTicket } from './store';
+import { activeScope, getWorkspaceSnapshot, readCache } from './store';
 
 export function captureFileLinkOwner() {
   const session = liveSession();
@@ -35,20 +37,35 @@ export async function openChatFile(value: string, owner: ReturnType<typeof captu
   if (!reference || currentScreen() !== 'pane') return;
   if (!owner.current()) { showError(t('preview.stale')); return; }
   const generation = ++latestOpen;
-  if (isRoomy()) await openWorkspaceInspector();
-  else {
-    parkComposeView();
-    leaveAgentChat({ rememberGuided: false, paint: false });
-    await enterWorkspace(owner.paneId, 'agent');
+  const current = () => generation === latestOpen && owner.current();
+  try {
+    if (!owner.session?.workspaceResolve) throw new ProtocolError('unknown_op');
+    // Resolve before entering the viewer: even its initial directory listing
+    // must use a bound root, and failed links must leave the conversation open.
+    const scope = await readCache(owner.session).open(owner.paneId);
+    if (!current() || currentScreen() !== 'pane') return;
+    const root = scope.descriptor.root;
+    const path = !reference.path.startsWith('/') && !reference.path.startsWith('~/') && owner.cwd?.startsWith('/')
+      ? `${owner.cwd.replace(/\/+$/, '')}/${reference.path}` : reference.path;
+    const resolved = await owner.session.workspaceResolve(owner.paneId, root, path);
+    if (!current() || currentScreen() !== 'pane') return;
+    if (resolved.root !== root) throw new ProtocolError('forbidden');
+    scope.requireRootBinding();
+    if (isRoomy()) await openWorkspaceInspector();
+    else {
+      parkComposeView();
+      leaveAgentChat({ rememberGuided: false, paint: false });
+      await enterWorkspace(owner.paneId, 'agent');
+    }
+    if (!current()) return;
+    const snap = getWorkspaceSnapshot();
+    if (snap.paneId !== owner.paneId || snap.descriptor?.root !== root || activeScope()?.boundRoot !== root) return;
+    if (resolved.kind === 'directory') {
+      showWorkspaceTab('files');
+      await loadDirectory(resolved.path);
+    } else await loadWorkspaceFile(resolved.path, reference.line ?? null);
+  } catch (error) {
+    if (current()) showError(error instanceof ProtocolError && error.code === 'unknown_op' ? t('preview.homeUnsupported')
+      : error instanceof ProtocolError && error.code === 'forbidden' ? t('preview.outside') : messageOf(error));
   }
-  if (generation !== latestOpen || !owner.current()) return;
-  const snap = getWorkspaceSnapshot();
-  if (snap.paneId !== owner.paneId || !snap.descriptor) return;
-  // A relative reply belongs to the cwd captured with that reply. A daemon
-  // can report a moved root before its next dashboard snapshot reaches us.
-  const anchored = !reference.path.startsWith('/') && owner.cwd?.startsWith('/')
-    ? { ...reference, path: `${owner.cwd.replace(/\/+$/, '')}/${reference.path}` } : reference;
-  const path = workspaceReferencePath(anchored, snap.descriptor.root);
-  if (!path) { issueTicket()?.commit({ error: t('preview.outside') }); return; }
-  await loadWorkspaceFile(path, reference.line ?? null);
 }

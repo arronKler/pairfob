@@ -1,3 +1,4 @@
+import { rootBoundMedia } from "./root-bound-media";
 import { liveSession } from "../computers/catalog-store";
 import { t } from "../../lib/i18n";
 import { ProtocolError } from "../../lib/protocol/errors";
@@ -13,6 +14,7 @@ import {
 } from "./media-model";
 import { messageOf } from "../../lib/notices";
 import {
+  activeScope,
   claimMediaGeneration,
   currentMediaGeneration,
   getWorkspaceSnapshot,
@@ -146,7 +148,7 @@ export async function loadWorkspaceMedia(path: string, gen?: number): Promise<bo
   };
 
   try {
-    const loaded = await loader.load(session, paneId, path, onProgress);
+    const loaded = await loader.load(rootBoundMedia(session, activeScope()?.boundRoot), paneId, path, onProgress);
     // After the await: a retirement, fast switch or newer load invalidated this
     // generation/ticket; the loader already closes/disposes this operation's own
     // handle/URL, so never publish it (and never revoke a replacement URL).

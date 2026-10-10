@@ -1,5 +1,5 @@
 import { t } from '../../lib/i18n';
-import { WorkspaceMediaLoader, type MediaSession } from './media-loader';
+import { WorkspaceMediaLoader, type MediaContentCache, type MediaSession } from './media-loader';
 
 export const PREVIEW_ORIGIN = 'https://pairfob-preview.invalid';
 const MAX_BYTES = 32 * 1024 * 1024;
@@ -33,7 +33,7 @@ export class PreviewResources {
   private bytes = 0;
   private stopped = false;
 
-  constructor(private session: MediaSession, private pane: string, path: string, private current: () => boolean) {
+  constructor(private session: MediaSession, private pane: string, path: string, private current: () => boolean, private sharedCache?: MediaContentCache) {
     this.base = `${PREVIEW_ORIGIN}/${path.split('/').map(encodeURIComponent).join('/')}`;
   }
   close(): void { this.stopped = true; this.cached.clear(); this.loader.release(); }
@@ -50,7 +50,7 @@ export class PreviewResources {
         const loaded = await this.loader.load(this.session, this.pane, path, ({ total }) => {
           this.check();
           if (this.bytes + total > MAX_BYTES) throw new Error(t('preview.limit'));
-        });
+        }, undefined, this.sharedCache);
         this.check();
         const bytes = new Uint8Array(await loaded.blob.arrayBuffer());
         this.check();

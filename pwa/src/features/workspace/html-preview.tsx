@@ -1,6 +1,9 @@
+import { previewMedia } from './preview-media';
+import { previewCache } from './preview-cache';
+import { connectionStore } from '../connection/connection-store';
 import { dashboardStore } from "../dashboard/catalog-store";
 import "./workspace-preview.scss";
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { computersStore, liveSession } from '../computers/catalog-store';
 import { t } from '../../lib/i18n';
 import { messageOf } from '../../lib/notices';
@@ -8,7 +11,7 @@ import { ProtocolError } from '../../lib/protocol/errors';
 import type { PreviewControls } from './preview-controls';
 import { FileSource } from './file-source';
 import type { WorkspaceSnapshot } from './model';
-import { getWorkspaceSnapshot, issueTicket, subscribeWorkspace, workspacePaneCwd } from './store';
+import { activeScope, getWorkspaceSnapshot, issueTicket, subscribeWorkspace, workspaceContentVersion, workspacePaneCwd } from './store';
 import { PreviewResources } from './preview-resources';
 import { preparePreviewDocument } from './preview-document';
 
@@ -56,7 +59,10 @@ function PreviewFrame({ loaded, onError, hidden }: { hidden: boolean; loaded: Lo
 export function HTMLPreview({ snapshot, wrap, controls }: { snapshot: WorkspaceSnapshot; wrap: boolean; controls: PreviewControls }) {
   const file = snapshot.file!;
   const session = liveSession();
+  const contentVersion = useSyncExternalStore(subscribeWorkspace, workspaceContentVersion);
   const { mode, started, reload } = controls;
+  const network = useSyncExternalStore(connectionStore.subscribe, connectionStore.get);
+  const direct = network.sessionTransport === 'p2p' && !network.transportSwitching && network.networkOnline && network.phase === 'live';
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -67,10 +73,11 @@ export function HTMLPreview({ snapshot, wrap, controls }: { snapshot: WorkspaceS
     const cwd = workspacePaneCwd(snapshot.paneId);
     const runtime = session?.herdSession?.();
     let alive = true;
-    if (!session || !ticket) return;
+    if (!session || !ticket || !started || !direct) return;
     const current = () => alive && ticket.current() && ticket.sameContent()
       && session.herdSession?.() === runtime && workspacePaneCwd(snapshot.paneId) === cwd && getWorkspaceSnapshot().view === 'file';
-    const resources = new PreviewResources(session, snapshot.paneId, file.path, current);
+    const resources = new PreviewResources(previewMedia(session, activeScope()?.boundRoot), snapshot.paneId, file.path, current,
+      previewCache.scope(session, runtime ?? null, snapshot.descriptor!.root, snapshot.paneId));
     const retire = () => {
       if (!current()) { resources.close(); setLoaded(null); setError(t('preview.stale')); }
     };
@@ -86,15 +93,17 @@ export function HTMLPreview({ snapshot, wrap, controls }: { snapshot: WorkspaceS
         if (current()) setLoaded({ token, source: text, html, resources });
       } catch (error) {
         if (current()) setError(error instanceof ProtocolError && error.code === 'unknown_op'
-          ? t('workspace.media.unsupportedDaemon') : messageOf(error));
+          ? t('workspace.media.unsupportedDaemon') : error instanceof ProtocolError && error.code === 'p2p_required'
+            ? t('preview.p2pRequired') : messageOf(error));
       }
     })();
     return () => { alive = false; stops.forEach(stop => stop()); resources.close(); };
-  }, [session, snapshot.paneId, snapshot.descriptor?.root, file.path, file.revision, reload]);
+  }, [session, snapshot.paneId, snapshot.descriptor?.root, file.path, file.revision, reload, started, direct, contentVersion]);
   return <section className="workspace-html" aria-label={t('preview.title')}>
-    {loaded && started && <PreviewFrame key={loaded.token} loaded={loaded} hidden={mode !== 'preview'} onError={setRuntimeError} />}
+    {loaded && started && direct && <PreviewFrame key={loaded.token} loaded={loaded} hidden={mode !== 'preview'} onError={setRuntimeError} />}
     {mode === 'preview' ? <>
-      {error ? <p className="workspace-feedback workspace-error" role="alert">{error}</p>
+      {!direct ? <p className="workspace-feedback" role="status">{t('preview.p2pRequired')}</p>
+        : error ? <p className="workspace-feedback workspace-error" role="alert">{error}</p>
         : loaded ? null
         : <p className="workspace-feedback" role="status">{t('preview.loading')}</p>}
       {runtimeError && <p className="workspace-feedback workspace-error" role="status">{runtimeError}</p>}

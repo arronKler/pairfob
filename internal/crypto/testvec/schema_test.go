@@ -85,7 +85,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"PushSubscribe", "RevokeDevice", "ListDevices", "ListSessions", "History", "AgentTrace", "AgentTraceSummary", "AgentTraceDetail", "RenamePane",
 		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace",
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
-		"WorkspaceOpen", "WorkspaceList", "WorkspaceRead", "WorkspaceMediaOpen", "WorkspaceMediaRead", "WorkspaceMediaClose", "WorkspaceUploadBegin", "WorkspaceUploadWrite", "WorkspaceUploadStatus", "WorkspaceUploadCommit", "WorkspaceUploadCancel", "WorkspaceUploadBeginV2", "WorkspaceUploadWriteV2", "WorkspaceUploadStatusV2", "WorkspaceUploadCommitV2", "WorkspaceUploadCancelV2", "WorkspaceRename", "WorkspaceDelete", "GitStatus", "GitDiff", "GitBranches",
+		"WorkspaceOpen", "WorkspaceResolve", "WorkspaceList", "WorkspaceListAtRoot", "WorkspaceRead", "WorkspaceReadAtRoot", "WorkspaceMediaOpen", "WorkspaceMediaOpenAtRoot", "WorkspaceMediaRead", "WorkspaceMediaClose", "WorkspaceUploadBegin", "WorkspaceUploadWrite", "WorkspaceUploadStatus", "WorkspaceUploadCommit", "WorkspaceUploadCancel", "WorkspaceUploadBeginV2", "WorkspaceUploadWriteV2", "WorkspaceUploadStatusV2", "WorkspaceUploadCommitV2", "WorkspaceUploadCancelV2", "WorkspaceRename", "WorkspaceDelete", "GitStatus", "GitDiff", "GitBranches",
 		"CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
 		"TransportOffer", "TransportCommit", "TransportRestart",
@@ -192,11 +192,15 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		t.Error("WorkspaceMediaClose params must reject additional properties")
 	}
 	for op, required := range map[string][]string{
-		"WorkspaceList":   {"pane_id"},
-		"WorkspaceRead":   {"pane_id", "path"},
-		"WorkspaceRename": {"operation_id", "pane_id", "root", "path", "new_name", "size", "modified_ms", "revision"},
-		"WorkspaceDelete": {"operation_id", "pane_id", "root", "path", "size", "modified_ms", "revision"},
-		"GitDiff":         {"pane_id", "path", "layer"},
+		"WorkspaceResolve":         {"pane_id", "root", "path"},
+		"WorkspaceListAtRoot":      {"pane_id", "root", "path"},
+		"WorkspaceReadAtRoot":      {"pane_id", "root", "path"},
+		"WorkspaceMediaOpenAtRoot": {"pane_id", "root", "path"},
+		"WorkspaceList":            {"pane_id"},
+		"WorkspaceRead":            {"pane_id", "path"},
+		"WorkspaceRename":          {"operation_id", "pane_id", "root", "path", "new_name", "size", "modified_ms", "revision"},
+		"WorkspaceDelete":          {"operation_id", "pane_id", "root", "path", "size", "modified_ms", "revision"},
+		"GitDiff":                  {"pane_id", "path", "layer"},
 	} {
 		params := paramsByOp[op]
 		gotRequired := slices.Clone(params.Required)
@@ -349,6 +353,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	requireExactObject(t, schema.Defs, "listWorktreesResult", []string{"worktrees"})
 	requireExactObject(t, schema.Defs, "workspaceFeatures", []string{"files", "git_status", "git_diff", "git_branches"})
 	requireExactObject(t, schema.Defs, "workspaceRepository", []string{"name", "branch", "head", "detached"})
+	requireExactObject(t, schema.Defs, "workspaceResolveResult", []string{"root", "path", "kind"})
 	requireExactObject(t, schema.Defs, "workspaceOpenResult", []string{"name", "root", "features", "git"})
 	requireExactObjectFields(t, schema.Defs, "workspaceEntry", []string{"name", "path", "kind", "size", "modified_ms", "hidden", "revision"}, []string{"name", "path", "kind", "size", "modified_ms", "hidden"})
 	requireExactObject(t, schema.Defs, "workspaceListResult", []string{"path", "entries", "next_cursor", "truncated", "revision"})

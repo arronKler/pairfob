@@ -150,8 +150,11 @@ HTML files open in Preview, with Source and Reload controls. Switching to Source
 keeps an already running preview alive; Reload creates a fresh document. A chat
 reference with a line suffix (`path.html:12` or `path.html#L12`) opens Source first
 without executing the page. Explicit Markdown links, inline code paths and
-unambiguous paths in prose use the owning session's workspace. Absolute paths
-must fall below the daemon-reported workspace root, on a path-component boundary.
+unambiguous paths in prose use the owning session's workspace. Local `file:///`
+and `file://localhost/` links name files on the paired computer and use the same
+workspace reader; they never navigate the phone browser to a `file:` URL.
+Absolute paths and daemon-expanded `~/` paths
+must fall at or below the daemon-reported workspace root, on a path-component boundary.
 A computer, pane, runtime session or cwd change retires the link's captured owner.
 
 The PWA reads the complete HTML using the existing media RPC and verifies its
@@ -161,7 +164,27 @@ allows at most 128 distinct files and 32 MiB total. Static CSS (including import
 and URLs), script/image/font/media references, local ES module imports (including
 cycles and literal dynamic imports), and local `fetch()` GETs are resolved inside
 the current workspace. `.git`, encoded traversal, and host filesystem paths are
-not accepted. No new wire operation, file server or origin upload is involved.
+not accepted. Preview bytes use existing media operations; no file server or origin upload is involved.
+
+The PWA admits HTML preview only on an established P2P path (not merely a P2P
+settings preference). Both media Open and every chunk Read check the captured
+transport after any switch barrier settles. They fail with the client-side
+`p2p_required` error before sending on relay; this policy flag is not serialized
+into RPC parameters. A fallback retires the preview document and local readers;
+P2P recovery reloads it. Source viewing and ordinary media reads retain their
+existing relay behavior. This is a preview-client admission policy, not a new
+daemon authorization rule or a ban on every media RPC over relay.
+
+A page-lifetime LRU retains SHA-256-verified immutable file blobs across previews,
+with a shared 128-file / 32 MiB bound. Entries are separated by live connection
+identity, Herdr session, workspace root, pane and path. Every new preview still
+opens each file on the computer, rechecking authorization and the current full
+SHA-256 and size. An unchanged version skips all chunk reads; a changed version
+is fetched and verified again. Failed Open never falls back to cached content.
+The daemon still hashes the local file, so the saving is network transfer, not
+all computer disk work. Closing a preview releases handles and blob URLs while
+retaining bounded content; reloading the PWA clears the memory cache. Source
+reads and external HTTP resources do not use this preview cache.
 
 `/preview/runner.html` is a fixed, source-free static document, packaged as an
 opaque asset to avoid Cloudflare HTML canonicalization. Only that exact route
@@ -181,3 +204,41 @@ a development server: computed local module specifiers, local XMLHttpRequest,
 and dynamically inserted local resource elements are not bundled. External URLs
 continue to use normal browser loading. Fragment navigation is supported; a
 history router that requires a normal origin/path must use its own hosted app.
+
+
+## Resolving chat references
+
+`WorkspaceResolve` is an additive read-only operation with `{pane_id, root, path}`
+and optional Herdr `session`. `root` must equal the live pane's canonical root.
+`path` is an absolute path or begins with `~/`; the daemon expands the latter
+using its own user home, never a browser guess. The response is `{root, path,
+kind}`, with a canonical root, a workspace-relative path (empty for the root
+itself), and `kind` of `file` or `directory`. Directory links open the file list;
+file links retain HTML preview/source-line behavior. This operation follows the
+existing workspace reader's Established-session checks and bounded read slots;
+it neither advertises a mutation capability nor changes existing RPC fields.
+
+Resolution checks containment before access and after symlink resolution,
+rejects traversal and `.git`, and grants no new root. Files outside the current
+pane root remain unavailable, including other projects and `/tmp`. Subsequent
+reads use `WorkspaceListAtRoot`, `WorkspaceReadAtRoot`, and
+`WorkspaceMediaOpenAtRoot`. These additive variants require `root` and `path`
+alongside `pane_id` (and optional Herdr `session`), and return the same result
+shapes as their legacy counterparts. List also accepts `cursor` and `limit`.
+The daemon checks the expected canonical root against the live pane root in
+that read operation and reads from the checked root. A mismatch is `conflict`.
+Media handles retain their existing root/session binding for every chunk.
+HTML, CSS, scripts and local fetches all use the captured root when opening a
+handle. Existing operation fields and envelope/crypto bytes are unchanged.
+
+The PWA resolves before opening the viewer, enables root binding for that
+connection's workspace cache, and invalidates previously unbound cached reads.
+Binding persists through navigation and refresh. A descriptor refresh cannot
+silently substitute a different root. Unsupported daemons get an update message
+for chat links; there is no fallback to an unbound file/list/media read. The
+PWA discards results after owner or navigation changes.
+
+Raw paths (plain text and inline code) retain literal percent signs. Markdown
+URLs and `file:` URIs are decoded exactly once. Ambiguous spaced filenames in
+plain prose are left unlinked rather than split into partial path links; use
+inline code or an explicit Markdown link to delimit a path containing spaces.

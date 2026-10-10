@@ -26,6 +26,8 @@ func (e *Engine) dispatchWorkspaceMedia(s *sess, id, op string, params json.RawM
 		return
 	}
 	switch op {
+	case "WorkspaceMediaOpenAtRoot":
+		e.rpcWorkspaceBound(s, id, op, params)
 	case "WorkspaceMediaOpen":
 		e.rpcWorkspaceMediaOpen(s, id, params)
 	case "WorkspaceMediaRead":
@@ -56,7 +58,7 @@ func (e *Engine) replyMediaErr(s *sess, id string, err error) {
 	}
 }
 
-func (e *Engine) rpcWorkspaceMediaOpen(s *sess, id string, params json.RawMessage) {
+func (e *Engine) rpcWorkspaceMediaOpen(s *sess, id string, params json.RawMessage, expectedRoot ...string) {
 	var p struct {
 		workspacePaneParams
 		Path string `json:"path"`
@@ -71,7 +73,7 @@ func (e *Engine) rpcWorkspaceMediaOpen(s *sess, id string, params json.RawMessag
 	if e.mediaTestHold != nil {
 		<-e.mediaTestHold
 	}
-	root, ok := e.workspaceTarget(s, id, p.workspacePaneParams)
+	root, ok := e.workspaceReadTarget(s, id, p.workspacePaneParams, expectedRoot)
 	if !ok {
 		return
 	}

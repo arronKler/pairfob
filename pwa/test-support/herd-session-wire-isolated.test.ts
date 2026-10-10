@@ -24,7 +24,10 @@ const { sessionOverWS } = await import("../src/lib/protocol/session-ws") as {
 type Live = {
   close(): void;
   getConfig(): Promise<Record<string, unknown>>;
-  workspaceMediaOpen(paneId: string, path: string): Promise<unknown>;
+  workspaceList(paneId: string, path: string, cursor: string, limit: number, root: string): Promise<unknown>;
+  workspaceRead(paneId: string, path: string, root: string): Promise<unknown>;
+  workspaceMediaOpen(paneId: string, path: string, root?: string, options?: { requireDirect: boolean }): Promise<unknown>;
+  workspaceMediaRead(handle: string, offset: number, length: number, options?: { requireDirect: boolean }): Promise<unknown>;
   snapshot(): Promise<unknown>;
   paneRead(paneId: string): Promise<unknown>;
   sendText(paneId: string, text: string): Promise<unknown>;
@@ -144,4 +147,31 @@ test("a media open keeps the Herdr session selected when issued", () => withSess
   live.selectHerdSession("other");
   const request = await nextRequest("WorkspaceMediaOpen");
   expect(request.params.session).toBe("work");
+}));
+
+
+test("root-bound readers preserve issue-time session and never downgrade on failure", () => withSession(async live => {
+  live.selectHerdSession('work');
+  const pending = [
+    live.workspaceList('w1:p1', 'src', '', 120, '/original').catch(error => error),
+    live.workspaceRead('w1:p1', 'src/app.ts', '/original').catch(error => error),
+    live.workspaceMediaOpen('w1:p1', 'report.html', '/original').catch(error => error),
+  ];
+  live.selectHerdSession('other');
+  for (const op of ['WorkspaceListAtRoot', 'WorkspaceReadAtRoot', 'WorkspaceMediaOpenAtRoot']) {
+    const request = await nextRequest(op);
+    expect(request.params.root).toBe('/original');
+    expect(request.params.session).toBe('work');
+    relay.reply(request, {}, false);
+  }
+  for (const result of await Promise.all(pending)) expect(result.code).toBe('conflict');
+  expect(relay.requests.some(request => ['WorkspaceList', 'WorkspaceRead', 'WorkspaceMediaOpen'].includes(request.op))).toBe(false);
+}));
+
+
+test("HTML media cannot send Open or chunk reads over the real relay transport", () => withSession(async live => {
+  const before = relay.requests.length;
+  await expect(live.workspaceMediaOpen('w1:p1', 'report.html', '/original', { requireDirect: true })).rejects.toThrow('p2p_required');
+  await expect(live.workspaceMediaRead('media_' + 'c'.repeat(32), 0, 65536, { requireDirect: true })).rejects.toThrow('p2p_required');
+  expect(relay.requests.length).toBe(before);
 }));
