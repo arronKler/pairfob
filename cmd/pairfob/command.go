@@ -115,8 +115,7 @@ func writerIsTTY(w io.Writer) bool {
 	if !ok {
 		return false
 	}
-	info, err := file.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	return fileIsTTY(file)
 }
 
 func useANSI(w io.Writer) bool {
