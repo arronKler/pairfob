@@ -141,6 +141,21 @@ prove the private metrics implementation or establish client latency. Check
 subrequest response-body ownership as well as handler completion, and validate
 any proposed cleanup with an isolated control before changing production.
 
+The isolated PairingIndex response-body control reproduced this effect in two
+runs: all eight pairing operations with unused bodies produced 19–20 second
+GraphQL times, while consuming or canceling the bodies brought all sixteen
+corresponding operations into agreement with invocation logs. All 114 WS
+invocations were present with sampling interval 1 and no errors. This identifies
+the unused body as the application trigger for this class of long tail; it
+does not establish the internals of Cloudflare's private metrics observer.
+The experiment did not show a comparable increase in billed active time.
+
+`NamespaceIndexClient` cancels bodies it does not use, including unsuccessful
+lookups. HTTP status remains authoritative: a cleanup error cannot turn an
+already successful index mutation into a failure or trigger a retry. The
+`index_response_cleanup_failed` warning exposes cleanup failures using only
+the operation name and status. Successful lookups still consume their JSON.
+
 ### Validate canceled upgrade cleanup
 
 `room_upgrade_cancelled` records completion of the local two-endpoint cleanup
