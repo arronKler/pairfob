@@ -19,10 +19,14 @@ const commandUsage = `Pairfob — this computer, on another device.
   pairfob doctor            Check this computer
   pairfob setup             Check, install if requested, and start Herdr
   pairfob quota-setup-claude Enable Claude subscription quota collection
+  pairfob service status|start|restart|stop|install
+                            Manage the login service
+  pairfob run               Run the daemon in the foreground
   pairfob version
 
 After install, Pairfob runs in the background.
-Type pairfob by itself to see how it's doing.`
+Type pairfob by itself in a terminal to see how it's doing.
+Use pairfob run to start it in the foreground.`
 
 func runCommand(args []string, sock string) error {
 	if len(args) == 0 {
@@ -63,6 +67,11 @@ func runCommand(args []string, sock string) error {
 		return relayCredentialCommand(args[1:], sock)
 	case "service":
 		return serviceCommand(args[1:])
+	case "run":
+		if len(args) != 1 {
+			return errors.New("usage: pairfob run")
+		}
+		return runForeground()
 	case "update":
 		return updateCommand(args[1:])
 	default:
@@ -85,7 +94,7 @@ func printResult(sock string, req admin.Request) error {
 
 func notRunning(err error) error {
 	if errors.Is(err, admin.ErrNotRunning) {
-		return errors.New("Pairfob isn't running. It starts at login after install, or run pairfob in a terminal.")
+		return errors.New("Pairfob isn't running. " + localServiceHint().advice())
 	}
 	return err
 }
@@ -106,8 +115,7 @@ func writerIsTTY(w io.Writer) bool {
 	if !ok {
 		return false
 	}
-	info, err := file.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	return fileIsTTY(file)
 }
 
 func useANSI(w io.Writer) bool {

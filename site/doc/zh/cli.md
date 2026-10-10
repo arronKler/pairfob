@@ -5,7 +5,7 @@ description: pair、list、forget、doctor、update。装好后后台跑，敲 p
 
 # 电脑上的命令
 
-装好后 Pairfob 在后台跑。终端里直接敲 `pairfob`（后面不跟子命令）会打印一段人话状态：在不在跑、配了对几台、Herdr 开没开。
+装好后 Pairfob 在后台跑。终端里直接敲 `pairfob`（后面不跟子命令）会打印状态并退出：在不在跑、配了对几台、Herdr 开没开。没在跑时会打印恢复建议，并以非零状态退出。
 
 ```
 Pairfob is running.
@@ -17,7 +17,7 @@ Herdr is on.
   pairfob doctor   full check
 ```
 
-没在跑时会提示：安装后登录会启动，或在这个终端跑 `pairfob`。睡眠和注销会停掉登录服务，回到同一次会话后再起来。
+没在跑时，按提示执行对应的服务命令，或用 `pairfob run` 在前台运行。睡眠和注销会停掉登录服务，回到同一次会话后再起来。
 
 ## 日常命令
 
@@ -26,6 +26,7 @@ pairfob pair      # 配对手机、平板或另一台电脑
 pairfob list      # 已经配对的设备
 pairfob forget 1  # 解除第 1 台（序号来自 list）
 pairfob doctor    # 本机检查
+pairfob run       # 在前台运行 daemon
 pairfob update    # 换成最新版本并重启用户服务
 pairfob version
 pairfob help
@@ -56,7 +57,7 @@ Pairfob <version>
 
 | 项 | 正常 | 不正常时 |
 | --- | --- | --- |
-| Running | yes | 登录服务没起来，看 `pairfob service status` |
+| Running | yes | `service not installed` → `pairfob service install`；`service stopped` → `pairfob service start`；`service running but not answering` → `pairfob service restart`；状态查询失败 → `pairfob service status` |
 | Paired | ≥ 1 | 还没配对，跑 `pairfob pair` |
 | Herdr | `ready` | `not installed` / `installed but not running` / `incompatible server` / `unavailable` |
 | P2P | `on` | `off` 表示这台电脑只用中继（`PAIRFOB_P2P=0`）；`unknown` 重启 Pairfob 后会恢复 |
@@ -68,7 +69,7 @@ Pairfob <version>
 
 ## 服务
 
-安装脚本默认会装用户服务。需要手调时：
+安装脚本默认会装用户服务。`doctor` 和未运行状态会建议对应的 install、start、restart 或 status 命令，保持服务不变。需要前台运行时使用 `pairfob run`。在终端直接输入 `pairfob` 只显示状态；登录服务仍按原来的方式启动 daemon。需要手调服务时：
 
 ```sh
 pairfob service status

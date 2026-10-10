@@ -83,7 +83,8 @@ vulnerabilities privately via [SECURITY.md](SECURITY.md).
 ## Computer commands
 
 ```sh
-pairfob                     # status; starts the daemon if it is not running
+pairfob                     # status in a terminal; exits if it is not running
+pairfob run                 # start the daemon in the foreground
 pairfob pair                # pair a phone, tablet, or another computer
 pairfob list                # paired devices
 pairfob forget 1            # unpair by index or name

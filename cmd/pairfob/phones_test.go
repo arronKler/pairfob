@@ -63,12 +63,12 @@ func TestResolvePhoneByLabelAndIndex(t *testing.T) {
 
 func TestHelpListsPairPhonesUpdateDoctor(t *testing.T) {
 	usage := commandUsage
-	for _, want := range []string{"pairfob pair", "pairfob list", "pairfob forget", "pairfob update", "pairfob doctor"} {
+	for _, want := range []string{"pairfob pair", "pairfob list", "pairfob forget", "pairfob update", "pairfob doctor", "pairfob service status|start|restart|stop|install", "\n  pairfob run "} {
 		if !strings.Contains(usage, want) {
 			t.Fatalf("help missing %s", want)
 		}
 	}
-	for _, hide := range []string{"enroll", "service", "relay", "pair_ref", "phones"} {
+	for _, hide := range []string{"enroll", "relay", "pair_ref", "phones", "uninstall"} {
 		if strings.Contains(usage, hide) {
 			t.Fatalf("help still shows %q", hide)
 		}
