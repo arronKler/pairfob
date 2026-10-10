@@ -50,7 +50,7 @@ async function applyAlarm(room: RoomCore, kind: AlarmKind, ref: string, now: num
       await room.withPairingLock(() => expireSlot(room, ref, notifications));
       return;
     case "ticket_15s":
-      room.store.expireTickets(now);
+      // Ticket expiry is swept once after the entire due-alarm batch.
       return;
   }
 }
@@ -72,7 +72,7 @@ function closeExpiredResumes(room: RoomCore, now: number, notifications: Teardow
   for (const ws of room.sockets()) {
     const a = room.att(ws);
     if (a?.kind !== "resumehello") continue;
-    if (now - a.created_ms > RESUME_MS) {
+    if (now - a.created_ms >= RESUME_MS) {
       room.closeBind(ws, "unpaired", "15s DeviceHello timeout", true, notifications);
     }
   }
