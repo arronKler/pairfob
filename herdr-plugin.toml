@@ -2,7 +2,7 @@ id = "pairfob"
 name = "Pairfob"
 version = "1.3.8"
 min_herdr_version = "0.8.2"
-description = "Pair your phone to Herdr: same live agent sessions in the browser. Dials out, no ports/VPN, no app, E2E."
+description = "Pair your phone to Herdr: same live agent sessions in the browser. Dials out, no ports/VPN, no app or account, E2E."
 platforms = ["linux", "macos"]
 
 [[actions]]
