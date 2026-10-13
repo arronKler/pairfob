@@ -1,14 +1,14 @@
 id = "pairfob"
 name = "Pairfob"
-version = "0.1.0"
+version = "1.3.8"
 min_herdr_version = "0.8.2"
-description = "Open your live Herdr sessions securely from a phone or another device"
+description = "Pair your phone to Herdr: same live agent sessions in the browser. Dials out, no ports/VPN, no app, E2E."
 platforms = ["linux", "macos"]
 
 [[actions]]
 id = "pair"
 title = "Pairfob: Pair a device"
-description = "Install Pairfob if needed, then open interactive device pairing"
+description = "Scan a QR code with your phone to open these Herdr sessions there (installs Pairfob on first use)"
 contexts = ["global"]
 command = ["sh", "plugin/herdr/open-pane.sh", "pair"]
 
