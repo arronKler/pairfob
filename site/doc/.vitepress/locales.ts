@@ -51,6 +51,7 @@ const enSidebar: DefaultTheme.Sidebar = [
       { text: "Get started", link: "/start" },
       { text: "Install", link: "/install" },
       { text: "FAQ", link: "/faq" },
+      { text: "Use cases", link: "/use-cases" },
     ],
   },
   {
@@ -89,6 +90,7 @@ const zhSidebar: DefaultTheme.Sidebar = [
       { text: "开始使用", link: "/zh/start" },
       { text: "安装", link: "/zh/install" },
       { text: "常见问题", link: "/zh/faq" },
+      { text: "使用场景", link: "/zh/use-cases" },
     ],
   },
   {

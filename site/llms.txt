@@ -1,12 +1,12 @@
 # Pairfob
 
-> Pairfob is a free, open-source (Apache-2.0) phone and browser surface for Herdr: it lets you continue the coding-agent sessions (Claude Code, Codex CLI, Gemini CLI, Grok and other Herdr-supported agents) that are already running on your macOS or Linux computer from your phone's browser. Pair once by QR code; no app, no account, no VPN, no inbound ports. Sessions are end-to-end encrypted (direct WebRTC when possible, otherwise through the pairfob.com relay, which cannot read content).
+> Pairfob is a free, open-source (Apache-2.0) phone and browser surface for Herdr: it lets you continue the coding-agent sessions (Claude Code, Codex CLI, Grok and other agents running in Herdr) that are already running on your macOS or Linux computer from your phone's browser. Pair once by QR code; no app, no account, no VPN, no inbound ports. Sessions are end-to-end encrypted (direct WebRTC when possible, otherwise through the pairfob.com relay, which cannot read content).
 
 Key facts:
-- Host: macOS or Linux with Herdr 0.8+ (the installer offers to install Herdr if missing). Windows hosts: not supported.
+- Host: macOS or Linux with Herdr 0.8+ (the installer offers to install Herdr if missing); the Herdr plugin route and agent inspection need Herdr 0.8.2+. Windows hosts: not supported.
 - Client: any modern mobile browser (iOS Safari, Android Chrome); installable to the Home Screen as a PWA. No App Store app.
 - Same live session, not a copy: approve commands, reply (incl. dictation), review diffs, get "Needs you" push notifications.
-- Install: `curl -fsSL https://pairfob.com/install.sh | sh && pairfob pair`, then open https://pairfob.com/pair on the phone and scan. Or inside Herdr: `herdr plugin install arronKler/pairfob`.
+- Install: `curl -fsSL https://pairfob.com/install.sh | sh && pairfob pair`, then open https://pairfob.com/pair on the phone and scan. Or inside Herdr 0.8.2+: `herdr plugin install arronKler/pairfob`.
 - Price: free. Source: https://github.com/arronKler/pairfob
 
 ## Docs
@@ -14,6 +14,7 @@ Key facts:
 - [Get started](https://pairfob.com/doc/start): install and first pairing
 - [Pairing](https://pairfob.com/doc/pair): QR / 14-character code, admitting a device
 - [FAQ](https://pairfob.com/doc/faq): security, relay, troubleshooting
+- [Use cases](https://pairfob.com/doc/use-cases): control Claude Code, Codex and Grok from a phone; approvals, diffs, uploads; when Pairfob is not a fit
 
 ## Optional
 - [中文首页](https://pairfob.com/zh/)
