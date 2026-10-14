@@ -18,4 +18,5 @@ Key facts:
 
 ## Optional
 - [中文首页](https://pairfob.com/zh/)
+- [使用场景（中文）](https://pairfob.com/doc/zh/use-cases)
 - [GitHub Releases (binaries + SHA-256)](https://github.com/arronKler/pairfob/releases)
