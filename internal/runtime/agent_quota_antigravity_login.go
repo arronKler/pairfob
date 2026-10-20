@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	goruntime "runtime"
 	"strings"
 	"time"
@@ -15,23 +17,49 @@ import (
 
 // The Antigravity CLI answers its loopback port only to commands it started
 // itself, so its allowance is read the way the CLI reads it: from Google's
-// Code Assist API, with the login the CLI keeps in the system keyring. The
-// access token there lasts an hour and only the CLI renews it.
+// Code Assist API, with the login the CLI keeps in the system keyring, or in
+// its private token file where it has no keyring to use (a Linux server). The
+// access token lasts an hour and only the CLI renews it.
 
 const antigravityCodeAssist = "https://cloudcode-pa.googleapis.com/v1internal:"
 
+// The quota summary answers 403 to any client that does not name itself as
+// Antigravity; the login being sent is the Antigravity CLI's own.
+const antigravityUserAgent = "antigravity"
+
+// antigravityLoginFile is the CLI's file store, mode 0600 in its own directory.
+func antigravityLoginFile() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".gemini", "antigravity-cli", "antigravity-oauth-token"), nil
+}
+
 // antigravityStoredLogin returns the CLI's access token, or why there is none
 // to use. "" as the status with no token means no login is stored at all.
+// The keyring is the CLI's first store on macOS; the file is where it writes
+// when no keyring takes the login, and its only store elsewhere.
 func antigravityStoredLogin(ctx context.Context, now time.Time) (token, status string) {
-	if goruntime.GOOS != "darwin" {
-		return "", ""
+	if goruntime.GOOS == "darwin" {
+		raw, err := quotaKeychainRead(ctx, "gemini", "antigravity", 256*1024)
+		if err == nil {
+			return parseAntigravityLogin(raw, now)
+		}
+		if !errors.Is(err, errQuotaKeychainNotFound) {
+			status = "keychain_denied"
+		}
 	}
-	raw, err := quotaKeychainRead(ctx, "gemini", "antigravity", 256*1024)
-	if errors.Is(err, errQuotaKeychainNotFound) {
-		return "", ""
+	path, err := antigravityLoginFile()
+	if err != nil {
+		return "", status
+	}
+	raw, err := quotaFile(path, 256*1024)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", status
 	}
 	if err != nil {
-		return "", "keychain_denied"
+		return "", "unavailable"
 	}
 	return parseAntigravityLogin(raw, now)
 }
@@ -132,7 +160,7 @@ func fetchAntigravityCloudQuota(ctx context.Context, c *http.Client, base, token
 		}
 		return emptyQuota("antigravity", "oauth", status)
 	}
-	headers := map[string]string{"Authorization": "Bearer " + token}
+	headers := map[string]string{"Authorization": "Bearer " + token, "User-Agent": antigravityUserAgent}
 	var assist struct {
 		Project json.RawMessage `json:"cloudaicompanionProject"`
 		Current *struct {

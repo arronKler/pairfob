@@ -181,8 +181,17 @@ which can differ from the one the background service was installed from.
 - Antigravity: queries the already-running, same-user app/CLI through
   loopback listener ports attributed to its PID using `ps` and `lsof`.
   Uses grouped quota summaries, then legacy model quotas. No app launch,
-  model turn, or availability-to-quota inference occurs. Missing process is
-  reported as `not_running`; unsupported local endpoint versions are unavailable.
+  model turn, or availability-to-quota inference occurs. Without an app that
+  answers, the Antigravity CLI's stored login is read: the macOS `gemini`
+  Keychain item first, then the CLI's private file
+  `~/.gemini/antigravity-cli/antigravity-oauth-token` (its only store where no
+  keyring takes the login, as on a Linux server). With it, `loadCodeAssist`
+  then `retrieveUserQuotaSummary` are asked of
+  `https://cloudcode-pa.googleapis.com`, naming the client as `antigravity`,
+  which the summary requires. No token refresh occurs: an expired login is
+  `auth_required` until the CLI next runs. No process and no stored login is
+  reported as `not_running`; unsupported local endpoint versions are
+  unavailable.
 
 - Grok Build: reads the unique OIDC login from `GROK_HOME/auth.json`
   (default `~/.grok/auth.json`), then GETs
@@ -279,6 +288,23 @@ changes. Remove `pairfob-quota.json` if the saved sample is no longer wanted.
 The setup command targets macOS/Linux shell-based Claude Code installations.
 It never runs as part of the read-only RPC. The daemon must see the same
 `CLAUDE_CONFIG_DIR` and Codex executable/login environment as the local CLI.
+
+## Optional Antigravity statusline fallback
+
+The Antigravity CLI reports exact model pools, including Gemini Argon,
+via its `statusLine` callback. To capture these high-fidelity samples:
+
+```sh
+pairfob quota-setup-antigravity
+```
+
+This updates `ANTIGRAVITY_CONFIG_DIR/settings.json` (default
+`~/.gemini/antigravity-cli/settings.json`), preserving existing command chains
+and configuration in `settings.json.pairfob-backup`. When the CLI runs,
+`pairfob quota-statusline` caches the sample to `pairfob-quota.json` with mode
+0600 and forwards the payload to any existing command. When fresh, this sample
+is preferred so that Gemini Argon and standard Gemini limits are reported in
+their respective pools.
 
 The service installer preserves the nonsecret account-directory selectors
 `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `GROK_HOME`, and the explicit Claude

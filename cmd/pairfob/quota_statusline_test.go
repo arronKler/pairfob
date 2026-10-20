@@ -101,3 +101,80 @@ func TestClaudeStatuslineOversizeStillReachesPreviousCommand(t *testing.T) {
 		t.Fatal("oversized input cached")
 	}
 }
+
+func TestAntigravityQuotaSetupPreservesStatusline(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	original := `{"model":"Gemini 4 Argon (High)","statusLine":{"type":"command","command":"agy-statusline","enabled":true}}`
+	if err := os.WriteFile(path, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := installSettingsQuota(path, "/tmp/pairfob", "Antigravity"); err != nil {
+		t.Fatal(err)
+	}
+	backup, _ := os.ReadFile(path + ".pairfob-backup")
+	if string(backup) != original {
+		t.Fatal("backup altered")
+	}
+	updated, _ := os.ReadFile(path)
+	var settings map[string]json.RawMessage
+	_ = json.Unmarshal(updated, &settings)
+	if string(settings["model"]) != `"Gemini 4 Argon (High)"` {
+		t.Fatal("lost model setting")
+	}
+	var line struct {
+		Command string `json:"command"`
+		Enabled bool   `json:"enabled"`
+	}
+	_ = json.Unmarshal(settings["statusLine"], &line)
+	if !line.Enabled || !strings.Contains(line.Command, " quota-statusline 'agy-statusline'") {
+		t.Fatalf("%+v", line)
+	}
+}
+
+func TestAntigravityStatuslineCachesQuotaWithArgonPool(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ANTIGRAVITY_CONFIG_DIR", dir)
+	raw := `{"cwd":"/secret/path","product":"antigravity","plan_tier":"Google AI Pro","quota":{"gemini-5h":{"remaining_fraction":0.85,"reset_time":"2027-01-01T00:00:00Z"},"gemini-argon-wtu-weekly":{"remaining_fraction":0.10,"reset_time":"2027-01-07T00:00:00Z"},"3p-weekly":{"remaining_fraction":0.50,"reset_time":"2027-01-07T00:00:00Z"}}}`
+	var out bytes.Buffer
+	if err := quotaStatusline([]string{"cat"}, strings.NewReader(raw), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != raw {
+		t.Fatal("previous command didn't get original raw input")
+	}
+	path := filepath.Join(dir, "pairfob-quota.json")
+	cached, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(cached), "secret") {
+		t.Fatal("secret path leaked into quota cache")
+	}
+	var q struct {
+		Provider string `json:"provider"`
+		Plan     string `json:"plan"`
+		Windows  []struct {
+			Name        string  `json:"name"`
+			UsedPercent float64 `json:"used_percent"`
+		} `json:"windows"`
+	}
+	if err := json.Unmarshal(cached, &q); err != nil {
+		t.Fatal(err)
+	}
+	if q.Provider != "antigravity" || q.Plan != "Google AI Pro" || len(q.Windows) != 3 {
+		t.Fatalf("%+v", q)
+	}
+	foundArgon := false
+	for _, w := range q.Windows {
+		if strings.Contains(w.Name, "Argon") {
+			foundArgon = true
+			if w.UsedPercent < 89 || w.UsedPercent > 91 {
+				t.Fatalf("argon used percent: %f", w.UsedPercent)
+			}
+		}
+	}
+	if !foundArgon {
+		t.Fatal("Gemini Argon window not found in cache")
+	}
+}
