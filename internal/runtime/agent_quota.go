@@ -122,6 +122,18 @@ func AntigravityQuotaPath() (string, error) {
 	return filepath.Join(dir, "pairfob-quota.json"), nil
 }
 
+func antigravityObservationPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	stateDir := os.Getenv("XDG_STATE_HOME")
+	if stateDir == "" {
+		stateDir = filepath.Join(home, ".local", "state")
+	}
+	return filepath.Join(stateDir, "herdr", "plugins", "herdr-agent-usage", "agy-statusline.observation.json"), nil
+}
+
 func readAntigravityStatuslineQuota(now time.Time) AgentQuota {
 	q := emptyQuota("antigravity", "statusline", "setup_required")
 	path, err := AntigravityQuotaPath()
@@ -130,7 +142,55 @@ func readAntigravityStatuslineQuota(now time.Time) AgentQuota {
 		return q
 	}
 	info, err := os.Lstat(path)
-	if errors.Is(err, os.ErrNotExist) {
+	var obsInfo os.FileInfo
+	obsPath, _ := antigravityObservationPath()
+	if obsPath != "" {
+		obsInfo, _ = os.Lstat(obsPath)
+	}
+
+	useObs := false
+	if obsInfo != nil && obsInfo.Mode().IsRegular() && obsInfo.Size() <= 65536 {
+		if info == nil || !info.Mode().IsRegular() || obsInfo.ModTime().After(info.ModTime()) {
+			useObs = true
+		}
+	}
+
+	if useObs {
+		raw, err := quotaFile(obsPath, 65536)
+		if err == nil {
+			var wrapper struct {
+				Snapshot struct {
+					FetchedAtUnix int64 `json:"fetched_at_unix"`
+				} `json:"snapshot"`
+				Payload json.RawMessage `json:"payload"`
+			}
+			if json.Unmarshal(raw, &wrapper) == nil && len(wrapper.Payload) > 0 {
+				parsed, err := ParseAntigravityStatuslineQuota(wrapper.Payload, now)
+				if err == nil && len(parsed.Windows) > 0 {
+					q = parsed
+					if wrapper.Snapshot.FetchedAtUnix > 0 {
+						q.ObservedAt = wrapper.Snapshot.FetchedAtUnix
+					} else {
+						q.ObservedAt = obsInfo.ModTime().Unix()
+					}
+					for i := range q.Windows {
+						markAntigravityWindow(&q.Windows[i])
+					}
+					if now.Unix()-q.ObservedAt > 900 {
+						q.Status = "stale"
+					}
+					for _, w := range q.Windows {
+						if w.ResetsAt > 0 && w.ResetsAt <= now.Unix() {
+							q.Status = "stale"
+						}
+					}
+					return q
+				}
+			}
+		}
+	}
+
+	if errors.Is(err, os.ErrNotExist) || info == nil {
 		return q
 	}
 	if err != nil || !info.Mode().IsRegular() || info.Size() > 16384 {

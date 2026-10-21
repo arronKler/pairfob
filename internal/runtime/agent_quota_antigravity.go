@@ -120,7 +120,7 @@ func locateAntigravityQuota(ctx context.Context) (quotaRead, AgentQuota) {
 	if os.Getenv("PAIRFOB_ANTIGRAVITY_QUOTA_SOURCE") == "statusline" {
 		return func(context.Context) AgentQuota { return readAntigravityStatuslineQuota(time.Now()) }, AgentQuota{}
 	}
-	if sq := readAntigravityStatuslineQuota(time.Now()); sq.Status == "ok" {
+	if sq := readAntigravityStatuslineQuota(time.Now()); sq.Status == "ok" || sq.Status == "stale" {
 		return func(context.Context) AgentQuota { return readAntigravityStatuslineQuota(time.Now()) }, AgentQuota{}
 	}
 	processes := antigravityQuotaProcesses(ctx)
