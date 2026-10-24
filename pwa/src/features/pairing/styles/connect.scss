@@ -255,7 +255,7 @@
 .scanner-guide {
   position: absolute;
   inset: 14%;
-  border: 1px solid rgba(110, 168, 254, 0.28);
+  border: 1px solid var(--accent-28);
   border-radius: 12px;
   box-shadow: 0 0 0 999px #0006;
   pointer-events: none;
@@ -406,7 +406,7 @@ input[type="text"] {
   padding: 0 16px;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
-  background: #0e1218;
+  background: var(--plate);
   color: var(--ink);
   font: 500 1.1rem/1.3 var(--mono);
   letter-spacing: 0.14em;

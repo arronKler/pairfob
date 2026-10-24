@@ -129,9 +129,9 @@
   min-height: 46px;
   margin: 0;
   padding: 0 14px;
-  border: 1px solid rgba(110, 168, 254, 0.32);
+  border: 1px solid var(--accent-32);
   border-radius: 14px;
-  background: rgba(110, 168, 254, 0.12);
+  background: var(--accent-12);
   color: var(--ink);
 }
 .board-mode-bar > svg { flex: none; color: var(--accent); }

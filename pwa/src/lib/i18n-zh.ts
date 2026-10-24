@@ -190,6 +190,7 @@ export const zh = {
 
   "chrome.back": "返回",
   "chrome.langAuto": "自动",
+  "chrome.themeAuto": "跟随系统",
   "chrome.networkOffline": "当前没有网络 · 联网后自动恢复",
   "chrome.checking": "正在恢复连接",
   "chrome.reconnecting": "连接中断，正在自动重连",
@@ -481,6 +482,10 @@ export const zh = {
   "meta.description": "安全地从手机控制电脑上的 agent",
   "settings.sentenceEnd": "。",
   "settings.langAria": "语言",
+  "settings.themeAria": "外观",
+  "settings.themeAuto": "跟随系统",
+  "settings.themeLight": "浅色",
+  "settings.themeDark": "深色",
   "settings.helpAria": "{topic}的说明",
 
   "connect.title": "连上你的电脑",

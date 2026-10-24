@@ -1,12 +1,29 @@
 /* Herdr's live ANSI controller. The guided mobile pane remains the default. */
 
+/*
+  The screen is dark on both sides of the theme: xterm's own palette does not
+  follow the page, and neither does the chrome around it, because the header,
+  the error panel and the scroll buttons sit on near-black plates. These values
+  are scoped here rather than declared on :root, where they also serve code
+  blocks and the compose field — those follow the page, and a light document
+  draws their ink dark on paper.
+*/
 .full-terminal-root {
+  --term-ink: #dfe5ee;
+  /* The plate the screen and its overlays are painted on. */
+  --term-plate: #090c10;
+  /* A field cut into the terminal is dark like the plate it sits on. */
+  --sink: #141a22;
+  /* The header's ground, which the shared chrome reads, so its title and its
+     action icons stay on the dark side with the ink that is already here. */
+  --chrome-scrim: rgba(11, 14, 19, 0.88);
+  --chrome-scrim-2: rgba(11, 14, 19, 0.92);
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: #090c10;
+  background: var(--term-plate);
 }
 
 .full-terminal-chrome {
@@ -76,7 +93,7 @@
   border-radius: 12px;
   color: var(--term-ink);
   background: rgba(26, 32, 41, 0.88);
-  border: 1px solid rgba(233, 237, 243, 0.16);
+  border: 1px solid var(--ink-line-strong);
 }
 
 .full-terminal-scroll-btn:active {
@@ -111,7 +128,7 @@
   overflow: hidden;
   isolation: isolate;
   contain: paint;
-  background: #090c10;
+  background: var(--term-plate);
   touch-action: none;
 }
 
@@ -126,7 +143,7 @@
   gap: 14px;
   padding: 28px;
   color: var(--term-ink);
-  background: #090c10;
+  background: var(--term-plate);
   text-align: center;
 }
 
@@ -178,10 +195,10 @@
   min-width: 96px;
   min-height: 44px;
   padding: 0 18px;
-  border: 1px solid rgba(110, 168, 254, 0.4);
+  border: 1px solid var(--accent-40);
   border-radius: 12px;
   color: var(--accent);
-  background: rgba(110, 168, 254, 0.1);
+  background: var(--pressed);
   font-size: var(--text-lead);
   font-weight: 660;
 }
@@ -191,7 +208,7 @@
 }
 
 .full-terminal-state-retry:active {
-  background: rgba(110, 168, 254, 0.2);
+  background: var(--accent-20);
 }
 
 @keyframes full-terminal-state-spin {
@@ -309,7 +326,7 @@ html.page-zoomed .full-terminal-host .full-terminal-pan {
   border: 1px solid var(--line-strong);
   border-radius: 13px;
   color: var(--term-ink);
-  background: #0a0d12;
+  background: var(--sink);
   font: 400 16px/1.3 var(--font);
   letter-spacing: 0;
   text-transform: none;
@@ -374,7 +391,7 @@ html.full-terminal-active body {
    whole mount, taller than the rows, so outrank that rule rather than tie it. */
 .full-terminal-host .xterm .xterm-viewport {
   overflow: hidden;
-  background-color: #090c10;
+  background-color: var(--term-plate);
   overscroll-behavior: none;
 }
 
@@ -438,18 +455,18 @@ html.full-terminal-active body {
   top: 3px;
   bottom: 1px;
   border-radius: 999px;
-  background: rgba(233, 237, 243, 0.34);
+  background: var(--ink-thumb);
   transition: background var(--dur-1) var(--ease);
 }
 
-.full-terminal-pan-bar.is-dragging .full-terminal-pan-thumb { background: rgba(233, 237, 243, 0.62); }
+.full-terminal-pan-bar.is-dragging .full-terminal-pan-thumb { background: var(--ink-thumb-active); }
 
 #app.desk { @include pan-without-scrollbar; }
 
 @media (hover: hover) and (pointer: fine) {
   @include pan-without-scrollbar;
 
-  .full-terminal-pan-bar:hover .full-terminal-pan-thumb { background: rgba(233, 237, 243, 0.62); }
+  .full-terminal-pan-bar:hover .full-terminal-pan-thumb { background: var(--ink-thumb-active); }
 }
 
 @media (prefers-reduced-motion: reduce) {

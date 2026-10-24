@@ -115,12 +115,17 @@ test("the steps scene keeps routine failures off the card header and names comma
   // The agent worked past a failed read and answered: the card counts its steps.
   expect(cards[0].className).toBe("work-card is-done");
   expect(cards[0].querySelector(".work-title")?.textContent).toBe("Done · 5 steps");
-  // The agent's note before its first step is a row too; only tool rows carry a target.
+  // The agent's note before its first step speaks outside the card, not as a row in it.
+  expect(document.querySelector(".agent-finding")?.textContent).toContain("I will refresh the production stats");
+  // Three settled commands in a row fold into one row that names their count.
   const rows = [...cards[0].querySelectorAll(".work-step")].filter((row) => row.querySelector(".work-step-text"));
   expect(rows.map((row) => row.querySelector(".work-step-text")?.textContent)).toEqual([
-    "cat /tmp/usage.ts +1", "Read command output", "bun /tmp/usage.ts +1", "Read command output +1", "Read command output",
+    "cat /tmp/usage.ts +1", "Read command output", "bun /tmp/usage.ts +1 · Read command output +1",
   ]);
-  expect(rows.map((row) => row.className.includes("is-error"))).toEqual([false, true, false, false, false]);
+  const folded = cards[0].querySelector(".work-folded")!;
+  expect(folded.querySelector(".work-folded-count")?.textContent).toBe("3 items");
+  // The failed read keeps its own row: a failure is never folded away.
+  expect(rows.filter((row) => row.className.includes("is-error"))).toHaveLength(1);
   expect(cards[0].textContent).not.toContain("write_stdin");
   // The last turn stopped on a failed build with no reply: that is its result.
   expect(cards[1].className).toBe("work-card is-error");
@@ -130,17 +135,22 @@ test("the steps scene keeps routine failures off the card header and names comma
 
 test("recorded Cursor, Hermes and opencode sessions render from the daemon's own replies", async () => {
   const card = () => document.querySelector<HTMLElement>(".work-card")!;
-  // Tool rows only: thinking and the agent's notes are rows too.
+  // Rows that name a step: a folded run stands for several, so it is one row here.
   const rows = () => [...card().querySelectorAll(".work-step")].filter((row) => row.querySelector(".work-step-text") && !row.className.includes("is-think"))
-    .map((row) => `${row.className.match(/is-(read|search|edit|command|web|other|think)/)?.[1]}:${row.className.match(/is-(done|error|ended|running)/)?.[1] ?? ""}`);
+    .map((row) => row.className.includes("work-folded")
+      ? `folded:${row.closest(".work-folded")?.querySelector(".work-folded-count")?.textContent ?? ""}`
+      : `${row.className.match(/is-(read|search|edit|command|web|other|think)/)?.[1]}:${row.className.match(/is-(done|error|ended|running)/)?.[1] ?? ""}`);
   await start("chat-cursor");
   // Cursor records no results: steps are ended, the card claims nothing.
   expect(card().className).toBe("work-card is-neutral");
-  expect(rows()).toEqual(["read:ended", "command:ended", "command:ended", "command:ended", "search:ended"]);
+  // Its three settled commands are one folded row; the read and search keep their own.
+  expect(rows()).toEqual(["read:ended", "folded:3 items", "search:ended"]);
+  await act(async () => { card().querySelector<HTMLButtonElement>(".work-folded-head")!.click(); await Promise.resolve(); });
+  expect([...card().querySelectorAll(".work-folded-steps .work-step-text")].map((node) => node.textContent)).toHaveLength(3);
   expect(document.querySelector(".agent-user-text")?.textContent).toStartWith("Do these steps in order");
   expect(document.querySelector(".agent-stream")?.textContent).not.toContain("user_query");
   // Its step sheet says the output was not recorded rather than that there was none.
-  await act(async () => { card().querySelector<HTMLButtonElement>(".work-step.is-command")!.click(); await Promise.resolve(); });
+  await act(async () => { card().querySelector<HTMLButtonElement>(".work-folded-steps .work-step.is-command")!.click(); await Promise.resolve(); });
   await settle(() => Boolean(document.querySelector("dialog.step-sheet .step-empty")));
   expect(document.querySelector("dialog.step-sheet .step-empty")?.textContent).toBe("This agent does not record step output");
   closeTestDialogs();

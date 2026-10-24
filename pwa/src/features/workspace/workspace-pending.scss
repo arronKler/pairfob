@@ -39,7 +39,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(100deg, transparent 32%, rgba(233, 237, 243, 0.07) 50%, transparent 68%);
+  background: linear-gradient(100deg, transparent 32%, var(--ink-07) 50%, transparent 68%);
   animation: skeleton-sheen var(--sheen) var(--ease-in-out) infinite;
 }
 
@@ -82,7 +82,7 @@
 .workspace-list-skeleton-name,
 .workspace-list-skeleton-meta {
   border-radius: 2px;
-  background: rgba(233, 237, 243, 0.1);
+  background: var(--ink-line);
   flex: none;
 }
 
@@ -93,7 +93,7 @@
 }
 
 .workspace-list-skeleton-row:nth-child(odd) .workspace-list-skeleton-icon {
-  background: rgba(110, 168, 254, 0.24);
+  background: var(--accent-24);
 }
 
 .workspace-list-skeleton-body,
@@ -145,7 +145,7 @@
   height: 0.62em;
   margin: 0.465em 0;
   border-radius: 2px;
-  background: rgba(233, 237, 243, 0.1);
+  background: var(--ink-line);
   flex: none;
 }
 
@@ -176,7 +176,7 @@
 .workspace-diff-skeleton-text {
   height: 0.55em;
   border-radius: 2px;
-  background: rgba(233, 237, 243, 0.1);
+  background: var(--ink-line);
 }
 
 .workspace-diff-skeleton-gutter { justify-self: end; width: 2.5ch; margin-right: 6px; }

@@ -132,7 +132,7 @@ dialog.modal form > .text-edit-label {
   padding: 0 6px 0 12px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
-  background: #0e1218;
+  background: var(--plate);
 }
 
 .text-edit-field:focus-within {

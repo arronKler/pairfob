@@ -2,7 +2,7 @@ import { Check, ChevronRight, CircleSlash, TriangleAlert, WifiOff, X } from "luc
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../../lib/i18n";
 import type { AgentTraceItem, AgentTraceModel } from "../../../lib/operations";
-import { formatElapsed, stepCategory, stepState, type TurnOutcome, type TurnTone } from "../../../lib/agent-trace-steps";
+import { formatElapsed, groupSteps, stepCategory, stepState, type TurnOutcome, type TurnTone } from "../../../lib/agent-trace-steps";
 import { Button, Spinner, Swap } from "../../../shared/ui/primitives";
 import { daemonNow } from "../../../lib/agent-trace-clock";
 import type { DetailsState } from "./agent-chat-stream";
@@ -67,8 +67,10 @@ function useHeldOpen(live: boolean, follow: boolean): boolean {
  * `historyLoads` counts the older pages put in front of the transcript: when it
  * changes, history moved in front of the card and none of its steps are new.
  */
-export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept, verified, span, models, anchor, historyLoads = 0, onOpen }: {
+export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept, verified, span, models, anchor, historyLoads = 0, breaks, onOpen }: {
   traceKey: string; entries: AgentTraceItem[]; outcome: TurnOutcome; live: boolean; follow?: boolean; kept?: DetailsState;
+  /** Row indices a finding interrupted, so a run never folds across one. */
+  breaks?: readonly number[];
   verified: boolean; models?: AgentTraceModel[]; span?: { start?: number; end?: number };
   anchor: { anchor: string; ordinal: number; ordinalFromEnd: number }; historyLoads?: number; onOpen: OpenStep;
 }) {
@@ -82,7 +84,26 @@ export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept
   const edits = entries.filter((item) => item.type === "tool" && stepCategory(item) === "edit");
   const filters = entries.length >= FILTER_FROM && (failed.length > 0 || edits.length > 0);
   const filtered = filter === "failed" ? failed : filter === "edits" ? edits : entries;
-  const hidden = live && !all && filter === "all" ? Math.max(0, filtered.length - LIVE_STEPS) : 0;
+  // A running card draws every step as itself: the reader is watching the work
+  // arrive, and a run that folded under them would hide steps they just saw. A
+  // finished card folds its runs, and its window holds four rows, so hiding
+  // "four steps" never leaves two rows where there were three.
+  //
+  // The window is measured in rows but cut from the raw steps the list receives,
+  // so the count is translated: the rows dropped are whole groups, and the steps
+  // those groups hold are what the list has to drop. A group is never split, and
+  // the disclosure says the number of steps it reveals.
+  const foldsNow = !live && filter === "all";
+  const groups = foldsNow ? groupSteps(filtered, breaks) : null;
+  let hidden = 0;
+  if (!all && filter === "all") {
+    if (groups) {
+      const drop = Math.max(0, groups.length - LIVE_STEPS);
+      hidden = groups.slice(0, drop).reduce((count, group) => count + group.steps.length, 0);
+    } else {
+      hidden = Math.max(0, filtered.length - LIVE_STEPS);
+    }
+  }
   // Followed here, above the details' own key: the card's first tool renames it and remounts its rows.
   const arrivals = useStepArrivals(filtered, hidden, `${filter}:${all ? "all" : "latest"}:${historyLoads}`);
   const openStep = (item: AgentTraceItem) => onOpen(item, entries);
@@ -115,7 +136,9 @@ export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept
         {edits.length > 0 && chip("edits", t("work.filterEdits", { n: edits.length }))}
       </div>}
       {hidden > 0 && <Button className="work-earlier" onClick={() => setAll(true)}>{t("work.earlier", { n: hidden })}</Button>}
-      <StepList steps={filtered} hidden={hidden} listKey={filter} arrivals={arrivals} verified={verified} onOpen={openStep} />
+      <StepList steps={filtered} hidden={hidden} listKey={filter} breaks={filter === "all" ? breaks : undefined}
+        folds={foldsNow}
+                arrivals={arrivals} verified={verified} onOpen={openStep} />
     </div>}
   </AgentDetails>;
 }

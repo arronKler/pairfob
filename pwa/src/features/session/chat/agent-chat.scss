@@ -242,6 +242,43 @@
   min-width: 0;
 }
 
+/*
+  The agent speaking: a finding between steps and the final reply are the same
+  message shape, because they are the same voice. The reply carries the turn's
+  answer, so its bubble is drawn one step stronger than a finding's.
+*/
+.agent-assistant {
+  align-self: stretch;
+  min-width: 0;
+  margin-top: 10px;
+}
+
+/*
+  A finding: what the agent worked out between its steps, spoken in the
+  transcript rather than filed inside the run of tools. It is plain prose at
+  the reply's reading size, set apart by its place in the flow; a press opens
+  the finding on its own.
+*/
+.agent-finding {
+  align-self: stretch;
+  min-width: 0;
+  margin-top: 10px;
+}
+
+.agent-finding-body {
+  width: 100%;
+  display: block;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.agent-finding-body:focus-visible { outline-offset: 2px; }
+
 .agent-md {
   font: 400 0.92rem/1.55 var(--font);
   color: var(--ink);
@@ -252,6 +289,24 @@
 
 .agent-md > :first-child { margin-top: 0; }
 .agent-md > :last-child { margin-bottom: 0; }
+
+/* A finding reads at the reply's size: both are the agent speaking. */
+.agent-finding .agent-md {
+  font: 400 0.92rem/1.55 var(--font);
+  color: var(--ink);
+}
+
+/* The reply carries the turn's answer, so it is the one block drawn as a card:
+   its own surface, a firmer edge, and a lift off the transcript. The shape is
+   the same while the turn runs, so the text does not reflow when it ends; only
+   the copy action arrives. */
+.agent-assistant .agent-md {
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
 
 .agent-md h1,
 .agent-md h2,

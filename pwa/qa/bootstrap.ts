@@ -17,5 +17,9 @@ await import(/* @vite-ignore */ style);
 if (query.get("motion") !== "1") installStablePaint();
 
 const { createFixtureAPI } = await import("./fixtures");
+// The palette is part of the first frame a reader sees, and the fixture mounts
+// the production App: paint the stored side before the first commit, as boot does.
+const { applyDocumentTheme } = await import("../src/lib/theme");
+applyDocumentTheme();
 window.qa = await createFixtureAPI(language, scene);
 await window.qa.ready;

@@ -20,8 +20,13 @@ import { useChat } from "../hooks";
  */
 export function openStepSheet(paneId: string, item: AgentTraceItem, verified: boolean, steps: AgentTraceItem[] = [item],
   locate?: () => AgentTraceItem[] | null): void {
-  const list = steps.includes(item) ? steps : [item];
-  showActionSheet(t("sheet.title"), () => <StepPager paneId={paneId} steps={list} start={list.indexOf(item)} verified={verified} locate={locate} />,
+  // A step that is not one of the card's rows — a finding, which speaks outside
+  // the card — is its own page: its pager must not borrow a tool list, or Next
+  // would jump into the middle of a run that does not contain it.
+  const listed = steps.includes(item);
+  const list = listed ? steps : [item];
+  const locateRows = listed ? locate : undefined;
+  showActionSheet(t("sheet.title"), () => <StepPager paneId={paneId} steps={list} start={list.indexOf(item)} verified={verified} locate={locateRows} />,
     { className: "step-sheet", expandable: true });
 }
 

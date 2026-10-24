@@ -60,8 +60,8 @@
   white-space: nowrap;
   flex: none;
 }
-.workspace-chip[aria-pressed="true"] { border-color: rgba(110, 168, 254, 0.55); background: rgba(110, 168, 254, 0.09); color: var(--accent); }
-.workspace-chip.is-change { border-color: rgba(255, 178, 36, 0.4); color: #ffc46b; }
+.workspace-chip[aria-pressed="true"] { border-color: var(--accent-55); background: var(--accent-9); color: var(--accent); }
+.workspace-chip.is-change { border-color: rgba(255, 178, 36, 0.4); color: var(--mark-modified); }
 .workspace-chip .workspace-git-mark { min-width: 18px; height: 18px; }
 .workspace-chip:active { background: var(--surface-2); }
 
@@ -75,7 +75,7 @@
   gap: 2px;
   padding: 2px;
   border-radius: var(--r-sm);
-  background: #0e1218;
+  background: var(--plate);
   flex: none;
 }
 .workspace-layer-switch button {
@@ -133,7 +133,7 @@
   padding: 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
-  background: #0e1218;
+  background: var(--plate);
   color: var(--ink);
   /* 16px: a smaller field makes iOS zoom the page on focus. */
   font: 400 16px/1 var(--font);
@@ -205,9 +205,9 @@
 }
 .workspace-code.is-wrap .workspace-highlight { width: auto; }
 /* The line whose actions are open, marked as a diff line with a note is. */
-.workspace-code-line.is-picked { background: rgba(110, 168, 254, 0.14); box-shadow: inset 3px 0 0 var(--accent); }
+.workspace-code-line.is-picked { background: var(--accent-14); box-shadow: inset 3px 0 0 var(--accent); }
 @media (hover: hover) and (pointer: fine) {
-  .workspace-code-line:hover:not(.is-picked) { background: rgba(233, 237, 243, 0.035); }
+  .workspace-code-line:hover:not(.is-picked) { background: var(--ink-faint-35); }
 }
 .workspace-code.is-wrap .workspace-code-line { white-space: pre-wrap; overflow-wrap: anywhere; }
 /* The lines a find matched, and the one the reader is on. */
@@ -312,10 +312,10 @@ button.diff-line-number {
 .diff-line-text { padding: 0 12px 0 2px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .diff-add { background: rgba(70, 214, 140, 0.1); }
 .diff-add .diff-line-number,
-.diff-add .diff-line-sign { color: #6fe3a5; }
+.diff-add .diff-line-sign { color: var(--mark-added); }
 .diff-delete { background: rgba(255, 128, 128, 0.1); }
 .diff-delete .diff-line-number,
-.diff-delete .diff-line-sign { color: #ff9a9a; }
+.diff-delete .diff-line-sign { color: var(--mark-deleted); }
 
 .workspace-diff-line.diff-noteable { cursor: pointer; }
 /* The pencil that says a line takes a note. Under a finger it stands, faint, on
@@ -334,12 +334,12 @@ button.diff-line-number {
 .diff-noteable .diff-line-text { padding-right: 4px; }
 .diff-noteable:is(.diff-add, .diff-delete) .diff-line-hint { opacity: 0.4; }
 .workspace-diff-line.has-note .diff-line-hint { opacity: 0.9; }
-.workspace-diff-line.diff-noteable:active { background: rgba(110, 168, 254, 0.2); }
+.workspace-diff-line.diff-noteable:active { background: var(--accent-20); }
 .workspace-diff-line.has-note { box-shadow: inset 3px 0 0 var(--accent); }
 /* A phone keeps :hover after the tap, so hover-only affordances would stay
    stuck on the last line the reader touched. */
 @media (hover: hover) and (pointer: fine) {
-  .workspace-diff-line.diff-noteable:hover { background: rgba(110, 168, 254, 0.1); }
+  .workspace-diff-line.diff-noteable:hover { background: var(--pressed); }
   .diff-noteable:is(.diff-add, .diff-delete) .diff-line-hint { opacity: 0; }
   .workspace-diff-line.diff-noteable:hover .diff-line-hint,
   .workspace-diff-line.diff-noteable:focus-within .diff-line-hint,
@@ -354,7 +354,7 @@ button.diff-line-number {
   gap: 4px;
   margin: 4px 10px 8px calc(var(--diff-gutter) + 0.95rem);
   padding: 9px 10px 4px 12px;
-  border: 1px solid rgba(110, 168, 254, 0.28);
+  border: 1px solid var(--accent-28);
   border-radius: var(--r-md);
   background: var(--surface-2);
   font-family: var(--font);
@@ -365,9 +365,9 @@ button.diff-line-number {
 .workspace-diff-note { transition: opacity var(--dur-2) var(--ease); }
 .workspace-diff-note.is-sending { opacity: 0.6; }
 @keyframes note-fresh {
-  0% { opacity: 0; transform: translateY(-6px); box-shadow: 0 0 0 0 rgba(110, 168, 254, 0); }
-  25% { opacity: 1; transform: none; box-shadow: 0 0 0 4px rgba(110, 168, 254, 0.35); }
-  100% { box-shadow: 0 0 0 0 rgba(110, 168, 254, 0); }
+  0% { opacity: 0; transform: translateY(-6px); box-shadow: 0 0 0 0 transparent; }
+  25% { opacity: 1; transform: none; box-shadow: 0 0 0 4px var(--accent-35); }
+  100% { box-shadow: 0 0 0 0 transparent; }
 }
 .diff-note-main { display: flex; align-items: flex-start; gap: 8px; min-width: 0; cursor: pointer; }
 .diff-note-mark { flex: none; margin-top: 2px; color: var(--accent); }
@@ -418,7 +418,7 @@ button.diff-line-number {
 }
 /* A note that is not saved yet waits in the saved card's place: the same card,
    unfilled and dashed, and its words are the way back into the editor. */
-.workspace-diff-note.is-draft { border-style: dashed; border-color: rgba(110, 168, 254, 0.6); background: none; }
+.workspace-diff-note.is-draft { border-style: dashed; border-color: var(--accent-60); background: none; }
 /* Says what the dashed card is: a note still to be saved, not one already kept. */
 .diff-note-state { flex: none; color: var(--accent); font-size: var(--text-caption); font-weight: 620; white-space: nowrap; }
 .diff-note-resume { width: 100%; min-height: 34px; padding: 0; align-items: center; border-radius: var(--r-sm); color: var(--muted); text-align: left; }
@@ -513,7 +513,7 @@ button.diff-line-number {
   /* The note card's own place, so saving swaps one for the other without a jump. */
   margin: 4px 10px 8px calc(var(--diff-gutter) + 0.95rem);
   padding: 8px;
-  border: 1px solid rgba(110, 168, 254, 0.45);
+  border: 1px solid var(--accent-45);
   border-radius: var(--r-md);
   background: var(--surface-2);
   font-family: var(--font);
@@ -551,7 +551,7 @@ html[data-kb="open"] .workspace-diff-view:has(.diff-note-inline:focus-within) .w
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
-  background: #0e1218;
+  background: var(--plate);
   color: var(--ink);
   font: 400 16px/1.45 var(--font);
   resize: none;

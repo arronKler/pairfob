@@ -138,9 +138,11 @@ test("ordered mixed blocks keep source order inside the card and the reply outsi
   const outer = () => [...current().querySelector(".agent-stream-inner")!.children].map(node => node.className);
   const steps = () => [...current().querySelectorAll(".work-step")].map(node => node.className);
   act(() => renderReact(<AgentStream items={mixed} working={false} empty={empty} truncated />));
-  expect(outer()).toEqual(["agent-trace-limit", "agent-user", "work-card is-neutral", "agent-assistant agent-assistant-final"]);
-  // Thinking, the interim note and the tool stay in source order inside the card.
-  expect(steps()).toEqual(["work-step is-think", "work-step work-note", "work-step is-read is-ended"]);
+  // The finding leaves the card and speaks for itself between the steps and the reply.
+  expect(outer()).toEqual(["agent-trace-limit", "agent-user", "work-card is-neutral", "agent-finding", "agent-assistant agent-assistant-final"]);
+  // The card keeps the steps; the agent's own words are drawn outside it.
+  expect(steps()).toEqual(["work-step is-think", "work-step is-read is-ended"]);
+  expect(current().querySelector(".agent-finding")?.textContent).toBe("Intermediate\n");
   const done = current().querySelector<HTMLElement>(".work-card")!;
   expect(done.dataset.key).toBe("w:u:12:Inspect this:s:thinking:::Read:");
   expect(expanded(done)).toBeFalse();
@@ -148,7 +150,7 @@ test("ordered mixed blocks keep source order inside the card and the reply outsi
   act(unmountReact);
   act(() => renderReact(<AgentStream items={mixed} working empty={empty} truncated />));
   // While the turn runs the card is open and the trailing text is the latest note under it.
-  expect(outer()).toEqual(["agent-trace-limit", "agent-user", "work-card is-running", "agent-assistant agent-assistant-intermediate"]);
+  expect(outer()).toEqual(["agent-trace-limit", "agent-user", "work-card is-running", "agent-finding", "agent-assistant agent-assistant-intermediate"]);
   const live = current().querySelector<HTMLElement>(".work-card")!;
   expect([expanded(live), live.dataset.autoOpen]).toEqual([true, "1"]);
   expect(current().querySelector(".agent-reply-copy")).toBeNull();

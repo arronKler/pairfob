@@ -5,7 +5,7 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../../lib/i18n";
 import type { AgentTraceItem } from "../../../lib/operations";
-import { categoryLabel, stepCategory, stepObject, stepState, type StepCategory } from "../../../lib/agent-trace-steps";
+import { categoryLabel, groupSteps, stepCategory, stepObject, stepState, type StepCategory, type StepGroup } from "../../../lib/agent-trace-steps";
 import { Button, Spinner } from "../../../shared/ui/primitives";
 import { MOTION_MS, motionMs, playMove } from "../../../shared/ui/dom/motion";
 import { arrivedFrom, seenSteps, type StepsSeen } from "./step-arrivals";
@@ -69,9 +69,9 @@ function StepRow({ item, verified, arriving = false, onOpen }: {
   const settled = useTurned(state !== null && state !== "running");
   const row = arriving ? "is-arriving" : undefined;
   if (item.type === "assistant") {
-    return <li className={row}><Button className="work-step work-note" onClick={() => onOpen(item)}>
-      <span className="work-note-text">{item.text}</span>
-    </Button></li>;
+    // A finding is the agent speaking, so it is drawn as a message of its own
+    // outside the card; the card never reaches this branch.
+    return null;
   }
   const stateLabel = state ? t(`work.state.${state}`) : "";
   const aria = state ? t("work.stepAria", { category: categoryLabel(category), object, state: stateLabel }) : `${categoryLabel(category)} ${object}`;
@@ -88,17 +88,48 @@ function StepRow({ item, verified, arriving = false, onOpen }: {
 }
 
 /**
+ * A run of same-kind settled tools as one row: how many, and what kind. The
+ * press opens the run's first step, and its own chevron stands it down again,
+ * so a long stretch of reads or greps takes one line instead of one each.
+ */
+function FoldedRow({ group, verified, arriving, onOpen }: {
+  group: StepGroup; verified: boolean; arriving?: boolean; onOpen: (item: AgentTraceItem, steps: AgentTraceItem[]) => void;
+}) {
+  const Icon = CATEGORY_ICON[group.category];
+  const [open, setOpen] = useState(false);
+  const label = t("work.folded", { category: categoryLabel(group.category), n: group.steps.length });
+  // What the run touched: the first two targets say more than the category the
+  // icon already gives, and the count closes the row.
+  const preview = group.steps.map((step) => stepObject(step)).filter(Boolean).slice(0, 2).join(" · ");
+  const count = t("work.foldedCount", { n: group.steps.length });
+  return <li className={`work-folded is-${group.category}${arriving ? " is-arriving" : ""}${open ? " is-open" : ""}`}>
+    <Button className="work-step work-folded-head" aria-expanded={open} aria-label={label} onClick={() => setOpen(!open)}>
+      <Icon className="work-step-icon" size={15} aria-hidden="true" />
+      <span className="work-step-text">{preview || categoryLabel(group.category)}</span>
+      <span className="work-folded-count">{count}</span>
+    </Button>
+    {open && <ol className="work-steps work-folded-steps">
+      {group.steps.map((step, index) => <StepRow key={index} item={step} verified={verified} onOpen={(item) => onOpen(item, group.steps)} />)}
+    </ol>}
+  </li>;
+}
+
+/**
  * A card's steps from `hidden` on. A step that joins fades in (`arrivals.from`).
  * When it pushes the first rows out of a full window, the list moves up by
  * their height with those rows still on it, so the reader sees which way the
  * work went. The card's box is final from the first frame: only the rows travel,
  * inside a window that clips them, and the transcript below does not move twice.
  */
-export function StepList({ steps, hidden, listKey, arrivals, verified, onOpen }: {
+export function StepList({ steps, hidden, listKey, breaks = [], folds = true, arrivals, verified, onOpen }: {
   steps: readonly AgentTraceItem[]; hidden: number;
   /** Tells one filter's rows from another's. */
   listKey: string;
-  arrivals: StepArrivals; verified: boolean; onOpen: (item: AgentTraceItem) => void;
+  /** Row indices where a finding sat between steps, so no run folds across one. */
+  breaks?: readonly number[];
+  /** A running turn draws every step as itself; a finished one folds its runs. */
+  folds?: boolean;
+  arrivals: StepArrivals; verified: boolean; onOpen: (item: AgentTraceItem, steps?: AgentTraceItem[]) => void;
 }) {
   const track = useRef<HTMLDivElement>(null);
   const pushed = useRef<HTMLOListElement>(null);
@@ -113,15 +144,35 @@ export function StepList({ steps, hidden, listKey, arrivals, verified, onOpen }:
     playMove(node, [{ transform: `translateY(${shift}px)` }, { transform: "translateY(0)" }], MOTION_MS.panel);
   }, [arrivals.move]);
   const gone = arrivals.pushed;
+  // Rows are grouped after the window is cut, so `hidden` still counts the steps
+  // the reader asked to reveal, and a group's first step keeps its own arrival.
+  // A chosen filter shows exactly what it named, one row each; the unfiltered
+  // list folds its runs, in the window and out of it alike, because the window
+  // is measured in the same rows.
+  const visible = steps.slice(hidden);
+  const groups = listKey === "all" && folds
+    ? groupSteps(visible, breaks.map((at) => at - hidden).filter((at) => at >= 0))
+    : visible.map((item) => ({ items: [item], steps: [item], category: stepCategory(item) }));
+  const firstOf = new Map(groups.map((group) => [group, visible.indexOf(group.steps[0]!)]));
+  // `arrivals.from` counts steps in the whole list, so a row's own step index is
+  // the window offset plus its place among the rows drawn.
+  const arrived = (row: number): boolean => hidden + row >= arrivals.from;
+  const pushedGroups = gone ? groupSteps(steps.slice(gone.from, gone.to)) : [];
   return <div className="work-steps-window">
     <div ref={track} className="work-steps-track">
       {gone && <ol ref={pushed} className="work-steps work-steps-pushed" aria-hidden="true" inert>
-        {steps.slice(gone.from, gone.to).map((item, index) =>
-          <StepRow key={`${listKey}:${gone.from + index}`} item={item} verified={verified} onOpen={onOpen} />)}
+        {pushedGroups.map((group, index) => group.steps.length > 1
+          ? <FoldedRow key={`${listKey}:pushed:${index}`} group={group} verified={verified} onOpen={() => undefined} />
+          : <StepRow key={`${listKey}:pushed:${index}`} item={group.items[0]!} verified={verified} onOpen={onOpen} />)}
       </ol>}
       <ol className="work-steps" aria-label={t("work.stepsAria")}>
-        {steps.slice(hidden).map((item, index) => <StepRow key={`${listKey}:${hidden + index}`} item={item} verified={verified}
-          arriving={hidden + index >= arrivals.from} onOpen={onOpen} />)}
+        {groups.map((group, index) => {
+          return group.steps.length > 1
+            ? <FoldedRow key={`${listKey}:${hidden + (firstOf.get(group) ?? index)}`} group={group} verified={verified}
+              arriving={arrived(firstOf.get(group) ?? index)} onOpen={(item) => onOpen(item, group.steps)} />
+            : <StepRow key={`${listKey}:${hidden + (firstOf.get(group) ?? index)}`} item={group.items[0]!} verified={verified}
+              arriving={arrived(firstOf.get(group) ?? index)} onOpen={onOpen} />;
+        })}
       </ol>
     </div>
   </div>;

@@ -110,7 +110,7 @@ $field-hint: #757575;
   content: "";
   position: absolute;
   inset-inline: 1px;
-  background: var(--compose-cut-bg, #0a0d12);
+  background: var(--compose-cut-bg, var(--sink));
   pointer-events: none;
 }
 .compose-field[data-cut]::before { top: 1px; height: var(--compose-cut-top, 0); border-radius: 12px 12px 0 0; }
@@ -432,7 +432,7 @@ $field-hint: #757575;
   padding: 10px 14px;
   border: 1px solid rgba(70, 214, 140, 0.6);
   border-radius: 13px;
-  background: #0a0d12;
+  background: var(--sink);
   box-shadow: 0 0 0 3px rgba(70, 214, 140, 0.08);
   color: $field-hint;
   font: 400 15px/1.3 var(--font);

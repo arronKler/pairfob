@@ -553,7 +553,7 @@ dialog.modal#{$desk} .pane-rename-clear { outline-offset: -5px; }
   font-weight: 600;
 }
 
-.pane-wt-tag.is-current { background: rgba(110, 168, 254, 0.12); color: var(--accent); }
+.pane-wt-tag.is-current { background: var(--accent-12); color: var(--accent); }
 
 .pane-wt.is-skeleton { flex-direction: column; align-items: stretch; justify-content: center; gap: 7px; }
 
@@ -572,7 +572,7 @@ dialog.modal#{$desk} .pane-rename-clear { outline-offset: -5px; }
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(233, 237, 243, 0.08), transparent);
+  background: linear-gradient(90deg, transparent, var(--ink-08), transparent);
   animation: skeleton-sheen var(--sheen) var(--ease-in-out) infinite;
 }
 

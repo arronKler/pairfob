@@ -187,6 +187,7 @@ export const en: { [K in keyof typeof zh]: string } = {
 
   "chrome.back": "Back",
   "chrome.langAuto": "Auto",
+  "chrome.themeAuto": "System",
   "chrome.networkOffline": "You're offline · resumes on the network",
   "chrome.checking": "Restoring connection",
   "chrome.reconnecting": "Connection dropped, reconnecting",
@@ -478,6 +479,10 @@ export const en: { [K in keyof typeof zh]: string } = {
   "meta.description": "Control agents on your computer from your phone.",
   "settings.sentenceEnd": ".",
   "settings.langAria": "Language",
+  "settings.themeAria": "Appearance",
+  "settings.themeAuto": "Follow the system",
+  "settings.themeLight": "Light",
+  "settings.themeDark": "Dark",
   "settings.helpAria": "About {topic}",
 
   "connect.title": "Connect your computer",

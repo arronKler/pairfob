@@ -165,17 +165,43 @@ button.work-head:active { background: var(--surface-2); }
   }
 }
 
-.work-step.is-running { background: rgba(110, 168, 254, 0.07); }
+.work-step.is-running { background: var(--running-tint); }
+
+/*
+  A run of same-kind tools, folded to one row. The count says how many and the
+  row says in whose words; opening it puts the run back, row for row, so the
+  summary never hides a step the reader cannot reach.
+*/
+.work-folded-head {
+  min-height: 44px;
+}
+
+.work-folded-count {
+  flex: none;
+  color: var(--muted);
+  font: 400 var(--text-secondary) / 1.35 var(--font);
+  white-space: nowrap;
+}
+
+.work-folded.is-open > .work-folded-head { background: var(--surface-2); }
+
+.work-folded-steps .work-step {
+  padding-left: 34px;
+}
 
 .work-step-icon {
   flex: none;
   color: var(--muted);
+  opacity: 0.75;
 }
 
 .work-step-text {
   flex: 1 1 auto;
   min-width: 0;
   font: 400 0.79rem/1.35 var(--mono);
+  /* A step is support for the finding, not the message: it reads a shade under
+     the ink so the notes and the reply keep the reader's eye. */
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -189,6 +215,7 @@ button.work-head:active { background: var(--surface-2); }
 .work-step-state {
   flex: none;
   color: var(--muted);
+  opacity: 0.8;
 }
 
 .work-step-state.spinner {
@@ -199,22 +226,10 @@ button.work-head:active { background: var(--surface-2); }
 .work-step.is-done .work-step-state { color: var(--ok); }
 .work-step.is-error .work-step-state { color: var(--error); }
 
-.work-note {
-  align-items: flex-start;
-  padding-block: 8px;
-}
-
-.work-note-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  color: var(--muted);
-  font: 400 var(--text-secondary)/1.45 var(--font);
-  white-space: pre-wrap;
-}
+/*
+  A finding used to sit in this list; it now speaks in the transcript as its own
+  bubble (agent-chat.scss), so the card holds steps alone.
+*/
 
 .work-filters {
   display: flex;
@@ -396,7 +411,7 @@ button.work-head:active { background: var(--surface-2); }
 
 .needs-option.is-chosen {
   border-color: var(--accent);
-  background: rgba(110, 168, 254, 0.1);
+  background: var(--pressed);
 }
 
 .needs-option-number {

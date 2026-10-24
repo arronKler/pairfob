@@ -52,7 +52,7 @@
   padding: 0 6px;
   overflow: hidden;
   border-bottom: 1px solid var(--line);
-  background: #141922;
+  background: var(--plate-2);
   font: 600 var(--text-caption) / 18px var(--font);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -77,16 +77,16 @@
 }
 
 .pane-layout-cell.is-blocked b {
-  background: #1c1a13;
+  background: var(--blocked-ground);
   color: var(--warn);
   box-shadow: inset 0 2px 0 var(--warn);
 }
 
 /* The computer's focused pane, as the board marks it. */
-.pane-layout-cell.is-focused > span { box-shadow: inset 0 0 0 1px rgba(110, 168, 254, 0.55); }
+.pane-layout-cell.is-focused > span { box-shadow: inset 0 0 0 1px var(--accent-55); }
 
 .pane-layout-cell.is-current > span {
-  background: rgba(110, 168, 254, 0.1);
+  background: var(--pressed);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
@@ -104,10 +104,10 @@
 
 .pane-layout-cell.is-other:active > span { background: var(--surface-2); }
 
-.pane-layout-cell.is-target > span { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(110, 168, 254, 0.14); }
+.pane-layout-cell.is-target > span { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-14); }
 
 .pane-layout-cell.is-new > span {
-  background: rgba(110, 168, 254, 0.06);
+  background: var(--accent-06);
   box-shadow: none;
   outline: 1.5px dashed var(--accent);
   outline-offset: -1.5px;

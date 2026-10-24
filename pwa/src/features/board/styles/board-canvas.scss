@@ -8,7 +8,6 @@
    ------------------------------------------------------------------------------ */
 
 .board-canvas {
-  --board-seam: #262d39;
   position: relative;
   flex: 1;
   min-height: 0;
@@ -16,8 +15,8 @@
   touch-action: none;
   background-color: var(--bg);
   background-image:
-    linear-gradient(rgba(233, 237, 243, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(233, 237, 243, 0.035) 1px, transparent 1px);
+    linear-gradient(var(--ink-faint-35) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ink-faint-35) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -31,7 +30,7 @@
   background: var(--board-seam);
   box-shadow:
     0 0 0 calc(1px * var(--board-control-scale, 1)) var(--board-seam),
-    0 calc(14px * var(--board-control-scale, 1)) calc(40px * var(--board-control-scale, 1)) rgba(0, 0, 0, 0.45);
+    0 calc(14px * var(--board-control-scale, 1)) calc(40px * var(--board-control-scale, 1)) var(--stage-shadow);
 }
 
 .board-pane {
@@ -120,7 +119,7 @@
 /* The computer's focused pane, like herdr's highlighted border. */
 .board-pane.focused::after { box-shadow: inset 0 0 0 calc(1.5px * var(--board-control-scale, 1)) var(--accent); }
 /* The session open on this phone. */
-.board-pane.sel::after { box-shadow: inset 0 0 0 calc(2px * var(--board-control-scale, 1)) rgba(110, 168, 254, 0.7); }
+.board-pane.sel::after { box-shadow: inset 0 0 0 calc(2px * var(--board-control-scale, 1)) var(--accent-70); }
 .board-pane[data-board-menu-target]::after { box-shadow: inset 0 0 0 calc(2px * var(--board-control-scale, 1)) var(--accent); }
 
 /* --- Title bar: herdr's border row, one terminal row tall (14–24px on screen, set by
@@ -142,7 +141,7 @@
   transform: scale(var(--board-chrome-scale, 1));
   transform-origin: 0 0;
   border-bottom: 1px solid var(--line);
-  background: #141922;
+  background: var(--plate-2);
   color: var(--ink);
   /* 12px at full height, 10.5px once the bar is a thin row. */
   font-size: clamp(10.5px, calc(var(--board-title-h, 24px) - 12px), 12px);
@@ -218,7 +217,7 @@
 }
 
 .board-pane.status-blocked .board-pane-title {
-  background: #1c1a13;
+  background: var(--blocked-ground);
   color: var(--warn);
   box-shadow: inset 0 2px 0 var(--warn);
 }

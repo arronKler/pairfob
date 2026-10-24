@@ -13,7 +13,7 @@
   text-align: left;
 }
 
-.switch-item.on { border-color: rgba(110, 168, 254, 0.5); background: rgba(110, 168, 254, 0.1); }
+.switch-item.on { border-color: var(--accent-50); background: var(--pressed); }
 
 .switch-item:active { background: #232c38; }
 

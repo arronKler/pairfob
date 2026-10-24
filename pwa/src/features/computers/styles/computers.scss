@@ -57,7 +57,7 @@
 .computer-trail-face { display: inline-flex; align-items: center; }
 
 .set-icon.is-accent {
-  background: rgba(110, 168, 254, 0.13);
+  background: var(--accent-13);
   color: var(--accent);
 }
 

@@ -205,7 +205,8 @@ describe("the floating notice's box", () => {
 
   test("it is opaque: each tone's own tint over a ground, with a soft shadow", () => {
     expect(shared).toMatch(/\$error-tint:\s*rgba\(214, 59, 49, 0\.12\);/);
-    expect(shared).toMatch(/\$status-tint:\s*rgba\(110, 168, 254, 0\.1\);/);
+    // The status tint follows the palette: the same weight as a pressed control.
+    expect(shared).toMatch(/\$status-tint:\s*var\(--pressed\);/);
     // The page's notices still paint the tint alone.
     expect(shared).toMatch(/\.notice-error \{\s*background:\s*\$error-tint;/);
     expect(shared).toMatch(/\.notice-status \{\s*background:\s*\$status-tint;/);

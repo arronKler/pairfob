@@ -152,12 +152,12 @@ dialog.modal.command-palette > form {
 }
 
 .palette-row.is-action { min-height: 44px; }
-.palette-row.is-active { background: #16202e; }
+.palette-row.is-active { background: var(--selected-ground); }
 .palette-row[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 
 .palette-row .agent-avatar { width: 32px; height: 32px; border-radius: 10px; }
 .palette-row .agent-avatar-status { width: 11px; height: 11px; border-width: 2px; }
-.palette-row.is-active .agent-avatar-status { border-color: #16202e; }
+.palette-row.is-active .agent-avatar-status { border-color: var(--selected-ground); }
 
 /* An action's mark sits in the avatar's column, so labels and titles share an edge. */
 .palette-icon {

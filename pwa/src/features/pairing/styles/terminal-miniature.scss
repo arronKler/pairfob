@@ -78,7 +78,7 @@
   height: 2px;
   border-radius: 2px;
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  box-shadow: 0 0 12px 1px rgba(110, 168, 254, 0.7);
+  box-shadow: 0 0 12px 1px var(--accent-70);
   animation: term-mini-sweep 2.6s var(--ease-in-out) infinite;
 }
 
@@ -93,7 +93,7 @@
 .term-mini-window.is-quiet :is(.term-mini-corner, .term-mini-sweep) { opacity: 0; animation: none; }
 
 .term-mini-mask { display: inline-flex; gap: 5px; vertical-align: -1px; }
-.term-mini-mask i { height: 0.85em; border-radius: 3px; background: rgba(233, 237, 243, 0.16); }
+.term-mini-mask i { height: 0.85em; border-radius: 3px; background: var(--ink-line-strong); }
 .term-mini-mask i:nth-child(-n + 2) { width: 26px; }
 .term-mini-mask i:last-child { width: 40px; }
 

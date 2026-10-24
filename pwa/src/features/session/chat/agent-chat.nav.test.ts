@@ -428,7 +428,8 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(patchAgentChat({ follow: true })).toBe(true);
 
     const fold = app.querySelector(".work-card");
-    const preamble = fold?.querySelector(".work-note");
+    // The preamble speaks in the transcript, not as a row inside the card.
+    const preamble = app.querySelector(".agent-finding");
     const tool = fold?.querySelector(".work-step.is-read");
     const final = app.querySelector(".agent-assistant-final");
     if (!(fold instanceof HTMLElement) || !(preamble instanceof HTMLElement) || !(tool instanceof HTMLElement) || !(final instanceof HTMLElement)) {
@@ -437,8 +438,9 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(preamble.textContent).toContain("I will inspect it first.");
     expect(tool.textContent).toContain("Read a.ts");
     expect(final.textContent).toContain("Everything is fine.");
-    expect(Boolean(preamble.compareDocumentPosition(tool) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-    expect(Boolean(fold.compareDocumentPosition(final) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    // Source order holds across the card's edge: card, then the finding, then the reply.
+    expect(Boolean(fold.compareDocumentPosition(preamble) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(Boolean(preamble.compareDocumentPosition(final) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   }));
 
   test("anchors an optimistic prompt before output that arrives ahead of its transcript echo", async () => await act(async () => {

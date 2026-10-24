@@ -2,6 +2,7 @@ import { pickResumeCredential } from "../lib/computer-catalog";
 import { bindRippleSurface } from "../lib/dom";
 import { bindLegacyGestureBoundary } from "../lib/gesture-boundary";
 import { detectLang, initI18n, langPref, setLang, t } from "../lib/i18n";
+import { applyDocumentTheme } from "../lib/theme";
 import { messageOf } from "../lib/notices";
 import { loadOriginConfig, originConfigErrorIsRecoverable, probeOrigin } from "../lib/origin-config";
 import { backgroundAndroidUpdateCheck } from "../features/settings/android-update";
@@ -182,6 +183,8 @@ export function startApplication(): () => void {
   try {
     hydrateApplicationState();
     initI18n();
+    // Before the first commit: the palette is part of the first frame a reader sees.
+    applyDocumentTheme();
     // Start the control-plane read before React's first synchronous composition.
     const configRead = readOriginConfig();
     bindLanguageChange(signal);

@@ -17,7 +17,7 @@
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(233, 237, 243, 0.06), transparent);
+  background: linear-gradient(90deg, transparent, var(--sheen-tint), transparent);
   animation: skeleton-sheen var(--sheen) var(--ease-in-out) infinite;
 }
 

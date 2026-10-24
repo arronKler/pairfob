@@ -38,7 +38,7 @@
 }
 
 @mixin accessibility-controls {
-  ::selection { background: rgba(110, 168, 254, 0.32); }
+  ::selection { background: var(--accent-32); }
 
   .sr-only {
     position: absolute;

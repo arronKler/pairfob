@@ -340,7 +340,7 @@
 
 .set-tag.is-ok { background: rgba(70, 214, 140, 0.12); color: var(--ok); }
 .set-tag.is-warn { background: rgba(255, 178, 36, 0.14); color: var(--warn); }
-.set-tag.is-accent { background: rgba(110, 168, 254, 0.13); color: var(--accent); }
+.set-tag.is-accent { background: var(--accent-13); color: var(--accent); }
 
 .set-state {
   flex: none;
@@ -541,7 +541,7 @@
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(233, 237, 243, 0.1), transparent);
+  background: linear-gradient(90deg, transparent, var(--ink-line), transparent);
   animation: skeleton-sheen var(--sheen) var(--ease-in-out) infinite;
 }
 

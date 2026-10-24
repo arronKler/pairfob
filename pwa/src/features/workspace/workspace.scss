@@ -36,7 +36,7 @@ body.sheet-open #app.workspace { min-height: var(--vv-height, 100dvh); }
   min-height: calc(54px + env(safe-area-inset-top, 0px));
   padding: env(safe-area-inset-top, 0px) 6px 0;
   border-bottom: 1px solid var(--line);
-  background: rgba(10, 12, 16, 0.96);
+  background: var(--veil-chrome-2);
   flex: none;
 }
 
@@ -233,7 +233,7 @@ body.sheet-open #app.workspace { min-height: var(--vv-height, 100dvh); }
   min-width: 20px;
   padding: 1px 6px;
   border-radius: 999px;
-  background: rgba(110, 168, 254, 0.16);
+  background: var(--accent-16);
   color: var(--accent);
   font-family: var(--mono);
   font-size: 0.67rem;

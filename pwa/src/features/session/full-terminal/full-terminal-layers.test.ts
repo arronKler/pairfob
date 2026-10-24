@@ -12,6 +12,27 @@ function rules(source: string): Array<{ selectors: string[]; body: string }> {
     .map(([, selector, body]) => ({ selectors: selector.split(",").map((part) => part.trim()), body }));
 }
 
+/** A custom property declared on the terminal root, which is where the plate and its ink live. */
+function rootVariable(name: string): string {
+  // The rules helper keeps the whole body; the property may start the block or
+  // follow another declaration, so both boundaries are accepted.
+  // The compiled sheet opens with an `@charset` rule, so the first selector
+  // carries that preamble rather than standing alone.
+  const body = rules(css).find((rule) => rule.selectors.some((selector) => selector.includes(".full-terminal-root")))?.body ?? "";
+  const value = body.match(new RegExp(`(?:^|;)\\s*${name}:\\s*([^;]+)`))?.[1];
+  return value ? value.trim() : "";
+}
+
+/**
+ * The colour a declaration resolves to. The terminal states its plate and its
+ * ink as custom properties on `.full-terminal-root`, so a rule that reads one
+ * is compared by the value a reader sees, not by the reference.
+ */
+function resolved(source: string, selector: string, property: string): string {
+  const value = declared(source, selector, property);
+  return value.replace(/var\((--[\w-]+)\)/g, (whole, name) => rootVariable(name) || whole);
+}
+
 function declared(source: string, selector: string, property: string): string {
   for (const rule of rules(source)) {
     if (!rule.selectors.includes(selector)) continue;
@@ -47,7 +68,7 @@ describe("complete terminal layers", () => {
     expect(declared(css, ours, "overflow")).toBe("hidden");
     // The colour the host is painted and the theme draws the rows on.
     const theme = fullTerminalOptions({ fontFamily: "monospace", fontSize: 13, lineHeight: 1, linkHandler: { activate() {} } }).theme;
-    expect(declared(css, ours, "background-color")).toBe(theme?.background ?? "");
-    expect(declared(css, ".full-terminal-host", "background")).toBe(theme?.background ?? "");
+    expect(resolved(css, ours, "background-color")).toBe(theme?.background ?? "");
+    expect(resolved(css, ".full-terminal-host", "background")).toBe(theme?.background ?? "");
   });
 });

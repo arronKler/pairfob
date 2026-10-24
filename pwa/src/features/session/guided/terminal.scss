@@ -101,7 +101,7 @@
 */
 .term-line.is-picked {
   border-radius: 3px;
-  box-shadow: inset 0 0 0 100vmax rgba(110, 168, 254, 0.18);
+  box-shadow: inset 0 0 0 100vmax var(--accent-18);
 }
 
 html.page-zoomed :is(.term, .term-line) {
@@ -195,7 +195,7 @@ html.page-zoomed :is(.term, .term-line) {
   -webkit-user-select: text;
   user-select: text;
   -webkit-touch-callout: default;
-  box-shadow: inset 0 0 0 2px rgba(110, 168, 254, 0.45);
+  box-shadow: inset 0 0 0 2px var(--accent-45);
   transition-duration: var(--dur-2);
 }
 

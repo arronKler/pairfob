@@ -212,8 +212,90 @@ export function splitTurn(turn: AgentTurn) {
 
 export type TurnRef = { key: string; ordinal: number };
 
+/**
+ * A run of consecutive steps the card shows as one row: same category tools,
+ * no findings between them, so "read 6 files" reads as one deed instead of six
+ * rows a phone has to scroll. A run shorter than the threshold stays expanded;
+ * so does one holding a running or failed step, whose row has to be pressable
+ * to open the failure. Everything else is a run of one, shown as itself.
+ */
+export type StepGroup = {
+  /** Rows the card draws: a grouped run is one entry holding its steps. */
+  items: AgentTraceItem[];
+  /** The run's steps; one element is a plain row. */
+  steps: AgentTraceItem[];
+  category: StepCategory;
+};
+
+/** Short enough to read as a list already; only longer runs fold. */
+const FOLD_FROM = 3;
+
+export function groupSteps(steps: readonly AgentTraceItem[], breaks: readonly number[] = []): StepGroup[] {
+  const settled = (step: AgentTraceItem) => step.type === "tool" && toolState(step) === "done" && stepCategory(step) !== "other";
+  const cut = new Set(breaks);
+  const groups: StepGroup[] = [];
+  for (const [index, item] of steps.entries()) {
+    const previous = groups.at(-1);
+    const category = stepCategory(item);
+    // A run is broken by anything between it: a finding the agent spoke, or a
+    // step of another kind. Reads on either side of "now the parser" are two
+    // deeds with something said between them, and fold as two rows.
+    const joins = previous && previous.category === category && previous.steps.every(settled) && !cut.has(index);
+    if (settled(item) && joins) {
+      previous.steps.push(item);
+      continue;
+    }
+    groups.push({ items: [item], steps: [item], category });
+  }
+  // A run that stayed under the threshold is its own rows again.
+  return groups.flatMap((group) => group.steps.length === 1 || group.steps.length >= FOLD_FROM
+    ? [group]
+    : group.steps.map((step) => ({ items: [step], steps: [step], category: group.category })));
+}
+
 /** The current steps of the turn a sheet was opened from, or null once it is gone. */
 export function turnEntries(items: readonly AgentTraceItem[], ref: TurnRef): AgentTraceItem[] | null {
   const turn = groupAgentTurns(items).filter((candidate) => turnKey(candidate) === ref.key)[ref.ordinal];
   return turn ? splitTurn(turn).entries : null;
+}
+
+/**
+ * The rows the card draws for a turn's steps: the same list the sheet pages
+ * through, so a press and the index it carries agree after a repaint. Findings
+ * speak in the transcript as their own message, so they leave this list.
+ */
+export function stepRows(entries: readonly AgentTraceItem[]): AgentTraceItem[] {
+  return entries.filter((item) => item.type !== "assistant");
+}
+
+/**
+ * Where a finding sat between two steps, so a run is not folded across it.
+ * `stepRows` drops findings, and folding the rows either side of one would say
+ * the agent read six files in a row when it stopped to report after three.
+ * Returns the row each finding interrupted: rows at or after the index start a
+ * new run.
+ */
+export function findingBreaks(entries: readonly AgentTraceItem[]): number[] {
+  const breaks: number[] = [];
+  let rows = 0;
+  let spoke = false;
+  for (const item of entries) {
+    if (item.type === "assistant") {
+      // Only a finding with steps on both sides breaks a run.
+      if (rows > 0) spoke = true;
+      continue;
+    }
+    if (spoke) {
+      breaks.push(rows);
+      spoke = false;
+    }
+    rows += 1;
+  }
+  return breaks;
+}
+
+/** The step rows of the turn a sheet was opened from, or null once it is gone. */
+export function turnStepRows(items: readonly AgentTraceItem[], ref: TurnRef): AgentTraceItem[] | null {
+  const entries = turnEntries(items, ref);
+  return entries ? stepRows(entries) : null;
 }

@@ -48,6 +48,14 @@ afterEach(() => {
 const empty = { kind: "empty" as const, title: "No history" };
 const tool = (file: string, state: "running" | "done" = "done"): AgentTraceItem =>
   ({ type: "tool", name: "Read", label: file, input: `{"path":"${file}"}`, toolState: state });
+/**
+ * A step of its own kind, so a list of them never folds into one row: these
+ * cases are about the window moving, and a folded run would hide the rows the
+ * window is supposed to carry.
+ */
+const kinds = ["Read", "Bash", "Grep", "Edit", "WebFetch", "Agent", "TodoWrite", "AskUserQuestion", "Read"];
+const toolOf = (file: string, state: "running" | "done" = "done", kind = 0): AgentTraceItem =>
+  ({ type: "tool", name: kinds[kind]!, label: file, input: `{"path":"${file}"}`, toolState: state });
 const done: AgentTraceItem[] = [
   { type: "user", text: "First question" }, tool("old.ts"), { type: "assistant", text: "First answer" },
 ];
@@ -167,9 +175,9 @@ test("history loading while a prompt is on its way takes the arrival off it", ()
 
 test("a step that arrives pushes a full list up by the row it displaces and fades in; the step before it gets its mark", async () => {
   const turn = (...steps: AgentTraceItem[]): AgentTraceItem[] => [{ type: "user", text: "Go" }, ...steps];
-  paint(turn(tool("a.ts"), tool("b.ts"), tool("c.ts", "running")), { working: true });
+  paint(turn(toolOf("a.ts", "done", 0), toolOf("b.ts", "done", 1), toolOf("c.ts", "running", 2)), { working: true });
   // The list is not full yet: the newcomer joins at the end, nothing is displaced.
-  paint(turn(tool("a.ts"), tool("b.ts"), tool("c.ts"), tool("d.ts", "running")), { working: true });
+  paint(turn(toolOf("a.ts", "done", 0), toolOf("b.ts", "done", 1), toolOf("c.ts", "done", 2), toolOf("d.ts", "running", 3)), { working: true });
   expect(rows()).toEqual(["a.ts", "b.ts", "c.ts", "d.ts"]);
   expect([...appRoot().querySelectorAll(".work-steps li")].map((row) => row.className)).toEqual(["", "", "", "is-arriving"]);
   // The step that was running in front of the reader has its result: the mark pops, on that row only.
@@ -179,7 +187,7 @@ test("a step that arrives pushes a full list up by the row it displaces and fade
   expect(slides).toEqual([]);
   // The fifth step: the first row leaves the window, kept on the track for the length of the move.
   const kept = [...appRoot().querySelectorAll(".work-steps li")].slice(1);
-  paint(turn(tool("a.ts"), tool("b.ts"), tool("c.ts"), tool("d.ts"), tool("e.ts", "running")), { working: true });
+  paint(turn(toolOf("a.ts", "done", 0), toolOf("b.ts", "done", 1), toolOf("c.ts", "done", 2), toolOf("d.ts", "done", 3), toolOf("e.ts", "running", 4)), { working: true });
   expect(rows()).toEqual(["b.ts", "c.ts", "d.ts", "e.ts"]);
   const pushed = appRoot().querySelector(".work-steps-pushed")!;
   expect([pushed.textContent, pushed.hasAttribute("inert"), pushed.getAttribute("aria-hidden")]).toEqual(["a.ts", true, "true"]);
@@ -189,7 +197,7 @@ test("a step that arrives pushes a full list up by the row it displaces and fade
   live.slice(0, 3).forEach((row, index) => expectSameNode(row, kept[index]));
   expect(live.map((row) => row.className)).toEqual(["", "", "", "is-arriving"]);
   // The second ticks of the elapsed time and the next poll repaint the card: nothing plays again.
-  paint(turn(tool("a.ts"), tool("b.ts"), tool("c.ts"), tool("d.ts"), tool("e.ts", "running")), { working: true });
+  paint(turn(toolOf("a.ts", "done", 0), toolOf("b.ts", "done", 1), toolOf("c.ts", "done", 2), toolOf("d.ts", "done", 3), toolOf("e.ts", "running", 4)), { working: true });
   expect(slides).toHaveLength(1);
   [...appRoot().querySelectorAll(".work-steps:not(.work-steps-pushed) li")].forEach((row, index) => expectSameNode(row, live[index]));
   // The move over, the row that left is gone.
@@ -204,8 +212,8 @@ test("under reduced motion a new step only fades in: no row is kept and the list
   globals.matchMedia = () => ({ matches: true });
   try {
     const turn = (...steps: AgentTraceItem[]): AgentTraceItem[] => [{ type: "user", text: "Go" }, ...steps];
-    paint(turn(tool("a.ts"), tool("b.ts"), tool("c.ts"), tool("d.ts", "running")), { working: true });
-    paint(turn(tool("a.ts"), tool("b.ts"), tool("c.ts"), tool("d.ts"), tool("e.ts", "running")), { working: true });
+    paint(turn(toolOf("a.ts", "done", 0), toolOf("b.ts", "done", 1), toolOf("c.ts", "done", 2), toolOf("d.ts", "running", 3)), { working: true });
+    paint(turn(toolOf("a.ts", "done", 0), toolOf("b.ts", "done", 1), toolOf("c.ts", "done", 2), toolOf("d.ts", "done", 3), toolOf("e.ts", "running", 4)), { working: true });
     expect(rows()).toEqual(["b.ts", "c.ts", "d.ts", "e.ts"]);
     expect(appRoot().querySelector(".work-steps-pushed")).toBeNull();
     expect(slides).toEqual([]);
@@ -216,7 +224,9 @@ test("under reduced motion a new step only fades in: no row is kept and the list
 });
 
 test("the reader's own filter and \"earlier steps\" redraw the list without an arrival", () => {
-  const many = [{ type: "user" as const, text: "Go" }, ...Array.from({ length: 9 }, (_, index) => tool(`f${index}.ts`))];
+  // Each step a kind of its own: this case counts rows, and a folded run would
+  // stand for several of them.
+  const many = [{ type: "user" as const, text: "Go" }, ...Array.from({ length: 9 }, (_, index) => toolOf(`f${index}.ts`, "done", index))];
   paint(many, { working: true });
   act(() => appRoot().querySelector<HTMLButtonElement>(".work-earlier")!.click());
   expect(rows()).toHaveLength(9);

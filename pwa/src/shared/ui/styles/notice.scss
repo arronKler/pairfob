@@ -3,7 +3,7 @@
 // The two tones' fills. They are see-through, so a notice that floats over
 // content lays the same tint on a ground of its own (session-shell.scss).
 $error-tint: rgba(214, 59, 49, 0.12);
-$status-tint: rgba(110, 168, 254, 0.1);
+$status-tint: var(--pressed);
 
 @mixin notice-toast {
   /* --- Notices / banners ------------------------------------------------------- */
@@ -24,7 +24,7 @@ $status-tint: rgba(110, 168, 254, 0.1);
 
   .notice-status {
     background: $status-tint;
-    border: 1px solid rgba(110, 168, 254, 0.3);
+    border: 1px solid var(--accent-30);
     color: var(--accent);
   }
 }

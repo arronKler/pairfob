@@ -14,7 +14,7 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   padding: 4px max(12px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(12px, env(safe-area-inset-left, 0px));
-  background: rgba(10, 12, 16, 0.9);
+  background: var(--veil-chrome);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);

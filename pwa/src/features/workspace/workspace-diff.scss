@@ -122,7 +122,7 @@
 .workspace-hunk-notes { flex: none; margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
 .workspace-hunk-context + .workspace-hunk-count { margin-left: 0; }
 .workspace-hunk-notes { display: inline-flex; align-items: center; gap: 3px; margin-left: 0; color: var(--accent); }
-.workspace-hunk-toggle:active { background: rgba(110, 168, 254, 0.12); }
+.workspace-hunk-toggle:active { background: var(--accent-12); }
 .workspace-diff-group.is-folded .workspace-diff-hunk { top: auto; }
 /* A hunk's lines fold under its head. One taller than the diff's window (`is-tall`, diff.tsx)
    does not travel its whole height: the lines fade and the height follows in one step. */
@@ -150,8 +150,8 @@ button.workspace-gap-open:active { background: var(--surface); }
 .workspace-diff-more { width: 100%; }
 
 @media (hover: hover) and (pointer: fine) {
-  .workspace-hunk-toggle:hover { background: rgba(110, 168, 254, 0.08); color: #c4dbff; }
-  button.workspace-gap-open:hover { background: rgba(233, 237, 243, 0.035); color: var(--muted); }
+  .workspace-hunk-toggle:hover { background: var(--accent-08); color: #c4dbff; }
+  button.workspace-gap-open:hover { background: var(--ink-faint-35); color: var(--muted); }
   .workspace-gap-act { opacity: 0; }
   button.workspace-gap-open:hover .workspace-gap-act,
   button.workspace-gap-open:focus-visible .workspace-gap-act { opacity: 1; }
@@ -215,7 +215,7 @@ html[data-kb="open"] .workspace-diff { scroll-padding-top: 0; }
 .diff-split-cell { width: auto; min-width: 0; }
 .diff-split-cell + .diff-split-cell { border-left: 1px solid var(--line); }
 /* The side with nothing to show: neither added nor removed, and not a line to press. */
-.diff-split-cell.is-blank { background: rgba(233, 237, 243, 0.025); }
+.diff-split-cell.is-blank { background: var(--ink-025); }
 
 /* --- Reading size and wrap ------------------------------------------------------------ */
 

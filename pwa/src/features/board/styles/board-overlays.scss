@@ -156,7 +156,7 @@
   pointer-events: none;
 }
 
-.board-pane[data-board-drop-over] { background-color: rgba(110, 168, 254, 0.18); }
+.board-pane[data-board-drop-over] { background-color: var(--accent-18); }
 .board-pane[data-board-drop-over]::after { background: var(--ink); color: var(--bg); }
 .board-pane[data-board-dim] { opacity: 0.32; }
 
@@ -176,7 +176,7 @@
 .board-place-dim {
   position: absolute;
   z-index: 5;
-  background: rgba(10, 12, 16, 0.62);
+  background: var(--veil);
   pointer-events: none;
 }
 
@@ -195,12 +195,12 @@
   place-items: center;
   padding: 0;
   border: calc(1.5px * var(--board-control-scale, 1)) dashed var(--accent);
-  background: rgba(110, 168, 254, 0.13);
+  background: var(--accent-13);
   color: var(--accent);
   cursor: pointer;
 }
 
-.board-place-target { border-style: solid; background: rgba(110, 168, 254, 0.16); }
+.board-place-target { border-style: solid; background: var(--accent-16); }
 
 .board-place-ghost > span,
 .board-place-target > span {
@@ -221,7 +221,7 @@
 }
 
 .board-place-ghost:active,
-.board-place-target:active { background: rgba(110, 168, 254, 0.28); }
+.board-place-target:active { background: var(--accent-28); }
 
 /* The hint and its Cancel belong to the tab row (`.board-mode` in board-chrome.scss).
    Only a canvas shown without that row draws them on itself. */

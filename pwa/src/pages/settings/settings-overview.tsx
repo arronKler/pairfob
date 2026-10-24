@@ -3,6 +3,7 @@ import { AndroidUpdateCard } from "../../features/settings/android-update-view";
 import { DaemonUpdateRow } from "../../features/settings/daemon-update-view";
 import { HerdSessionRow } from "../../features/herd-sessions/herd-session-row";
 import { LanguageControl } from "../../features/settings/language";
+import { ThemeControl } from "../../features/settings/theme";
 import { SegThumb } from "../../features/settings/seg-thumb";
 import { travelSettingsSection } from "./section-travel";
 import { t } from "../../lib/i18n";
@@ -45,6 +46,7 @@ export function SettingsOverview({ input }: { input: SettingsOverviewInput }) {
       <SessionDefaults mode={input.defaultTermMode} live={input.defaultComposeLive} enterSends={input.composeEnterSends} />
       <SetGroup label={t(input.desk ? "set.deviceSection" : "settings.phoneSection")}>
         {input.notification && <NotificationItem input={input.notification} />}
+        <SetItem className="theme-item" label={t("settings.themeAria")} trailing={<ThemeControl className="set-seg"><SegThumb /></ThemeControl>} />
         <SetItem className="language-item" label={t("settings.language")} trailing={<LanguageControl className="set-seg"><SegThumb /></LanguageControl>} />
       </SetGroup>
     </>

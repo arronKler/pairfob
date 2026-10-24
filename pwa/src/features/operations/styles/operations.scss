@@ -25,7 +25,7 @@
   padding: 0 12px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
-  background: #0e1218;
+  background: var(--plate);
   color: var(--ink);
   font: 400 0.95rem/1.4 var(--font);
   letter-spacing: 0;
@@ -40,7 +40,7 @@
   padding: 0 34px 0 12px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
-  background: #0e1218;
+  background: var(--plate);
   color: var(--ink);
   font: 400 0.95rem/1.4 var(--font);
   appearance: none;
@@ -59,7 +59,7 @@
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
-  background: #0e1218;
+  background: var(--plate);
   color: var(--ink);
   font: 400 0.95rem/1.5 var(--font);
   resize: vertical;
@@ -137,7 +137,7 @@
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: rgba(110, 168, 254, 0.13);
+  background: var(--accent-13);
   color: var(--accent);
 }
 

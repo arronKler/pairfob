@@ -17,7 +17,7 @@ import { chatTraceNote, copyAgentReply, currentAgentTraceOwnerKey, emptySpec, ju
 import { agentChatUIRevision, publishAgentChatUI, subscribeAgentChatUI } from "./agent-chat-ui";
 import type { SessionHandlers } from "../guided/view";
 import type { AgentTraceItem } from "../../../lib/operations";
-import { recordsStepResults, turnEntries, type TurnRef } from "../../../lib/agent-trace-steps";
+import { recordsStepResults, turnStepRows, type TurnRef } from "../../../lib/agent-trace-steps";
 import { agentFromDashboardSnapshot } from "../agents";
 import { sessionOwner } from "../identity";
 import { subscribeVisibleNotice, visibleNotice } from "../../../app/notices-store";
@@ -75,7 +75,8 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   if (jumpShown) jumpLabel.current = working && newSteps ? t("chat.newSteps", { n: newSteps }) : t(working ? "chat.newProgress" : "chat.newReply");
   const openStep = useCallback((item: AgentTraceItem, steps: AgentTraceItem[], turn: TurnRef) => {
     // The sheet re-finds its turn on every trace update, so running steps finish in place.
-    if (paneId) openStepSheet(paneId, item, verified, steps, () => turnEntries(visibleItems(), turn));
+    // The sheet re-finds its rows in the same list the card draws, so its index stays true.
+    if (paneId) openStepSheet(paneId, item, verified, steps, () => turnStepRows(visibleItems(), turn));
   }, [paneId, verified]);
   useLayoutEffect(() => {
     const element = stream.current;

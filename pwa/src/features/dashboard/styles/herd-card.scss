@@ -154,9 +154,9 @@
 
 .card .pin-mark { flex: none; color: var(--muted); }
 
-.card.is-blocked .card-main { background-color: #1c1a13; box-shadow: inset 3px 0 0 var(--warn); }
-.card.is-blocked .card-main:active { background-color: #24211a; }
-.card.sel .card-main { background-color: #16202e; }
+.card.is-blocked .card-main { background-color: var(--blocked-ground); box-shadow: inset 3px 0 0 var(--warn); }
+.card.is-blocked .card-main:active { background-color: var(--blocked-ground-press); }
+.card.sel .card-main { background-color: var(--selected-ground); }
 
 /* Trailing / leading swipe actions sit behind the sliding button. */
 .card-actions {
@@ -219,14 +219,14 @@
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: #1d232d;
+  background: var(--chip-plate);
   color: var(--ink);
   font: 600 var(--text-body) var(--mono);
 }
 
 .agent-avatar > svg,
 .agent-avatar > img { width: 56%; height: 56%; }
-.agent-avatar.is-terminal { background: #192019; color: #a9c9b1; }
+.agent-avatar.is-terminal { background: var(--term-mark-ground); color: var(--term-mark-ink); }
 .agent-avatar.is-terminal > svg { width: 58%; height: 58%; }
 .agent-avatar.is-sm { width: 24px; height: 24px; border-radius: 7px; font-size: var(--text-caption); }
 .agent-avatar.is-lg { width: 44px; height: 44px; border-radius: 13px; }
@@ -245,7 +245,7 @@
 .agent-avatar-status.is-blocked { background: var(--warn); }
 .agent-avatar-status.is-working { background: var(--accent); }
 .agent-avatar-status.is-done { background: var(--ok); }
-.card.is-blocked .agent-avatar-status { border-color: #1c1a13; }
+.card.is-blocked .agent-avatar-status { border-color: var(--blocked-ground); }
 
 /* --- Card motion -------------------------------------------------------------- */
 
@@ -285,7 +285,7 @@
   border-radius: inherit;
   pointer-events: none;
   z-index: 2;
-  background: linear-gradient(100deg, transparent 22%, rgba(110, 168, 254, 0.16) 50%, transparent 78%);
+  background: linear-gradient(100deg, transparent 22%, var(--accent-16) 50%, transparent 78%);
   background-size: 300% 100%;
   background-repeat: no-repeat;
   animation: card-sweep var(--dur-trace) var(--ease) forwards;
@@ -425,7 +425,7 @@
 }
 
 .pill-blocked { background: rgba(255, 178, 36, 0.16); color: var(--warn); border-color: rgba(255, 178, 36, 0.4); }
-.pill-working { background: rgba(110, 168, 254, 0.13); color: var(--accent); border-color: rgba(110, 168, 254, 0.32); }
+.pill-working { background: var(--accent-13); color: var(--accent); border-color: var(--accent-32); }
 .pill-done { background: rgba(70, 214, 140, 0.12); color: var(--ok); border-color: rgba(70, 214, 140, 0.32); }
 .pill-idle { background: transparent; color: var(--muted); border-color: var(--line-strong); }
 .pill-unknown { background: transparent; color: var(--muted); border-color: var(--line-strong); }

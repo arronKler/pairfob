@@ -222,13 +222,13 @@ dialog.attach-viewer > form {
 .imgedit-tool.on {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(110, 168, 254, 0.14);
+  background: var(--accent-14);
 }
 
 .imgedit-text {
   min-height: 40px;
   padding: 0 12px;
-  background: #0a0d12;
+  background: var(--sink);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   color: var(--term-ink);
@@ -239,7 +239,7 @@ dialog.attach-viewer > form {
   display: flex;
   justify-content: center;
   padding: 8px;
-  background: #07090d;
+  background: var(--media-ground);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   touch-action: none;

@@ -168,7 +168,7 @@
 
 .attach-chip-wrap.is-selected .attach-chip {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(110, 168, 254, 0.35);
+  box-shadow: 0 0 0 2px var(--accent-35);
 }
 
 .attach-chip.is-failed { border-color: var(--danger-bright); }
@@ -207,7 +207,7 @@
    the thumbnail as the mark arrives (the tray keeps it that long). */
 .attach-chip-cover { transition: opacity var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease); }
 
-.attach-chip-cover.is-dim { background: rgba(10, 12, 16, 0.45); }
+.attach-chip-cover.is-dim { background: var(--veil-dim); }
 
 .attach-chip-cover.is-leaving { opacity: 0; }
 
@@ -227,7 +227,7 @@
   stroke-width: 3.5;
 }
 
-.attach-ring-bg { stroke: rgba(233, 237, 243, 0.25); }
+.attach-ring-bg { stroke: var(--ink-hairline-2); }
 
 .attach-ring-fg {
   stroke: #fff;
@@ -294,7 +294,7 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 5px;
-  background: rgba(10, 12, 16, 0.8);
+  background: var(--veil-strong);
   color: var(--ink);
   font: 600 9.5px/16px var(--font);
 }

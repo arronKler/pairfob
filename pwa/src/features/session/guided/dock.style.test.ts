@@ -345,12 +345,13 @@ describe("a short field over a longer draft", () => {
   test("covers the strips that are not its whole lines, inside its border and in its own colour", () => {
     const strips = rule(compose, ".compose-field[data-cut]::before,\n.compose-field[data-cut]::after");
     expect(strips).toMatch(/inset-inline:\s*1px;/);
-    expect(strips).toMatch(/background:\s*var\(--compose-cut-bg, #0a0d12\);/);
+    // The strip is the field's own colour, which follows the palette.
+    expect(strips).toContain("background: var(--compose-cut-bg, var(--sink));");
     expect(strips).toMatch(/pointer-events:\s*none;/);
     expect(compose).toContain(".compose-field[data-cut]::before { top: 1px; height: var(--compose-cut-top, 0); border-radius: 12px 12px 0 0; }");
     expect(compose).toContain(".compose-field[data-cut]::after { bottom: 1px; height: var(--compose-cut-bottom, 0); border-radius: 0 0 12px 12px; }");
     // The colour named as the fallback is the field's own, and the corners are its 13px less the border.
-    expect(rule(dock, ".dock-form textarea")).toMatch(/background:\s*#0a0d12;/);
+    expect(rule(dock, ".dock-form textarea")).toContain("background: var(--sink);");
     expect(rule(dock, ".dock-form textarea")).toMatch(/border-radius:\s*13px;/);
     // The line count stays readable over the lower strip.
     expect(compose).toContain(".compose-field[data-cut] > .compose-lines { z-index: 1; }");

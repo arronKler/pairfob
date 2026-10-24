@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { setLang, t } from "./i18n.ts";
 import type { AgentTraceItem } from "./operations";
-import { formatElapsed, pendingAsk, recordsStepResults, stepCategory, stepObject, stepState, turnOutcome, turnSpan } from "./agent-trace-steps";
+import { findingBreaks, formatElapsed, groupSteps, pendingAsk, recordsStepResults, stepCategory, stepObject, stepRows, stepState, turnOutcome, turnSpan } from "./agent-trace-steps";
 
 beforeEach(() => setLang("zh"));
 
@@ -124,4 +124,68 @@ test("a turn's span and elapsed text come from its own record times", () => {
   expect(formatElapsed(42_400)).toBe(t("time.seconds", { s: 42 }));
   expect(formatElapsed(185_000)).toBe(t("time.minutes", { m: 3, s: 5 }));
   expect(formatElapsed(3_900_000)).toBe(t("time.hours", { h: 1, m: 5 }));
+});
+
+describe("consecutive same-kind tools fold into one row", () => {
+  test("a run of three or more settled tools of one kind is one group", () => {
+    const steps = [tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), tool("Bash", { toolState: "done" })];
+    const groups = groupSteps(steps);
+    expect(groups.map((group) => group.steps.length)).toEqual([3, 1]);
+    expect(groups.map((group) => group.category)).toEqual(["read", "command"]);
+    // The group holds the very steps, in source order, so opening it loses none.
+    expect(groups[0]!.steps).toEqual(steps.slice(0, 3));
+  });
+
+  test("a run shorter than three stays as its own rows", () => {
+    expect(groupSteps([tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" })]).map((group) => group.steps.length))
+      .toEqual([1, 1]);
+  });
+
+  test("a finding or thinking step breaks the run, and a running or failed tool never folds", () => {
+    const broken = groupSteps([tool("Read", { toolState: "done" }), { type: "assistant", text: "found it" },
+      tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" })]);
+    expect(broken.map((group) => group.steps.length)).toEqual([1, 1, 3]);
+    // A run holding a failure stays open: its row has to be pressable on its own.
+    const failing = groupSteps([tool("Read", { toolState: "done" }), tool("Read", { toolState: "error" }),
+      tool("Read", { toolState: "done" })]);
+    expect(failing.every((group) => group.steps.length === 1)).toBe(true);
+    const running = groupSteps([tool("Bash", { toolState: "done" }), tool("Bash", { toolState: "running" }), tool("Bash", { toolState: "done" })]);
+    expect(running.every((group) => group.steps.length === 1)).toBe(true);
+  });
+});
+
+describe("the rows a card draws", () => {
+  test("findings leave the list so a press and the sheet count the same rows", () => {
+    const entries = [
+      { type: "assistant" as const, text: "Let me look first." },
+      tool("Read", { toolState: "done", detailRef: "r1" }),
+      { type: "assistant" as const, text: "Now the next one." },
+      tool("Read", { toolState: "done", detailRef: "r2" }),
+    ];
+    // The finding is drawn as its own message; the rows keep only the steps.
+    expect(stepRows(entries).map((row) => row.detailRef)).toEqual(["r1", "r2"]);
+    // Without findings the list is untouched, so a plain turn keeps its identity.
+    const plain = [tool("Read", { toolState: "done" })];
+    expect(stepRows(plain)).toEqual(plain);
+  });
+});
+
+describe("a finding breaks the run it interrupted", () => {
+  test("rows either side of a finding fold as two runs, not one", () => {
+    const entries = [
+      tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }),
+      { type: "assistant" as const, text: "Now the parser." },
+      tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }),
+    ];
+    // Three rows before the finding, a fourth starts the next run.
+    expect(findingBreaks(entries)).toEqual([3]);
+    expect(groupSteps(stepRows(entries), findingBreaks(entries)).map((group) => group.steps.length)).toEqual([3, 3]);
+    // Without the break the six reads would read as one deed.
+    expect(groupSteps(stepRows(entries))).toHaveLength(1);
+  });
+
+  test("a finding before any step, or with nothing after it, breaks nothing", () => {
+    expect(findingBreaks([{ type: "assistant", text: "first" }, tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" })])).toEqual([]);
+    expect(findingBreaks([tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), { type: "assistant", text: "last" }])).toEqual([]);
+  });
 });
