@@ -1,16 +1,21 @@
 package daemon
 
 import (
+	"context"
 	"time"
 
 	"pairfob/internal/journal"
 	"pairfob/internal/runtime"
 )
 
+// codexDialogLines is the live bottom of a Codex pane. The plan picker and
+// other choice lists sit there; older scrollback is not part of the decision.
+const codexDialogLines = 40
+
 // decorateAgentActivity applies the same task semantics to phone snapshots and
 // notification observations. It does not change the raw runtime used for path
 // authorization or commands, and never takes a transcript path from a client.
-func (e *Engine) decorateAgentActivity(snapshot runtime.Snapshot) runtime.Snapshot {
+func (e *Engine) decorateAgentActivity(ctx context.Context, session runtime.SessionRef, snapshot runtime.Snapshot) runtime.Snapshot {
 	snapshot.Panes = append([]runtime.Pane(nil), snapshot.Panes...)
 	for i := range snapshot.Panes {
 		pane := &snapshot.Panes[i]
@@ -20,12 +25,42 @@ func (e *Engine) decorateAgentActivity(snapshot runtime.Snapshot) runtime.Snapsh
 		if pane.Agent == "" || pane.AgentStatus == "unknown" {
 			continue
 		}
-		if pane.AgentStatus != "blocked" {
+		reported := pane.AgentStatus
+		if reported != "blocked" {
 			e.decorateTaskStatus(pane)
+		}
+		// Herdr's screen rules miss some Codex choice lists and report idle or
+		// done. Lift only those. A status Herdr already calls blocked is left
+		// alone, and a failed read keeps the reported status.
+		if pane.Agent == "codex" && (reported == "idle" || reported == "done") &&
+			(pane.AgentStatus == "idle" || pane.AgentStatus == "done") {
+			e.promoteCodexChoice(ctx, session, pane)
 		}
 		e.decorateTurnActivity(pane)
 	}
 	return snapshot
+}
+
+func (e *Engine) promoteCodexChoice(ctx context.Context, session runtime.SessionRef, pane *runtime.Pane) {
+	if e == nil || e.RT == nil || pane.PaneID == "" {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	readCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
+	defer cancel()
+	view, err := e.RT.Observe(readCtx, session, runtime.PaneReadQuery{
+		PaneID: pane.PaneID, Source: runtime.SourceRecent, Format: runtime.FormatText, Lines: codexDialogLines,
+	})
+	if err != nil {
+		return
+	}
+	read, ok := view.(runtime.PaneReadView)
+	if !ok || !codexChoiceDialog(read.Text) {
+		return
+	}
+	pane.AgentStatus = "blocked"
 }
 
 func (e *Engine) decorateTaskStatus(pane *runtime.Pane) {

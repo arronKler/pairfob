@@ -314,7 +314,7 @@ func (e *Engine) monitorSnapshot(ctx context.Context, session runtime.SessionRef
 	if !ok {
 		return runtime.Snapshot{}, errors.New("runtime returned an invalid snapshot view")
 	}
-	return e.decorateAgentActivity(snapshot.Snapshot), nil
+	return e.decorateAgentActivity(callCtx, session, snapshot.Snapshot), nil
 }
 
 func (e *Engine) reconcileRuntimeSession(ctx context.Context, session runtime.SessionRef, allowPush bool, state *sessionMonitorState, emitPoke func(string, string), emitPush func(HerdPush)) (bool, []string) {
