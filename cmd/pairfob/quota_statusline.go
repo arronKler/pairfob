@@ -26,17 +26,37 @@ func quotaStatusline(args []string, input io.Reader, output io.Writer) error {
 	}
 	var q runtime.AgentQuota
 	var parseErr error
+	var path string
+	var pathErr error
+
 	if len(raw) <= 1024*1024 {
-		q, parseErr = runtime.ParseClaudeQuota(raw, time.Now())
+		if bytes.Contains(raw, []byte(`"rate_limits"`)) {
+			q, parseErr = runtime.ParseClaudeQuota(raw, time.Now())
+			if parseErr == nil {
+				path, pathErr = runtime.ClaudeQuotaPath()
+			}
+		} else if bytes.Contains(raw, []byte(`"quota"`)) {
+			q, parseErr = runtime.ParseAntigravityStatuslineQuota(raw, time.Now())
+			if parseErr == nil {
+				path, pathErr = runtime.AntigravityQuotaPath()
+			}
+		} else {
+			q, parseErr = runtime.ParseClaudeQuota(raw, time.Now())
+			if parseErr == nil {
+				path, pathErr = runtime.ClaudeQuotaPath()
+			} else {
+				q, parseErr = runtime.ParseAntigravityStatuslineQuota(raw, time.Now())
+				if parseErr == nil {
+					path, pathErr = runtime.AntigravityQuotaPath()
+				}
+			}
+		}
 	} else {
 		parseErr = errors.New("statusline input too large")
 	}
-	if parseErr == nil {
-		path, pathErr := runtime.ClaudeQuotaPath()
-		if pathErr == nil {
-			data, _ := json.Marshal(q)
-			_ = writeQuotaFile(path, data)
-		}
+	if parseErr == nil && pathErr == nil && path != "" {
+		data, _ := json.Marshal(q)
+		_ = writeQuotaFile(path, data)
 	}
 	// Existing local statusline configuration remains responsible for its output.
 	// Cache failures must not break it; the phone ages out the last sample.
@@ -60,7 +80,11 @@ func quotaStatusline(args []string, input io.Reader, output io.Writer) error {
 		_, _ = fmt.Fprintf(output, "%s %.0f%% left", w.Name, 100-w.UsedPercent)
 	}
 	if len(q.Windows) == 0 {
-		_, _ = fmt.Fprint(output, "Claude Code")
+		if q.Provider == "antigravity" {
+			_, _ = fmt.Fprint(output, "Antigravity")
+		} else {
+			_, _ = fmt.Fprint(output, "Claude Code")
+		}
 	}
 	_, err = fmt.Fprintln(output)
 	return err
@@ -102,27 +126,51 @@ func setupClaudeQuota(args []string) error {
 		return err
 	}
 	settings := filepath.Join(filepath.Dir(path), "settings.json")
-	if err = installClaudeQuota(settings, exe); err != nil {
+	if err = installSettingsQuota(settings, exe, "Claude"); err != nil {
 		return err
 	}
 	fmt.Println("Claude quota collection enabled. Start a new Claude Code session. Original settings: " + settings + ".pairfob-backup")
 	return nil
 }
 
+func setupAntigravityQuota(args []string) error {
+	if len(args) != 0 {
+		return errors.New("usage: pairfob quota-setup-antigravity")
+	}
+	path, err := runtime.AntigravityQuotaPath()
+	if err != nil {
+		return err
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	settings := filepath.Join(filepath.Dir(path), "settings.json")
+	if err = installSettingsQuota(settings, exe, "Antigravity"); err != nil {
+		return err
+	}
+	fmt.Println("Antigravity quota collection enabled. Start a new Antigravity session. Original settings: " + settings + ".pairfob-backup")
+	return nil
+}
+
 func installClaudeQuota(path, exe string) error {
+	return installSettingsQuota(path, exe, "Claude")
+}
+
+func installSettingsQuota(path, exe, label string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	if len(raw) > 1024*1024 {
-		return errors.New("Claude settings too large")
+		return fmt.Errorf("%s settings too large", label)
 	}
 	if len(raw) == 0 {
 		raw = []byte("{}")
 	}
 	var settings map[string]json.RawMessage
 	if err = json.Unmarshal(raw, &settings); err != nil || settings == nil {
-		return errors.New("invalid Claude settings")
+		return fmt.Errorf("invalid %s settings", label)
 	}
 	var previous struct {
 		Type    string `json:"type"`
@@ -143,6 +191,7 @@ func installClaudeQuota(path, exe string) error {
 	}
 	line["type"] = json.RawMessage(`"command"`)
 	line["command"], _ = json.Marshal(command)
+	line["enabled"] = json.RawMessage(`true`)
 	settings["statusLine"], _ = json.Marshal(line)
 	updated, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {

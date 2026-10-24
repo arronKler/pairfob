@@ -112,9 +112,17 @@ func antigravityQuotaPorts(ctx context.Context, pid int) []int {
 	return ports
 }
 
-// The running app is asked first: it holds a login that is always current. The
+// The statusline cache (when configured or recently written by the CLI) is
+// asked first: it holds exact per-model limits including Gemini Argon. The
+// running app is asked next: it holds a login that is always current. The
 // CLI's stored login is the other way in, and the only one when no app is open.
 func locateAntigravityQuota(ctx context.Context) (quotaRead, AgentQuota) {
+	if os.Getenv("PAIRFOB_ANTIGRAVITY_QUOTA_SOURCE") == "statusline" {
+		return func(context.Context) AgentQuota { return readAntigravityStatuslineQuota(time.Now()) }, AgentQuota{}
+	}
+	if sq := readAntigravityStatuslineQuota(time.Now()); sq.Status == "ok" || sq.Status == "stale" {
+		return func(context.Context) AgentQuota { return readAntigravityStatuslineQuota(time.Now()) }, AgentQuota{}
+	}
 	processes := antigravityQuotaProcesses(ctx)
 	token, status := antigravityStoredLogin(ctx, time.Now())
 	if len(processes) == 0 && token == "" {

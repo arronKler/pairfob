@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 )
@@ -95,14 +96,8 @@ func parseAntigravityQuota(raw []byte, now time.Time) AgentQuota {
 			if fraction == nil {
 				continue
 			} // Model availability is not proof of unused quota.
-			name := bucket.Name
-			if name == "" {
-				name = bucket.ID
-			}
-			if group.Name != "" {
-				name = group.Name + " / " + name
-			}
-			q.Windows = append(q.Windows, QuotaWindow{Name: name, UsedPercent: 100 * (1 - *fraction), ResetsAt: quotaReset(bucket.Reset), pool: quotaPool(name), headline: true})
+			name, pool := antigravityBucketName(group.Name, bucket.ID, bucket.Name)
+			q.Windows = append(q.Windows, QuotaWindow{Name: name, UsedPercent: 100 * (1 - *fraction), ResetsAt: quotaReset(bucket.Reset), pool: pool, headline: true})
 		}
 	}
 	if len(q.Windows) > 0 {
@@ -133,4 +128,129 @@ func parseAntigravityQuota(raw []byte, now time.Time) AgentQuota {
 		q.Windows = append(q.Windows, QuotaWindow{Name: model.Label, UsedPercent: 100 * (1 - *model.Quota.Fraction), ResetsAt: quotaReset(model.Quota.Reset), pool: quotaPool(model.Label), headline: true})
 	}
 	return finishQuota(q, now)
+}
+
+// ParseAntigravityStatuslineQuota strips the statusline payload to the quota
+// allowlist and distinguishes Gemini, Gemini Argon, and 3P models.
+func ParseAntigravityStatuslineQuota(data []byte, now time.Time) (AgentQuota, error) {
+	q := emptyQuota("antigravity", "statusline", "unavailable")
+	var payload struct {
+		PlanTier string `json:"plan_tier"`
+		Model    struct {
+			DisplayName string `json:"display_name"`
+			ID          string `json:"id"`
+		} `json:"model"`
+		Quota map[string]struct {
+			Fraction *float64 `json:"remaining_fraction"`
+			Reset    string   `json:"reset_time"`
+		} `json:"quota"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return q, err
+	}
+	if len(payload.Quota) == 0 {
+		return q, errors.New("missing antigravity statusline quota")
+	}
+	q.Plan = payload.PlanTier
+	if len(q.Plan) > 80 {
+		q.Plan = ""
+	}
+	q.ObservedAt = now.Unix()
+
+	type bucketDef struct {
+		key  string
+		name string
+		pool string
+	}
+	defs := []bucketDef{
+		{"gemini-5h", "Gemini 5h", "gemini-models"},
+		{"gemini-weekly", "Gemini 7d", "gemini-models"},
+		{"gemini-argon-wtu-weekly", "Argon 7d", "gemini-argon"},
+		{"3p-5h", "Claude/GPT 5h", "claude-and-gpt-models"},
+		{"3p-weekly", "Claude/GPT 7d", "claude-and-gpt-models"},
+	}
+	seen := map[string]bool{}
+	for _, def := range defs {
+		seen[def.key] = true
+		b, ok := payload.Quota[def.key]
+		if !ok || b.Fraction == nil {
+			continue
+		}
+		rem := *b.Fraction
+		if rem < 0 {
+			rem = 0
+		} else if rem > 1 {
+			rem = 1
+		}
+		w := QuotaWindow{
+			Name:        def.name,
+			UsedPercent: 100 * (1 - rem),
+			ResetsAt:    quotaReset(b.Reset),
+			pool:        def.pool,
+			headline:    true,
+		}
+		if validQuotaWindow(w) {
+			q.Windows = append(q.Windows, w)
+		}
+	}
+	for key, b := range payload.Quota {
+		if seen[key] || b.Fraction == nil {
+			continue
+		}
+		rem := *b.Fraction
+		if rem < 0 {
+			rem = 0
+		} else if rem > 1 {
+			rem = 1
+		}
+		name, pool := antigravityBucketName("", key, "")
+		w := QuotaWindow{
+			Name:        name,
+			UsedPercent: 100 * (1 - rem),
+			ResetsAt:    quotaReset(b.Reset),
+			pool:        pool,
+			headline:    true,
+		}
+		if validQuotaWindow(w) {
+			q.Windows = append(q.Windows, w)
+		}
+	}
+	if len(q.Windows) > 0 {
+		q.Status = "ok"
+	}
+	return q, nil
+}
+
+func antigravityBucketName(group, bucketID, bucketName string) (string, string) {
+	lowerID := strings.ToLower(bucketID)
+	lowerName := strings.ToLower(bucketName)
+	lowerGroup := strings.ToLower(group)
+
+	if strings.Contains(lowerID, "argon") || strings.Contains(lowerName, "argon") {
+		return "Argon 7d", "gemini-argon"
+	}
+	if strings.Contains(lowerGroup, "claude") || strings.Contains(lowerGroup, "gpt") || strings.Contains(lowerID, "3p") {
+		if strings.Contains(lowerID, "5h") || strings.Contains(lowerName, "five hour") || strings.Contains(lowerName, "5h") {
+			return "Claude/GPT 5h", "claude-and-gpt-models"
+		}
+		if strings.Contains(lowerID, "weekly") || strings.Contains(lowerName, "weekly") || strings.Contains(lowerName, "7d") {
+			return "Claude/GPT 7d", "claude-and-gpt-models"
+		}
+	}
+	if strings.Contains(lowerGroup, "gemini") || strings.Contains(lowerID, "gemini") {
+		if strings.Contains(lowerID, "5h") || strings.Contains(lowerName, "five hour") || strings.Contains(lowerName, "5h") {
+			return "Gemini 5h", "gemini-models"
+		}
+		if strings.Contains(lowerID, "weekly") || strings.Contains(lowerName, "weekly") || strings.Contains(lowerName, "7d") {
+			return "Gemini 7d", "gemini-models"
+		}
+	}
+	name := bucketName
+	if name == "" {
+		name = bucketID
+	}
+	if group != "" {
+		name = group + " / " + name
+	}
+	return name, quotaPool(name)
 }

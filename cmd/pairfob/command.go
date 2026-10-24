@@ -22,6 +22,7 @@ const commandUsage = `Pairfob — this computer, on another device.
                             Prepare the latest stable Herdr update
   pairfob quota list        Subscription quota this computer can read
   pairfob quota-setup-claude Enable Claude subscription quota collection
+  pairfob quota-setup-antigravity Enable Antigravity subscription quota collection
   pairfob service status|start|restart|stop|install
                             Manage the login service
   pairfob run               Run the daemon in the foreground
@@ -43,6 +44,8 @@ func runCommand(args []string, sock string) error {
 		return quotaStatusline(args[1:], os.Stdin, os.Stdout)
 	case "quota-setup-claude":
 		return setupClaudeQuota(args[1:])
+	case "quota-setup-antigravity":
+		return setupAntigravityQuota(args[1:])
 	case "quota":
 		return quotaCLI(args[1:], os.Stdout)
 	case "version", "-v", "--version":

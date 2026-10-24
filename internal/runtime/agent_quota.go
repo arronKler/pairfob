@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -105,6 +106,145 @@ func readClaudeQuota(now time.Time) AgentQuota {
 		}
 	}
 	return q
+}
+
+// AntigravityQuotaPath is shared with the statusline collector. No credentials,
+// prompts, cwd, or transcript content are persisted here.
+func AntigravityQuotaPath() (string, error) {
+	dir := os.Getenv("ANTIGRAVITY_CONFIG_DIR")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		dir = filepath.Join(home, ".gemini", "antigravity-cli")
+	}
+	return filepath.Join(dir, "pairfob-quota.json"), nil
+}
+
+func antigravityObservationPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	stateDir := os.Getenv("XDG_STATE_HOME")
+	if stateDir == "" {
+		stateDir = filepath.Join(home, ".local", "state")
+	}
+	return filepath.Join(stateDir, "herdr", "plugins", "herdr-agent-usage", "agy-statusline.observation.json"), nil
+}
+
+func readAntigravityStatuslineQuota(now time.Time) AgentQuota {
+	q := emptyQuota("antigravity", "statusline", "setup_required")
+	path, err := AntigravityQuotaPath()
+	if err != nil {
+		q.Status = "unavailable"
+		return q
+	}
+	info, err := os.Lstat(path)
+	var obsInfo os.FileInfo
+	obsPath, _ := antigravityObservationPath()
+	if obsPath != "" {
+		obsInfo, _ = os.Lstat(obsPath)
+	}
+
+	useObs := false
+	if obsInfo != nil && obsInfo.Mode().IsRegular() && obsInfo.Size() <= 65536 {
+		if info == nil || !info.Mode().IsRegular() || obsInfo.ModTime().After(info.ModTime()) {
+			useObs = true
+		}
+	}
+
+	if useObs {
+		raw, err := quotaFile(obsPath, 65536)
+		if err == nil {
+			var wrapper struct {
+				Snapshot struct {
+					FetchedAtUnix int64 `json:"fetched_at_unix"`
+				} `json:"snapshot"`
+				Payload json.RawMessage `json:"payload"`
+			}
+			if json.Unmarshal(raw, &wrapper) == nil && len(wrapper.Payload) > 0 {
+				parsed, err := ParseAntigravityStatuslineQuota(wrapper.Payload, now)
+				if err == nil && len(parsed.Windows) > 0 {
+					q = parsed
+					if wrapper.Snapshot.FetchedAtUnix > 0 {
+						q.ObservedAt = wrapper.Snapshot.FetchedAtUnix
+					} else {
+						q.ObservedAt = obsInfo.ModTime().Unix()
+					}
+					for i := range q.Windows {
+						markAntigravityWindow(&q.Windows[i])
+					}
+					if now.Unix()-q.ObservedAt > 900 {
+						q.Status = "stale"
+					}
+					for _, w := range q.Windows {
+						if w.ResetsAt > 0 && w.ResetsAt <= now.Unix() {
+							q.Status = "stale"
+						}
+					}
+					return q
+				}
+			}
+		}
+	}
+
+	if errors.Is(err, os.ErrNotExist) || info == nil {
+		return q
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 16384 {
+		q.Status = "unavailable"
+		return q
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		q.Status = "unavailable"
+		return q
+	}
+	defer f.Close()
+	if err := json.NewDecoder(io.LimitReader(f, 16384)).Decode(&q); err != nil {
+		return emptyQuota("antigravity", "statusline", "unavailable")
+	}
+	if q.Provider != "antigravity" || q.Source != "statusline" || len(q.Windows) > 8 || q.ObservedAt <= 0 || q.ObservedAt > now.Unix()+60 || (q.Status != "ok" && q.Status != "unavailable") {
+		return emptyQuota("antigravity", "statusline", "unavailable")
+	}
+	for _, w := range q.Windows {
+		if !validQuotaWindow(w) {
+			return emptyQuota("antigravity", "statusline", "unavailable")
+		}
+	}
+	if len(q.Windows) == 0 {
+		q.Windows = []QuotaWindow{}
+		q.Status = "unavailable"
+		return q
+	}
+	for i := range q.Windows {
+		markAntigravityWindow(&q.Windows[i])
+	}
+	if now.Unix()-q.ObservedAt > 900 {
+		q.Status = "stale"
+	}
+	for _, w := range q.Windows {
+		if w.ResetsAt > 0 && w.ResetsAt <= now.Unix() {
+			q.Status = "stale"
+		}
+	}
+	return q
+}
+
+func markAntigravityWindow(w *QuotaWindow) {
+	w.headline = true
+	lower := strings.ToLower(w.Name)
+	if strings.Contains(lower, "argon") {
+		w.pool = "gemini-argon"
+	} else if strings.Contains(lower, "gemini") {
+		w.pool = "gemini-models"
+	} else if strings.Contains(lower, "claude") || strings.Contains(lower, "gpt") || strings.Contains(lower, "3p") {
+		w.pool = "claude-and-gpt-models"
+	} else if w.pool == "" {
+		w.pool = quotaPool(w.Name)
+	}
 }
 
 // ParseClaudeQuota strips the statusline payload to the quota allowlist. A
