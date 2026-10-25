@@ -82,7 +82,7 @@ func (e *Engine) observe(session *string, query runtime.Query) (runtime.View, er
 		if err != nil {
 			return nil, err
 		}
-		return e.markHistory(view), nil
+		return e.markHistory(ctx, session, view), nil
 	}
 	if key, ok := observeKey(session, query); ok {
 		return e.reads.do(key, run)
@@ -90,12 +90,12 @@ func (e *Engine) observe(session *string, query runtime.Query) (runtime.View, er
 	return run()
 }
 
-func (e *Engine) markHistory(view runtime.View) runtime.View {
+func (e *Engine) markHistory(ctx context.Context, session *string, view runtime.View) runtime.View {
 	snap, ok := view.(runtime.SnapshotView)
 	if !ok {
 		return view
 	}
-	snap.Snapshot = e.decorateAgentActivity(snap.Snapshot)
+	snap.Snapshot = e.decorateAgentActivity(ctx, runtimeSession(session), snap.Snapshot)
 	for i := range snap.Snapshot.Panes {
 		pane := &snap.Snapshot.Panes[i]
 		pane.HistoryAvailable = pane.AgentSession != nil && e.Journal != nil && e.Journal.Available(journalRef(pane.AgentSession))

@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -20,7 +21,7 @@ func TestAgentTitleUsesBoundFirstPromptOnPhoneAndMonitor(t *testing.T) {
 	label := "My custom name"
 	pane := runtime.Pane{PaneID: "p1", Agent: "codex", AgentStatus: "blocked", Cwd: "/repo/pairfob", TerminalTitle: "⠋ | pairfob", AgentSession: ref, Tokens: map[string]string{"phase": "review"}, Label: &label}
 	snapshot := runtime.Snapshot{Panes: []runtime.Pane{pane}}
-	got := e.decorateAgentActivity(snapshot).Panes[0]
+	got := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), snapshot).Panes[0]
 	if got.Tokens["task"] != "Fix the session title" || got.TerminalTitle != pane.TerminalTitle || *got.Label != label || got.AgentStatus != "blocked" {
 		t.Fatalf("decorated=%+v", got)
 	}
@@ -33,12 +34,12 @@ func TestAgentTitleUsesBoundFirstPromptOnPhoneAndMonitor(t *testing.T) {
 	}
 	// Even in the same cwd, an unbound pane cannot borrow this task.
 	pane.AgentSession = nil
-	if other := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
+	if other := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
 		t.Fatal("unbound pane acquired another session's title")
 	}
 	pane.AgentSession = ref
 	pane.TerminalTitle = "Review title handling | pairfob"
-	if next := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; next.Tokens["task"] != "Review title handling" {
+	if next := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; next.Tokens["task"] != "Review title handling" {
 		t.Fatalf("OSC title did not replace fallback: %+v", next)
 	}
 }
@@ -61,7 +62,7 @@ func TestAgentTitleUsesBoundPiSession(t *testing.T) {
 	e.Journal = &journal.Reader{PiRoot: root}
 	ref := &runtime.AgentSessionRef{Source: "herdr:pi", Agent: "pi", Kind: "path", Value: path}
 	pane := runtime.Pane{PaneID: "p1", Agent: "pi", AgentStatus: "blocked", Cwd: "/repo/pairfob", TerminalTitle: "π - pairfob", AgentSession: ref, Tokens: map[string]string{"phase": "review"}}
-	got := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
+	got := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
 	if got.Tokens["task"] != "修复 Pi 会话标题" || got.TerminalTitle != pane.TerminalTitle || got.Tokens["phase"] != "review" {
 		t.Fatalf("decorated=%+v", got)
 	}
@@ -74,12 +75,12 @@ func TestAgentTitleUsesBoundPiSession(t *testing.T) {
 	}
 	// Even in the same cwd, an unbound pane cannot borrow this task.
 	pane.AgentSession = nil
-	if other := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
+	if other := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
 		t.Fatal("unbound pane acquired another session's title")
 	}
 	pane.AgentSession = ref
 	pane.Agent = "claude"
-	if other := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
+	if other := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
 		t.Fatal("another agent borrowed the Pi title")
 	}
 }
