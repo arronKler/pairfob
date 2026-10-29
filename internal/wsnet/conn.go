@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,9 +17,16 @@ import (
 	"pairfob/internal/mux"
 )
 
+const (
+	// DefaultRecvTimeout is the idle read deadline for a live connection.
+	DefaultRecvTimeout = 60 * time.Second
+	writeTimeout       = 10 * time.Second
+)
+
 type Conn struct {
-	ws      *websocket.Conn
-	writeMu sync.Mutex
+	ws         *websocket.Conn
+	writeMu    sync.Mutex
+	pongExtend atomic.Int64
 }
 
 func Wrap(ws *websocket.Conn) *Conn {
@@ -33,12 +41,41 @@ func (c *Conn) Send(f envelope.Frame) error {
 	}
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
-	c.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	c.ws.SetWriteDeadline(time.Now().Add(writeTimeout))
 	return c.ws.WriteMessage(websocket.BinaryMessage, b)
 }
 
+// Ping sends a WebSocket protocol ping. The Cloudflare runtime answers it
+// without waking a hibernating Durable Object, and protocol pings are not
+// billed.
+func (c *Conn) Ping() error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return c.ws.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeTimeout))
+}
+
+// EnablePongKeepalive extends the read deadline by timeout whenever a protocol
+// pong arrives. Call it before the live read loop: an idle connection kept
+// alive by protocol pings receives no data frames, so Recv's deadline would
+// otherwise fire between heartbeats.
+func (c *Conn) EnablePongKeepalive(timeout time.Duration) {
+	if timeout <= 0 {
+		c.pongExtend.Store(0)
+		c.ws.SetPongHandler(nil)
+		return
+	}
+	c.pongExtend.Store(int64(timeout))
+	c.ws.SetPongHandler(func(string) error {
+		d := time.Duration(c.pongExtend.Load())
+		if d <= 0 {
+			return nil
+		}
+		return c.ws.SetReadDeadline(time.Now().Add(d))
+	})
+}
+
 func (c *Conn) Recv() (envelope.Frame, error) {
-	return c.RecvWithin(60 * time.Second)
+	return c.RecvWithin(DefaultRecvTimeout)
 }
 
 func (c *Conn) RecvWithin(timeout time.Duration) (envelope.Frame, error) {

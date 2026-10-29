@@ -206,9 +206,14 @@ and `index_unavailable`.
 
 ## Heartbeat
 
-Send envelope PING/PONG every **25 seconds**. The Durable Object must send an
-application-level PONG. PING/PONG performs **no SQLite operations and does not
-call setAlarm**. `RecvWithin(60s)` proves client liveness, not Room liveness.
+Keep the transport alive every **25 seconds**. The daemon uses WebSocket
+protocol ping frames; the Cloudflare runtime returns a pong without waking a
+hibernating Durable Object, and protocol pings are not billed. A pong extends
+the daemon's 60-second read deadline. Phones, whose browser API cannot send
+control frames, keep using envelope PING; the Durable Object answers with an
+application-level PONG. Neither form performs SQLite operations or calls
+`setAlarm`. `RecvWithin(60s)` and the pong deadline prove client liveness, not
+Room liveness.
 
 ## Security headers
 

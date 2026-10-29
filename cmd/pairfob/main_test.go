@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -226,27 +226,42 @@ func TestRelayLinkDropsOfflineFramesAcrossReconnect(t *testing.T) {
 	}
 }
 
-func TestRelayHeartbeatKeepsIdleConnectionActive(t *testing.T) {
-	sender, receiver := mux.NewPipePair(4)
-	defer sender.Close()
-	defer receiver.Close()
+type heartbeatRecorder struct {
+	pings  chan struct{}
+	closed chan struct{}
+	err    error
+}
+
+func (h *heartbeatRecorder) Ping() error {
+	select {
+	case h.pings <- struct{}{}:
+	default:
+	}
+	return h.err
+}
+
+func (h *heartbeatRecorder) Close() {
+	select {
+	case <-h.closed:
+	default:
+		close(h.closed)
+	}
+}
+
+func TestRelayHeartbeatPingsIdleConnection(t *testing.T) {
+	conn := &heartbeatRecorder{pings: make(chan struct{}, 4), closed: make(chan struct{})}
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
-		runRelayHeartbeat(sender, time.Millisecond, stop)
+		runRelayHeartbeat(conn, time.Millisecond, stop)
 		close(done)
 	}()
 
-	for want := uint64(1); want <= 2; want++ {
-		frame, ok := receiver.RecvTimeout(time.Second)
-		if !ok {
-			t.Fatal("heartbeat was not sent")
-		}
-		if frame.Version != 1 || frame.Typ != envelope.TypPING || frame.RouteID != ([16]byte{}) || len(frame.Payload) != 8 {
-			t.Fatalf("invalid heartbeat frame: %+v", frame)
-		}
-		if got := binary.BigEndian.Uint64(frame.Payload); got != want {
-			t.Fatalf("heartbeat counter=%d want=%d", got, want)
+	for i := 0; i < 2; i++ {
+		select {
+		case <-conn.pings:
+		case <-time.After(time.Second):
+			t.Fatal("heartbeat did not send a protocol ping")
 		}
 	}
 	close(stop)
@@ -254,6 +269,30 @@ func TestRelayHeartbeatKeepsIdleConnectionActive(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("heartbeat loop did not stop")
+	}
+}
+
+func TestRelayHeartbeatClosesOnPingError(t *testing.T) {
+	conn := &heartbeatRecorder{
+		pings:  make(chan struct{}, 1),
+		closed: make(chan struct{}),
+		err:    errors.New("transport closed"),
+	}
+	done := make(chan struct{})
+	go func() {
+		runRelayHeartbeat(conn, time.Millisecond, make(chan struct{}))
+		close(done)
+	}()
+
+	select {
+	case <-conn.closed:
+	case <-time.After(time.Second):
+		t.Fatal("ping error did not close the connection")
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("heartbeat loop did not return after a ping error")
 	}
 }
 

@@ -72,6 +72,59 @@ func TestConcurrentSendSerializesWebSocketWrites(t *testing.T) {
 	}
 }
 
+func TestProtocolPingPongExtendsReadDeadline(t *testing.T) {
+	const (
+		readTimeout = 300 * time.Millisecond
+		keepalive   = 900 * time.Millisecond
+	)
+	ponged := make(chan struct{})
+	var once sync.Once
+	elapsed := make(chan time.Duration, 1)
+	server := httptest.NewServer(httpHandler(func(ws *websocket.Conn) {
+		conn := Wrap(ws)
+		conn.EnablePongKeepalive(keepalive)
+		start := time.Now()
+		if err := conn.Ping(); err != nil {
+			t.Errorf("Ping: %v", err)
+			elapsed <- 0
+			return
+		}
+		if _, err := conn.RecvWithin(readTimeout); err == nil {
+			t.Error("RecvWithin returned a data frame, want a timeout")
+		}
+		elapsed <- time.Since(start)
+	}))
+	defer server.Close()
+
+	client := dialTestWS(t, server.URL)
+	defer client.Close()
+	client.SetPingHandler(func(appData string) error {
+		once.Do(func() { close(ponged) })
+		return client.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(time.Second))
+	})
+	go func() {
+		for {
+			if _, _, err := client.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-ponged:
+	case <-time.After(2 * time.Second):
+		t.Fatal("client did not receive a protocol ping")
+	}
+	select {
+	case got := <-elapsed:
+		if got < keepalive/2 {
+			t.Fatalf("read deadline was not extended by the pong: %v", got)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("server read did not finish")
+	}
+}
+
 func TestHasV1SubprotocolRequiresExplicitOffer(t *testing.T) {
 	req := httptest.NewRequest("GET", "http://relay.test/v1/ws", nil)
 	if HasV1Subprotocol(req) {

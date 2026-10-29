@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -37,23 +36,19 @@ func liveRelayRetry() relayRetry {
 }
 
 type relayHeartbeatConn interface {
-	Send(envelope.Frame) error
+	Ping() error
 	Close()
 }
 
 func runRelayHeartbeat(conn relayHeartbeatConn, interval time.Duration, stop <-chan struct{}) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	var counter uint64
 	for {
 		select {
 		case <-stop:
 			return
 		case <-ticker.C:
-			counter++
-			payload := make([]byte, 8)
-			binary.BigEndian.PutUint64(payload, counter)
-			if err := conn.Send(envelope.Frame{Version: 1, Typ: envelope.TypPING, Payload: payload}); err != nil {
+			if err := conn.Ping(); err != nil {
 				conn.Close()
 				return
 			}
@@ -167,6 +162,9 @@ func runRelayWith(link *relayLink, eng *daemon.Engine, relayURL, join string, fi
 			backoff = nextBackoff(backoff)
 			continue
 		}
+		// Protocol pings keep the idle transport alive without waking the
+		// hibernating Durable Object; pongs extend the read deadline.
+		conn.EnablePongKeepalive(wsnet.DefaultRecvTimeout)
 		link.set(conn)
 		if !firstDone {
 			first <- nil
