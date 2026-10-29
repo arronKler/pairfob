@@ -93,11 +93,20 @@ describe("ship-guard release directory", () => {
   });
 
   test("rejects legacy pairfobd artifacts and any other extra file", () => {
-    for (const extra of ["pairfobd-darwin-arm64", "notes.txt"]) {
+    for (const extra of ["pairfobd-darwin-arm64", "notes.txt", "android"]) {
       const dir = releaseFixture();
       writeFileSync(join(dir, extra), "stale\n");
       expect(run(`pairfob_require_release_dir "$DIR"`, { DIR: dir }).exit, extra).not.toBe(0);
     }
+  });
+
+  test("accepts the Android publish staging directory beside the daemon artifacts", () => {
+    // publish-android-beta.sh keeps the channel in dist/dl/android/beta; a pack
+    // copies only the top-level files, so the directory is not shipped.
+    const dir = releaseFixture();
+    mkdirSync(join(dir, "android/beta"), { recursive: true });
+    writeFileSync(join(dir, "android/beta/latest.json"), "{}\n");
+    expect(run(`pairfob_require_release_dir "$DIR"`, { DIR: dir }).exit).toBe(0);
   });
 
   test("rejects missing or symlinked binaries", () => {

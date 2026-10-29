@@ -91,6 +91,14 @@ pairfob_require_release_dir() {
     name="${path##*/}"
     case "$name" in
       pairfob-darwin-amd64|pairfob-darwin-arm64|pairfob-linux-amd64|pairfob-linux-arm64|VERSION|SHA256SUMS) ;;
+      # publish-android-beta.sh stages the Android channel in dist/dl/android/beta,
+      # and a pack copies only the top-level files, so a directory of that name
+      # never reaches the relay's /dl.
+      android)
+        [[ -d "$path" && ! -L "$path" ]] && continue
+        echo "unexpected release artifact: $path" >&2
+        return 1
+        ;;
       *)
         echo "unexpected release artifact: $path" >&2
         return 1
