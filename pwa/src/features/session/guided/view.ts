@@ -5,7 +5,7 @@ import { getAppFrame } from "../../../app/frame";
 import { liveSession } from "../../computers/catalog-store";
 import { currentViewIncarnation } from "../drafts/state-drafts";
 import { composeFocused } from "../compose-store";
-import { applyPaneRead, isAgentChat, livePaneHash, livePaneText, openPaneId, sessionStore, setPaneFollow, setPaneUnread, termSelect } from "../session-store";
+import { isAgentChat, openPaneId, publishPaneBuffer, sessionStore, setPaneFollow, setPaneUnread, termSelect } from "../session-store";
 import { registerSessionView } from "../register";
 import { appRoot } from "../../../app/dom-root";
 import { hardwareKeyboard } from "../../../app/input-mode";
@@ -71,7 +71,7 @@ function committedBound(): CommitBound | null {
 
 // Still on the same committed owner AND the same DOM node, with no pending
 // composition hold. Call after any synchronous named publication that can let a
-// subscriber commit a replacement (e.g. applyPaneRead, batch(follow/unread)).
+// subscriber commit a replacement (e.g. publishPaneBuffer, batch(follow/unread)).
 function stillBound(bound: CommitBound, term: HTMLElement | null): boolean {
   if (compositionPublicationHeld()) return false;
   const s = getAppFrame().session;
@@ -125,7 +125,7 @@ export function patchChromeTitle(): void {
 export function patchSessionScreen(): SessionPatchOutcome {
   // A pending staged composition (session/pane/page/phase) has its own arriving
   // owner/frame/shell. Leaf patching would split it and read a stale snapshot
-  // (applyPaneRead cannot publish under the hold). Defer to the queued App
+  // (the buffer cannot publish under the hold). Defer to the queued App
   // commit; this is a real outcome, not "no terminal".
   if (compositionPublicationHeld()) return "deferred";
 
@@ -143,7 +143,7 @@ export function patchSessionScreen(): SessionPatchOutcome {
   // Publish the live pane read before any snapshot-backed model or echo work.
   // A notified subscriber may synchronously commit a replacement (no hold), so
   // recheck the bound + node identity before reading the snapshot model.
-  applyPaneRead(livePaneText(), livePaneHash());
+  publishPaneBuffer();
   if (!stillBound(bound, term)) return "deferred";
   const session = sessionStore.get();
   const model = paneModel();
@@ -179,7 +179,7 @@ export { sessionScroll, stickBottom };
 /** Normalize controller state before rendering; JSX only reads the prepared view. */
 export function prepareSessionPaint(): ReturnType<typeof sessionScroll> {
   registerSessionView();
-  applyPaneRead(livePaneText(), livePaneHash());
+  publishPaneBuffer();
   discardEmptyPaneRow(displayedTermModel(paneModel()));
   return sessionScroll();
 }

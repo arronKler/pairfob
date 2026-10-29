@@ -18,10 +18,11 @@ import {
 import { composeDraft, composeFocused, composeIME, setComposeDraft } from "../compose-store";
 import { fitComposeHeight } from "../compose-size";
 import { clearNoticeForScope, showError, visibleNotice, type Notice } from "../../../app/notices-store";
-import { currentDaemonId, liveSession } from "../../computers/catalog-store";
+import { liveSession } from "../../computers/catalog-store";
 import { phase } from "../../connection/connection-store";
 import { batch } from "../../../app/domain-publication";
 import { isAgentChat, isFullTerminal, openPaneId, setAgentChat, setFullTerminal } from "../session-store";
+import { paneOwnerKey } from "../pane-owner";
 import { liveAgents, markPaneSubmitted, selectedAgent } from "../../dashboard/catalog-store";
 import { setPaneTermMode } from "../../settings/preferences-store";
 import { commitView } from "../../../app/host";
@@ -85,17 +86,7 @@ let traceRequest = 0;
 
 /** Cache/read owner: daemon + runtime session + pane + terminal agent occupant. */
 export function currentAgentTraceOwnerKey(): string {
-  const session = liveSession();
-  const paneId = openPaneId();
-  if (!session || !paneId) return "";
-  const agent = liveAgents().find((item) => item.paneId === paneId);
-  return JSON.stringify([
-    currentDaemonId(),
-    agent?.runtimeSession || "",
-    paneId,
-    agent?.terminalId || "",
-    agent?.agentInstanceId || "",
-  ]);
+  return paneOwnerKey(openPaneId());
 }
 
 export function streamSig(items: AgentTraceItem[], working: boolean): string {

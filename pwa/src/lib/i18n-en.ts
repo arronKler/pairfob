@@ -582,6 +582,8 @@ export const en: { [K in keyof typeof zh]: string } = {
   "keys.scrollAria": "Terminal scroll",
 
   "term.screenAria": "The terminal on the computer",
+  "term.readingScreen": "Reading the screen on the computer",
+  "term.waitingComputer": "The computer is out of reach; this resumes on its own",
   "term.newOutput": "new output",
   "term.jumpLines": "{n} new lines",
 

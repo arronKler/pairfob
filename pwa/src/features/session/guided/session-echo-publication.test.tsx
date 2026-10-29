@@ -112,11 +112,11 @@ test("guided patch settles predicted text against the new authoritative pane rea
   }
 });
 
-test("patchSessionScreen publishes the pane read before it builds the model and gates a held composition", () => {
+test("patchSessionScreen publishes the live buffer before it builds the model and gates a held composition", () => {
   const source = readFileSync(fileURLToPath(new URL("./view.ts", import.meta.url)), "utf8");
   const patch = source.slice(source.indexOf("export function patchSessionScreen"), source.indexOf("export { sessionScroll"));
   const held = patch.indexOf("compositionPublicationHeld()");
-  const apply = patch.indexOf("applyPaneRead(");
+  const apply = patch.indexOf("publishPaneBuffer(");
   const model = patch.indexOf("paneModel()");
   const noted = patch.indexOf("noteSnapshot(");
   const unread = patch.indexOf("setPaneUnread(unreadCount() > 0)");

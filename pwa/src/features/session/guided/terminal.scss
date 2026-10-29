@@ -268,6 +268,95 @@ html.page-zoomed :is(.term, .term-line) {
   .agent-jump.term-jump-out { animation: none; }
 }
 
+/* --- Reading the screen --------------------------------------------------------------
+
+   A pane that has been chosen but not yet read. The destination is a terminal,
+   so the wait is drawn at the terminal's own rhythm — rows of output in the
+   text colour, one sheen across them (the workspace placeholders' language) —
+   instead of an empty buffer on the terminal's ground, which is a black screen
+   for as long as the round trip takes. The overlay keeps the ground opaque so
+   nothing shows through from the buffer underneath, and it takes the taps: a
+   screen still being read has no rows to act on.
+   ------------------------------------------------------------------------------------ */
+.term-reading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  padding: 10px 12px 18px;
+  background: var(--term-bg);
+  font-family: var(--mono);
+  font-size: var(--term-fs);
+  line-height: var(--term-lh);
+}
+
+/* Bars thin out towards the bottom, as the rows they stand for would. */
+.term-reading-lines {
+  position: relative;
+  height: 100%;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 72%, transparent);
+  mask-image: linear-gradient(180deg, #000 0%, #000 72%, transparent);
+}
+
+.term-reading-lines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 32%, var(--ink-07) 50%, transparent 68%);
+  animation: skeleton-sheen var(--sheen) var(--ease-in-out) infinite;
+}
+
+.term-reading-line {
+  display: flex;
+  align-items: center;
+  height: var(--term-lh);
+}
+
+.term-reading-line::before {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 0.55em;
+  border-radius: 2px;
+  background: var(--ink-line);
+}
+
+/* A screen's worth of lines: prompt rows short, output rows long, some
+   indented — enough shape that the reader sees a terminal arriving. */
+.term-reading-line:nth-child(12n + 1)::before { width: 34%; }
+.term-reading-line:nth-child(12n + 2)::before { width: 62%; }
+.term-reading-line:nth-child(12n + 3)::before { width: 71%; margin-left: 2ch; }
+.term-reading-line:nth-child(12n + 4)::before { width: 48%; margin-left: 2ch; }
+.term-reading-line:nth-child(12n + 5)::before { width: 56%; }
+.term-reading-line:nth-child(12n + 6)::before { width: 22%; }
+.term-reading-line:nth-child(12n + 7)::before { width: 44%; margin-left: 4ch; }
+.term-reading-line:nth-child(12n + 8)::before { width: 38%; margin-left: 4ch; }
+.term-reading-line:nth-child(12n + 9)::before { width: 66%; }
+.term-reading-line:nth-child(12n + 10)::before { width: 29%; }
+.term-reading-line:nth-child(12n + 11)::before { width: 52%; margin-left: 2ch; }
+.term-reading-line:nth-child(12n + 12)::before { width: 18%; }
+
+/* Out of reach: no read is on its way, so the rows stand still and the pane
+   says why, instead of a sheen promising a screen that cannot arrive. */
+.term-reading.is-still .term-reading-lines { opacity: 0.45; }
+.term-reading.is-still .term-reading-lines::after { display: none; }
+
+/* App text, not terminal output: the UI face, low in the pane, out of the rows. */
+.term-reading-note {
+  position: absolute;
+  inset: auto 12px 12px;
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-reading-lines::after { display: none; }
+}
+
 /* --- Wide layout --------------------------------------------------------------------- */
 
 /*

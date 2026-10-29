@@ -39,6 +39,7 @@ function ports(over: Partial<OpenPanePorts> = {}): OpenPanePorts {
     disposeGuidedScroll: () => undefined,
     leaveFullTerminal: async () => null,
     restoreAgentTrace: () => undefined,
+    restorePaneBuffer: () => undefined,
     canEnterAgentChat: () => false,
     resolvedTermMode: () => "guided",
     queuedKind: () => "none",
@@ -305,6 +306,7 @@ function counting(session: LiveSession, over: Partial<OpenPanePorts> = {}) {
       disposeGuidedScroll: step("dispose scroll"),
       leaveFullTerminal: async () => { steps.push("leave terminal"); return { from: 1, to: 1 }; },
       restoreAgentTrace: step("restore trace"),
+      restorePaneBuffer: step("restore buffer"),
       commitView: step("commit"),
       refreshPane: async () => { steps.push("read"); },
       ...over,
@@ -404,7 +406,7 @@ describe("choosing the pane that is already on screen beside the list", () => {
 
     const nav = await openPaneWithOwner("pB", counted);
 
-    expect(steps).toEqual(["park", "drop keys", "dispose scroll", "leave terminal", "restore trace", "commit", "read"]);
+    expect(steps).toEqual(["park", "drop keys", "dispose scroll", "leave terminal", "restore trace", "restore buffer", "commit", "read"]);
     expect(openPaneId()).toBe("pB");
     expect(sessionStore.get().fullTerminal).toBeFalse();
     expect(nav?.isCurrent()).toBeTrue();
@@ -419,7 +421,7 @@ describe("choosing the pane that is already on screen beside the list", () => {
 
     await openPaneWithOwner("pA", counted);
 
-    expect(steps).toEqual(["park", "drop keys", "dispose scroll", "leave terminal", "restore trace", "commit", "read"]);
+    expect(steps).toEqual(["park", "drop keys", "dispose scroll", "leave terminal", "restore trace", "restore buffer", "commit", "read"]);
     expect(currentScreen()).toBe("pane");
   });
 
@@ -430,14 +432,14 @@ describe("choosing the pane that is already on screen beside the list", () => {
     setScreen("home");
     const fromList = counting(session);
     await openPaneWithOwner("pA", fromList.ports);
-    expect(fromList.steps).toEqual(["park", "drop keys", "dispose scroll", "restore trace", "commit", "read"]);
+    expect(fromList.steps).toEqual(["park", "drop keys", "dispose scroll", "restore trace", "restore buffer", "commit", "read"]);
     expect(currentScreen()).toBe("pane");
 
     // And asked for again while it is the whole screen (a notification for it).
     display("pA", session, "terminal", 1, false);
     const onScreen = counting(session, { resolvedTermMode: () => "full" });
     await openPaneWithOwner("pA", onScreen.ports);
-    expect(onScreen.steps).toEqual(["park", "drop keys", "dispose scroll", "leave terminal", "restore trace", "commit", "read"]);
+    expect(onScreen.steps).toEqual(["park", "drop keys", "dispose scroll", "leave terminal", "restore trace", "restore buffer", "commit", "read"]);
   });
 
   test("a frame from another live session or an older view is not this pane on screen", async () => {

@@ -14,6 +14,8 @@ import { bindPaneKeys } from "../src/app/pane-keys";
 import { bindOverlayOrigin } from "../src/shared/ui/overlay";
 import { revealCaretRow, stickBottom } from "../src/features/session/guided/term";
 import { refreshAgentTrace, stickAgentStream } from "../src/features/session/chat/agent-chat-controller";
+import { refreshPaneRead } from "../src/features/connection/controller";
+import { bindPaneRefresh, unbindPaneRefresh } from "../src/features/connection/refresh-request";
 import { guidedScrollController } from "../src/features/session/guided/guided-scroll";
 import {
   disposeFullTerminal, getFullTerminalView, handleFullTerminalEvent, handleFullTerminalVisibility,
@@ -99,6 +101,10 @@ export async function createFixtureAPI(language: "zh" | "en", initialScene: stri
   stops.push(bindLegacyGestureBoundary(document));
   stops.push(bindRippleSurface(document));
   stops.push(initSwipeBack());
+  // The live poller binds this owner in the app; scenes have no poller, so bind
+  // it here to keep a scroll's follow-up read going through the same seam.
+  bindPaneRefresh(refreshPaneRead);
+  stops.push(() => unbindPaneRefresh(refreshPaneRead));
   window.addEventListener("beforeunload", dispose, { once: true });
 
   function ensureAppMounted(): void {

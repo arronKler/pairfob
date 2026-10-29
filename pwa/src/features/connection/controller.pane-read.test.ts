@@ -21,15 +21,17 @@ import { setDefaultComposeLive, setPaneComposeLive, setPaneTermMode } from "../s
 import { setComposeDraft, setComposeFocused, setComposeIME, setComposeLive, composeLive, composeFocused } from "../session/compose-store";
 import { setScreen } from "../../app/navigation-store";
 import {
+  applyPaneRead,
   isFullTerminal,
   noteSnapshotAt,
+  paneLoaded,
   resetObservationLifecycle,
   resetPaneView,
   selectPane,
   sessionStore,
 } from "../session/session-store";
 import { resetGenerationsForTests } from "./generations";
-import { openPane, refreshPaneRead, stopPolling } from "./controller";
+import { openPane, refreshPane, refreshPaneRead, stopPolling } from "./controller";
 
 let renders = 0;
 
@@ -154,7 +156,7 @@ function flipToDone(): void {
 describe("desk pane reads repaint the installed App once", () => {
   beforeEach(async () => {
     await resetBoardTestDOM();
-  await (await import("../../app/connected-loader")).loadConnectedRuntime();
+    await (await import("../../app/connected-loader")).loadConnectedRuntime();
     happy.happyDOM.setWindowSize({ width: 1280, height: 800 });
     resetGenerationsForTests();
     registerSessionOwnerPreparer(registerSessionView);
@@ -388,5 +390,55 @@ describe("per-pane input mode", () => {
     releaseAppHost(countingHost);
     resetPaneReadFixture();
     renders = 0;
+  });
+});
+
+describe("a pane opened while the computer is out of reach", () => {
+  beforeEach(async () => {
+    await resetBoardTestDOM();
+    await (await import("../../app/connected-loader")).loadConnectedRuntime();
+    happy.happyDOM.setWindowSize({ width: 1280, height: 800 });
+    resetGenerationsForTests();
+    registerSessionOwnerPreparer(registerSessionView);
+  });
+
+  /* A pane opened out of reach has no screen to read. That is not an empty
+     screen: claiming one blanked whatever the pane already held, and left a
+     pane with nothing waiting on a read that never came. */
+  test("keeps the screen it already holds instead of blanking it", async () => {
+    bootDeskPane("idle");
+    act(() => { mountApp(); });
+    act(() => {
+      applyPaneRead("last screen", "h1");
+      attachLiveSession({ isConnected: () => false });
+    });
+
+    await act(async () => { await refreshPane(); });
+
+    expect(sessionStore.get().paneText).toBe("last screen");
+    expect(paneLoaded()).toBeTrue();
+  });
+
+  test("claims no screen when it has none, so the pane waits for the read", async () => {
+    bootDeskPane("idle");
+    act(() => { mountApp(); });
+    act(() => {
+      resetPaneView();
+      attachLiveSession({ isConnected: () => false });
+    });
+
+    await act(async () => { await refreshPane(); });
+
+    expect(sessionStore.get().paneText).toBe("");
+    expect(paneLoaded()).toBeFalse();
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      stopPolling();
+      unmountApp();
+      registerSessionOwnerPreparer(null);
+    });
+    resetPaneReadFixture();
   });
 });

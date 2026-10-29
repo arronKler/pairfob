@@ -50,6 +50,12 @@ export type OpenPanePorts = {
   disposeGuidedScroll(): void;
   leaveFullTerminal(): Promise<{ from: number; to: number } | null>;
   restoreAgentTrace(paneId: string): void;
+  /**
+   * Paint the screen this pane had when it was last read, so the visit shows
+   * the terminal at once instead of waiting for the first `PaneRead`. Does
+   * nothing when no screen was kept; the read fills it in either way.
+   */
+  restorePaneBuffer(paneId: string): void;
   canEnterAgentChat(agent: { paneId: string; historyAvailable?: boolean; hasAgent?: boolean; agent?: string } | undefined): boolean;
   resolvedTermMode(mode: ReturnType<typeof paneTermMode>): "full" | "agent" | "guided";
   queuedKind(): string;
@@ -152,6 +158,7 @@ export async function openPaneWithOwner(paneId: string, ports: OpenPanePorts): P
     resetPaneView();
     setComposeLive(paneComposeLive(paneId));
     ports.restoreAgentTrace(paneId);
+    ports.restorePaneBuffer(paneId);
     if (ports.queuedKind() === "none") ports.nextTransition(ports.transitionFor(ports.currentScreen(), "pane"), paneId);
     setScreen("pane");
     const resolved = ports.resolvedTermMode(paneTermMode(paneId));

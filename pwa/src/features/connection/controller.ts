@@ -51,6 +51,7 @@ import { wsURL } from "./connection-store";
 import { track } from "../../lib/telemetry";
 import { applyComposeDraft, bumpViewIncarnation, captureComposeDraft, currentViewIncarnation, parkComposeView } from "../session/drafts/compose-drafts";
 import { clearAgentTraceCache } from "../../lib/agent-trace-cache";
+import { clearPaneBufferCache, rememberPaneBuffer, restorePaneBuffer } from "../session/pane-buffer";
 import { clearBoardPreviews } from "../board/preview/store";
 import { liveView, liveViewIsCurrent } from "./generations";
 import { openPaneWithOwner as openOwnedPane, type PaneNavigation } from "./open-pane";
@@ -158,6 +159,7 @@ const retirementPorts: RetirementPorts = {
   bumpViewIncarnation,
   clearAgentTraceCache,
   clearBoardPreviews,
+  clearPaneBufferCache,
 };
 
 const lifecyclePorts: LifecyclePorts = {
@@ -361,6 +363,7 @@ export async function openPaneWithOwner(paneId: string, source?: HTMLElement | n
     disposeGuidedScroll: () => guidedScrollController.dispose(),
     leaveFullTerminal: () => leaveFullTerminalWithTransition({ rememberGuided: false, paint: false }),
     restoreAgentTrace,
+    restorePaneBuffer,
     canEnterAgentChat,
     resolvedTermMode: resolvedPaneTermMode,
     queuedKind,
@@ -441,6 +444,7 @@ async function performPaneRead(owner: PaneReadOwner, startedAt: number): Promise
     markAppPerformance("first-session-data");
     const same = nextHash !== "" && nextHash === sessionStore.get().paneHash && nextText === sessionStore.get().paneText;
     applyPaneRead(nextText, nextHash);
+    rememberPaneBuffer(paneId, nextText, nextHash);
     const acknowledged = acknowledgePaneCompletion(paneId);
     if (shouldPullStatus(!same, Date.now(), lastSnapshotAt())) void refreshSnapshot();
     const keep = preserveCompose();
@@ -527,8 +531,11 @@ export function wakeLiveReads(): void {
 }
 
 export async function refreshPane(): Promise<void> {
-  if (!liveSession() || !openPaneId() || !liveSession()!.isConnected()) {
-    applyPaneRead("", "");
+  const session = liveSession();
+  if (!session || !openPaneId() || !session.isConnected()) {
+    // A screen cannot be read out of reach, so nothing is claimed: a screen this
+    // pane already holds stays, and one with none keeps waiting (the terminal
+    // says why) until the connection returns and the read lands.
     commitView();
     return;
   }

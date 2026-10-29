@@ -2,7 +2,7 @@ import { ArrowDown } from "lucide-react";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { lineFillBackground, paintLines, plainCellClass, spanCss, spanInk, type StyledLine } from "../../../lib/ansi";
 import { t } from "../../../lib/i18n";
-import { openPaneId, paneFollow, paneUnread, sessionStore, setPaneFollow, termSelect } from "../session-store";
+import { openPaneId, paneFollow, paneLoaded, paneUnread, sessionStore, setPaneFollow, termSelect } from "../session-store";
 import { termWrap } from "../../settings/preferences-store";
 import { haptic } from "../../../lib/dom";
 import { echoGhost, echoStoreRevision, subscribeEcho } from "./echo";
@@ -30,6 +30,7 @@ import { unreadBars, unreadCount } from "./unread";
 import { bindHostScroll } from "../full-terminal/full-terminal-scroll";
 import { deskPointer, useDeskPointer } from "../desk-pointer";
 import { SessionScrollRail } from "./session-scroll";
+import { TermReading } from "./term-reading";
 import { cellText } from "../../../shared/ui/primitives";
 
 function TermLine({
@@ -125,6 +126,9 @@ export function SessionTerminal({ onRow }: { onRow?: (index: number, at?: RowPre
   useSyncExternalStore(subscribeEcho, echoStoreRevision);
   useSyncExternalStore(subscribeTermDisplay, termDisplayStoreRevision);
   const picked = useSyncExternalStore(sessionStore.subscribe, pickedRow, pickedRow);
+  // The screen is what the daemon last sent; until it lands the pane draws the
+  // read in progress instead of an empty buffer.
+  const reading = !useSyncExternalStore(sessionStore.subscribe, paneLoaded, paneLoaded);
   const handleRow = onRow ?? openRow;
   const onRowRef = useRef(handleRow);
   onRowRef.current = handleRow;
@@ -199,8 +203,9 @@ export function SessionTerminal({ onRow }: { onRow?: (index: number, at?: RowPre
           ))}
         </div>
       </div>
-      <SessionScrollRail scroll={sendGuidedTuiScroll} pageLines={pageScrollLines} />
-      <JumpChip jumpRef={jumpRef} />
+      {reading ? <TermReading /> : null}
+      {reading ? null : <SessionScrollRail scroll={sendGuidedTuiScroll} pageLines={pageScrollLines} />}
+      {reading ? null : <JumpChip jumpRef={jumpRef} />}
     </div>
   );
 }

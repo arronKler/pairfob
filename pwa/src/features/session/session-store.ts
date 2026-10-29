@@ -21,6 +21,11 @@ export type SessionRecord = {
   agentChat: boolean;
   paneText: string;
   paneHash: string;
+  /**
+   * A screen read has landed for this open, even if it returned nothing. Until
+   * then the guided terminal has no screen to show, whatever text it carries.
+   */
+  paneLoaded: boolean;
   snapshotPending: boolean;
   /** When the last Snapshot landed, so a pane change can pull status forward. */
   snapshotAt: number;
@@ -40,6 +45,7 @@ const sessionDomain = createDomain<SessionRecord>("session", {
   agentChat: false,
   paneText: "",
   paneHash: "",
+  paneLoaded: false,
   snapshotPending: false,
   snapshotAt: 0,
   paneReadBusy: false,
@@ -103,17 +109,61 @@ export function selectPane(paneId: string): void {
   });
 }
 
+/** Whether a screen read has landed for this open. */
+export function paneLoaded(): boolean {
+  return read().paneLoaded;
+}
+
 /** A successful terminal read replaced the buffer. */
 export function applyPaneRead(text: string, hash: string): void {
   const live = read();
   const published = sessionStore.get();
   if (
-    live.paneText === text && live.paneHash === hash
+    live.paneLoaded && published.paneLoaded
+    && live.paneText === text && live.paneHash === hash
     && published.paneText === text && published.paneHash === hash
   ) return;
   write((record) => {
     record.paneText = text;
     record.paneHash = hash;
+    record.paneLoaded = true;
+  });
+}
+
+/**
+ * Bring the published buffer up to the live one without claiming a screen has
+ * been read: a staged transition's buffer is republished this way when the pane
+ * is painted, and the wait for its own read must survive the repaint.
+ */
+export function publishPaneBuffer(): void {
+  const live = read();
+  const published = sessionStore.get();
+  if (
+    published.paneText === live.paneText && published.paneHash === live.paneHash
+    && published.paneLoaded === live.paneLoaded
+  ) return;
+  write((record) => {
+    record.paneText = live.paneText;
+    record.paneHash = live.paneHash;
+    record.paneLoaded = live.paneLoaded;
+  });
+}
+
+/**
+ * Paint the screen this pane had when it was last open, before its read lands
+ * (the pane-buffer cache owns where that comes from). An empty screen has
+ * nothing to paint and stays unloaded, so the read decides what it shows.
+ */
+export function seedPaneBuffer(text: string, hash: string): void {
+  if (!text) return;
+  const live = read();
+  if (live.paneText === text && live.paneHash === hash && live.paneLoaded) return;
+  composeTransaction([sessionStore], () => {
+    stage((record) => {
+      record.paneText = text;
+      record.paneHash = hash;
+      record.paneLoaded = true;
+    });
   });
 }
 
@@ -259,6 +309,7 @@ export function resetPaneView(): void {
     stage((record) => {
       record.paneText = "";
       record.paneHash = "";
+      record.paneLoaded = false;
       record.paneFollow = true;
       record.paneUnread = false;
       record.paneRow = null;

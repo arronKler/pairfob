@@ -24,6 +24,7 @@ function portsSpy() {
     bumpViewIncarnation: () => calls.push("incarnation"),
     clearAgentTraceCache: () => calls.push("traceCache"),
     clearBoardPreviews: () => calls.push("previews"),
+    clearPaneBufferCache: () => calls.push("paneBuffers"),
   };
   return { calls, ports };
 }
@@ -114,7 +115,7 @@ describe("session retirement", () => {
     expect(snapshotIsPending()).toBe(false);
     expect(sessionStore.get().paneReadBusy).toBe(false);
     expect(networkOnline()).toBe(true);
-    expect(calls).toEqual(["incarnation", "traceCache", "previews"]);
+    expect(calls).toEqual(["incarnation", "traceCache", "previews", "paneBuffers"]);
 
     // One transaction: no domain publishes twice for a single retirement.
     for (const [domain, count] of Object.entries(publishes)) {
@@ -139,7 +140,7 @@ describe("session retirement", () => {
     const second = portsSpy();
     resetLiveConnection(second.ports);
     expect(liveSession()).toBeNull();
-    expect(second.calls).toEqual(["incarnation", "traceCache", "previews"]);
+    expect(second.calls).toEqual(["incarnation", "traceCache", "previews", "paneBuffers"]);
     for (const [domain, count] of Object.entries(publishes)) {
       expect([domain, count <= 1]).toEqual([domain, true]);
     }

@@ -585,6 +585,8 @@ export const zh = {
   "keys.scrollAria": "终端滚动",
 
   "term.screenAria": "电脑上的终端画面",
+  "term.readingScreen": "正在读取电脑上的屏幕",
+  "term.waitingComputer": "电脑暂时联系不上，恢复后自动继续",
   "term.newOutput": "新输出",
   "term.jumpLines": "{n} 行新输出",
 

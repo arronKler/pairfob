@@ -1,6 +1,7 @@
 import { clearAgentTraceCache } from "../../lib/agent-trace-cache";
 import { bumpViewIncarnation } from "../session/drafts/compose-drafts";
 import { clearBoardPreviews } from "../board/preview/store";
+import { clearPaneBufferCache } from "../session/pane-buffer";
 import { resetLiveConnection, type RetirementPorts } from "./retirement";
 
 /**
@@ -16,6 +17,7 @@ const ports: RetirementPorts = {
   bumpViewIncarnation,
   clearAgentTraceCache,
   clearBoardPreviews,
+  clearPaneBufferCache,
 };
 
 /** Clear data that belongs to one established daemon session. Callers park drafts first. */

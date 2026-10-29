@@ -33,6 +33,8 @@ export type RetirementPorts = {
   bumpViewIncarnation(): void;
   clearAgentTraceCache(): void;
   clearBoardPreviews(): void;
+  /** Screens remembered for this computer's panes answer for no one else. */
+  clearPaneBufferCache(): void;
 };
 
 /** Domain writes only; callers wrap this in their own `batch` for a larger transaction. */
@@ -66,6 +68,7 @@ export function resetLiveConnection(ports: RetirementPorts): void {
   ports.bumpViewIncarnation();
   ports.clearAgentTraceCache();
   ports.clearBoardPreviews();
+  ports.clearPaneBufferCache();
   batch(() => {
     retireLiveDomains();
   });
