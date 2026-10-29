@@ -72,19 +72,28 @@ describe("runtime operation config", () => {
 		expect(() => parseRuntimeOperationsConfig(null)).toThrow();
 		expect(() => parseRuntimeOperationsConfig({ capabilities: NO_OPERATION_CAPABILITIES, agent_kinds: [] })).toThrow();
 		expect(() => parseRuntimeOperationsConfig(config(
-			{ create_conversation: true, history: "yes", layout: true, worktrees: true },
+			{ create_conversation: true, history: "yes" },
 			["codex", "BadKind"],
 		))).toThrow();
 		expect(() => parseRuntimeOperationsConfig({ ...config(NO_OPERATION_CAPABILITIES), extra: true })).toThrow();
 	});
 
-  test("old daemon omits file capabilities, malformed extensions fail closed", () => {
+  test("old daemon omits file capabilities, malformed known keys still fail closed", () => {
     const { rename_file, delete_file, upload_file, upload_file_v2, ...legacy } = NO_OPERATION_CAPABILITIES;
     expect(parseRuntimeOperationsConfig(config(legacy)).capabilities).toEqual(NO_OPERATION_CAPABILITIES);
     expect(() => parseRuntimeOperationsConfig(config({ ...legacy, rename_file: "true" }))).toThrow();
-    expect(() => parseRuntimeOperationsConfig(config({ ...legacy, file_actions: true }))).toThrow();
     expect(() => parseRuntimeOperationsConfig(config({ ...legacy, upload_file: 1 }))).toThrow();
     expect(() => parseRuntimeOperationsConfig(config({ ...legacy, upload_file_v2: "yes" }))).toThrow();
+  });
+
+  test("a capability this build does not know is ignored, not incompatible", () => {
+    // The Android shell bundles its page, so a packaged client cannot be
+    // replaced before the daemon that advertises a new capability. Additive
+    // keys are skipped; everything this build does know keeps its meaning.
+    const parsed = parseRuntimeOperationsConfig(config({ ...NO_OPERATION_CAPABILITIES, future_capability: true }));
+    expect(parsed.capabilities).toEqual(NO_OPERATION_CAPABILITIES);
+    const mixed = parseRuntimeOperationsConfig(config({ ...NO_OPERATION_CAPABILITIES, history: true, future_capability: "yes" }));
+    expect(mixed.capabilities.history).toBeTrue();
   });
 
   test("upload_file_v2 is optional (absent=false) and independent of upload_file", () => {

@@ -144,10 +144,11 @@ Envelope bytes stay `pairfob.v1` (`proto/envelope.md`, `proto/rpc.schema.json`,
 fields are frozen; `pair_loc` never enters SPAKE / Argon2. There is no `/v1/ws`
 origin.
 
-`GetConfig.capabilities` is a closed object (eleven required keys plus optional
-ones such as `rename_file`, `delete_file` and `upload_file_v2`) and is the only
-authority for which operations the phone shows. Mutations carry a fresh
-`operation_id` and are never retried automatically; `unknown_outcome`
+`GetConfig.capabilities` is the only authority for which operations the phone
+shows. Keys are additive: a known key must be a boolean, and a key this build
+does not know is ignored, so a packaged client (the Android shell bundles its
+page) keeps working against a daemon that advertises more. Mutations carry a
+fresh `operation_id` and are never retried automatically; `unknown_outcome`
 refreshes, it does not replay. Paths and cwd fail closed outside live snapshot
 roots or `PAIRFOB_ALLOWED_ROOTS`.
 

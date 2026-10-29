@@ -53,9 +53,11 @@ are unchanged.
 ## Rollout and notifications
 
 Ship the PWA that recognizes `list_sessions` before a daemon that advertises
-the key, even when its value is false. Older PWAs reject unknown capability
-keys and fail closed. A new PWA talking to an older daemon treats the absent
-key as false and sends no discovery probe.
+the key, even when its value is false. A client built before the
+forward-compatible parser rejects unknown capability keys and fails closed, and
+the Android shell bundles its page, so an APK must be rebuilt and published
+whenever a daemon starts advertising a new key. A new PWA talking to an older
+daemon treats the absent key as false and sends no discovery probe.
 
 Push notifications remain default-session-only. Their deep links carry
 `daemonId` and `paneId`, so a phone currently viewing a named session switches

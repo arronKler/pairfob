@@ -415,11 +415,13 @@ export function parseRuntimeOperationsConfig(value: unknown): RuntimeOperationsC
 
 	const rawCapabilities = isRecord(config.capabilities) ? config.capabilities : {};
 	const capabilities = { ...NO_OPERATION_CAPABILITIES };
-	const capabilityKeys = Object.keys(rawCapabilities);
 	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "download_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers", "trace_labels", "trace_times", "trace_models", "trace_writes", "git_change_stats", "search_files"]);
-	const capabilitiesValid = capabilityKeys.every((key) => (OPERATION_CAPABILITY_KEYS as readonly string[]).includes(key))
-		&& OPERATION_CAPABILITY_KEYS.every((key) => typeof rawCapabilities[key] === "boolean"
-      || (optionalCapabilities.has(key) && !(key in rawCapabilities)));
+	// A capability this build does not know is ignored rather than rejected: keys
+	// are additive, and a packaged client (the Android shell bundles its page)
+	// cannot be replaced before the daemon that advertises them. Known keys must
+	// still be booleans, so a malformed answer is still an error.
+	const capabilitiesValid = OPERATION_CAPABILITY_KEYS.every((key) => typeof rawCapabilities[key] === "boolean"
+    || (optionalCapabilities.has(key) && !(key in rawCapabilities)));
 	if (!capabilitiesValid) badResult("GetConfig capabilities 非法");
 	for (const key of OPERATION_CAPABILITY_KEYS) capabilities[key] = rawCapabilities[key] === true;
 
