@@ -412,7 +412,7 @@ func journalRef(ref *runtime.AgentSessionRef) journal.Ref {
 	if ref == nil {
 		return journal.Ref{}
 	}
-	return journal.Ref{Source: ref.Source, Agent: ref.Agent, Kind: ref.Kind, Value: ref.Value}
+	return journal.Ref{Source: ref.Source, Agent: ref.Agent, Kind: ref.Kind, Value: ref.Value, Leaf: ref.Leaf}
 }
 
 func (e *Engine) findPane(session *string, paneID string) (*runtime.Pane, error) {

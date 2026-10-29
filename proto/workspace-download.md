@@ -134,6 +134,11 @@ file instead of falling back to the relay or buffering the whole file. The
 Capacitor shell needs its own native file-write/share bridge; Chrome's download
 behaviour inside a WebView is not assumed.
 
+A saved file of at most 32 MiB is then kept in memory and offered to the system
+share sheet (`navigator.share` with the `File`), which is how a phone opens it:
+no web API starts a saved path in its default app. Larger downloads stay on the
+device with nothing held in the page.
+
 The phone caps its own request at the daemon's advertised `max_bytes`, shows
 bytes saved, and can cancel. Cancelling closes the handle, aborts the writable,
 or cancels the service-worker stream. There is no automatic retry of the

@@ -218,7 +218,7 @@ describe("no production consumer reaches a retired legacy facade path", () => {
         expect(RETIRED.has(id), `${moduleId(sourceRoot, file)} -> ${spec} (${id})`).toBe(false);
       }
     }
-    // A whole-tree static scan: its cost grows with the module count, so it gets
-    // room beyond the default per-test budget when the full suite runs in parallel.
-  }, 20_000);
+    // This parses the whole production tree. On a loaded workstation the same
+    // scan can take over a minute; retain every assertion and allow it to finish.
+  }, 120_000);
 });

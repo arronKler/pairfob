@@ -521,6 +521,19 @@ func failAgentStart(operationID string, err error) (Receipt, error) {
 }
 
 func (h *Herdr) startAgentOnPane(ctx context.Context, session SessionRef, paneID, name, kind string) (string, error) {
+	if localBindingAgent(kind) && h.HookBinary != "" {
+		if err := InstallAgentObservation(kind, h.HookBinary); err != nil {
+			return "", invalidFault("agent.start", "cannot prepare agent session observation: "+err.Error())
+		}
+	}
+	if kind == "cmd" {
+		return h.startCommandCode(ctx, session, paneID, name)
+	}
+	if kind == "opencode" && h.HookBinary != "" {
+		if err := h.prepareOpenCodeObservation(ctx, session); err != nil {
+			return "", err
+		}
+	}
 	if err := h.waitCreatedShell(ctx, session, paneID); err != nil {
 		return "", err
 	}
@@ -562,7 +575,9 @@ func (h *Herdr) maybeStartAgent(ctx context.Context, session SessionRef, operati
 	if startErr != nil {
 		return h.compensateCreated(ctx, session, operationID, created, closer, startErr)
 	}
-	created = append(created, EntityRef{Kind: EntityAgent, ID: startedName})
+	if startedName != "" {
+		created = append(created, EntityRef{Kind: EntityAgent, ID: startedName})
+	}
 	return Receipt{OperationID: operationID, Outcome: OutcomeApplied, Created: created}, nil
 }
 

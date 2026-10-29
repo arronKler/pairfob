@@ -1,3 +1,4 @@
+import { terminalLateCleanup } from "./terminal-late";
 import { connectionDiagnostics } from "./connection-diagnostics";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Direction, DIR_C, DIR_S } from "./aead.ts";
@@ -494,4 +495,45 @@ test("disconnect evidence retains pending count and route before cleanup", async
   expect(JSON.stringify(record)).not.toContain("private");
   transport.close();
   expect(connectionDiagnostics().filter((record) => record.route_id === "2a".repeat(16) && record.event === "disconnect")).toHaveLength(1);
+});
+
+
+describe("late TerminalOpen replies", () => {
+  test("releases a late controller once on its original epoch without reopening", async () => {
+    const { c2s, s2c, route } = keys();
+    const channel = new MockChannel();
+    const transport = openTransport(channel, c2s, s2c, route);
+    const wire = { operation_id: "op_terminal_late_test", pane_id: "w0:p1", cols: 80, rows: 24 };
+    const pending = trackMutationDelivery(markSent => transport.rpc("TerminalOpen", wire, 20, markSent,
+      terminalLateCleanup(transport, "TerminalOpen", wire)));
+    const error = await pending.catch(error => error);
+    expect(error.code).toBe("unknown_outcome");
+    const daemonReads = new Direction(new Uint8Array(32).fill(7), DIR_C);
+    const daemonWrites = new Direction(new Uint8Array(32).fill(7), DIR_S);
+    const open = JSON.parse(new TextDecoder().decode(daemonReads.open(route, channel.fwd()[0]!.payload)));
+    const result = { ...wire, terminal_id: "term_" + "a".repeat(32), encoding: "ansi" };
+    const deliver = (id: string, value: unknown) => channel.deliver({ version: 1, typ: Typ.FWD, flags: 0, routeId: route,
+      payload: daemonWrites.seal(route, new TextEncoder().encode(JSON.stringify({ v: 1, id, ok: true, result: value }))) });
+    deliver(open.id, result);
+    expect(channel.fwd()).toHaveLength(2);
+    const close = JSON.parse(new TextDecoder().decode(daemonReads.open(route, channel.fwd()[1]!.payload)));
+    expect(close.op).toBe("TerminalClose");
+    expect(close.params.terminal_id).toBe(result.terminal_id);
+    expect(close.params.operation_id).not.toBe(wire.operation_id);
+    deliver(open.id, result);
+    expect(channel.fwd()).toHaveLength(2);
+    deliver(close.id, {});
+    transport.close();
+  });
+
+  test("invalid late results cannot close a different pane's controller", () => {
+    const calls: string[] = [];
+    const transport = { rpc: async (op: string) => { calls.push(op); return {}; } };
+    const wire = { pane_id: "w0:p1", operation_id: "op_late" };
+    const cleanup = terminalLateCleanup(transport, "TerminalOpen", wire)!;
+    cleanup({ ...wire, pane_id: "w0:p2", terminal_id: "term_" + "a".repeat(32), cols: 80, rows: 24, encoding: "ansi" });
+    cleanup({ ...wire, operation_id: "other", terminal_id: "term_" + "a".repeat(32), cols: 80, rows: 24, encoding: "ansi" });
+    expect(calls).toEqual([]);
+    expect(terminalLateCleanup(transport, "TerminalInput", wire)).toBeUndefined();
+  });
 });

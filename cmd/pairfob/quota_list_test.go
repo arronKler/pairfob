@@ -8,6 +8,31 @@ import (
 	"pairfob/internal/runtime"
 )
 
+func TestQuotaListPrintsTheNewAccountProviders(t *testing.T) {
+	five, week := 12.5, 54.5
+	remaining := int64(5343)
+	var out bytes.Buffer
+	printQuotaAccounts(&out, []runtime.QuotaReading{
+		{Account: runtime.QuotaAccount{ID: "opencode-go", Provider: "opencode-go", State: "ok", Meters: []runtime.QuotaMeter{
+			{Kind: "quota", Name: "five hour", Pool: "plan", Headline: true, UsedPercent: &five, WindowMinutes: 300},
+			{Kind: "quota", Name: "seven day", Pool: "plan", Headline: true, UsedPercent: &week, WindowMinutes: 10080},
+		}}},
+		{Account: runtime.QuotaAccount{ID: "command-code", Provider: "command-code", Plan: "Individual Goat", State: "ok", Meters: []runtime.QuotaMeter{
+			{Kind: "quota", Name: "five hour", Pool: "plan", Headline: true, UsedPercent: &five, WindowMinutes: 300},
+			{Kind: "balance", Name: "monthly balance", Pool: "usd", Headline: true, Amount: &remaining, Scale: 2, Unit: "usd"},
+		}}},
+	})
+	got := out.String()
+	for _, want := range []string{
+		"opencode-go", "5h 88% left · 7d 46% left",
+		"command-code", "Individual Goat", "5h 88% left · monthly balance 53.43 usd",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in\n%s", want, got)
+		}
+	}
+}
+
 func TestQuotaListPrintsStatesAndSharesOnly(t *testing.T) {
 	used, low, amount, cash := 28.0, 94.0, int64(1240), int64(21139)
 	var out bytes.Buffer

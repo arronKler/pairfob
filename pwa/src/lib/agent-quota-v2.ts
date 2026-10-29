@@ -9,7 +9,7 @@ import { ProtocolError } from "./protocol/errors";
  */
 
 /** The providers this build can name and explain. An item of any other is dropped, not refused. */
-export const QUOTA_PROVIDERS = ["codex", "claude", "antigravity", "copilot", "cursor", "grok", "deepseek"] as const;
+export const QUOTA_PROVIDERS = ["codex", "claude", "antigravity", "copilot", "cursor", "grok", "deepseek", "opencode-go", "command-code"] as const;
 export type QuotaProvider = typeof QUOTA_PROVIDERS[number];
 
 export type QuotaState = "ok" | "partial" | "failed" | "throttled" | "needs_action" | "not_configured";

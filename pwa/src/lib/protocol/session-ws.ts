@@ -1,3 +1,4 @@
+import { terminalLateCleanup } from "./terminal-late";
 import { WorkspaceDownloadRPC } from "./workspace-download-rpc";
 import { WorkspaceMediaRPC } from "./workspace-media-rpc";
 import { parseWorkspaceReference } from "./workspace-reference";
@@ -596,7 +597,7 @@ class ReconnectingSession implements LiveSession {
     const cleanup = op === "TerminalClose";
     const transport = this.checking && !cleanup ? null : await this.captureTransport();
     if (!transport || (this.checking && !cleanup)) return Promise.reject(new ProtocolError("disconnected", "连接已断开；本次终端操作未发送"));
-    return trackMutationDelivery((markSent) => transport.rpc(op, params, TERMINAL_RPC_TIMEOUT_MS, markSent));
+    return trackMutationDelivery((markSent) => transport.rpc(op, params, TERMINAL_RPC_TIMEOUT_MS, markSent, terminalLateCleanup(transport, op, params)));
   }
 
   private async captureTransport(): Promise<SessionTransport | null> {

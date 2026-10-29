@@ -35,6 +35,7 @@ func doctorCommand(sock string) error {
 		return err
 	}
 	writeDoctor(os.Stdout, h)
+	writePrivacyDoctor(os.Stdout, sock)
 	writeHerdrMaintenance(os.Stdout)
 	if !h.Running || !h.HerdrOK {
 		return errDoctor

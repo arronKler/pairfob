@@ -48,6 +48,8 @@ type quotaAccountProvider struct {
 
 var quotaAccountProviders = []quotaAccountProvider{
 	{name: "deepseek", source: "api", locate: locateDeepSeekQuota},
+	{name: "opencode-go", source: "api", locate: locateOpenCodeGoQuota},
+	{name: "command-code", source: "api", locate: locateCommandCodeQuota},
 }
 
 // Reads that start a CLI share these slots. HTTP reads are not limited: run
@@ -63,11 +65,25 @@ type QuotaSource struct {
 
 // QuotaSources lists the accounts this build can read, configured or not.
 func QuotaSources() []QuotaSource {
+	selected, err := QuotaSelection()
+	if err != nil {
+		return nil
+	}
+	enabled := map[string]bool{}
+	for _, name := range selected {
+		enabled[name] = true
+	}
 	out := make([]QuotaSource, 0, len(quotaProviders)+len(quotaAccountProviders))
 	for _, p := range quotaProviders {
+		if !enabled[p.name] {
+			continue
+		}
 		out = append(out, QuotaSource{ID: p.name, Read: p.read})
 	}
 	for _, p := range quotaAccountProviders {
+		if !enabled[p.name] {
+			continue
+		}
 		out = append(out, QuotaSource{ID: p.name, Read: p.read})
 	}
 	return out

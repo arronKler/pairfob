@@ -27,6 +27,7 @@ import { mountTestApp, commitTest, unmountTestApp } from "../../../../test-suppo
 import { bindSessionOwnerFromLive } from "../bind-live";
 import { MOTION_MS } from "../../../shared/ui/dom/motion";
 import { AgentChatPane } from "./agent-chat";
+import { agentChatUIRevision } from "./agent-chat-ui";
 import {
   currentAgentTraceOwnerKey,
   enterAgentChat,
@@ -609,6 +610,9 @@ test("retirement during the initial busy publication prevents even the first rea
   let calls = 0;
   withLive({ agentTrace: async () => { calls++; return page("unexpected"); } });
   await act(async () => mount());
+  // A read with the transcript still loading owns the busy flag; a background
+  // poll of one already on screen does not publish it (see the poll test below).
+  act(() => { setTraceLoadState("loading"); });
   let transitioned = false;
   stopped.push(chatStore.subscribe(() => {
     if (transitioned || !chatStore.get().agentTraceBusy) return;
@@ -627,6 +631,26 @@ test("retirement during the initial busy publication prevents even the first rea
   expect(result).toBeFalse();
   expect(calls).toBe(0);
   expect(chatSnapshot().agentTraceBusy).toBeFalse();
+});
+
+test("a poll that found the transcript already on screen publishes nothing", async () => {
+  const settled = page("settled reply");
+  const terminal = { ...settled, nextCursor: null };
+  applyTrace({
+    agentTraceItems: terminal.items,
+    agentTraceTail: terminal.items.length,
+    agentTraceSig: JSON.stringify(terminal.items),
+    agentTraceNext: null,
+  });
+  withLive({ agentTrace: async () => terminal });
+  await act(async () => mount());
+  const revision = agentChatUIRevision();
+  let changed = true;
+  await act(async () => { changed = await refreshAgentTrace(); });
+  expect(changed).toBeFalse();
+  expect(agentChatUIRevision()).toBe(revision);
+  expect(chatSnapshot().agentTraceBusy).toBeFalse();
+  expect(appRoot().querySelector<HTMLElement>(".agent-stream")?.getAttribute("aria-busy")).toBe("false");
 });
 
 test("retirement at a tail-page publication prevents the automatic older-context read", async () => {

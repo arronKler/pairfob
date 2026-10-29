@@ -2,76 +2,41 @@ package runtime
 
 import (
 	"context"
-	"fmt"
-	"os"
+	"errors"
 	"strings"
 	"testing"
-	"time"
 )
 
-// Run a test subprocess instead of touching the operator's real Keychain.
-func TestCursorQuotaSecurityProcess(t *testing.T) {
-	if os.Getenv("PAIRFOB_CURSOR_SECURITY_FIXTURE") != "1" {
-		return
-	}
-	switch os.Getenv("PAIRFOB_CURSOR_SECURITY_RESULT") {
-	case "ok":
-		fmt.Print("saved-access-token\n")
-	case "max":
-		fmt.Print(strings.Repeat("x", cursorQuotaTokenLimit) + "\n")
-	case "missing":
-		os.Exit(44)
-	case "denied":
-		fmt.Print("partial-secret")
-		fmt.Fprint(os.Stderr, "private credential text")
-		os.Exit(36)
-	case "oversized":
-		fmt.Print(strings.Repeat("x", cursorQuotaTokenLimit+2))
-	case "empty":
-		fmt.Print("\n")
-	case "blocked":
-		time.Sleep(time.Minute)
-	}
-	os.Exit(0)
-}
-
 func TestCursorQuotaSecurityReadIsBoundedAndFailsClosed(t *testing.T) {
-	t.Setenv("PAIRFOB_CURSOR_SECURITY_FIXTURE", "1")
-	binary, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct{ result, status string }{
-		{"ok", ""}, {"max", ""}, {"missing", "not_logged_in"}, {"denied", "keychain_denied"},
-		{"oversized", "keychain_denied"}, {"empty", "keychain_denied"}, {"blocked", "keychain_denied"},
+	for _, tc := range []struct {
+		name   string
+		data   []byte
+		err    error
+		status string
+	}{
+		{"ok", []byte("saved-access-token"), nil, ""},
+		{"max", []byte(strings.Repeat("x", cursorQuotaTokenLimit)), nil, ""},
+		{"missing", nil, errQuotaKeychainNotFound, "not_logged_in"},
+		{"interaction", []byte("partial-secret"), errQuotaKeychainInteraction, "keychain_denied"},
+		{"cancelled", nil, errQuotaKeychainCancelled, "keychain_denied"},
+		{"timeout", nil, context.DeadlineExceeded, "timeout"},
+		{"caller cancelled", nil, context.Canceled, "unavailable"},
+		{"oversized", []byte(strings.Repeat("x", cursorQuotaTokenLimit+1)), nil, "unavailable"},
+		{"empty", nil, nil, "unavailable"},
+		{"unsupported", nil, errQuotaKeychainUnsupported, "unavailable"},
+		{"unknown", []byte("secret"), errors.New("private detail"), "unavailable"},
 	} {
-		t.Run(tc.result, func(t *testing.T) {
-			t.Setenv("PAIRFOB_CURSOR_SECURITY_RESULT", tc.result)
-			ctx := context.Background()
-			if tc.result == "blocked" {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
-				defer cancel()
-			}
-			start := time.Now()
-			raw, err := runQuotaKeychain(ctx, cursorQuotaTokenLimit, binary, "-test.run=^TestCursorQuotaSecurityProcess$")
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := newKeychainReader().read(context.Background(), "cursor", quotaKeychains["cursor"], false, func(quotaKeychainSpec, bool) ([]byte, error) { return tc.data, tc.err })
 			token, status := cursorQuotaKeychainResult(raw, err)
 			if status != tc.status {
-				t.Fatalf("status=%q, want %q", status, tc.status)
+				t.Fatalf("%s want %s", status, tc.status)
 			}
-			if tc.result == "ok" {
-				if token != "saved-access-token" {
-					t.Fatal("credential bytes changed")
-				}
-			} else if tc.result == "max" {
-				if len(token) != cursorQuotaTokenLimit {
-					t.Fatal("maximum credential was truncated")
-				}
-			} else if token != "" {
-				t.Fatal("failed process leaked credential output")
+			if status != "" && token != "" {
+				t.Fatal("failed read leaked credential")
 			}
-			if tc.result == "blocked" && time.Since(start) > 2*time.Second {
-				t.Fatal("credential reader ignored cancellation")
+			if status == "" && token != string(tc.data) {
+				t.Fatal("credential changed")
 			}
 		})
 	}

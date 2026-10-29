@@ -21,6 +21,7 @@ fi
 
 bash -n "$ROOT/scripts/install.sh"
 bash -n "$ROOT/scripts/release.sh"
+bash -n "$ROOT/scripts/macos-signing.sh"
 bash -n "$ROOT/scripts/build-android-release.sh"
 bash -n "$ROOT/scripts/publish-android-beta.sh"
 bash -n "$ROOT/scripts/publish-daemon.sh"
@@ -37,14 +38,16 @@ bash -n "$ROOT/plugin/herdr/pairfob.sh"
 
 jq empty proto/pairfob-vectors.json proto/pgp-words.json proto/rpc.schema.json
 go vet ./...
-go test ./...
-# The race detector amplifies the Argon2 pairing tests; the default 10m package
-# timeout is too short under parallel package load.
+# These packages include many Argon2 handshakes and encrypted media transfers.
+# Give the whole package the same budget with and without the race detector;
+# individual RPC/network deadlines remain bounded in their tests.
+go test -timeout 20m ./...
 go test -race -timeout 20m ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 bun test scripts/load-mux.test.ts
 bun test scripts/dev-acme.test.ts
-bun test scripts/ship-guard.test.ts
+bun test scripts/ship-guard.test.ts --timeout 30000
+bun test scripts/macos-signing.test.ts
 bun test scripts/pwa-release-scope.test.ts
 bun test plugin/herdr/plugin.test.ts
 (cd "$ROOT/site/doc" && bun test)

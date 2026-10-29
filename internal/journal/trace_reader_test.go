@@ -170,6 +170,33 @@ func BenchmarkReadTraceLargeTail(b *testing.B) {
 			}
 		}
 	})
+	// What a poll costs while an agent writes: one record lands between reads.
+	b.Run("growing_append", func(b *testing.B) {
+		reader := &Reader{CodexRoot: root}
+		if _, err := reader.ReadTrace(ref, nil, 200); err != nil {
+			b.Fatal(err)
+		}
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer file.Close()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			line, marshalErr := json.Marshal(map[string]any{"type": "response_item", "payload": map[string]any{
+				"type": "message", "role": "assistant", "content": []map[string]any{{"type": "output_text", "text": "streaming output"}},
+			}})
+			if marshalErr != nil {
+				b.Fatal(marshalErr)
+			}
+			if _, writeErr := file.Write(append(line, '\n')); writeErr != nil {
+				b.Fatal(writeErr)
+			}
+			if _, readErr := reader.ReadTrace(ref, nil, 200); readErr != nil {
+				b.Fatal(readErr)
+			}
+		}
+	})
 }
 
 // openLogTranscript opens a log file the way the reader does, closed with the test.

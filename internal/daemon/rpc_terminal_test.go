@@ -63,17 +63,17 @@ func TestTerminalRPCStreamsFramesAndOrdersCommands(t *testing.T) {
 	// read-only Ping until every already-generated frame has reached the test
 	// client; one Ping is not a synchronization barrier for that goroutine.
 	deadline := time.Now().Add(2 * time.Second)
-	for len(client.Events) < 3 && time.Now().Before(deadline) {
+	for len(client.EventSnapshot()) < 3 && time.Now().Before(deadline) {
 		if _, err := client.RPC("Ping", map[string]any{"t_ms": 1}); err != nil {
 			t.Fatal(err)
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if len(client.Events) < 3 {
-		t.Fatalf("terminal events = %d, want initial, input and resize", len(client.Events))
+	if len(client.EventSnapshot()) < 3 {
+		t.Fatalf("terminal events = %d, want initial, input and resize", len(client.EventSnapshot()))
 	}
 	var sawFull, sawInput, sawResize bool
-	for _, raw := range client.Events {
+	for _, raw := range client.EventSnapshot() {
 		var event struct {
 			Op     string `json:"op"`
 			Params struct {
@@ -96,7 +96,7 @@ func TestTerminalRPCStreamsFramesAndOrdersCommands(t *testing.T) {
 		sawResize = sawResize || event.Params.Full && event.Params.Width == 100 && event.Params.Height == 40
 	}
 	if !sawFull || !sawInput || !sawResize {
-		t.Fatalf("frame coverage full=%v input=%v resize=%v events=%q", sawFull, sawInput, sawResize, client.Events)
+		t.Fatalf("frame coverage full=%v input=%v resize=%v events=%q", sawFull, sawInput, sawResize, client.EventSnapshot())
 	}
 	closedRaw, err := client.RPC("TerminalClose", map[string]any{
 		"operation_id": terminalOperation(6), "terminal_id": terminalID,
@@ -142,6 +142,17 @@ func TestTerminalOpenReplacesStaleControllerFromSameSession(t *testing.T) {
 		"data": base64.StdEncoding.EncodeToString([]byte("stale")),
 	}); err == nil || err.Error() != "conflict" {
 		t.Fatalf("stale controller command = %v", err)
+	}
+	if _, err := client.RPC("TerminalClose", map[string]any{
+		"operation_id": terminalOperation(4), "terminal_id": first,
+	}); err == nil || err.Error() != "conflict" {
+		t.Fatalf("late close of old controller = %v", err)
+	}
+	if _, err := client.RPC("TerminalInput", map[string]any{
+		"operation_id": terminalOperation(5), "terminal_id": second, "seq": 1,
+		"data": base64.StdEncoding.EncodeToString([]byte("still alive")),
+	}); err != nil {
+		t.Fatalf("late close damaged replacement controller: %v", err)
 	}
 	if _, err := client.RPC("TerminalClose", map[string]any{
 		"operation_id": terminalOperation(3), "terminal_id": second,

@@ -12,6 +12,9 @@ const (
 	traceInitialReadBytes = 512 << 10
 	traceMaxReadChunk     = 4 << 20
 	maxTraceCacheEntries  = 32
+	// traceCacheAnchorBytes is how much of the parsed prefix a resumed read checks
+	// still matches before it trusts the cached window as append-only.
+	traceCacheAnchorBytes = 256
 )
 
 type traceParser func([]byte) []parsedEvent
@@ -22,10 +25,33 @@ type traceCacheKey struct {
 	options TraceOptions
 }
 
+// traceCacheEntry is the parsed tail window of one transcript at one parser
+// setting. A growing log resumes from `tail` instead of scanning the window
+// again, so a poll costs the bytes that arrived, not the bytes on screen.
 type traceCacheEntry struct {
 	size     int64
 	modified int64
-	page     TracePage
+	// tail is the offset just past the last line the parse consumed.
+	tail int
+	// start is the offset of the first line the window holds.
+	start   int
+	limited bool
+	// anchor is the bytes just before tail, proving the prefix did not change.
+	anchor []byte
+	window traceWindow
+}
+
+// traceRead is one tail read: the page plus what a later read needs to resume
+// from the same parse.
+type traceRead struct {
+	page    TracePage
+	tail    int
+	start   int
+	whole   bool
+	scanned int
+	// limited records that the scan budget, not the turn head, ended the read.
+	limited bool
+	window  traceWindow
 }
 
 type traceWindow struct {
@@ -68,15 +94,21 @@ func (r *Reader) ReadTraceWith(ref Ref, cursor *string, limit int, options Trace
 	defer source.Close()
 	key := traceCacheKey{path: source.name, limit: limit, options: options}
 	if cursor == nil {
-		if page, ok := r.cachedTracePage(key, source); ok {
+		if page, ok := r.cachedTracePage(key, source, ref); ok {
+			return page, nil
+		}
+		if page, ok := r.resumeTracePage(key, source, ref, limit, options); ok {
 			return page, nil
 		}
 	}
-	page, _, err := readTracePage(source, ref, end, limit, traceParserFor(ref.Agent), options)
-	if err == nil && cursor == nil && source.unchanged() {
-		r.cacheTracePage(key, source, page)
+	read, err := readTrace(source, ref, end, limit, traceParserFor(ref.Agent), options)
+	if err != nil {
+		return TracePage{}, err
 	}
-	return page, err
+	if cursor == nil && read.whole {
+		r.cacheTracePage(key, source, read)
+	}
+	return read.page, nil
 }
 
 func (r *Reader) ReadTraceSummary(ref Ref, cursor *string, limit int) (TraceSummaryPage, error) {
@@ -146,40 +178,93 @@ func summaryItemSize(item TraceSummaryItem) int {
 	return len(encoded) + 1
 }
 
-func (r *Reader) cachedTracePage(key traceCacheKey, source *transcript) (TracePage, bool) {
+func (r *Reader) cachedTracePage(key traceCacheKey, source *transcript, ref Ref) (TracePage, bool) {
 	r.traceMu.Lock()
 	defer r.traceMu.Unlock()
 	entry, ok := r.traceCache[key]
 	if !ok || entry.size != source.size || entry.modified != source.modified {
 		return TracePage{}, false
 	}
-	return cloneTracePage(entry.page), true
+	// The page builder trims the window it is given, so it gets a copy; the
+	// parsed events it reads are shared and never written by it.
+	window := entry.window
+	return detachPageModels(window.page(ref, entry.start, entry.limited)), true
 }
 
-func (r *Reader) cacheTracePage(key traceCacheKey, source *transcript, page TracePage) {
+// detachPageModels gives the caller its own model lists, so no page handed out
+// can rewrite the parse a later read resumes from.
+func detachPageModels(page TracePage) TracePage {
+	for i := range page.Items {
+		page.Items[i].Models = slices.Clone(page.Items[i].Models)
+	}
+	return page
+}
+
+func (r *Reader) cacheTracePage(key traceCacheKey, source *transcript, read traceRead) {
+	anchor := make([]byte, min(traceCacheAnchorBytes, read.tail))
+	if _, err := source.reader.ReadAt(anchor, int64(read.tail-len(anchor))); err != nil && !errors.Is(err, io.EOF) {
+		return
+	}
 	r.traceMu.Lock()
 	defer r.traceMu.Unlock()
 	if r.traceCache == nil || len(r.traceCache) >= maxTraceCacheEntries {
 		r.traceCache = make(map[traceCacheKey]traceCacheEntry)
 	}
-	r.traceCache[key] = traceCacheEntry{size: source.size, modified: source.modified, page: cloneTracePage(page)}
+	r.traceCache[key] = traceCacheEntry{
+		size: source.size, modified: source.modified, tail: read.tail, start: read.start,
+		limited: read.limited, anchor: anchor, window: read.window,
+	}
 }
 
-func cloneTracePage(page TracePage) TracePage {
-	copyPage := TracePage{
-		Items: append([]Event(nil), page.Items...), Truncated: page.Truncated, SummaryTruncated: page.SummaryTruncated,
+// resumeTracePage answers a tail read from the cached window plus the bytes
+// appended since, and falls back to a full read whenever the prefix cannot be
+// proven to be the one already parsed.
+func (r *Reader) resumeTracePage(key traceCacheKey, source *transcript, ref Ref, limit int, options TraceOptions) (TracePage, bool) {
+	r.traceMu.Lock()
+	entry, ok := r.traceCache[key]
+	r.traceMu.Unlock()
+	if !ok || entry.tail <= 0 || entry.tail > int(source.size) || source.size <= entry.size {
+		return TracePage{}, false
 	}
-	for i := range copyPage.Items {
-		copyPage.Items[i].Models = slices.Clone(copyPage.Items[i].Models)
+	// A rewrite that grows the file is not an append; the anchor catches it.
+	if len(entry.anchor) > 0 {
+		seen := make([]byte, len(entry.anchor))
+		if _, err := source.reader.ReadAt(seen, int64(entry.tail-len(seen))); err != nil && !errors.Is(err, io.EOF) {
+			return TracePage{}, false
+		}
+		if !bytes.Equal(seen, entry.anchor) {
+			return TracePage{}, false
+		}
 	}
-	if page.NextCursor != nil {
-		next := *page.NextCursor
-		copyPage.NextCursor = &next
+	if int(source.size)-entry.tail > maxScanBytes {
+		return TracePage{}, false
 	}
-	return copyPage
+	data := make([]byte, int(source.size)-entry.tail)
+	if _, err := source.reader.ReadAt(data, int64(entry.tail)); err != nil && !errors.Is(err, io.EOF) {
+		return TracePage{}, false
+	}
+	window, tail, whole, err := extendTraceWindow(entry.window, data, entry.tail, limit, traceParserFor(ref.Agent), options)
+	if err != nil || !whole {
+		// A trailing partial line belongs to the next write; parse it in a full
+		// read, the way a cold read would, and do not cache this pass.
+		return TracePage{}, false
+	}
+	read := traceRead{
+		page: detachPageModels(window.page(ref, entry.start, entry.limited)), tail: tail,
+		start: entry.start, whole: true, limited: entry.limited, window: window,
+	}
+	r.cacheTracePage(key, source, read)
+	return read.page, true
 }
 
-func readTracePage(source *transcript, ref Ref, end, limit int, parse traceParser, options TraceOptions) (page TracePage, scanned int, err error) {
+// readTracePage is the measurement seam tests use: the page and the bytes the
+// scan read.
+func readTracePage(source *transcript, ref Ref, end, limit int, parse traceParser, options TraceOptions) (TracePage, int, error) {
+	read, err := readTrace(source, ref, end, limit, parse, options)
+	return read.page, read.scanned, err
+}
+
+func readTrace(source *transcript, ref Ref, end, limit int, parse traceParser, options TraceOptions) (traceRead, error) {
 	if end <= 0 || int64(end) > source.size {
 		end = int(source.size)
 	}
@@ -188,6 +273,7 @@ func readTracePage(source *transcript, ref Ref, end, limit int, parse traceParse
 	var data []byte
 	var window traceWindow
 	alignedStart := end
+	scanned := 0
 	limited := false
 
 	for {
@@ -201,10 +287,10 @@ func readTracePage(source *transcript, ref Ref, end, limit int, parse traceParse
 		chunk := make([]byte, readBytes)
 		read, err := source.reader.ReadAt(chunk, int64(nextStart))
 		if err != nil && err != io.EOF {
-			return TracePage{}, scanned, err
+			return traceRead{}, err
 		}
 		if read != readBytes {
-			return TracePage{}, scanned, io.ErrUnexpectedEOF
+			return traceRead{}, io.ErrUnexpectedEOF
 		}
 		data = append(chunk, data...)
 		scanned += readBytes
@@ -227,7 +313,7 @@ func readTracePage(source *transcript, ref Ref, end, limit int, parse traceParse
 		}
 		window, err = parseTraceWindow(view, alignedStart, limit, windowParser, options)
 		if err != nil {
-			return TracePage{}, scanned, err
+			return traceRead{}, err
 		}
 		if traceWindowComplete(window, start == 0) {
 			break
@@ -239,11 +325,41 @@ func readTracePage(source *transcript, ref Ref, end, limit int, parse traceParse
 		// An older page: records after it exist, whatever they hold.
 		window.settleBefore(end)
 	}
-	return window.page(ref, alignedStart, limited), scanned, nil
+	// The tail a later read resumes from ends at the file's last complete line;
+	// a record still being written is read again once its newline arrives.
+	tail := alignedStart
+	if cut := bytes.LastIndexByte(data, '\n'); cut >= 0 {
+		tail = start + cut + 1
+	}
+	stored := window
+	page := detachPageModels(window.page(ref, alignedStart, limited))
+	return traceRead{
+		page: page, tail: tail, start: alignedStart, whole: tail == end,
+		scanned: scanned, limited: limited, window: stored,
+	}, nil
 }
 
 func parseTraceWindow(data []byte, base, limit int, parse traceParser, options TraceOptions) (traceWindow, error) {
-	window := traceWindow{items: make([]parsedEvent, 0, limit), starts: make([]int, 0, limit), limit: limit}
+	return parseTraceWindowInto(traceWindow{
+		items: make([]parsedEvent, 0, limit), starts: make([]int, 0, limit), limit: limit,
+	}, data, base, limit, parse, options)
+}
+
+// extendTraceWindow reads the records appended after a cached window and
+// continues that window instead of scanning from the tail again. It returns
+// the offset just past the last complete line, and whether the region ended on
+// a line boundary.
+func extendTraceWindow(window traceWindow, data []byte, base, limit int, parse traceParser, options TraceOptions) (traceWindow, int, bool, error) {
+	cut := bytes.LastIndexByte(data, '\n')
+	if cut < 0 {
+		return window, base, false, nil
+	}
+	extended, err := parseTraceWindowInto(window, data[:cut+1], base, limit, parse, options)
+	return extended, base + cut + 1, cut == len(data)-1, err
+}
+
+func parseTraceWindowInto(window traceWindow, data []byte, base, limit int, parse traceParser, options TraceOptions) (traceWindow, error) {
+	window.limit = limit
 	dropFront := func() {
 		if len(window.items) == 0 {
 			return

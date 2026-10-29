@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -81,6 +83,84 @@ func quotaFile(path string, limit int) ([]byte, error) {
 		return nil, errors.New("quota credential unavailable")
 	}
 	return raw, nil
+}
+
+// quotaKeyFileLimit leaves room for a trailing newline or a pasted label while
+// still refusing anything that is obviously a document rather than a key.
+const quotaKeyFileLimit = 16384
+
+// validQuotaKey accepts a single printable token. A file holding an exported
+// line, a comment or several lines is a mistake to fix, never a key.
+func validQuotaKey(key string) bool {
+	if len(key) < 8 || len(key) > 4096 {
+		return false
+	}
+	for _, r := range key {
+		if r < 0x21 || r > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+// quotaStatePath is where a provider's key file lives: the daemon's state
+// directory, which is ~/.config/pairfob unless the operator moved it.
+func quotaStatePath(name string) (string, error) {
+	dir := os.Getenv("PAIRFOB_STATE_DIR")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		dir = filepath.Join(home, ".config", "pairfob")
+	}
+	return filepath.Join(dir, name), nil
+}
+
+// quotaEnvKey returns the first named variable that holds a value.
+func quotaEnvKey(names ...string) (string, bool) {
+	for _, name := range names {
+		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// quotaKeyFile reads one key file. A missing file is no login; a file that
+// cannot be read is one to save again; a file that holds anything but a single
+// key is not a login at all.
+func quotaKeyFile(path string) (string, string) {
+	raw, err := quotaFile(path, quotaKeyFileLimit)
+	if os.IsNotExist(err) {
+		return "", "not_logged_in"
+	}
+	if err != nil {
+		return "", "auth_required"
+	}
+	key := strings.TrimSpace(string(raw))
+	if !validQuotaKey(key) {
+		return "", "not_logged_in"
+	}
+	return key, ""
+}
+
+// quotaKey finds a provider's key: an environment variable first, for a daemon
+// started from a shell, then the file for the installed service, which does
+// not inherit one. A variable that is set but unusable is a mistake to fix,
+// not a reason to read a file the user may not know about.
+func quotaKey(file string, names ...string) (string, string) {
+	if value, ok := quotaEnvKey(names...); ok {
+		if validQuotaKey(value) {
+			return value, ""
+		}
+		return "", "not_logged_in"
+	}
+	path, err := quotaStatePath(file)
+	if err != nil {
+		return "", "not_logged_in"
+	}
+	return quotaKeyFile(path)
 }
 
 type quotaOutput struct {

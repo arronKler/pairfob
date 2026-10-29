@@ -181,6 +181,11 @@ func forgetSearchListing(root string) {
 // searchFiles lists the workspace's files: Git's view inside a repository, a
 // bounded walk elsewhere.
 func searchFiles(root string) ([]string, bool, error) {
+	// Check before either the cache, Git, or the filesystem walk. An unavailable
+	// Git view must never fall back to recursively scanning the entire home.
+	if broadScanRoot(root) {
+		return nil, false, ErrInvalidPath
+	}
 	if files, truncated, ok := rememberedFiles(root); ok {
 		return files, truncated, nil
 	}

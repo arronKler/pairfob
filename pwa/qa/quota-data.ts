@@ -61,6 +61,16 @@ export function manyQuotas(): QuotaAccount[] {
     account("cursor-cn", "cursor", { plan: "Pro", region: "cn", meters: [quota("Included plan", 94, 0, 12 * DAY)] }),
     account("grok-team", "grok", { plan: "SuperGrok", label: "team@example.com", meters: [quota("Shared subscription quota", 36, 10080, 6 * DAY)] }),
     off("grok", "grok", "needs_action", "relogin"),
+    account("opencode-go", "opencode-go", { source: "api", meters: [
+      quota("five hour", 12.5, 300, 4 * HOUR),
+      quota("seven day", 83, 10080, 3 * DAY),
+      quota("monthly", 100, 0, 12 * DAY),
+    ] }),
+    account("command-code", "command-code", { plan: "Individual Goat", source: "api", meters: [
+      quota("five hour", 7, 300, 2 * HOUR, { count: { used: 98, limit: 1400, scale: 2, unit: "usd" } }),
+      quota("seven day", 54.5, 10080, 4 * DAY, { count: { used: 1906, limit: 3500, scale: 2, unit: "usd" } }),
+      { kind: "balance", name: "monthly balance", pool: "usd", headline: true, amount: 5343, scale: 2, unit: "usd", window_minutes: 0, resets_at: sec() + 12 * DAY },
+    ] }),
   ];
 }
 

@@ -9,7 +9,7 @@ import (
 	runtimeapi "pairfob/internal/runtime"
 )
 
-var serviceCopiedKeys = []string{"HERDR_SOCKET_PATH", "HERDR_CONFIG_PATH", "HERDR_CLIENT_SOCKET_PATH", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "GROK_HOME", "PAIRFOB_STATE_DIR", "PAIRFOB_ADMIN_SOCK", "PAIRFOB_HERDR_AUTOSTART", "PAIRFOB_MULTI_SESSION", "PAIRFOB_PUSH", "PAIRFOB_VAPID_SUBJECT"}
+var serviceCopiedKeys = []string{"HERDR_SOCKET_PATH", "HERDR_CONFIG_PATH", "HERDR_CLIENT_SOCKET_PATH", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "GROK_HOME", "PAIRFOB_STATE_DIR", "PAIRFOB_ADMIN_SOCK", "PAIRFOB_HERDR_AUTOSTART", "PAIRFOB_MULTI_SESSION", "PAIRFOB_PUSH", "PAIRFOB_VAPID_SUBJECT", "PAIRFOB_QUOTA_PROVIDERS"}
 
 // The variables serviceRuntimeEnvironment writes. None holds a credential, so
 // an install may print their values; any other variable is named only.

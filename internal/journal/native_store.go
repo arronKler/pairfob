@@ -11,7 +11,7 @@ import (
 
 func nativeStoreAgent(agent string) bool {
 	switch agent {
-	case "gemini", "qwen", "cline", "amp", "droid", "maki", "muse", "agy", "letta", "qodercli", "kiro", "devin", "kimi":
+	case "cmd", "gemini", "qwen", "cline", "amp", "droid", "maki", "muse", "agy", "letta", "qodercli", "kiro", "devin", "kimi":
 		return true
 	}
 	return false
@@ -38,6 +38,9 @@ func (r *Reader) loadNativeStore(ref Ref, entry *storeEntry) ([]storeRecord, str
 		return nil, "", false, ErrUnavailable
 	}
 	stamp := path + ":" + strconv.FormatInt(info.Size(), 10) + ":" + strconv.FormatInt(info.ModTime().UnixNano(), 10)
+	if ref.Agent == "cmd" {
+		stamp += ":" + fileStamp(commandCodeMetaPath(path))
+	}
 	if ref.Agent == "kiro" {
 		stamp += ":" + fileStamp(filepath.Join(filepath.Dir(path), "session.json"))
 	}
@@ -57,6 +60,8 @@ func (r *Reader) loadNativeStore(ref Ref, entry *storeEntry) ([]storeRecord, str
 	var records []storeRecord
 	var title Title
 	switch ref.Agent {
+	case "cmd":
+		records, title, err = r.parseCommandCodeSession(data, ref, path)
 	case "muse":
 		records, title, err = parseMuseSession(data, ref.Value)
 	case "agy":
@@ -96,7 +101,7 @@ func (r *Reader) nativeStoreTitle(ref Ref) (Title, bool) {
 	}
 	r.storeMu.Lock()
 	defer r.storeMu.Unlock()
-	entry := r.storeCache[ref.Agent+"\x00"+ref.Value]
+	entry := r.storeCache[storeBindingKey(ref)]
 	if entry == nil || entry.err != nil {
 		return Title{}, false
 	}

@@ -135,12 +135,15 @@ func repositoryRoot(workspaceRoot string) (repositoryState, error) {
 	if err != nil {
 		return repositoryState{}, err
 	}
+	if broadScanRoot(workspaceRoot) {
+		return repositoryState{}, ErrNotRepository
+	}
 	data, _, err := runGit(workspaceRoot, 8192, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return repositoryState{}, ErrNotRepository
 	}
 	repoRoot, err := canonicalRoot(strings.TrimSpace(string(data)))
-	if err != nil || !within(repoRoot, workspaceRoot) {
+	if err != nil || !within(repoRoot, workspaceRoot) || broadScanRoot(repoRoot) {
 		return repositoryState{}, ErrNotRepository
 	}
 	prefix := ""

@@ -84,6 +84,26 @@ describe("AgentQuotaV2 boundary", () => {
     expect(accounts[0]!.meters[0]).toMatchObject({ kind: "balance", amount: 21139, scale: 2, unit: "cny", headline: true });
   });
 
+  test("OpenCode Go and Command Code keep their windows and dollar counts", () => {
+    const window = { kind: "quota", name: "five hour", pool: "plan", headline: true, used_percent: 7, used: 98, limit: 1400, scale: 2, unit: "usd", window_minutes: 300, resets_at: 1800001000 };
+    const monthly = { kind: "balance", name: "monthly balance", pool: "usd", headline: true, amount: 5343, scale: 2, unit: "usd", resets_at: 1800002000 };
+    const { accounts, unknown } = parseQuotaAccounts({ items: [
+      { ...ok, id: "opencode-go", provider: "opencode-go", plan: "", source: "api", meters: [
+        { kind: "quota", name: "five hour", pool: "plan", headline: true, used_percent: 12.5, window_minutes: 300, resets_at: 1800001000 },
+        { kind: "quota", name: "seven day", pool: "plan", headline: true, used_percent: 83, window_minutes: 10080, resets_at: 1800001000 },
+        { kind: "quota", name: "monthly", pool: "plan", headline: true, used_percent: 100, resets_at: 1800001000 },
+      ] },
+      { ...ok, id: "command-code", provider: "command-code", plan: "Individual Goat", source: "api", meters: [window, monthly] },
+    ] });
+    expect(unknown).toBe(0);
+    expect(accounts.map(account => [account.id, account.plan]))
+      .toEqual([["opencode-go", ""], ["command-code", "Individual Goat"]]);
+    expect(accounts[0]!.meters.map(meter => [meter.name, meter.window_minutes, meter.resets_at]))
+      .toEqual([["five hour", 300, 1800001000], ["seven day", 10080, 1800001000], ["monthly", 0, 1800001000]]);
+    expect(accounts[1]!.meters[0]).toMatchObject({ count: { used: 98, limit: 1400, scale: 2, unit: "usd" } });
+    expect(accounts[1]!.meters[1]).toMatchObject({ kind: "balance", name: "monthly balance", amount: 5343, unit: "usd", resets_at: 1800002000 });
+  });
+
   test("an account of a provider this build cannot name is left out, and the rest still show", () => {
     const later = { ...ok, id: "kimi-1", provider: "kimi", meters: [{ kind: "tokens", name: "a kind from the future", pool: "x" }] };
     const { accounts, unknown } = parseQuotaAccounts({ items: [later, ok, { ...later, id: "kimi-2" }] });

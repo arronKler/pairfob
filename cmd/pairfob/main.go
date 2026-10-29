@@ -20,6 +20,10 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "agent-hook" {
+		_ = agentHook(os.Args[2:], os.Stdin)
+		return
+	}
 	if len(os.Args) > 1 {
 		sock, err := admin.SocketPath()
 		if err != nil {

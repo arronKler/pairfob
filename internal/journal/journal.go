@@ -39,9 +39,10 @@ var (
 	ErrCursorConflict = errors.New("history cursor conflicts with pane session")
 )
 
-// Ref is a trusted pane-to-agent-session binding reported by Herdr. Callers
+// Ref is a trusted pane-to-agent-session binding verified by the runtime. Callers
 // must never construct it from phone-supplied transcript identifiers.
 type Ref struct {
+	Leaf   *string // Exact live branch selection, nil when the provider has none.
 	Source string
 	Agent  string
 	Kind   string
@@ -79,6 +80,7 @@ type Reader struct {
 	activityCache map[string]activityCacheEntry
 	titleMu       sync.Mutex
 	titleCache    map[string]titleCacheEntry
+	titleFlights  map[string]*titleFlight
 	traceCache    map[traceCacheKey]traceCacheEntry
 	piCache       []piCacheEntry
 	storeMu       sync.Mutex
@@ -141,6 +143,9 @@ func NewDefault() *Reader {
 }
 
 func (r *Reader) Supports(ref Ref) bool {
+	if ref.Agent == "cmd" {
+		return ref.Source == "pairfob:cmd" && ref.Kind == "id" && sessionID.MatchString(ref.Value) && ref.Leaf != nil && (*ref.Leaf == "" || sessionID.MatchString(*ref.Leaf)) && r.NativeRoots["cmd"] != ""
+	}
 	if ref.Source == "herdr:pi" && ref.Agent == "pi" && r.PiRoot != "" {
 		return (ref.Kind == "id" && sessionID.MatchString(ref.Value)) ||
 			(ref.Kind == "path" && piPathSyntax(r.PiRoot, ref.Value))
@@ -168,7 +173,9 @@ func (r *Reader) Supports(ref Ref) bool {
 	case ref.Source == "herdr:opencode" && ref.Agent == "opencode":
 		return r.OpencodeRoot != ""
 	default:
-		return ref.Source == "herdr:"+ref.Agent && nativeAgent(ref.Agent) && r.NativeRoots[ref.Agent] != ""
+		local := ref.Source == "pairfob:"+ref.Agent && (ref.Agent == "gemini" || ref.Agent == "cline" || ref.Agent == "amp" || ref.Agent == "maki")
+		agy := ref.Agent == "agy" && ref.Source == "herdr:antigravity_cli"
+		return (local || agy || ref.Source == "herdr:"+ref.Agent) && nativeAgent(ref.Agent) && r.NativeRoots[ref.Agent] != ""
 	}
 }
 

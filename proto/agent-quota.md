@@ -104,6 +104,8 @@ which meters are headline, because it knows each provider's shapes:
 | Grok Build | `Shared subscription quota` | |
 | Antigravity | Every model bucket, each its own pool: none is the plan's total | |
 | DeepSeek | Its only balance meter | |
+| OpenCode Go | `five hour`, `seven day`, and `monthly` when the plan has one | |
+| Command Code | `five hour`, `seven day`, `monthly balance` | |
 
 Freshness is judged where it is shown. All meters of one read share the
 account's `observed_at`; each is also past use once its own `resets_at` has
@@ -130,6 +132,29 @@ account's state, plan and headline meters. It prints no credential, path or
 raw provider reply. It reads with the environment of the shell it is run in,
 which can differ from the one the background service was installed from.
 
+## Local privacy controls
+
+`PAIRFOB_QUOTA_PROVIDERS` is an optional comma-separated allowlist (for example
+`codex,cursor`). Unset/empty keeps all sources; `none` disables all discovery.
+Unknown names fail closed without querying providers. `service install` persists
+this non-secret setting. Disabled providers are omitted from both quota responses;
+no remote RPC fields or statuses change.
+
+`pairfob quota authorize <claude|cursor|antigravity>` is a local-only action that
+allows native Keychain interaction for up to two minutes and discards the returned
+credential. A successful read does not promise a permanent grant: that depends on
+the user's choice in macOS. Background reads pause after interaction is required
+or declined. `pairfob quota retry <provider>` clears that pause through the local
+admin socket after the user changes permissions. It does not read credentials or
+show a prompt. The existing one-minute quota response cache still applies.
+
+`pairfob doctor` reads `privacy.status` over the local admin socket: executable,
+selected providers, native reader availability, and the last Keychain result per
+provider (reason/time/paused). No credentials or raw provider errors are included.
+These records are in memory; they do not survive a daemon restart. There is no
+phone RPC to enable OS permission prompts. Builds without native Keychain support
+return unavailable without falling back to `security` or AppleScript.
+
 ## Sources and refresh
 
 - Codex: the local `codex app-server` using `initialize`, `account/read`, and
@@ -138,10 +163,10 @@ which can differ from the one the background service was installed from.
   view. The provider call has an 8-second deadline and bounded output.
 - Claude Code: automatic OAuth GET of `https://api.anthropic.com/api/oauth/usage`.
   Reads `CLAUDE_CONFIG_DIR/.credentials.json`, or the default macOS
-  `Claude Code-credentials` Keychain service via `/usr/bin/security`, matching
-  the CLI-compatible reader used for Cursor. macOS may request Keychain access;
-  denied or timed-out reads need the user (`allow_keychain`; `auth_required`
-  on the first operation). No credential file and no Keychain item is
+  `Claude Code-credentials` file-based Keychain service through the native
+  Security framework. Background reads disable user interaction. A read needing
+  authorization is paused (`allow_keychain`; `auth_required` on the first
+  operation); a timeout is `failed/timeout`, not a denial. No credential file and no Keychain item is
   `not_logged_in`. An expired credential is `auth_required`; one without the
   `user:profile` scope cannot read usage and is `unsupported`. A 403 from the
   endpoint is a network Anthropic does not serve, not a login to renew, and is
@@ -168,13 +193,16 @@ which can differ from the one the background service was installed from.
   Windows `%APPDATA%/Cursor/auth.json`. `CURSOR_CONFIG_DIR` does not move CLI
   credentials. Pairfob must inherit the same credential-store environment as
   the CLI. A missing or invalid selected store never falls back to another
-  account. On macOS, Cursor uses the same `/usr/bin/security` credential reader
-  as its CLI; authorization can differ from a JXA reader. macOS may request
-  Keychain access. The read has a three-second deadline, bounded stdout and
-  discarded stderr. It does not change Keychain permissions or unlock it.
-  Missing credentials report `not_logged_in`; an expired or invalid login
-  reports `auth_required`; a denied or timed-out Keychain read needs the user
-  (`allow_keychain`; `auth_required` on the first operation). The `memory`
+  account. On macOS, Pairfob queries the same file-based Keychain service/account
+  through the native Security framework, with UI disabled for background reads.
+  Pairfob now has its own Keychain access identity; an old grant to the security
+  tool does not necessarily grant access to Pairfob. Reads have a three-second
+  caller deadline and bounded returned data; at most one native call remains
+  outstanding even if the caller times out. No background read unlocks the
+  Keychain or changes its access rules. Missing credentials report
+  `not_logged_in`; an expired or invalid login reports `auth_required`; an
+  interaction-required read needs the user (`allow_keychain`; `auth_required`
+  on the first operation). Timeouts report `failed/timeout`. The `memory`
   store is `unsupported`.
   API-key-only credentials and
   custom API endpoints are unsupported. No API-key exchange, token refresh,
@@ -213,6 +241,41 @@ which can differ from the one the background service was installed from.
   missing or unusable local key is `not_logged_in`. This provider is V2-only:
   the first operation keeps its six items. No model turn or credential write
   occurs.
+
+- OpenCode Go: reads `OPENCODE_GO_API_KEY`, otherwise the login opencode keeps
+  for itself — the `credential` rows of
+  `$XDG_DATA_HOME/opencode/opencode.db` (default
+  `~/.local/share/opencode/opencode.db`), read with a read-only `sqlite3`
+  query, then the older `auth.json` beside it — otherwise the key file
+  `$PAIRFOB_STATE_DIR/opencode-go.key` (default
+  `~/.config/pairfob/opencode-go.key`). An OAuth login contributes its access
+  token, an `api` login its key. The Go plan belongs to that account, so no
+  second key is needed. It then GETs `https://opencode.ai/zen/go/v1/usage`.
+  `usage.rolling` and `usage.weekly` become `five hour` (300 minutes) and
+  `seven day` (10080) shares; `usage.monthly` is optional and becomes `monthly`
+  with no window length. A percentage is what has been used, rounded to a
+  tenth. A missing required window, a missing percentage or one outside 0-100
+  is `unavailable`. 401 is `auth_required`; 403 is an authenticated account
+  without the Go plan, reported as `unavailable` rather than a relogin. An
+  expired token is renewed in opencode, never here. This provider is V2-only.
+  No model turn or credential write occurs.
+
+- Command Code: reads `COMMAND_CODE_API_KEY`, then `COMMANDCODE_API_KEY`,
+  otherwise the login the `command-code` CLI writes to
+  `~/.commandcode/auth.json` (`apiKey`), otherwise the key file
+  `$PAIRFOB_STATE_DIR/command-code.key` (default
+  `~/.config/pairfob/command-code.key`), then GETs
+  `https://api.commandcode.ai/alpha/whoami`, `/alpha/billing/credits` and
+  `/alpha/billing/subscriptions`, scoping the two billing reads to the `orgId`
+  whoami names. `windowLimits.fiveHour` and `windowLimits.weekly` become
+  `five hour` and `seven day` shares, carrying the dollars used and the cap as
+  their counts; `monthlyCredits` with `purchasedCredits` and `freeCredits`
+  becomes one `monthly balance` in `usd`, reset at the subscription's period
+  end. A window that is present must carry both `used` and `cap`, a window with
+  no cap is skipped, and `monthlyCredits` is required. Losing only the
+  subscription read costs the plan name and the monthly reset, not the
+  numbers. This provider is V2-only. No model turn, CLI process or credential
+  write occurs.
 
 Gemini CLI is deliberately excluded. Each provider represents the locally
 selected account, not an aggregation of multiple login profiles. Provider

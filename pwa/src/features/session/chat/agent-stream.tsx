@@ -1,5 +1,5 @@
 import { captureFileLinkOwner, openChatFile } from "../../workspace/file-links";
-import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode, type Ref } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, memo, type MouseEvent, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import { groupAgentTurns, replyText, submittedText, turnKey, type AgentTurn } from "../../../lib/agent-trace-view";
 import { findingBreaks, pendingAsk, splitTurn, stepObject, stepRows, turnOutcome, turnSpan, type TurnRef } from "../../../lib/agent-trace-steps";
@@ -141,11 +141,13 @@ function AssistantReply({ items, final, anchor, part, onCopy }: {
 function FindingBubble({ item, anchor, part, onOpen }: {
   item: AgentTraceItem; anchor: TraceAnchor; part: string; onOpen: (item: AgentTraceItem) => void;
 }) {
-  const html = renderMarkdown(item.text || "", false);
+  // Same object for the same words: a turn that re-renders for a later step must
+  // not throw away the finding's DOM, and with it the reader's selection.
+  const markup = useMemo(() => ({ __html: renderMarkdown(item.text || "", false) }), [item.text]);
   return <article {...anchorData(anchor, part)} className="agent-finding">
     <button type="button" className="agent-finding-body" onClick={() => onOpen(item)}>
       {/* The existing Markdown parser returns sanitized allowlisted HTML. */}
-      <div className="agent-md" dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="agent-md" dangerouslySetInnerHTML={markup} />
     </button>
   </article>;
 }
@@ -211,10 +213,56 @@ function useSentPrompt(turns: readonly AgentTurn[], historyLoads: number): strin
   return seen.sent;
 }
 
-function TraceTurn({ turn, state, anchor, kept, onCopy, onTerminal, onAnswered, onOpenStep }: {
-  turn: AgentTurn; state: TurnState; anchor: TraceAnchor; kept?: DetailsState; onCopy?: CopyReply; onTerminal?: () => void;
-  onAnswered?: () => void; onOpenStep: OpenStep;
-}) {
+/**
+ * A page arrives as fresh objects every time, so a turn's props never keep
+ * their identity, whatever stayed the same. Comparing the values lets a stream
+ * that grew by one step draw that step's turn and leave the rest untouched.
+ */
+function sameModels(before: AgentTraceItem["models"], after: AgentTraceItem["models"]): boolean {
+  if (before === after) return true;
+  if (!before || !after || before.length !== after.length) return false;
+  return before.every((model, index) => model.model === after[index].model
+    && model.effort === after[index].effort && model.source === after[index].source);
+}
+
+function sameTraceItem(before: AgentTraceItem | undefined, after: AgentTraceItem | undefined): boolean {
+  if (before === after) return true;
+  if (!before || !after) return false;
+  return before.type === after.type && before.text === after.text && before.name === after.name
+    && before.input === after.input && before.output === after.output && before.toolState === after.toolState
+    && before.detailRef === after.detailRef && before.label === after.label && before.at === after.at
+    && before.pending === after.pending && sameModels(before.models, after.models);
+}
+
+function sameTraceItems(before: readonly AgentTraceItem[], after: readonly AgentTraceItem[]): boolean {
+  if (before === after) return true;
+  if (before.length !== after.length) return false;
+  return before.every((item, index) => sameTraceItem(item, after[index]));
+}
+
+function sameTurnState(before: TurnState, after: TurnState): boolean {
+  return before.live === after.live && before.waiting === after.waiting && before.stale === after.stale
+    && before.verified === after.verified && before.pending === after.pending && before.hasNext === after.hasNext
+    && before.partial === after.partial && before.follow === after.follow && before.sent === after.sent
+    && before.historyLoads === after.historyLoads;
+}
+
+type TraceTurnProps = {
+  turn: AgentTurn; state: TurnState; anchor: TraceAnchor; kept?: DetailsState;
+  onCopy?: CopyReply; onTerminal?: () => void; onAnswered?: () => void; onOpenStep: OpenStep;
+};
+
+function sameTurnProps(before: TraceTurnProps, after: TraceTurnProps): boolean {
+  return before.anchor.key === after.anchor.key && before.anchor.ordinal === after.anchor.ordinal
+    && before.anchor.ordinalFromEnd === after.anchor.ordinalFromEnd && before.kept === after.kept
+    && before.onCopy === after.onCopy && before.onTerminal === after.onTerminal
+    && before.onAnswered === after.onAnswered && before.onOpenStep === after.onOpenStep
+    && sameTraceItem(before.turn.user, after.turn.user)
+    && sameTraceItems(before.turn.items, after.turn.items)
+    && sameTurnState(before.state, after.state);
+}
+
+const TraceTurn = memo(function TraceTurn({ turn, state, anchor, kept, onCopy, onTerminal, onAnswered, onOpenStep }: TraceTurnProps) {
   const { entries, reply, compacted, interrupted } = splitTurn(turn);
   // Findings are the agent's own words between steps. They leave the card and
   // speak in the transcript, so a run of steps never buries what it concluded.
@@ -258,7 +306,7 @@ function TraceTurn({ turn, state, anchor, kept, onCopy, onTerminal, onAnswered, 
     {reply.length > 0 && <AssistantReply items={reply} final={!live} anchor={anchor} part="reply" onCopy={onCopy} />}
     {compacted && <CompactionDivider />}
   </>;
-}
+}, sameTurnProps);
 
 function EmptyPanel({ spec, onRetry, onTerminal }: { spec: AgentEmptySpec; onRetry?: () => void; onTerminal?: () => void }) {
   return <div className={`agent-empty agent-empty-${spec.kind}`} role={spec.kind === "error" ? "alert" : "status"}>

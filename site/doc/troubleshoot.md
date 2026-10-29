@@ -84,6 +84,58 @@ If no daemon is running, `pairfob run` starts it in the foreground. Check
 - Unsupported OS (Windows): the script refuses
 - If `~/.local/bin` is not on PATH, `pairfob` is “not found” even when the service is installed
 
+## macOS repeatedly asks for file access
+
+Access to other apps' data and access to Downloads, Desktop or Documents are
+different permissions. Some app-container consent lasts only for the running
+process, so restarting the daemon can prompt again. Old or locally built ad-hoc
+executables may also lose grants on replacement. Release builds use a stable
+developer signing identity; switching from the old identity may require a new grant.
+
+Terminal and chat do not require access to Photos, screen recording,
+Accessibility or Input Monitoring. File features access the selected workspace;
+chat and quota features read the relevant Agent's local data. Some quota sources
+also request separate Keychain authorization.
+
+Current versions read Keychain silently during ordinary quota refresh. If
+unlocking or consent is required, that source pauses instead of displaying
+background prompts. Timeouts are reported separately. `pairfob doctor` shows
+the executable, its on-disk signing identity, enabled quota sources and recent
+Keychain results without probing protected folders.
+
+Run `pairfob quota authorize cursor` on the computer to allow a Keychain prompt
+(also supports `claude` and `antigravity`). Whether access persists depends on
+your choice in macOS. After changing permissions yourself, use
+`pairfob quota retry cursor` to resume silent reads. Wait for the one-minute
+quota cache to expire before refreshing. Use the same executable as the running
+service. Development builds without native Keychain support report unavailable.
+
+To read only selected quota sources, install the service with an allowlist:
+
+```sh
+PAIRFOB_QUOTA_PROVIDERS=codex,cursor pairfob service install
+```
+
+`none` disables all quota discovery; leaving it unset enables all sources.
+This affects quota queries only. Service installation takes the current shell's
+environment, so retain your other service settings when reinstalling it.
+
+On macOS, workspace-wide search and Git discovery skip the home directory and
+its ancestors. Browsing individual directories still works. Set the session cwd
+to a specific project for recursive search and Git review. Projects inside
+Downloads or Documents can still require first-use consent.
+
+If you need continuing access to protected files, you can add Pairfob in
+**System Settings → Privacy & Security → Full Disk Access**. Run
+`pairfob service status` and use its `Executable` path (normally
+`~/.local/bin/pairfob`); press `⌘⇧G` in the file picker to enter it.
+Then run `pairfob service restart`.
+
+Full Disk Access is broader than project access, is optional, and does not grant
+Keychain authorization. Pairfob does not change system privacy settings. Avoid
+resetting all privacy grants, which makes other apps ask again too.
+See [Apple's app-data privacy explanation](https://developer.apple.com/videos/play/wwdc2023/10053/).
+
 ## Pairing
 
 - Use the code in the **current** terminal, not a screenshot

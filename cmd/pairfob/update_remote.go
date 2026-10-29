@@ -197,6 +197,9 @@ func (u *remoteUpdater) installAndActivateLocked(target string, activate func(st
 	if err = replaceExecutable(path, payload); err != nil {
 		return err
 	}
+	if err = verifyUpdateIdentity(u.dest, path, u.base); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, path, "version").Output()

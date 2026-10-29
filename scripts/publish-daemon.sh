@@ -17,6 +17,8 @@ done
 # Local dirty fixtures must never bypass release checks in a publisher.
 unset PAIRFOB_ALLOW_DIRTY
 pairfob_require_release_dir "$SOURCE"
+. "$ROOT/scripts/macos-signing.sh"
+pairfob_verify_macos_release "$SOURCE"
 # Both publishers deploy the same Worker. Keep the lock outside the checkout so
 # two checkouts on one machine cannot publish concurrently.
 LOCK="${PAIRFOB_PUBLISH_LOCK:-$HOME/.cache/pairfob/publish.lock}"

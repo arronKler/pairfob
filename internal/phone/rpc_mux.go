@@ -135,7 +135,7 @@ func (c *Client) dispatchMux(f envelope.Frame) {
 		return
 	}
 	if resp.ID == "" && (resp.Op == "TerminalFrame" || resp.Op == "TerminalClosed") {
-		c.Events = append(c.Events, append(json.RawMessage(nil), pt...))
+		c.recordEvent(pt)
 		return
 	}
 	if resp.ID == "" {

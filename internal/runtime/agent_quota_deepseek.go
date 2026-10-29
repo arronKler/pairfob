@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,52 +18,7 @@ const deepSeekBalanceURL = "https://api.deepseek.com/user/balance"
 // started from a shell; the file is for the installed service, which does not
 // inherit credentials. A key that is present but unusable is not a login.
 func deepSeekQuotaKey() (string, string) {
-	if key := strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")); key != "" {
-		if validDeepSeekKey(key) {
-			return key, ""
-		}
-		return "", "not_logged_in"
-	}
-	path, err := deepSeekQuotaKeyPath()
-	if err != nil {
-		return "", "not_logged_in"
-	}
-	raw, err := quotaFile(path, 16384)
-	if os.IsNotExist(err) {
-		return "", "not_logged_in"
-	}
-	if err != nil {
-		return "", "auth_required"
-	}
-	key := strings.TrimSpace(string(raw))
-	if !validDeepSeekKey(key) {
-		return "", "not_logged_in"
-	}
-	return key, ""
-}
-
-func deepSeekQuotaKeyPath() (string, error) {
-	dir := os.Getenv("PAIRFOB_STATE_DIR")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		dir = filepath.Join(home, ".config", "pairfob")
-	}
-	return filepath.Join(dir, "deepseek.key"), nil
-}
-
-func validDeepSeekKey(key string) bool {
-	if len(key) < 8 || len(key) > 4096 {
-		return false
-	}
-	for _, r := range key {
-		if r < 0x21 || r > 0x7e {
-			return false
-		}
-	}
-	return true
+	return quotaKey("deepseek.key", "DEEPSEEK_API_KEY")
 }
 
 func locateDeepSeekQuota(context.Context) (quotaAccountRead, AgentQuota) {

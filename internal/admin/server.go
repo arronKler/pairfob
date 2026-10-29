@@ -71,6 +71,18 @@ func timeoutFor(op string) time.Duration {
 
 func dispatch(svc Service, req Request) Response {
 	switch req.Op {
+	case "privacy.status", "privacy.retry":
+		privacy, ok := svc.(PrivacyService)
+		if !ok {
+			return errResult(errors.New("unknown_op"))
+		}
+		if req.Op == "privacy.status" {
+			return okResult(privacy.PrivacyStatus())
+		}
+		if err := privacy.RetryKeychain(req.Provider); err != nil {
+			return errResult(err)
+		}
+		return okResult(map[string]bool{"ok": true})
 	case "pair.status":
 		return okResult(svc.Status())
 	case "pair.new":

@@ -117,6 +117,24 @@ function streamShape(stream: HTMLElement) {
   };
 }
 
+test("an unchanged finding keeps its drawn nodes while the turn's reply grows", () => {
+  const turn = (finding: string, reply: string): AgentTraceItem[] => [user,
+    { type: "assistant", text: finding }, { type: "tool", name: "Read", output: "done" },
+    { type: "assistant", text: reply }];
+  const render = (items: AgentTraceItem[]) => act(() => renderReact(<AgentStream items={items} working={false} empty={empty} />));
+  render(turn("First finding", "Final one"));
+  const drawn = current().querySelector<HTMLElement>(".agent-finding .agent-md")!;
+  const child = drawn.firstChild;
+  // The reply grows in place; the finding's own markup is not written again,
+  // so a selection inside it survives a streaming update.
+  render(turn("First finding", "Final one and more"));
+  expect(current().querySelector(".agent-finding .agent-md")?.firstChild).toBe(child);
+  expect(current().querySelector(".agent-assistant-final")?.textContent).toBe("Final one and more\n");
+  render(turn("First finding, revised", "Final one"));
+  expect(current().querySelector(".agent-finding .agent-md")?.textContent).toContain("First finding, revised");
+  act(unmountReact);
+});
+
 test("empty/loading/working/error states retain accessible status and busy contracts", () => {
   for (const kind of ["empty", "loading", "working", "error"] as const) {
     act(() => renderReact(<AgentStream items={[]} working={false} busy={kind === "loading"}

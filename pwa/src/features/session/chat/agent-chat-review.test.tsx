@@ -225,7 +225,8 @@ test("a retired trace request cannot overwrite the new pane or release its activ
     resetPaneView();
     selectPane("p2");
     setAgentChat(true);
-    setTraceLoadState("ready");
+    // A foreground read owns the busy flag the retired read must leave alone.
+    setTraceLoadState("loading");
     setTraceBusy(false);
     mount();
   });

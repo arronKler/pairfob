@@ -31,7 +31,7 @@ func antigravityStoredLogin(ctx context.Context, now time.Time) (token, status s
 		return "", ""
 	}
 	if err != nil {
-		return "", "keychain_denied"
+		return "", quotaKeychainStatus(err)
 	}
 	return parseAntigravityLogin(raw, now)
 }

@@ -17,6 +17,10 @@ describe("agent marks", () => {
     expect(agentIcon("droid")).toBe(AGENT_ICONS.droid);
     expect(agentIcon("hermes")).toBe(AGENT_ICONS.hermes);
     expect(agentIcon("maki")).toBe(AGENT_ICONS.maki);
+    expect(agentIcon("deepseek")).toBe(AGENT_ICONS.deepseek);
+    expect(agentIcon("command-code")).toBe(AGENT_ICONS["command-code"]);
+    expect(agentIcon("CommandCode")).toBe(AGENT_ICONS["command-code"]);
+    expect(agentIcon("opencode-go")).toBe(AGENT_ICONS.opencode);
     for (const kind of ["letta", "Letta-Code", " letta-cli "]) expect(agentIcon(kind)).toBe(AGENT_ICONS.letta);
     for (const kind of ["muse", "Muse-Code", " muse-cli "]) expect(agentIcon(kind)).toBe(AGENT_ICONS.muse);
   });

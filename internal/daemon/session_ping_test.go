@@ -189,8 +189,22 @@ func TestHealthAuditConcurrentWithTransportCommit(t *testing.T) {
 		}
 		e.sessions[newRoute] = candidate
 		send("health", "Ping")
+		// Admit Ping before racing the commit; otherwise stopping the worker
+		// can skip every request and the audit branch is never exercised.
+		s.sendMu.Lock()
 		done := make(chan struct{})
 		go func() { defer close(done); e.runSessionPing(s) }()
+		deadline := time.Now().Add(2 * time.Second)
+		for s.interactiveWait.Load() == 0 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		waiting := s.interactiveWait.Load() > 0
+		s.sendMu.Unlock()
+		if !waiting {
+			stopSessionRPC(s)
+			<-done
+			t.Fatal("health worker did not reach send lock")
+		}
 		params, _ := json.Marshal(transportCommitParams{AttemptID: candidate.attemptID, RouteID: hex.EncodeToString(newRoute[:])})
 		e.rpcTransportCommit(s, "commit", params)
 		stopSessionRPC(s)

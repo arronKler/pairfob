@@ -60,6 +60,7 @@ type Service interface {
 
 type Request struct {
 	Op       string `json:"op"`
+	Provider string `json:"provider,omitempty"`
 	Instance string `json:"instance,omitempty"`
 	PairRef  string `json:"pair_ref,omitempty"`
 	DeviceID string `json:"device_id,omitempty"`

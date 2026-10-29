@@ -20,10 +20,12 @@ type Herdr struct {
 	ConfigRoot     string
 	Multi          bool
 	TerminalBinary string
-	launchServer   herdrServerLauncher
-	lookupBinary   func(string) (string, error)
-	runCLI         func(context.Context, string, ...string) ([]byte, error)
-	bootstrapPoll  time.Duration
+	// HookBinary enables automatic local observation integrations on agent start.
+	HookBinary    string
+	launchServer  herdrServerLauncher
+	lookupBinary  func(string) (string, error)
+	runCLI        func(context.Context, string, ...string) ([]byte, error)
+	bootstrapPoll time.Duration
 }
 
 func DefaultSocket() string {
@@ -57,6 +59,7 @@ func Open(devFake, multi bool) (rt Runtime, source string, err error) {
 	}
 	h := NewHerdr(sock)
 	h.Multi = multi
+	h.HookBinary, _ = os.Executable()
 	return h, fmt.Sprintf("herdr:%s", sock), nil
 }
 

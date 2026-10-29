@@ -98,6 +98,8 @@ export const zhWorkspace = {
   "workspace.download.progress": "正在保存 {loaded} / {total}（{percent}%）",
   "workspace.download.done": "已保存到你的设备。",
   "workspace.download.started": "已开始下载，浏览器会保存到你的设备。",
+  "workspace.download.open": "打开或分享",
+  "workspace.download.openFailed": "无法打开分享面板，文件已保存在你的设备上。",
   "workspace.download.cancel": "取消",
   "workspace.download.retry": "重试",
   "workspace.download.close": "关闭",

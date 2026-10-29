@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"errors"
 )
 
 const cursorQuotaTokenLimit = 16384
@@ -13,11 +12,8 @@ func cursorQuotaKeychain(ctx context.Context) (string, string) {
 }
 
 func cursorQuotaKeychainResult(raw []byte, err error) (string, string) {
-	if errors.Is(err, errQuotaKeychainNotFound) {
-		return "", "not_logged_in"
-	}
 	if err != nil {
-		return "", "keychain_denied"
+		return "", quotaKeychainStatus(err)
 	}
 	return string(raw), ""
 }

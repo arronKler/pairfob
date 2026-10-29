@@ -65,6 +65,10 @@ export const en: { [K in keyof typeof zh]: string } = {
   "quota.grokHelp": "Sign in with grok login on this computer, then refresh.",
   "quota.deepseekHelp": "Save your DeepSeek API key to ~/.config/pairfob/deepseek.key on the computer (readable only by you), or run Pairfob with DEEPSEEK_API_KEY set, then refresh.",
   "quota.deepseekNote": "DeepSeek shows its remaining API balance. It is pay-as-you-go and does not reset each period.",
+  "quota.opencodeGoHelp": "Log in with opencode on the computer (Pairfob reads the login it already saved), or run Pairfob with OPENCODE_GO_API_KEY set, or save the key to ~/.config/pairfob/opencode-go.key (readable only by you), then refresh.",
+  "quota.opencodeGoNote": "OpenCode Go has three separate windows that reset on their own: 5 hours, 7 days and the plan's month.",
+  "quota.commandCodeHelp": "Run command-code login on the computer (Pairfob reads ~/.commandcode/auth.json), or run Pairfob with COMMAND_CODE_API_KEY set, or save the key to ~/.config/pairfob/command-code.key (readable only by you), then refresh.",
+  "quota.commandCodeNote": "Command Code counts its 5-hour and weekly allowances in dollars of usage; the monthly balance is what is left this billing period.",
   "quota.grokNote": "Shared Grok subscription allowance across Build, Chat and other products.",
   "quota.cursorHelp": "Run cursor-agent login on the computer running Pairfob, then refresh. Use the same OS user and credential store with readable login credentials.",
   "quota.cursorUnsupportedHelp": "Use the CLI browser login for the official Cursor service. If you installed the background service with a temporary token, API key, or custom endpoint, clear those environment settings, then run cursor-agent login and pairfob service install.",
@@ -96,6 +100,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "quota.window.sevenDayCowork": "Cowork 7-day",
   "quota.window.sevenDayRoutines": "Routines 7-day",
   "quota.window.spend": "Spend limit",
+  "quota.window.monthly": "Monthly window",
 
 
   "mode.auto": "Auto",

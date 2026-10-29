@@ -82,6 +82,9 @@ func updateExecutableLocked(dest, base string) error {
 	if sha256Hex(payload) != want {
 		return errors.New("downloaded pairfob failed SHA-256 verification")
 	}
+	if err := checkDownloadedIdentity(dest, payload, base); err != nil {
+		return err
+	}
 	if err := replaceExecutable(dest, payload); err != nil {
 		return err
 	}

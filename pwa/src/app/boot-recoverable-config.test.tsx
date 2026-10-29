@@ -185,6 +185,17 @@ async function bootFailedOnRecoverable(statusOrError: unknown): Promise<void> {
   expect(visibleNotice()?.tone).toBe("error");
 }
 
+// Manual foreground/button recovery is tested independently from the automatic
+// retry clock below. A slow render must not fire that clock between assertions.
+async function withManualStorageRecovery(run: () => Promise<void>): Promise<void> {
+  const original = window.setTimeout.bind(window);
+  const timer = spyOn(window, "setTimeout").mockImplementation(((fn: () => void, delay: number, ...args: unknown[]) => {
+    if (delay === 1500 || delay === 3000) return 0;
+    return original(fn, delay, ...args);
+  }) as typeof window.setTimeout);
+  try { await run(); } finally { timer.mockRestore(); }
+}
+
 function dispatchRecoveryEvents(): void {
   window.dispatchEvent(new happy.Event("online"));
   document.dispatchEvent(new happy.Event("visibilitychange"));
@@ -223,7 +234,7 @@ afterEach(async () => {
 });
 
 describe("cold-start origin config recovery", () => {
-  for (const recovery of ["foreground", "button"] as const) test(`unavailable credential storage stays out of pairing and retries via ${recovery}`, async () => {
+  for (const recovery of ["foreground", "button"] as const) test(`unavailable credential storage stays out of pairing and retries via ${recovery}`, () => withManualStorageRecovery(async () => {
     const working = globalThis.indexedDB;
     (globalThis as Record<string, unknown>).indexedDB = {
       open() { throw new DOMException("Connection to Indexed Database server lost", "UnknownError"); },
@@ -250,7 +261,7 @@ describe("cold-start origin config recovery", () => {
     expect(phase()).toBe("connect");
     expect(visibleNotice()).toBeNull();
     expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "boot_decision", phase: "connect", code: "ok", usable_count: 0 });
-  });
+  }));
 
   test("storage recovery retries automatically and discards callbacks from a stopped lifetime", async () => {
     const working = globalThis.indexedDB;
@@ -544,7 +555,7 @@ describe("saved computers never fall through to pairing", () => {
     } finally { timers.restore(); }
   });
 
-  test("an empty store where computers were saved holds boot; pairing again is an explicit choice", async () => {
+  test("an empty store where computers were saved holds boot; pairing again is an explicit choice", () => withManualStorageRecovery(async () => {
     localStorage.setItem(SAVED_COUNT_KEY, "2");
     await act(async () => { startApplication(); });
     await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
@@ -561,5 +572,5 @@ describe("saved computers never fall through to pairing", () => {
     await act(async () => { fetchLog.resolveNext(validConfigResponse()); await flushMicrotasks(); });
     expect(phase()).toBe("connect");
     expect(localStorage.getItem(SAVED_COUNT_KEY)).toBeNull();
-  });
+  }));
 });

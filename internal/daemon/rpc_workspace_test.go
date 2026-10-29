@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"pairfob/internal/runtime"
 	"pairfob/internal/workspace"
@@ -73,15 +74,15 @@ func TestWorkspaceReadRPCUsesLivePaneRoot(t *testing.T) {
 	if err != nil || !containsJSONText(readRaw, "ready = true") {
 		t.Fatalf("WorkspaceRead=%s err=%v", readRaw, err)
 	}
-	statusRaw, err := client.RPC("GitStatus", map[string]any{"pane_id": "w0:p1"})
+	statusRaw, err := client.RPCTimeout("GitStatus", map[string]any{"pane_id": "w0:p1"}, 8*time.Second)
 	if err != nil || !containsJSONText(statusRaw, "src/app.ts") {
 		t.Fatalf("GitStatus=%s err=%v", statusRaw, err)
 	}
-	diffRaw, err := client.RPC("GitDiff", map[string]any{"pane_id": "w0:p1", "path": "src/app.ts", "layer": "worktree"})
+	diffRaw, err := client.RPCTimeout("GitDiff", map[string]any{"pane_id": "w0:p1", "path": "src/app.ts", "layer": "worktree"}, 8*time.Second)
 	if err != nil || !containsJSONText(diffRaw, "+export const ready = true") {
 		t.Fatalf("GitDiff=%s err=%v", diffRaw, err)
 	}
-	branchesRaw, err := client.RPC("GitBranches", map[string]any{"pane_id": "w0:p1"})
+	branchesRaw, err := client.RPCTimeout("GitBranches", map[string]any{"pane_id": "w0:p1"}, 8*time.Second)
 	if err != nil || !containsJSONText(branchesRaw, "feature/mobile") {
 		t.Fatalf("GitBranches=%s err=%v", branchesRaw, err)
 	}

@@ -37,6 +37,14 @@ pairfob help
 `pairfob machine list` 列出这台电脑上 Herdr 保存的 SSH 机器，`pairfob machine link 名字` 让设备和其中一台配对。见 [Herdr 通过 SSH 连接的机器](/zh/devices)。
 
 
+## 额度和钥匙串
+
+`pairfob quota list` 查询一次已启用的订阅额度。macOS 上，
+`pairfob quota authorize cursor` 主动允许显示钥匙串授权提示；也支持 `claude`
+和 `antigravity`。自行修改权限后，`pairfob quota retry cursor` 恢复静默读取。
+这些命令不会输出凭据。额度来源选择和授权方式见
+[macOS 权限排查](/zh/troubleshoot#macos-反复询问文件访问权限)。
+
 ## setup
 
 `pairfob setup` 自动安装缺少的最新稳定版 Herdr，按需启动并验证接口。`--no-install-herdr` 禁止下载；`--non-interactive` 不会禁止补齐依赖。已有安装直接复用。`doctor` 只诊断。Pairfob 管理的运行组件使用 `pairfob setup --update-herdr` 更新，见 [Herdr 更新](/zh/install#herdr-runtime)。

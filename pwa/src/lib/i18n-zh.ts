@@ -68,6 +68,10 @@ export const zh = {
   "quota.grokHelp": "在本机运行 grok login 登录后刷新。",
   "quota.deepseekHelp": "在电脑上把 DeepSeek API key 保存到 ~/.config/pairfob/deepseek.key（仅本人可读），或让运行 Pairfob 的进程带有 DEEPSEEK_API_KEY，然后刷新。",
   "quota.deepseekNote": "DeepSeek 显示的是 API 余额，按实际用量扣费，不随周期重置。",
+  "quota.opencodeGoHelp": "在电脑上用 opencode 登录（Pairfob 直接读取它保存的登录），或让运行 Pairfob 的进程带有 OPENCODE_GO_API_KEY，或把 key 保存到 ~/.config/pairfob/opencode-go.key（仅本人可读），然后刷新。",
+  "quota.opencodeGoNote": "OpenCode Go 的额度分 5 小时、7 天和套餐月度三个窗口，各自单独重置。",
+  "quota.commandCodeHelp": "在电脑上运行 command-code login（Pairfob 读取 ~/.commandcode/auth.json），或让运行 Pairfob 的进程带有 COMMAND_CODE_API_KEY，或把 key 保存到 ~/.config/pairfob/command-code.key（仅本人可读），然后刷新。",
+  "quota.commandCodeNote": "Command Code 的 5 小时和每周额度按已用金额计，月度余额是本期剩余金额。",
   "quota.grokNote": "Grok 订阅共享额度，由 Build、Chat 等产品共同使用。",
   "quota.cursorHelp": "在运行 Pairfob 的电脑上执行 cursor-agent login 后刷新；需使用同一系统用户和凭据存储设置，登录凭据须可读取。",
   "quota.cursorUnsupportedHelp": "请使用 Cursor 官方服务的 CLI 浏览器登录。若安装后台服务时设置了临时 token、API key 或自定义服务地址，请先清除这些环境设置，再执行 cursor-agent login 和 pairfob service install。",
@@ -99,6 +103,7 @@ export const zh = {
   "quota.window.sevenDayCowork": "Cowork 7 天",
   "quota.window.sevenDayRoutines": "Routines 7 天",
   "quota.window.spend": "花费上限",
+  "quota.window.monthly": "月度窗口",
 
 
   "mode.auto": "自动",

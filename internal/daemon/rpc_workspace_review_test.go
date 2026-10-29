@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"pairfob/internal/workspace"
 )
@@ -17,7 +18,7 @@ func TestGitStatusStatsAreOptIn(t *testing.T) {
 	}
 	_, client := runtimeRPCClient(t, fake)
 
-	plainRaw, err := client.RPC("GitStatus", map[string]any{"pane_id": "w0:p1"})
+	plainRaw, err := client.RPCTimeout("GitStatus", map[string]any{"pane_id": "w0:p1"}, 8*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,12 +26,12 @@ func TestGitStatusStatsAreOptIn(t *testing.T) {
 	if strings.Contains(string(plainRaw), `"stat"`) || strings.Contains(string(plainRaw), `"modified_ms"`) {
 		t.Fatalf("stats without opt-in: %s", plainRaw)
 	}
-	offRaw, err := client.RPC("GitStatus", map[string]any{"pane_id": "w0:p1", "stats": false})
+	offRaw, err := client.RPCTimeout("GitStatus", map[string]any{"pane_id": "w0:p1", "stats": false}, 8*time.Second)
 	if err != nil || strings.Contains(string(offRaw), `"stat"`) {
 		t.Fatalf("stats:false = %s err=%v", offRaw, err)
 	}
 
-	raw, err := client.RPC("GitStatus", map[string]any{"pane_id": "w0:p1", "stats": true})
+	raw, err := client.RPCTimeout("GitStatus", map[string]any{"pane_id": "w0:p1", "stats": true}, 8*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +56,7 @@ func TestGitStatusStatsAreOptIn(t *testing.T) {
 	if counts["src/app.ts"] != (workspace.LineCount{Additions: 1, Deletions: 1}) || counts["notes.md"] != (workspace.LineCount{Additions: 2}) {
 		t.Fatalf("counts=%+v", counts)
 	}
-	if _, err := client.RPC("GitStatus", map[string]any{"pane_id": "w0:p1", "stats": "yes"}); err == nil || err.Error() != "invalid_argument" {
+	if _, err := client.RPCTimeout("GitStatus", map[string]any{"pane_id": "w0:p1", "stats": "yes"}, 8*time.Second); err == nil || err.Error() != "invalid_argument" {
 		t.Fatalf("stats of the wrong type err=%v", err)
 	}
 }

@@ -21,11 +21,6 @@ type Title struct {
 	Prompt string
 }
 
-type titleCacheEntry struct {
-	at    time.Time
-	value Title
-}
-
 const titleReadBytes = 4 << 20
 
 var codexStateFile = regexp.MustCompile(`^state_([0-9]+)\.sqlite$`)
@@ -54,7 +49,7 @@ func (r *Reader) ReadTitle(ref Ref) Title {
 		return r.cachedTitle(r.NativeRoots[ref.Agent], ref, r.kiloTitle)
 	case "opencode":
 		return r.cachedTitle(r.OpencodeRoot, ref, r.opencodeTitle)
-	case "gemini", "qwen", "cline", "amp", "droid", "maki", "agy", "letta", "qodercli", "kiro", "devin", "kimi":
+	case "cmd", "gemini", "qwen", "cline", "amp", "droid", "maki", "agy", "letta", "qodercli", "kiro", "devin", "kimi":
 		return r.cachedTitle(r.NativeRoots[ref.Agent], ref, r.nativeStoreTitle)
 	case "muse":
 		return r.cachedTitle(r.NativeRoots[ref.Agent], ref, r.museTitle)
@@ -63,35 +58,6 @@ func (r *Reader) ReadTitle(ref Ref) Title {
 	default:
 		return Title{}
 	}
-}
-
-// cachedTitle serializes reads of one provider behind an exact-binding cache.
-// A locked/unavailable store is not a rename: keep display-only metadata from
-// this exact binding, but let successful reads clear a removed name.
-func (r *Reader) cachedTitle(root string, ref Ref, read func(Ref) (Title, bool)) Title {
-	now := time.Now()
-	if r.now != nil {
-		now = r.now()
-	}
-	r.titleMu.Lock()
-	defer r.titleMu.Unlock()
-	key := root + "\x00" + refFingerprint(ref)
-	entry, cached := r.titleCache[key]
-	if cached && now.Sub(entry.at) < 2*time.Second {
-		return entry.value
-	}
-	title, stored := read(ref)
-	if !stored && cached {
-		title.Name = entry.value.Name
-		if title.Prompt == "" {
-			title.Prompt = entry.value.Prompt
-		}
-	}
-	if r.titleCache == nil || len(r.titleCache) >= maxTraceCacheEntries {
-		r.titleCache = make(map[string]titleCacheEntry)
-	}
-	r.titleCache[key] = titleCacheEntry{at: now, value: title}
-	return title
 }
 
 func (r *Reader) codexTitle(ref Ref) (Title, bool) {

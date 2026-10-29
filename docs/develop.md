@@ -187,6 +187,77 @@ from a clean tree with `VERSION=vX.Y.Z ./scripts/release.sh`. Run the full
 use `scripts/publish-daemon.sh`; they do not pack or deploy the relay. Preserve the verified source and
 artifact snapshot; subsequent edits require the affected checks again.
 
+#### macOS signing and privacy permissions
+
+Build and publish daemon releases on macOS with the release team's **Developer
+ID Application** certificate and private key installed. Before `release.sh`:
+
+```sh
+export PAIRFOB_MACOS_TEAM_ID=YOURTEAMID
+export PAIRFOB_MACOS_SIGN_IDENTITY='Developer ID Application: Your Name (YOURTEAMID)'
+VERSION=vX.Y.Z ./scripts/release.sh
+```
+
+Keep the same Team ID and code identifier (`com.pairfob.daemon`) across releases.
+The builder signs both Darwin architectures with a timestamp and hardened
+runtime **before** calculating SHA256SUMS. Darwin builds enable CGO and link
+the macOS Security framework for non-interactive Keychain reads; Xcode Command
+Line Tools and its macOS SDK are required. Both Darwin architectures target
+macOS 12.0 (Go 1.26's minimum), rather than inheriting the build Mac's deployment
+target. Linux binaries remain CGO-free. The daemon publisher requires
+`PAIRFOB_MACOS_TEAM_ID` and verifies both signatures before touching the download
+channels. It rejects ad-hoc signatures, the wrong team/identifier, and designated
+requirements pinned to a binary hash. Signing does not grant privacy permissions
+or constitute Apple notarization; notarization is a separate distribution step.
+See [Apple's distribution signing instructions](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac/).
+
+For local cross-platform development artifacts without a certificate, explicitly
+set `PAIRFOB_ALLOW_UNSIGNED_MACOS=1`. These artifacts may lose privacy grants on
+rebuild and cannot pass the daemon publisher. Do not re-sign an installed daemon
+in place as a workaround: its published checksum would no longer match.
+
+The CLI and remote updater verify the staged Darwin candidate before replacement
+or execution. A signed installed image requires the same Team ID, code identifier,
+and its original designated requirement. HTTPS updates of old unsigned/ad-hoc
+images require a valid Developer ID candidate with `com.pairfob.daemon`; this first
+migration trusts the existing HTTPS/checksum channel for the initial team. Only
+unsigned/ad-hoc development installs updated from an HTTP loopback server can
+use unsigned fixtures. That exception never applies to a signed installed image.
+
+Moving from an old ad-hoc build to the signed identity can require one new user
+grant. Stable signing preserves identity across subsequent updates; it does not
+turn macOS process-lifetime app-container consent into permanent access. Test
+that boundary on a Mac without Full Disk Access: select a concrete project,
+restart the daemon, then upgrade to another build signed by the same team.
+Check directory consent separately from app-container and Keychain prompts.
+
+Privacy acceptance on a disposable macOS account (do not reset an operator's TCC):
+
+1. Deny a quota Keychain prompt through the explicit local authorize command.
+   Refresh from two clients: expect `allow_keychain`, a paused doctor record,
+   and zero background prompts. Test a locked Keychain separately; the native
+   non-interactive API cannot always distinguish locking from missing consent.
+2. Grant access through the same installed executable, then retry. Check both
+   an Allow-once and an Always-Allow choice. No credential may reach CLI output,
+   the admin response, logs, or a phone response.
+3. Restart, lock/unlock, and sleep/wake. Reads may require local action again,
+   but ordinary quota refresh must not display Keychain UI.
+4. Upgrade between two builds signed by the same team and identifier; check
+   retained file grants. Reject an ad-hoc, wrong-team, wrong-identifier, modified,
+   or incompatible-requirement candidate before execution and replacement.
+5. With `PAIRFOB_QUOTA_PROVIDERS=codex`, confirm disabled sources are not touched.
+   With `none` or an invalid list, confirm no provider discovery occurs.
+
+`PAIRFOB_TEST_KEYCHAIN=1 go test ./internal/runtime -run QuotaKeychainNativeQuery`
+checks a nonexistent item without reading real credentials or requesting UI.
+This smoke test does not substitute for the interactive acceptance above.
+
+On macOS, workspace-wide search and Git discovery do not scan HOME or its
+ancestors. File browsing and explicit file operations still work there; use a
+specific project cwd for recursive search and Git review. This also avoids a
+home-directory dotfiles repository causing Git to inspect personal folders.
+This policy is not a replacement for workspace root authorization or macOS TCC.
+
 Version numbers default to a patch bump: fixes and features both ship as
 `vX.Y.(Z+1)`. Bump the minor only for a deliberate named milestone release and
 the major only for a backward-incompatible change. Keep all three components;

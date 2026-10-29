@@ -25,40 +25,36 @@ export function captureTraceViewport(
   unread: boolean,
   edge: "start" | "end" = "start",
 ): AgentTraceViewport {
+  const at = { scrollTop: bounded(stream.scrollTop), follow, unread, edge };
+  // A following reader is restored to the tail, so its anchor is never read.
+  // Measuring one node per turn would cost a layout pass on every poll.
+  if (follow) return { anchor: "", offset: 0, ...at };
   const nodes = anchorNodes(stream);
-  let anchor = "";
-  let offset = 0;
+  // One box for the scrollport, and one per node: a repeating read of the same
+  // rect costs a call and an object each time on a long transcript.
+  let streamRect: DOMRect | null = null;
+  const streamBox = (): DOMRect => (streamRect ??= stream.getBoundingClientRect());
   for (const node of nodes) {
     const rect = node.getBoundingClientRect();
-    const measurable = Boolean(rect.height || rect.top || stream.getBoundingClientRect().height || node.offsetHeight || node.offsetTop);
+    const measurable = Boolean(rect.height || rect.top || streamBox().height || node.offsetHeight || node.offsetTop);
     if (!measurable) continue;
-    const top = relativeTop(stream, node);
+    const box = streamBox();
+    const top = box.height || rect.height || rect.top || box.top ? rect.top - box.top : node.offsetTop - stream.scrollTop;
     const height = rect.height || node.offsetHeight;
     if (top + height > 0 || node === nodes[nodes.length - 1]) {
-      anchor = node.dataset.traceAnchor || "";
-      offset = bounded(top);
+      const anchor = node.dataset.traceAnchor || "";
       const ordinal = Number(node.dataset.traceOrdinal);
       const ordinalFromEnd = Number(node.dataset.traceOrdinalEnd);
       return {
         anchor: anchor.slice(0, 512),
-        offset,
-        scrollTop: bounded(stream.scrollTop),
-        follow,
-        unread,
-        edge,
+        offset: bounded(top),
+        ...at,
         ...(Number.isSafeInteger(ordinal) ? { ordinal } : {}),
         ...(Number.isSafeInteger(ordinalFromEnd) ? { ordinalFromEnd } : {}),
       };
     }
   }
-  return {
-    anchor: anchor.slice(0, 512),
-    offset,
-    scrollTop: bounded(stream.scrollTop),
-    follow,
-    unread,
-    edge,
-  };
+  return { anchor: "", offset: 0, ...at };
 }
 
 /** Restore an anchor after React has committed changed/prepended transcript content. */

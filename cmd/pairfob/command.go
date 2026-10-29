@@ -21,6 +21,12 @@ const commandUsage = `Pairfob — this computer, on another device.
   pairfob setup --update-herdr
                             Prepare the latest stable Herdr update
   pairfob quota list        Subscription quota this computer can read
+  pairfob quota authorize PROVIDER
+                            Allow a local macOS Keychain read
+  pairfob quota retry PROVIDER
+                            Resume silent Keychain reads after changing permissions
+  pairfob agent-observation AGENT
+                            Install local session title/progress hooks
   pairfob quota-setup-claude Enable Claude subscription quota collection
   pairfob service status|start|restart|stop|install
                             Manage the login service
@@ -36,6 +42,10 @@ func runCommand(args []string, sock string) error {
 		return errors.New(commandUsage)
 	}
 	switch args[0] {
+	case "agent-hook":
+		return agentHook(args[1:], os.Stdin)
+	case "agent-observation":
+		return installAgentObservation(args[1:])
 	case "help", "-h", "--help":
 		fmt.Println(commandUsage)
 		return nil

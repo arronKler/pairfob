@@ -86,7 +86,7 @@ func (r *Reader) loadStore(ref Ref, refresh bool) (*storeSnapshot, error) {
 	if r.now != nil {
 		now = r.now()
 	}
-	key := ref.Agent + "\x00" + ref.Value
+	key := storeBindingKey(ref)
 	// One load at a time: the monitor and a phone read share the work.
 	r.storeMu.Lock()
 	defer r.storeMu.Unlock()
@@ -107,7 +107,7 @@ func (r *Reader) loadStore(ref Ref, refresh bool) (*storeSnapshot, error) {
 		err     error
 	)
 	switch ref.Agent {
-	case "gemini", "qwen", "cline", "amp", "droid", "maki", "muse", "agy", "letta", "qodercli", "kiro", "kimi":
+	case "cmd", "gemini", "qwen", "cline", "amp", "droid", "maki", "muse", "agy", "letta", "qodercli", "kiro", "kimi":
 		records, stamp, same, err = r.loadNativeStore(ref, entry)
 	case "devin":
 		records, stamp, same, err = r.loadDevinStore(ref, entry)
@@ -266,4 +266,12 @@ func (r *Reader) storeActivity(ref Ref) Activity {
 	}
 	start := max(0, len(snapshot.data)-activityReadBytes)
 	return scanActivity(ref.Agent, snapshot.data[start:], int64(start))
+}
+
+func storeBindingKey(ref Ref) string {
+	key := ref.Agent + "\x00" + ref.Value
+	if ref.Leaf != nil {
+		key += "\x00leaf:" + *ref.Leaf
+	}
+	return key
 }

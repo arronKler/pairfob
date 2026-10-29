@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { quotaAccount, quotaOff, quotaShare } from "../../../test-support/quota";
-import type { QuotaAccount, QuotaMeter } from "../../lib/agent-quota-v2";
+import { QUOTA_PROVIDERS, type QuotaAccount, type QuotaMeter } from "../../lib/agent-quota-v2";
 import { setLang, t } from "../../lib/i18n";
+import { agentIcon } from "../../shared/ui/primitives";
 import {
   MODULE_ROWS, amountText, meterLabel, meterModel, orderAccounts, quotaCardModel, quotaGuidance, quotaModuleModel, quotaPanelModel,
   quotaRowModel, summaryMeter,
@@ -177,6 +178,27 @@ describe("the quota page's three groups", () => {
     expect(card.notes).toEqual([t("quota.deepseekNote")]);
   });
 
+  test("OpenCode Go names its windows, and Command Code ends on its monthly balance", () => {
+    const opencode = quotaCardModel(account({ id: "opencode-go", provider: "opencode-go", plan: "", source: "api", meters: [
+      share(12.5, { name: "five hour", window_minutes: 300 }),
+      share(83, { name: "seven day", window_minutes: 10080 }),
+      share(100, { name: "monthly", window_minutes: 0 }),
+    ] }), NOW);
+    expect([opencode.title, opencode.rows.map(row => row.label)]).toEqual(["OpenCode Go", ["5 小时", "7 天", "月度窗口"]]);
+    expect(opencode.notes).toEqual([t("quota.opencodeGoNote")]);
+
+    const credits: QuotaMeter = { ...base, kind: "balance", name: "monthly balance", amount: 5343, scale: 2, unit: "usd", headline: true };
+    const command = quotaCardModel(account({ id: "command-code", provider: "command-code", plan: "Individual Goat", source: "api", meters: [
+      share(7, { name: "five hour", window_minutes: 300 }),
+      credits,
+    ] }), NOW);
+    expect([command.title, command.plan, command.rows.map(row => row.label)])
+      .toEqual(["Command Code", "Individual Goat", ["5 小时", "本月余额"]]);
+    expect(command.rows[0]!.meter.kind).toBe("limited");
+    expect(command.rows[1]!.meter).toEqual({ kind: "balance", text: "$53.43", aria: "Command Code 本月余额：$53.43" });
+    expect(command.notes).toEqual([t("quota.commandCodeNote")]);
+  });
+
   test("a second account of a provider says which one it is", () => {
     expect(quotaCardModel(account({ region: "cn" }), NOW).status).toBe("国内站 · 1 分钟前更新");
     expect(quotaCardModel(account({ region: "global", scope: "org", label: "acme" }), NOW).status).toBe("国际站 · 组织账户 · acme · 1 分钟前更新");
@@ -212,6 +234,10 @@ describe("what to do about an account without numbers", () => {
     // Claude Code renews its login when it runs; Pairfob never names a command that starts it.
     expect(guide("claude", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.fix.reloginClaude")], command: null });
     expect(guide("copilot", "needs_action", "relogin").command).toBeNull();
+    // The two providers read the login their CLI already holds, so the way
+    // back in is that CLI's own login.
+    expect(guide("opencode-go", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.opencodeGoHelp")], command: "opencode auth login" });
+    expect(guide("command-code", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.commandCodeHelp")], command: "command-code login" });
   });
 
   test("a refused Keychain read, several logins and an unset collector each say their own step", () => {
@@ -298,5 +324,12 @@ describe("the settings quota module", () => {
     expect([kept.state, kept.rows.length]).toEqual(["ready", 4]);
     // Numbers kept past fifteen minutes are not shown as current.
     expect(quotaModuleModel(snapshot(...five), true, [], NOW + 900).rows).toEqual([]);
+  });
+});
+
+describe("the mark that stands beside an account", () => {
+  test("every provider this build names has its own mark, never a monogram", () => {
+    const missing = QUOTA_PROVIDERS.filter(provider => !agentIcon(provider));
+    expect(missing).toEqual([]);
   });
 });

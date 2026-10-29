@@ -93,6 +93,7 @@ type sess struct {
 	sendMu          sync.Mutex
 	interactiveWait atomic.Int32
 	rpcQueue        chan rpcRequest
+	readQueue       chan rpcRequest
 	pingQueue       chan rpcRequest
 	rpcStop         chan struct{}
 	rpcStopOnce     sync.Once

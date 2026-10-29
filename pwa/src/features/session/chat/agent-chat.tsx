@@ -78,6 +78,9 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
     // The sheet re-finds its rows in the same list the card draws, so its index stays true.
     if (paneId) openStepSheet(paneId, item, verified, steps, () => turnStepRows(visibleItems(), turn));
   }, [paneId, verified]);
+  // Stable identities: a turn only redraws when its own content changed.
+  const openTerminal = useCallback(() => { if (openPaneId() === paneId) leaveAgentChat(); }, [paneId]);
+  const answered = useCallback(() => { void refreshAgentTrace(); }, []);
   useLayoutEffect(() => {
     const element = stream.current;
     const ownerKey = currentAgentTraceOwnerKey();
@@ -105,7 +108,7 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
         empty={emptySpec(working)}
         busy={chat.agentTraceBusy || (!chat.agentTraceItems.length && chat.agentTraceLoadState === "cold")}
         signature={streamSig(items, working)} truncated={chat.agentTraceTruncated}
-        onTerminal={() => { if (openPaneId() === paneId) leaveAgentChat(); }}
+        onTerminal={openTerminal}
         onRetry={() => { if (!chat.agentTraceBusy) void refreshAgentTrace(); }}
         onNeedOlder={() => { if (chat.agentTraceNext && !chat.agentTraceBusy) void refreshAgentTrace(true); }}
         onFollow={(follow, element) => {
@@ -115,7 +118,7 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
           publishAgentChatUI();
           rememberAgentViewport(element, paneId);
         }}
-        onCopyReply={copyAgentReply} onOpenStep={openStep} onAnswered={() => void refreshAgentTrace()} older={<Button className="btn btn-small agent-older" hidden={!chat.agentTraceNext}
+        onCopyReply={copyAgentReply} onOpenStep={openStep} onAnswered={answered} older={<Button className="btn btn-small agent-older" hidden={!chat.agentTraceNext}
           disabled={!chat.agentTraceNext || chat.agentTraceBusy} onClick={() => {
             if (chat.agentTraceNext && !chat.agentTraceBusy) void refreshAgentTrace(true);
           }}>{chat.agentTraceBusy && chat.agentTraceNext ? t("chat.readingOlder") : t("hist.loadEarlier")}</Button>} />

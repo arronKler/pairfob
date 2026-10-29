@@ -37,7 +37,7 @@ func claudeQuotaCredentials(ctx context.Context) (claudeQuotaAuth, string) {
 			return auth, "not_logged_in"
 		}
 		if err != nil {
-			return auth, "keychain_denied"
+			return auth, quotaKeychainStatus(err)
 		}
 	}
 	if err != nil || len(raw) == 0 || json.Unmarshal(raw, &auth) != nil {

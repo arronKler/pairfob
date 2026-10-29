@@ -25,14 +25,26 @@ type rpcRequest struct {
 const sessionRPCQueueSize = 32
 
 func (e *Engine) runSessionRPC(s *sess) {
+	if s.readQueue != nil {
+		go e.runSessionQueue(s, s.readQueue)
+	}
+	e.runSessionQueue(s, s.rpcQueue)
+}
+
+func (e *Engine) runSessionQueue(s *sess, queue <-chan rpcRequest) {
 	for {
 		select {
-		case request := <-s.rpcQueue:
+		case <-s.rpcStop:
+			return
+		default:
+		}
+		select {
+		case request := <-queue:
 			e.mu.Lock()
 			active := s.sendEpochLive() && s.state == "established" && e.sessions[s.routeID] == s
 			e.mu.Unlock()
 			if active {
-				e.dispatch(s, request.id, request.op, request.params)
+				e.dispatchQueued(s, request)
 			}
 		case <-s.rpcStop:
 			return
@@ -71,7 +83,7 @@ func (e *Engine) handleSessionBound(f envelope.Frame) {
 	}
 	created := &sess{
 		routeID: rid, state: "resumehello", link: e.Conn, transport: "relay",
-		rpcQueue: make(chan rpcRequest, sessionRPCQueueSize), pingQueue: make(chan rpcRequest, sessionPingQueueSize), rpcStop: make(chan struct{}),
+		rpcQueue: make(chan rpcRequest, sessionRPCQueueSize), readQueue: make(chan rpcRequest, sessionReadQueueSize), pingQueue: make(chan rpcRequest, sessionPingQueueSize), rpcStop: make(chan struct{}),
 	}
 	e.sessions[rid] = created
 	e.mu.Unlock()
@@ -139,6 +151,8 @@ func (e *Engine) handleSessFWD(f envelope.Frame, s *sess) {
 	queue := s.rpcQueue
 	if req.Op == "Ping" && s.pingQueue != nil {
 		queue = s.pingQueue
+	} else if sessionRead(request.op) && s.readQueue != nil {
+		queue = s.readQueue
 	}
 	select {
 	case queue <- request:

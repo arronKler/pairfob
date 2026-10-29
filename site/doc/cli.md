@@ -37,7 +37,17 @@ pairfob help
 `pairfob machine list` shows the SSH machines Herdr has saved on this computer, and `pairfob machine link NAME` pairs a device with one of them. See [Machines Herdr reaches over SSH](/devices).
 
 
+## Quota and Keychain
+
+`pairfob quota list` reads enabled subscription quotas once. On macOS,
+`pairfob quota authorize cursor` explicitly allows a Keychain prompt; substitute
+`claude` or `antigravity` for their stored logins. `pairfob quota retry cursor`
+resumes silent reads after you change permissions. These actions never print
+credentials. See [macOS privacy troubleshooting](/troubleshoot#macos-repeatedly-asks-for-file-access)
+for source selection and permission guidance.
+
 ## setup
+
 
 `pairfob setup` installs the latest stable Herdr when missing, starts it when needed and verifies its API. `--no-install-herdr` disables downloads; `--non-interactive` does not disable dependency installation. Existing installations are reused. `doctor` remains diagnostic. Use `pairfob setup --update-herdr` for a Pairfob-managed runtime update; see [Herdr updates](/install#herdr-runtime).
 

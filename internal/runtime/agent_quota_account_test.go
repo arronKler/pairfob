@@ -294,7 +294,7 @@ func TestCopilotBorrowedLoginWithoutCopilotIsNotALogin(t *testing.T) {
 
 func TestQuotaSourcesKeepTheFirstWireOrder(t *testing.T) {
 	// The first six are the first operation's order; a V2-only provider follows.
-	want := []string{"codex", "claude", "antigravity", "copilot", "cursor", "grok", "deepseek"}
+	want := []string{"codex", "claude", "antigravity", "copilot", "cursor", "grok", "deepseek", "opencode-go", "command-code"}
 	sources := QuotaSources()
 	if len(sources) != len(want) {
 		t.Fatalf("%d sources", len(sources))

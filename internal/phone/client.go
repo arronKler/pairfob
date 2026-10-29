@@ -31,6 +31,7 @@ type Client struct {
 	c2s, s2c    *aead.Direction
 	Established bool
 	Events      []json.RawMessage
+	eventsMu    sync.Mutex
 
 	sendMu     sync.Mutex
 	muxMu      sync.Mutex
@@ -339,7 +340,7 @@ func (c *Client) RPCTimeout(op string, params any, timeout time.Duration) (json.
 			return nil, errors.New("invalid RPC response")
 		}
 		if message.ID == "" && (message.Op == "TerminalFrame" || message.Op == "TerminalClosed") {
-			c.Events = append(c.Events, append(json.RawMessage(nil), pt...))
+			c.recordEvent(pt)
 			continue
 		}
 		var resp struct {

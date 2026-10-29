@@ -42,6 +42,11 @@ func (e *Engine) decorateTaskStatus(pane *runtime.Pane) {
 		activity = e.Journal.ReadActivity(journalRef(pane.AgentSession))
 	}
 	pane.TaskEvidence = activity.Key
+	// Command Code reports run_start before it persists the first response.
+	// Its explicit working state remains valid while the selected tree is empty.
+	if pane.Agent == "cmd" && pane.AgentSession != nil && pane.AgentStatus == "working" {
+		return
+	}
 	if pane.LaunchPending != nil && *pane.LaunchPending {
 		pane.AgentStatus = "idle"
 		return
@@ -60,6 +65,11 @@ func (e *Engine) decorateTaskStatus(pane *runtime.Pane) {
 // for a pane whose agent is working, waiting on the reader or just finished.
 func (e *Engine) decorateTurnActivity(pane *runtime.Pane) {
 	if e.Journal == nil || pane.AgentSession == nil {
+		return
+	}
+	if pane.Agent == "cmd" && pane.AgentSession.LiveActivity != nil && (pane.AgentStatus == "working" || pane.AgentStatus == "blocked") {
+		activity := *pane.AgentSession.LiveActivity
+		pane.Activity = &activity
 		return
 	}
 	var mode journal.TurnActivityMode

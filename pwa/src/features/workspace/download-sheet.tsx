@@ -7,6 +7,7 @@ import type { ActionSheetController } from "../../shared/ui/overlay/action-sheet
 import { Button } from "../../shared/ui/primitives";
 import { formatBytes } from "./format";
 import { ensureServiceWorkerControl, serviceWorkerDownloadSupported, startServiceWorkerDownload, type ServiceWorkerDownload } from "./download-pump";
+import { SHARE_MAX_BYTES, canOpenOnDevice, isShareCancel, openOnDevice, shareCandidate } from "./download-share";
 import { fileSystemAccessAvailable, isPickerCancel, pickFileSink, type DownloadSink } from "./download-writer";
 import "./workspace-download.scss";
 
@@ -53,6 +54,10 @@ function downloadMessage(error: unknown, size: number): string {
  * written through the File System Access picker when the browser has it, or
  * through the service-worker pump when it does not; the RPC layer rejects
  * relay before a single byte is requested.
+ *
+ * A finished file that the browser can share is kept for the sheet's "open or
+ * share" action; the sheet hands it to the system instead of pretending the
+ * app can open a path on disk.
  */
 export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal }: DownloadPanelProps) {
   const [attempt, setAttempt] = useState(0);
@@ -61,11 +66,14 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
   const [loaded, setLoaded] = useState(0);
   const [error, setError] = useState("");
   const [viaServiceWorker, setViaServiceWorker] = useState(false);
+  const [shareFile, setShareFile] = useState<File | null>(null);
+  const [shareFailed, setShareFailed] = useState(false);
   const handleRef = useRef<string | null>(null);
   const sinkRef = useRef<DownloadSink | null>(null);
   const pumpRef = useRef<ServiceWorkerDownload | null>(null);
   const cancelRef = useRef(false);
   const aliveRef = useRef(true);
+  const sharingRef = useRef(false);
 
   const total = info?.size ?? fallbackSize;
   const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
@@ -80,10 +88,13 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
   useEffect(() => {
     aliveRef.current = true;
     cancelRef.current = false;
+    sharingRef.current = false;
     setPhase("opening");
     setInfo(null);
     setLoaded(0);
     setError("");
+    setShareFile(null);
+    setShareFailed(false);
     if (!session.workspaceDownloadOpen || !session.workspaceDownloadRead) {
       setError(t("workspace.download.update"));
       setPhase("error");
@@ -130,6 +141,22 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
     }
     let offset = 0;
     let lastProgress = 0;
+    // Holding the bytes is the whole price of "open or share", so nothing is
+    // kept for a file too large to hand over, or for a browser that cannot
+    // take one.
+    const keepForShare = shareCandidate() && info.size <= SHARE_MAX_BYTES;
+    const parts: Uint8Array<ArrayBuffer>[] = [];
+    const finishDone = () => {
+      let share: File | null = null;
+      if (keepForShare) {
+        share = new File(parts, name, { type: info.mime });
+        if (!canOpenOnDevice(share)) share = null;
+      }
+      closeHandle();
+      if (!aliveRef.current) return;
+      setShareFile(share);
+      setPhase("done");
+    };
     const reportProgress = (value: number) => {
       const now = Date.now();
       if (now - lastProgress < 50 && value !== info.size) return;
@@ -141,6 +168,8 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
     setLoaded(0);
     setError("");
     setViaServiceWorker(false);
+    setShareFile(null);
+    setShareFailed(false);
     const source = async () => {
       if (cancelRef.current) throw new DOMException("取消下载", "AbortError");
       const chunk = await read(handle, offset, DOWNLOAD_CHUNK_BYTES);
@@ -148,6 +177,7 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
         throw new ProtocolError("conflict", "download chunk mismatch");
       }
       offset += chunk.length;
+      if (keepForShare) parts.push(new Uint8Array(chunk.bytes));
       reportProgress(offset);
       return { bytes: chunk.bytes, eof: chunk.eof };
     };
@@ -182,8 +212,7 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
         if (offset !== info.size) throw new ProtocolError("conflict", "download size mismatch");
         await sink.close();
         sinkRef.current = null;
-        closeHandle();
-        if (aliveRef.current) setPhase("done");
+        finishDone();
         return;
       }
       if (serviceWorkerDownloadSupported() || await ensureServiceWorkerControl()) {
@@ -192,8 +221,7 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
         pumpRef.current = pump;
         await pump.promise;
         pumpRef.current = null;
-        closeHandle();
-        if (aliveRef.current) setPhase("done");
+        finishDone();
         return;
       }
       throw new ProtocolError("unsupported", t("workspace.download.unsupported"));
@@ -232,6 +260,22 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
     setAttempt(value => value + 1);
   };
 
+  /** Called straight from the tap: the share sheet needs the same gesture. */
+  const share = (file: File) => {
+    // A second tap while the sheet is opening would be refused by the browser
+    // and read as a failure of the first.
+    if (sharingRef.current) return;
+    sharingRef.current = true;
+    setShareFailed(false);
+    void openOnDevice(file).then(
+      () => { sharingRef.current = false; },
+      (caught: unknown) => {
+        sharingRef.current = false;
+        if (aliveRef.current && !isShareCancel(caught)) setShareFailed(true);
+      },
+    );
+  };
+
   return <div className="workspace-download">
     <p className="workspace-download-name">{name}</p>
     <p className="workspace-row-meta">{displayBytes(total)} · {t("workspace.download.p2pShort")}</p>
@@ -260,8 +304,14 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
       <p className="workspace-download-note" role="status">
         {viaServiceWorker ? t("workspace.download.started") : t("workspace.download.done")}
       </p>
+      {shareFailed && <p className="workspace-download-error" role="alert">{t("workspace.download.openFailed")}</p>}
       <div className="workspace-download-actions">
-        <Button className="btn btn-small btn-primary" onClick={() => modal.dismiss()}>{t("workspace.download.close")}</Button>
+        {shareFile && <Button className="btn btn-small btn-primary" onClick={() => share(shareFile)}>
+          {t("workspace.download.open")}
+        </Button>}
+        <Button className={`btn btn-small ${shareFile ? "btn-ghost" : "btn-primary"}`} onClick={() => modal.dismiss()}>
+          {t("workspace.download.close")}
+        </Button>
       </div>
     </>}
     {phase === "error" && <>

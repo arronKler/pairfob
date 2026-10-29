@@ -16,7 +16,7 @@ var quotaReasonText = map[string]string{
 	"unavailable":       "could not be read this time",
 	"timeout":           "timed out",
 	"relogin":           "sign in again on this computer",
-	"allow_keychain":    "the keychain refused the read",
+	"allow_keychain":    "keychain needs local attention; run pairfob doctor",
 	"choose_account":    "more than one login; keep one",
 	"setup":             "run pairfob quota-setup-claude",
 	"no_login":          "no login found",
@@ -28,8 +28,17 @@ var quotaReasonText = map[string]string{
 // quotaCLI reads the same accounts the phone's quota page shows, once and with
 // no cache. It prints states and shares only: no credential, path or raw reply.
 func quotaCLI(args []string, out io.Writer) error {
+	if len(args) == 2 && args[0] == "authorize" {
+		return quotaAuthorize(args[1], out)
+	}
+	if len(args) == 2 && args[0] == "retry" {
+		return quotaRetry(args[1], out)
+	}
 	if len(args) != 1 || args[0] != "list" {
-		return errors.New("usage: pairfob quota list")
+		return errors.New("usage: pairfob quota list | authorize <claude|cursor|antigravity> | retry <claude|cursor|antigravity>")
+	}
+	if _, err := runtime.QuotaSelection(); err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
 	defer cancel()

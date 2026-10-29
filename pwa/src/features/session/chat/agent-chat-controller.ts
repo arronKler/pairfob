@@ -132,19 +132,23 @@ function applyTracePage(page: AgentTracePage, older: boolean): boolean {
   // A terminal page is the complete authoritative history. In particular, a
   // branch/reset must not retain an older prefix loaded for the prior history.
   if (page.nextCursor === null) {
+    // Identical history writes nothing: a poll that found the transcript as it
+    // already stands must not publish a render of it.
     const changed = fingerprint(current.agentTraceItems) !== sig || current.agentTraceNext !== null;
-    applyTrace({
-      agentTraceItems: [...page.items],
-      agentTraceTail: page.items.length,
-      agentTraceSig: sig,
-      agentTraceNext: null,
-    });
+    if (changed) {
+      applyTrace({
+        agentTraceItems: [...page.items],
+        agentTraceTail: page.items.length,
+        agentTraceSig: sig,
+        agentTraceNext: null,
+      });
+    }
     absorbPending(page.items);
     return changed;
   }
   if (sig === current.agentTraceSig) {
     const changed = current.agentTraceItems.length === current.agentTraceTail && current.agentTraceNext !== page.nextCursor;
-    if (current.agentTraceItems.length === current.agentTraceTail) applyTrace({ agentTraceNext: page.nextCursor });
+    if (changed) applyTrace({ agentTraceNext: page.nextCursor });
     absorbPending(page.items);
     return changed;
   }
@@ -445,15 +449,20 @@ async function performAgentTraceRefresh(older = false): Promise<boolean> {
   const request = ++traceRequest;
   const ownerVersion = currentTraceOwnerVersion();
   const measureColdLoad = !older && chatSnapshot().agentTraceLoadState === "cold" && !chatSnapshot().agentTraceItems.length;
+  // A transcript already on screen is polled in the background: it shows no
+  // reading state, and a page that did not move paints nothing at all.
+  const background = !older && chatSnapshot().agentTraceLoadState === "ready";
   const startedAt = Date.now();
   let measured = false;
   batch(() => {
-    setTraceBusy(true);
+    if (!background) setTraceBusy(true);
     if (!older && !chatSnapshot().agentTraceItems.length && !chatSnapshot().agentTracePending) setTraceLoadState("loading");
-    if (!older) applyTrace({ agentTraceNote: "", agentTraceTruncated: false });
+    if (!older && (chatSnapshot().agentTraceNote || chatSnapshot().agentTraceTruncated)) {
+      applyTrace({ agentTraceNote: "", agentTraceTruncated: false });
+    }
   });
   if (retiredTrace(request, ownerVersion, session, paneId)) return false;
-  syncOlderButton();
+  if (!background) syncOlderButton();
   if (retiredTrace(request, ownerVersion, session, paneId)) return false;
   let changed = false;
   try {
@@ -471,28 +480,31 @@ async function performAgentTraceRefresh(older = false): Promise<boolean> {
         measured = true;
       }
       const beforeStream = streamEl();
-      const beforeSnapshot = chatSnapshot();
       // Read the posture at publication time: the reader may have scrolled up
       // while this RPC was in flight.
       const pageFollow = !older && (!beforeStream || atBottom(beforeStream));
-      const viewport = beforeStream
-        ? captureTraceViewport(beforeStream, pageFollow, beforeSnapshot.agentTraceUnread, cursor === null ? "start" : "end")
-        : undefined;
       let applied = false;
       batch(() => {
         applied = applyTracePage(page, cursor !== null);
-        applyTrace({
-          agentTraceLoadState: "ready",
-          ...(page.truncated ? { agentTraceTruncated: true } : {}),
-        });
+        if (page.truncated && !chatSnapshot().agentTraceTruncated) applyTrace({ agentTraceTruncated: true });
+        setTraceLoadState("ready");
       });
       if (retiredTrace(request, ownerVersion, session, paneId)) return false;
       changed = applied || changed;
       markAppPerformance("first-session-data");
       pulls += 1;
+      // The cache is what a return visit paints, so every successful read
+      // refreshes it even when nothing was drawn.
       rememberTrace(paneId);
-      if (applied || pulls === 1) {
+      // No stream on screen is a paint to repair, whatever the page holds.
+      const paint = applied || !background || !beforeStream;
+      if (paint && (applied || pulls === 1)) {
         const current = streamEl();
+        // Old context is anchored at its end; the tail's own viewport is
+        // captured by patchAgentChat when it paints.
+        const viewport = cursor !== null && beforeStream
+          ? captureTraceViewport(beforeStream, pageFollow, chatSnapshot().agentTraceUnread, "end")
+          : undefined;
         if (!patchAgentChat({
           follow: pageFollow,
           older: cursor !== null,
@@ -503,13 +515,15 @@ async function performAgentTraceRefresh(older = false): Promise<boolean> {
         if (retiredTrace(request, ownerVersion, session, paneId)) return false;
       }
       if (cursor !== null && !applied) break;
-      if (!filling || !firstTurnNeedsUser(chatSnapshot().agentTraceItems, chatSnapshot().agentTraceNext) || !chatSnapshot().agentTraceNext) break;
+      // The owning prompt is context for a fresh read. A background poll of a
+      // transcript already on screen does not page history again to find it.
+      if (background || !filling || !firstTurnNeedsUser(chatSnapshot().agentTraceItems, chatSnapshot().agentTraceNext) || !chatSnapshot().agentTraceNext) break;
       cursor = chatSnapshot().agentTraceNext;
     }
     setTraceLoadState("ready");
     if (retiredTrace(request, ownerVersion, session, paneId)) return false;
     rememberTrace(paneId);
-    syncOlderButton();
+    if (!background) syncOlderButton();
     if (retiredTrace(request, ownerVersion, session, paneId)) return false;
     return changed;
   } catch (error) {
@@ -540,7 +554,7 @@ async function performAgentTraceRefresh(older = false): Promise<boolean> {
     if (!patchAgentChat({ follow: errorFollow })) commitView();
     return false;
   } finally {
-    if (!retiredTrace(request, ownerVersion, session, paneId)) {
+    if (!background && !retiredTrace(request, ownerVersion, session, paneId)) {
       setTraceBusy(false);
       syncOlderButton();
     }

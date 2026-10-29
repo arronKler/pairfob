@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"pairfob/internal/crypto/aead"
 	"pairfob/internal/envelope"
@@ -30,6 +29,12 @@ type terminalSlot struct {
 }
 
 func (e *Engine) rpcTerminalOpen(s *sess, id string, params json.RawMessage) {
+	ctx, cancel := context.WithTimeout(context.Background(), terminalOpenBudget)
+	defer cancel()
+	e.rpcTerminalOpenContext(ctx, s, id, params)
+}
+
+func (e *Engine) rpcTerminalOpenContext(ctx context.Context, s *sess, id string, params json.RawMessage) {
 	var p struct {
 		OperationID string  `json:"operation_id"`
 		Session     *string `json:"session"`
@@ -48,7 +53,7 @@ func (e *Engine) rpcTerminalOpen(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "unsupported", "the live runtime does not support terminal streams")
 		return
 	}
-	pane, err := e.findPane(p.Session, p.PaneID)
+	pane, err := e.findTerminalPaneContext(ctx, p.Session, p.PaneID)
 	if err != nil {
 		e.replyRuntimeErr(s, id, err, "pane_not_found")
 		return
@@ -66,11 +71,13 @@ func (e *Engine) rpcTerminalOpen(s *sess, id string, params json.RawMessage) {
 		// Herdr still enforces takeover against controllers owned elsewhere.
 		closeSessionTerminal(s)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	if ctx.Err() != nil {
+		e.replyErr(s, id, "herdr_offline", "terminal open expired before bridge start")
+		return
+	}
 	controller, err := opener.OpenTerminal(ctx, runtime.TerminalOpen{
 		Session: runtimeSession(p.Session), PaneID: p.PaneID, Cols: p.Cols, Rows: p.Rows, Takeover: p.Takeover,
 	})
-	cancel()
 	if err != nil {
 		e.replyRuntimeErr(s, id, err, "pane_not_found")
 		return
@@ -81,9 +88,17 @@ func (e *Engine) rpcTerminalOpen(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "internal", "could not create terminal session")
 		return
 	}
+	if ctx.Err() != nil {
+		_ = controller.Close()
+		e.replyErr(s, id, "herdr_offline", "terminal open exceeded its deadline")
+		return
+	}
 	slot := &terminalSlot{id: terminalID, paneID: p.PaneID, controller: controller, nextCommand: 1}
 	s.terminalMu.Lock()
-	if s.terminal != nil {
+	e.mu.Lock()
+	active := s.sendEpochLive() && s.state == "established" && e.sessions[s.routeID] == s
+	e.mu.Unlock()
+	if !active || s.terminal != nil {
 		s.terminalMu.Unlock()
 		_ = controller.Close()
 		e.replyErr(s, id, "conflict", "this phone session already controls a terminal")
@@ -103,6 +118,33 @@ func (e *Engine) rpcTerminalOpen(s *sess, id string, params json.RawMessage) {
 		"cols": p.Cols, "rows": p.Rows, "takeover": p.Takeover,
 	})
 	go e.forwardTerminal(s, slot)
+}
+
+func (e *Engine) findTerminalPane(session *string, paneID string) (*runtime.Pane, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), terminalOpenBudget)
+	defer cancel()
+	return e.findTerminalPaneContext(ctx, session, paneID)
+}
+
+func (e *Engine) findTerminalPaneContext(ctx context.Context, session *string, paneID string) (*runtime.Pane, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	e.touchRuntimeSession(runtimeSession(session))
+	view, err := e.RT.Observe(ctx, runtimeSession(session), runtime.SnapshotQuery{})
+	if err != nil {
+		return nil, err
+	}
+	snapshot, ok := view.(runtime.SnapshotView)
+	if !ok {
+		return nil, fmt.Errorf("runtime returned an invalid snapshot view")
+	}
+	for i := range snapshot.Snapshot.Panes {
+		if snapshot.Snapshot.Panes[i].PaneID == paneID {
+			return &snapshot.Snapshot.Panes[i], nil
+		}
+	}
+	return nil, nil
 }
 
 func (e *Engine) rpcTerminalInput(s *sess, id string, params json.RawMessage) {

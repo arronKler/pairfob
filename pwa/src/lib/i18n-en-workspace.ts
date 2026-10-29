@@ -98,6 +98,8 @@ export const enWorkspace = {
   "workspace.download.progress": "Saving {loaded} of {total} ({percent}%)",
   "workspace.download.done": "Saved to your device.",
   "workspace.download.started": "Download started. The browser will save it to your device.",
+  "workspace.download.open": "Open or share",
+  "workspace.download.openFailed": "Could not open the share sheet. The file is saved on your device.",
   "workspace.download.cancel": "Cancel",
   "workspace.download.retry": "Retry",
   "workspace.download.close": "Close",

@@ -30,6 +30,7 @@ func defaultNativeRoots(home, dataHome string) map[string]string {
 	}
 	return map[string]string{
 		"cline":     cline,
+		"cmd":       filepath.Join(home, ".commandcode"),
 		"copilot":   copilot,
 		"kimi":      kimi,
 		"kimi-code": nativeRoot("KIMI_CODE_HOME", filepath.Join(home, ".kimi-code")),
@@ -50,7 +51,7 @@ func defaultNativeRoots(home, dataHome string) map[string]string {
 
 func nativeAgent(agent string) bool {
 	switch agent {
-	case "copilot", "kimi", "gemini", "qwen", "kilo", "cline", "amp", "droid", "maki", "muse", "agy", "letta", "qodercli", "kiro", "devin":
+	case "cmd", "copilot", "kimi", "gemini", "qwen", "kilo", "cline", "amp", "droid", "maki", "muse", "agy", "letta", "qodercli", "kiro", "devin":
 		return true
 	}
 	return false
@@ -62,6 +63,8 @@ func (r *Reader) nativeTranscriptPath(ref Ref) (string, error) {
 		return "", ErrUnavailable
 	}
 	switch ref.Agent {
+	case "cmd":
+		return uniqueNativeFile(root, filepath.Join(root, "projects", "*", ref.Value+".jsonl"))
 	case "muse":
 		return uniqueNativeFile(root, filepath.Join(root, "sessions", "*", "*", "*", ref.Value, "session.jsonl"))
 	case "agy":

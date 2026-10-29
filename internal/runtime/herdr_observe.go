@@ -175,6 +175,7 @@ func (h *Herdr) snapshot(ctx context.Context, session SessionRef) (Snapshot, err
 		out.Panes = append(out.Panes, normalized)
 	}
 	out.Layouts = normalizeLayouts(s.Layouts)
+	h.applyLocalAgentBindings(ctx, session, &out)
 	return out, nil
 }
 
@@ -262,6 +263,9 @@ func (h *Herdr) agentKinds(ctx context.Context, session SessionRef) ([]AgentKind
 		if manifest.Agent != "" {
 			seen[manifest.Agent] = struct{}{}
 		}
+	}
+	if h.HookBinary != "" && commandCodeBinary() != "" {
+		seen["cmd"] = struct{}{}
 	}
 	values := make([]string, 0, len(seen))
 	for kind := range seen {

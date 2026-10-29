@@ -16,8 +16,11 @@ const KINDS: Record<QuotaProvider, readonly string[]> = {
   copilot: ["copilot", "github-copilot", "copilot-cli"],
   cursor: ["cursor", "cursor-agent", "cursor-cli"],
   grok: ["grok", "grok-cli"],
-  // DeepSeek is an API balance; no agent kind of this build reports it.
+  // OpenCode Go follows the opencode agent; DeepSeek and Command Code are read
+  // by key, and no agent kind of this build starts them.
   deepseek: [],
+  "opencode-go": ["opencode"],
+  "command-code": [],
 };
 
 export function quotaProviderOrder(memory: Pick<CreateMemory, "pinned" | "uses">): QuotaProvider[] {

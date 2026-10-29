@@ -21,6 +21,7 @@ type herdrTerminal struct {
 	stdin     io.WriteCloser
 	events    chan TerminalEvent
 	done      chan struct{}
+	stop      chan struct{}
 	closeOnce sync.Once
 	writeMu   sync.Mutex
 }
@@ -74,7 +75,7 @@ func (h *Herdr) OpenTerminal(ctx context.Context, open TerminalOpen) (TerminalCo
 		return nil, terminalOpenFault(err.Error(), err)
 	}
 	controller := &herdrTerminal{
-		cmd: cmd, stdin: stdin, events: make(chan TerminalEvent, 16), done: make(chan struct{}),
+		cmd: cmd, stdin: stdin, events: make(chan TerminalEvent, 16), done: make(chan struct{}), stop: make(chan struct{}),
 	}
 	first := make(chan TerminalEvent, 1)
 	go controller.read(stdout, first, stderr)
@@ -82,7 +83,6 @@ func (h *Herdr) OpenTerminal(ctx context.Context, open TerminalOpen) (TerminalCo
 	select {
 	case event := <-first:
 		if event.Frame != nil {
-			controller.events <- event
 			return controller, nil
 		}
 		_ = controller.Close()
@@ -146,7 +146,22 @@ func (t *herdrTerminal) command(operation string, value any) error {
 		return terminalCommandFault(operation, errors.New("terminal bridge is closed"))
 	default:
 	}
-	_, err = t.stdin.Write(append(raw, '\n'))
+	written := make(chan error, 1)
+	go func() {
+		_, err := t.stdin.Write(append(raw, '\n'))
+		written <- err
+	}()
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	select {
+	case err = <-written:
+	case <-timer.C:
+		_ = t.stdin.Close()
+		if t.cmd.Process != nil {
+			_ = t.cmd.Process.Kill()
+		}
+		err = errors.New("terminal command pipe timed out")
+	}
 	if err != nil {
 		return terminalCommandFault(operation, err)
 	}
@@ -156,11 +171,23 @@ func (t *herdrTerminal) command(operation string, value any) error {
 func (t *herdrTerminal) Close() error {
 	var closeErr error
 	t.closeOnce.Do(func() {
-		_ = t.command("terminal.close", map[string]any{"type": "terminal.release"})
-		closeErr = t.stdin.Close()
+		close(t.stop)
+		released := make(chan struct{})
+		go func() {
+			_ = t.command("terminal.close", map[string]any{"type": "terminal.release"})
+			close(released)
+		}()
+		timer := time.NewTimer(500 * time.Millisecond)
+		defer timer.Stop()
 		select {
-		case <-t.done:
-		case <-time.After(500 * time.Millisecond):
+		case <-released:
+			closeErr = t.stdin.Close()
+			select {
+			case <-t.done:
+			case <-timer.C:
+			}
+		case <-timer.C:
+			closeErr = t.stdin.Close()
 		}
 		if t.cmd.Process != nil {
 			_ = t.cmd.Process.Kill()
@@ -176,13 +203,19 @@ func (t *herdrTerminal) read(stdout io.Reader, first chan<- TerminalEvent, stder
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64*1024), 8<<20)
 	firstPending := true
-	emit := func(event TerminalEvent) {
+	emit := func(event TerminalEvent) bool {
+		// Only this reader writes events, including the initial full frame.
+		// Readiness is signalled after enqueueing it, so deltas cannot overtake it.
+		select {
+		case t.events <- event:
+		case <-t.stop:
+			return false
+		}
 		if firstPending {
 			firstPending = false
 			first <- event
-			return
 		}
-		t.events <- event
+		return true
 	}
 	for scanner.Scan() {
 		var record herdrTerminalRecord
@@ -201,9 +234,11 @@ func (t *herdrTerminal) read(stdout io.Reader, first chan<- TerminalEvent, stder
 				emit(TerminalEvent{Closed: &TerminalClosed{Reason: "Herdr terminal frame is invalid or too large", Err: err}})
 				return
 			}
-			emit(TerminalEvent{Frame: &TerminalFrame{
+			if !emit(TerminalEvent{Frame: &TerminalFrame{
 				Sequence: record.Sequence, Width: record.Width, Height: record.Height, Full: record.Full, Data: data,
-			}})
+			}}) {
+				return
+			}
 		case "terminal.closed":
 			emit(TerminalEvent{Closed: &TerminalClosed{Reason: record.Reason}})
 			return
@@ -218,11 +253,7 @@ func (t *herdrTerminal) read(stdout io.Reader, first chan<- TerminalEvent, stder
 		reason = "Herdr terminal bridge closed"
 	}
 	event := TerminalEvent{Closed: &TerminalClosed{Reason: reason, Err: err}}
-	if firstPending {
-		first <- event
-	} else {
-		t.events <- event
-	}
+	emit(event)
 }
 
 func terminalOpenFault(message string, cause error) error {

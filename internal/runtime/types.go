@@ -131,10 +131,13 @@ type Tab struct {
 }
 
 type AgentSessionRef struct {
-	Source string
-	Agent  string
-	Kind   string
-	Value  string
+	// Leaf and LiveActivity are local observation data, never phone fields.
+	Leaf         *string
+	LiveActivity *PaneActivity
+	Source       string
+	Agent        string
+	Kind         string
+	Value        string
 }
 
 type Pane struct {

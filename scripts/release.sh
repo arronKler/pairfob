@@ -23,6 +23,9 @@ if [[ -z "$COMMIT" ]] && command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-pa
 fi
 pairfob_require_shipable_version "$VERSION" "release.sh VERSION"
 
+. "$ROOT/scripts/macos-signing.sh"
+pairfob_prepare_macos_signing
+
 OUT="${OUT:-$ROOT/dist/daemon}"
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -36,7 +39,19 @@ for os in darwin linux; do
   for arch in amd64 arm64; do
     dest="${OUT}/pairfob-${os}-${arch}"
     echo "build ${dest}"
-    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$ldflags" -o "$dest" ./cmd/pairfob
+    # Native macOS Keychain access disables interaction for background reads.
+    # Linux remains static; unsigned cross-builds on Linux have no Keychain reader.
+    build_env=(CGO_ENABLED=0)
+    if [[ "$os" == darwin && "$(uname -s)" == Darwin ]]; then
+      # Match Go 1.26's minimum OS instead of inheriting the build Mac's OS.
+      build_env=(CGO_ENABLED=1 MACOSX_DEPLOYMENT_TARGET=12.0
+        "CGO_CFLAGS=-O2 -g -mmacosx-version-min=12.0"
+        "CGO_LDFLAGS=-O2 -g -mmacosx-version-min=12.0")
+    fi
+    env "${build_env[@]}" GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$ldflags" -o "$dest" ./cmd/pairfob
+    if [[ "$os" == darwin ]]; then
+      pairfob_sign_macos_binary "$dest"
+    fi
   done
 done
 

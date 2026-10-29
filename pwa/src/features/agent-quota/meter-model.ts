@@ -18,6 +18,8 @@ const NAMES: Record<string, CopyKey> = {
   "included plan": "quota.window.included",
   "five hour": "quota.window.fiveHour",
   "seven day": "quota.window.sevenDay",
+  monthly: "quota.window.monthly",
+  "monthly balance": "quota.name.monthlyBalance",
   "seven day sonnet": "quota.window.sevenDaySonnet",
   "seven day opus": "quota.window.sevenDayOpus",
   "seven day cowork": "quota.window.sevenDayCowork",
