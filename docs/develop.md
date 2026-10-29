@@ -238,6 +238,15 @@ candidate even when no-certificate publication was explicitly enabled. Only
 unsigned/ad-hoc development installs updated from an HTTP loopback server can
 use unsigned fixtures. That exception never applies to a signed installed image.
 
+A daemon installed by the user-level service also self-updates patch releases.
+Every six hours it reads `https://dl.pairfob.com/daemon/VERSION` and installs a
+target in the same major.minor after that target has stayed current for the
+soak window (`PAIRFOB_AUTO_UPDATE_SOAK`, default `12h`), and only while no RPC
+has arrived for a minute. Each target is attempted once, so a release that
+fails to install waits for the next version instead of retrying. Set
+`PAIRFOB_AUTO_UPDATE=0` to turn the loop off; updating from the app keeps
+working either way.
+
 Moving from an old ad-hoc build to the signed identity can require one new user
 grant. Stable signing preserves identity across subsequent updates; it does not
 turn macOS process-lifetime app-container consent into permanent access. Test

@@ -113,6 +113,12 @@ package can express that duty.
   do not expose the Herdr HTTP/Unix socket to the relay.
 - Mutations carry a fresh `operation_id` and are not retried automatically;
   `unknown_outcome` only refreshes, never replays.
+- The daemon self-updates patch releases within its own major.minor. It reads
+  `https://dl.pairfob.com/daemon/VERSION` six-hourly, installs a target only
+  after it has stayed current for the soak window (`PAIRFOB_AUTO_UPDATE_SOAK`,
+  default 12h), only when no RPC has arrived for 60s, and attempts each target
+  once. `PAIRFOB_AUTO_UPDATE=0` disables it; `DaemonUpdate` remains the manual
+  path.
 - The `GetConfig.capabilities` keys are the authority for showing and
   allowing operations; do not invent aggregate aliases. `rename_file` and
   `delete_file` advertise workspace file mutations; `download_file` advertises
