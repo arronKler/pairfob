@@ -7,9 +7,19 @@ import type { RoomCore } from "./core.ts";
 import { newAttachment } from "./attachment.ts";
 import type { RoomSocket } from "./types.ts";
 
+/**
+ * A refused hello dies before any session exists, so the client cannot report
+ * the code afterwards. Recording it here is the only way a registration loop
+ * shows up in Analytics Engine.
+ */
+function refuseDaemon(room: RoomCore, ws: RoomSocket, code: string, message: string): void {
+  room.noteReject(code, "daemon");
+  reject(ws, code, message);
+}
+
 export async function handleDaemonHello(room: RoomCore, ws: RoomSocket, frame: Frame): Promise<void> {
   if (!isZeroRoute(frame.routeId)) {
-    reject(ws, "bad_token", "HELLO_DAEMON route_id must be zero");
+    refuseDaemon(room, ws, "bad_token", "HELLO_DAEMON route_id must be zero");
     return;
   }
   const req = parseJSONObject(frame.payload);
@@ -24,16 +34,17 @@ export async function handleDaemonHello(room: RoomCore, ws: RoomSocket, frame: F
     daemonId !== room.daemonId ||
     !RECONNECT_TOKEN_RE.test(token)
   ) {
-    reject(ws, "bad_token", "invalid RegisterDaemon payload");
+    refuseDaemon(room, ws, "bad_token", "invalid RegisterDaemon payload");
     return;
   }
 
   const att = room.att(ws);
   if (att?.role !== "daemon") {
-    reject(ws, "unbound", "HELLO_DAEMON on non-daemon websocket");
+    refuseDaemon(room, ws, "unbound", "HELLO_DAEMON on non-daemon websocket");
     return;
   }
   if (room.daemon === ws) {
+    room.noteReject("unbound", "daemon");
     sendErr(ws, "unbound", "daemon websocket already registered");
     ws.close(1000, "unbound");
     return;
@@ -41,12 +52,12 @@ export async function handleDaemonHello(room: RoomCore, ws: RoomSocket, frame: F
 
   const want = room.loadReconnectHash();
   if (!want) {
-    reject(ws, "enroll_required", "room has no reconnect hash");
+    refuseDaemon(room, ws, "enroll_required", "room has no reconnect hash");
     return;
   }
   const got = await sha256Hex(token);
   if (!timingSafeEqual(got, want)) {
-    reject(ws, "bad_token", "reconnect");
+    refuseDaemon(room, ws, "bad_token", "reconnect");
     return;
   }
 

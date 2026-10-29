@@ -313,6 +313,10 @@ export class RoomCore {
     this.deps.metrics?.bind(kind);
   }
 
+  noteReject(code: string, role: string): void {
+    this.deps.metrics?.reject(code, role);
+  }
+
   closeBind(ws: RoomSocket, code: string, message: string, notifyDaemon = true, notifications?: TeardownNotifications): void {
     const sends = notifications ?? new TeardownNotifications();
     const a = this.att(ws);

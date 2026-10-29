@@ -100,6 +100,7 @@ export interface RoomMetrics {
   bind(kind: string): void;
   close(code: string, kind: string): void;
   fwd(bytes: number): void;
+  reject(code: string, role: string): void;
   alarmLate(ms: number): void;
 }
 

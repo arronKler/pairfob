@@ -1,5 +1,8 @@
 import { DAEMON_ID_RE, GRANT_ID_RE } from "./constants.ts";
 import { buildOf } from "./http.ts";
+import type { RoomMetrics } from "./room/types.ts";
+
+export type { RoomMetrics };
 
 export type CounterMap = Record<string, number>;
 
@@ -14,13 +17,6 @@ export type AnalyticsSink = {
 export type MetricsEnv = {
   METRICS?: AnalyticsSink;
   BUILD?: string;
-};
-
-export type RoomMetrics = {
-  bind(kind: string): void;
-  close(code: string, kind: string): void;
-  fwd(bytes: number): void;
-  alarmLate(ms: number): void;
 };
 
 /**
@@ -133,6 +129,14 @@ export function observeClose(env: MetricsEnv, code: string, kind: string, daemon
   emit(env, { event: "ws_close", result: code || "unknown", dim: kind, daemonId });
 }
 
+/**
+ * A refused hello is the one close a client cannot report: the socket dies
+ * before any session exists, so the relay has to say why it closed it.
+ */
+export function observeReject(env: MetricsEnv, code: string, role: string, daemonId = ""): void {
+  emit(env, { event: "hello_reject", result: code, dim: role, daemonId });
+}
+
 export function observeBind(env: MetricsEnv, kind: string, daemonId = ""): void {
   emit(env, { event: "bind", dim: kind, daemonId });
 }
@@ -155,6 +159,9 @@ export function roomMetrics(env: MetricsEnv, daemonId: string): RoomMetrics {
     },
     fwd(bytes) {
       observeFwd(env, bytes, daemonId);
+    },
+    reject(code, role) {
+      observeReject(env, code, role, daemonId);
     },
     alarmLate(ms) {
       observeAlarmLate(env, ms, daemonId);
