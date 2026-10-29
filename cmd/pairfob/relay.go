@@ -20,6 +20,7 @@ const (
 	relayHeartbeatInterval = 25 * time.Second
 	relayStableConnection  = 10 * time.Second
 	relayInitialBackoff    = time.Second
+	relayUnstableBackoff   = 5 * time.Second
 	relayMaxBackoff        = 30 * time.Second
 	relayRejectedBackoff   = 5 * time.Minute
 	relayRegisterTimeout   = 10 * time.Second
@@ -231,12 +232,14 @@ func retryAfter(retry relayRetry, label string, delay time.Duration, err error, 
 // A link that was healthy gets one immediate reconnect attempt. A connection
 // that never became stable keeps the exponential backoff to avoid a hot loop.
 // Registration success does not reset delay: only a stable live link does.
+// A connection that dies young starts at five seconds, because a flapping path
+// would otherwise spend a whole ladder inside the first two minutes.
 func relayReconnectBackoff(connectedFor, current time.Duration) (time.Duration, time.Duration) {
 	if connectedFor >= relayStableConnection {
 		return 0, relayInitialBackoff
 	}
-	if current < relayInitialBackoff {
-		current = relayInitialBackoff
+	if current < relayUnstableBackoff {
+		current = relayUnstableBackoff
 	}
 	return current, nextBackoff(current)
 }

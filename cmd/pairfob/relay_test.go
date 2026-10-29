@@ -26,7 +26,8 @@ func TestRelayReconnectBackoff(t *testing.T) {
 	}{
 		{name: "stable reconnects immediately", connectedFor: relayStableConnection, current: time.Second, wantDelay: 0, wantNext: time.Second},
 		{name: "stable resets high backoff", connectedFor: relayStableConnection, current: 16 * time.Second, wantDelay: 0, wantNext: time.Second},
-		{name: "unstable keeps backoff", connectedFor: relayStableConnection - time.Millisecond, current: time.Second, wantDelay: time.Second, wantNext: 2 * time.Second},
+		{name: "unstable starts at five seconds", connectedFor: relayStableConnection - time.Millisecond, current: time.Second, wantDelay: relayUnstableBackoff, wantNext: 10 * time.Second},
+		{name: "unstable keeps backoff", connectedFor: 0, current: 10 * time.Second, wantDelay: 10 * time.Second, wantNext: 20 * time.Second},
 		{name: "unstable caps backoff", connectedFor: 0, current: 30 * time.Second, wantDelay: 30 * time.Second, wantNext: 30 * time.Second},
 	}
 	for _, tt := range tests {
@@ -87,7 +88,7 @@ func TestRunRelayShortRegisteredConnectionsGrowBackoff(t *testing.T) {
 	startTestRelay(t, url, stop, h.retry)
 	got := h.waitDelays(t, 3)
 	close(stop)
-	want := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}
+	want := []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second}
 	for i, delay := range want {
 		if got[i] != delay {
 			t.Fatalf("short-link delays=%v, want %v", got, want)
@@ -137,8 +138,8 @@ func TestRunRelayStableLinkResetsBackoff(t *testing.T) {
 	h := newRelayHarness(stop)
 	startTestRelay(t, url, stop, h.retry)
 	got := h.waitDelays(t, 2)
-	if got[0] != time.Second || got[1] != 2*time.Second {
-		t.Fatalf("pre-stable delays=%v, want 1s then 2s", got)
+	if got[0] != 5*time.Second || got[1] != 10*time.Second {
+		t.Fatalf("pre-stable delays=%v, want 5s then 10s", got)
 	}
 	waitRegistered(t, registered, 3)
 	h.waitNow(t, 5)
@@ -146,7 +147,7 @@ func TestRunRelayStableLinkResetsBackoff(t *testing.T) {
 	close(holdThird)
 	got = append(got, h.waitDelays(t, 2)...)
 	close(stop)
-	want := []time.Duration{time.Second, 2 * time.Second, 0, time.Second}
+	want := []time.Duration{5 * time.Second, 10 * time.Second, 0, 5 * time.Second}
 	for i, delay := range want {
 		if got[i] != delay {
 			t.Fatalf("stable-reset delays=%v, want %v", got, want)
