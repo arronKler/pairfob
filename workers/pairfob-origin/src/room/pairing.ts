@@ -11,7 +11,7 @@ import { bytesToHex, isZeroRoute, newRouteId, routeHex } from "../crypto.ts";
 import { mintLoc } from "../crockford.ts";
 import { Typ, type Frame } from "../envelope.ts";
 import { parseJSONObject, reject, sendErr, sendJSON } from "../frames.ts";
-import { armPairFirst, clearKindRef, schedule } from "./alarms.ts";
+import { armPairFirst, clearKindRef, schedule, settleHello } from "./alarms.ts";
 import type { RoomCore } from "./core.ts";
 import type { RoomSocket } from "./types.ts";
 
@@ -242,4 +242,5 @@ export async function handlePairAttach(room: RoomCore, ws: RoomSocket, frame: Fr
   };
   sendJSON(ws, Typ.PAIR_ATTACHED, rid, body);
   sendJSON(room.daemon, Typ.PAIR_ATTACHED, rid, body);
+  await settleHello(room);
 }

@@ -3,6 +3,7 @@ import { isZeroRoute, timingSafeEqual } from "../crypto.ts";
 import { Typ, type Frame } from "../envelope.ts";
 import { parseJSONObject, reject, sendErr, sendJSON } from "../frames.ts";
 import { sha256Hex } from "../crypto.ts";
+import { settleHello } from "./alarms.ts";
 import type { RoomCore } from "./core.ts";
 import { newAttachment } from "./attachment.ts";
 import type { RoomSocket } from "./types.ts";
@@ -77,4 +78,5 @@ export async function handleDaemonHello(room: RoomCore, ws: RoomSocket, frame: F
     reconnect_token: token,
     relay_time: Math.floor(room.now() / 1000),
   });
+  await settleHello(room);
 }

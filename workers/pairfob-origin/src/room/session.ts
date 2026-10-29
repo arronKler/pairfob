@@ -2,7 +2,7 @@ import { DAEMON_ID_RE, HELLO_GRACE_MS, MAX_ESTABLISHED, MAX_RESUME, PROTOCOL } f
 import { isZeroRoute, newRouteId, routeHex } from "../crypto.ts";
 import { encode, Typ, type Frame } from "../envelope.ts";
 import { parseJSONObject, reject, sendErr, sendJSON } from "../frames.ts";
-import { armHello, armResume, clearKindRef } from "./alarms.ts";
+import { armHello, armResume, clearKindRef, settleHello } from "./alarms.ts";
 import type { RoomCore } from "./core.ts";
 import type { RoomSocket } from "./types.ts";
 
@@ -30,7 +30,7 @@ export async function handleClientHello(room: RoomCore, ws: RoomSocket, frame: F
   att.hello_at_ms = now;
   att.mode = "hello";
   room.writeAtt(ws, att);
-  await armHello(room, String(now), now);
+  await armHello(room, now);
 }
 
 export async function handleSessionAttach(room: RoomCore, ws: RoomSocket, frame: Frame): Promise<void> {
@@ -92,6 +92,7 @@ export async function handleSessionAttach(room: RoomCore, ws: RoomSocket, frame:
   const body = { v: PROTOCOL, route_id: hex };
   sendJSON(ws, Typ.SESSION_BOUND, rid, body);
   sendJSON(room.daemon, Typ.SESSION_BOUND, rid, body);
+  await settleHello(room);
 }
 
 export async function handleSessionEstablished(room: RoomCore, ws: RoomSocket, frame: Frame): Promise<void> {

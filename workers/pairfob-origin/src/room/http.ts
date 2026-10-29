@@ -1,5 +1,4 @@
 import { DAEMON_ID_RE, MAX_PENDING_HELLO } from "../constants.ts";
-import { bytesToHex } from "../crypto.ts";
 import { applySecurityHeaders, buildOf, errorJson, jsonResponse, noStore, readJSON, unpairedJson } from "../http.ts";
 import type { RoomCore } from "./core.ts";
 import type { Attachment } from "./attachment.ts";
@@ -98,13 +97,18 @@ export async function handleRoomFetch(
     const consumed = room.consumeUpgrade(url.searchParams, role);
     if (!consumed.ok) return unpairedJson(build, noStore());
     if (!hooks) return errorJson(build, 500, "internal", noStore());
-    await armHello(room, bytesToHex(room.random(8)), consumed.attachment.created_ms);
+    await armHello(room, consumed.attachment.created_ms);
     // Cancellation can arrive while the alarm write awaits storage. Accepting
     // that upgrade leaves an orphan whose timeout close can prevent hibernation.
     signal.throwIfAborted();
     const headers = new Headers({ "Sec-WebSocket-Protocol": "pairfob.v2" });
     applySecurityHeaders(headers, build);
-    return hooks.upgrade(consumed.attachment, consumed.tags, headers);
+    const response = hooks.upgrade(consumed.attachment, consumed.tags, headers);
+    // Another handler can settle the shared hello alarm while the first arm
+    // awaited storage. The socket is visible now, so arm for it again; this is
+    // a read-only no-op when the row already exists.
+    await armHello(room, consumed.attachment.created_ms);
+    return response;
   }
 
   return errorJson(build, 404, "unbound");

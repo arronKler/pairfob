@@ -2,7 +2,23 @@ import { HELLO_GRACE_MS, PAIR_CONFIRM_MS, PAIR_FIRST_MS, RESUME_MS } from "../co
 import { TeardownNotifications } from "./teardown-notifications.ts";
 import { isRegisteredDaemon } from "./attachment.ts";
 import type { RoomCore } from "./core.ts";
-import type { AlarmKind, RoomStore } from "./types.ts";
+import type { AlarmKind, RoomSocket, RoomStore } from "./types.ts";
+
+/** Every pending hello in a room shares one sweep alarm instead of one per connection. */
+const HELLO_REF = "hellos";
+
+function pendingHellos(room: RoomCore): Array<{ ws: RoomSocket; deadline: number }> {
+  const pending: Array<{ ws: RoomSocket; deadline: number }> = [];
+  for (const ws of room.sockets()) {
+    const a = room.att(ws);
+    if (!a || a.mode !== "hello" || a.kind !== "none") continue;
+    if (isRegisteredDaemon(a)) continue;
+    const started = a.hello_at_ms || a.created_ms;
+    if (!started) continue;
+    pending.push({ ws, deadline: started + HELLO_GRACE_MS });
+  }
+  return pending;
+}
 
 export async function syncHeapAlarm(store: RoomStore): Promise<void> {
   const next = store.minAlarmAt();
@@ -40,9 +56,13 @@ export async function harvestDue(room: RoomCore): Promise<TeardownNotifications>
 
 async function applyAlarm(room: RoomCore, kind: AlarmKind, ref: string, now: number, notifications: TeardownNotifications): Promise<void> {
   switch (kind) {
-    case "hello_5s":
-      closeExpiredHellos(room, now, notifications);
+    case "hello_5s": {
+      // The sweep covers the whole room, so keep the shared alarm armed for the
+      // earliest socket that has not reached its deadline yet.
+      const next = closeExpiredHellos(room, now, notifications);
+      if (next !== null) await schedule(room.store, "hello_5s", HELLO_REF, next);
       return;
+    }
     case "resume_15s":
       closeExpiredResumes(room, now, notifications);
       return;
@@ -59,17 +79,17 @@ async function applyAlarm(room: RoomCore, kind: AlarmKind, ref: string, now: num
   }
 }
 
-function closeExpiredHellos(room: RoomCore, now: number, notifications: TeardownNotifications): void {
-  for (const ws of room.sockets()) {
-    const a = room.att(ws);
-    if (!a || a.mode !== "hello" || a.kind !== "none") continue;
-    if (isRegisteredDaemon(a)) continue;
-    const started = a.hello_at_ms || a.created_ms;
-    if (started && now - started >= HELLO_GRACE_MS) {
+function closeExpiredHellos(room: RoomCore, now: number, notifications: TeardownNotifications): number | null {
+  let next: number | null = null;
+  for (const { ws, deadline } of pendingHellos(room)) {
+    if (deadline <= now) {
       notifications.error(ws, "unbound", "5s attach timeout");
       notifications.close(ws, 1000, "unbound");
+    } else if (next === null || deadline < next) {
+      next = deadline;
     }
   }
+  return next;
 }
 
 function closeExpiredResumes(room: RoomCore, now: number, notifications: TeardownNotifications): void {
@@ -105,8 +125,23 @@ async function expireSlot(room: RoomCore, pairRef: string, notifications: Teardo
   await room.index()?.remove(loc, { daemon_id: room.daemonId, pair_ref: slot.pair_ref });
 }
 
-export async function armHello(room: RoomCore, ref: string, helloAt: number): Promise<void> {
-  await schedule(room.store, "hello_5s", ref, helloAt + HELLO_GRACE_MS);
+export async function armHello(room: RoomCore, helloAt: number): Promise<void> {
+  // The caller's socket may not be accepted yet, so its deadline is part of the
+  // candidate set alongside every socket already waiting in the room.
+  const candidate = helloAt + HELLO_GRACE_MS;
+  const at = pendingHellos(room).reduce((min, hello) => Math.min(min, hello.deadline), candidate);
+  await schedule(room.store, "hello_5s", HELLO_REF, at);
+}
+
+/** A socket that completed its handshake no longer needs the hello timeout. */
+export async function settleHello(room: RoomCore): Promise<void> {
+  const pending = pendingHellos(room);
+  if (pending.length === 0) {
+    await clearKindRef(room.store, "hello_5s", HELLO_REF);
+    return;
+  }
+  const at = pending.reduce((min, hello) => Math.min(min, hello.deadline), pending[0].deadline);
+  await schedule(room.store, "hello_5s", HELLO_REF, at);
 }
 
 export async function armResume(room: RoomCore, routeHex: string, created: number): Promise<void> {
