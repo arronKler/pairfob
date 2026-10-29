@@ -105,20 +105,27 @@ describe("reading a pane's turn", () => {
     expect(reads).toBe(1);
 
     const stop = subscribeTurnWrites(() => undefined);
-    // The same status again is no news.
+    // A list that reports the status it already gave is not news.
     setAgentStatus("working");
     await flush();
-    expect(reads).toBe(2);
-    setAgentStatus("working");
-    await flush();
-    expect(reads).toBe(2);
+    expect(reads).toBe(1);
 
-    // The turn ends having written another file.
+    // The turn ends having written another file; that is when the list moves on.
     written = ["b.ts"];
     setAgentStatus("done");
     await flush();
-    expect(reads).toBe(3);
+    expect(reads).toBe(2);
     expect([...turnWrites("p1", ROOT)]).toEqual(["b.ts"]);
+
+    // The same status again is no news.
+    setAgentStatus("done");
+    await flush();
+    expect(reads).toBe(2);
+
+    // And the next turn starts: the agent is working again.
+    setAgentStatus("working");
+    await flush();
+    expect(reads).toBe(3);
     stop();
   });
 });
