@@ -92,6 +92,8 @@ from the original module so imports do not churn.
 | `site/` `site/doc` | homepage and VitePress docs, packed into the Worker by `scripts/pack-origin-assets.sh` |
 | `herdr-plugin.toml` `plugin/herdr` | Herdr plugin listing and its pane scripts |
 | `scripts/verify.sh` | format, vet, Go tests (including race), PWA tests, Worker origin tests, typecheck, production build |
+| `scripts/verify-web.sh` `scripts/verify-android.sh` | the web and APK halves of the gate, run through `scripts/verify.sh --pwa-only` / `--android-only` after its scope check |
+| `scripts/pwa-release-scope.ts` `scripts/android-release-scope.ts` | refuse a scoped release whose changes left that scope |
 | `scripts/install.sh` | one-line install of pairfob (checksum, enroll, user-level service) |
 | `scripts/release.sh` | cross-compile SemVer `dist/daemon/pairfob-{os}-{arch}` + SHA256SUMS (`git tag vX.Y.Z`) |
 | `scripts/publish-daemon.sh` | publish verified daemon artifacts through the download Worker while preserving the live Android channel |
@@ -203,8 +205,9 @@ repository gate after every local edit or merely because a task is ending.
 | UI behavior or layout change | Add focused browser checks for the changed interaction, on each surface it can reach: a phone with touch (390x844), a tablet with touch (about 1024x768, and 820 wide for the 720–899 tier when the change touches layout), and a desktop with a mouse and keyboard (1440x900). Shared components and anything keyed on width or input reach all three. Drive them with real touch and mouse input through the `pwa/qa` scenes; a unit test at one width does not cover the others. Fixtures, live transport and physical-device acceptance are distinct. |
 | Agent transcript adapter (`internal/journal`) or an agent CLI upgrade | Run `PAIRFOB_SCAN_LOCAL_TRANSCRIPTS=1 go test ./internal/journal -run LocalTranscripts -v` on a machine with real Claude Code / Codex / Grok / Pi / Cursor / Hermes / opencode sessions; a hit is injected context leaking into chat. |
 | PWA UI-only production release | Run `./scripts/verify.sh --pwa-only <verified-release-commit>` against a trustworthy baseline in the current checkout. |
+| Android shell / APK-only production release | Run `./scripts/verify.sh --android-only <verified-release-commit>` against a trustworthy baseline. It covers the bundled PWA, the download channel publisher and the APK provenance checks, and refuses changes to the protocol client, daemon, relay, release scripts or anything beyond the two version literals in `mobile/android/app/build.gradle`. |
 | Backend, protocol, cross-module contract or release-tooling delivery | Run the full `./scripts/verify.sh` once on the final candidate before handoff/merge/release. Use focused checks during iteration. |
-| Production release outside the guarded PWA-only scope, or without a trustworthy baseline | Run the full gate on the final release candidate. |
+| Production release outside both guarded scopes, or without a trustworthy baseline | Run the full gate on the final release candidate. |
 
 For ordinary non-release changes, submitting a commit or PR does not itself
 require unrelated full-repository tests. Finish the checks appropriate to the
