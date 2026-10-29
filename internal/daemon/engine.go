@@ -196,6 +196,7 @@ type Engine struct {
 	operationMu  sync.Mutex
 	operations   map[string]*operationRecord
 	operationSeq uint64
+	lastRPC      atomic.Int64 // unix nanos of the most recent dispatched RPC
 
 	reads        observeGroup
 	quotas       quotaCache

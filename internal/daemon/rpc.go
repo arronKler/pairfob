@@ -278,7 +278,17 @@ func IsValidHerdrKey(key string) bool {
 	return ok
 }
 
+// IdleSince reports how long no RPC has arrived on any session.
+func (e *Engine) IdleSince() time.Duration {
+	last := e.lastRPC.Load()
+	if last == 0 {
+		return time.Duration(1<<63 - 1)
+	}
+	return time.Since(time.Unix(0, last))
+}
+
 func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
+	e.lastRPC.Store(time.Now().UnixNano())
 	switch op {
 	case "Ping":
 		e.rpcPing(s, id, params)
