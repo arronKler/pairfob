@@ -32,6 +32,9 @@ ui-review/
 .herd-dispatch/
 .field-guide/
 .claude/
+.codex/
+# Impeccable's generated sidecar; DESIGN.md itself stays tracked.
+.impeccable/
 
 # secrets and env (keep *.example)
 .wrangler
