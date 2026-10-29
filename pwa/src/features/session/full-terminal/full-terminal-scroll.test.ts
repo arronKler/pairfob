@@ -272,6 +272,33 @@ describe("complete-terminal remote scroll", () => {
     host.remove();
   });
 
+  test("a hand pan moves one row of this screen per line, so the view follows the finger", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const calls: Call[] = [];
+    const stop = bindHostScroll(host, (direction, lines, source) => {
+      calls.push({ direction, lines, source });
+    }, () => undefined, { linePx: () => 21 });
+    host.dispatchEvent(pointer("pointerdown", 80, 240));
+    host.dispatchEvent(pointer("pointermove", 80, 240 - 21 * 5));
+    expect(calls).toEqual([{ direction: "down", lines: 5, source: "wheel" }]);
+    stop();
+    host.remove();
+  });
+
+  test("a wheel notch keeps its own travel however tall a row is", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const calls: Call[] = [];
+    const stop = bindHostScroll(host, (direction, lines, source) => {
+      calls.push({ direction, lines, source });
+    }, () => undefined, { linePx: () => 21 });
+    host.dispatchEvent(new WheelEvent("wheel", { deltaY: SCROLL_LINE_PX * 2, bubbles: true, cancelable: true }));
+    expect(calls).toEqual([{ direction: "down", lines: 2, source: "wheel" }]);
+    stop();
+    host.remove();
+  });
+
   test("an 80-column touch drag explicitly pans the overflow scroller", () => {
     const host = document.createElement("div");
     const pan = document.createElement("div");

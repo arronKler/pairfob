@@ -147,7 +147,14 @@ export function SessionTerminal({ onRow }: { onRow?: (index: number, at?: RowPre
       (direction, lines, source) => sendGuidedTuiScroll(direction, lines, source),
       () => undefined,
       // A mouse drag beside the list selects text; it must not also page the agent.
-      { grabTouch: false, tapAsClick: false, capturePan: guidedCapturePan, pansWith: (type) => type !== "mouse" || !deskPointer() },
+      {
+        grabTouch: false,
+        tapAsClick: false,
+        capturePan: guidedCapturePan,
+        pansWith: (type) => type !== "mouse" || !deskPointer(),
+        // One rendered row is one line of the remote TUI, so the pane follows the finger.
+        linePx: () => term.querySelector<HTMLElement>(".term-line")?.offsetHeight ?? 0,
+      },
     );
     const onScroll = () => {
       const following = atBottom(term);

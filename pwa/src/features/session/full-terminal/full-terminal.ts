@@ -29,6 +29,7 @@ import { sessionMayTakeFocus } from "../focus";
 import {
   bindFontPinch,
   clamp,
+  cssCellOf,
   frameMatchesGrid,
   FULL_TERM_FONT_FAMILY,
   measureGlyphHeight,
@@ -280,6 +281,7 @@ function bindInput(host: HTMLElement): void {
     // Fixed columns pan, and so do columns the inspector is covering.
     panXScroller: () => host.classList.contains("is-pan") ? host.querySelector<HTMLElement>(".full-terminal-pan") : null,
     wheelReported: () => reportsWheel(terminal?.modes.mouseTrackingMode),
+    linePx: () => (terminal ? cssCellOf(terminal)?.height ?? 0 : 0),
   });
   unbindCopy?.();
   unbindCopy = bindTerminalCopyKey(host, () => terminal);

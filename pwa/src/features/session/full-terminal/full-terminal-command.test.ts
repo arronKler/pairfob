@@ -203,3 +203,86 @@ describe("TerminalCommandPump", () => {
     expect(rtts).toEqual([150, 150]);
   });
 });
+
+describe("TerminalCommandPump scrolls", () => {
+  function scrollHarness() {
+    const sent: TerminalCommand[] = [];
+    const acks: Deferred[] = [];
+    const pump = new TerminalCommandPump({
+      execute: (command) => {
+        const done = deferred();
+        sent.push(command);
+        acks.push(done);
+        return done.promise;
+      },
+      onError: () => undefined,
+    });
+    return { pump, sent, acks };
+  }
+
+  test("a flick sends where the finger is now, not every step it passed", async () => {
+    const { pump, sent, acks } = scrollHarness();
+    const at = (row: number) => ({ column: 3, row });
+
+    pump.enqueueScroll({ direction: "down", lines: 1, source: "wheel", at: at(1) });
+    for (let row = 2; row <= 6; row++) {
+      pump.enqueueScroll({ direction: "down", lines: 1, source: "wheel", at: at(row) });
+    }
+    expect(sent).toHaveLength(1);
+    expect(pump.snapshot().commands).toBe(2);
+
+    acks[0].resolve();
+    await flush();
+
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toEqual({ kind: "scroll", direction: "down", lines: 5, source: "wheel", at: at(6) });
+    expect(pump.snapshot().commands).toBe(1);
+  });
+
+  test("travel that reverses before it is sent cancels itself out", async () => {
+    const { pump, sent, acks } = scrollHarness();
+
+    pump.enqueueInput(new Uint8Array([1]));
+    pump.enqueueScroll({ direction: "up", lines: 1, source: "wheel" });
+    pump.enqueueScroll({ direction: "up", lines: 2, source: "wheel" });
+    pump.enqueueScroll({ direction: "down", lines: 3, source: "wheel" });
+    expect(pump.snapshot().commands).toBe(1);
+
+    acks[0].resolve();
+    await flush();
+    expect(sent).toHaveLength(1);
+    expect(pump.snapshot().commands).toBe(0);
+  });
+
+  test("a page step is its own command, not wheel travel that merges", async () => {
+    const { pump, sent, acks } = scrollHarness();
+
+    pump.enqueueScroll({ direction: "down", lines: 1, source: "wheel" });
+    pump.enqueueScroll({ direction: "down", lines: 8, source: "page_key" });
+    pump.enqueueScroll({ direction: "down", lines: 8, source: "page_key" });
+    expect(pump.snapshot().commands).toBe(3);
+
+    acks[0].resolve();
+    await flush();
+    acks[1].resolve();
+    await flush();
+
+    expect(sent.slice(1)).toEqual([
+      { kind: "scroll", direction: "down", lines: 8, source: "page_key" },
+      { kind: "scroll", direction: "down", lines: 8, source: "page_key" },
+    ]);
+  });
+
+  test("merged travel stays within what the daemon accepts as one scroll", async () => {
+    const { pump, sent, acks } = scrollHarness();
+
+    pump.enqueueScroll({ direction: "down", lines: 40, source: "wheel" });
+    for (let step = 0; step < 6; step += 1) {
+      pump.enqueueScroll({ direction: "down", lines: 40, source: "wheel" });
+    }
+    acks[0].resolve();
+    await flush();
+
+    expect(sent[1]).toEqual({ kind: "scroll", direction: "down", lines: 160, source: "wheel", at: undefined });
+  });
+});

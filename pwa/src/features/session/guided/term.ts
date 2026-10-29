@@ -4,6 +4,7 @@ import { prefersReducedMotion } from "../../../lib/dom";
 import { MOTION_MS } from "../../../shared/ui/dom/motion";
 import { isPageZoomed, touchSpread } from "../../../lib/gesture-boundary";
 import { TERMINAL_MAX_COLS, TERMINAL_MAX_ROWS, TERMINAL_MIN_COLS, TERMINAL_MIN_ROWS } from "../../../lib/protocol/terminal";
+import { requestPaneRefresh } from "../../connection/refresh-request";
 import { reportMutationError } from "../../connection/mutations";
 import { commitView } from "../../../app/host";
 import { clampTermFont, saveTermFont, setTermFontPx, setTermWrap, termFontPx, termLineHeightPx, termWrap } from "../../settings/preferences-store";
@@ -23,8 +24,11 @@ const TAP_SLOP_PX = 8;
 const HOLD_MS = 420;
 /** The chip's exit (`.term-jump-out`, terminal.scss): gone before the scroll it started has arrived. */
 const JUMP_OUT_MS = MOTION_MS.press;
+/** One tick says the pane took the gesture; a step per line would buzz through the whole pan. */
+const SCROLL_TICK_MS = 240;
 
 let jumpTimer = 0;
+let lastScrollTick = 0;
 let jumpLeaving = false;
 let frozenDisplay: { session: ReturnType<typeof liveSession>; paneId: string; model: PaneModel } | null = null;
 /** Text dragged out of the buffer with a mouse is selected right now (no select mode). */
@@ -247,14 +251,47 @@ export function sendGuidedTuiScroll(direction: "up" | "down", lines = 1, source:
     TERMINAL_MAX_ROWS,
     Math.max(TERMINAL_MIN_ROWS, Math.round((term?.clientHeight || 320) / Math.max(1, termLineHeightPx(termFontPx())))),
   );
-  haptic(4);
+  const tickAt = performance.now();
+  if (tickAt - lastScrollTick >= SCROLL_TICK_MS) {
+    lastScrollTick = tickAt;
+    haptic(4);
+  }
   // In its turn among what was typed before it; a pane left meanwhile gets nothing.
   liveOrder.submit("wheel", () => {
     if (liveSession() !== session || openPaneId() !== paneId) return;
-    void guidedScrollController.scroll({ session, paneId, cols, rows }, direction, lines).catch((error) => {
-      void reportMutationError(session, error);
-    });
+    void guidedScrollController.scroll({ session, paneId, cols, rows }, direction, lines).then(
+      (written) => {
+        if (written) scheduleScreenRead(performance.now());
+      },
+      (error) => {
+        void reportMutationError(session, error);
+      },
+    );
   });
+}
+
+/** How soon a guided pane asks for the screen its scroll just moved. */
+const SCROLL_READ_MS = 150;
+
+let screenReadSince = 0;
+let screenReadAt = 0;
+let screenReadTimer = 0;
+
+/**
+ * A guided pane shows a snapshot, so a scroll it sent is invisible until the
+ * next read, and the fallback poll can take 1.5s. Ask on the quiet edge of a
+ * burst, from an acknowledgment no older than the last scroll: often enough to
+ * watch the pane move, never one read per line.
+ */
+function scheduleScreenRead(since: number): void {
+  screenReadSince = since;
+  if (screenReadTimer) return;
+  const wait = Math.max(0, SCROLL_READ_MS - (performance.now() - screenReadAt));
+  screenReadTimer = window.setTimeout(() => {
+    screenReadTimer = 0;
+    screenReadAt = performance.now();
+    void requestPaneRefresh({ notBefore: screenReadSince, postponeFallback: true });
+  }, wait);
 }
 
 /** One-screen TUI snapshots cannot CSS-scroll; pan then pages the live agent. */

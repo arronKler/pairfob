@@ -17,6 +17,35 @@ export type TerminalScrollCommand = {
 };
 export type TerminalCommand = TerminalInputCommand | TerminalResizeCommand | TerminalScrollCommand;
 
+/** What the daemon accepts as one `TerminalScroll` (`internal/runtime/herdr_terminal.go`). */
+const SCROLL_LINES_MAX = 160;
+
+function signedLines(direction: "up" | "down", lines: number): number {
+  const count = Number.isFinite(lines) ? Math.min(SCROLL_LINES_MAX, Math.max(0, Math.round(lines))) : 0;
+  return direction === "down" ? count : -count;
+}
+
+/**
+ * Two wheel scrolls still waiting to be sent are the same gesture: the finger
+ * moved on. Their travel adds, opposing travel cancels, and the pointer
+ * position comes from the later one.
+ */
+function mergeWheel(
+  queued: TerminalScrollCommand,
+  next: Omit<TerminalScrollCommand, "kind">,
+): TerminalScrollCommand | null {
+  const total = signedLines(queued.direction, queued.lines) + signedLines(next.direction, next.lines);
+  const lines = Math.min(SCROLL_LINES_MAX, Math.abs(total));
+  if (!lines) return null;
+  return {
+    kind: "scroll",
+    direction: total < 0 ? "up" : "down",
+    lines,
+    source: "wheel",
+    at: next.at ?? queued.at,
+  };
+}
+
 export type TerminalCommandQueueState = {
   commands: number;
   inputBytes: number;
@@ -125,8 +154,21 @@ export class TerminalCommandPump {
     this.enqueue({ kind: "resize", ...command });
   }
 
+  /**
+   * Wheel travel is continuous, so an unsent scroll is already stale: merging
+   * lands the pane where the finger is instead of replaying every step it
+   * passed before the pane catches up.
+   */
   enqueueScroll(command: Omit<TerminalScrollCommand, "kind">): void {
     if (this.stopped) return;
+    const tail = this.queue[this.queue.length - 1];
+    if (command.source === "wheel" && tail?.command.kind === "scroll" && tail.command.source === "wheel") {
+      const merged = mergeWheel(tail.command, command);
+      if (merged) tail.command = merged;
+      else this.queue.pop();
+      this.observer?.queued?.("scroll", true, this.state());
+      return;
+    }
     this.enqueue({ kind: "scroll", ...command });
   }
 

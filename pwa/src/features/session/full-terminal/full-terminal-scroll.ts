@@ -1,7 +1,7 @@
 import { isPageZoomed } from "../../../lib/gesture-boundary";
 import { tapAsMouse } from "./full-terminal-input";
 
-/** Pixels of finger or wheel travel that map to one remote TUI line. */
+/** Pixels of wheel travel that map to one remote TUI line. A notch is not finger travel. */
 export const SCROLL_LINE_PX = 36;
 const ENGAGE_PX = 12;
 /** A wheel that reports lines instead of pixels pans this far per line. */
@@ -32,6 +32,8 @@ export type HostScrollOptions = {
   pansWith?: (pointerType: string) => boolean;
   /** True while the app in the terminal asked for mouse reports that include the wheel. */
   wheelReported?: () => boolean;
+  /** Height of one rendered row. A hand pan then moves the view as far as the finger. */
+  linePx?: () => number;
 };
 
 /** Whether xterm reports the wheel to the app under this mouse protocol; X10 reports presses only. */
@@ -63,6 +65,7 @@ export function bindHostScroll(
   let lastY = 0;
   let panRemainder = 0;
   let wheelRemainder = 0;
+  let panLinePx = SCROLL_LINE_PX;
   let engaged = false;
   let horizontal = false;
   let panXScroller: HTMLElement | null = null;
@@ -94,6 +97,9 @@ export function bindHostScroll(
     lastY = point.clientY;
     startedAt = performance.now();
     panRemainder = 0;
+    // Read once per gesture: one row of this screen is one line of the remote TUI.
+    const measured = opts.linePx?.() ?? 0;
+    panLinePx = measured > 0 ? measured : SCROLL_LINE_PX;
     at = cellAt(point.clientX, point.clientY);
     if (canPanX) {
       const candidate = opts.panXScroller?.() ?? null;
@@ -125,10 +131,10 @@ export function bindHostScroll(
       return true;
     }
     panRemainder -= dy;
-    const lines = Math.trunc(Math.abs(panRemainder) / SCROLL_LINE_PX);
+    const lines = Math.trunc(Math.abs(panRemainder) / panLinePx);
     if (!lines) return true;
     const direction = panRemainder < 0 ? "up" : "down";
-    panRemainder %= SCROLL_LINE_PX;
+    panRemainder %= panLinePx;
     scroll(direction, Math.min(lines, 40), "wheel", at);
     return true;
   };

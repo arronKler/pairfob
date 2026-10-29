@@ -110,6 +110,44 @@ describe("react session scroll rail", () => {
     expect(keys).toEqual([]);
   });
 
+  test("a finished scroll asks for the screen it moved instead of waiting for the poll", async () => {
+    const refreshes: Array<{ notBefore?: number; postponeFallback?: boolean }> = [];
+    setPhase("live");
+    setScreen("pane");
+    selectPane("p1");
+    applyPaneRead("ready", "");
+    setFullTerminal(false);
+    attachLiveSession(live({
+      terminalOpen: async (paneId: string, cols: number, rows: number) => ({
+        operationId: "op_open",
+        terminalId: "term_00000000000000000000000000000000",
+        paneId,
+        cols,
+        rows,
+        encoding: "ansi" as const,
+      }),
+      terminalScroll: async () => undefined,
+      terminalClose: async () => undefined,
+    }) as unknown as LiveSession);
+    bindPaneRefresh(async (request) => {
+      refreshes.push(request ?? {});
+      return null;
+    });
+    renderReact(createElement(SessionTerminal));
+    const wheelUp = [...appRoot().querySelectorAll(".full-terminal-scroll-btn")]
+      .find((el) => el.getAttribute("aria-label") === "向上滚动") as HTMLButtonElement | undefined;
+    if (!wheelUp) throw new Error("missing wheel button");
+
+    const before = performance.now();
+    wheelUp.dispatchEvent(pointer("pointerdown"));
+    wheelUp.dispatchEvent(pointer("pointerup"));
+    await wait(300);
+
+    expect(refreshes).toHaveLength(1);
+    expect(refreshes[0].postponeFallback).toBeTrue();
+    expect(refreshes[0].notBefore).toBeGreaterThanOrEqual(before);
+  });
+
   test("上一页 / 下一页 write CSI into the PTY, not SendKeys pageup", async () => {
     const texts: string[] = [];
     const keys: string[][] = [];
