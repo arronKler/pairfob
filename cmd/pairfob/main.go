@@ -123,7 +123,8 @@ func runDaemon(store *state.Store, sock string) error {
 	// committed files. Ordinary disconnects do not call this.
 	defer eng.CloseUploads()
 	eng.Build = version
-	eng.Updater = newRemoteUpdater(store.Dir)
+	updater := newRemoteUpdater(store.Dir)
+	eng.Updater = updater
 	if getenv("PAIRFOB_MACHINE_LINK", "1") != "0" {
 		eng.Machines = newMachineLinkService(rt, store.Dir, machineInstallFromEnv(), log.Printf)
 	}
@@ -176,6 +177,9 @@ func runDaemon(store *state.Store, sock string) error {
 	if err := completeUpdateBoot(); err != nil {
 		return fmt.Errorf("complete update: %w", err)
 	}
+	updateCtx, updateCancel := context.WithCancel(context.Background())
+	defer updateCancel()
+	go newAutoUpdater(eng, updater, store.Dir, logger).Run(updateCtx)
 	log.Printf("pairfob admin %s daemon_id %s", sock, target.DaemonID)
 	err = admin.Serve(ln, liveAdmin{eng: eng, store: store, origin: plan.Origin, process: process, stop: func() { _ = ln.Close() }})
 	if errors.Is(err, net.ErrClosed) {
