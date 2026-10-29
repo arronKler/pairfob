@@ -381,6 +381,23 @@ func (e *Engine) Register(join string) error {
 	})
 }
 
+// RegisterRejected is the relay refusing a RegisterDaemon for this identity.
+// Retrying fast cannot clear it, so callers back off long instead of climbing a
+// short ladder that hammers the relay.
+type RegisterRejected struct{ Code string }
+
+func (e *RegisterRejected) Error() string { return e.Code }
+
+// RegisterRejection reports the relay's code when err is a refusal rather than
+// a transport failure.
+func RegisterRejection(err error) (string, bool) {
+	var rejected *RegisterRejected
+	if errors.As(err, &rejected) {
+		return rejected.Code, true
+	}
+	return "", false
+}
+
 // RegisterExchange registers directly on a freshly dialed relay connection.
 // It is used before the connection is exposed to the normal frame pumps, which
 // guarantees RegisterDaemon is the first frame after every reconnect.
@@ -397,7 +414,7 @@ func (e *Engine) RegisterExchange(join string, exchange func(envelope.Frame) (en
 		if body.Code == "" {
 			body.Code = "relay registration error"
 		}
-		return errors.New(body.Code)
+		return &RegisterRejected{Code: body.Code}
 	}
 	if resp.Typ != envelope.TypHELLO_DAEMON {
 		return fmt.Errorf("unexpected registration frame type %d", resp.Typ)

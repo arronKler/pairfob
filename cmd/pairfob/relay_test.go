@@ -95,6 +95,29 @@ func TestRunRelayShortRegisteredConnectionsGrowBackoff(t *testing.T) {
 	}
 }
 
+func TestRunRelayRefusedRegistrationBacksOffLong(t *testing.T) {
+	url := startRefusingRelay(t, "bad_token")
+	stop := make(chan struct{})
+	h := newRelayHarness(stop)
+	eng, link := testRelayEngine(t)
+	ready := make(chan error, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runRelayWith(link, eng, url, "", ready, stop, h.retry)
+	}()
+	got := h.waitDelays(t, 2)
+	stopRelay(stop, link)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("runRelay did not stop after a refusal")
+	}
+	if got[0] != relayRejectedBackoff || got[1] != relayRejectedBackoff {
+		t.Fatalf("refused-registration delays=%v, want %s twice", got, relayRejectedBackoff)
+	}
+}
+
 func TestRunRelayStableLinkResetsBackoff(t *testing.T) {
 	holdThird := make(chan struct{})
 	t.Cleanup(func() {
@@ -376,6 +399,33 @@ func startRegisterRelay(t *testing.T, hold func(seq int) <-chan struct{}) (strin
 	t.Cleanup(server.Close)
 	t.Cleanup(func() { close(released) })
 	return "ws" + strings.TrimPrefix(server.URL, "http"), registered
+}
+
+// startRefusingRelay answers every RegisterDaemon with an ERROR frame and keeps
+// the socket open until cleanup, the way the relay holds a refused socket.
+func startRefusingRelay(t *testing.T, code string) string {
+	t.Helper()
+	released := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := wsnet.UpgraderFor(wsnet.SubprotocolV2)
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := wsnet.Wrap(ws)
+		defer conn.Close()
+		frame, err := conn.Recv()
+		if err != nil || frame.Typ != envelope.TypHELLO_DAEMON {
+			return
+		}
+		if err := conn.Send(envelope.JSON(envelope.TypERROR, [16]byte{}, envelope.ErrorBody{Code: code})); err != nil {
+			return
+		}
+		<-released
+	}))
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(released) })
+	return "ws" + strings.TrimPrefix(server.URL, "http")
 }
 
 func waitRegistered(t *testing.T, registered <-chan int, n int) {

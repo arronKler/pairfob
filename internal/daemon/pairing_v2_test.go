@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -216,6 +217,23 @@ func TestRegistrationFrameV2OmitsJoinToken(t *testing.T) {
 	}
 	if body["reconnect_token"] != eng.Reconnect || body["daemon_id"] != eng.DaemonID {
 		t.Fatalf("reconnect fields=%v", body)
+	}
+}
+
+func TestRegisterExchangeReportsRefusal(t *testing.T) {
+	a, _ := mux.NewPipePair(4)
+	eng := NewEngine(nil, a, runtime.NewFake())
+	eng.DaemonID = "d_0123456789abcdef0123"
+	eng.Reconnect = "rt_" + strings.Repeat("ab", 16)
+	err := eng.RegisterExchange("", func(envelope.Frame) (envelope.Frame, error) {
+		return envelope.JSON(envelope.TypERROR, [16]byte{}, envelope.ErrorBody{Code: "bad_token"}), nil
+	})
+	code, refused := RegisterRejection(err)
+	if !refused || code != "bad_token" {
+		t.Fatalf("refusal = %q, %v; want bad_token", code, refused)
+	}
+	if _, refused := RegisterRejection(errors.New("dial tcp: connection refused")); refused {
+		t.Fatal("a transport failure was classified as a refusal")
 	}
 }
 

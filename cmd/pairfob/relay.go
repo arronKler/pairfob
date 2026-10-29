@@ -21,6 +21,7 @@ const (
 	relayStableConnection  = 10 * time.Second
 	relayInitialBackoff    = time.Second
 	relayMaxBackoff        = 30 * time.Second
+	relayRejectedBackoff   = 5 * time.Minute
 	relayRegisterTimeout   = 10 * time.Second
 )
 
@@ -148,6 +149,17 @@ func runRelayWith(link *relayLink, eng *daemon.Engine, relayURL, join string, fi
 			return conn.RecvWithin(relayRegisterTimeout)
 		}); err != nil {
 			conn.Close()
+			if code, refused := daemon.RegisterRejection(err); refused {
+				// The identity itself was refused, so a fast retry only hammers
+				// the relay. A local re-pair changes the credential and is
+				// picked up on the next attempt.
+				log.Printf("relay refused registration (%s); retry in %s", code, relayRejectedBackoff)
+				if !retry.wait(relayRejectedBackoff, stop) {
+					return
+				}
+				backoff = relayInitialBackoff
+				continue
+			}
 			if !retryAfter(retry, "relay registration failed", backoff, err, stop) {
 				return
 			}
