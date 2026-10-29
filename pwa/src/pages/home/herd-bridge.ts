@@ -22,7 +22,7 @@
  * Presentation (`features/dashboard`) and the pure models never import this file.
  */
 import { capabilityEnabled, operationBusy } from "../../features/operations/capabilities-store";
-import { computersStore, liveSession } from "../../features/computers/catalog-store";
+import { computersStore, currentHerdSession, liveSession } from "../../features/computers/catalog-store";
 import { computerTitle } from "../../lib/computer-catalog";
 import { settingsNetworkPath, settingsNetworkPathInUse } from "../../features/settings/model";
 import { t } from "../../lib/i18n";
@@ -100,11 +100,12 @@ export function readHerdAttention(): HerdPaint {
 }
 
 /**
- * The list the last presentation showed: its grouping and its rows, how many
- * lists there have been, and the count subscribers were last told.
+ * The list the last presentation showed: whose list it is, its grouping, its
+ * rows, how many lists there have been, and the count subscribers were last
+ * told.
  */
-type Roster = { mode: string; ids: ReadonlySet<string>; epoch: number; published: number };
-const NO_ROSTER: Roster = { mode: "", ids: new Set(), epoch: 0, published: 0 };
+type Roster = { scope: string; mode: string; ids: ReadonlySet<string>; epoch: number; published: number };
+const NO_ROSTER: Roster = { scope: "", mode: "", ids: new Set(), epoch: 0, published: 0 };
 let roster = NO_ROSTER;
 
 /** Test seam: forget the consumed attention, and the list it was consumed for, so a suite starts unseen. */
@@ -114,17 +115,33 @@ export function resetHerdAttentionSnapshot(): void {
 }
 
 /**
- * Whether this presentation shows another list than the last one did, as
- * opposed to that list with a session more or less. Another grouping builds
- * the list again, and so does a list that shares no row with the one before:
- * the first rows after none, another computer, another Herdr session. Only
- * then does the whole list replay its entrance; within one list a row that
- * joins or leaves moves alone (`HerdViewModel.epoch`).
+ * Whose list this is. A disconnect retires the rows and a reconnect brings them
+ * back, so the rows alone cannot say whether the list that comes back is the one
+ * the reader was looking at: the computer and its Herdr session can. Pane ids
+ * repeat across both, so another of either is always another list.
  */
-function openRoster(agents: readonly DashboardAgentCard[], mode: string): boolean {
+function herdScope(): string {
+  return `${computersStore.get().credential?.daemonId ?? ""}\u0000${currentHerdSession() ?? ""}`;
+}
+
+/**
+ * Whether this presentation shows another list than the last one did, as
+ * opposed to that list with a session more or less. Another grouping builds the
+ * list again, and so does a list of another computer or Herdr session; so does
+ * a list that shares no row with the one before. Only then does the whole list
+ * replay its entrance; within one list a row that joins or leaves moves alone
+ * (`HerdViewModel.epoch`).
+ *
+ * A list that is momentarily empty — a disconnect retiring the session before
+ * the reconnect brings the same rows back — is not another list: what the
+ * reader last saw is kept, so those rows return to a list that is still itself
+ * instead of replaying the entrance over unchanged sessions.
+ */
+function openRoster(agents: readonly DashboardAgentCard[], mode: string, scope: string): boolean {
   const ids = new Set(agents.map((agent) => agent.paneId));
-  const rebuilt = ids.size > 0 && (mode !== roster.mode || ![...ids].some((id) => roster.ids.has(id)));
-  roster = { mode, ids, epoch: roster.epoch + Number(rebuilt), published: roster.published };
+  if (!ids.size) return false;
+  const rebuilt = scope !== roster.scope || mode !== roster.mode || ![...ids].some((id) => roster.ids.has(id));
+  roster = { scope, mode, ids, epoch: roster.epoch + Number(rebuilt), published: roster.published };
   return rebuilt;
 }
 
@@ -160,6 +177,23 @@ function listActivation(live: TouchedAt, agents: readonly DashboardAgentCard[], 
 /** Forget the held list order (tests, and a list that must be built afresh). */
 export function resetHerdListOrder(): void {
   orderHold = null;
+}
+
+/**
+ * What the herd surfaces render from the dashboard domain, as a scalar: which
+ * rows, not which record carries them. The domain publishes for the refresh
+ * flag and for a snapshot that reported the same list; neither changes a row,
+ * and `lastHerdSig` is the list's own signature, written with every write that
+ * does.
+ */
+export function herdAgentsKey(snapshot: object): string {
+  const record = snapshot as { snapshotLoaded: boolean; lastHerdSig: string };
+  return `${record.snapshotLoaded ? 1 : 0}\u0000${record.lastHerdSig}`;
+}
+
+/** The open session: the only thing the herd surfaces read from the session domain. */
+export function herdSessionKey(snapshot: object): string {
+  return (snapshot as { paneId: string }).paneId;
 }
 
 /**
@@ -297,7 +331,7 @@ export function presentHerdView(): HerdViewModel {
   const agents = liveAgents();
   const group = listGroup();
   const consumed = openHerdPaint([...agents], group);
-  const rebuilt = openRoster(agents, group);
+  const rebuilt = openRoster(agents, group, herdScope());
   if (consumed.completed.length && document.visibilityState === "visible") haptic(COMPLETION_HAPTIC_MS);
   if (group !== "flat") {
     const groups = groupAgents([...agents], group, listActivation(paneActivated(), agents, dashboardStore.get().snapshotLoaded), panePinned());

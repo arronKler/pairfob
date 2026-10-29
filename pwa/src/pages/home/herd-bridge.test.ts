@@ -10,7 +10,7 @@ import { setLang, t } from "../../lib/i18n";
 import { NO_OPERATION_CAPABILITIES } from "../../lib/operations";
 import { morphingPane, nextTransition, takeTransition } from "../../app/transition";
 import { applyRuntimeIdentity } from "../../features/connection/runtime-store";
-import { attachLiveSession } from "../../features/computers/catalog-store";
+import { attachLiveSession, setCredential } from "../../features/computers/catalog-store";
 import { setNetworkOnline, setPhase } from "../../features/connection/connection-store";
 import { replaceAgentsFromSnapshot, resetDashboard } from "../../features/dashboard/catalog-store";
 import { setComputers } from "../../features/computers/catalog-store";
@@ -201,15 +201,37 @@ describe("herd presenter", () => {
     expect([other.stagger, other.epoch]).toEqual([true, 3]);
   });
 
-  test("a list that empties has nothing to replay, and its next rows are a first paint again", () => {
-    seed([seedAgent("p1", "alpha")]);
+  test("a reconnect brings the same rows back to the same list, so nothing replays", () => {
+    seed([seedAgent("p1", "alpha"), seedAgent("p2", "beta")]);
     presentHerdView();
-    seed([]);
+    // A disconnect retires the rows; the empty list is not a list of its own.
+    resetDashboard();
     const empty = presentHerdView();
     expect([empty.stagger, empty.epoch]).toEqual([false, 1]);
-    seed([seedAgent("p1", "alpha")]);
+    // The reconnect reports the very sessions the reader was looking at.
+    seed([seedAgent("p1", "alpha"), seedAgent("p2", "beta")]);
     const back = presentHerdView();
-    expect([back.stagger, back.epoch]).toEqual([true, 2]);
+    expect([back.stagger, back.epoch]).toEqual([false, 1]);
+  });
+
+  test("another computer or another Herdr session is another list, even when its rows repeat", () => {
+    setCredential({ daemonId: "daemon-a" } as never);
+    seed([seedAgent("p1", "alpha"), seedAgent("p2", "alpha")]);
+    expect(presentHerdView().stagger).toBe(true);
+    expect(presentHerdView().stagger).toBe(false);
+    // Pane ids repeat across computers: only the scope can tell them apart.
+    resetDashboard();
+    setCredential({ daemonId: "daemon-b" } as never);
+    seed([seedAgent("p1", "alpha"), seedAgent("p2", "alpha")]);
+    expect(presentHerdView().stagger).toBe(true);
+    // ...and across Herdr sessions on the same computer, with or without a gap.
+    attachLiveSession({ isConnected: () => true, herdSession: () => "release" } as never);
+    expect(presentHerdView().stagger).toBe(true);
+    resetDashboard();
+    attachLiveSession({ isConnected: () => true, herdSession: () => "scratch" } as never);
+    seed([seedAgent("p1", "alpha")]);
+    expect(presentHerdView().stagger).toBe(true);
+    setCredential(null);
   });
 
   test("a subscriber is told when the list is built again, though nothing else of the attention changed", () => {

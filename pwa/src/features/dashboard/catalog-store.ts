@@ -101,10 +101,21 @@ export function liveAgents(): readonly DashboardAgentCard[] {
   return detach(read().agents);
 }
 
+/** The same statuses keyed by pane, as a value: a fold reporting them again changes nothing. */
+function sameStatuses(left: RuntimeAgentStatuses, right: RuntimeAgentStatuses): boolean {
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
+}
+
 /**
  * Fold a daemon snapshot into the herd list: cards, runtime statuses, completion
  * attention, the board catalog, and pruning of per-pane choices for panes that
  * are gone. Returns the previous cards so a caller can diff attention.
+ *
+ * A snapshot that reports the list already shown — the ordinary poll — writes
+ * nothing: publishing it would re-render every row's view for no visible
+ * change. `previous` is still the cards the last paint projected, so callers
+ * diffing attention find nothing to mark.
  */
 export function replaceAgentsFromSnapshot(snapshot: SnapshotWire): DashboardAgentCard[] {
   const projected = projectCompletionAttention(
@@ -113,18 +124,22 @@ export function replaceAgentsFromSnapshot(snapshot: SnapshotWire): DashboardAgen
     read().completionSeen,
   );
   const seenChanged = projected.seen !== read().completionSeen;
+  const signature = herdSignature(projected.agents);
   // The cards being replaced are read inside the owner mutation, so the caller
   // gets the very array the previous paint projected.
   let previous: DashboardAgentCard[] = [];
   batch(() => {
-    write((record) => {
+    writeIf((record) => {
       // Detached: the caller diffs the previous cards, it does not inherit them.
       previous = detach(record.agents);
+      if (record.snapshotLoaded && !seenChanged && record.lastHerdSig === signature
+        && sameStatuses(record.runtimeAgentStatuses, projected.runtimeStatuses)) return false;
       record.agents = projected.agents;
       record.runtimeAgentStatuses = projected.runtimeStatuses;
       record.completionSeen = projected.seen;
-      record.lastHerdSig = herdSignature(projected.agents);
+      record.lastHerdSig = signature;
       record.snapshotLoaded = true;
+      return true;
     });
     projectSnapshot(snapshot, projected.agents);
     const paneIds = projected.agents.map((agent) => agent.paneId);

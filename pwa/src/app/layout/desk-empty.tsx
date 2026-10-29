@@ -15,7 +15,7 @@ import { paneFileSearch } from "../../features/workspace/file-search";
 import { preferencesStore } from "../../features/settings/preferences-store";
 import { t } from "../../lib/i18n";
 import { createDomainUpdates, useDomainUpdates, type DomainWatch } from "../../pages/domain-updates";
-import { herdActionPorts, readHerdAttention, readHerdInput, subscribeHerdAttention } from "../../pages/home/herd-bridge";
+import { herdActionPorts, herdAgentsKey, herdSessionKey, readHerdAttention, readHerdInput, subscribeHerdAttention } from "../../pages/home/herd-bridge";
 import { AgentAvatar, Button } from "../../shared/ui/primitives";
 import { commandKOffered, useHardwareKeyboard } from "../input-mode";
 import { getLayout, layoutStore } from "../layout-store";
@@ -31,13 +31,14 @@ import { navigationStore } from "../navigation-store";
  * fire the list's own actions, so a jump is a click on the row it stands for.
  */
 const watches: DomainWatch[] = [
-  { store: dashboardStore },
+  // As on the rail: the rows themselves, not the record a repeated poll rewrites.
+  { store: dashboardStore, keyOf: herdAgentsKey },
   { store: preferencesStore },
   { store: capabilitiesStore },
   { store: connectionStore },
   { store: computersStore },
   { store: runtimeStore },
-  { store: sessionStore },
+  { store: sessionStore, keyOf: herdSessionKey },
   { store: navigationStore, keyOf: (snapshot) => (snapshot as { screen: string }).screen },
   { store: layoutStore },
 ];

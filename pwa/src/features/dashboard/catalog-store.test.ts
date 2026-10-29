@@ -110,6 +110,25 @@ describe("dashboard domain", () => {
     expect(third.unchanged).toBe(false);
   });
 
+  test("a poll that reports the list already shown publishes nothing", () => {
+    resetDashboard();
+    applySnapshot(snapshot(["p1", "p2"]));
+    let publishes = 0;
+    const stop = dashboardStore.subscribe(() => { publishes += 1; });
+    try {
+      const repeat = applySnapshot(snapshot(["p1", "p2"]));
+      expect(repeat.unchanged).toBe(true);
+      expect(publishes).toBe(0);
+      // The cards the last paint projected are still what a caller diffs against.
+      expect(repeat.previous.map((card) => card.paneId)).toEqual(["p1", "p2"]);
+      // A real change still publishes, whatever the refresh flag does.
+      applySnapshot(snapshot(["p1", "p2", "p3"]));
+      expect(publishes).toBe(1);
+    } finally {
+      stop();
+    }
+  });
+
   test("the selected agent follows the open pane", () => {
     replaceAgentsFromSnapshot(snapshot(["p1", "p2"]));
     selectPane("p2");

@@ -12,7 +12,7 @@ import { createHerdActions } from "../../features/dashboard/actions";
 import { HerdScreen } from "../../features/dashboard/components/herd-screen";
 import { buildHerdViewModel, type HerdViewModel } from "../../features/dashboard/model/herd-view";
 import { createDomainUpdates, useDomainUpdates, type DomainWatch } from "../domain-updates";
-import { herdActionPorts, readHerdAttention, readHerdInput, subscribeHerdAttention } from "./herd-bridge";
+import { herdActionPorts, herdAgentsKey, herdSessionKey, readHerdAttention, readHerdInput, subscribeHerdAttention } from "./herd-bridge";
 
 /**
  * Home route: the phone page and the desktop rail.
@@ -33,13 +33,17 @@ import { herdActionPorts, readHerdAttention, readHerdInput, subscribeHerdAttenti
  * repaints.
  */
 const watches: DomainWatch[] = [
-  { store: dashboardStore },
+  // The rows, not the record that carries them: a poll publishes the refresh
+  // flag and may publish a repeated snapshot, and neither moves a row.
+  { store: dashboardStore, keyOf: herdAgentsKey },
   { store: preferencesStore },
   { store: capabilitiesStore },
   { store: connectionStore },
   { store: computersStore },
   { store: runtimeStore },
-  { store: sessionStore },
+  // The list reads the open session's id and nothing else from this domain:
+  // beside the rail the pane publishes a read or a keystroke at a time.
+  { store: sessionStore, keyOf: herdSessionKey },
   // The desk rail marks the board's tab and its own Board link. Keyed on the tab
   // so camera writes at pointer speed never re-render the list.
   { store: navigationStore, keyOf: (snapshot) => (snapshot as { screen: string }).screen },
