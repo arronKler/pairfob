@@ -29,6 +29,9 @@ case "$1" in
   --force) if [[ "\${SIGN_FAIL:-}" == sign ]]; then exit 1; fi; printf 'signed\\n' >> "\${!#}" ;;
   --verify) if [[ "\${SIGN_FAIL:-}" == verify ]]; then exit 1; fi ;;
   --display)
+    echo "Identifier=\${SIGN_IDENTIFIER:-com.pairfob.daemon}"
+    echo "Signature=\${SIGN_KIND:-adhoc}"
+    echo 'TeamIdentifier=not set'
     if [[ "\${SIGN_FAIL:-}" != timestamp ]]; then echo 'Timestamp=Oct 28, 2026'; fi
     if [[ "\${SIGN_FAIL:-}" == hash ]]; then echo 'designated => cdhash H"123"';
     else echo 'designated => identifier "com.pairfob.daemon" and anchor apple generic'; fi ;;
@@ -88,9 +91,36 @@ test("failed signing or verification never produces a release manifest", () => {
   }
 }, 60_000);
 
-test("development bypass builds locally but cannot bypass publication verification", () => {
+test("explicit no-certificate release verifies both architectures and hashes signed bytes", () => {
   const f = fixture();
-  expect(f.run('bash scripts/release.sh', { PAIRFOB_ALLOW_UNSIGNED_MACOS: "1", SIGN_HOST: "Linux" }).exitCode).toBe(0);
+  const env = { PAIRFOB_ALLOW_UNSIGNED_MACOS: "1", PAIRFOB_MACOS_TEAM_ID: "", PAIRFOB_MACOS_SIGN_IDENTITY: "" };
+  const result = f.run('bash scripts/release.sh; pairfob_verify_macos_release "$OUT"', env);
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  const manifest = readFileSync(join(f.env.OUT, "SHA256SUMS"), "utf8");
+  for (const arch of ["amd64", "arm64"]) {
+    const name = `pairfob-darwin-${arch}`;
+    const data = readFileSync(join(f.env.OUT, name));
+    expect(data.toString()).toBe("binary\nsigned\n");
+    expect(manifest).toContain(`${createHash("sha256").update(data).digest("hex")}  ${name}`);
+  }
+  const calls = readFileSync(f.env.SIGN_CALLS, "utf8");
+  expect(calls.match(/--sign - --identifier com\.pairfob\.daemon/g)?.length).toBe(2);
+  expect(calls).not.toContain("--timestamp");
+  expect(f.run('pairfob_prepare_macos_signing', { ...env, SIGN_HOST: "Linux" }).exitCode).not.toBe(0);
+}, 60_000);
+
+test("no-certificate mode rejects invalid signatures and misleading identifiers", () => {
+  for (const extra of [{ SIGN_FAIL: "verify" }, { SIGN_IDENTIFIER: "com.pairfob.daemon.other" }, { SIGN_KIND: "invalid" }]) {
+    const f = fixture();
+    const result = f.run('bash scripts/release.sh', { PAIRFOB_ALLOW_UNSIGNED_MACOS: "1", ...extra });
+    expect(result.exitCode).not.toBe(0);
+    expect(() => readFileSync(join(f.env.OUT, "SHA256SUMS"))).toThrow();
+  }
+}, 60_000);
+
+test("no-certificate publication still verifies before touching download channels", () => {
+  const f = fixture();
+  expect(f.run('bash scripts/release.sh', { PAIRFOB_ALLOW_UNSIGNED_MACOS: "1" }).exitCode).toBe(0);
   const result = f.run('bash scripts/publish-daemon.sh --source "$OUT"', {
     PAIRFOB_ALLOW_UNSIGNED_MACOS: "1", SIGN_FAIL: "verify",
   });

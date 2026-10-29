@@ -16,13 +16,14 @@ pairfob_require_macos_signing_host() {
 
 pairfob_prepare_macos_signing() {
   if [[ "${PAIRFOB_ALLOW_UNSIGNED_MACOS:-0}" == 1 ]]; then
-    echo 'WARNING: unsigned macOS development artifacts; privacy grants may reset. The daemon publisher will reject them.' >&2
-    return 0
+    echo 'WARNING: macOS release without a Developer ID certificate; privacy grants may reset after updates.' >&2
+    pairfob_require_adhoc_host
+    return $?
   fi
   pairfob_require_macos_signing_host || return 1
   if [[ -z "${PAIRFOB_MACOS_SIGN_IDENTITY:-}" || "$PAIRFOB_MACOS_SIGN_IDENTITY" == - ]]; then
     echo 'Set PAIRFOB_MACOS_SIGN_IDENTITY to a Developer ID Application identity (name or SHA-1).' >&2
-    echo 'For local development artifacts only, set PAIRFOB_ALLOW_UNSIGNED_MACOS=1.' >&2
+    echo 'For an explicit release without a certificate, set PAIRFOB_ALLOW_UNSIGNED_MACOS=1.' >&2
     return 1
   fi
 }
@@ -44,7 +45,10 @@ pairfob_verify_macos_binary() {
 pairfob_sign_macos_binary() {
   local binary="$1"
   if [[ "${PAIRFOB_ALLOW_UNSIGNED_MACOS:-0}" == 1 ]]; then
-    return 0
+    pairfob_require_adhoc_host || return 1
+    codesign --force --sign - --identifier "$PAIRFOB_MACOS_IDENTIFIER" "$binary" || return 1
+    pairfob_verify_adhoc_binary "$binary"
+    return $?
   fi
   codesign --force --sign "$PAIRFOB_MACOS_SIGN_IDENTITY" \
     --identifier "$PAIRFOB_MACOS_IDENTIFIER" --options runtime --timestamp "$binary" || return 1
@@ -53,8 +57,32 @@ pairfob_sign_macos_binary() {
 
 pairfob_verify_macos_release() {
   local directory="$1" arch
-  # No development bypass here: publication always verifies both architectures.
+  # Explicit no-certificate publication still verifies both ad-hoc signatures.
   for arch in amd64 arm64; do
-    pairfob_verify_macos_binary "$directory/pairfob-darwin-$arch" || return 1
+    if [[ "${PAIRFOB_ALLOW_UNSIGNED_MACOS:-0}" == 1 ]]; then
+      pairfob_verify_adhoc_binary "$directory/pairfob-darwin-$arch" || return 1
+    else
+      pairfob_verify_macos_binary "$directory/pairfob-darwin-$arch" || return 1
+    fi
   done
+}
+
+# Ad-hoc signing validates executable integrity but provides no publisher identity.
+pairfob_require_adhoc_host() {
+  if [[ "$(uname -s)" != Darwin ]] || ! command -v codesign >/dev/null 2>&1; then
+    echo 'No-certificate macOS releases require a Mac with codesign.' >&2
+    return 1
+  fi
+}
+
+pairfob_verify_adhoc_binary() {
+  local binary="$1" details
+  pairfob_require_adhoc_host || return 1
+  codesign --verify --strict "$binary" || return 1
+  details="$(codesign --display --verbose=4 "$binary" 2>&1)" || return 1
+  details=$'\n'"$details"$'\n'
+  if [[ "$details" != *$'\n'"Identifier=$PAIRFOB_MACOS_IDENTIFIER"$'\n'* || "$details" != *$'\nSignature=adhoc\n'* || "$details" != *$'\nTeamIdentifier=not set\n'* ]]; then
+    echo "expected a valid Pairfob ad-hoc signature: $binary" >&2
+    return 1
+  fi
 }

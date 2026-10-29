@@ -211,16 +211,29 @@ requirements pinned to a binary hash. Signing does not grant privacy permissions
 or constitute Apple notarization; notarization is a separate distribution step.
 See [Apple's distribution signing instructions](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac/).
 
-For local cross-platform development artifacts without a certificate, explicitly
-set `PAIRFOB_ALLOW_UNSIGNED_MACOS=1`. These artifacts may lose privacy grants on
-rebuild and cannot pass the daemon publisher. Do not re-sign an installed daemon
+For a release without a certificate, explicitly enable the no-certificate mode
+on a Mac with Xcode Command Line Tools for both building and publishing:
+
+```sh
+PAIRFOB_ALLOW_UNSIGNED_MACOS=1 VERSION=vX.Y.Z ./scripts/release.sh
+PAIRFOB_ALLOW_UNSIGNED_MACOS=1 ./scripts/publish-daemon.sh --source dist/daemon --deploy
+```
+
+This mode applies and verifies ad-hoc signatures with `com.pairfob.daemon` on both
+Darwin architectures before hashing or touching the download channels. It needs
+no Team ID or certificate. Ad-hoc signing checks executable integrity, provides
+no publisher identity, and is not notarization. These builds may lose privacy
+grants after updates. The default mode still requires Developer ID signing. Do not re-sign an installed daemon
 in place as a workaround: its published checksum would no longer match.
 
 The CLI and remote updater verify the staged Darwin candidate before replacement
 or execution. A signed installed image requires the same Team ID, code identifier,
 and its original designated requirement. HTTPS updates of old unsigned/ad-hoc
-images require a valid Developer ID candidate with `com.pairfob.daemon`; this first
-migration trusts the existing HTTPS/checksum channel for the initial team. Only
+images accept a valid ad-hoc candidate with `com.pairfob.daemon`, or migrate to a
+valid Developer ID candidate with the same identifier. Both paths trust the
+existing HTTPS/checksum channel; the first Developer ID migration establishes
+the team for subsequent updates. A Developer ID installation rejects an ad-hoc
+candidate even when no-certificate publication was explicitly enabled. Only
 unsigned/ad-hoc development installs updated from an HTTP loopback server can
 use unsigned fixtures. That exception never applies to a signed installed image.
 

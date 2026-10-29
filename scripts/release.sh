@@ -40,7 +40,7 @@ for os in darwin linux; do
     dest="${OUT}/pairfob-${os}-${arch}"
     echo "build ${dest}"
     # Native macOS Keychain access disables interaction for background reads.
-    # Linux remains static; unsigned cross-builds on Linux have no Keychain reader.
+    # Linux remains static; macOS builds retain the native Keychain reader.
     build_env=(CGO_ENABLED=0)
     if [[ "$os" == darwin && "$(uname -s)" == Darwin ]]; then
       # Match Go 1.26's minimum OS instead of inheriting the build Mac's OS.

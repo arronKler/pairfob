@@ -7,11 +7,16 @@ import (
 )
 
 func signatureFixture(team, id, requirement string) string {
-	return "Identifier=" + id + "\nTeamIdentifier=" + team + "\ndesignated => " + requirement + "\n"
+	signature := ""
+	if team == "not set" {
+		signature = "Signature=adhoc\n"
+	}
+	return signature + "Identifier=" + id + "\nTeamIdentifier=" + team + "\ndesignated => " + requirement + "\n"
 }
 
 func TestMacUpdateIdentityContinuity(t *testing.T) {
 	stable := signatureFixture("ABCDE12345", macDaemonIdentifier, `identifier "com.pairfob.daemon" and anchor apple generic`)
+	releaseAdhoc := signatureFixture("not set", macDaemonIdentifier, `cdhash H"456"`)
 	adhoc := signatureFixture("not set", "a.out", `cdhash H"123"`)
 	for _, tc := range []struct {
 		name, old, next, base, fail string
@@ -19,7 +24,13 @@ func TestMacUpdateIdentityContinuity(t *testing.T) {
 	}{
 		{"same identity", stable, stable, "https://dl.pairfob.com/daemon", "", true},
 		{"migration", adhoc, stable, "https://dl.pairfob.com/daemon", "", true},
-		{"public unsigned", adhoc, adhoc, "https://dl.pairfob.com/daemon", "", false},
+		{"wrong unsigned identifier", adhoc, adhoc, "https://dl.pairfob.com/daemon", "", false},
+		{"public no certificate", adhoc, releaseAdhoc, "https://dl.pairfob.com/daemon", "", true},
+		{"missing ad-hoc signature", adhoc, strings.ReplaceAll(releaseAdhoc, "Signature=adhoc\n", ""), "https://dl.pairfob.com/daemon", "", false},
+		{"next no certificate", releaseAdhoc, releaseAdhoc, "https://dl.pairfob.com/daemon", "", true},
+		{"tampered no certificate", adhoc, releaseAdhoc, "https://dl.pairfob.com/daemon", "candidate", false},
+		{"signed refuses no certificate", stable, releaseAdhoc, "https://dl.pairfob.com/daemon", "", false},
+		{"remote insecure", adhoc, releaseAdhoc, "http://example.com/daemon", "", false},
 		{"signed to adhoc", stable, adhoc, "http://127.0.0.1:1234", "", false},
 		{"other team", stable, signatureFixture("ZZZZZ12345", macDaemonIdentifier, "anchor apple"), "https://dl.pairfob.com/daemon", "", false},
 		{"other identifier", stable, signatureFixture("ABCDE12345", "another.app", "anchor apple"), "https://dl.pairfob.com/daemon", "", false},

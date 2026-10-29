@@ -18,7 +18,10 @@ const macDaemonIdentifier = "com.pairfob.daemon"
 
 var macTeamID = regexp.MustCompile(`^[A-Z0-9]{10}$`)
 
-type macIdentity struct{ identifier, team, requirement string }
+type macIdentity struct {
+	identifier, team, requirement string
+	adhoc                         bool
+}
 type codesignRunner func(...string) ([]byte, error)
 
 // Bounded metadata only; never expose codesign's raw error in a phone response.
@@ -55,6 +58,9 @@ func readMacIdentity(path string, run codesignRunner) (macIdentity, error) {
 	}
 	var identity macIdentity
 	for _, line := range strings.Split(string(raw), "\n") {
+		if line == "Signature=adhoc" {
+			identity.adhoc = true
+		}
 		if value, ok := strings.CutPrefix(line, "Identifier="); ok {
 			identity.identifier = value
 		}
@@ -116,6 +122,17 @@ func verifyMacUpdateIdentity(current, candidate, base string, run codesignRunner
 	next, err := readMacIdentity(candidate, run)
 	if err != nil {
 		return err
+	}
+	// An installation without a certificate may keep using the HTTPS/checksum
+	// channel. Signed installations never take this path or downgrade identity.
+	if old.team == "" && next.team == "" && next.adhoc && next.identifier == macDaemonIdentifier {
+		if allowedDownloadBase(base) != nil {
+			return errors.New("invalid update source")
+		}
+		if _, err = run("--verify", "--strict", candidate); err != nil {
+			return errors.New("update failed ad-hoc signature verification; current binary was kept")
+		}
+		return nil
 	}
 	if next.team == "" || next.identifier != macDaemonIdentifier || strings.Contains(next.requirement, "cdhash") {
 		return errors.New("update requires a stable Developer ID signature; current binary was kept")
