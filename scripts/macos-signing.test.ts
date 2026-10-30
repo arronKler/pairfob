@@ -77,7 +77,10 @@ test("release hashes signed bytes and uses the same identity for both Mac archit
     expect(manifest).toContain(`${createHash("sha256").update(data).digest("hex")}  ${name}`);
   }
   const calls = readFileSync(f.env.SIGN_CALLS, "utf8");
-  expect(readFileSync(f.env.BUILD_CALLS, "utf8")).toBe("darwin amd64 1\ndarwin arm64 1\nlinux amd64 0\nlinux arm64 0\n");
+  // Two products per target: the daemon and its pairfob-chat host.
+  expect(readFileSync(f.env.BUILD_CALLS, "utf8")).toBe(
+    "darwin amd64 1\ndarwin amd64 1\ndarwin arm64 1\ndarwin arm64 1\nlinux amd64 0\nlinux amd64 0\nlinux arm64 0\nlinux arm64 0\n",
+  );
   expect(calls.match(/--identifier com\.pairfob\.daemon --options runtime --timestamp/g)?.length).toBe(2);
   expect(calls).toContain('certificate leaf[subject.OU] = "ABCDE12345"');
 }, 60_000);

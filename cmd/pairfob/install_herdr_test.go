@@ -39,6 +39,7 @@ func TestInstallHerdrPreflightAndReadiness(t *testing.T) {
 printf '%s\n' "$*" >> "$PAIRFOB_TEST_SETUP_LOG"
 case "$1" in
  setup) pwd -P > "$PAIRFOB_TEST_STARTUP_LOG"; [ "$PAIRFOB_TEST_SETUP_FAIL" != 1 ] ;;
+ runtime) printf '{"kind":"herdr","source":"herdr:/tmp/herdr.sock","command":"","version":"","protocol":0}\n' ;;
  doctor) [ "$PAIRFOB_TEST_DOCTOR_FAIL" != 1 ] ;;
  *) exit 0 ;;
 esac
@@ -81,7 +82,7 @@ esac
 			}
 			if tc.setupFails {
 				got, _ := os.ReadFile(filepath.Join(prefix, "pairfob"))
-				if string(got) != string(old) || string(calls) != "setup --install-herdr --non-interactive\n" {
+				if string(got) != string(old) || string(calls) != "runtime --json\nsetup --install-herdr --non-interactive\n" {
 					t.Fatalf("preflight changed installation: %q %s", got, calls)
 				}
 			} else if tc.skip {
@@ -90,10 +91,10 @@ esac
 				}
 			} else {
 				lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
-				if len(lines) != 5 || lines[0] != "setup --install-herdr --non-interactive" || !strings.HasPrefix(lines[1], "service prepare-install ") || strings.Join(lines[2:], "\n") != "enroll\nservice install\ndoctor" {
+				if len(lines) != 6 || lines[0] != "runtime --json" || lines[1] != "setup --install-herdr --non-interactive" || !strings.HasPrefix(lines[2], "service prepare-install ") || strings.Join(lines[3:], "\n") != "enroll\nservice install\ndoctor" {
 					t.Fatalf("calls %q", calls)
 				}
-				prepared := strings.TrimPrefix(lines[1], "service prepare-install ")
+				prepared := strings.TrimPrefix(lines[2], "service prepare-install ")
 				gotPath, _ := filepath.EvalSymlinks(prepared)
 				wantPath, _ := filepath.EvalSymlinks(filepath.Join(prefix, "pairfob"))
 				if gotPath != wantPath {

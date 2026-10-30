@@ -34,7 +34,7 @@ labels. If labels would push a page past its byte budget, the oldest labels on
 that page are dropped first.
 
 Tool `state` is independent of labels: `error` comes from the agent's own
-record (Claude `tool_result.is_error`, Pi `isError`, Grok `status: failed` whatever text came with it,
+record (Claude `tool_result.is_error`, Pi and Prime Agent `isError`, Grok `status: failed` whatever text came with it,
 opencode part `status: error` or a nonzero `metadata.exit`, Hermes a JSON result
 with a nonzero `exit_code`, `success: false` or an `error` text) or, for
 Codex, from the exit status it prints with the output (`Process exited with

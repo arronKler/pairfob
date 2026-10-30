@@ -76,6 +76,7 @@ const (
 	FeatureLayoutSwap         Feature = "layout_swap"
 	FeatureLayoutZoom         Feature = "layout_zoom"
 	FeatureHistory            Feature = "history"
+	FeatureTranscript         Feature = "transcript"
 	FeatureAgentInspect       Feature = "agent_inspect"
 )
 

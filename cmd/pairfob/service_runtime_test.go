@@ -157,3 +157,53 @@ func TestServicePreservesQuotaAccountDirectoriesWithoutCredentials(t *testing.T)
 		}
 	}
 }
+
+func TestServicePersistsCoreRuntimeFromExplicitSelection(t *testing.T) {
+	hc := filepath.Join(t.TempDir(), "hc")
+	if err := os.WriteFile(hc, []byte("#!/bin/sh\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PAIRFOB_RUNTIME", "core")
+	t.Setenv("PAIRFOB_HC", hc)
+	t.Setenv("HERDR_BIN", "/opt/herdr")
+	env := map[string]string{}
+	for _, entry := range serviceRuntimeEnvironment() {
+		env[entry[0]] = entry[1]
+	}
+	if env["PAIRFOB_RUNTIME"] != "core" || env["PAIRFOB_HC"] != hc {
+		t.Fatalf("service env=%v", env)
+	}
+	if _, ok := env["HERDR_BIN"]; ok {
+		t.Fatal("core service retained HERDR_BIN")
+	}
+}
+
+func TestServicePersistsCoreRuntimeFromAutoDetection(t *testing.T) {
+	for _, path := range []string{"/usr/local/bin/herdr", "/opt/homebrew/bin/herdr"} {
+		if _, err := os.Stat(path); err == nil {
+			t.Skipf("system Herdr at %s makes auto detection choose Herdr", path)
+		}
+	}
+	commandDir := t.TempDir()
+	hc := filepath.Join(commandDir, "hc")
+	if err := os.WriteFile(hc, []byte("#!/bin/sh\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", commandDir)
+	t.Setenv("HERDR_BIN", "")
+	t.Setenv("HERDR_SOCKET_PATH", filepath.Join(home, "herdr.sock"))
+	t.Setenv("PAIRFOB_RUNTIME", "")
+	t.Setenv("PAIRFOB_HC", "hc")
+	env := map[string]string{}
+	for _, entry := range serviceRuntimeEnvironment() {
+		env[entry[0]] = entry[1]
+	}
+	if env["PAIRFOB_RUNTIME"] != "core" || env["PAIRFOB_HC"] != hc {
+		t.Fatalf("service env=%v", env)
+	}
+	if _, ok := env["HERDR_BIN"]; ok {
+		t.Fatal("core service retained HERDR_BIN")
+	}
+}

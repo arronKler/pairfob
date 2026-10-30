@@ -40,6 +40,9 @@ type Device struct {
 	LastSeen          int64  `json:"last_seen,omitempty"`
 	RevokedAt         *int64 `json:"revoked_at,omitempty"`
 	SubscriptionCount int    `json:"subscription_count"`
+	// Connected is absent on daemons that predate it, so false and unknown
+	// stay distinguishable.
+	Connected *bool `json:"connected,omitempty"`
 }
 
 type Relay struct {

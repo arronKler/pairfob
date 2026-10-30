@@ -35,6 +35,19 @@ func TestFakeImplementsDeepRuntimeAndCoreFlow(t *testing.T) {
 	}
 }
 
+func TestFakeAdvertisesTranscriptOnlyWithProtocol(t *testing.T) {
+	fake := NewFake()
+	descriptor, err := fake.Describe(context.Background(), DefaultSession())
+	if err != nil || !descriptor.Supports(FeaturePaneRead) || !descriptor.Supports(FeatureTranscript) {
+		t.Fatalf("protocol %d descriptor=%+v err=%v", fake.Snap.HerdrProtocol, descriptor, err)
+	}
+	fake.Snap.HerdrProtocol = 0
+	descriptor, err = fake.Describe(context.Background(), DefaultSession())
+	if err != nil || descriptor.Supports(FeaturePaneRead) || descriptor.Supports(FeatureTranscript) {
+		t.Fatalf("protocol 0 descriptor=%+v err=%v", descriptor, err)
+	}
+}
+
 func TestFakeTerminalStreamsInputAndResize(t *testing.T) {
 	fake := NewFake()
 	controller, err := fake.OpenTerminal(context.Background(), TerminalOpen{PaneID: "w0:p1", Cols: 80, Rows: 24})

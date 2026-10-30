@@ -26,11 +26,14 @@ pairfob list
 ```
 
 ```
-1  iPhone  just now
+1  iPhone  connected
 2  Android phone  2 hours ago
 
 Unpair one: pairfob forget 1
 ```
+
+`connected` means that device holds an open session right now; every other row
+shows how long ago the device was last seen.
 
 If nothing is paired: `Nothing paired yet. Pair one: pairfob pair`.
 
@@ -73,6 +76,25 @@ The phone keeps one credential per computer and reconnects to the last one you u
 A computer that is asleep or offline stays on the list. Pairfob does not delete that credential, and it does not send you back to the pairing page. Wake it; you do not pair again. A locked screen is fine; a closed lid only works if the machine does not sleep.
 
 **Forget** on a row only drops the credential in this browser. The computer still lists this device until you `forget` it there or **Unpair** it under Settings → computer card → Paired devices. **Unpair this device** still only affects the current computer pairing.
+
+## Terminal runtime
+
+Pairfob can read terminals through the Herdr TUI or through `herdr-core`
+(`hc`). Herdr is the default and has tabs, splits, worktrees and transcript
+chat. The core keeps one terminal per pane, takes status from OSC 7501, and only
+shows terminals started with `hc`; it has no tabs, splits, worktrees, layout
+controls or transcript chat.
+
+Install Pairfob for herdr-core (`hc` must already be installed):
+
+```sh
+curl -fsSL https://pairfob.com/install.sh | sh -s -- --runtime core
+```
+
+Or set `PAIRFOB_RUNTIME=core` (or `herdr`) for a foreground `pairfob run`.
+`pairfob runtime` shows the selection. The installer saves `PAIRFOB_RUNTIME` and
+the absolute `PAIRFOB_HC` in the login service, so the computer keeps the
+runtime you chose. Start a terminal the phone can see with `hc run --bg claude`.
 
 ## Machines Herdr reaches over SSH
 

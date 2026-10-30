@@ -315,7 +315,8 @@ func TestDeviceAdminNeverReturnsCredentials(t *testing.T) {
 			t.Fatalf("admin response leaked %q: %s", forbidden, body)
 		}
 	}
-	if !strings.Contains(body, `"device_id":"dev_12345678"`) || !strings.Contains(body, `"subscription_count":1`) {
+	if !strings.Contains(body, `"device_id":"dev_12345678"`) || !strings.Contains(body, `"subscription_count":1`) ||
+		!strings.Contains(body, `"connected":false`) {
 		t.Fatalf("missing safe summary fields: %s", body)
 	}
 }

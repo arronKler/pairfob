@@ -2,6 +2,7 @@
  * Daemon and Android downloads share this Worker independently of the relay.
  */
 import { daemonDownload } from "./daemon";
+import { desktopDownload } from "./desktop";
 
 export interface Env {
   ASSETS: { fetch(req: Request): Promise<Response> };
@@ -56,6 +57,8 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const daemon = await daemonDownload(req, env.ASSETS);
     if (daemon) return daemon;
+    const desktop = await desktopDownload(req, env.ASSETS);
+    if (desktop) return desktop;
     const url = new URL(req.url);
     const metadata = url.pathname === MANIFEST || url.pathname === "/android/beta/previous.json"
       || /^\/android\/beta\/[A-Za-z0-9._-]+\.apk\.provenance\.json$/.test(url.pathname);

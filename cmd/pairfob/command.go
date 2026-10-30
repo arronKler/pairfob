@@ -17,6 +17,7 @@ const commandUsage = `Pairfob — this computer, on another device.
   pairfob machine link NAME Pair with a machine Herdr reaches over SSH
   pairfob update            Update Pairfob (keeps Herdr unchanged)
   pairfob doctor            Check this computer
+  pairfob runtime           Show the selected terminal runtime
   pairfob setup             Install missing Herdr and check the session runtime
   pairfob setup --update-herdr
                             Prepare the latest stable Herdr update
@@ -78,6 +79,8 @@ func runCommand(args []string, sock string) error {
 		return setupCommand(args[1:])
 	case "doctor":
 		return doctorCommand(sock)
+	case "runtime":
+		return runtimeCommand(args[1:])
 	case "relay":
 		return relayCredentialCommand(args[1:], sock)
 	case "service":

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +27,12 @@ func phonesCommand(args []string, sock string) error {
 }
 
 func deviceCommand(args []string, sock string) error {
+	if len(args) == 1 && args[0] == "--json" {
+		return printDevicesJSON(sock)
+	}
+	if len(args) == 2 && args[0] == "list" && args[1] == "--json" {
+		return printDevicesJSON(sock)
+	}
 	if len(args) == 0 || (len(args) == 1 && args[0] == "list") {
 		return printPhones(sock)
 	}
@@ -32,6 +40,37 @@ func deviceCommand(args []string, sock string) error {
 		return forgetPhone(sock, args[1])
 	}
 	return errors.New("usage: pairfob list\n       pairfob forget N")
+}
+
+func printDevicesJSON(sock string) error {
+	rows, err := loadPhones(sock)
+	if err != nil {
+		return err
+	}
+	return writeDevicesJSON(os.Stdout, rows)
+}
+
+// deviceRow is the desktop's device-list contract. It carries no credential,
+// user agent, or push material.
+type deviceRow struct {
+	ID        string `json:"device_id"`
+	Label     string `json:"label,omitempty"`
+	Created   int64  `json:"created_at"`
+	LastSeen  int64  `json:"last_seen"`
+	Connected *bool  `json:"connected,omitempty"`
+}
+
+func writeDevicesJSON(w io.Writer, rows []admin.Device) error {
+	out := struct {
+		Devices []deviceRow `json:"devices"`
+	}{Devices: make([]deviceRow, 0, len(rows))}
+	for _, d := range rows {
+		out.Devices = append(out.Devices, deviceRow{
+			ID: d.ID, Label: d.Label, Created: d.Created,
+			LastSeen: d.LastSeen, Connected: d.Connected,
+		})
+	}
+	return json.NewEncoder(w).Encode(out)
 }
 
 func loadPhones(sock string) ([]admin.Device, error) {
@@ -73,7 +112,7 @@ func printPhones(sock string) error {
 		if label == "" {
 			label = "Device"
 		}
-		fmt.Printf("%d  %s  %s\n", i+1, label, lastSeenPhrase(d.LastSeen))
+		fmt.Printf("%d  %s  %s\n", i+1, label, deviceStatePhrase(d))
 	}
 	fmt.Println("\nUnpair one: pairfob forget 1")
 	return nil
@@ -123,6 +162,13 @@ func resolvePhone(rows []admin.Device, raw string) (string, error) {
 		return "", fmt.Errorf("several devices are named %q — forget by number", raw)
 	}
 	return "", fmt.Errorf("no device matching %q — pairfob list", raw)
+}
+
+func deviceStatePhrase(d admin.Device) string {
+	if d.Connected != nil && *d.Connected {
+		return "connected"
+	}
+	return lastSeenPhrase(d.LastSeen)
 }
 
 func lastSeenPhrase(unix int64) string {

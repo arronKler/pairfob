@@ -77,6 +77,23 @@ func TestLocalTranscriptsShowNoInjectedContext(t *testing.T) {
 		}
 	}
 	t.Logf("pi: %d transcripts", len(piFiles))
+	// Prime Agent is a Pi fork: top-level sessions sit flat under sessions/.
+	primeDir := reader.piSessionsDir("prime-agent")
+	primeFiles, _ := filepath.Glob(filepath.Join(primeDir, "*.jsonl"))
+	nestedPrime, _ := filepath.Glob(filepath.Join(primeDir, "*", "*.jsonl"))
+	primeFiles = append(primeFiles, nestedPrime...)
+	for _, path := range primeFiles {
+		session, err := parsePiSessionFile(path)
+		if err != nil {
+			continue
+		}
+		for _, ev := range piEvents(session, false) {
+			if turnHead(ev.Type) {
+				reportInjected(t, "prime-agent", path, ev)
+			}
+		}
+	}
+	t.Logf("prime-agent: %d transcripts", len(primeFiles))
 	scanLocalStore(t, reader, "opencode", localOpencodeSessions(reader))
 	scanLocalStore(t, reader, "hermes", localHermesSessions(t, reader))
 }

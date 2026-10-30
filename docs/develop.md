@@ -60,6 +60,37 @@ closes stdin does that: the URL is already cancelled, and opening it cannot
 pair the browser. If a previous copy is still recorded under `.dev/*.pid`, run
 `./scripts/dev-down.sh` before starting another one.
 
+## Terminal runtimes
+
+Pairfob reads a pane through one of two terminal runtimes:
+
+- `herdr` is the Herdr TUI and its Unix socket. It is the default and the only
+  runtime with tabs, splits, worktrees, layout control and agent transcript
+  chat.
+- `herdr-core` is the `hc connect` client. One terminal is one pane, status
+  comes from OSC 7501, and only terminals started through `hc` are visible to
+  the phone. It has no tabs, splits, worktrees, layout commands or transcript
+  chat.
+
+`PAIRFOB_RUNTIME=herdr|core` chooses one explicitly. Unset or `auto` uses Herdr
+when its binary or configured socket exists, otherwise a runnable `hc`; Herdr
+wins when both are present. An unknown value fails closed. `pairfob runtime`
+prints the selection, and `pairfob runtime --json` emits
+`{kind, source, command, version, protocol}`. Version and protocol are empty
+when the runtime is not running; the selection is still valid.
+
+`pairfob setup` prepares the selected runtime. Herdr installs, starts or updates
+as before. herdr-core verifies `hc`, describes the core, observes the terminal
+list, and prints its version, protocol and terminal count. Herdr-only flags
+(`--install-herdr`, `--no-install-herdr`, `--update-herdr`, `--restart-herdr`)
+fail under herdr-core; `--non-interactive` is accepted and has no effect there.
+
+`scripts/install.sh --runtime core` installs without downloading Herdr and
+requires `hc` on `PATH`. The installer resolves the runtime before setup and
+persists `PAIRFOB_RUNTIME` plus an absolute `PAIRFOB_HC` in the login service,
+so auto-detection at login cannot switch runtimes. `--skip-runtime-check`
+(formerly `--skip-herdr-check`) installs without checking readiness.
+
 ## Testing on a real phone
 
 For phone testing without installing a local CA, create a DNS-only A record
@@ -343,6 +374,42 @@ When backfilling an already hosted version, reuse its exact artifacts after
 checking the official checksums, version, clean build metadata and remote tag.
 Do not rebuild it from a newer or dirty checkout. Record this as artifact
 verification, not a new full test run.
+
+### Desktop releases
+
+The desktop executable has its own channel under
+`https://dl.pairfob.com/desktop`: `release.json`, `VERSION`, `SHA256SUMS` and
+one `pairfob-desktop-{os}-{arch}` per published platform. The app checks the
+manifest at launch and every six hours and installs only after the user picks
+**Update**; the daemon and `pairfob-chat` channels are not touched.
+
+Build from a clean tree with an exact version:
+
+```sh
+VERSION=vX.Y.Z ./scripts/release-desktop.sh
+```
+
+The default target is the host. `PAIRFOB_DESKTOP_TARGETS` takes a
+space-separated list of Rust triples (`aarch64-apple-darwin`,
+`x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-gnu`);
+each target must be installed and its linker available. Run the script with the
+same `VERSION` and `OUT` on each build host (copy the previous `OUT` there) to
+add that host's platform to the version; it keeps the other platform binaries
+and rewrites `VERSION` and `SHA256SUMS`. Use a fresh `OUT` when `VERSION`
+changes. A release built on one OS may add its platform to a version already on
+the channel, but a new version must include every platform the live channel
+carries.
+
+```sh
+./scripts/publish-desktop.sh --source dist/desktop --deploy
+```
+
+The publisher hydrates the daemon and Android channels from their live,
+hash-checked inventories, stages the desktop manifest, deploys only the
+download Worker, and verifies the live desktop bytes plus the unchanged
+channels. It refuses to roll back a version or to change a published version's
+bytes. The desktop channel is not part of `scripts/release.sh`, GitHub
+Releases, or the relay.
 
 ### PWA performance and asset continuity
 

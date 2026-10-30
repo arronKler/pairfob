@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -71,6 +73,96 @@ func TestHelpListsPairPhonesUpdateDoctor(t *testing.T) {
 	for _, hide := range []string{"enroll", "relay", "pair_ref", "phones", "uninstall"} {
 		if strings.Contains(usage, hide) {
 			t.Fatalf("help still shows %q", hide)
+		}
+	}
+}
+
+func TestWriteDevicesJSONEmitsActiveRows(t *testing.T) {
+	yes, no := true, false
+	var buf bytes.Buffer
+	rows := []admin.Device{
+		{ID: "dev_aaaaaaaa", Label: "iPhone", Created: 100, LastSeen: 200, Connected: &yes},
+		{ID: "dev_bbbbbbbb", Label: "iPad", Created: 150, LastSeen: 250, Connected: &no},
+		{ID: "dev_cccccccc", Created: 300},
+	}
+	if err := writeDevicesJSON(&buf, rows); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(buf.String(), "\n") != 1 {
+		t.Fatalf("want one JSON line: %q", buf.String())
+	}
+	var got struct {
+		Devices []map[string]any `json:"devices"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("%v: %s", err, buf.String())
+	}
+	if len(got.Devices) != 3 {
+		t.Fatalf("%s", buf.String())
+	}
+	first := got.Devices[0]
+	for key, want := range map[string]any{
+		"device_id": "dev_aaaaaaaa", "label": "iPhone", "created_at": float64(100),
+		"last_seen": float64(200), "connected": true,
+	} {
+		if first[key] != want {
+			t.Fatalf("%s = %v, want %v", key, first[key], want)
+		}
+	}
+	if len(first) != 5 {
+		t.Fatalf("unexpected fields: %v", first)
+	}
+	if second := got.Devices[1]; second["connected"] != false {
+		t.Fatalf("a known-offline row must say false: %v", second)
+	}
+	third := got.Devices[2]
+	if _, ok := third["label"]; ok {
+		t.Fatalf("an empty label must be omitted: %v", third)
+	}
+	if _, ok := third["connected"]; ok {
+		t.Fatalf("an unknown connection state must be omitted: %v", third)
+	}
+	if third["last_seen"] != float64(0) {
+		t.Fatalf("offline row: %v", third)
+	}
+	if len(third) != 3 {
+		t.Fatalf("unexpected fields: %v", third)
+	}
+}
+
+func TestWriteDevicesJSONEmptyList(t *testing.T) {
+	var buf bytes.Buffer
+	if err := writeDevicesJSON(&buf, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(buf.String()); got != `{"devices":[]}` {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestDeviceStatePhrasePrefersConnected(t *testing.T) {
+	yes, no := true, false
+	if got := deviceStatePhrase(admin.Device{LastSeen: time.Now().Add(-time.Hour).Unix(), Connected: &yes}); got != "connected" {
+		t.Fatalf("got %q", got)
+	}
+	if got := deviceStatePhrase(admin.Device{LastSeen: time.Now().Unix(), Connected: &no}); got != "just now" {
+		t.Fatalf("got %q", got)
+	}
+	if got := deviceStatePhrase(admin.Device{LastSeen: time.Now().Unix()}); got != "just now" {
+		t.Fatalf("got %q", got)
+	}
+	if got := deviceStatePhrase(admin.Device{}); got != "never seen" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestDevicesJSONDispatches(t *testing.T) {
+	a, _ := mux.NewPipePair(8)
+	eng := daemon.NewEngine(nil, a, runtime.NewFake())
+	sock := startLiveAdmin(t, eng)
+	for _, args := range [][]string{{"devices", "--json"}, {"devices", "list", "--json"}} {
+		if err := runCommand(args, sock); err != nil {
+			t.Fatalf("%v: %v", args, err)
 		}
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -72,5 +74,85 @@ func TestSetupHerdrLifecycle(t *testing.T) {
 				t.Fatalf("claimed ready: %s", out.String())
 			}
 		})
+	}
+}
+
+func TestSetupRejectsHerdrFlagsForCore(t *testing.T) {
+	t.Setenv("PAIRFOB_RUNTIME", "core")
+	for _, args := range [][]string{
+		{"--install-herdr"},
+		{"--no-install-herdr"},
+		{"--update-herdr"},
+		{"--update-herdr", "--restart-herdr"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			err := setupCommand(args)
+			if err == nil || !strings.Contains(err.Error(), "PAIRFOB_RUNTIME=herdr") {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
+func TestSetupTreatsNonInteractiveAsRuntimeNeutral(t *testing.T) {
+	o, err := parseSetupOptions([]string{"--non-interactive"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flags := o.herdrOnlyFlags(); len(flags) != 0 {
+		t.Fatalf("non-interactive classified as Herdr-only: %v", flags)
+	}
+}
+
+func TestSetupCoreRequiresRunnableClient(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing-hc")
+	t.Setenv("PAIRFOB_HC", missing)
+	err := setupCore(runtime.RuntimeSelection{Kind: runtime.RuntimeKindCore, Command: missing}, true)
+	if err == nil || !strings.Contains(err.Error(), "not runnable") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestSetupAutoSelectsCoreWhenOnlyHCIsInstalled(t *testing.T) {
+	for _, path := range []string{"/usr/local/bin/herdr", "/opt/homebrew/bin/herdr"} {
+		if _, err := os.Stat(path); err == nil {
+			t.Skipf("system Herdr at %s makes auto detection choose Herdr", path)
+		}
+	}
+	commandDir := t.TempDir()
+	hc := filepath.Join(commandDir, "hc")
+	if err := os.WriteFile(hc, []byte("#!/bin/sh\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", commandDir)
+	t.Setenv("HERDR_BIN", "")
+	t.Setenv("HERDR_SOCKET_PATH", filepath.Join(home, "herdr.sock"))
+	t.Setenv("PAIRFOB_RUNTIME", "")
+	t.Setenv("PAIRFOB_HC", "hc")
+	selection, auto, err := setupRuntimeSelection()
+	if err != nil || !auto || selection.Kind != runtime.RuntimeKindCore || selection.Command != hc {
+		t.Fatalf("selection=%+v auto=%v err=%v", selection, auto, err)
+	}
+}
+
+func TestSetupFallsBackToHerdrWhenDetectionFindsNothing(t *testing.T) {
+	for _, path := range []string{"/usr/local/bin/herdr", "/opt/homebrew/bin/herdr"} {
+		if _, err := os.Stat(path); err == nil {
+			t.Skipf("system Herdr at %s is detected", path)
+		}
+	}
+	home := t.TempDir()
+	empty := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", empty)
+	t.Setenv("HERDR_BIN", "")
+	t.Setenv("HERDR_SOCKET_PATH", filepath.Join(home, "herdr.sock"))
+	t.Setenv("PAIRFOB_RUNTIME", "")
+	t.Setenv("PAIRFOB_HC", "hc")
+	selection, auto, err := setupRuntimeSelection()
+	if err != nil || !auto || selection.Kind != runtime.RuntimeKindHerdr {
+		t.Fatalf("selection=%+v auto=%v err=%v", selection, auto, err)
 	}
 }

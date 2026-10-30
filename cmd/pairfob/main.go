@@ -75,7 +75,7 @@ func runDaemon(store *state.Store, sock string) error {
 
 	devFake := getenv("PAIRFOB_DEV_FAKE_RUNTIME", "") == "1"
 	multiSession := herdrMultiSessionEnabled()
-	rt, source, rtErr := runtime.Open(devFake, multiSession)
+	rt, source, rtErr := runtime.OpenConfigured(devFake, multiSession)
 	if rtErr != nil {
 		log.Printf("runtime herdr_offline: %v", rtErr)
 		rt = runtime.NewOffline(rtErr)
@@ -305,9 +305,11 @@ func (a liveAdmin) Devices() []admin.Device {
 	rows := a.eng.ListDeviceSummaries()
 	out := make([]admin.Device, len(rows))
 	for i, d := range rows {
+		connected := d.Connected
 		out[i] = admin.Device{
 			ID: d.ID, Label: d.Label, Created: d.Created, LastSeen: d.LastSeen,
 			RevokedAt: d.RevokedAt, SubscriptionCount: d.SubscriptionCount,
+			Connected: &connected,
 		}
 	}
 	return out

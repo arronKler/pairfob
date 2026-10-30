@@ -37,8 +37,8 @@ func (r *Reader) ReadTitle(ref Ref) Title {
 		return r.cachedTitle(r.ClaudeRoot, ref, r.claudeTitle)
 	case "codex":
 		return r.cachedTitle(r.CodexRoot, ref, r.codexTitle)
-	case "pi":
-		return r.cachedTitle(r.PiRoot, ref, r.piTitle)
+	case "pi", "prime-agent":
+		return r.cachedTitle(r.piSessionsDir(ref.Agent), ref, r.piTitle)
 	case "grok":
 		return r.cachedTitle(r.GrokRoot, ref, r.grokTitle)
 	case "cursor":

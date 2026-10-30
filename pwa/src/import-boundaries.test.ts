@@ -50,7 +50,13 @@ function importCycles(files: string[]): string[][] {
 }
 
 describe("PWA module boundaries", () => {
-  test("production modules have no import cycles", () => {
-    expect(importCycles(productionModules())).toEqual([]);
-  });
+  // The TypeScript preprocessor walks every production module; about six
+  // seconds on an idle machine, which is over bun's five-second default.
+  test(
+    "production modules have no import cycles",
+    () => {
+      expect(importCycles(productionModules())).toEqual([]);
+    },
+    30_000,
+  );
 });

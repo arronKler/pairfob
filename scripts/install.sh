@@ -4,17 +4,22 @@ set -eu
 
 usage() {
   cat <<'EOF'
-usage: install.sh [--origin URL] [--prefix DIR] [--no-service] [--no-enroll] [--no-install-herdr] [--non-interactive] [--skip-herdr-check]
+usage: install.sh [--origin URL] [--prefix DIR] [--runtime auto|herdr|core] [--no-service] [--no-enroll] [--no-install-herdr] [--non-interactive] [--skip-runtime-check]
 
 Downloads the pairfob binary for this machine, verifies SHA-256, enrolls
 against pairfob.com (or --origin), and installs a user-level service that
 starts at login.
 
-  Missing Herdr is installed automatically from the latest stable release.
-  --install-herdr     Compatibility alias for the default installation behavior
+  --runtime MODE      auto (default) uses Herdr when it is present, otherwise
+                      herdr-core. herdr installs and checks Herdr. core uses
+                      the hc client and never installs Herdr.
+  Missing Herdr is installed automatically when the selected runtime is Herdr.
+  --install-herdr     Compatibility alias for the default Herdr installation behavior
   --no-install-herdr  Fail if Herdr is missing; do not download it
   --non-interactive   Never prompt; missing Herdr is still installed by default
-  --skip-herdr-check  Install Pairfob only; does not claim session readiness
+  --skip-runtime-check
+                      Install Pairfob only; runtime readiness is not checked
+  --skip-herdr-check  Alias for --skip-runtime-check
 
   curl -fsSL https://pairfob.com/install.sh | sh
 EOF
@@ -27,7 +32,10 @@ NO_ENROLL=0
 INSTALL_HERDR=0
 NO_INSTALL_HERDR=0
 NON_INTERACTIVE=0
-SKIP_HERDR_CHECK=0
+SKIP_RUNTIME_CHECK=0
+RUNTIME="auto"
+RUNTIME_KIND=""
+HC=""
 BASE="${PAIRFOB_DOWNLOAD_BASE:-https://dl.pairfob.com/daemon}"
 BASE="${BASE%/}"
 
@@ -58,7 +66,16 @@ while [ "$#" -gt 0 ]; do
     --install-herdr) INSTALL_HERDR=1; shift ;;
     --no-install-herdr) NO_INSTALL_HERDR=1; shift ;;
     --non-interactive) NON_INTERACTIVE=1; shift ;;
-    --skip-herdr-check) SKIP_HERDR_CHECK=1; shift ;;
+    --runtime)
+      [ "$#" -ge 2 ] || { echo "install.sh: --runtime needs a value" >&2; exit 1; }
+      RUNTIME="$2"
+      shift 2
+      ;;
+    --runtime=*)
+      RUNTIME="${1#--runtime=}"
+      shift
+      ;;
+    --skip-runtime-check | --skip-herdr-check) SKIP_RUNTIME_CHECK=1; shift ;;
     --no-service)
       NO_SERVICE=1
       shift
@@ -81,6 +98,17 @@ done
 
 if [ "$INSTALL_HERDR" -eq 1 ] && [ "$NO_INSTALL_HERDR" -eq 1 ]; then
   echo "install.sh: --install-herdr conflicts with --no-install-herdr" >&2
+  exit 1
+fi
+case "$RUNTIME" in
+  auto | herdr | core) ;;
+  *)
+    echo "install.sh: --runtime must be auto, herdr, or core" >&2
+    exit 1
+    ;;
+esac
+if [ "$RUNTIME" = core ] && { [ "$INSTALL_HERDR" -eq 1 ] || [ "$NO_INSTALL_HERDR" -eq 1 ]; }; then
+  echo "install.sh: --install-herdr and --no-install-herdr apply only to the Herdr runtime; use --runtime herdr" >&2
   exit 1
 fi
 
@@ -145,6 +173,10 @@ sums_hash() {
   '
 }
 
+json_field() {
+  printf '%s' "$1" | sed -n "s/.*\"$2\":\"\([^\"]*\)\".*/\1/p"
+}
+
 workdir="$(mktemp -d "${TMPDIR:-/tmp}/pairfob-install.XXXXXX")"
 cleanup() { rm -rf "$workdir"; }
 trap cleanup 0
@@ -160,14 +192,107 @@ if [ "$want" != "$got" ]; then
 fi
 chmod 0755 "${workdir}/${name}"
 
+# pairfob-chat is optional. A release that predates it, or a channel that lists
+# it before the binary is uploaded, must not fail the daemon installation.
+chat_name="pairfob-chat-${os}-${arch}"
+chat_dest="${PREFIX}/pairfob-chat"
+chat_src=""
+if chat_want="$(sums_hash "$chat_name" <"${workdir}/SHA256SUMS")"; then
+  echo "downloading ${chat_name} from ${BASE}"
+  if curl -fsSL "${BASE}/${chat_name}" -o "${workdir}/${chat_name}"; then
+    if [ "$(file_sha256 "${workdir}/${chat_name}")" = "$chat_want" ]; then
+      chmod 0755 "${workdir}/${chat_name}"
+      chat_src="${workdir}/${chat_name}"
+    else
+      rm -f "${workdir}/${chat_name}"
+      echo "warning: ${chat_name} failed SHA-256 verification; installing pairfob without chat" >&2
+    fi
+  else
+    rm -f "${workdir}/${chat_name}"
+    echo "warning: ${chat_name} is listed in SHA256SUMS but not downloadable; installing pairfob without chat" >&2
+  fi
+else
+  echo "warning: this release does not include ${chat_name}; installing pairfob without chat" >&2
+fi
+
+# Resolve the terminal runtime before setup and the login service so both use
+# the same concrete choice. Resolution is not a readiness check, so it also runs
+# when --skip-runtime-check is set. Herdr files are only prepared when checks are
+# enabled; an explicit --runtime is always persisted.
+runtime_json=""
+if [ "$RUNTIME" != auto ]; then
+  RUNTIME_KIND="$RUNTIME"
+else
+  runtime_selected=0
+  if runtime_json="$("${workdir}/${name}" runtime --json 2>"${workdir}/runtime.err")"; then
+    case "$(json_field "$runtime_json" kind)" in
+      herdr) RUNTIME_KIND=herdr; runtime_selected=1 ;;
+      herdr-core | core) RUNTIME_KIND=core; runtime_selected=1 ;;
+    esac
+  fi
+  if [ "$runtime_selected" -eq 0 ]; then
+    runtime_error="$(sed -n '1p' "${workdir}/runtime.err" 2>/dev/null)"
+    if [ "$SKIP_RUNTIME_CHECK" -eq 1 ]; then
+      echo "install.sh: the runtime was not resolved (${runtime_error:-no selection}); it will be detected when the service starts"
+      RUNTIME_KIND=""
+    else
+      case "$runtime_error" in
+        *"no terminal runtime found"*)
+          echo "install.sh: ${runtime_error}"
+          echo "install.sh: preparing Herdr, which setup installs when it is missing"
+          RUNTIME_KIND=herdr
+          ;;
+        *)
+          if [ -n "$runtime_json" ]; then
+            echo "install.sh: pairfob runtime returned an unknown selection: ${runtime_json}" >&2
+          else
+            echo "install.sh: pairfob runtime failed: ${runtime_error:-no output}" >&2
+          fi
+          exit 1
+          ;;
+      esac
+    fi
+  fi
+fi
+if [ "$RUNTIME_KIND" = core ]; then
+  if [ "$INSTALL_HERDR" -eq 1 ] || [ "$NO_INSTALL_HERDR" -eq 1 ]; then
+    echo "install.sh: --install-herdr and --no-install-herdr apply only to the Herdr runtime; this install uses herdr-core" >&2
+    exit 1
+  fi
+  hc_command="${PAIRFOB_HC:-}"
+  if [ -z "$hc_command" ]; then
+    hc_command=hc
+  fi
+  hc_path="$(command -v "$hc_command" 2>/dev/null || true)"
+  if [ -z "$hc_path" ]; then
+    echo "install.sh: --runtime core needs herdr-core (hc) on PATH; install hc, or use --runtime herdr" >&2
+    exit 1
+  fi
+  case "$hc_path" in
+    /*) ;;
+    *) hc_path="$(cd "$(dirname "$hc_path")" && pwd)/$(basename "$hc_path")" ;;
+  esac
+  HC="$hc_path"
+  export PAIRFOB_RUNTIME=core
+  export PAIRFOB_HC="$HC"
+elif [ "$RUNTIME_KIND" = herdr ]; then
+  export PAIRFOB_RUNTIME=herdr
+fi
+
 # Check with the verified new CLI before replacing binaries or services.
-if [ "$SKIP_HERDR_CHECK" -eq 0 ]; then
+if [ "$SKIP_RUNTIME_CHECK" -eq 0 ]; then
   set --
-  if [ "$INSTALL_HERDR" -eq 1 ]; then set -- "$@" --install-herdr; fi
-  if [ "$NO_INSTALL_HERDR" -eq 1 ]; then set -- "$@" --no-install-herdr; fi
-  if [ "$NON_INTERACTIVE" -eq 1 ]; then set -- "$@" --non-interactive; fi
+  if [ "$RUNTIME_KIND" = herdr ]; then
+    if [ "$INSTALL_HERDR" -eq 1 ]; then set -- "$@" --install-herdr; fi
+    if [ "$NO_INSTALL_HERDR" -eq 1 ]; then set -- "$@" --no-install-herdr; fi
+    if [ "$NON_INTERACTIVE" -eq 1 ]; then set -- "$@" --non-interactive; fi
+  fi
   "${workdir}/${name}" setup "$@" || {
-    echo "Setup incomplete: Herdr is not ready. Existing Pairfob installation was preserved." >&2
+    if [ "$RUNTIME_KIND" = core ]; then
+      echo "Setup incomplete: herdr-core is not ready. Existing Pairfob installation was preserved." >&2
+    else
+      echo "Setup incomplete: Herdr is not ready. Existing Pairfob installation was preserved." >&2
+    fi
     exit 1
   }
 fi
@@ -177,10 +302,11 @@ dest="${PREFIX}/pairfob"
 legacy="${PREFIX}/pairfobd"
 
 # One lock covers preflight, file replacement, enroll and service readiness.
-"${workdir}/${name}" service with-install-lock sh -s -- "$workdir" "$name" "$dest" "$legacy" "$NO_SERVICE" "$NO_ENROLL" "$ORIGIN" "$SKIP_HERDR_CHECK" <<'INSTALL_TRANSACTION'
+"${workdir}/${name}" service with-install-lock sh -s -- "$workdir" "$name" "$dest" "$legacy" "$NO_SERVICE" "$NO_ENROLL" "$ORIGIN" "$SKIP_RUNTIME_CHECK" "$chat_src" "$chat_dest" <<'INSTALL_TRANSACTION'
 set -eu
 workdir="$1" name="$2" dest="$3" legacy="$4"
-NO_SERVICE="$5" NO_ENROLL="$6" ORIGIN="$7" SKIP_HERDR_CHECK="$8"
+NO_SERVICE="$5" NO_ENROLL="$6" ORIGIN="$7" SKIP_RUNTIME_CHECK="$8"
+chat_src="$9" chat_dest="${10}"
 
 # A reinstall is also the supported migration from the pre-release pairfobd
 # command. The verified new binary owns cleanup, so an older uninstaller cannot
@@ -196,6 +322,14 @@ ln -s pairfob "${workdir}/pairfobd"
 mv -f "${workdir}/pairfobd" "$legacy"
 echo "installed ${dest}"
 
+if [ -n "$chat_src" ]; then
+  if mv "$chat_src" "$chat_dest" && chmod 0755 "$chat_dest"; then
+    echo "installed ${chat_dest}"
+  else
+    echo "install.sh: pairfob-chat was not installed; continuing without chat" >&2
+  fi
+fi
+
 if [ "$NO_ENROLL" -eq 0 ]; then
   set --
   if [ -n "$ORIGIN" ]; then
@@ -206,11 +340,11 @@ fi
 
 if [ "$NO_SERVICE" -eq 0 ]; then
   "$dest" service install
-  if [ "$SKIP_HERDR_CHECK" -eq 0 ]; then
+  if [ "$SKIP_RUNTIME_CHECK" -eq 0 ]; then
     "$dest" doctor || { echo "Setup incomplete: run pairfob doctor." >&2; exit 1; }
     echo "Pairfob is ready."
   else
-    echo "Pairfob is running; Herdr readiness was not checked."
+    echo "Pairfob is running; runtime readiness was not checked."
   fi
 else
   "$dest" service uninstall
@@ -229,14 +363,26 @@ case ":${PATH}:" in
     ;;
 esac
 
-if [ "$SKIP_HERDR_CHECK" -eq 1 ] || [ "$NO_SERVICE" -eq 1 ]; then
-  echo "Installation complete; session setup is not verified. Run ${pairfob_command} setup, start Pairfob, then run ${pairfob_command} doctor before pairing."
+if [ "$SKIP_RUNTIME_CHECK" -eq 1 ] || [ "$NO_SERVICE" -eq 1 ]; then
+  echo "Installation complete; runtime setup is not verified. Run ${pairfob_command} setup, start Pairfob, then run ${pairfob_command} doctor before pairing."
   exit 0
 fi
 
 echo "Next: ${pairfob_command} pair"
 echo "On this computer, a phone or a tablet: https://pairfob.com/pair"
 echo "Scan or type the code, then press Enter here."
+if [ "$RUNTIME_KIND" = core ]; then
+  hc_display=hc
+  if [ -n "$HC" ]; then
+    case ":${PATH}:" in
+      *":$(dirname "$HC"):"*) ;;
+      *) hc_display="$(shell_quote "$HC")" ;;
+    esac
+  fi
+  echo "Local terminal: ${hc_display} run --bg claude"
+  echo "Heads up: your phone sees terminals started with \`hc run\`. A \`claude\` you open in another terminal won't show up."
+  exit 0
+fi
 if [ -n "${HERDR_BIN:-}" ]; then
   herdr_command="$(shell_quote "$HERDR_BIN")"
 elif command -v herdr >/dev/null 2>&1; then

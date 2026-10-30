@@ -23,9 +23,9 @@ is this project's official instance. User docs do not offer a self-hosted origin
 
 ## File size (hard limit)
 
-**Each handwritten source file is at most 800 lines.** Applies to Go,
+**Each handwritten source file is at most 800 lines.** Applies to Go, Rust,
 TypeScript, CSS, tests, and scripts. Excludes `node_modules/`, `pwa/dist/`,
-generated output, and lockfiles.
+`desktop/target/`, generated output, and lockfiles.
 
 The point is a clear project shape: split on duty, keep logic readable.
 
@@ -70,15 +70,16 @@ from the original module so imports do not churn.
 | Path | Duty |
 | --- | --- |
 | `cmd/pairfob` | outbound origin, pairing CLI, local Herdr |
+| `desktop` | native window over the local Herdr session (Rust + GPUI); attaches to `herdr-client.sock`, never owns a PTY |
 | `workers/pairfob-origin` | the only relay: Worker + R2 + DaemonRoom DO (production and `wrangler dev`) |
-| `workers/pairfob-downloads` | daemon and Android artifacts at `dl.pairfob.com`; owns legacy daemon download/install routes independently of the relay |
+| `workers/pairfob-downloads` | daemon, Android and desktop artifacts at `dl.pairfob.com`; owns legacy daemon download/install routes independently of the relay |
 | `cmd/genvectors` | generate `proto/pairfob-vectors.json` from the Go crypto |
 | `internal/mux` | frame routing; does not touch FWD plaintext |
 | `internal/daemon` | pairing, session, RPC, push, operation ledger |
 | `internal/runtime` | Herdr adapt; Herdr method names must not cross the `Runtime` interface |
 | `internal/envelope` `internal/crypto/*` | protocol primitives (AEAD, canon, HKDF, SPAKE2+, session keys, PGP words) |
 | `internal/workspace` | bounded views and file operations inside a live workspace root |
-| `internal/journal` | agent transcript adapters (Claude Code, Codex, Grok, Pi, Cursor, Hermes, opencode) |
+| `internal/journal` | agent transcript adapters (Claude Code, Codex, Grok, Pi, Prime Agent, Cursor, Hermes, opencode) |
 | `internal/state` `admin` `audit` | durable identity and devices, local operator socket, security audit log |
 | `internal/phone` | Go phone client for daemon end-to-end tests only |
 | `pwa/src/app` | boot, lifecycle, layout, width tier and input mode; `main.ts` only calls `startApplication` |
@@ -97,6 +98,8 @@ from the original module so imports do not churn.
 | `scripts/install.sh` | one-line install of pairfob (checksum, enroll, user-level service) |
 | `scripts/release.sh` | cross-compile SemVer `dist/daemon/pairfob-{os}-{arch}` + SHA256SUMS (`git tag vX.Y.Z`) |
 | `scripts/publish-daemon.sh` | publish verified daemon artifacts through the download Worker while preserving the live Android channel |
+| `scripts/release-desktop.sh` | build SemVer `dist/desktop/pairfob-desktop-{os}-{arch}` for the host or named Rust targets |
+| `scripts/publish-desktop.sh` | publish verified desktop artifacts through the download Worker while preserving the daemon and Android channels |
 | `scripts/site-shots.ts` | render the homepage product stills `site/img/home/{en,zh}` from the `pwa/qa` fixtures; rerun after PWA screen changes |
 
 Put new code in an existing module. Add `internal/<name>` only when no current
@@ -193,11 +196,13 @@ matching `herdr-plugin.toml` version and its `plugin/herdr/plugin.test.ts`
 assertion.
 
 Daemon artifacts publish with `scripts/publish-daemon.sh`, independently of
-the relay. The shared download Worker also serves Android; use the channel
-publishers so a fresh checkout restores and verifies the other live channel
-before deployment. Initial migration publishes the daemon channel before the
-updated Android publisher can deploy. The legacy origin binary pack is not
-the daemon publication path.
+the relay. The shared download Worker also serves Android and the desktop
+channel; use the channel publishers so a fresh checkout restores and verifies
+the other live channels before deployment. Desktop builds are per platform:
+`scripts/release-desktop.sh` builds the host or named Rust targets, and a new
+version must include every platform the live desktop channel carries. Initial
+migration publishes the daemon channel before the updated Android publisher can
+deploy. The legacy origin binary pack is not the daemon publication path.
 
 ## Verify
 
@@ -209,8 +214,9 @@ repository gate after every local edit or merely because a task is ending.
 | Documentation or copy-only edit | Check the diff, links and affected rendering as relevant; no unrelated code suites. |
 | Local implementation iteration | Run affected module tests and relevant type/format checks. For shared code, include its affected consumers. |
 | UI behavior or layout change | Add focused browser checks for the changed interaction, on each surface it can reach: a phone with touch (390x844), a tablet with touch (about 1024x768, and 820 wide for the 720–899 tier when the change touches layout), and a desktop with a mouse and keyboard (1440x900). Shared components and anything keyed on width or input reach all three. Drive them with real touch and mouse input through the `pwa/qa` scenes; a unit test at one width does not cover the others. Fixtures, live transport and physical-device acceptance are distinct. |
-| Agent transcript adapter (`internal/journal`) or an agent CLI upgrade | Run `PAIRFOB_SCAN_LOCAL_TRANSCRIPTS=1 go test ./internal/journal -run LocalTranscripts -v` on a machine with real Claude Code / Codex / Grok / Pi / Cursor / Hermes / opencode sessions; a hit is injected context leaking into chat. |
+| Agent transcript adapter (`internal/journal`) or an agent CLI upgrade | Run `PAIRFOB_SCAN_LOCAL_TRANSCRIPTS=1 go test ./internal/journal -run LocalTranscripts -v` on a machine with real Claude Code / Codex / Grok / Pi / Prime Agent / Cursor / Hermes / opencode sessions; a hit is injected context leaking into chat. |
 | PWA UI-only production release | Run `./scripts/verify.sh --pwa-only <verified-release-commit>` against a trustworthy baseline in the current checkout. |
+| Desktop client change | Run `bash scripts/verify-desktop.sh`. Engine, input or lifecycle changes also run `PF_DESKTOP_LIVE=1 cargo test --test live -- --ignored` against a running `pffixture` session. A UI change is not verified until the window has been seen on the surfaces it reaches; say which ones you could not open. |
 | Android shell / APK-only production release | Run `./scripts/verify.sh --android-only <verified-release-commit>` against a trustworthy baseline. It covers the bundled PWA, the download channel publisher and the APK provenance checks, and refuses changes to the protocol client, daemon, relay, release scripts or anything beyond the two version literals in `mobile/android/app/build.gradle`. |
 | Backend, protocol, cross-module contract or release-tooling delivery | Run the full `./scripts/verify.sh` once on the final candidate before handoff/merge/release. Use focused checks during iteration. |
 | Production release outside both guarded scopes, or without a trustworthy baseline | Run the full gate on the final release candidate. |

@@ -11,14 +11,18 @@ func testBool(value bool) *bool { return &value }
 func TestWriteDoctorIsHuman(t *testing.T) {
 	var buf bytes.Buffer
 	writeDoctor(&buf, health{
-		Version: "dev", Running: true, Phones: 2, HerdrOK: true, HerdrNote: "on", Origin: "pairfob.com", P2P: testBool(true),
+		Version: "dev", Running: true, Phones: 2, Origin: "pairfob.com", P2P: testBool(true),
+		RuntimeKind: "herdr", RuntimeOK: true, RuntimeVersion: "0.8.2", RuntimeProtocol: 20, RuntimeTerminals: 2,
 	})
 	got := buf.String()
 	if strings.Contains(got, "{") || strings.Contains(got, "daemon_id") {
 		t.Fatalf("doctor leaked internals: %s", got)
 	}
-	if !strings.Contains(got, "Running") || !strings.Contains(got, "Paired") || !strings.Contains(got, "Herdr") || !strings.Contains(got, "Origin") || !strings.Contains(got, "P2P") {
+	if !strings.Contains(got, "Running") || !strings.Contains(got, "Paired") || !strings.Contains(got, "Runtime") || !strings.Contains(got, "Origin") || !strings.Contains(got, "P2P") {
 		t.Fatalf("doctor missing checklist: %s", got)
+	}
+	if !strings.Contains(got, "Runtime     herdr 0.8.2, protocol 20, 2 terminals") {
+		t.Fatalf("doctor missing runtime status: %s", got)
 	}
 	if !strings.Contains(got, "P2P         on") {
 		t.Fatalf("doctor missing P2P on: %s", got)
@@ -43,7 +47,7 @@ func TestWriteDoctorSanitizesOriginNote(t *testing.T) {
 
 func TestWriteDoctorP2POff(t *testing.T) {
 	var buf bytes.Buffer
-	writeDoctor(&buf, health{Version: "dev", P2P: testBool(false), HerdrNote: "on"})
+	writeDoctor(&buf, health{Version: "dev", P2P: testBool(false)})
 	if !strings.Contains(buf.String(), "off — this computer is relay-only") {
 		t.Fatalf("%s", buf.String())
 	}
@@ -51,9 +55,41 @@ func TestWriteDoctorP2POff(t *testing.T) {
 
 func TestWriteDoctorP2PUnknown(t *testing.T) {
 	var buf bytes.Buffer
-	writeDoctor(&buf, health{Version: "dev", HerdrNote: "on"})
+	writeDoctor(&buf, health{Version: "dev"})
 	if !strings.Contains(buf.String(), "unknown — restart Pairfob to check") {
 		t.Fatalf("%s", buf.String())
+	}
+}
+
+func TestWriteDoctorRuntimeStates(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		h    health
+		want string
+	}{
+		{
+			name: "core ready",
+			h:    health{RuntimeKind: "herdr-core", RuntimeOK: true, RuntimeVersion: "0.9.1", RuntimeProtocol: 1, RuntimeTerminals: 1},
+			want: "Runtime     herdr-core 0.9.1, protocol 1, 1 terminal",
+		},
+		{
+			name: "core unavailable",
+			h:    health{RuntimeKind: "herdr-core", RuntimeNote: "unavailable — herdr-core did not answer"},
+			want: "Runtime     herdr-core — unavailable — herdr-core did not answer",
+		},
+		{
+			name: "herdr missing",
+			h:    health{RuntimeKind: "herdr", RuntimeNote: "not installed — run pairfob setup"},
+			want: "Runtime     herdr — not installed — run pairfob setup",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			writeDoctor(&buf, tc.h)
+			if !strings.Contains(buf.String(), tc.want) {
+				t.Fatalf("missing %q in %s", tc.want, buf.String())
+			}
+		})
 	}
 }
 

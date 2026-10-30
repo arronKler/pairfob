@@ -11,9 +11,32 @@ import subprocess
 import tempfile
 from urllib.parse import urlsplit
 
-DAEMON_FILES = {"VERSION", "SHA256SUMS", "pairfob-darwin-amd64", "pairfob-darwin-arm64",
-                "pairfob-linux-amd64", "pairfob-linux-arm64"}
+DAEMON_BINARIES = {"pairfob-darwin-amd64", "pairfob-darwin-arm64",
+                   "pairfob-linux-amd64", "pairfob-linux-arm64"}
+# pairfob-chat ships beside the daemon so the desktop chat view has a local
+# process to attach to. It is published only after the release that added it,
+# so a prior manifest may carry just the daemon four.
+CHAT_BINARIES = {"pairfob-chat-darwin-amd64", "pairfob-chat-darwin-arm64",
+                 "pairfob-chat-linux-amd64", "pairfob-chat-linux-arm64"}
+DAEMON_FILES = {"VERSION", "SHA256SUMS"} | DAEMON_BINARIES | CHAT_BINARIES
+LEGACY_FILES = {"VERSION", "SHA256SUMS"} | DAEMON_BINARIES
 DAEMON_PATHS = {"daemon/" + name for name in DAEMON_FILES} | {"install.sh"}
+LEGACY_PATHS = {"daemon/" + name for name in LEGACY_FILES} | {"install.sh"}
+
+# The desktop channel keeps one manifest for every published platform. A
+# release built on one OS may add its own target to the same version, but a
+# new version must include every platform the live channel already carries.
+DESKTOP_TARGETS = ("darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64")
+DESKTOP_BINARIES = {"pairfob-desktop-" + target for target in DESKTOP_TARGETS}
+DESKTOP_FILES = DESKTOP_BINARIES | {"VERSION", "SHA256SUMS"}
+CHANNEL_DIRS = {"daemon": "daemon", "android": "android/beta", "desktop": "desktop"}
+
+
+def binary_target(name):
+    """The GOOS and GOARCH a release binary was built for."""
+    stem = name.removeprefix("pairfob-").removeprefix("chat-")
+    os_name, arch = stem.split("-")
+    return os_name, arch
 # The release moved here from the relay; validate a first bootstrap against it.
 LEGACY_DAEMON_ORIGIN = "https://pairfob.com/dl"
 APK_PATH = re.compile(r"/android/beta/[A-Za-z0-9._-]+\.apk\Z")
@@ -28,7 +51,7 @@ def digest(data):
 def version(value):
     match = VERSION.fullmatch(value) if isinstance(value, str) else None
     if not match:
-        raise ValueError("daemon release must use three-part SemVer")
+        raise ValueError("release must use three-part SemVer")
     return tuple(int(part) for part in match.groups())
 
 
@@ -68,18 +91,19 @@ def legacy_inventory(data):
         if not match:
             raise ValueError("invalid legacy daemon checksum inventory")
         entries[match.group(2)] = match.group(1)
-    if set(entries) != DAEMON_FILES:
+    if not LEGACY_FILES <= set(entries):
         raise ValueError("invalid legacy daemon checksum inventory")
     return entries
 
 
-def daemon_manifest(data):
+def daemon_manifest(data, allow_legacy=False):
     value = json.loads(data)
     version(value.get("version"))
     if value.get("schema") != 1 or not re.fullmatch(r"[0-9a-f]{40}", value.get("commit", "")):
         raise ValueError("invalid daemon release provenance")
     files = value.get("files")
-    if not isinstance(files, dict) or set(files) != DAEMON_PATHS:
+    valid_sets = (DAEMON_PATHS, LEGACY_PATHS) if allow_legacy else (DAEMON_PATHS,)
+    if not isinstance(files, dict) or set(files) not in valid_sets:
         raise ValueError("invalid daemon release inventory")
     for info in files.values():
         if (not isinstance(info, dict) or not isinstance(info.get("sha256"), str)
@@ -100,6 +124,33 @@ def android_manifest(data, previous=False):
     if previous and value.get("origin") not in (None, "https://dl.pairfob.com"):
         raise ValueError("previous Android release must be on the download host")
     return value
+
+
+def desktop_manifest(data):
+    value = json.loads(data)
+    version(value.get("version"))
+    if value.get("schema") != 1 or not re.fullmatch(r"[0-9a-f]{40}", value.get("commit", "")):
+        raise ValueError("invalid desktop release provenance")
+    files = value.get("files")
+    if (not isinstance(files, dict) or not files
+            or not set(files) <= set(DESKTOP_TARGETS)):
+        raise ValueError("invalid desktop release inventory")
+    for info in files.values():
+        if (not isinstance(info, dict) or not isinstance(info.get("sha256"), str)
+                or not SHA.fullmatch(info["sha256"]) or type(info.get("size")) is not int
+                or not 0 < info["size"] <= 64 * 1024 * 1024):
+            raise ValueError("invalid desktop artifact hash or size")
+    return value
+
+
+def checksum_inventory(data):
+    entries = {}
+    for line in data.decode().splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  \*?(.+)", line.strip())
+        if not match or match.group(2) in entries:
+            raise ValueError("invalid checksum inventory")
+        entries[match.group(2)] = match.group(1)
+    return entries
 
 
 def check_receipt(receipt):
@@ -138,7 +189,7 @@ def preserve(base, public, channel, receipt_path, required=False):
                         raise ValueError(f"daemon artifact mismatch: {path}")
                     save(path, payload)
                 save("daemon/release.json", data)
-        else:
+        elif channel == "android":
             data = read("/android/beta/latest.json")
             if data is not None:
                 latest = android_manifest(data)
@@ -162,13 +213,47 @@ def preserve(base, public, channel, receipt_path, required=False):
                         if saved.get("sha256") != entry["sha256"]:
                             raise ValueError("Android provenance hash mismatch")
                         save(entry["url"] + ".provenance.json", provenance)
+        else:
+            data = read("/desktop/release.json")
+            if data is None:
+                if required:
+                    raise ValueError("publish the desktop channel before preserving it")
+                if read("/desktop/VERSION") is not None:
+                    raise ValueError("desktop channel has no verified inventory")
+            else:
+                manifest = desktop_manifest(data)
+                payloads = {}
+                for target, info in manifest["files"].items():
+                    name = "pairfob-desktop-" + target
+                    payload = fetch(base, "/desktop/" + name, info["size"])
+                    if len(payload) != info["size"] or digest(payload) != info["sha256"]:
+                        raise ValueError(f"desktop artifact mismatch: {name}")
+                    payloads[name] = payload
+                checksums = read("/desktop/SHA256SUMS")
+                if checksums is None:
+                    raise ValueError("desktop checksum inventory is missing")
+                entries = checksum_inventory(checksums)
+                if set(entries) != set(payloads) | {"VERSION"}:
+                    raise ValueError("desktop checksum inventory does not match the manifest")
+                release = read("/desktop/VERSION")
+                if (release is None
+                        or release.decode("utf-8", "replace").strip() != manifest["version"]):
+                    raise ValueError("desktop VERSION differs from the manifest")
+                payloads["VERSION"] = release
+                for name, expected in entries.items():
+                    if digest(payloads[name]) != expected:
+                        raise ValueError(f"desktop artifact mismatch: {name}")
+                    save("desktop/" + name, payloads[name])
+                save("desktop/SHA256SUMS", checksums)
+                save("desktop/release.json", data)
         receipt = {"origin": base, "metadata": metadata}
         check_receipt(receipt)
         # Replace only the untouched channel, never the channel being published.
-        target = public / ("daemon" if channel == "daemon" else "android/beta")
+        directory = CHANNEL_DIRS[channel]
+        target = public / directory
         if target.exists():
             shutil.rmtree(target)
-        source = staged / ("daemon" if channel == "daemon" else "android/beta")
+        source = staged / directory
         if source.exists():
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(source, target)
@@ -193,7 +278,7 @@ def stage_daemon(base, public, source, installer, receipt_path):
             if len(parts) == 2 and parts[0] == "build" and "=" in parts[1]:
                 key, val = parts[1].split("=", 1)
                 settings[key] = val
-        os_name, arch = name.removeprefix("pairfob-").split("-")
+        os_name, arch = binary_target(name)
         revision = settings.get("vcs.revision", "")
         if (settings.get("vcs.modified") != "false" or settings.get("GOOS") != os_name
                 or settings.get("GOARCH") != arch or not re.fullmatch(r"[0-9a-f]{40}", revision)):
@@ -230,15 +315,15 @@ def stage_daemon(base, public, source, installer, receipt_path):
                 raise ValueError("refusing daemon version rollback")
             if version(release) == version(legacy_release):
                 entries = legacy_inventory(legacy_sums)
-                for name in DAEMON_FILES - {"VERSION", "SHA256SUMS"}:
+                for name in DAEMON_BINARIES:
                     if entries[name] != manifest["files"]["daemon/" + name]["sha256"]:
                         raise ValueError("legacy daemon version already has different binary bytes")
     else:
-        prior = daemon_manifest(old)
+        prior = daemon_manifest(old, allow_legacy=True)
         if version(release) < version(prior["version"]):
             raise ValueError("refusing daemon version rollback")
         if version(release) == version(prior["version"]):
-            for path in DAEMON_PATHS - {"install.sh"}:
+            for path in (DAEMON_PATHS - {"install.sh"}) & set(prior["files"]):
                 if prior["files"][path] != manifest["files"][path]:
                     raise ValueError("published daemon version already has different bytes")
     receipt_path.write_text(json.dumps({"origin": base, "metadata": {
@@ -262,16 +347,128 @@ def verify_daemon(base, public):
             raise ValueError(f"live daemon artifact mismatch: {path}")
 
 
+def stage_desktop(base, public, source, commit, receipt_path):
+    source = source.resolve()
+    release = (source / "VERSION").read_text().strip()
+    version(release)
+    if not re.fullmatch(r"[0-9a-f]{40}", commit or ""):
+        raise ValueError("desktop release needs the source commit")
+
+    present = {path.name for path in source.iterdir()}
+    binaries = present & DESKTOP_BINARIES
+    targets = {name.removeprefix("pairfob-desktop-") for name in binaries}
+    if not targets:
+        raise ValueError("desktop release has no platform binary")
+    if present != {"VERSION", "SHA256SUMS"} | binaries:
+        raise ValueError("unexpected or missing desktop release file")
+    for name in sorted(binaries):
+        path = source / name
+        if not path.is_file() or path.is_symlink():
+            raise ValueError(f"desktop release requires a regular file: {name}")
+        if not (path.stat().st_mode & 0o111):
+            raise ValueError(f"desktop release binary is not executable: {name}")
+
+    inventory = checksum_inventory((source / "SHA256SUMS").read_bytes())
+    if set(inventory) != {"VERSION"} | binaries:
+        raise ValueError("desktop checksum inventory does not match its files")
+    payloads = {}
+    for name in sorted(binaries):
+        payload = (source / name).read_bytes()
+        if digest(payload) != inventory[name]:
+            raise ValueError(f"desktop checksum mismatch: {name}")
+        payloads[name] = payload
+    version_bytes = (source / "VERSION").read_bytes()
+    if digest(version_bytes) != inventory["VERSION"]:
+        raise ValueError("desktop checksum mismatch: VERSION")
+
+    files = {name.removeprefix("pairfob-desktop-"): {
+        "sha256": digest(payload), "size": len(payload)} for name, payload in payloads.items()}
+    old = fetch(base, "/desktop/release.json", optional=True)
+    if old is not None:
+        prior = desktop_manifest(old)
+        if version(release) < version(prior["version"]):
+            raise ValueError("refusing desktop version rollback")
+        if version(release) == version(prior["version"]):
+            for target, info in prior["files"].items():
+                if target in files and files[target] != info:
+                    raise ValueError("published desktop version already has different bytes")
+        missing = set(prior["files"]) - targets
+        if missing:
+            if version(release) != version(prior["version"]):
+                raise ValueError("desktop release must include every published platform")
+            for target in sorted(missing):
+                name = "pairfob-desktop-" + target
+                info = prior["files"][target]
+                payload = fetch(base, "/desktop/" + name, info["size"])
+                if len(payload) != info["size"] or digest(payload) != info["sha256"]:
+                    raise ValueError(f"desktop artifact mismatch: {name}")
+                payloads[name] = payload
+                files[target] = info
+
+    receipt_path.write_text(json.dumps({"origin": base, "metadata": {
+        "/desktop/release.json": digest(old) if old is not None else None}}, indent=2) + "\n")
+
+    # Rewrite the staged channel from the merged set, so a platform carried
+    # over from the live manifest keeps its bytes. SHA256SUMS is regenerated
+    # because a partial build's file covers only its own platform.
+    staged = public / "desktop"
+    if staged.exists():
+        shutil.rmtree(staged)
+    staged.mkdir(parents=True)
+    checksums = []
+    for name, payload in sorted(payloads.items()):
+        (staged / name).write_bytes(payload)
+        checksums.append(f"{digest(payload)}  {name}\n")
+    checksums.append(f"{digest(version_bytes)}  VERSION\n")
+    (staged / "VERSION").write_bytes(version_bytes)
+    (staged / "SHA256SUMS").write_text("".join(sorted(checksums)))
+    manifest = {"schema": 1, "version": release, "commit": commit, "files": files}
+    desktop_manifest(json.dumps(manifest))
+    (staged / "release.json").write_text(json.dumps(manifest, indent=2) + "\n")
+
+
+def verify_desktop(base, public):
+    expected = (public / "desktop/release.json").read_bytes()
+    actual = fetch(base, "/desktop/release.json")
+    if actual != expected:
+        raise ValueError("live desktop manifest differs from candidate")
+    manifest = desktop_manifest(actual)
+    checksums = fetch(base, "/desktop/SHA256SUMS")
+    if checksums != (public / "desktop/SHA256SUMS").read_bytes():
+        raise ValueError("live desktop checksum inventory differs from candidate")
+    entries = checksum_inventory(checksums)
+    expected_names = {"VERSION"} | {
+        "pairfob-desktop-" + target for target in manifest["files"]}
+    if set(entries) != expected_names:
+        raise ValueError("live desktop checksum inventory does not match the manifest")
+    for target, info in manifest["files"].items():
+        if entries["pairfob-desktop-" + target] != info["sha256"]:
+            raise ValueError("live desktop checksum differs from the manifest")
+    for name, expected_sha in entries.items():
+        live = fetch(base, "/desktop/" + name, 64 * 1024 * 1024)
+        candidate = (public / "desktop" / name).read_bytes()
+        if live != candidate or digest(live) != expected_sha:
+            raise ValueError(f"live desktop artifact mismatch: {name}")
+    release = fetch(base, "/desktop/VERSION")
+    if release != (public / "desktop/VERSION").read_bytes():
+        raise ValueError("live desktop VERSION differs from candidate")
+    if release.decode("utf-8", "replace").strip() != manifest["version"]:
+        raise ValueError("live desktop VERSION differs from the manifest")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=["preserve", "check", "stage-daemon", "verify-daemon"])
+    parser.add_argument("mode", choices=[
+        "preserve", "check", "stage-daemon", "verify-daemon",
+        "stage-desktop", "verify-desktop"])
     parser.add_argument("--origin", default="https://dl.pairfob.com")
     parser.add_argument("--public", type=Path)
-    parser.add_argument("--channel", choices=["android", "daemon"])
+    parser.add_argument("--channel", choices=["android", "daemon", "desktop"])
     parser.add_argument("--receipt", type=Path)
     parser.add_argument("--require-present", action="store_true")
     parser.add_argument("--source", type=Path)
     parser.add_argument("--installer", type=Path)
+    parser.add_argument("--commit", default="")
     args = parser.parse_args()
     base = origin(args.origin)
     if args.mode == "preserve":
@@ -280,8 +477,12 @@ def main():
         check_receipt(json.loads(args.receipt.read_text()))
     elif args.mode == "stage-daemon":
         stage_daemon(base, args.public, args.source, args.installer, args.receipt)
-    else:
+    elif args.mode == "stage-desktop":
+        stage_desktop(base, args.public, args.source, args.commit, args.receipt)
+    elif args.mode == "verify-daemon":
         verify_daemon(base, args.public)
+    else:
+        verify_desktop(base, args.public)
 
 
 if __name__ == "__main__":

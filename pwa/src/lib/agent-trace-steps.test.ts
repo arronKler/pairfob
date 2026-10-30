@@ -26,6 +26,8 @@ describe("step categories follow each agent's own tool names", () => {
       ["browser_navigate", "web"], ["delegate_task", "subtask"], ["todo", "plan"], ["clarify", "question"], ["skill_view", "other"],
       // opencode
       ["list", "read"], ["todoread", "plan"], ["webfetch", "web"],
+      // Prime Agent (Pi-format tools)
+      ["python_repl", "command"], ["attach_image", "read"],
     ];
     for (const [name, category] of cases) expect([name, stepCategory(tool(name))]).toEqual([name, category]);
     expect(stepCategory({ type: "thinking", text: "x" })).toBe("think");
@@ -53,7 +55,7 @@ describe("step categories follow each agent's own tool names", () => {
   });
 
   test("only agents that record how a step ended can show a verified result", () => {
-    for (const agent of ["claude", "codex", "grok", "pi", "hermes", "opencode", undefined]) expect(recordsStepResults(agent)).toBeTrue();
+    for (const agent of ["claude", "codex", "grok", "pi", "prime-agent", "hermes", "opencode", undefined]) expect(recordsStepResults(agent)).toBeTrue();
     expect(recordsStepResults("cursor")).toBeFalse();
   });
 

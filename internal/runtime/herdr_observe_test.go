@@ -2,6 +2,21 @@ package runtime
 
 import "testing"
 
+func TestHerdrCapabilitiesBindTranscriptToProtocol(t *testing.T) {
+	t.Parallel()
+	live := capabilities(19)
+	if !live[FeaturePaneRead].Available || !live[FeatureTranscript].Available {
+		t.Fatalf("protocol 19 capabilities = %+v", live)
+	}
+	if live[FeatureHistory].Available {
+		t.Fatal("herdr must leave history to the daemon journal")
+	}
+	legacy := capabilities(0)
+	if legacy[FeaturePaneRead].Available || legacy[FeatureTranscript].Available {
+		t.Fatalf("protocol 0 capabilities = %+v", legacy)
+	}
+}
+
 func TestNormalizePaneKeepsLabelSeparateFromTerminalTitle(t *testing.T) {
 	t.Parallel()
 	pane := normalizePane(herdrPaneWire{

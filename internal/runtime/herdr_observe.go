@@ -303,6 +303,12 @@ func capabilities(protocol int) map[Feature]Capability {
 			out[feature] = Capability{Available: true}
 		}
 	}
+	// Herdr panes carry an AgentSession binding, which the daemon journal reads.
+	// The terminal core has no equivalent, so GetConfig.history must not treat
+	// a readable pane as a readable transcript.
+	if protocol > 0 {
+		out[FeatureTranscript] = Capability{Available: true}
+	}
 	out[FeatureHistory] = Capability{Reason: "history reader is not configured"}
 	return out
 }

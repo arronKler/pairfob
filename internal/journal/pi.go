@@ -92,7 +92,33 @@ type piBlock struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-func piPathSyntax(root, value string) bool {
+// piAgent reports whether an agent's transcripts use the Pi session tree.
+// Prime Agent is a Pi fork: same header, entry tree and tool records.
+func piAgent(agent string) bool { return agent == "pi" || agent == "prime-agent" }
+
+// piSessionsDir is the directory holding one agent's Pi-format sessions.
+// Empty means the adapter is not configured.
+func (r *Reader) piSessionsDir(agent string) string {
+	switch agent {
+	case "pi":
+		if r.PiRoot == "" {
+			return ""
+		}
+		return filepath.Join(r.PiRoot, "sessions")
+	case "prime-agent":
+		if r.PrimeSessionDir != "" {
+			return r.PrimeSessionDir
+		}
+		if r.PrimeRoot == "" {
+			return ""
+		}
+		return filepath.Join(r.PrimeRoot, "sessions")
+	default:
+		return ""
+	}
+}
+
+func piPathSyntax(sessions, value string) bool {
 	if !filepath.IsAbs(value) || filepath.Clean(value) != value || filepath.Ext(value) != ".jsonl" {
 		return false
 	}
@@ -101,7 +127,7 @@ func piPathSyntax(root, value string) bool {
 			return false
 		}
 	}
-	absRoot, err := filepath.Abs(filepath.Join(root, "sessions"))
+	absRoot, err := filepath.Abs(sessions)
 	if err != nil {
 		return false
 	}
@@ -114,12 +140,16 @@ func piPathSyntax(root, value string) bool {
 }
 
 func (r *Reader) findPiTranscript(ref Ref, refresh bool) (string, error) {
-	root, err := filepath.Abs(filepath.Join(r.PiRoot, "sessions"))
+	sessions := r.piSessionsDir(ref.Agent)
+	if sessions == "" {
+		return "", ErrUnavailable
+	}
+	root, err := filepath.Abs(sessions)
 	if err != nil {
 		return "", ErrUnavailable
 	}
 	if ref.Kind == "path" {
-		if !piPathSyntax(r.PiRoot, ref.Value) {
+		if !piPathSyntax(root, ref.Value) {
 			return "", ErrUnavailable
 		}
 		absolute, err := filepath.Abs(ref.Value)
@@ -252,7 +282,11 @@ func (r *Reader) loadPiSession(ref Ref, refresh bool) (*piSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err := filepath.Abs(filepath.Join(r.PiRoot, "sessions"))
+	sessions := r.piSessionsDir(ref.Agent)
+	if sessions == "" {
+		return nil, ErrUnavailable
+	}
+	root, err := filepath.Abs(sessions)
 	if err != nil {
 		return nil, ErrUnavailable
 	}

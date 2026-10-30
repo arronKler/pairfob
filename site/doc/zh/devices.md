@@ -26,11 +26,13 @@ pairfob list
 ```
 
 ```
-1  iPhone  just now
+1  iPhone  connected
 2  Android 手机  2 hours ago
 
 Unpair one: pairfob forget 1
 ```
+
+`connected` 表示这台设备此刻正保持着会话；其他行显示的是上次连接距今多久。
 
 还没有设备时会提示 `Nothing paired yet. Pair one: pairfob pair`。
 
@@ -73,6 +75,18 @@ pairfob forget 1
 电脑休眠或不在线时，名单还在。Pairfob 不会删掉这条凭证，也不会把你踢回配对页。唤醒即可，不用重新配对。锁屏可以；合盖只有系统没睡才行。
 
 某一行的 **忘记** 只删这台浏览器里的凭证。电脑上的设备名单还在，除非你在那边 `forget`，或在设置 → 电脑卡片 → 已配对设备里 **解除**。**解除这台设备的配对** 仍然只影响当前这台电脑的配对关系。
+
+## 终端运行时
+
+Pairfob 可以通过 Herdr TUI 或 `herdr-core`（`hc`）读取终端。Herdr 是默认值，支持标签页、分屏、worktree 和对话记录。core 里一个终端就是一个 pane，状态来自 OSC 7501，手机上只显示用 `hc` 启动的终端；它没有标签页、分屏、worktree、布局操作，也没有对话记录。
+
+为 herdr-core 安装 Pairfob（需要先安装好 `hc`）：
+
+```sh
+curl -fsSL https://pairfob.com/install.sh | sh -s -- --runtime core
+```
+
+也可以显式设置 `PAIRFOB_RUNTIME=core`（或 `herdr`）后在前台运行 `pairfob run`。`pairfob runtime` 显示当前选择。安装脚本会把 `PAIRFOB_RUNTIME` 和 `PAIRFOB_HC` 的绝对路径写进登录服务，登录后仍是同一套运行时。用 `hc run --bg claude` 启动的终端会出现在手机上。
 
 ## Herdr 通过 SSH 连接的机器
 

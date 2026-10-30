@@ -143,7 +143,7 @@ class Publication(unittest.TestCase):
         def metadata(args, text=True, timeout=None):
             if args[-1] == "version":
                 return f"pairfob {release} ({'b' * 7})\n"
-            os_name, arch = Path(args[-1]).name.removeprefix("pairfob-").split("-")
+            os_name, arch = channel.binary_target(Path(args[-1]).name)
             return (f"build\tGOOS={os_name}\nbuild\tGOARCH={arch}\n"
                     f"build\tvcs.modified=false\nbuild\tvcs.revision={'b' * 40}\n"
                     f"build\t-ldflags=-s -w -X main.version={release}\n")
@@ -151,7 +151,7 @@ class Publication(unittest.TestCase):
 
     def legacy(self, release="v1.4.5", mutate=None):
         sums = []
-        for name in channel.DAEMON_FILES:
+        for name in channel.LEGACY_FILES:
             data = (release if name == "VERSION" else "new:" + name).encode()
             sha = channel.digest(data)
             if name == mutate:
@@ -217,6 +217,111 @@ class Publication(unittest.TestCase):
         for value in ["http://evil.example", "https://user:password@host", "https://host/path", "https://host?x=1"]:
             with self.assertRaises(ValueError):
                 channel.origin(value)
+
+    def desktop(self, release="v1.4.5", targets=("darwin-arm64", "linux-amd64")):
+        files = {}
+        sums = []
+        for target in targets:
+            name = "pairfob-desktop-" + target
+            data = f"desktop {target} {release}".encode()
+            self.live["/desktop/" + name] = data
+            files[target] = {"sha256": channel.digest(data), "size": len(data)}
+            sums.append(f"{channel.digest(data)}  {name}")
+        version_data = (release + "\n").encode()
+        self.live["/desktop/VERSION"] = version_data
+        sums.append(f"{channel.digest(version_data)}  VERSION")
+        self.live["/desktop/SHA256SUMS"] = ("\n".join(sums) + "\n").encode()
+        manifest = {"schema": 1, "version": release, "commit": "a" * 40, "files": files}
+        self.live["/desktop/release.json"] = json.dumps(manifest).encode()
+        return manifest
+
+    def desktop_source(self, release="v1.4.6", targets=("darwin-arm64",), contents=None):
+        source = self.root / "desktop-source"
+        source.mkdir(exist_ok=True)
+        version_data = (release + "\n").encode()
+        (source / "VERSION").write_bytes(version_data)
+        sums = [f"{channel.digest(version_data)}  VERSION"]
+        for target in targets:
+            name = "pairfob-desktop-" + target
+            data = (contents or {}).get(target, f"built {target} {release}".encode())
+            path = source / name
+            path.write_bytes(data)
+            path.chmod(0o755)
+            sums.append(f"{channel.digest(data)}  {name}")
+        (source / "SHA256SUMS").write_text("\n".join(sums) + "\n")
+        return source
+
+    def test_desktop_publication_hydrates_from_live_and_keeps_other_channels(self):
+        self.daemon()
+        self.android()
+        self.desktop()
+        own = self.public / "android/beta/candidate.apk"
+        own.parent.mkdir(parents=True)
+        own.write_bytes(b"candidate")
+        self.preserve("desktop")
+        for path in ["desktop/release.json", "desktop/VERSION", "desktop/SHA256SUMS",
+                     "desktop/pairfob-desktop-darwin-arm64",
+                     "desktop/pairfob-desktop-linux-amd64"]:
+            self.assertEqual((self.public / path).read_bytes(), self.live["/" + path])
+        self.assertEqual(own.read_bytes(), b"candidate")
+
+    def test_desktop_preservation_rejects_corrupt_bytes(self):
+        self.desktop()
+        self.live["/desktop/pairfob-desktop-linux-amd64"] = b"corrupt"
+        with self.assertRaisesRegex(ValueError, "mismatch"):
+            self.preserve("desktop")
+
+    def test_desktop_manifest_cannot_write_outside_channel(self):
+        manifest = self.desktop()
+        manifest["files"]["../outside"] = {"sha256": "a" * 64, "size": 1}
+        self.live["/desktop/release.json"] = json.dumps(manifest).encode()
+        with self.assertRaisesRegex(ValueError, "inventory"):
+            self.preserve("desktop")
+        self.assertFalse((self.root / "outside").exists())
+
+    def test_desktop_stage_writes_manifest_and_regenerated_checksums(self):
+        source = self.desktop_source()
+        channel.stage_desktop(self.origin, self.public, source, "c" * 40, self.receipt)
+        manifest = channel.desktop_manifest((self.public / "desktop/release.json").read_bytes())
+        self.assertEqual(manifest["version"], "v1.4.6")
+        self.assertEqual(set(manifest["files"]), {"darwin-arm64"})
+        sums = channel.checksum_inventory((self.public / "desktop/SHA256SUMS").read_bytes())
+        self.assertEqual(set(sums), {"VERSION", "pairfob-desktop-darwin-arm64"})
+        self.assertEqual((self.public / "desktop/VERSION").read_text(), "v1.4.6\n")
+        self.assertEqual(json.loads(self.receipt.read_text())["metadata"],
+                         {"/desktop/release.json": None})
+
+    def test_desktop_stage_keeps_other_platforms_at_the_same_version(self):
+        self.desktop("v1.4.5", ("darwin-arm64", "linux-amd64"))
+        source = self.desktop_source(
+            "v1.4.5", ("darwin-arm64",),
+            contents={"darwin-arm64": b"desktop darwin-arm64 v1.4.5"})
+        channel.stage_desktop(self.origin, self.public, source, "c" * 40, self.receipt)
+        manifest = channel.desktop_manifest((self.public / "desktop/release.json").read_bytes())
+        self.assertEqual(set(manifest["files"]), {"darwin-arm64", "linux-amd64"})
+        self.assertTrue((self.public / "desktop/pairfob-desktop-linux-amd64").exists())
+
+    def test_desktop_stage_requires_every_published_platform_on_a_new_version(self):
+        self.desktop("v1.4.5", ("darwin-arm64", "linux-amd64"))
+        source = self.desktop_source("v1.4.6", ("darwin-arm64",))
+        with self.assertRaisesRegex(ValueError, "every published platform"):
+            channel.stage_desktop(self.origin, self.public, source, "c" * 40, self.receipt)
+
+    def test_desktop_stage_rejects_changed_bytes_at_the_same_version(self):
+        self.desktop("v1.4.5", ("darwin-arm64",))
+        source = self.desktop_source("v1.4.5", ("darwin-arm64",))
+        with self.assertRaisesRegex(ValueError, "different bytes"):
+            channel.stage_desktop(self.origin, self.public, source, "c" * 40, self.receipt)
+
+    def test_desktop_verify_compares_live_bytes(self):
+        source = self.desktop_source()
+        channel.stage_desktop(self.origin, self.public, source, "c" * 40, self.receipt)
+        for path in (self.public / "desktop").iterdir():
+            self.live["/desktop/" + path.name] = path.read_bytes()
+        channel.verify_desktop(self.origin, self.public)
+        self.live["/desktop/pairfob-desktop-darwin-arm64"] = b"tampered"
+        with self.assertRaisesRegex(ValueError, "mismatch"):
+            channel.verify_desktop(self.origin, self.public)
 
 
 if __name__ == "__main__":

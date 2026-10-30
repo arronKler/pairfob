@@ -1,0 +1,63 @@
+[package]
+name = "pairfob-desktop"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.98"
+publish = false
+description = "Pairfob for the desktop: Herdr sessions in a native window"
+
+[lib]
+name = "pairfob_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pairfob-desktop"
+path = "src/main.rs"
+
+[features]
+default = ["gui"]
+gui = ["dep:gpui", "dep:gpui_platform"]
+perf-hud = ["gui", "dep:gpui-fps"]
+shot = ["gui", "gpui_platform/test-support", "dep:image"]
+
+[dependencies]
+async-channel = "2"
+base64 = "0.22"
+crossbeam-channel = "0.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+bincode = { version = "2", features = ["serde"] }
+smol_str = "0.3"
+thiserror = "2"
+time = { version = "0.3", features = ["parsing"] }
+unicode-width = "0.2.2"
+qrcode = "0.14"
+gpui = { package = "gpui-pre", version = "=0.3.10", optional = true }
+# Pins the same `gpui-pre` version as the application and reads GPUI's own
+# frame trace, so the development HUD adds no measured work to the frame loop.
+gpui-fps = { version = "=0.8.1", optional = true }
+# `font-kit` is not on by default and is what wires CoreText into the macOS
+# platform. Without it gpui_macos falls back to `NoopTextSystem`: layout and
+# colors still draw, but every glyph is invisible.
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.10", optional = true, features = ["font-kit"] }
+image = { version = "0.25", optional = true, default-features = false, features = ["png"] }
+
+# The chat socket is owned by this user at 0600; checking that needs geteuid.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+
+# A default dev build rasterizes every glyph and paints every cell unoptimized,
+# which is enough to make typing feel delayed on a full terminal. This profile
+# keeps this crate's own compile fast and optimizes the dependencies, so
+# `cargo run --profile fast` is interactive. It stays out of `dev` so the
+# verification gate does not rebuild the whole tree for its lints.
+[profile.fast]
+inherits = "dev"
+opt-level = 1
+
+[profile.fast.package."*"]
+opt-level = 3

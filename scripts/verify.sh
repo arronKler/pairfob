@@ -24,15 +24,18 @@ fi
 
 bash -n "$ROOT/scripts/install.sh"
 bash -n "$ROOT/scripts/release.sh"
+bash -n "$ROOT/scripts/release-desktop.sh"
 bash -n "$ROOT/scripts/macos-signing.sh"
 bash -n "$ROOT/scripts/build-android-release.sh"
 bash -n "$ROOT/scripts/publish-android-beta.sh"
 bash -n "$ROOT/scripts/publish-daemon.sh"
+bash -n "$ROOT/scripts/publish-desktop.sh"
 python3 "$ROOT/scripts/download-channel.test.py"
 python3 "$ROOT/scripts/android-provenance.test.py"
 bash -n "$ROOT/scripts/pack-origin-assets.sh"
 bash -n "$ROOT/scripts/ship-guard.sh"
 bash -n "$ROOT/scripts/verify-web.sh"
+bash -n "$ROOT/scripts/verify-desktop.sh"
 bash -n "$ROOT/scripts/verify-android.sh"
 bash -n "$ROOT/scripts/dev-acme.sh"
 bash -n "$ROOT/scripts/dev-up.sh"
@@ -57,4 +60,5 @@ bun test scripts/android-release-scope.test.ts
 bun test plugin/herdr/plugin.test.ts
 (cd "$ROOT/site/doc" && bun test)
 
+bash "$ROOT/scripts/verify-desktop.sh"
 bash "$ROOT/scripts/verify-web.sh"

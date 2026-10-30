@@ -39,7 +39,7 @@ for os in darwin linux; do
   for arch in amd64 arm64; do
     dest="${OUT}/pairfob-${os}-${arch}"
     echo "build ${dest}"
-    # Native macOS Keychain access disables interaction for background reads.
+# Native macOS Keychain access disables interaction for background reads.
     # Linux remains static; macOS builds retain the native Keychain reader.
     build_env=(CGO_ENABLED=0)
     if [[ "$os" == darwin && "$(uname -s)" == Darwin ]]; then
@@ -52,6 +52,9 @@ for os in darwin linux; do
     if [[ "$os" == darwin ]]; then
       pairfob_sign_macos_binary "$dest"
     fi
+    dest="${OUT}/pairfob-chat-${os}-${arch}"
+    echo "build ${dest}"
+    env "${build_env[@]}" GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$ldflags" -o "$dest" ./cmd/pairfob-chat
   done
 done
 

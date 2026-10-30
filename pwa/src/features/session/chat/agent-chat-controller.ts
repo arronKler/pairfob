@@ -333,8 +333,8 @@ export function visibleItems(): AgentTraceItem[] {
 
 /**
  * Agents every daemon reads (internal/journal), so their chat opens even before a new session has written
- * a transcript. Cursor, Hermes and opencode are read only by daemons that know them and open on
- * historyAvailable alone.
+ * a transcript. Cursor, Hermes, opencode and Prime Agent are read only by daemons that know them and open
+ * on historyAvailable alone.
  */
 const CHAT_AGENT_KINDS = new Set(["claude", "codex", "grok", "pi"]);
 

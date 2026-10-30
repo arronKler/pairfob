@@ -66,6 +66,9 @@ type Reader struct {
 	GrokRoot   string
 	PiRoot     string
 	CursorRoot string
+	// PrimeRoot holds Prime Agent state; PrimeSessionDir overrides sessions/.
+	PrimeRoot       string
+	PrimeSessionDir string
 	// HermesRoot holds state.db; OpencodeRoot holds storage/.
 	HermesRoot   string
 	OpencodeRoot string
@@ -127,6 +130,11 @@ func NewDefault() *Reader {
 	if piRoot == "" {
 		piRoot = filepath.Join(home, ".pi", "agent")
 	}
+	primeRoot := os.Getenv("PRIME_AGENT_CODING_AGENT_DIR")
+	if primeRoot == "" {
+		primeRoot = filepath.Join(home, ".prime", "agent")
+	}
+	primeSessionDir := os.Getenv("PRIME_AGENT_SESSION_DIR")
 	hermesRoot := os.Getenv("HERMES_HOME")
 	if hermesRoot == "" {
 		hermesRoot = filepath.Join(home, ".hermes")
@@ -137,6 +145,7 @@ func NewDefault() *Reader {
 	}
 	return &Reader{
 		CodexRoot: codexRoot, ClaudeRoot: claudeRoot, GrokRoot: grokRoot, PiRoot: piRoot,
+		PrimeRoot: primeRoot, PrimeSessionDir: primeSessionDir,
 		CursorRoot: filepath.Join(home, ".cursor"), HermesRoot: hermesRoot, OpencodeRoot: filepath.Join(dataHome, "opencode"),
 		NativeRoots: defaultNativeRoots(home, dataHome),
 	}
@@ -146,9 +155,15 @@ func (r *Reader) Supports(ref Ref) bool {
 	if ref.Agent == "cmd" {
 		return ref.Source == "pairfob:cmd" && ref.Kind == "id" && sessionID.MatchString(ref.Value) && ref.Leaf != nil && (*ref.Leaf == "" || sessionID.MatchString(*ref.Leaf)) && r.NativeRoots["cmd"] != ""
 	}
-	if ref.Source == "herdr:pi" && ref.Agent == "pi" && r.PiRoot != "" {
+	// Prime Agent is a Pi fork and reports through Herdr's herdr:pi source
+	// under its own agent name; both read the same session tree.
+	if ref.Source == "herdr:pi" && piAgent(ref.Agent) {
+		sessions := r.piSessionsDir(ref.Agent)
+		if sessions == "" {
+			return false
+		}
 		return (ref.Kind == "id" && sessionID.MatchString(ref.Value)) ||
-			(ref.Kind == "path" && piPathSyntax(r.PiRoot, ref.Value))
+			(ref.Kind == "path" && piPathSyntax(sessions, ref.Value))
 	}
 	if ref.Source == "herdr:devin" && ref.Agent == "devin" && ref.Kind == "id" {
 		return devinSessionID.MatchString(ref.Value) && r.NativeRoots["devin"] != ""
@@ -185,7 +200,7 @@ func (r *Reader) Available(ref Ref) bool {
 	if !r.Supports(ref) {
 		return false
 	}
-	if ref.Agent == "pi" {
+	if piAgent(ref.Agent) {
 		_, err := r.loadPiSession(ref, false)
 		return err == nil
 	}
@@ -201,7 +216,7 @@ func (r *Reader) Read(ref Ref, cursor *string, limit int) (Page, error) {
 	if !r.Supports(ref) {
 		return Page{}, ErrUnavailable
 	}
-	if ref.Agent == "pi" {
+	if piAgent(ref.Agent) {
 		return r.readPiHistory(ref, cursor, limit)
 	}
 	if limit == 0 {
@@ -233,7 +248,7 @@ func (r *Reader) transcriptPath(ref Ref, refreshMissing bool) (string, error) {
 		path, err = r.findCodexTranscript(ref.Value, refreshMissing)
 	case "claude":
 		path, err = r.findClaudeTranscript(ref.Value, refreshMissing)
-	case "pi":
+	case "pi", "prime-agent":
 		path, err = r.findPiTranscript(ref, refreshMissing)
 	case "cursor":
 		path, err = findCursorTranscript(r.CursorRoot, ref.Value)

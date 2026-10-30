@@ -588,6 +588,8 @@ func (e *Engine) RuntimeKind() string {
 		return "offline"
 	case *runtimeapi.Herdr:
 		return "herdr"
+	case *runtimeapi.Core:
+		return "herdr-core"
 	default:
 		return "unknown"
 	}

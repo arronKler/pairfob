@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"pairfob/internal/admin"
 	"pairfob/internal/runtime"
@@ -14,19 +16,24 @@ import (
 )
 
 type health struct {
-	Version        string
-	RunningVersion string
-	RunningPID     int
-	ProcessNote    string
-	Running        bool
-	Recovery       serviceRecoveryHint
-	Phones         int
-	HerdrOK        bool
-	HerdrNote      string
-	Enrolled       bool
-	Origin         string
-	OriginNote     string
-	P2P            *bool
+	Version          string
+	RunningVersion   string
+	RunningPID       int
+	ProcessNote      string
+	Running          bool
+	Recovery         serviceRecoveryHint
+	Phones           int
+	RuntimeKind      string
+	RuntimeCommand   string
+	RuntimeOK        bool
+	RuntimeNote      string
+	RuntimeVersion   string
+	RuntimeProtocol  int
+	RuntimeTerminals int
+	Enrolled         bool
+	Origin           string
+	OriginNote       string
+	P2P              *bool
 }
 
 func doctorCommand(sock string) error {
@@ -36,8 +43,10 @@ func doctorCommand(sock string) error {
 	}
 	writeDoctor(os.Stdout, h)
 	writePrivacyDoctor(os.Stdout, sock)
-	writeHerdrMaintenance(os.Stdout)
-	if !h.Running || !h.HerdrOK {
+	if h.RuntimeKind == runtime.RuntimeKindHerdr {
+		writeHerdrMaintenance(os.Stdout)
+	}
+	if !h.Running || !h.RuntimeOK {
 		return errDoctor
 	}
 	return nil
@@ -47,7 +56,10 @@ var errDoctor = fmt.Errorf("not ready")
 
 func gatherHealth(sock string) (health, error) {
 	configuredP2P := getenv("PAIRFOB_P2P", "1") != "0"
-	h := health{Version: version, Running: daemonIsLive(sock), P2P: &configuredP2P}
+	h := health{
+		Version: version, Running: daemonIsLive(sock), P2P: &configuredP2P,
+		RuntimeTerminals: -1,
+	}
 	if !h.Running {
 		h.Recovery = localServiceHint()
 	}
@@ -92,13 +104,7 @@ func gatherHealth(sock string) (health, error) {
 			h.Phones = len(live)
 		}
 	}
-	rt, _, rtErr := runtime.Open(false, herdrMultiSessionEnabled())
-	h.HerdrNote = "unavailable — check the configured Herdr socket"
-	if rtErr == nil {
-		check := checkHerdrInstallation(rt.(*runtime.Herdr))
-		h.HerdrOK = check.State == "ready"
-		h.HerdrNote = herdrInstallationNote(check)
-	}
+	gatherRuntimeHealth(&h)
 	stored, relayErr := store.LoadRelay()
 	if relayErr != nil {
 		h.OriginNote = relayErr.Error()
@@ -128,6 +134,88 @@ func gatherHealth(sock string) (health, error) {
 	return h, nil
 }
 
+func gatherRuntimeHealth(h *health) {
+	devFake := os.Getenv("PAIRFOB_DEV_FAKE_RUNTIME") == "1"
+	selection, err := runtime.SelectRuntime(devFake)
+	if err != nil {
+		h.RuntimeKind = runtime.RuntimeKindHerdr
+		h.RuntimeNote = "unavailable — no Herdr or herdr-core runtime found; run pairfob setup"
+		return
+	}
+	h.RuntimeKind = selection.Kind
+	h.RuntimeCommand = selection.Command
+	switch selection.Kind {
+	case runtime.RuntimeKindCore:
+		gatherCoreHealth(h, selection)
+	case runtime.RuntimeKindHerdr:
+		gatherHerdrHealth(h)
+	case runtime.RuntimeKindFake:
+		h.RuntimeOK = true
+		h.RuntimeNote = "development fake runtime"
+	default:
+		h.RuntimeNote = "unavailable — unknown runtime"
+	}
+}
+
+func gatherHerdrHealth(h *health) {
+	rt, _, err := runtime.Open(false, herdrMultiSessionEnabled())
+	if err != nil {
+		h.RuntimeNote = "unavailable — check the configured Herdr socket"
+		return
+	}
+	check := checkHerdrInstallation(rt.(*runtime.Herdr))
+	h.RuntimeVersion = check.Descriptor.Version
+	h.RuntimeProtocol = check.Descriptor.Protocol
+	h.RuntimeOK = check.State == "ready"
+	if !h.RuntimeOK {
+		h.RuntimeNote = herdrInstallationNote(check)
+		return
+	}
+	h.RuntimeTerminals = runtimeTerminalCount(rt)
+}
+
+func gatherCoreHealth(h *health, selection runtime.RuntimeSelection) {
+	core := runtime.NewCore(selection.Command)
+	defer core.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	descriptor, err := core.Describe(ctx, runtime.DefaultSession())
+	cancel()
+	if err != nil {
+		h.RuntimeNote = "unavailable — herdr-core did not answer; check hc and run pairfob runtime"
+		return
+	}
+	h.RuntimeVersion = descriptor.Version
+	h.RuntimeProtocol = descriptor.Protocol
+	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+	view, err := core.Observe(ctx, runtime.DefaultSession(), runtime.SnapshotQuery{})
+	cancel()
+	if err != nil {
+		h.RuntimeNote = "terminals could not be read: " + err.Error()
+		return
+	}
+	snapshot, ok := view.(runtime.SnapshotView)
+	if !ok {
+		h.RuntimeNote = "terminals could not be read"
+		return
+	}
+	h.RuntimeOK = true
+	h.RuntimeTerminals = len(snapshot.Snapshot.Panes)
+}
+
+func runtimeTerminalCount(rt runtime.Runtime) int {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	view, err := rt.Observe(ctx, runtime.DefaultSession(), runtime.SnapshotQuery{})
+	if err != nil {
+		return -1
+	}
+	snapshot, ok := view.(runtime.SnapshotView)
+	if !ok {
+		return -1
+	}
+	return len(snapshot.Snapshot.Panes)
+}
+
 func writeDoctor(w io.Writer, h health) {
 	fmt.Fprintf(w, "Pairfob %s\n\n", h.Version)
 	fmt.Fprintf(w, "  Installed   %s\n", h.Version)
@@ -147,7 +235,7 @@ func writeDoctor(w io.Writer, h health) {
 	}
 	fmt.Fprintf(w, "  Running     %s\n", yesNo(h.Running, "yes", "no — "+h.Recovery.Note))
 	fmt.Fprintf(w, "  Paired      %d\n", h.Phones)
-	fmt.Fprintf(w, "  Herdr       %s\n", h.HerdrNote)
+	fmt.Fprintf(w, "  Runtime     %s\n", runtimeDoctorLine(h))
 	p2p := "unknown — restart Pairfob to check"
 	if h.P2P != nil {
 		p2p = yesNo(*h.P2P, "on", "off — this computer is relay-only")
@@ -168,6 +256,40 @@ func writeDoctor(w io.Writer, h health) {
 	} else {
 		fmt.Fprintln(w, "\n"+h.Recovery.advice())
 	}
+}
+
+// runtimeDoctorLine names the selected runtime, its version and protocol when
+// known, and how many terminals the phone would see.
+func runtimeDoctorLine(h health) string {
+	kind := h.RuntimeKind
+	if kind == "" {
+		kind = "unknown"
+	}
+	line := kind
+	parts := make([]string, 0, 3)
+	if h.RuntimeVersion != "" {
+		parts = append(parts, h.RuntimeVersion)
+	}
+	if h.RuntimeProtocol > 0 {
+		parts = append(parts, fmt.Sprintf("protocol %d", h.RuntimeProtocol))
+	}
+	if h.RuntimeOK && h.RuntimeTerminals >= 0 {
+		parts = append(parts, terminalCount(h.RuntimeTerminals))
+	}
+	if len(parts) > 0 {
+		line += " " + strings.Join(parts, ", ")
+	}
+	if h.RuntimeNote != "" {
+		line += " — " + h.RuntimeNote
+	}
+	return line
+}
+
+func terminalCount(n int) string {
+	if n == 1 {
+		return "1 terminal"
+	}
+	return fmt.Sprintf("%d terminals", n)
 }
 
 func loadDaemonP2P(sock string) (*bool, error) {
@@ -196,18 +318,36 @@ func writeLiveSnapshot(w io.Writer, sock string) error {
 	default:
 		fmt.Fprintf(w, "%d devices paired.\n", h.Phones)
 	}
-	if h.HerdrOK {
-		fmt.Fprintln(w, "Herdr is on.")
+	if h.RuntimeOK {
+		if h.RuntimeKind == runtime.RuntimeKindHerdr {
+			fmt.Fprintln(w, "Herdr is on.")
+		} else {
+			fmt.Fprintln(w, h.RuntimeKind+" is on.")
+		}
 	} else {
-		fmt.Fprintln(w, "Herdr: "+h.HerdrNote)
+		fmt.Fprintln(w, h.RuntimeKind+": "+h.RuntimeNote)
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "  pairfob pair     pair a device")
 	fmt.Fprintln(w, "  pairfob list     what's paired")
 	fmt.Fprintln(w, "  pairfob doctor   full check")
-	fmt.Fprintf(w, "  %s    local terminal\n", herdrTerminalCommand())
+	if h.RuntimeKind == runtime.RuntimeKindCore {
+		fmt.Fprintf(w, "  %s run --bg claude    start a terminal\n", coreTerminalCommand(h.RuntimeCommand))
+	} else {
+		fmt.Fprintf(w, "  %s    local terminal\n", herdrTerminalCommand())
+	}
 	fmt.Fprintln(w, "  Browser: https://pairfob.com/pair (this computer, a phone or a tablet)")
 	return nil
+}
+
+func coreTerminalCommand(command string) string {
+	if command == "" {
+		command = "hc"
+	}
+	if strings.ContainsRune(command, '/') {
+		return shellQuote(command)
+	}
+	return command
 }
 
 func yesNo(ok bool, yes, no string) string {

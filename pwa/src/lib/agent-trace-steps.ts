@@ -9,14 +9,14 @@ import { groupAgentTurns, toolState, toolSummary, turnKey, type AgentTurn } from
  */
 export type StepCategory = "read" | "search" | "edit" | "command" | "web" | "subtask" | "plan" | "question" | "mcp" | "think" | "other";
 
-/** Tool names as Claude Code, Codex, Grok, Pi, Cursor, Hermes and opencode write them, lowercased. */
+/** Tool names as Claude Code, Codex, Grok, Pi, Prime Agent, Cursor, Hermes and opencode write them, lowercased. */
 const CATEGORY_NAMES: ReadonlyArray<readonly [StepCategory, readonly string[]]> = [
-  ["read", ["read", "read_file", "list_dir", "ls", "list", "view", "notebookread", "view_image"]],
+  ["read", ["read", "read_file", "list_dir", "ls", "list", "view", "notebookread", "view_image", "attach_image"]],
   ["search", ["grep", "glob", "search", "find", "rg", "file_search", "codebase_search", "toolsearch", "search_files", "session_search"]],
   ["edit", ["edit", "write", "multiedit", "apply_patch", "notebookedit", "str_replace", "create_file",
     "strreplace", "editnotebook", "delete", "write_file", "patch"]],
   ["command", ["bash", "exec_command", "exec", "shell", "run_terminal_command", "write_stdin", "bashoutput", "killshell", "monitor",
-    "terminal", "process", "execute_code"]],
+    "terminal", "process", "execute_code", "python_repl"]],
   ["web", ["webfetch", "websearch", "web_search", "browser", "fetch"]],
   ["subtask", ["task", "agent", "get_command_or_subagent_output", "spawn_agent", "sendmessage", "delegate_task"]],
   ["plan", ["todowrite", "update_plan", "todo", "todoread"]],

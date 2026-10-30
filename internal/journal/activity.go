@@ -59,7 +59,7 @@ func (r *Reader) ReadActivity(ref Ref) Activity {
 		return cached.activity
 	}
 	var activity Activity
-	if ref.Agent == "pi" {
+	if piAgent(ref.Agent) {
 		activity = r.piActivity(ref)
 	} else {
 		start := max(int64(0), info.Size()-activityReadBytes)

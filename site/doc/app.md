@@ -76,7 +76,7 @@ The four choices are at the top of `···`. A switch inside a session is rememb
 | **Auto** | Chooses when the session opens: Terminal on P2P with WebGL2 unless Save-Data is on, otherwise Control |
 | **Control** | View the terminal and operate the session with the system keyboard and keypad |
 | **Terminal** | A real terminal. Use for vim or a full-screen TUI. On a phone the default is an 80-column view you pan sideways; **Fit** resizes the computer's terminal to this screen's width. Vertical pan and the mouse wheel scroll remotely; a URL on screen opens in a new tab when you tap or click it |
-| **Chat** | Message the Agent (this is where you send a task; it is not a `···` menu item). Each turn's work sits in one step card: open while it runs, one result line after. Available for Claude Code, Codex, Grok, Pi, Cursor, Hermes and opencode sessions; the last three open once the agent has saved the session, which for Cursor is after its first message. Cursor records no step results, so its steps show as ended rather than succeeded or failed. Hermes needs `sqlite3` on the computer; opencode 1.2 and later is not read yet |
+| **Chat** | Message the Agent (this is where you send a task; it is not a `···` menu item). Each turn's work sits in one step card: open while it runs, one result line after. Available for Claude Code, Codex, Grok, Pi, Prime Agent, Cursor, Hermes and opencode sessions; Cursor, Hermes and opencode open once the agent has saved the session, which for Cursor is after its first message. Cursor records no step results, so its steps show as ended rather than succeeded or failed. Hermes needs `sqlite3` on the computer; opencode 1.2 and later is not read yet |
 
 In **Control**:
 

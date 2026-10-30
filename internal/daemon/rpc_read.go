@@ -43,16 +43,18 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 		"split_pane":          descriptor.Supports(runtime.FeatureSplitPane),
 		"prompt_agent":        descriptor.Supports(runtime.FeaturePromptAgent),
 		"agent_inspect":       descriptor.Supports(runtime.FeatureAgentInspect),
-		"history":             describeErr == nil && (e.Journal != nil || descriptor.Supports(runtime.FeaturePaneRead)),
-		"list_worktrees":      descriptor.Supports(runtime.FeatureWorktreeList),
-		"list_sessions":       e.sessionsListable(),
-		"create_worktree":     descriptor.Supports(runtime.FeatureWorktreeCreate),
-		"open_worktree":       descriptor.Supports(runtime.FeatureWorktreeOpen),
-		"resize_pane":         descriptor.Supports(runtime.FeatureLayoutResize),
-		"swap_pane":           descriptor.Supports(runtime.FeatureLayoutSwap),
-		"zoom_pane":           descriptor.Supports(runtime.FeatureLayoutZoom),
-		"rename_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
-		"delete_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		// history: agent chat needs a pane bound to a readable transcript, not
+		// merely a readable pane, so a terminal-core pane cannot advertise it.
+		"history":         describeErr == nil && descriptor.Supports(runtime.FeatureTranscript),
+		"list_worktrees":  descriptor.Supports(runtime.FeatureWorktreeList),
+		"list_sessions":   e.sessionsListable(),
+		"create_worktree": descriptor.Supports(runtime.FeatureWorktreeCreate),
+		"open_worktree":   descriptor.Supports(runtime.FeatureWorktreeOpen),
+		"resize_pane":     descriptor.Supports(runtime.FeatureLayoutResize),
+		"swap_pane":       descriptor.Supports(runtime.FeatureLayoutSwap),
+		"zoom_pane":       descriptor.Supports(runtime.FeatureLayoutZoom),
+		"rename_file":     describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		"delete_file":     describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
 		// download_file: P2P-only, chunked workspace file download. The client
 		// also requires the live transport to be P2P; this key only says the
 		// daemon has the RPCs.

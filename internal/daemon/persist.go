@@ -76,6 +76,7 @@ type DeviceSummary struct {
 	LastSeen          int64  `json:"last_seen,omitempty"`
 	RevokedAt         *int64 `json:"revoked_at,omitempty"`
 	SubscriptionCount int    `json:"subscription_count"`
+	Connected         bool   `json:"connected"`
 }
 
 func (e *Engine) ListDeviceSummaries() []DeviceSummary {
@@ -86,6 +87,7 @@ func (e *Engine) ListDeviceSummaries() []DeviceSummary {
 		rows = append(rows, DeviceSummary{
 			ID: d.ID, Label: d.Label, Created: d.Created, LastSeen: d.LastSeen,
 			RevokedAt: d.RevokedAt, SubscriptionCount: len(d.PushSubscriptions),
+			Connected: e.deviceConnectedLocked(d.ID),
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })

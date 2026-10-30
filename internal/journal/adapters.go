@@ -54,8 +54,8 @@ func (r *Reader) transcriptBase(agent string) string {
 		return filepath.Join(r.CodexRoot, "sessions")
 	case "claude":
 		return filepath.Join(r.ClaudeRoot, "projects")
-	case "pi":
-		return filepath.Join(r.PiRoot, "sessions")
+	case "pi", "prime-agent":
+		return r.piSessionsDir(agent)
 	case "cursor":
 		return filepath.Join(r.CursorRoot, "projects")
 	case "copilot", "kimi":

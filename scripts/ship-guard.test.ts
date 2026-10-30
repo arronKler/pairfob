@@ -11,6 +11,18 @@ const releaseFiles = [
   "pairfob-linux-amd64",
   "pairfob-linux-arm64",
 ];
+const chatFiles = [
+  "pairfob-chat-darwin-amd64",
+  "pairfob-chat-darwin-arm64",
+  "pairfob-chat-linux-amd64",
+  "pairfob-chat-linux-arm64",
+];
+const desktopFiles = [
+  "pairfob-desktop-darwin-amd64",
+  "pairfob-desktop-darwin-arm64",
+  "pairfob-desktop-linux-amd64",
+  "pairfob-desktop-linux-arm64",
+];
 
 function run(body: string, env: Record<string, string> = {}): { exit: number; stderr: string } {
   const proc = Bun.spawnSync(["bash", "-c", `set -euo pipefail; . "$GUARD"; ${body}`], {
@@ -21,14 +33,29 @@ function run(body: string, env: Record<string, string> = {}): { exit: number; st
   return { exit: proc.exitCode ?? 1, stderr: proc.stderr.toString() };
 }
 
-function releaseFixture(): string {
-  const dir = mkdtempSync(join(tmpdir(), "pairfob-release-"));
-  for (const name of releaseFiles) {
+function desktopFixture(names: string[] = desktopFiles): string {
+  const dir = mkdtempSync(join(tmpdir(), "pairfob-desktop-"));
+  for (const name of names) {
     writeFileSync(join(dir, name), `fixture ${name}\n`);
     chmodSync(join(dir, name), 0o755);
   }
   writeFileSync(join(dir, "VERSION"), "1.0.0\n");
-  const manifest = [...releaseFiles, "VERSION"]
+  const manifest = [...names, "VERSION"]
+    .map((name) => `${createHash("sha256").update(readFileSync(join(dir, name))).digest("hex")}  ${name}`)
+    .join("\n");
+  writeFileSync(join(dir, "SHA256SUMS"), `${manifest}\n`);
+  return dir;
+}
+
+function releaseFixture(extra: string[] = []): string {
+  const dir = mkdtempSync(join(tmpdir(), "pairfob-release-"));
+  const binaries = [...releaseFiles, ...extra];
+  for (const name of binaries) {
+    writeFileSync(join(dir, name), `fixture ${name}\n`);
+    chmodSync(join(dir, name), 0o755);
+  }
+  writeFileSync(join(dir, "VERSION"), "1.0.0\n");
+  const manifest = [...binaries, "VERSION"]
     .map((name) => `${createHash("sha256").update(readFileSync(join(dir, name))).digest("hex")}  ${name}`)
     .join("\n");
   writeFileSync(join(dir, "SHA256SUMS"), `${manifest}\n`);
@@ -92,6 +119,27 @@ describe("ship-guard release directory", () => {
     expect(run(`pairfob_require_release_dir "$DIR"`, { DIR: dir }).exit).toBe(0);
   });
 
+  test("accepts a complete pairfob-chat artifact set", () => {
+    const dir = releaseFixture(chatFiles);
+    expect(run(`pairfob_require_release_dir "$DIR"`, { DIR: dir }).exit).toBe(0);
+  });
+
+  test("rejects an incomplete pairfob-chat artifact set", () => {
+    const dir = releaseFixture(chatFiles.slice(0, 3));
+    const got = run(`pairfob_require_release_dir "$DIR"`, { DIR: dir });
+    expect(got.exit).not.toBe(0);
+    expect(got.stderr).toContain("incomplete pairfob-chat");
+  });
+
+  test("rejects chat binaries missing from SHA256SUMS", () => {
+    const dir = releaseFixture();
+    for (const name of chatFiles) {
+      writeFileSync(join(dir, name), `fixture ${name}\n`);
+      chmodSync(join(dir, name), 0o755);
+    }
+    expect(run(`pairfob_require_release_dir "$DIR"`, { DIR: dir }).exit).not.toBe(0);
+  });
+
   test("rejects legacy pairfobd artifacts and any other extra file", () => {
     for (const extra of ["pairfobd-darwin-arm64", "notes.txt", "android"]) {
       const dir = releaseFixture();
@@ -131,6 +179,49 @@ describe("ship-guard release directory", () => {
   });
 });
 
+describe("ship-guard desktop directory", () => {
+  test("accepts one or more complete platform builds", () => {
+    expect(run(`pairfob_require_desktop_dir "$DIR"`, { DIR: desktopFixture() }).exit).toBe(0);
+    expect(run(`pairfob_require_desktop_dir "$DIR"`, {
+      DIR: desktopFixture(["pairfob-desktop-darwin-arm64"]),
+    }).exit).toBe(0);
+  });
+
+  test("rejects an empty channel and any extra file", () => {
+    expect(run(`pairfob_require_desktop_dir "$DIR"`, { DIR: desktopFixture([]) }).exit).not.toBe(0);
+    for (const extra of ["release.json", "notes.txt", ".DS_Store", "pairfob-desktop-windows-amd64"]) {
+      const dir = desktopFixture(["pairfob-desktop-darwin-arm64"]);
+      writeFileSync(join(dir, extra), "stale\n");
+      expect(run(`pairfob_require_desktop_dir "$DIR"`, { DIR: dir }).exit, extra).not.toBe(0);
+    }
+  });
+
+  test("rejects missing, symlinked, or non-executable binaries", () => {
+    const missing = desktopFixture();
+    rmSync(join(missing, "pairfob-desktop-linux-arm64"));
+    expect(run(`pairfob_require_desktop_dir "$DIR"`, { DIR: missing }).exit).not.toBe(0);
+
+    const linked = desktopFixture();
+    rmSync(join(linked, "pairfob-desktop-linux-arm64"));
+    symlinkSync("pairfob-desktop-linux-amd64", join(linked, "pairfob-desktop-linux-arm64"));
+    expect(run(`pairfob_require_desktop_dir "$DIR"`, { DIR: linked }).exit).not.toBe(0);
+
+    const plain = desktopFixture();
+    chmodSync(join(plain, "pairfob-desktop-darwin-arm64"), 0o644);
+    expect(run(`pairfob_require_desktop_dir "$DIR"`, { DIR: plain }).exit).not.toBe(0);
+  });
+
+  test("rejects corrupt content and malformed manifests", () => {
+    const corrupt = desktopFixture();
+    writeFileSync(join(corrupt, "pairfob-desktop-darwin-arm64"), "changed after checksums\n");
+    expect(run(`pairfob_require_desktop_dir "$DIR"`, { DIR: corrupt }).exit).not.toBe(0);
+
+    const malformed = desktopFixture();
+    writeFileSync(join(malformed, "SHA256SUMS"), `${"0".repeat(64)}  pairfob-desktop-windows-amd64\n`);
+    expect(run(`pairfob_require_desktop_dir "$DIR"`, { DIR: malformed }).exit).not.toBe(0);
+  });
+});
+
 describe("release and pack call the guard", () => {
   test("release.sh refuses a dirty tree before it compiles", () => {
     const release = readFileSync(new URL("./release.sh", import.meta.url), "utf8");
@@ -146,5 +237,18 @@ describe("release and pack call the guard", () => {
     const pack = readFileSync(new URL("./pack-origin-assets.sh", import.meta.url), "utf8");
     expect(pack).toContain("pairfob_require_release_dir");
     expect(pack).not.toMatch(/PAIRFOB_PACK_DL:-\}" == "1" && -d/);
+  });
+
+  test("desktop release and publisher require a valid desktop directory", () => {
+    const release = readFileSync(new URL("./release-desktop.sh", import.meta.url), "utf8");
+    expect(release).toContain("pairfob_require_clean_tree");
+    expect(release).toContain("pairfob_require_desktop_dir");
+    expect(release).toContain("pairfob_require_shipable_version");
+
+    const publish = readFileSync(new URL("./publish-desktop.sh", import.meta.url), "utf8");
+    expect(publish).toContain("pairfob_require_desktop_dir");
+    const unset = publish.indexOf("unset PAIRFOB_ALLOW_DIRTY");
+    expect(unset).toBeGreaterThan(-1);
+    expect(unset).toBeLessThan(publish.indexOf("pairfob_require_clean_tree"));
   });
 });

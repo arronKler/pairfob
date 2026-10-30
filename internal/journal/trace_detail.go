@@ -57,7 +57,7 @@ func (r *Reader) ReadTraceDetail(ref Ref, detailRef string) (TraceDetail, error)
 	if !r.Supports(ref) {
 		return TraceDetail{}, ErrUnavailable
 	}
-	if ref.Agent == "pi" {
+	if piAgent(ref.Agent) {
 		return r.readPiTraceDetail(ref, detailRef)
 	}
 	locator, err := decodeTraceDetailRef(ref, detailRef)
