@@ -288,8 +288,8 @@ button.work-head:active { background: var(--surface-2); }
   gap: 10px;
   padding: 12px;
   border-radius: 14px;
-  background: rgba(255, 178, 36, 0.07);
-  border: 1px solid rgba(255, 178, 36, 0.28);
+  background: var(--warn-tint);
+  border: 1px solid var(--warn-edge);
 }
 
 /*
@@ -304,7 +304,7 @@ button.work-head:active { background: var(--surface-2); }
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(100deg, transparent 22%, rgba(255, 178, 36, 0.2) 50%, transparent 78%) no-repeat;
+  background: linear-gradient(100deg, transparent 22%, var(--warn-wash) 50%, transparent 78%) no-repeat;
   background-size: 300% 100%;
   opacity: 0;
   animation: needs-sweep calc(var(--dur-2) + var(--dur-3)) var(--ease) var(--dur-2);
@@ -503,7 +503,7 @@ button.work-head:active { background: var(--surface-2); }
 
 .pending-card.is-attention {
   border-style: solid;
-  border-color: rgba(255, 178, 36, 0.35);
+  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
   color: var(--warn);
 }
 

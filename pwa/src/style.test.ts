@@ -11,10 +11,18 @@ const viewportSrc = await Bun.file(new URL("./app/viewport.ts", import.meta.url)
 const preferencesSrc = await Bun.file(new URL("./features/settings/preferences-store.ts", import.meta.url)).text();
 const padFit = await import("./features/session/keypad/pad-fit.ts");
 
-function color(token: string): string {
-  const match = css.match(new RegExp(`--${token}:\\s*(#[0-9a-f]{6})`, "i"));
-  if (!match) throw new Error(`missing color token ${token}`);
-  return match[1];
+/**
+ * A token's value: the dark `:root` by default, or the restatement a light block
+ * carries. Only hex values resolve; an alias (`--link: var(--accent)` on dark)
+ * reads through the token it names.
+ */
+function color(token: string, theme: "dark" | "light" = "dark"): string {
+  const scope = theme === "light" ? rule(':root[data-theme="light"]') : rule(":root");
+  const match = scope.match(new RegExp(`--${token}:\\s*(#[0-9a-f]{6})`, "i"));
+  if (match) return match[1];
+  const alias = scope.match(new RegExp(`--${token}:\\s*var\\(--([\\w-]+)\\)`));
+  if (alias) return color(alias[1], theme);
+  throw new Error(`missing ${theme} color token ${token}`);
 }
 
 function luminance(hex: string): number {
@@ -60,6 +68,28 @@ describe("UI accessibility guardrails", () => {
     expect(contrast(color("accent"), color("bg"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(color("accent-ink"), color("accent"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast("#ffffff", color("danger"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("each theme's own ink clears AA on its own ground", () => {
+    // Body-size links, on the page and on a card, in both restatements.
+    expect(contrast(color("link"), color("bg"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(color("link", "light"), color("bg", "light"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(color("link", "light"), color("surface", "light"))).toBeGreaterThanOrEqual(4.5);
+    // Amber text sits on paper like the other status inks.
+    expect(contrast(color("warn", "light"), color("surface", "light"))).toBeGreaterThanOrEqual(4.5);
+    // A filled amber badge's count reads on the amber itself; the ink turns over
+    // between themes because the fill does.
+    expect(contrast(color("warn-ink"), color("warn"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(color("warn-ink", "light"), color("warn", "light"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("a count on a filled amber badge takes the role's ink, never a literal", () => {
+    // Amber is bright on the dark theme and dark on paper: the ink flips with
+    // it, so every one of these reads the role instead of naming a colour.
+    for (const selector of [".chrome-back-badge", ".tab-bar-badge", ".attn-count", ".attach-chip-badge.is-warn"]) {
+      expect(rule(selector), selector).toMatch(/background:\s*var\(--warn\)/);
+      expect(rule(selector), selector).toContain("color: var(--warn-ink)");
+    }
   });
 
   test("loops and traces keep one beat each, read from a token", () => {
@@ -129,7 +159,7 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("interactive touch controls keep a 44px target", () => {
-    for (const selector of [".connect-manual", ".pair-paste", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".computer-add", ".set-nav", ".set-action", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-state-retry", ".work-head", ".work-step", ".work-earlier", ".agent-user-more", ".step-copy", ".agent-older", ".agent-reply-copy", ".slash-cmd"]) {
+    for (const selector of [".connect-manual", ".pair-paste", ".btn-small", ".key", ".desk .key", ".text-link", ".topbar-create", ".back", ".send-btn", ".menu-item", ".icon-btn", ".card-main", ".operation-field input", ".operation-field select", ".lang-select", ".seg-item", ".dock-form textarea", ".chrome-title", ".row-act", ".switch-item", ".computer-forget", ".computer-add", ".set-nav", ".set-action", ".full-terminal-action", ".full-terminal-scroll-btn", ".full-terminal-state-retry", ".work-head", ".work-step", ".work-earlier", ".agent-user-more", ".step-copy", ".agent-older", ".agent-quiet-pill", ".slash-cmd"]) {
       const match = rule(selector).match(/min-height:\s*(\d+)px/);
       expect(match, selector).not.toBeNull();
       expect(Number(match?.[1]), selector).toBeGreaterThanOrEqual(44);

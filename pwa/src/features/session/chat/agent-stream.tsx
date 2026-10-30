@@ -6,7 +6,7 @@ import { findingBreaks, pendingAsk, splitTurn, stepObject, stepRows, turnOutcome
 import type { AgentTraceItem } from "../../../lib/operations";
 import { t } from "../../../lib/i18n";
 import type { AgentEmptySpec, DetailsState } from "./agent-chat-stream";
-import { Button, Spinner } from "../../../shared/ui/primitives";
+import { Button, Chevron, Spinner } from "../../../shared/ui/primitives";
 import { CompactionDivider, PendingCard, ReplyActions, TurnHead, type TraceAnchorData } from "./turn-parts";
 import { NeedsYouCard } from "./needs-you";
 import { turnModels } from "./turn-models";
@@ -134,9 +134,22 @@ function AssistantReply({ items, final, anchor, part, onCopy }: {
 }
 
 /**
+ * The finding's first words name its control: several identical "Open" buttons
+ * tell a screen reader no more than an unnamed one.
+ */
+function findingTitle(text: string, max = 60): string {
+  const first = text.split("\n")
+    .map((line) => line.replace(/^[#>\s*-]+|[*_`]/g, "").trim())
+    .find(Boolean) ?? "";
+  return first.length > max ? `${first.slice(0, max - 1)}…` : first;
+}
+
+/**
  * What the agent found, spoken between its steps: its own message in the
  * transcript, beside the card rather than inside it, so a finding reads in the
- * flow of the conversation and a run of steps never buries it.
+ * flow of the conversation and a run of steps never buries it. The prose is
+ * content and the press is a control of its own: a block of headings, lists and
+ * links inside a button would collapse into one long name.
  */
 function FindingBubble({ item, anchor, part, onOpen }: {
   item: AgentTraceItem; anchor: TraceAnchor; part: string; onOpen: (item: AgentTraceItem) => void;
@@ -144,11 +157,21 @@ function FindingBubble({ item, anchor, part, onOpen }: {
   // Same object for the same words: a turn that re-renders for a later step must
   // not throw away the finding's DOM, and with it the reader's selection.
   const markup = useMemo(() => ({ __html: renderMarkdown(item.text || "", false) }), [item.text]);
+  // A record can carry an empty text (an agent that only called tools, or a
+  // placeholder the daemon later replaced). Its action row would be a bare pill
+  // under nothing.
+  const text = item.text ?? "";
+  if (!text.trim()) return null;
   return <article {...anchorData(anchor, part)} className="agent-finding">
-    <button type="button" className="agent-finding-body" onClick={() => onOpen(item)}>
-      {/* The existing Markdown parser returns sanitized allowlisted HTML. */}
-      <div className="agent-md" dangerouslySetInnerHTML={markup} />
-    </button>
+    {/* The existing Markdown parser returns sanitized allowlisted HTML. */}
+    <div className="agent-md" dangerouslySetInnerHTML={markup} />
+    <div className="agent-finding-actions">
+      <Button className="agent-quiet-pill agent-finding-open" onClick={() => onOpen(item)}
+        aria-label={t("chat.openFindingAria", { title: findingTitle(text) || t("chat.openFinding") })}>
+        {t("chat.openFinding")}
+        <Chevron />
+      </Button>
+    </div>
   </article>;
 }
 

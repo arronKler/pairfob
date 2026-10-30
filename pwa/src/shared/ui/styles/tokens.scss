@@ -17,6 +17,9 @@
   --accent: #6ea8fe;
   --accent-deep: #3d7bfd;
   --accent-ink: #081018;
+  /* Body-size text that has to be read, not a fill that has to be seen. On
+     paper the accent is tuned for a filled control and lands under 4.5:1. */
+  --link: var(--accent);
   --ok: #46d68c;
   --warn: #ffb224;
   --error: #ff8080;
@@ -158,6 +161,15 @@
   --blocked-ground-press: #24211a;
   /* The attention strip's blocked ticket sits a shade under the rail's row. */
   --blocked-ticket: #1a1812;
+  /* The warm wash a blocked card sits on, the edge that bounds it, and the
+     sweep it takes when it rises. Named apart from `--warn` so paper can keep
+     a light wash under dark amber ink instead of darkening with the text. */
+  --warn-tint: rgba(255, 178, 36, 0.07);
+  --warn-edge: rgba(255, 178, 36, 0.28);
+  --warn-wash: rgba(255, 178, 36, 0.2);
+  /* Ink on a filled amber badge. Near-black on the bright dark-theme amber;
+     paper's amber is dark enough that the badge has to turn to white. */
+  --warn-ink: #1a1200;
   /* A chip or avatar plate that sits on a card, and the head bar that floats
      over a scrolled view. */
   --chip-plate: #1d232d;
@@ -202,8 +214,11 @@
   --accent: #2f6fe4;
   --accent-deep: #1f57c4;
   --accent-ink: #ffffff;
+  --link: #1f57c4;
   --ok: #1a8f56;
-  --warn: #a86a00;
+  /* Dark enough that 13px amber text clears 4.5:1 on the warm blocked grounds
+     below, not just the 3:1 an edge or a dot needs. */
+  --warn: #8a5a00;
   --error: #c0392b;
   --danger: #b32b20;
   --danger-bright: #d63b31;
@@ -266,6 +281,12 @@
   --blocked-ground-2: #fbf0d9;
   --blocked-ground-press: #f7eacb;
   --blocked-ticket: #fdf6e6;
+  /* The same warm wash on paper: bright amber under dark amber ink, because a
+     wash drawn from `--warn` would darken the ground the ink is read against. */
+  --warn-tint: rgba(255, 178, 36, 0.1);
+  --warn-edge: rgba(138, 90, 0, 0.3);
+  --warn-wash: rgba(255, 178, 36, 0.24);
+  --warn-ink: #ffffff;
   --chip-plate: #e6eaf0;
   --chrome-scrim: rgba(255, 255, 255, 0.88);
   --chrome-scrim-2: rgba(255, 255, 255, 0.92);

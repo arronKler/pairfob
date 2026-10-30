@@ -190,7 +190,9 @@
   place-items: center;
   border-radius: 8px;
   background: var(--warn);
-  color: #1b1405;
+  /* The role's own ink: amber is bright on the dark theme and dark on paper,
+     and the badge's count has to stay readable on both. */
+  color: var(--warn-ink);
   font-size: 10.5px;
   font-weight: 700;
   line-height: 1;

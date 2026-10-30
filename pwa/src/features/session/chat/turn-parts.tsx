@@ -101,7 +101,7 @@ export function ReplyActions({ text, onCopy, arriving = false }: { text: string;
     void Promise.resolve(onCopy(text)).then((done) => { if (done === true) confirm("done"); });
   };
   return <div className={`agent-reply-actions${arriving ? " is-arriving" : ""}`}>
-    <Button className="agent-reply-copy" aria-label={t(copied ? "chat.copiedReply" : "chat.copyReplyAria")} onClick={copy}>
+    <Button className="agent-quiet-pill agent-reply-copy" aria-label={t(copied ? "chat.copiedReply" : "chat.copyReplyAria")} onClick={copy}>
       <CopyAck state={copied ? "copied" : "idle"}
         idle={<><Copy size={14} aria-hidden="true" />{t("reply.copy")}</>}
         copied={<><Check size={14} aria-hidden="true" />{t("reply.copied")}</>} />

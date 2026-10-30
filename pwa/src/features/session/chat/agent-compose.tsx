@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { operationBusy } from "../../operations/capabilities-store";
 import {
   composeDraft,
@@ -111,6 +111,10 @@ export function submitAgentMessage(): Promise<void> {
 /** The controller owns draft value/selection; React owns labels and availability. */
 export function AgentCompose() {
   const input = useRef<HTMLTextAreaElement>(null);
+  // The dock can be mounted twice for a moment while a screen swaps; ids drawn
+  // from the instance keep each field's description pointing at its own hint.
+  const composeId = useId();
+  const statusId = `${composeId}-status`;
   const [limited, setLimited] = useState(false);
   const allowed = canSend();
   const busy = operationBusy();
@@ -204,7 +208,8 @@ export function AgentCompose() {
       <AttachButton />
       <ComposeFrame field={input} draft={draft} live={false} focused={compose.composeFocused} foldable={phone}
         onResize={() => { if (input.current) sizeField(input.current); }}>
-        <textarea ref={input} rows={1} enterKeyHint={phone ? phoneEnterKeyHint() : "send"} maxLength={OPERATION_INPUT_LIMITS.prompt}
+        <textarea ref={input} id={composeId} aria-label={t("chat.composeAria")} aria-describedby={limited ? statusId : undefined}
+          rows={1} enterKeyHint={phone ? phoneEnterKeyHint() : "send"} maxLength={OPERATION_INPUT_LIMITS.prompt}
           placeholder={placeholder}
           disabled={!allowed || busy} />
       </ComposeFrame>
@@ -224,6 +229,6 @@ export function AgentCompose() {
     </form>
     {/* The same quiet line the guided and terminal docks carry under their field; a finger has no Shift+Enter to be told about. */}
     {pointer && <div className="dock-mode"><p className="dock-mode-hint"><span>{t("deskDock.hintChat")}</span></p></div>}
-    <p className="agent-compose-hint" aria-live="polite" hidden={!limited}>{limited ? t("chat.limit") : ""}</p>
+    <p className="agent-compose-hint" id={statusId} aria-live="polite" hidden={!limited}>{limited ? t("chat.limit") : ""}</p>
   </div>;
 }

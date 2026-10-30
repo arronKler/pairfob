@@ -113,7 +113,10 @@ async function capture(cdp: Cdp, lang: string, shot: Shot): Promise<void> {
     const url = `http://127.0.0.1:${VITE_PORT}/qa/index.html?lang=${lang}&scene=${shot.scene}`;
     await cdp.send("Page.navigate", { url }, sessionId);
     let ready = false;
-    for (let i = 0; i < 120 && !ready; i++) {
+    // A cold dev server transforms the module graph on demand; headless Chrome
+    // with a fresh profile fetches every module once. Two minutes, not thirty
+    // seconds: the first scene alone took over half a minute on a loaded machine.
+    for (let i = 0; i < 480 && !ready; i++) {
       const res = await cdp.send("Runtime.evaluate", {
         expression: 'document.documentElement.dataset.qaReady === "true"',
         returnByValue: true,
@@ -184,6 +187,10 @@ const chrome = Bun.spawn([
   "--force-color-profile=srgb",
   `--remote-debugging-port=${CDP_PORT}`,
   `--user-data-dir=${profile}`,
+  // Every page this loads is on loopback. Under a system proxy (a VPN client,
+  // a corporate profile) the machine's own HTTP proxy answers for 127.0.0.1
+  // with a 502 and the fixture never boots.
+  "--no-proxy-server",
   "about:blank",
 ], { stdout: "ignore", stderr: "ignore" });
 

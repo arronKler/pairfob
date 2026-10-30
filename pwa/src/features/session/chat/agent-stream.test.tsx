@@ -146,7 +146,7 @@ test("a finding opens on its own page, not as the first item of the tool pager",
   let opened: { item: AgentTraceItem; steps?: AgentTraceItem[] } | null = null;
   act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified
     onOpenStep={(item, steps) => { opened = { item, steps }; }} />));
-  const bubble = appRoot().querySelector<HTMLButtonElement>(".agent-finding-body")!;
+  const bubble = appRoot().querySelector<HTMLButtonElement>(".agent-finding-open")!;
   act(() => bubble.click());
   // The finding is not one of the card's rows, so the press carries the card's
   // tool list; `openStepSheet` drops it and pages the finding alone.
@@ -175,6 +175,37 @@ test("a turn's finding stands on its own between the steps and the reply", () =>
   expect(Boolean(card.compareDocumentPosition(bubble) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   const reply = appRoot().querySelector(".agent-assistant-final")!;
   expect(Boolean(bubble.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+});
+
+test("a finding's open control is named by the words it opens", () => {
+  const turn: AgentTraceItem[] = [
+    { type: "user", text: "inspect" },
+    { type: "tool", name: "Read", label: "a.go", toolState: "done", detailRef: "r1" },
+    { type: "assistant", text: "The snapshot keeps no URL." },
+    { type: "tool", name: "Read", label: "b.go", toolState: "done", detailRef: "r2" },
+    { type: "assistant", text: "The photo is dropped at submit." },
+    { type: "tool", name: "Edit", label: "b.go", toolState: "done", detailRef: "e1" },
+  ];
+  act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified />));
+  const labels = [...appRoot().querySelectorAll(".agent-finding-open")]
+    .map((button) => button.getAttribute("aria-label") ?? "");
+  // Several findings share one page: each control is named by its own words.
+  expect(labels).toHaveLength(2);
+  expect(labels[0]).toContain("The snapshot keeps no URL.");
+  expect(labels[1]).toContain("The photo is dropped at submit.");
+});
+
+test("a finding with no words draws neither prose nor a control", () => {
+  const turn: AgentTraceItem[] = [
+    { type: "user", text: "inspect" },
+    { type: "tool", name: "Read", label: "a.go", toolState: "done", detailRef: "r1" },
+    { type: "assistant", text: "  \n " },
+    { type: "tool", name: "Edit", label: "a.go", toolState: "done", detailRef: "e1" },
+    { type: "assistant", text: "Fixed." },
+  ];
+  act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified />));
+  expect(appRoot().querySelector(".agent-finding")).toBeNull();
+  expect(appRoot().querySelector(".agent-finding-open")).toBeNull();
 });
 
 test("a manual collapse of a live card survives new output and keeps its card node", () => {

@@ -185,6 +185,7 @@ export const scenes: FixtureScene[] = [
   { name: "chat-hermes", description: "A recorded Hermes session: thinking, shell results and a failed command" },
   { name: "chat-opencode", description: "A recorded opencode session: thinking, tools and a failed command" },
   { name: "chat-steps", description: "Codex steps: a failure the agent worked past, command-output reads, and a turn stopped on a failed step" },
+  { name: "chat-finding", description: "A finding the agent spoke between its steps: heading, list and link, then its own open control" },
   { name: "chat-pi-long", description: "Long Pi transcript with tool success, error, and empty output" },
   { name: "chat-pi-unread", description: "Long Pi transcript scrolled away from the tail with unread updates" },
   { name: "chat-pi-recovery", description: "Long Pi transcript ready for disconnect, reconnect, and foreground actions" },
@@ -647,9 +648,9 @@ export async function applyScene(name: string, session: FixtureSession): Promise
       session.setTrace(backing);
       applyTrace({ agentTraceItems: view, agentTraceTail: view.length, agentTraceLoadState: "ready", agentTraceSig: JSON.stringify(view) });
     }
-    if (name === "chat-markers" || name === "chat-steps") {
+    if (name === "chat-markers" || name === "chat-steps" || name === "chat-finding") {
       replaceAgentsFromSnapshot(idleFocusedSnapshot());
-      const trace = name === "chat-steps" ? data.stepsTrace() : data.markerTrace();
+      const trace = name === "chat-steps" ? data.stepsTrace() : name === "chat-finding" ? data.findingTrace() : data.markerTrace();
       session.setTrace(trace);
       applyTrace({ agentTraceItems: trace, agentTraceTail: trace.length, agentTraceLoadState: "ready", agentTraceSig: JSON.stringify(trace) });
     }

@@ -160,7 +160,7 @@ test("ordered mixed blocks keep source order inside the card and the reply outsi
   expect(outer()).toEqual(["agent-trace-limit", "agent-user", "work-card is-neutral", "agent-finding", "agent-assistant agent-assistant-final"]);
   // The card keeps the steps; the agent's own words are drawn outside it.
   expect(steps()).toEqual(["work-step is-think", "work-step is-read is-ended"]);
-  expect(current().querySelector(".agent-finding")?.textContent).toBe("Intermediate\n");
+  expect(current().querySelector(".agent-finding .agent-md")?.textContent).toBe("Intermediate\n");
   const done = current().querySelector<HTMLElement>(".work-card")!;
   expect(done.dataset.key).toBe("w:u:12:Inspect this:s:thinking:::Read:");
   expect(expanded(done)).toBeFalse();

@@ -211,8 +211,8 @@ describe("a line that says what a dock field is for", () => {
     const line = rule(compose, "@mixin one-line");
     expect(line).toContain("white-space: nowrap");
     expect(line).toContain("overflow: hidden");
-    // Every compose and live field, at every width.
-    expect(compose).toContain("\n.compose-field > textarea::placeholder { @include one-line; }");
+    // Every compose and live field, at every width, in the quiet ink a theme can restate.
+    expect(compose).toContain(".compose-field > textarea::placeholder { @include one-line; color: var(--muted); opacity: 1; }");
   });
 
   test("beside the list the cut fades; the phone's placeholder fits and is drawn as it always was", () => {
@@ -248,10 +248,13 @@ describe("a line that says what a dock field is for", () => {
     // And it is the same line: the field's box, its type and its grey, by name on both.
     expect(button).toContain("padding: 10px 14px");
     expect(button).toContain("font: 400 15px/1.3 var(--font)");
-    expect(button).toContain("color: $field-hint");
-    expect(compose).toContain("#app.desk .compose-field > textarea::placeholder { color: $field-hint; opacity: 1; }");
-    // The echo a live field waits for keeps its accent over that.
-    expect(compose).toContain("#app.desk .dock-form.live-pending .compose-field > textarea::placeholder { color: var(--accent); opacity: 0.82; }");
+    expect(button).toContain("color: var(--muted)");
+    // The stand-in line takes the same quiet ink on every tier: left to the
+    // browser's own grey it was a colour no theme could restate.
+    expect(compose).toContain(".compose-field > textarea::placeholder { @include one-line; color: var(--muted); opacity: 1; }");
+    // The echo a live field waits for keeps its accent over that: one rule for
+    // every dock, in dock.scss.
+    expect(rule(dock, ".dock-form.live-pending textarea::placeholder")).toContain("color: var(--accent)");
   });
 
   test("the line count stands clear of a mouse's scrollbar, which a capped draft brings", () => {

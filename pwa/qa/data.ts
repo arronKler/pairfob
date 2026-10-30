@@ -204,6 +204,21 @@ export function stepsTrace(): AgentTraceItem[] {
   ];
 }
 
+/**
+ * A finding the agent spoke between its steps: a block of prose with a heading,
+ * a list and a link, so the transcript shows the shape that a press wrapping the
+ * whole block would flatten.
+ */
+export function findingTrace(): AgentTraceItem[] {
+  return [
+    { type: "user", text: "Audit the chat composer for missing labels." },
+    { type: "tool", name: "Read", input: '{"path":"pwa/src/features/session/chat/agent-compose.tsx"}', output: "Read 232 lines.", toolState: "done", detailRef: "qa-finding-read", label: "pwa/src/features/session/chat/agent-compose.tsx" },
+    { type: "assistant", text: "## Two gaps in the composer\n\nThe field carries a placeholder and no name, so a reader is told **an unnamed text box**.\n\n- `aria-label` is missing\n- the hint line is not described by the field\n\nSee [the form rules](https://pairfob.com/doc/app) for the contract." },
+    { type: "tool", name: "Grep", input: '{"pattern":"aria-label"}', output: "3 matches", toolState: "done", detailRef: "qa-finding-grep", label: "aria-label" },
+    { type: "assistant", text: "Fixed both." },
+  ];
+}
+
 export function trace(): AgentTraceItem[] {
   return [
     // The finished turn carries record times (trace_times); the live one below does not.

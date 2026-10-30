@@ -14,6 +14,10 @@
   --term-plate: #090c10;
   /* A field cut into the terminal is dark like the plate it sits on. */
   --sink: #141a22;
+  /* Quiet chrome inside the plate — the compose field's stand-in line, the live
+     field's label — reads in the dark theme's quiet ink: paper's muted grey is
+     ink for paper and lands under 4.5:1 against this ground. */
+  --muted: #9aa5b4;
   /* The header's ground, which the shared chrome reads, so its title and its
      action icons stay on the dark side with the ink that is already here. */
   --chrome-scrim: rgba(11, 14, 19, 0.88);
