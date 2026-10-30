@@ -83,7 +83,7 @@ const chatDomain = createDomain<ChatRecord>("chat", {
   agentTraceUnread: false,
 });
 export const chatStore = chatDomain.store;
-const { read, write, stage } = chatDomain.controller;
+const { read, write, writeIf, stage } = chatDomain.controller;
 
 /**
  * Published transcript: the cached frozen snapshot, not the live record.
@@ -162,17 +162,22 @@ export function setTraceNote(note: string): void {
 }
 
 /** The reader is pinned to the newest turn, so nothing is unread. */
-export function followTrace(): void {
-  write((record) => {
+export function followTrace(): boolean {
+  // A scroll event calls this on every frame while the reader is at the tail;
+  // an already-following reading with no unread chip must publish nothing.
+  return writeIf((record) => {
+    if (record.agentTraceFollow && !record.agentTraceUnread) return false;
     record.agentTraceFollow = true;
     record.agentTraceUnread = false;
+    return true;
   });
 }
 
-export function setTraceFollow(follow: boolean): void {
-  if (read().agentTraceFollow === follow) return;
-  write((record) => {
+export function setTraceFollow(follow: boolean): boolean {
+  return writeIf((record) => {
+    if (record.agentTraceFollow === follow) return false;
     record.agentTraceFollow = follow;
+    return true;
   });
 }
 

@@ -23,8 +23,9 @@ export function prepareFrame(): FrameSnapshot {
   const showsHerd = layout.mode === "home" || desk;
   const showsGuided = layout.mode === "pane" || layout.deskChild === "session";
   // Home and its desktop rail subscribe to their feature-owned view and attention.
-  // Preparation still consumes attention once, before either route renders.
-  if (showsHerd) requireConnectedPresentation().presentHerdView();
+  // Preparation still consumes attention once, before either route renders; it
+  // projects no view, since each route projects for its own render.
+  if (showsHerd) requireConnectedPresentation().consumeHerdAttention();
   const scroll = showsGuided ? requireConnectedPresentation().prepareSessionPaint() : null;
   const kind = displayedSession(layout);
   const described = kind

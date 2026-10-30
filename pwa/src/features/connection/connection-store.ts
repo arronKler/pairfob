@@ -243,6 +243,13 @@ export function setTransportSwitching(switching: boolean): void {
   });
 }
 
+/**
+ * A measured relay trip, or null once it is no longer known.
+ *
+ * Every write publishes, even a repeated reading: `session-events` lists this
+ * among the publications each continuation revalidates after, so a disconnect
+ * that finds the reading already null must still reach its subscribers.
+ */
 export function noteRelayRtt(ms: number | null): void {
   write((record) => {
     record.relayRttMs = ms;

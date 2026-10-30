@@ -18,7 +18,7 @@ import { Button } from "../../../shared/ui/primitives";
 /**
  * A new grouping starts from the default accordion: no previous fold carries
  * over. The defaults are prepared here, as part of the typed choice, so a
- * subscribed list does not wait for a later presentHerdView pass.
+ * subscribed list does not wait for a later paint to reconcile them.
  */
 export function chooseListGroup(id: ListGroup): void {
   if (listGroup() === id) return;

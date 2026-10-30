@@ -12,8 +12,8 @@ import {
 import { AttachButton } from "../attachments/attach-button";
 import { phoneEnterKeyHint } from "../compose-keys";
 import { useDeskPointer, useKeyboardHintsInPlace } from "../desk-pointer";
-import { useCompose, useSession } from "../hooks";
-import { usePreferences } from "../../settings/hooks";
+import { useComposeDraft, useComposeFocused, usePaneId } from "../hooks";
+import { usePreferenceField } from "../../settings/hooks";
 import { queueKey } from "./keys";
 import { ComposeFrame, DockKeysButton, SendButton, SendIssuePopover, useSendKind } from "./compose-controls";
 import { cancelStop, type StopTarget } from "./session-stop";
@@ -36,12 +36,17 @@ export type SessionComposeProps = {
 /** Guided compose field. The textarea is controller-owned after mount; React only owns chrome. */
 export function SessionCompose({ includeBack, phone = includeBack, keysButton = false }: SessionComposeProps) {
   const snap = useSyncExternalStore(subscribeComposeView, composeViewSnapshot, composeViewSnapshot);
-  const paneId = useSession().paneId;
-  const focused = useCompose().composeFocused;
+  const paneId = usePaneId();
+  const focused = useComposeFocused();
+  // The button's face and the line count follow the text; a controller-owned
+  // field publishes it here, and the view snapshot alone does not see a keystroke.
+  useComposeDraft();
   const pointer = useDeskPointer();
   // A tablet with a keyboard has no hint line under the field: the field says it.
   const keysInPlace = useKeyboardHintsInPlace();
-  usePreferences();
+  // Return's meaning is a preference the hint line states; the domain's other
+  // fields (the draft, a tap timestamp) must not repaint the field.
+  usePreferenceField((prefs) => prefs.composeEnterSends);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const inputID = phone ? "compose-text-mobile" : "compose-text-desktop";
   const statusID = `${inputID}-live-status`;

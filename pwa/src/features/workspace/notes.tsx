@@ -28,9 +28,7 @@ import { sendAllDiffNotesToAgent, sendDiffNotesToAgent } from "../../features/op
 import { operationBusy } from "../operations/capabilities-store";
 import { useCapabilities } from "../operations/hooks";
 import { liveSession } from "../computers/catalog-store";
-import { useDashboard } from "../dashboard/hooks";
-import { useSession } from "../session/hooks";
-import { agentFromDashboardSnapshot } from "../session/agents";
+import { useAgentCard, usePaneId } from "../session/hooks";
 import { usePresence } from "../../shared/react/use-presence";
 import { MOTION_MS } from "../../shared/ui/dom/motion";
 import { Button } from "../../shared/ui/primitives";
@@ -258,11 +256,11 @@ export function DiffNotesBar(props: NotesBarProps) {
   // Subscribed snapshots: the bar re-renders with capability, busy and pane
   // changes instead of reading one-shot published copies during render.
   const capabilities = useCapabilities();
-  const dashboard = useDashboard();
-  const session = useSession();
+  // The open pane is the one whose agent receives the notes, as before.
+  const agent = useAgentCard(usePaneId());
   useEffect(watchSentNotes, []);
   const sendKey = useKeyHint("sendNotes");
-  const bar = notesBar(props, { capabilities, dashboard, session, sendKey });
+  const bar = notesBar(props, { capabilities, agent, sendKey });
   const last = useRef<NotesBar | null>(null);
   if (bar) last.current = bar;
   const { leaving } = usePresence(bar !== null, MOTION_MS.element);
@@ -274,8 +272,8 @@ type NotesBarProps = { path: string; layer: GitLayer; paneId: string; beside?: b
 type NotesBar = ReactElement<{ className: string; inert?: boolean }>;
 
 /** The bar for what the stores hold now; null when there is nothing to say. */
-function notesBar({ path, layer, paneId, beside = false, returnView = "guided" }: NotesBarProps, { capabilities, dashboard, session, sendKey }: {
-  capabilities: ReturnType<typeof useCapabilities>; dashboard: ReturnType<typeof useDashboard>; session: ReturnType<typeof useSession>;
+function notesBar({ path, layer, paneId, beside = false, returnView = "guided" }: NotesBarProps, { capabilities, agent, sendKey }: {
+  capabilities: ReturnType<typeof useCapabilities>; agent: ReturnType<typeof useAgentCard>;
   sendKey: ReturnType<typeof useKeyHint>;
 }): NotesBar | null {
   const count = diffNotesFor(path, layer).length;
@@ -310,7 +308,7 @@ function notesBar({ path, layer, paneId, beside = false, returnView = "guided" }
   }
   if (!count && !elsewhere) return null;
   const sending = capabilities.operationBusy || diffNoteSendOpen();
-  const canSend = canPromptAgent(agentFromDashboardSnapshot(dashboard, session.paneId));
+  const canSend = canPromptAgent(agent);
   const layerName = layer === "staged" ? t("workspace.staged") : t("workspace.worktree");
   const otherLayerName = layer === "staged" ? t("workspace.worktree") : t("workspace.staged");
   // The file's change is gone or its patch is cut short: nothing on screen holds these notes, so the bar is where they are answered.

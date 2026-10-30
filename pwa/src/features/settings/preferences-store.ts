@@ -342,7 +342,9 @@ export function setListGroup(group: ListGroup): void {
 }
 
 export function setListGroupCollapsed(collapsed: Record<string, boolean>): void {
-  if (collapsed === read().listGroupCollapsed) return;
+  // The same folding, rebuilt: a caller merging a map hands over a fresh object
+  // with identical entries, and that is not a change the list should repaint for.
+  if (sameEntries(collapsed, read().listGroupCollapsed)) return;
   write((record) => {
     record.listGroupCollapsed = detach(collapsed);
   });
@@ -370,6 +372,11 @@ export function rememberPane(paneId: string): void {
 }
 
 function sameTouched(left: TouchedAt, right: TouchedAt): boolean {
+  return sameEntries(left, right);
+}
+
+/** Same keys, same values: a map rebuild with nothing changed is not a change. */
+function sameEntries<V>(left: Record<string, V>, right: Record<string, V>): boolean {
   const keys = Object.keys(left);
   return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
 }

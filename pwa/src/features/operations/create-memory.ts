@@ -80,9 +80,23 @@ export function parseCreateMemory(raw: string | null): CreateMemory {
   return { pinned: [...new Set(pinned)], uses: numbers(record.uses), lastUsed: numbers(record.lastUsed), recents, dirs };
 }
 
+/**
+ * The stored memory, parsed once per stored value. The herd list reads it
+ * during a render (an empty list offers the directories this phone created), so
+ * a render that changes nothing must not parse the same string again. Every
+ * reader gets a value it only copies: nothing here writes into it.
+ */
+let parsedRaw: string | null | undefined;
+let parsedMemory: CreateMemory | null = null;
+
 export function loadCreateMemory(): CreateMemory {
   try {
-    return parseCreateMemory(localStorage.getItem(CREATE_MEMORY_KEY));
+    const raw = localStorage.getItem(CREATE_MEMORY_KEY);
+    if (parsedMemory && raw === parsedRaw) return parsedMemory;
+    const memory = parseCreateMemory(raw);
+    parsedRaw = raw;
+    parsedMemory = memory;
+    return memory;
   } catch {
     return unseeded();
   }

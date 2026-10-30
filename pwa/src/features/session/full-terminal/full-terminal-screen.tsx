@@ -1,8 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { useSession } from "../hooks";
 import { t } from "../../../lib/i18n";
-import { useDashboard } from "../../dashboard/hooks";
-import { agentFromDashboardSnapshot } from "../agents";
+import { useAgentCard, useFullTerminalMode } from "../hooks";
 import { setFullTerminalDocumentMode } from "./full-terminal-state";
 import { getFullTerminalView, subscribeFullTerminalView } from "./full-terminal-view";
 import type { FullTerminalControlsOptions } from "./full-terminal-compose";
@@ -49,9 +47,9 @@ function FullTerminalBody({ view, onBack, onWorkspace, onMenu, onRetry, scroll, 
   // The fallback follows the session domain's frozen snapshot: the terminal
   // shell is active exactly while the session domain says the complete
   // terminal is mounted.
-  const session = useSession();
-  const active = engineActive ?? session.fullTerminal;
-  const selected = agentFromDashboardSnapshot(useDashboard(), view.paneId);
+  const fullTerminalMode = useFullTerminalMode();
+  const active = engineActive ?? fullTerminalMode;
+  const selected = useAgentCard(view.paneId);
   // Connection progress and failures belong to the state layer over the
   // terminal; the header only says whose terminal this is.
   return (

@@ -3,11 +3,13 @@ import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import type { LiveSession, PairResult, SessionEvent } from "../../lib/protocol/client";
 import { closeComputerSession, establish, refreshSnapshot } from "./controller";
 import { attachLiveSession, computersStore, liveSession, setCredential } from "../computers/catalog-store";
-import { connectionStore, networkOnline, sessionTransport, setNetworkOnline, setPhase } from "./connection-store";
-import { dashboardStore } from "../dashboard/catalog-store";
+import { connectionStore, networkOnline, phase, sessionTransport, setNetworkOnline, setPhase } from "./connection-store";
+import { dashboardStore, resetDashboard } from "../dashboard/catalog-store";
+import { applyCapabilities, capabilityEnabled, clearCapabilities } from "../operations/capabilities-store";
 import { resetObservationLifecycle, resetPaneView, selectPane, setFullTerminal } from "../session/session-store";
-import { setScreen } from "../../app/navigation-store";
+import { currentScreen, setScreen } from "../../app/navigation-store";
 import { resetGenerationsForTests } from "./generations";
+import { resetRetainedViewsForTests } from "./retained-view";
 
 type FakeSession = LiveSession & {
   closed: number;
@@ -49,6 +51,32 @@ function fakeSession(): FakeSession {
   return session;
 }
 
+/** A session whose daemon answers with one pane named after itself. */
+function machineSession(daemonId: string): FakeSession {
+  const session = fakeSession();
+  session.getConfig = async () => ({ hostname: daemonId, runtime: "herdr", push_enabled: false });
+  session.snapshot = async () => ({
+    panes: [{ pane_id: `${daemonId}-1`, workspace_id: "w", tab_id: "t", agent: "codex", agent_status: "idle" }],
+  });
+  return session;
+}
+
+function machines() {
+  const created = new Map<string, FakeSession>();
+  let connects = 0;
+  const connect = async (credential: PairResult) => {
+    connects += 1;
+    const session = machineSession(credential.daemonId);
+    created.set(credential.daemonId, session);
+    return session;
+  };
+  return { created, connect, connects: () => connects };
+}
+
+function paintedPaneIds(): string[] {
+  return dashboardStore.get().agents.map((agent) => agent.paneId);
+}
+
 const daemonIds = ["computer_switch_a", "computer_switch_b"];
 
 beforeEach(async () => {
@@ -60,6 +88,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   for (const daemonId of daemonIds) closeComputerSession(daemonId);
+  resetRetainedViewsForTests();
+  resetDashboard();
   attachLiveSession(null);
   setCredential(null);
   setPhase("pick");
@@ -146,5 +176,88 @@ describe("switching among paired computers", () => {
 
     expect(computersStore.get().credential?.daemonId).toBe(daemonIds[1]);
     expect(dashboardStore.get().agents).toEqual([]);
+  });
+});
+
+describe("switching back to a computer this page holds", () => {
+  const [aId, bId] = daemonIds;
+
+  test("paints its rows in the tap's own turn, without a phase change or a handshake", async () => {
+    const { created, connect, connects } = machines();
+    await establish(pair(aId), connect);
+    const a = created.get(aId)!;
+    await establish(pair(bId), connect);
+    expect(paintedPaneIds()).toEqual([`${bId}-1`]);
+
+    const phases: string[] = [];
+    const stop = connectionStore.subscribe(() => {
+      if (phases[phases.length - 1] !== phase()) phases.push(phase());
+    });
+    try {
+      const switching = establish(pair(aId), connect);
+      // The same turn as the tap, before the switch settles: no "resuming"
+      // phase, no placeholder rows, no second handshake.
+      expect(paintedPaneIds()).toEqual([`${aId}-1`]);
+      expect(phase()).toBe("live");
+      expect(currentScreen()).toBe("home");
+      expect(liveSession()).toBe(a);
+      expect(connects()).toBe(2);
+
+      await switching;
+      expect(phases).not.toContain("resuming");
+      expect(phase()).toBe("live");
+      expect(paintedPaneIds()).toEqual([`${aId}-1`]);
+      expect(liveSession()).toBe(a);
+      expect(connects()).toBe(2);
+    } finally {
+      stop();
+    }
+  });
+
+  test("restores the target's rows, never the computer just left", async () => {
+    const { connect } = machines();
+    await establish(pair(aId), connect);
+    expect(paintedPaneIds()).toEqual([`${aId}-1`]);
+    await establish(pair(bId), connect);
+    expect(paintedPaneIds()).toEqual([`${bId}-1`]);
+
+    const back = establish(pair(aId), connect);
+    expect(paintedPaneIds()).toEqual([`${aId}-1`]);
+    await back;
+    expect(paintedPaneIds()).toEqual([`${aId}-1`]);
+  });
+
+  test("stays fail-closed on capabilities until the target answers", async () => {
+    const { connect } = machines();
+    await establish(pair(aId), connect);
+    await establish(pair(bId), connect);
+    applyCapabilities({ rename_file: true, delete_file: true }, ["codex"]);
+    try {
+      const back = establish(pair(aId), connect);
+      // The retained paint never carries a grant: only GetConfig does.
+      expect(capabilityEnabled("rename_file")).toBeFalse();
+      expect(capabilityEnabled("delete_file")).toBeFalse();
+      await back;
+      expect(capabilityEnabled("rename_file")).toBeFalse();
+    } finally {
+      clearCapabilities();
+    }
+  });
+
+  test("an old read of the computer left cannot overwrite the restored rows", async () => {
+    const { created, connect } = machines();
+    await establish(pair(aId), connect);
+    await establish(pair(bId), connect);
+    const b = created.get(bId)!;
+    let resolveOld!: (snapshot: unknown) => void;
+    b.snapshot = () => new Promise((resolve) => { resolveOld = resolve; });
+    const stale = refreshSnapshot();
+    await Promise.resolve();
+
+    await establish(pair(aId), connect);
+    resolveOld({ panes: [{ pane_id: `${bId}-stale`, workspace_id: "w", tab_id: "t", agent: "codex" }] });
+    await stale;
+
+    expect(paintedPaneIds()).toEqual([`${aId}-1`]);
   });
 });

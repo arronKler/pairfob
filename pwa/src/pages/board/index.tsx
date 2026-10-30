@@ -2,9 +2,9 @@ import { boardStore, type BoardRecord } from "../../features/board/layout-store"
 import { capabilitiesStore } from "../../features/operations/capabilities-store";
 import { computersStore } from "../../features/computers/catalog-store";
 import { connectionStore } from "../../features/connection/connection-store";
-import { dashboardStore } from "../../features/dashboard/catalog-store";
+import { dashboardStore, herdAgentsKey } from "../../features/dashboard/catalog-store";
 import { runtimeStore } from "../../features/connection/runtime-store";
-import { sessionStore } from "../../features/session/session-store";
+import { sessionStore, herdSessionKey } from "../../features/session/session-store";
 import { BoardScreenView } from "../../features/board/components/board-screen";
 import { buildBoardViewModel } from "../../features/board/model/board-view";
 import { blockedElsewhere } from "../../features/dashboard/model/herd-view";
@@ -38,13 +38,16 @@ function boardDisplayKey(board: BoardRecord): string {
 
 const watches: DomainWatch[] = [
   { store: boardInteractionStore },
-  { store: dashboardStore },
+  // The tiles and their status words, and whether a snapshot has been read at
+  // all: the domain also publishes the poll's refresh flag, which draws nothing.
+  { store: dashboardStore, keyOf: herdAgentsKey },
   { store: boardStore, keyOf: (snapshot) => boardDisplayKey(snapshot as BoardRecord) },
   { store: capabilitiesStore },
   { store: connectionStore },
   { store: computersStore },
   { store: runtimeStore },
-  { store: sessionStore },
+  // Which session is open is all this page reads from the session domain.
+  { store: sessionStore, keyOf: herdSessionKey },
 ];
 
 const updates = createDomainUpdates(watches);

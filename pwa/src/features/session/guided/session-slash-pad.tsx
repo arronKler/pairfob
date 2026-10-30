@@ -1,6 +1,5 @@
-import { useDashboard } from "../../dashboard/hooks";
-import { useSession } from "../hooks";
-import { usePreferences } from "../../settings/hooks";
+import { useAgentCard, usePaneId } from "../hooks";
+import { usePreferenceField, useQuickCommands } from "../../settings/hooks";
 import { defaultQuickCommands, editQuickCommand, type QuickCommandReorder } from "../keypad/quick-command-editor";
 import { bindCommandDrag } from "../keypad/command-drag";
 import { composeDraft } from "../compose-store";
@@ -193,13 +192,14 @@ function keyPageName(firstItem: number): (typeof KEY_PAGES)[number]["name"] {
 export function SessionSlashPad({ onSelect = insertSlashCommand, onCustomSelect = insertQuickCommand, keyItems, rows = 2 }: {
   onSelect?: (text: string) => void; onCustomSelect?: (text: string) => void; keyItems?: ReactNode[]; rows?: 1 | 2;
 }) {
-  const { paneId } = useSession();
-  const agent = useDashboard().agents.find(item => item.paneId === paneId)?.agent ?? "";
-  const preferences = usePreferences();
+  const paneId = usePaneId();
+  const agent = useAgentCard(paneId)?.agent ?? "";
+  const padKind = usePreferenceField((prefs) => prefs.padKind);
+  const quickCommands = useQuickCommands();
   const memory = useState<Record<string, number>>({});
-  const commands = !keyItems || preferences.padKind === "slash";
+  const commands = !keyItems || padKind === "slash";
   if (commands) return <CommandPad agent={agent} slash={slashCommandsForAgent(agent)} memory={memory} rows={rows}
-    commands={preferences.quickCommands ?? defaultQuickCommands()} onSelect={onSelect} onCustomSelect={onCustomSelect} />;
+    commands={quickCommands ?? defaultQuickCommands()} onSelect={onSelect} onCustomSelect={onCustomSelect} />;
   return <PadPages items={keyItems} columns={7} rows={rows} kind="keys" label={t("keys.more")} memory={memory}
     leading={(_page, firstItem) => <span className="pad-page-name">{t(keyPageName(firstItem))}</span>}
     trailing={<SessionPadModeBar />} />;

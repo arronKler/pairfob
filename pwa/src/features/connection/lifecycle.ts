@@ -58,6 +58,7 @@ import {
 } from "./generations";
 import type { LifecyclePorts } from "./ports";
 import { retireHerdView, retireLiveDomains, type RetirementPorts } from "./retirement";
+import { adoptRetainedView, forgetRetainedView, retainLiveView, retainedViewFor } from "./retained-view";
 import { pauseAttachmentTransfers } from "../session/attachments/attachments-store";
 import { markAppPerformance } from "../../lib/performance-marks";
 import { reloadComputers } from "./catalog-load";
@@ -105,7 +106,11 @@ export function clearLiveConnection(ctx: LifecycleContext, expected: LiveSession
   ctx.ports.disposeFullTerminal();
   cancelEstablish();
   invalidateReads(ctx.ports);
-  if (expected && (!daemonId || !ctx.pool.remove(daemonId, expected))) expected.close();
+  if (expected) {
+    if (!daemonId) expected.close();
+    else if (ctx.pool.remove(daemonId, expected)) forgetRetainedView(daemonId);
+    else expected.close();
+  }
   ctx.retirement.bumpViewIncarnation();
   ctx.retirement.clearAgentTraceCache();
   ctx.retirement.clearBoardPreviews();
@@ -137,7 +142,9 @@ export async function switchHerdSession(name: string | null, ctx: LifecycleConte
   ctx.retirement.bumpViewIncarnation();
   ctx.retirement.clearAgentTraceCache();
   ctx.retirement.clearBoardPreviews();
-  pauseAttachmentTransfers(currentDaemonId(), session.herdSession());
+  const daemonId = currentDaemonId();
+  if (daemonId) forgetRetainedView(daemonId);
+  pauseAttachmentTransfers(daemonId, session.herdSession());
   session.selectHerdSession(name);
   const screen = currentScreen();
   batch(() => {
@@ -162,7 +169,7 @@ export function closeComputerSession(daemonId: string, ctx: LifecycleContext): v
     clearLiveConnection(ctx);
     return;
   }
-  ctx.pool.remove(daemonId);
+  if (ctx.pool.remove(daemonId)) forgetRetainedView(daemonId);
 }
 
 export function setLiveNetworkAvailable(available: boolean, ctx: LifecycleContext): void {
@@ -248,27 +255,59 @@ export async function establish(
   if (ctx.ports.isFullTerminal()) await ctx.ports.leaveFullTerminal();
   else ctx.ports.disposeFullTerminal();
   if (!stillThisAttempt(attempt)) return;
+  retainLiveView();
   parkSession(ctx.ports);
   invalidateReads(ctx.ports);
   ctx.retirement.bumpViewIncarnation();
   ctx.retirement.clearAgentTraceCache();
   ctx.retirement.clearBoardPreviews();
-  batch(() => {
-    retireLiveDomains();
-    setPhase("resuming");
-    setCredential(destination);
-    setAddingComputer(false);
-    applyRuntimeIdentity({ herdHost: destination.hostname || "", runtimeKind: "" });
-    adoptDaemonPreferences();
-  });
-  ctx.ports.commitView();
+  ctx.retirement.clearHerdAttention();
+  const pooled = ctx.pool.reuse(destination);
+  const retained = pooled
+    ? retainedViewFor(destination, pooled.session.herdSession?.() ?? null)
+    : null;
+  if (retained && pooled) {
+    ctx.pool.bind(destination.daemonId, pooled.session, ctx.onSessionEvent, ctx.onP2PAttempt);
+    // The tap's own turn: the kept rows paint before any await. No identity
+    // write of "", no "resuming" phase and no identity read — the kept view
+    // carries the identity, and the config read below only starts one when it
+    // is empty.
+    batch(() => {
+      retireLiveDomains();
+      setCredential(destination);
+      setAddingComputer(false);
+      attachLiveSession(pooled.session);
+      noteRelayRtt(pooled.lastLatencyMs);
+      setSessionTransport(pooled.transport);
+      noteP2PAttempt(pooled.lastP2PAttempt);
+      adoptDaemonPreferences();
+      reloadCompletionSeen();
+      adoptRetainedView(retained);
+      setConnectFailure("");
+      setRetryingUnreachable(false);
+      setPhase("live");
+      setScreen("home");
+    });
+    ctx.ports.commitView();
+    ctx.ports.track("pwa_switch_retained", { result: "pooled" });
+  } else {
+    batch(() => {
+      retireLiveDomains();
+      setPhase("resuming");
+      setCredential(destination);
+      setAddingComputer(false);
+      applyRuntimeIdentity({ herdHost: destination.hostname || "", runtimeKind: "" });
+      adoptDaemonPreferences();
+    });
+    ctx.ports.commitView();
+  }
   if (!stillThisAttempt(attempt)) return;
   await ctx.ports.rememberLastUsed(destination.daemonId).catch(() => undefined);
   if (!stillThisAttempt(attempt)) return;
   setLastUsedDaemon(destination.daemonId);
   let activated: ActivatedSession;
   try {
-    activated = await ctx.pool.activate(destination, connect ?? ctx.defaultConnect);
+    activated = retained && pooled ? pooled : await ctx.pool.activate(destination, connect ?? ctx.defaultConnect);
   } catch (error) {
     // A newer activation owns the daemon slot, or this attempt lost while the
     // connector ran. Either way the attempt is stale: retire quietly so an
@@ -282,12 +321,15 @@ export async function establish(
   // a listener-less entry that a later reuse would adopt silently.
   const bound = ctx.pool.bind(destination.daemonId, session, ctx.onSessionEvent, ctx.onP2PAttempt);
   if (!stillThisAttempt(attempt)) return;
-  batch(() => {
-    attachLiveSession(session);
-    noteRelayRtt(activated.lastLatencyMs);
-    setSessionTransport(activated.transport);
-    noteP2PAttempt(activated.lastP2PAttempt);
-  });
+  // The retained path already attached this session in its own batch.
+  if (!retained) {
+    batch(() => {
+      attachLiveSession(session);
+      noteRelayRtt(activated.lastLatencyMs);
+      setSessionTransport(activated.transport);
+      noteP2PAttempt(activated.lastP2PAttempt);
+    });
+  }
   if (!stillThisAttempt(attempt)) return;
   if (!bound && !ctx.pool.has(destination.daemonId, session)) {
     // The entry is gone (evicted or replaced) while this attempt is current.
@@ -299,11 +341,12 @@ export async function establish(
   if (!stillThisAttempt(attempt)) return;
   session.setNetworkAvailable(networkOnline());
   if (activated.reused) void session.switchTransport(connectionStore.get().networkMode).catch(() => undefined);
-  reloadCompletionSeen();
+  // The retained path already loaded it under the destination credential.
+  if (!retained) reloadCompletionSeen();
   batch(() => {
     // The list's first paint must read "reading", not "cannot confirm Herdr":
     // the runtime identity is fetched right after this.
-    beginIdentityRead();
+    if (!retained) beginIdentityRead();
     setConnectFailure("");
     setRetryingUnreachable(false);
     setPhase("live");
@@ -328,6 +371,7 @@ export async function handleInactiveTerminal(
   code = "",
 ): Promise<void> {
   if (!ctx.pool.remove(daemonId, session)) return;
+  forgetRetainedView(daemonId);
   if (credentialIsBurned(code)) await ctx.ports.deleteCredential(daemonId).catch(() => undefined);
   await reloadComputers(ctx.ports).catch(() => undefined);
   if (currentScreen() === "computers") ctx.ports.commitView();

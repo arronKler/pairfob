@@ -310,6 +310,32 @@ export function herdNeedsReader(agent: DashboardAgentCard): "blocked" | "done" |
   return agent.status === "blocked" ? "blocked" : agent.status === "done" ? "done" : "";
 }
 
+/** What a status verdict is read from: the same inputs wherever it is asked. */
+export type HerdReach = Pick<HerdModelInput, "connected" | "networkOnline" | "reading" | "runtimeKind" | "liveness">;
+
+/**
+ * Rows that arrive before the first runtime read are fresh, not stale: the
+ * verdict is only "unverifiable" because the answer has not come back yet.
+ */
+export function herdReading(input: HerdReach): boolean {
+  return input.connected && input.networkOnline && input.reading && !input.runtimeKind;
+}
+
+/** Whether the status of a row cannot be confirmed, so nothing is claimed either way. */
+export function herdStale(input: HerdReach): boolean {
+  return input.liveness === "unverifiable" && !herdReading(input);
+}
+
+/**
+ * How many sessions the list's "needs you" strip would show, without building
+ * the list: the tab bar's badge asks on every publication, and grouping, ranking
+ * and every row's copy are none of its business.
+ */
+export function herdAttentionCount(input: Pick<HerdModelInput, "agents"> & HerdReach): number {
+  if (herdStale(input)) return 0;
+  return input.agents.filter((agent) => herdNeedsReader(agent) !== "").length;
+}
+
 /**
  * Who a pane is and what it is doing, as the list card shows it. The session
  * header renders the same projection, so the title that travels between the two
@@ -423,10 +449,8 @@ export function groupHasMenu(listGroup: ListGroup, group: AgentGroup): boolean {
 export function buildHerdViewModel(input: HerdModelInput): HerdViewModel {
   const groups = groupAgents([...input.agents], input.listGroup, input.paneActivated, input.panePinned);
   const reachable = input.connected && input.networkOnline;
-  // Rows that arrive before the first runtime read are fresh, not stale: the
-  // verdict is only "unverifiable" because the answer has not come back yet.
-  const reading = reachable && input.reading && !input.runtimeKind;
-  const stale = input.liveness === "unverifiable" && !reading;
+  const reading = herdReading(input);
+  const stale = herdStale(input);
   // Until the first snapshot (or while the runtime is still being read) an
   // empty list is unknown, not empty. A runtime that answered "exited" or
   // failed keeps its explanatory empty state.

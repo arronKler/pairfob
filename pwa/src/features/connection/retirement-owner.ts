@@ -1,4 +1,5 @@
 import { clearAgentTraceCache } from "../../lib/agent-trace-cache";
+import { resetHerdAttention } from "../../lib/herd-attention";
 import { bumpViewIncarnation } from "../session/drafts/compose-drafts";
 import { clearBoardPreviews } from "../board/preview/store";
 import { clearPaneBufferCache } from "../session/pane-buffer";
@@ -17,6 +18,7 @@ const ports: RetirementPorts = {
   bumpViewIncarnation,
   clearAgentTraceCache,
   clearBoardPreviews,
+  clearHerdAttention: resetHerdAttention,
   clearPaneBufferCache,
 };
 

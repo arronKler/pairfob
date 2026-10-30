@@ -9,9 +9,14 @@ import { composeTransaction } from "../../shared/model/compose-transaction";
  * controller is mounted (guided snapshot, complete terminal, agent chat).
  *
  * The live session object and credential live in `computers.ts`; the agent
- * transcript in `chat.ts`; the input draft in `compose.ts`. Snapshot queue,
- * snapshot time and pane-read flight flags are named observation actions on
- * this record (captain-authorized overlap); they are not a generic patch bag.
+ * transcript in `chat.ts`; the input draft in `compose.ts`.
+ *
+ * What is rendered is here; what only steers the poll lanes is not. The Snapshot
+ * queue and the pane-read flight flags never reach a render, so they live
+ * outside the record: publishing them would deep-copy the buffer and repaint
+ * every session subscriber to say a read started or ended. Snapshot time stays
+ * on the record: its publication is a reentry point a subscriber may retire the
+ * session from, which the poll checks before applying what it read.
  */
 export type SessionRecord = {
   paneId: string;
@@ -26,11 +31,8 @@ export type SessionRecord = {
    * then the guided terminal has no screen to show, whatever text it carries.
    */
   paneLoaded: boolean;
-  snapshotPending: boolean;
   /** When the last Snapshot landed, so a pane change can pull status forward. */
   snapshotAt: number;
-  paneReadBusy: boolean;
-  paneReadPending: boolean;
   /** Terminal is pinned to the newest row; cleared when the reader scrolls up. */
   paneFollow: boolean;
   paneUnread: boolean;
@@ -46,10 +48,7 @@ const sessionDomain = createDomain<SessionRecord>("session", {
   paneText: "",
   paneHash: "",
   paneLoaded: false,
-  snapshotPending: false,
   snapshotAt: 0,
-  paneReadBusy: false,
-  paneReadPending: false,
   paneFollow: true,
   paneUnread: false,
   paneRow: null,
@@ -58,9 +57,29 @@ const sessionDomain = createDomain<SessionRecord>("session", {
 export const sessionStore = sessionDomain.store;
 const { read, write, stage } = sessionDomain.controller;
 
+/**
+ * Observation bookkeeping for the poll lanes. No screen renders it, so it never
+ * enters a published snapshot: a pane read that starts and ends must not
+ * republish the buffer.
+ */
+const observation = {
+  snapshotPending: false,
+  paneReadBusy: false,
+  paneReadPending: false,
+};
+
 
 export function openPaneId(): string {
   return read().paneId;
+}
+
+/**
+ * What a screen that only names the open session renders from this domain, as a
+ * scalar: the pane. The domain publishes a read or a keystroke at a time, and
+ * none of that moves a screen that is not the session's own.
+ */
+export function herdSessionKey(snapshot: object): string {
+  return (snapshot as { paneId: string }).paneId;
 }
 
 /** The complete-terminal controller is mounted instead of the guided pane view. */
@@ -168,30 +187,22 @@ export function seedPaneBuffer(text: string, hash: string): void {
 }
 
 export function snapshotIsPending(): boolean {
-  return read().snapshotPending;
+  return observation.snapshotPending;
 }
 
 /** Queue another Snapshot after the in-flight one. Does not start a fetch. */
 export function queueSnapshot(): void {
-  if (read().snapshotPending) return;
-  write((record) => {
-    record.snapshotPending = true;
-  });
+  observation.snapshotPending = true;
 }
 
 export function clearSnapshotPending(): void {
-  if (!read().snapshotPending) return;
-  write((record) => {
-    record.snapshotPending = false;
-  });
+  observation.snapshotPending = false;
 }
 
 /** Consume a queued Snapshot. Returns whether one was waiting. */
 export function takeQueuedSnapshot(): boolean {
-  if (!read().snapshotPending) return false;
-  write((record) => {
-    record.snapshotPending = false;
-  });
+  if (!observation.snapshotPending) return false;
+  observation.snapshotPending = false;
   return true;
 }
 
@@ -207,36 +218,29 @@ export function noteSnapshotAt(ms: number): void {
 }
 
 export function paneReadBusy(): boolean {
-  return read().paneReadBusy;
+  return observation.paneReadBusy;
 }
 
 export function setPaneReadBusy(busy: boolean): void {
-  if (read().paneReadBusy === busy) return;
-  write((record) => {
-    record.paneReadBusy = busy;
-  });
+  observation.paneReadBusy = busy;
 }
 
 export function paneReadPending(): boolean {
-  return read().paneReadPending;
+  return observation.paneReadPending;
 }
 
 export function setPaneReadPending(pending: boolean): void {
-  if (read().paneReadPending === pending) return;
-  write((record) => {
-    record.paneReadPending = pending;
-  });
+  observation.paneReadPending = pending;
 }
 
 /** Drop observation flags with the session that queued them. Not a generic patch. */
 export function resetObservationLifecycle(): void {
-  const record = read();
-  if (!record.snapshotPending && record.snapshotAt === 0 && !record.paneReadBusy && !record.paneReadPending) return;
-  write((next) => {
-    next.snapshotPending = false;
-    next.snapshotAt = 0;
-    next.paneReadBusy = false;
-    next.paneReadPending = false;
+  observation.snapshotPending = false;
+  observation.paneReadBusy = false;
+  observation.paneReadPending = false;
+  if (read().snapshotAt === 0) return;
+  write((record) => {
+    record.snapshotAt = 0;
   });
 }
 

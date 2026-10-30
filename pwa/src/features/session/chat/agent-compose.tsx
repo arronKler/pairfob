@@ -10,10 +10,8 @@ import {
 } from "../compose-store";
 import { liveSession } from "../../computers/catalog-store";
 import { openPaneId } from "../session-store";
-import { useChat, useCompose, useSession } from "../hooks";
-import { useDashboard } from "../../dashboard/hooks";
+import { useAgentCard, useChat, useCompose, usePaneId } from "../hooks";
 import { currentViewIncarnation } from "../drafts/compose-drafts";
-import { agentFromDashboardSnapshot } from "../agents";
 import { fitOperationPrompt, OPERATION_INPUT_LIMITS } from "../../../lib/operations";
 import { t } from "../../../lib/i18n";
 import { showError } from "../../../app/notices-store";
@@ -29,7 +27,7 @@ import { phoneEnterKeyHint, returnAddsNewline } from "../compose-keys";
 import { acceptComposePaste, attachmentMessage, markSentAttachments, requestSend, resetSendGate } from "../guided/send-gate";
 import { AttachmentTray } from "../attachments/attachment-tray";
 import { useSoftKeyboardOpen } from "../keypad/soft-keyboard";
-import { usePreferences } from "../../settings/hooks";
+import { usePreferenceField } from "../../settings/hooks";
 import { ComposeFrame, SendButton, SendIssuePopover, useSendKind } from "../guided/compose-controls";
 import { cancelStop, type StopTarget } from "../guided/session-stop";
 import { useDeskPointer, useKeyboardHintsInPlace } from "../desk-pointer";
@@ -121,9 +119,10 @@ export function AgentCompose() {
   const compose = useCompose();
   const follow = useChat().agentTraceFollow;
   const draft = compose.composeDraft;
-  const paneId = useSession().paneId;
-  const selected = agentFromDashboardSnapshot(useDashboard(), paneId);
-  usePreferences();
+  const paneId = usePaneId();
+  const selected = useAgentCard(paneId);
+  // Return's meaning is a preference the hint line states.
+  usePreferenceField((prefs) => prefs.composeEnterSends);
   // Return adds a line only where there is no Shift+Enter: the keyboard decides, not the width.
   const phone = !useHardwareKeyboard();
   const send = useSendKind({ paneId, hasText: Boolean(draft.trim()), live: false, submitting: false });

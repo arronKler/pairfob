@@ -3,8 +3,8 @@ import { ChevronDown, Ellipsis } from "lucide-react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { composeFocused, composeIME, composeLive } from "../compose-store";
 import { sessionMayTakeFocus } from "../focus";
-import { useCompose, useSession } from "../hooks";
-import { usePreferences } from "../../settings/hooks";
+import { useCompose, usePaneId } from "../hooks";
+import { useKeysExpanded } from "../../settings/hooks";
 import { keysExpanded, setKeysExpanded } from "../../settings/preferences-store";
 import { t } from "../../../lib/i18n";
 import {
@@ -99,7 +99,7 @@ function FullTerminalLiveRow({ optionsRef, pointer }: {
   optionsRef: { current: FullTerminalControlsOptions };
   pointer: boolean;
 }) {
-  const paneId = useSession().paneId;
+  const paneId = usePaneId();
   const keysInPlace = useKeyboardHintsInPlace();
   const sendRef = useRef(optionsRef.current.sendCompose);
   sendRef.current = optionsRef.current.sendCompose;
@@ -172,8 +172,7 @@ function FullTerminalPadControls({
     bump((n) => n + 1);
     restoreCompose();
   };
-  const preferences = usePreferences();
-  const expanded = preferences.keysExpanded;
+  const expanded = useKeysExpanded();
 
   const onKey = (key: string, _el: HTMLElement): void => {
     if (!composeLive() && key === "enter") {

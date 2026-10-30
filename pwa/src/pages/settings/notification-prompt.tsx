@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useNavigation } from "../../app/domain-hooks";
-import { useConnection, useRuntime } from "../../features/connection/hooks";
+import { useConnectionPhase, useRuntime } from "../../features/connection/hooks";
 import { useComputers } from "../../features/computers/hooks";
 import { enablePush, preparePush, supportsWebPush } from "../../features/settings/actions";
 import { dismissNotifications, notificationPromptRevision, notificationsPending, subscribeNotificationPrompt } from "../../features/settings/notification-onboarding";
@@ -16,7 +16,7 @@ export { needsHomeScreen } from "../../lib/platform";
  * Settings has its own notification row, which the card would float over.
  */
 export function NotificationPrompt() {
-  const { phase } = useConnection();
+  const phase = useConnectionPhase();
   const { screen } = useNavigation();
   const { credential, live } = useComputers();
   const { pushEnabled, pushSubscribed } = useRuntime();

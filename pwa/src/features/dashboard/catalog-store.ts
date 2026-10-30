@@ -84,6 +84,18 @@ export function setRefreshBusy(busy: boolean): void {
 }
 
 /**
+ * What a screen that draws the rows renders from this domain, as a scalar:
+ * which rows, not which record carries them. The domain publishes for the
+ * refresh flag and for a snapshot that reported the same list; neither changes
+ * a row, and `lastHerdSig` is the list's own signature, written with every
+ * write that does.
+ */
+export function herdAgentsKey(snapshot: object): string {
+  const record = snapshot as { snapshotLoaded: boolean; lastHerdSig: string };
+  return `${record.snapshotLoaded ? 1 : 0}\u0000${record.lastHerdSig}`;
+}
+
+/**
  * The card of the open pane, detached: a caller gets a view it can hold and read,
  * never the domain's own card to edit behind its back.
  */
@@ -296,4 +308,29 @@ export function captureDashboardProjection(): () => void {
       record.snapshotLoaded = captured.snapshotLoaded;
     });
   };
+}
+
+/** The fields a snapshot fold writes that decide which rows the list paints. */
+export type DashboardProjection = Pick<DashboardRecord, "agents" | "runtimeAgentStatuses" | "lastHerdSig" | "snapshotLoaded">;
+
+/** Detached copy of the painted projection, for a page-local kept view. */
+export function dashboardProjection(): DashboardProjection {
+  return {
+    // The spread re-derives the mutable element type the record holds; the
+    // published view's own cards are readonly.
+    agents: detach(read().agents.map((agent) => ({ ...agent }))),
+    runtimeAgentStatuses: detach(read().runtimeAgentStatuses),
+    lastHerdSig: read().lastHerdSig,
+    snapshotLoaded: read().snapshotLoaded,
+  };
+}
+
+/** Adopt a kept projection. completionSeen / refreshBusy are never adopted. */
+export function adoptDashboardProjection(projection: DashboardProjection): void {
+  write((record) => {
+    record.agents = detach(projection.agents);
+    record.runtimeAgentStatuses = detach(projection.runtimeAgentStatuses);
+    record.lastHerdSig = projection.lastHerdSig;
+    record.snapshotLoaded = projection.snapshotLoaded;
+  });
 }

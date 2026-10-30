@@ -9,7 +9,7 @@ import { boardStore, liveBoardCatalog } from "../../features/board/layout-store"
 import { dividerCells, paneDivider, paneStepMove, type DividerAxis } from "../../features/board/model/divider";
 import { computersStore } from "../../features/computers/catalog-store";
 import { connectionStore } from "../../features/connection/connection-store";
-import { dashboardStore } from "../../features/dashboard/catalog-store";
+import { dashboardStore, herdAgentsKey } from "../../features/dashboard/catalog-store";
 import { capabilitiesStore } from "../../features/operations/capabilities-store";
 import { MenuGroup, MenuSetting, showActionSheet, type ActionSheetController } from "../../shared/ui/overlay";
 import { Button } from "../../shared/ui/primitives";
@@ -17,7 +17,9 @@ import { createDomainUpdates, useDomainUpdates } from "../domain-updates";
 import { boardLayoutReason, boardPaneCard, commitBoardResize, watchBoardTarget } from "./board-layout-ops";
 
 const updates = createDomainUpdates([
-  { store: navigationStore }, { store: boardStore }, { store: dashboardStore },
+  { store: navigationStore }, { store: boardStore },
+  // One pane's title, not the record a repeated poll rewrites.
+  { store: dashboardStore, keyOf: herdAgentsKey },
   { store: computersStore }, { store: connectionStore }, { store: capabilitiesStore },
 ]);
 

@@ -2,10 +2,10 @@ import { Ellipsis, FolderOpen } from "lucide-react";
 import { t } from "../../../lib/i18n";
 import type { DashboardAgentCard } from "../../../lib/dashboard";
 import type { Immutable } from "../../../shared/model/domain-store";
-import { useDashboard } from "../../dashboard/hooks";
+import { useAgents } from "../../dashboard/hooks";
 import { blockedElsewhere, paneHeaderLine, paneIdentity } from "../../dashboard/model/herd-view";
-import { usePreferences } from "../../settings/hooks";
-import { useConnection, useRuntime } from "../../connection/hooks";
+import { useListGroup } from "../../settings/hooks";
+import { useConnectionContact, useRuntime } from "../../connection/hooks";
 import { operationBusy } from "../../operations/capabilities-store";
 import { currentHerdStatusInput, herdLiveness } from "../../connection/runtime-status";
 import type { SessionHandlers } from "./view";
@@ -22,7 +22,7 @@ import { inspectorStore } from "../../workspace/inspector-store";
  * unrelated update happens to repaint it.
  */
 export function useStatusUnverifiable(): boolean {
-  useConnection();
+  useConnectionContact();
   useRuntime();
   return herdLiveness() === "unverifiable";
 }
@@ -34,7 +34,7 @@ export function useStatusUnverifiable(): boolean {
  * status word stays the list row's own, so the two never disagree.
  */
 function useContactLost(): boolean {
-  useConnection();
+  useConnectionContact();
   useRuntime();
   const input = currentHerdStatusInput();
   return !input.networkOnline || !input.connected;
@@ -104,8 +104,8 @@ export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, c
   /** The guided header is the one `patchChromeTitle` repaints in place. */
   guided?: boolean;
 }) {
-  const agents = useDashboard().agents;
-  const listGroup = usePreferences().listGroup;
+  const agents = useAgents();
+  const listGroup = useListGroup();
   const stale = useStatusUnverifiable();
   const contactLost = useContactLost();
   const identity = agent ? paneIdentity(agent, listGroup, stale) : null;

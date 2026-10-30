@@ -13,7 +13,7 @@ import {
 } from "../../features/board/interaction-store";
 import { liveSession, computersStore, currentDaemonId } from "../../features/computers/catalog-store";
 import { connectionStore, networkOnline } from "../../features/connection/connection-store";
-import { dashboardStore, liveAgents } from "../../features/dashboard/catalog-store";
+import { dashboardStore, herdAgentsKey, liveAgents } from "../../features/dashboard/catalog-store";
 import { capabilitiesStore, operationBusy, operationCapabilities } from "../../features/operations/capabilities-store";
 import { closePane, layoutSelectedPane, renamePane } from "../../features/operations/controller";
 import { paneMenuEntries, panePosition, type BoardPaneAction, type PaneMenuGroup, type PaneMenuModel,
@@ -28,7 +28,9 @@ import { createDomainUpdates, useDomainUpdates } from "../domain-updates";
 import { openBoardResizeSheet } from "./resize-sheet";
 
 const updates = createDomainUpdates([
-  { store: navigationStore }, { store: boardStore }, { store: dashboardStore },
+  { store: navigationStore }, { store: boardStore },
+  // The rows the menu names and their status words; a poll's refresh flag draws nothing.
+  { store: dashboardStore, keyOf: herdAgentsKey },
   { store: computersStore }, { store: connectionStore }, { store: capabilitiesStore }, { store: noticesStore },
 ]);
 

@@ -1,5 +1,5 @@
 import { ArrowDown } from "lucide-react";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { memo, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { lineFillBackground, paintLines, plainCellClass, spanCss, spanInk, type StyledLine } from "../../../lib/ansi";
 import { t } from "../../../lib/i18n";
 import { openPaneId, paneFollow, paneLoaded, paneUnread, sessionStore, setPaneFollow, termSelect } from "../session-store";
@@ -33,7 +33,11 @@ import { SessionScrollRail } from "./session-scroll";
 import { TermReading } from "./term-reading";
 import { cellText } from "../../../shared/ui/primitives";
 
-function TermLine({
+/**
+ * One rendered row. Memoised on its own line: an echo, the jump chip or the
+ * picked row repaints the terminal, and only the rows that changed redraw.
+ */
+const TermLine = memo(function TermLine({
   line,
   index,
   ghost,
@@ -59,7 +63,10 @@ function TermLine({
       ) : null}
     </div>
   );
-}
+});
+
+/** A screen with no rows still draws one empty line, from the same array every time. */
+const EMPTY_LINES: StyledLine[] = [{ text: "", spans: [] }];
 
 function pickedRow(): number | null {
   return sessionStore.get().paneRow;
@@ -136,8 +143,10 @@ export function SessionTerminal({ onRow }: { onRow?: (index: number, at?: RowPre
   const jumpRef = useRef<HTMLButtonElement>(null);
   const pointer = useDeskPointer();
   const model = displayedTermModel(paneModel());
-  const painted = paintLines(model.lines);
-  const live = painted.length ? painted : [{ text: "", spans: [] as StyledLine["spans"] }];
+  // Painted rows keep their identity per buffer: an echo or a picked row repaints
+  // the terminal, and the rows it did not change skip their render entirely.
+  const painted = useMemo(() => paintLines(model.lines), [model]);
+  const live = painted.length ? painted : EMPTY_LINES;
   const ghost = echoGhost(openPaneId());
   const ghostAt = ghost.text ? ghostRowIndex(live) : -1;
 

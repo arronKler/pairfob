@@ -1,7 +1,5 @@
 import { useLayoutEffect, useRef, useSyncExternalStore, type ComponentType } from "react";
-import { useDashboard } from "../../dashboard/hooks";
-import { useSession } from "../hooks";
-import { agentFromDashboardSnapshot } from "../agents";
+import { useAgentCard, usePaneId, usePaneTermSelect } from "../hooks";
 import { sessionOwner } from "../identity";
 import { t } from "../../../lib/i18n";
 import { paneModel, type PaneModel } from "./pane-model";
@@ -43,27 +41,30 @@ export function SessionPane(props: SessionPaneProps) {
 
 function SessionPaneView({ includeBack, handlers, scroll, parts = defaultParts }: SessionPaneProps) {
   useSyncExternalStore(subscribeSessionUI, sessionUIRevision);
-  const session = useSession();
-  const dashboard = useDashboard();
-  const selected = agentFromDashboardSnapshot(dashboard, session.paneId);
+  // What this screen decides is which pane and whether text is being selected;
+  // the buffer, the follow flag and every keystroke publish below it, into the
+  // terminal, the row bar and the dock that read them.
+  const paneId = usePaneId();
+  const selecting = usePaneTermSelect();
+  const selected = useAgentCard(paneId);
   const root = useRef<HTMLDivElement>(null);
   const model = paneModel();
   const shown = useRef(model);
-  if (!session.termSelect) shown.current = model;
+  if (!selecting) shown.current = model;
   const { Terminal, RowBar, Dock } = parts;
   // The field follows the keyboard, not the layout: a landscape tablet is wide
   // and still types on glass, and a back button can sit beside a mouse.
   const phone = !useHardwareKeyboard();
   // The hint outlives the mode by its exit.
-  const hint = usePresence(session.termSelect, MOTION_MS.press);
+  const hint = usePresence(selecting, MOTION_MS.press);
 
   useLayoutEffect(() => {
     const host = root.current;
     if (!host) return;
     finishSessionPaint(scroll);
-  }, [includeBack, session.termSelect]);
+  }, [includeBack, selecting]);
   useLayoutEffect(() => {
-    if (queuedKind() === "expand" && morphingPane() === session.paneId && root.current) shareOpening(root.current);
+    if (queuedKind() === "expand" && morphingPane() === paneId && root.current) shareOpening(root.current);
   });
 
   return <div ref={root} className="pane-root" data-react-guided-pane="">
@@ -77,7 +78,7 @@ function SessionPaneView({ includeBack, handlers, scroll, parts = defaultParts }
       </div>
       {/* The dock keeps its place while selecting so the buffer does not jump under the
           finger; it is inert until selection ends. */}
-      <div className="dock-slot" inert={session.termSelect || undefined}>
+      <div className="dock-slot" inert={selecting || undefined}>
         <Dock includeBack={includeBack} phone={phone} />
       </div>
     </>}

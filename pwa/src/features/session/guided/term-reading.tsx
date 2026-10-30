@@ -1,6 +1,6 @@
 import { t } from "../../../lib/i18n";
 import { useComputers } from "../../computers/hooks";
-import { useConnection } from "../../connection/hooks";
+import { useNetworkOnline } from "../../connection/hooks";
 
 /** Enough rows to reach the fade in the tallest pane; a shorter one hides the rest. */
 const READING_ROWS = 56;
@@ -20,7 +20,7 @@ const READING_ROWS = 56;
  * when the connection returns, and this hands back to the moving rows.
  */
 export function TermReading() {
-  const { networkOnline } = useConnection();
+  const networkOnline = useNetworkOnline();
   const { live } = useComputers();
   const reading = networkOnline && live?.isConnected() === true;
   return (

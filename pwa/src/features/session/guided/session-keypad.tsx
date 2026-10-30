@@ -1,7 +1,7 @@
 import { ChevronDown, Ellipsis } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { t } from "../../../lib/i18n";
-import { usePreferences } from "../../settings/hooks";
+import { useKeysExpanded } from "../../settings/hooks";
 import { keysExpanded, setKeysExpanded } from "../../settings/preferences-store";
 import {
   PRIMARY_KEYS,
@@ -37,7 +37,7 @@ export function SessionKeyPad({ collapsible = false, dense = false }: { collapsi
   useModifierScope();
   useSyncExternalStore(subscribeModifiers, modifierSnapshot, modifierSnapshot);
   const keyboard = useSoftKeyboardOpen();
-  const expanded = usePreferences().keysExpanded && !keyboard;
+  const expanded = useKeysExpanded() && !keyboard;
   if (collapsible && !expanded) return null;
   return <div className="keys-wrap">
     <div className={collapsible ? "keys keys-paged" : "keys"} role="group" aria-label={t("keys.primary")}>

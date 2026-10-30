@@ -10,9 +10,9 @@ import { boardStore, type BoardRecord } from "../../features/board/layout-store"
 import { navigationStore } from "../../app/navigation-store";
 import { createHerdActions } from "../../features/dashboard/actions";
 import { HerdScreen } from "../../features/dashboard/components/herd-screen";
-import { buildHerdViewModel, type HerdViewModel } from "../../features/dashboard/model/herd-view";
+import { buildHerdViewModel, herdAttentionCount, type HerdViewModel } from "../../features/dashboard/model/herd-view";
 import { createDomainUpdates, useDomainUpdates, type DomainWatch } from "../domain-updates";
-import { herdActionPorts, herdAgentsKey, herdSessionKey, readHerdAttention, readHerdInput, subscribeHerdAttention } from "./herd-bridge";
+import { herdActionPorts, herdAgentsKey, herdPreferencesKey, herdSessionKey, readHerdAttention, readHerdAttentionInput, readHerdInput, subscribeHerdAttention } from "./herd-bridge";
 
 /**
  * Home route: the phone page and the desktop rail.
@@ -26,7 +26,7 @@ import { herdActionPorts, herdAgentsKey, herdSessionKey, readHerdAttention, read
  * The route takes no props. The imperative boundaries that still consume
  * attention before a presentation — core's per-commit frame
  * (`app/frame-prepare.ts`) and the edge-swipe underlay
- * (`features/session/guided/pane-underlay.tsx`) — call `presentHerdView()` once:
+ * (`features/session/guided/pane-underlay.tsx`) — call `consumeHerdAttention()` once:
  * the bridge consumes attention and reconciles the accordion defaults, and this
  * route renders the same pure projection over the same domains. One source of
  * truth, and a typed action updates the mounted list whether or not anything
@@ -36,7 +36,9 @@ const watches: DomainWatch[] = [
   // The rows, not the record that carries them: a poll publishes the refresh
   // flag and may publish a repeated snapshot, and neither moves a row.
   { store: dashboardStore, keyOf: herdAgentsKey },
-  { store: preferencesStore },
+  // The list's grouping, folds and row stamps. A terminal's font or key pad
+  // changing publishes too, and none of it moves a row.
+  { store: preferencesStore, keyOf: herdPreferencesKey },
   { store: capabilitiesStore },
   { store: connectionStore },
   { store: computersStore },
@@ -59,10 +61,14 @@ function useHerdView(): HerdViewModel {
   return buildHerdViewModel(readHerdInput(painted));
 }
 
-/** Sessions that wait on the reader or finished unread; the tab bar badge. */
+/**
+ * Sessions that wait on the reader or finished unread; the tab bar badge. The
+ * bar shows a number, so it counts the rows this route subscribes to rather
+ * than projecting the list beside it — or instead of it.
+ */
 export function useHerdAttentionCount(): number {
-  const view = useHerdView();
-  return view.attention.length;
+  useDomainUpdates(updates);
+  return herdAttentionCount(readHerdAttentionInput());
 }
 
 export function HomePage() {

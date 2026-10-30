@@ -10,8 +10,8 @@ import { AgentKindPickerPanel } from "../../operations/agent-kind-picker";
 import { loadCreateMemory, rememberCreate } from "../../operations/create-memory";
 import { defaultAgentKind, loadLastAgentKind } from "../../operations/operation-form-model";
 import { PageFooter, usePageEnter, useSheetRun } from "../../operations/sheet-page";
-import { usePreferences } from "../../settings/hooks";
-import { useDashboard } from "../../dashboard/hooks";
+import { useListGroup } from "../../settings/hooks";
+import { useAgents } from "../../dashboard/hooks";
 import { cellStyle, layoutBoxes, layoutRatio, useTabLayout, type CellBox } from "./pane-layout-page";
 import type { ActionSheetController } from "../../../shared/ui/overlay/action-sheet";
 import { useDeskCancel } from "../../../shared/ui/overlay/desk-form";
@@ -141,13 +141,13 @@ function SplitPreview({ agent, direction, onDirection }: {
   agent: AgentCard; direction: SplitDirection; onDirection: (direction: SplitDirection) => void;
 }) {
   const layout = useTabLayout(agent);
-  const { listGroup } = usePreferences();
+  const listGroup = useListGroup();
   const boxes: CellBox[] = layout ? layoutBoxes(layout, agent.paneId) : [{ paneId: agent.paneId, x: 0, y: 0, width: 100, height: 100 }];
   const own = boxes.find(box => box.paneId === agent.paneId) ?? { paneId: agent.paneId, x: 0, y: 0, width: 100, height: 100 };
   const right = direction === "right";
   const half = right ? { ...own, width: own.width / 2 } : { ...own, height: own.height / 2 };
   const fresh = right ? { ...half, x: own.x + own.width / 2 } : { ...half, y: own.y + own.height / 2 };
-  const agents = useDashboard().agents;
+  const agents = useAgents();
   const title = (paneId: string) => { const card = agents.find(item => item.paneId === paneId); return card ? agentTitle(card, listGroup) : ""; };
   return <div className="pane-layout-preview pane-split-preview" style={{ aspectRatio: String(layoutRatio(layout)) }}>
     {boxes.filter(box => box.paneId !== agent.paneId).map(box => <span key={box.paneId} className="pane-layout-cell" style={cellStyle(box)} aria-hidden="true">
@@ -167,7 +167,7 @@ function SplitPreview({ agent, direction, onDirection }: {
 
 export function RenamePage({ modal, agent }: { modal: ActionSheetController; agent: AgentCard }) {
   const [value, setValue] = useState(agent.paneLabel || "");
-  const { listGroup } = usePreferences();
+  const listGroup = useListGroup();
   const input = useRef<HTMLInputElement>(null);
   const run = useSheetRun(modal);
   const reason = useOperationGate();

@@ -3,10 +3,9 @@ import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode
 import { t } from "../../../lib/i18n";
 import { MOTION_MS } from "../../../shared/ui/dom/motion";
 import { Button, Spinner, Swap } from "../../../shared/ui/primitives";
-import { useConnection, useRuntime } from "../../connection/hooks";
+import { useConnectionContact, useRuntime } from "../../connection/hooks";
 import { canInterruptAgent } from "../../connection/runtime-status";
-import { useDashboard } from "../../dashboard/hooks";
-import { agentFromDashboardSnapshot } from "../agents";
+import { useAgentCard } from "../hooks";
 import {
   acceptPastedFiles,
   dropBlockedAttachments,
@@ -22,7 +21,7 @@ import { playMove } from "../measured-move";
 import { clearModifiers } from "../keypad/keypad";
 import { useShortLandscape } from "../keypad/short-landscape";
 import { useSoftKeyboardOpen } from "../keypad/soft-keyboard";
-import { usePreferences } from "../../settings/hooks";
+import { useKeysExpanded } from "../../settings/hooks";
 import { keysExpanded, setKeysExpanded } from "../../settings/preferences-store";
 import {
   cancelSendWait,
@@ -59,10 +58,9 @@ export function useKeyboardOpen(): boolean {
 
 /** Whether Herdr reports this pane as working on a connection that can confirm it. */
 export function usePaneWorking(paneId: string): boolean {
-  const dashboard = useDashboard();
-  useConnection();
+  const agent = useAgentCard(paneId);
+  useConnectionContact();
   useRuntime();
-  const agent = agentFromDashboardSnapshot(dashboard, paneId);
   return canInterruptAgent(agent?.status ?? "");
 }
 
@@ -385,7 +383,7 @@ export function ComposeFrame({ field, draft, live, focused, foldable, onResize, 
   // So do the pad opening over a phone on its side, where its rows come out of
   // the lines the field may show, and the phone being turned.
   const keyboardOpen = useKeyboardOpen();
-  const padOpen = usePreferences().keysExpanded;
+  const padOpen = useKeysExpanded();
   const landscape = useShortLandscape();
   useLayoutEffect(() => { resize.current?.(); }, [folded, keyboardOpen, padOpen, landscape]);
   const showLines = !live && (lines > 3 || folded);
@@ -410,7 +408,7 @@ export function ComposeFrame({ field, draft, live, focused, foldable, onResize, 
  * hides the same expanded pad the touch row's ⋯ opens.
  */
 export function DockKeysButton() {
-  const expanded = usePreferences().keysExpanded;
+  const expanded = useKeysExpanded();
   return <PadChromeButton type="button" className="dock-keys-btn" aria-expanded={expanded ? "true" : "false"}
     title={t(expanded ? "deskDock.keysHide" : "deskDock.keysShow")}
     onClick={() => {

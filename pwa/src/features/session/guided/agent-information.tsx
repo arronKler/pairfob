@@ -1,7 +1,6 @@
-import { useSession } from "../hooks";
 import { Fragment, useState } from "react";
 import { useComputers } from "../../computers/hooks";
-import { useDashboard } from "../../dashboard/hooks";
+import { useAgentCard, usePaneId } from "../hooks";
 import { capabilityEnabled } from "../../operations/capabilities-store";
 import { useCapabilities } from "../../operations/hooks";
 import { t } from "../../../lib/i18n";
@@ -31,11 +30,11 @@ export function AgentInformation({ agent, session }: { agent: AgentCard; session
   const [state, setState] = useState<"idle" | "loading" | "failed">("idle");
   const [resultOwner, setResultOwner] = useState("");
   const [copied, setCopied] = useState(false);
-  const current = useDashboard().agents.find(item => item.paneId === agent.paneId);
+  const current = useAgentCard(agent.paneId);
   const computer = useComputers();
   const capabilities = useCapabilities();
   const owner = agentObservationKey(agent);
-  const paneId = useSession().paneId;
+  const paneId = usePaneId();
   const stale = paneId !== agent.paneId || computer.live !== session || !current || agentObservationKey(current) !== owner;
   const canInspect = !!agent.agent && capabilities.operationCapabilities.agent_inspect && !!session.agentInspect;
   const value = stale ? undefined : current;

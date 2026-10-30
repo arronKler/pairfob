@@ -2,9 +2,9 @@ import { commitView } from "../../../app/host";
 import { t } from "../../../lib/i18n";
 import { TERM_MODE_OPTIONS, type TermMode } from "../../../lib/terminal-mode";
 import { TERM_MODE_LABEL, TERM_MODE_MENU } from "../../../lib/ui-model";
-import { usePreferences } from "../../settings/hooks";
+import { usePreferenceField } from "../../settings/hooks";
 import { TERM_COL_PRESETS, TERM_FONT_MAX, TERM_FONT_MIN, setTermFont, termFontPx } from "../../settings/preferences-store";
-import { useCompose } from "../hooks";
+import { useComposeLive } from "../hooks";
 import { canEnterAgentChat } from "../chat/agent-chat-controller";
 import { setFullTerminalComposeLive, setTermFit } from "../full-terminal/full-terminal";
 import { resolvedPaneTermMode, selectPaneTermMode } from "../term-mode";
@@ -42,8 +42,11 @@ export function PaneModeSetting({ modal, mode }: { modal: ActionSheetController;
  * take effect in the pane behind the sheet.
  */
 export function PaneDisplaySettings({ modal, full, chat }: { modal: ActionSheetController; full: boolean; chat: boolean }) {
-  const prefs = usePreferences();
-  const { composeLive } = useCompose();
+  const fontPx = usePreferenceField((prefs) => prefs.termFontPx);
+  const wrap = usePreferenceField((prefs) => prefs.termWrap);
+  const fit = usePreferenceField((prefs) => prefs.termFit);
+  const panCols = usePreferenceField((prefs) => prefs.termCols);
+  const composeLive = useComposeLive();
   const font = (delta: number) => { setTermFont(termFontPx() + delta); commitView(); };
   if (chat) return null;
   return <MenuGroup className="pane-quick" label={t("pm.groupDisplay")}>
@@ -58,16 +61,16 @@ export function PaneDisplaySettings({ modal, full, chat }: { modal: ActionSheetC
           }} />)}
       </SegmentedControl>
     </MenuSetting>
-    <MenuStepper label={t("pane.fontSize")} value={t("pane.fontPx", { n: prefs.termFontPx })}
+    <MenuStepper label={t("pane.fontSize")} value={t("pane.fontPx", { n: fontPx })}
       decrease={t("menu.fontDown")} increase={t("menu.fontUp")} onDecrease={() => font(-1)} onIncrease={() => font(1)}
-      canDecrease={prefs.termFontPx > TERM_FONT_MIN} canIncrease={prefs.termFontPx < TERM_FONT_MAX} />
-    {!full && <MenuSwitch label={t("menu.wrap")} checked={prefs.termWrap} onChange={toggleTermWrap} />}
+      canDecrease={fontPx > TERM_FONT_MIN} canIncrease={fontPx < TERM_FONT_MAX} />
+    {!full && <MenuSwitch label={t("menu.wrap")} checked={wrap} onChange={toggleTermWrap} />}
     {full && <MenuSetting label={t("pane.width")} stacked>
       <SegmentedControl className="menu-mode pane-width-options" activation="manual" aria-label={t("pane.width")}>
-        <MenuRadio modal={modal} stay label={t("pane.fit")} aria={t("pane.fitAria")} selected={prefs.termFit === "fit"}
+        <MenuRadio modal={modal} stay label={t("pane.fit")} aria={t("pane.fitAria")} selected={fit === "fit"}
           action={() => { setTermFit("fit"); commitView(); }} />
         {TERM_COL_PRESETS.map(cols => <MenuRadio key={cols} modal={modal} stay label={t("pane.colsShort", { cols })}
-          aria={t("pane.panColsAria", { cols })} selected={prefs.termFit === "pan" && prefs.termCols === cols}
+          aria={t("pane.panColsAria", { cols })} selected={fit === "pan" && panCols === cols}
           action={() => { setTermFit("pan", cols); commitView(); }} />)}
       </SegmentedControl>
     </MenuSetting>}

@@ -6,7 +6,7 @@ import { dialogKeys, MAX_DIALOG_KEYS, parseTerminalDialog, screenExcerpt } from 
 import { ProtocolError } from "../../../lib/protocol/errors";
 import { messageOf } from "../../../lib/notices";
 import { liveSession } from "../../computers/catalog-store";
-import { useSession } from "../hooks";
+import { usePaneId } from "../hooks";
 import { Button, Fold, Spinner } from "../../../shared/ui/primitives";
 import { usePresence } from "../../../shared/react/use-presence";
 import { MOTION_MS } from "../../../shared/ui/dom/motion";
@@ -56,7 +56,7 @@ type Phase = "reading" | "ready" | "sending" | "sent";
 export function NeedsYouCard({ ask, raised = false, onTerminal, onAnswered }: {
   ask: PendingAsk | null; raised?: boolean; onTerminal?: () => void; onAnswered?: () => void;
 }) {
-  const paneId = useSession().paneId;
+  const paneId = usePaneId();
   const titleId = useId();
   const card = useRef<HTMLElement>(null);
   useKeepTail(card);

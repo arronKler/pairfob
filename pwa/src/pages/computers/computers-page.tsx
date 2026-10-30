@@ -1,7 +1,7 @@
 import { useComputers } from "../../features/computers/hooks";
-import { useConnection } from "../../features/connection/hooks";
+import { useConnectionPhase } from "../../features/connection/hooks";
 import { useNavigation } from "../../app/domain-hooks";
-import { useSession } from "../../features/session/hooks";
+import { usePaneId } from "../../features/session/hooks";
 import { beginAddComputer, computersPageInput, forgetComputer, leaveComputers, machineLinks, switchComputer } from "../../features/computers/actions";
 import { ComputerListView } from "../../features/computers/computer-list-view";
 import { computersViewModel } from "../../features/computers/model";
@@ -28,12 +28,17 @@ import { isDesk } from "../../app/viewport";
 
 function useComputersView(withBack: boolean) {
   const computers = useComputers();
-  const connection = useConnection();
+  // The projection reads the phase and the open pane's name, not the transport,
+  // the relay timing or the buffer: subscribing to those would repaint the
+  // whole list on every heartbeat.
+  const phase = useConnectionPhase();
   const navigation = useNavigation();
-  const session = useSession();
+  const paneId = usePaneId();
   // Project from the subscribed snapshots: a staged composition hold keeps the
   // picker on the same published phase/catalog as its frame.
-  return computersViewModel(computersPageInput(withBack, isDesk(), { connection, computers, navigation, session }));
+  return computersViewModel(computersPageInput(withBack, isDesk(), {
+    connection: { phase }, computers, navigation, session: { paneId },
+  }));
 }
 
 /** Machines the connected computer reaches; only an established session can list them. */
@@ -68,11 +73,10 @@ export function ComputersContent({ withBack }: { withBack: boolean }) {
 }
 
 export function ComputersScreen() {
-  useComputers();
-  const connection = useConnection();
-  useNavigation();
-  useSession();
-  const live = connection.phase === "live";
+  // The wrapper decides one thing, the class of the page: a reachability or
+  // relay-timing publish, or the open pane's buffer, must not repaint it. The
+  // content below subscribes to the catalog and the phase it draws.
+  const live = useConnectionPhase() === "live";
   return (
     <div className={live ? "page settings-page" : "page computer-pick"}>
       <ComputersContent withBack={live} />

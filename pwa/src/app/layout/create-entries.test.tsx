@@ -9,12 +9,13 @@ import { applyRuntimeIdentity, setIdentityPending } from "../../features/connect
 import { createHerdActions } from "../../features/dashboard/actions";
 import { replaceAgentsFromSnapshot, resetDashboard } from "../../features/dashboard/catalog-store";
 import { HerdScreen } from "../../features/dashboard/components/herd-screen";
+import { buildHerdViewModel, type HerdViewModel } from "../../features/dashboard/model/herd-view";
 import { applyCapabilities, setOperationBusy } from "../../features/operations/capabilities-store";
 import { setListGroup } from "../../features/settings/preferences-store";
 import { setLang, t } from "../../lib/i18n";
 import { NO_OPERATION_CAPABILITIES } from "../../lib/operations";
 import type { LiveSession } from "../../lib/protocol/client";
-import { herdActionPorts, presentHerdView } from "../../pages/home/herd-bridge";
+import { consumeHerdAttention, herdActionPorts, readHerdAttention, readHerdInput } from "../../pages/home/herd-bridge";
 import { batch } from "../../shared/model/domain-store";
 import { publishAllDomains } from "../domain-publication";
 import { setScreen } from "../navigation-store";
@@ -40,10 +41,16 @@ function seed(panes: string[]): void {
   } as never);
 }
 
+/** The list as the route projects one paint of it; the boundary itself projects nothing. */
+function presentedView(): HerdViewModel {
+  consumeHerdAttention();
+  return buildHerdViewModel(readHerdInput(readHerdAttention()));
+}
+
 /** What each entry says for the herd as it stands: true where it can be pressed. */
 function offered(variant: "rail" | "page"): Record<string, boolean | null> {
   publishAllDomains();
-  const view = presentHerdView();
+  const view = presentedView();
   act(() => root!.render(<>
     <HerdScreen view={view} actions={actions} variant={variant} />
     {variant === "rail" ? <DeskEmpty /> : null}

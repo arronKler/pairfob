@@ -1,5 +1,5 @@
 import { ArrowUp, Folder, Search } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, useMemo } from "react";
 import { t } from "../../lib/i18n";
 import { workspaceBreadcrumbs } from "../../lib/workspace";
 import { showActionSheet } from "../../shared/ui/overlay/action-sheet";
@@ -99,10 +99,12 @@ export function FileList({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const marks = gitMarks(snapshot.status);
   const together = useListBeside();
   const [query, setQuery] = useFileFilter(`${snapshot.paneId}\n${snapshot.descriptor?.root ?? ""}\n${snapshot.directory}`);
-  // Directories first, each group in the daemon's order.
-  const entries = [...snapshot.entries]
+  // Directories first, each group in the daemon's order. Filtering and sorting
+  // the listing is redone only for a new listing or a new query, not for every
+  // render of the panel around it.
+  const entries = useMemo(() => [...snapshot.entries]
     .filter((entry) => matchesFilter(entry.name, query))
-    .sort((a, b) => Number(b.kind === "directory") - Number(a.kind === "directory"));
+    .sort((a, b) => Number(b.kind === "directory") - Number(a.kind === "directory")), [snapshot.entries, query]);
   const filtering = query.trim() !== "";
   // The whole workspace is being asked as well: its section says what it found, or that it found nothing.
   const searching = filtering && searchable(query) && fileSearchOffered();

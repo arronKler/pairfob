@@ -60,12 +60,16 @@ function abortPairingInput(): void {
   clearPairErrorTarget();
 }
 
-/** Published snapshots the picker projects; callers subscribe first. */
+/**
+ * Published values the picker projects; callers subscribe first. The type names
+ * only the fields the projection reads, so a caller can subscribe to the phase
+ * alone instead of repainting the list on every heartbeat.
+ */
 export type ComputersPageSnapshots = {
-  connection: DomainView<ConnectionRecord>;
-  computers: DomainView<ComputersRecord, "live">;
-  navigation: DomainView<NavigationRecord>;
-  session: DomainView<SessionRecord>;
+  connection: Pick<DomainView<ConnectionRecord>, "phase">;
+  computers: Pick<DomainView<ComputersRecord, "live">, "computers" | "credential" | "lastUsedDaemonId">;
+  navigation: Pick<DomainView<NavigationRecord>, "computersFrom">;
+  session: Pick<DomainView<SessionRecord>, "paneId">;
 };
 
 /**

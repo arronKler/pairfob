@@ -25,6 +25,7 @@ import {
   isFullTerminal,
   noteSnapshotAt,
   paneLoaded,
+  paneReadPending,
   resetObservationLifecycle,
   resetPaneView,
   selectPane,
@@ -286,7 +287,7 @@ describe("desk pane-read scheduling", () => {
     const firstMutationRead = refreshPaneRead({ notBefore });
     const sharedMutationRead = refreshPaneRead({ notBefore });
     expect(calls).toBe(1);
-    expect(sessionStore.get().paneReadPending).toBeTrue();
+    expect(paneReadPending()).toBeTrue();
 
     resolvers.shift()!({ text: "hello", hash: "a".repeat(64) });
     await fallback;
@@ -296,7 +297,7 @@ describe("desk pane-read scheduling", () => {
     const observations = await Promise.all([firstMutationRead, sharedMutationRead]);
     expect(observations.every((observation) => observation?.hash === "b".repeat(64))).toBeTrue();
     expect(calls).toBe(2);
-    expect(sessionStore.get().paneReadPending).toBeFalse();
+    expect(paneReadPending()).toBeFalse();
   });
 
   afterEach(() => {

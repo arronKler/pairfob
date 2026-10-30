@@ -19,11 +19,21 @@ import { resetHerdAttention } from "../../lib/herd-attention";
 import { setLang, t } from "../../lib/i18n";
 import { NO_OPERATION_CAPABILITIES } from "../../lib/operations";
 import type { LiveSession } from "../../lib/protocol/session-types";
-import { presentHerdView, resetHerdAttentionSnapshot, toggleHerdGroup } from "./herd-bridge";
+import { consumeHerdAttention, readHerdAttention, readHerdInput, resetHerdAttentionSnapshot, toggleHerdGroup } from "./herd-bridge";
+import { buildHerdViewModel, type HerdViewModel } from "../../features/dashboard/model/herd-view";
 import { selectPane } from "../../features/session/session-store";
 
 const vibrations: number[] = [];
 const originalVibrate = Object.getOwnPropertyDescriptor(happy.navigator, "vibrate");
+
+/**
+ * One paint, then the list as the route projects it: the boundary consumes the
+ * attention and the render builds the view from the published domains.
+ */
+function presentHerdView(): HerdViewModel {
+  consumeHerdAttention();
+  return buildHerdViewModel(readHerdInput(readHerdAttention()));
+}
 
 function visible(value: "visible" | "hidden"): void {
   Object.defineProperty(document, "visibilityState", { configurable: true, value });

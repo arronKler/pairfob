@@ -5,7 +5,7 @@ import { BootScreen } from "../pages/boot/boot-screen";
 import { ReadingFrame } from "../pages/boot/reading-frame";
 import { BootRecovery } from "../pages/boot/boot-recovery";
 import { ConnectScreen } from "../pages/connect/connect-page";
-import { useConnection } from "../features/connection/hooks";
+import { useBootBlocked } from "../features/connection/hooks";
 import { TabBarView } from "./layout/tab-bar-view";
 import { getAppFrame, subscribeAppFrame, type FrameSnapshot } from "./frame";
 import { useAppShell, type ShellLayout } from "./shell";
@@ -26,7 +26,7 @@ export function App() {
 }
 
 function ReadingBoot() {
-  const { bootBlocked } = useConnection();
+  const bootBlocked = useBootBlocked();
   return bootBlocked ? <div className="page herd-page boot-shell"><BootRecovery block={bootBlocked} /></div> : <ReadingFrame />;
 }
 

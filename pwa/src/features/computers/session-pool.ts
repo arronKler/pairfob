@@ -118,6 +118,28 @@ export class ComputerSessions {
     return { session, reused: false, lastLatencyMs: null, transport: "relay", lastP2PAttempt: pendingAttempt };
   }
 
+  /**
+   * The pooled entry for this credential without connecting: the same
+   * deviceId + fingerprint match `activate` reuses, synchronously, so a switch can
+   * paint the target's kept view in the tap's own turn. Marks it the most recently
+   * activated entry, so eviction treats the computer on screen as in use; a
+   * matching entry means no activation for this daemon is in flight, because
+   * `activate` removes a mismatched one before it awaits its connector. Returns
+   * null when this computer has no matching pooled entry; never connects.
+   */
+  reuse(pair: PairResult): ActivatedSession | null {
+    const existing = this.entries.get(pair.daemonId);
+    if (!existing || existing.deviceId !== pair.deviceId || existing.fingerprint !== pair.fp) return null;
+    existing.activated = ++this.activation;
+    return {
+      session: existing.session,
+      reused: true,
+      lastLatencyMs: existing.lastLatencyMs,
+      transport: existing.transport,
+      lastP2PAttempt: existing.lastP2PAttempt,
+    };
+  }
+
   bind(
     daemonId: string,
     session: LiveSession,

@@ -250,4 +250,42 @@ describe("page-local computer sessions", () => {
     const reused = await pool.activate(pair("a"), connect);
     expect(reused.lastP2PAttempt).toEqual({ result: "timeout", extra: "later" });
   });
+
+  test("hands a pooled session over without connecting", async () => {
+    const pool = new ComputerSessions();
+    const created: FakeSession[] = [];
+    const connect = async () => {
+      const session = fakeSession();
+      created.push(session);
+      return session;
+    };
+    await pool.activate(pair("a"), connect);
+    await pool.activate(pair("b"), connect);
+
+    const handover = pool.reuse(pair("a"));
+
+    expect(handover?.session).toBe(pool.get("a"));
+    expect(handover?.reused).toBe(true);
+    expect(created).toHaveLength(2);
+    expect(pool.reuse(pair("a", "phone_new"))).toBeNull();
+    expect(pool.reuse(pair("missing"))).toBeNull();
+  });
+
+  test("a hand-off keeps the computer on screen out of the eviction order", async () => {
+    const pool = new ComputerSessions(2);
+    const sessions = new Map<string, FakeSession>();
+    const connect = async (credential: PairResult) => {
+      const session = fakeSession();
+      sessions.set(credential.daemonId, session);
+      return session;
+    };
+    await pool.activate(pair("a"), connect);
+    await pool.activate(pair("b"), connect);
+
+    pool.reuse(pair("a"));
+    await pool.activate(pair("c"), connect);
+
+    expect(sessions.get("a")?.closed).toBe(0);
+    expect(sessions.get("b")?.closed).toBe(1);
+  });
 });

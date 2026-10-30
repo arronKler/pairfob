@@ -6,8 +6,7 @@ import { renderMarkdown } from "../../../lib/agent-markdown";
 import type { AgentTraceItem } from "../../../lib/operations";
 import type { AgentTraceDetailState } from "../../../lib/agent-trace-cache";
 import { categoryLabel, recordsStepResults, stepCategory, stepObject, stepState, type StepState } from "../../../lib/agent-trace-steps";
-import { agentFromDashboardSnapshot } from "../agents";
-import { useDashboard } from "../../dashboard/hooks";
+import { useAgentCard } from "../hooks";
 import { showActionSheet } from "../../../shared/ui/overlay/action-sheet";
 import { Button, CopyAck, Spinner } from "../../../shared/ui/primitives";
 import { useCopied } from "../copy-confirm";
@@ -135,7 +134,7 @@ function Arguments({ item, input }: { item: AgentTraceItem; input: string }) {
 
 function ToolBody({ paneId, item, detail }: { paneId: string; item: AgentTraceItem; detail: AgentTraceDetailState }) {
   // An agent that records no results has no output to show, which is not the same as a step that printed nothing.
-  const recorded = recordsStepResults(agentFromDashboardSnapshot(useDashboard(), paneId)?.agent);
+  const recorded = recordsStepResults(useAgentCard(paneId)?.agent);
   const body = detail.detail;
   const input = body?.input ?? item.input ?? "";
   const output = body?.output ?? item.output ?? "";

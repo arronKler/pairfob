@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { useCompose, useSession } from "../hooks";
+import { useCompose, usePaneId } from "../hooks";
 import { t } from "../../../lib/i18n";
 import { OPERATION_INPUT_LIMITS } from "../../../lib/operations";
 import { hardwareKeyboard, useHardwareKeyboard } from "../../../app/input-mode";
@@ -8,7 +8,7 @@ import { AttachButton } from "../attachments/attach-button";
 import { phoneEnterKeyHint } from "../compose-keys";
 import { fitComposeHeight } from "../compose-size";
 import { useKeyboardHintsInPlace } from "../desk-pointer";
-import { usePreferences } from "../../settings/hooks";
+import { usePreferenceField } from "../../settings/hooks";
 import { ComposeFrame, DockKeysButton, SendButton, SendIssuePopover, useSendKind } from "../guided/compose-controls";
 import { cancelStop } from "../guided/session-stop";
 import { resetSendGate } from "../guided/send-gate";
@@ -27,8 +27,9 @@ export function FullTerminalCompose({ send, keysButton = false }: FullTerminalCo
   const sendRef = useRef(send);
   sendRef.current = send;
   const compose = useCompose();
-  const paneId = useSession().paneId;
-  usePreferences();
+  const paneId = usePaneId();
+  // Return's meaning is a preference the hint line states.
+  usePreferenceField((prefs) => prefs.composeEnterSends);
   // Return adds a line only where there is no Shift+Enter: the keyboard decides, not the width.
   const phone = !useHardwareKeyboard();
   const keysInPlace = useKeyboardHintsInPlace();

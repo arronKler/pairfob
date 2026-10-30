@@ -40,10 +40,15 @@ export type AgentTraceDetailState = {
   message?: string;
 };
 
+/**
+ * What a reader gets back, detached from the cache. The stored page is frozen
+ * published data, so only the array and the viewport are copied here; cloning
+ * every item would run per scroll event and per poll for nothing.
+ */
 function copy(entry: AgentTraceCacheEntry): AgentTraceCacheEntry {
   return {
     ...entry,
-    items: entry.items.map((item) => ({ ...item })),
+    items: entry.items.slice(),
     ...(entry.viewport ? { viewport: { ...entry.viewport } } : {}),
   };
 }
@@ -57,7 +62,7 @@ export function cacheAgentTrace(paneId: string, entry: AgentTraceCacheEntry): vo
     ? entry
     : { ...entry, viewport: previous.viewport };
   entries.delete(paneId);
-  entries.set(paneId, copy(next));
+  entries.set(paneId, { ...next, items: next.items.slice(), viewport: next.viewport ? { ...next.viewport } : undefined });
   while (entries.size > MAX_CACHED_PANES) {
     const oldest = entries.keys().next().value;
     if (typeof oldest !== "string") break;
@@ -77,8 +82,12 @@ export function cachedAgentTrace(paneId: string, ownerKey?: string): AgentTraceC
 export function cacheAgentTraceViewport(paneId: string, ownerKey: string, viewport: AgentTraceViewport): void {
   const entry = entries.get(paneId);
   if (!entry || (entry.ownerKey && entry.ownerKey !== ownerKey)) return;
+  // A scroll event updates the reading place per frame. The page and its items
+  // keep their identity; only the small viewport record is replaced.
+  entry.ownerKey = entry.ownerKey ?? ownerKey;
+  entry.viewport = { ...viewport };
   entries.delete(paneId);
-  entries.set(paneId, copy({ ...entry, ownerKey, viewport }));
+  entries.set(paneId, entry);
 }
 
 /** Update who is reading (follow, unread) without re-measuring a stream that may no longer be laid out. */

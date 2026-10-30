@@ -101,13 +101,18 @@ function useReadAll(view: HerdViewModel, actions: HerdActions): { readAll: Atten
   return { readAll, undo };
 }
 
-/** Minute ticks keep the "changed n ago" column honest while the list is open. */
-function useMinuteTick(): void {
+/**
+ * Minute ticks keep the "changed n ago" column honest while the list is open.
+ * A list with nothing dated — no rows yet, or rows the phone never saw change —
+ * has nothing to keep honest and takes no timer.
+ */
+function useMinuteTick(active: boolean): void {
   const [, setTick] = useState(0);
   useEffect(() => {
+    if (!active) return;
     const timer = window.setInterval(() => setTick(value => value + 1), 60_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [active]);
 }
 
 /**
@@ -138,7 +143,7 @@ export function HerdScreen({
   const [folded, setFolded] = useState(() => variant === "page" && rememberedScroll("herd") > FOLD_PX);
   const head = useRef<HTMLElement>(null);
   const { readAll, undo } = useReadAll(view, actions);
-  useMinuteTick();
+  useMinuteTick(view.groups.some(group => group.cards.some(card => card.ago !== "")));
   // The list keeps its place across tab switches and a trip into a session.
   useRememberedScroll("herd", variant === "page");
   useEffect(() => {

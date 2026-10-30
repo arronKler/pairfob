@@ -51,6 +51,7 @@ import { wsURL } from "./connection-store";
 import { track } from "../../lib/telemetry";
 import { applyComposeDraft, bumpViewIncarnation, captureComposeDraft, currentViewIncarnation, parkComposeView } from "../session/drafts/compose-drafts";
 import { clearAgentTraceCache } from "../../lib/agent-trace-cache";
+import { resetHerdAttention } from "../../lib/herd-attention";
 import { clearPaneBufferCache, rememberPaneBuffer, restorePaneBuffer } from "../session/pane-buffer";
 import { clearBoardPreviews } from "../board/preview/store";
 import { liveView, liveViewIsCurrent } from "./generations";
@@ -159,6 +160,7 @@ const retirementPorts: RetirementPorts = {
   bumpViewIncarnation,
   clearAgentTraceCache,
   clearBoardPreviews,
+  clearHerdAttention: resetHerdAttention,
   clearPaneBufferCache,
 };
 

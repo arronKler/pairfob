@@ -3,7 +3,7 @@ import { SessionCompose } from "./session-compose";
 import { SessionKeyPad } from "./session-keypad";
 import { AttachmentTray } from "../attachments/attachment-tray";
 import { useDeskPointer } from "../desk-pointer";
-import { useCompose } from "../hooks";
+import { useComposeLive } from "../hooks";
 import { useShortLandscape } from "../keypad/short-landscape";
 import { useSoftKeyboardOpen } from "../keypad/soft-keyboard";
 import { focusCompose, setComposeLive } from "./compose";
@@ -33,7 +33,7 @@ export type SessionDockProps = {
 export function SessionDock({ includeBack, phone = includeBack }: SessionDockProps) {
   const keyboardOpen = useSoftKeyboardOpen();
   const pointer = useDeskPointer();
-  const live = useCompose().composeLive;
+  const live = useComposeLive();
   const dense = useShortLandscape() && !pointer;
   return <div className={dense ? "dock is-dense" : "dock"}>
     <AttachmentTray compact={keyboardOpen} />

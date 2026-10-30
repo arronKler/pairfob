@@ -14,7 +14,7 @@ import { MOTION_MS } from "../../shared/ui/dom/motion";
 import type { PairResult } from "../../lib/protocol/client";
 import { ConnectionPathCard } from "./connection-path-card";
 import { UnreachableShell } from "./unreachable-shell";
-import { useConnection } from "../../features/connection/hooks";
+import { useBootBlocked } from "../../features/connection/hooks";
 import { BootRecovery } from "./boot-recovery";
 
 /**
@@ -28,7 +28,7 @@ import { BootRecovery } from "./boot-recovery";
  * A retry started from the "cannot reach" page keeps that page up instead.
  */
 export function BootShell() {
-  const { bootBlocked } = useConnection();
+  const bootBlocked = useBootBlocked();
   if (bootBlocked) return <div className="page herd-page boot-shell"><BootRecovery block={bootBlocked} /></div>;
   const reading = currentPhase() === "boot";
   if (reading) return <ReadingFrame />;

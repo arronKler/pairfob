@@ -8,13 +8,13 @@ import { layoutActionReason, type BoardLayoutAction, type PaneMenuModel } from "
 import { paneStepMove, type DividerAxis } from "../../board/model/divider";
 import { useBoard } from "../../board/hooks";
 import { liveAgents } from "../../dashboard/catalog-store";
-import { useDashboard } from "../../dashboard/hooks";
+import { useAgents } from "../../dashboard/hooks";
 import { layoutSelectedPane } from "../../operations/controller";
 import { useCapabilities } from "../../operations/hooks";
-import { useConnection } from "../../connection/hooks";
+import { useNetworkOnline } from "../../connection/hooks";
 import { openPane } from "../../connection/controller";
 import { liveSession } from "../../computers/catalog-store";
-import { usePreferences } from "../../settings/hooks";
+import { useListGroup } from "../../settings/hooks";
 import { openBoard } from "../../../pages/board/board-bridge";
 import { MenuGroup, MenuRow, MenuSetting, MenuSwitch } from "../../../shared/ui/overlay/menu-controls";
 import type { ActionSheetController } from "../../../shared/ui/overlay/action-sheet";
@@ -45,9 +45,9 @@ export function useTabLayout(agent: Pick<AgentCard, "workspaceId" | "tabId"> | u
  */
 export function PaneLayoutPage({ modal, agent }: { modal: ActionSheetController; agent: AgentCard }) {
   const { operationBusy, operationCapabilities: caps } = useCapabilities();
-  const agents = useDashboard().agents;
-  const { listGroup } = usePreferences();
-  const { networkOnline } = useConnection();
+  const agents = useAgents();
+  const listGroup = useListGroup();
+  const networkOnline = useNetworkOnline();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const pendingRef = useRef(false);

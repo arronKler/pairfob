@@ -15,7 +15,7 @@ import { selectPane, setAgentChat } from "../session-store";
 import { setScreen } from "../../../app/navigation-store";
 import { AgentChatPane } from "../chat/agent-chat";
 import { DeskShell } from "../../../app/layout/desk";
-import { presentHerdView as prepareHerdView } from "../../../pages/home/herd-bridge";
+import { consumeHerdAttention as prepareHerdView } from "../../../pages/home/herd-bridge";
 import { SessionPane } from "./session-pane";
 
 const live = () => ({ isConnected: () => true });

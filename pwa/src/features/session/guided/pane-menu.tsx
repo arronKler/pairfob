@@ -9,8 +9,8 @@ import { useStatusUnverifiable } from "./session-chrome";
 import { useCapabilities } from "../../operations/hooks";
 import { liveSession } from "../../computers/catalog-store";
 import { selectedAgent } from "../../dashboard/catalog-store";
-import { useDashboard } from "../../dashboard/hooks";
-import { usePreferences } from "../../settings/hooks";
+import { useAgentCard } from "../hooks";
+import { useListGroup } from "../../settings/hooks";
 import { isAgentChat, isFullTerminal, openPaneId, livePaneText } from "../session-store";
 import { paneTermMode } from "../../settings/preferences-store";
 import { agentStatusLabel, agentTitle } from "../../../lib/dashboard";
@@ -60,9 +60,9 @@ function PageRow({ icon, label, value, onClick }: { icon: ReactNode; label: stri
 
 /** Who this sheet acts on, as the list card and the header name it; tapping the path copies it. */
 function IdentityHead({ modal, agent, onCopied }: { modal: ActionSheetController; agent: AgentCard; onCopied: (text: string) => void }) {
-  const { listGroup } = usePreferences();
+  const listGroup = useListGroup();
   const stale = useStatusUnverifiable();
-  const current = useDashboard().agents.find((item) => item.paneId === agent.paneId) ?? agent;
+  const current = useAgentCard(agent.paneId) ?? agent;
   const status = current.agent ? (stale ? t("status.unverifiable") : agentStatusLabel(current)) : "";
   const path = current.cwd;
   const copy = async () => {
@@ -91,7 +91,7 @@ function IdentityHead({ modal, agent, onCopied }: { modal: ActionSheetController
  */
 function CloseZone({ modal, agent }: { modal: ActionSheetController; agent: AgentCard }) {
   const [asking, setAsking] = useState(false);
-  const { listGroup } = usePreferences();
+  const listGroup = useListGroup();
   const confirm = useRef<HTMLDivElement>(null);
   const zone = useRef<HTMLDivElement>(null);
   const asked = useRef(false);

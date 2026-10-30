@@ -33,6 +33,8 @@ export type RetirementPorts = {
   bumpViewIncarnation(): void;
   clearAgentTraceCache(): void;
   clearBoardPreviews(): void;
+  /** Status marks compare panes by id; another computer or Herdr session is another list. */
+  clearHerdAttention(): void;
   /** Screens remembered for this computer's panes answer for no one else. */
   clearPaneBufferCache(): void;
 };
@@ -68,6 +70,7 @@ export function resetLiveConnection(ports: RetirementPorts): void {
   ports.bumpViewIncarnation();
   ports.clearAgentTraceCache();
   ports.clearBoardPreviews();
+  ports.clearHerdAttention();
   ports.clearPaneBufferCache();
   batch(() => {
     retireLiveDomains();

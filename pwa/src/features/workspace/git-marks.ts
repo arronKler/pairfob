@@ -89,6 +89,21 @@ export function rowSteps(row: ChangeRowItem): ChangeStep[] {
  * opens (`loadGitDiff`).
  */
 export function listedChanges(changes: ReadonlyArray<Change>, limit = Number.POSITIVE_INFINITY): ListedChanges {
+  // The whole list is asked for on every render of the header, the overview and
+  // the changes column; one status is one answer, as with `gitMarks`.
+  if (limit === Number.POSITIVE_INFINITY) {
+    const cached = listedCache.get(changes);
+    if (cached) return cached;
+    const built = buildListed(changes, limit);
+    listedCache.set(changes, built);
+    return built;
+  }
+  return buildListed(changes, limit);
+}
+
+const listedCache = new WeakMap<object, ListedChanges>();
+
+function buildListed(changes: ReadonlyArray<Change>, limit: number): ListedChanges {
   const sections = changeSections(changes);
   const worktree = new Set(sections.worktree.map((step) => step.path));
   const tags = new Map(sections.staged.filter((step) => worktree.has(step.path)).map((step) => [step.path, step]));

@@ -35,14 +35,14 @@ const TEXT_TYPES = /^(?:text\/|application\/(?:json|xml|x-ndjson|x-yaml|yaml|tom
 const TEXT_NAMES = /\.(?:txt|log|md|json|jsonl|ya?ml|toml|csv|tsv|xml|ini|conf|sh|py|ts|tsx|js|jsx|go|rs|java|c|h|cpp|diff|patch)$/iu;
 const SWIPE_PX = 48;
 
+/** Stable across renders: an inline subscribe would detach and reattach on every one. */
+function subscribeTrayItems(listener: () => void): () => void {
+  const stops = [attachmentsStore.subscribe(listener), subscribeTrayState(listener)];
+  return () => stops.forEach((stop) => stop());
+}
+
 function useItems(key: string): readonly AttachmentItem[] {
-  return useSyncExternalStore(
-    (listener) => {
-      const stops = [attachmentsStore.subscribe(listener), subscribeTrayState(listener)];
-      return () => stops.forEach((stop) => stop());
-    },
-    () => visibleItemsSnapshot(key),
-  );
+  return useSyncExternalStore(subscribeTrayItems, () => visibleItemsSnapshot(key));
 }
 
 /** A settled row: nothing is uploading, so its bytes may change. */

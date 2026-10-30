@@ -2,7 +2,7 @@ import "../connected.scss";
 import { pageFor, TabBar } from "./connected-pages";
 import { systemBackAction, subscribeConnectedBack } from "./connected-back";
 import { prepareFullTerminal } from "../features/session/full-terminal/full-terminal";
-import { presentHerdView } from "../pages/home/herd-bridge";
+import { consumeHerdAttention } from "../pages/home/herd-bridge";
 import { prepareSessionPaint } from "../features/session/guided/view";
 import type { ConnectedPresentation } from "./presentation";
 import { NotificationPrompt } from "../pages/settings/notification-prompt";
@@ -10,7 +10,7 @@ import { NotificationPrompt } from "../pages/settings/notification-prompt";
 /** Ready as a unit before entering the first connected composition. */
 export const presentation: ConnectedPresentation = {
   NotificationPrompt,
-  pageFor, TabBar, prepareFullTerminal, presentHerdView, prepareSessionPaint,
+  pageFor, TabBar, prepareFullTerminal, consumeHerdAttention, prepareSessionPaint,
   systemBackAction, subscribeBack: subscribeConnectedBack,
 };
 export { registerSessionView } from "../features/session/register";

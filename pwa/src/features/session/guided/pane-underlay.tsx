@@ -1,7 +1,7 @@
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { HomePage } from "../../../pages/home";
-import { presentHerdView as prepareHerdView } from "../../../pages/home/herd-bridge";
+import { consumeHerdAttention } from "../../../pages/home/herd-bridge";
 
 export type PaneUnderlay = { element: HTMLDivElement; dispose(): void };
 
@@ -15,7 +15,7 @@ export function mountPaneUnderlay(app: HTMLElement, transform: string): PaneUnde
   // Prepare before render: consume dashboard attention and reconcile the
   // accordion defaults outside React; the real HomePage subscribes to the
   // published attention so the underlay stays consistent with the main list.
-  prepareHerdView();
+  consumeHerdAttention();
   // Keep the original sibling order: underlay first, current pane above it.
   app.insertBefore(element, app.firstChild);
   flushSync(() => root.render(<HomePage />));

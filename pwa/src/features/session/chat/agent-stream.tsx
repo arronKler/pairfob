@@ -341,17 +341,21 @@ function EmptyPanel({ spec, onRetry, onTerminal }: { spec: AgentEmptySpec; onRet
   </div>;
 }
 
-function turnAnchor(turn: AgentTurn, index: number, turns: readonly AgentTurn[]): TraceAnchor {
-  const key = turnKey(turn);
-  let ordinal = 0;
-  let ordinalFromEnd = 0;
-  for (let cursor = 0; cursor < index; cursor += 1) {
-    if (turnKey(turns[cursor]) === key) ordinal += 1;
-  }
-  for (let cursor = index + 1; cursor < turns.length; cursor += 1) {
-    if (turnKey(turns[cursor]) === key) ordinalFromEnd += 1;
-  }
-  return { key, ordinal, ordinalFromEnd };
+/**
+ * Every turn's place among the turns that share its key, in one pass. A turn
+ * that only went on keeps its anchor; computing each anchor by scanning the
+ * list twice would make a long transcript quadratic in its own render.
+ */
+function turnAnchors(turns: readonly AgentTurn[]): TraceAnchor[] {
+  const keys = turns.map((turn) => turnKey(turn));
+  const totals = new Map<string, number>();
+  for (const key of keys) totals.set(key, (totals.get(key) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return keys.map((key) => {
+    const ordinal = seen.get(key) ?? 0;
+    seen.set(key, ordinal + 1);
+    return { key, ordinal, ordinalFromEnd: (totals.get(key) ?? 1) - 1 - ordinal };
+  });
 }
 
 /**
@@ -369,8 +373,9 @@ export function AgentStream({ items, working, waiting = false, stale = false, ve
   onCopyReply?: CopyReply; onOpenStep?: OpenStep; truncated?: boolean;
   older?: ReactNode; streamRef?: Ref<HTMLDivElement>; signature?: string;
 }) {
-  const turns = groupAgentTurns(items);
-  const slots = turnSlots(turns);
+  const turns = useMemo(() => groupAgentTurns(items), [items]);
+  const slots = useMemo(() => turnSlots(turns), [turns]);
+  const anchors = useMemo(() => turnAnchors(turns), [turns]);
   const sent = useSentPrompt(turns, historyLoads);
   const openStep = onOpenStep ?? (() => undefined);
   // The transcript read for the first time takes the spinner's place: it fades in, once per read
@@ -399,7 +404,7 @@ export function AgentStream({ items, working, waiting = false, stale = false, ve
         const last = index === turns.length - 1;
         const live = working && empty.kind !== "unavailable" && last && turn.items.at(-1)?.type !== "interrupt";
         const pending = turn.user?.pending && progress ? progress : undefined;
-        return <TraceTurn key={slots[index]} turn={turn} anchor={turnAnchor(turn, index, turns)}
+        return <TraceTurn key={slots[index]} turn={turn} anchor={anchors[index]}
           state={{ live, waiting: waiting && last, stale, verified, pending, follow,
             hasNext: !last, partial: index === 0 && hasOlder && !turn.user,
             sent: turn.user?.pending === true && sent !== null, historyLoads }}

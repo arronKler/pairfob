@@ -8,7 +8,7 @@ export type ConnectedPresentation = {
   pageFor(layout: ShellLayout, frame: FrameSnapshot): ReactNode;
   TabBar(props: { mode: LayoutMode }): ReactNode;
   NotificationPrompt?: () => ReactNode;
-  presentHerdView(): unknown;
+  consumeHerdAttention(): void;
   prepareSessionPaint(): SessionScroll;
   prepareFullTerminal(): void;
   systemBackAction(): (() => void | Promise<void>) | null;

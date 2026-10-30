@@ -10,7 +10,7 @@ import { advertisedAgentKinds } from "../../features/operations/capabilities-sto
 import { splitSelectedPane, type SheetOutcome } from "../../features/operations/controller";
 import { loadCreateMemory, rememberCreate } from "../../features/operations/create-memory";
 import { defaultAgentKind, loadLastAgentKind } from "../../features/operations/operation-form-model";
-import { useConnection } from "../../features/connection/hooks";
+import { useNetworkOnline } from "../../features/connection/hooks";
 import { liveSession } from "../../features/computers/catalog-store";
 import { useCapabilities } from "../../features/operations/hooks";
 import { Button, Spinner } from "../../shared/ui/primitives";
@@ -42,7 +42,7 @@ function BoardSplitSheet({ modal, card, direction, target, reveal }: {
   const [back, setBack] = useState(false);
   const leavePicker = () => { setPicking(false); setBack(true); };
   const { operationBusy } = useCapabilities();
-  const { networkOnline } = useConnection();
+  const networkOnline = useNetworkOnline();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const running = useRef(false);

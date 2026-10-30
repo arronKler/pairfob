@@ -8,6 +8,7 @@ import {
   buildHerdViewModel,
   canCreateSession,
   herdAgo,
+  herdAttentionCount,
   herdCardClassName,
   herdCardPill,
   herdDoneCount,
@@ -376,6 +377,30 @@ describe("pane identity shared by the list card and the session header", () => {
     expect(blockedElsewhere(rows, "p1", false)).toBe(1);
     expect(blockedElsewhere(rows, "p4", false)).toBe(2);
     expect(blockedElsewhere(rows, "p4", true)).toBe(0);
+  });
+});
+
+describe("the count a badge shows", () => {
+  const rows = [
+    agent("p1", "alpha", "blocked"),
+    agent("p2", "alpha", "done"),
+    agent("p3", "alpha", "working"),
+    agent("p4", "alpha", "idle", { hasAgent: false, status: "done" }),
+  ];
+
+  test("it is the strip's length, read without projecting the list", () => {
+    const shaped = input({ agents: rows });
+    expect(herdAttentionCount(shaped)).toBe(2);
+    expect(herdAttentionCount(shaped)).toBe(buildHerdViewModel(shaped).attention.length);
+  });
+
+  test("a status that cannot be confirmed is counted as nothing, as the strip shows nothing", () => {
+    const stale = input({ agents: rows, liveness: "unverifiable", runtimeKind: "" });
+    expect(herdAttentionCount(stale)).toBe(0);
+    expect(herdAttentionCount(stale)).toBe(buildHerdViewModel(stale).attention.length);
+    // Still being read is not a lost status: the rows count.
+    const reading = input({ agents: rows, liveness: "unverifiable", runtimeKind: "", reading: true });
+    expect(herdAttentionCount(reading)).toBe(2);
   });
 });
 

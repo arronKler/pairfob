@@ -20,6 +20,12 @@ import {
   resetHerdPresentationChoices,
   setListGroup,
   setListGroupCollapsed,
+  setTermFontPx,
+  termFontPx,
+  termWrap,
+  setTermWrap,
+  rememberPane,
+  togglePanePin,
 } from "../../features/settings/preferences-store";
 import { applyCapabilities as setCapabilities, setOperationBusy } from "../../features/operations/capabilities-store";
 import { boardReturn } from "../../features/board/layout-store";
@@ -27,14 +33,26 @@ import { appHost, registerAppHost, releaseAppHost, type AppHost } from "../../ap
 import { currentScreen, setScreen } from "../../app/navigation-store";
 import { selectPane } from "../../features/session/session-store";
 import {
+  consumeHerdAttention,
   herdActionPorts,
-  presentHerdView,
+  herdPreferencesKey,
   readHerdAttention,
   readHerdInput,
   resetHerdAttentionSnapshot,
   subscribeHerdAttention,
   toggleHerdGroup,
 } from "./herd-bridge";
+import { buildHerdViewModel, type HerdViewModel } from "../../features/dashboard/model/herd-view";
+
+/**
+ * One paint, then the list as the route projects it. The paint boundary itself
+ * projects nothing: the view these assertions read is the one a render builds
+ * from the published domains.
+ */
+function presentHerdView(): HerdViewModel {
+  consumeHerdAttention();
+  return buildHerdViewModel(readHerdInput(readHerdAttention()));
+}
 
 const vibrations: number[] = [];
 let hostCommitted = 0;
@@ -426,6 +444,41 @@ describe("herd presenter", () => {
 function listGroupCollapsedNow(): Record<string, boolean> {
   return { ...preferencesStore.get().listGroupCollapsed };
 }
+
+describe("what the list hears from preferences", () => {
+  const key = () => herdPreferencesKey(preferencesStore.get());
+
+  test("a terminal's font or wrap publishes without moving the list's key", () => {
+    seed([seedAgent("p1", "alpha")]);
+    const before = key();
+    const published = preferencesStore.get();
+    setTermFontPx(termFontPx() + 2);
+    setTermWrap(!termWrap());
+    expect(preferencesStore.get()).not.toBe(published);
+    expect(key()).toBe(before);
+  });
+
+  test("the grouping, a fold, a stamp and a pin each move it", () => {
+    seed([seedAgent("p1", "alpha")]);
+    const before = key();
+    setListGroup("space");
+    const regrouped = key();
+    expect(regrouped).not.toBe(before);
+    setListGroupCollapsed({ alpha: true });
+    const folded = key();
+    expect(folded).not.toBe(regrouped);
+    setListGroupCollapsed({ alpha: false });
+    expect(key()).not.toBe(folded);
+
+    // The reader opening a pane reorders the list; a pin moves its row.
+    const unfolded = key();
+    rememberPane("p1");
+    const activated = key();
+    expect(activated).not.toBe(unfolded);
+    togglePanePin("p1");
+    expect(key()).not.toBe(activated);
+  });
+});
 
 describe("herd action ports", () => {
   test("the menu guard is read when the press lands, not when the card rendered", () => {

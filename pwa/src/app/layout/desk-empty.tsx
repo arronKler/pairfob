@@ -15,7 +15,7 @@ import { paneFileSearch } from "../../features/workspace/file-search";
 import { preferencesStore } from "../../features/settings/preferences-store";
 import { t } from "../../lib/i18n";
 import { createDomainUpdates, useDomainUpdates, type DomainWatch } from "../../pages/domain-updates";
-import { herdActionPorts, herdAgentsKey, herdSessionKey, readHerdAttention, readHerdInput, subscribeHerdAttention } from "../../pages/home/herd-bridge";
+import { herdActionPorts, herdAgentsKey, herdPreferencesKey, herdSessionKey, readHerdAttention, readHerdInput, subscribeHerdAttention } from "../../pages/home/herd-bridge";
 import { AgentAvatar, Button } from "../../shared/ui/primitives";
 import { commandKOffered, useHardwareKeyboard } from "../input-mode";
 import { getLayout, layoutStore } from "../layout-store";
@@ -33,7 +33,7 @@ import { navigationStore } from "../navigation-store";
 const watches: DomainWatch[] = [
   // As on the rail: the rows themselves, not the record a repeated poll rewrites.
   { store: dashboardStore, keyOf: herdAgentsKey },
-  { store: preferencesStore },
+  { store: preferencesStore, keyOf: herdPreferencesKey },
   { store: capabilitiesStore },
   { store: connectionStore },
   { store: computersStore },

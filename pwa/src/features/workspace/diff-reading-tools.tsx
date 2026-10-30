@@ -4,7 +4,7 @@ import { t } from "../../lib/i18n";
 import { showActionSheet } from "../../shared/ui/overlay/action-sheet";
 import { MenuGroup, MenuStepper, MenuSwitch } from "../../shared/ui/overlay/menu-controls";
 import { Button } from "../../shared/ui/primitives";
-import { usePreferences } from "../settings/hooks";
+import { usePreferenceField } from "../settings/hooks";
 import { autoDiffSize, canStepDiffSize, stepDiffSize } from "./diff-reading";
 import { diffWrap, setDiffWrap, useDiffSize, useDiffWrap } from "./prefs";
 import { isWrapKey, useKeyHint } from "./workspace-keys";
@@ -18,7 +18,7 @@ const FINE = "(hover: hover) and (pointer: fine)";
  * coming or going on a tablet.
  */
 function useAutoSize(lines: RefObject<HTMLElement | null>): number {
-  const { termFontPx } = usePreferences();
+  const termFontPx = usePreferenceField((prefs) => prefs.termFontPx);
   const [auto, setAuto] = useState(() => autoDiffSize(null));
   useLayoutEffect(() => { setAuto(autoDiffSize(lines.current)); }, [lines, termFontPx]);
   useEffect(() => {

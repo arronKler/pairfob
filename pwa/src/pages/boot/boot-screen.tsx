@@ -3,7 +3,7 @@ import { t } from "../../lib/i18n";
 import { credential } from "../../features/computers/catalog-store";
 import { phase as currentPhase } from "../../features/connection/connection-store";
 import { Brand, Spinner } from "../../shared/ui/primitives";
-import { useConnection } from "../../features/connection/hooks";
+import { useBootBlocked } from "../../features/connection/hooks";
 import { BootRecovery } from "./boot-recovery";
 
 /**
@@ -19,7 +19,7 @@ import { BootRecovery } from "./boot-recovery";
  * boot frame does, since a splash between attempts would hide the explanation.
  */
 export function BootScreen() {
-  const { bootBlocked } = useConnection();
+  const bootBlocked = useBootBlocked();
   const current = credential();
   if (bootBlocked) return <div className="boot"><Brand /><BootRecovery block={bootBlocked} /></div>;
   return <div className="boot">

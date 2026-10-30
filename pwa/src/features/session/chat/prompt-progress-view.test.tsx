@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { act } from "react";
+import { act, useSyncExternalStore } from "react";
 import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { WorkspaceSnapshotRestorer } from "../../../../test-support/workspace-snapshot-restore";
@@ -7,7 +7,7 @@ import { appRoot } from "../../../app/dom-root";
 import { setLang } from "../../../lib/i18n";
 import { applySnapshot, selectedAgent } from "../../dashboard/catalog-store";
 import { selectPane } from "../session-store";
-import { applyTrace, chatSnapshot, resetTrace } from "./trace-store";
+import { applyTrace, chatSnapshot, chatStore, resetTrace } from "./trace-store";
 import { createPromptProgress } from "./prompt-progress";
 import { PromptProgressView, usePromptProgressNote } from "./prompt-progress-view";
 const restorer = new WorkspaceSnapshotRestorer();
@@ -20,6 +20,12 @@ afterEach(() => { unmountReact(); act(() => { resetTrace(); restorer.restore(); 
 function NoteProbe() {
   const note = usePromptProgressNote();
   return <p data-note={note ? `${note.attention ? "attention" : note.settled ? "settled" : "live"}` : "none"}>{note?.message ?? ""}</p>;
+}
+/** The chat screen owns the note and the pending text; the row only draws them. */
+function ProgressRow() {
+  const note = usePromptProgressNote();
+  const pending = useSyncExternalStore(chatStore.subscribe, () => chatStore.get().agentTracePending);
+  return <PromptProgressView note={note} pending={pending} />;
 }
 const probe = () => appRoot().querySelector<HTMLElement>("[data-note]")!;
 
@@ -56,7 +62,7 @@ test("a leading slash for a non-Claude agent settles as sent to the terminal", (
 test("above the composer only an attention outcome without a pending turn remains", () => {
   const progress = createPromptProgress(selectedAgent()!);
   act(() => applyTrace({ promptProgress: { ...progress, phase: "unknown" }, agentTracePending: "" }));
-  renderReact(<PromptProgressView />);
+  renderReact(<ProgressRow />);
   expect(appRoot().querySelector("[data-prompt-progress]")?.className).toBe("agent-progress is-attention");
   act(() => applyTrace({ agentTracePending: "still pending" }));
   expect(appRoot().querySelector("[data-prompt-progress]")).toBeNull();

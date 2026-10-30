@@ -1,12 +1,11 @@
 import { PromptProgressView, usePromptProgressNote } from "./prompt-progress-view";
 import { ArrowDown } from "lucide-react";
-import { openPaneId } from "../session-store";
-import { useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { isAgentChat, openPaneId } from "../session-store";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { followTrace, setTraceFollow } from "./trace-store";
 import { glidingToTail } from "./tail-glide";
 import { computersStore } from "../../computers/catalog-store";
-import { useChat, useSession } from "../hooks";
-import { useDashboard } from "../../dashboard/hooks";
+import { useAgentCard, useChat, usePaneId } from "../hooks";
 import { t } from "../../../lib/i18n";
 import { capabilityEnabled } from "../../operations/capabilities-store";
 import { useStatusUnverifiable } from "../guided/session-chrome";
@@ -18,7 +17,6 @@ import { agentChatUIRevision, publishAgentChatUI, subscribeAgentChatUI } from ".
 import type { SessionHandlers } from "../guided/view";
 import type { AgentTraceItem } from "../../../lib/operations";
 import { recordsStepResults, turnStepRows, type TurnRef } from "../../../lib/agent-trace-steps";
-import { agentFromDashboardSnapshot } from "../agents";
 import { sessionOwner } from "../identity";
 import { subscribeVisibleNotice, visibleNotice } from "../../../app/notices-store";
 import { AgentCompose } from "./agent-compose";
@@ -30,8 +28,7 @@ import { noticeKeepsItsPlace, SessionNotice } from "../session-notice";
 import { SessionIdentity } from "../guided/session-chrome";
 
 function AgentChatChrome({ includeBack, handlers }: { includeBack: boolean; handlers: SessionHandlers }) {
-  const sessionSnap = useSession();
-  const selected = agentFromDashboardSnapshot(useDashboard(), sessionSnap.paneId);
+  const selected = useAgentCard(usePaneId());
   return <SessionIdentity agent={selected} fallbackTitle={t("mode.agent")} includeBack={includeBack} handlers={handlers} />;
 }
 
@@ -45,12 +42,11 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   const stream = useRef<HTMLDivElement>(null);
   useSyncExternalStore(subscribeAgentChatUI, agentChatUIRevision);
   useSyncExternalStore(subscribeVisibleNotice, visibleNotice);
-  const sessionSnap = useSession();
+  const paneId = usePaneId();
   const chat = useChat();
   const reading = useRef({ follow: chat.agentTraceFollow, unread: chat.agentTraceUnread });
   reading.current = { follow: chat.agentTraceFollow, unread: chat.agentTraceUnread };
-  const paneId = sessionSnap.paneId;
-  const agent = agentFromDashboardSnapshot(useDashboard(), paneId);
+  const agent = useAgentCard(paneId);
   const status = agent?.status;
   // A blocked agent is still inside its turn: the card stays live and says it waits on you.
   const working = status === "working" || status === "blocked";
@@ -58,7 +54,9 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   // trace_labels comes with real Claude/Codex failure states; before it, "done" only means "ended".
   const verified = capabilityEnabled("trace_labels") && recordsStepResults(agent?.agent);
   const progress = usePromptProgressNote();
-  const items = visibleItems();
+  // The transcript is the only array this screen renders: a repaint for the
+  // reading posture, a notice or a status must not rebuild it.
+  const items = useMemo(() => visibleItems(), [chat.agentTraceItems, chat.agentTracePending]);
   // What stays keeps its place in the page: an error raised to stay, else the chat's own note about its
   // history. A passing notice floats under it, so the note it used to replace does not leave and come back.
   const appNotice = visibleNotice();
@@ -92,7 +90,7 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
     let retired = false;
     const session = computersStore.get().live;
     queueMicrotask(() => {
-      if (!retired && computersStore.get().live === session && sessionSnap.paneId === paneId && sessionSnap.agentChat
+      if (!retired && computersStore.get().live === session && openPaneId() === paneId && isAgentChat()
         && !chat.agentTraceBusy && chat.agentTraceLoadState === "cold") void refreshAgentTrace();
     });
     return () => { retired = true; };
@@ -113,9 +111,13 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
         onNeedOlder={() => { if (chat.agentTraceNext && !chat.agentTraceBusy) void refreshAgentTrace(true); }}
         onFollow={(follow, element) => {
           // A glide to the tail passes through "not at the tail" on its way; the reader has not left.
-          if (follow || glidingToTail(element)) followTrace();
-          else setTraceFollow(false);
-          publishAgentChatUI();
+          // A scroll that changes neither the follow nor the unread posture repaints nothing: the
+          // event fires per frame, and the transcript cache already carries the place.
+          if (follow || glidingToTail(element)) {
+            if (followTrace()) publishAgentChatUI();
+          } else if (setTraceFollow(false)) {
+            publishAgentChatUI();
+          }
           rememberAgentViewport(element, paneId);
         }}
         onCopyReply={copyAgentReply} onOpenStep={openStep} onAnswered={answered} older={<Button className="btn btn-small agent-older" hidden={!chat.agentTraceNext}
@@ -124,7 +126,7 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
           }}>{chat.agentTraceBusy && chat.agentTraceNext ? t("chat.readingOlder") : t("hist.loadEarlier")}</Button>} />
       <Button className={jump.leaving ? "agent-jump term-jump-out" : "agent-jump"} hidden={!jump.mounted} inert={jump.leaving} onClick={jumpToLatest}><ArrowDown size={16} aria-hidden="true" />{jumpLabel.current}</Button>
     </div>
-    <PromptProgressView />
+    <PromptProgressView note={progress} pending={chat.agentTracePending} />
     <AgentCompose />
   </div>;
 }

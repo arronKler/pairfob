@@ -13,6 +13,9 @@
  *    and only when the reconciled map really differs, so a presentation that
  *    changes nothing publishes nothing.
  *
+ * The boundary projects no list: each route projects for its own render from the
+ * domains it subscribes to, so a view built here would be work nobody reads.
+ *
  * Every write here is a typed domain action (`preferences.setListGroupCollapsed`),
  * so a mounted herd list updates from its own subscription and no manual repaint
  * is requested. Reads come from the domains' live canonical readers and published
@@ -28,7 +31,7 @@ import { settingsNetworkPath, settingsNetworkPathInUse } from "../../features/se
 import { t } from "../../lib/i18n";
 import { connectionStore, networkOnline } from "../../features/connection/connection-store";
 import { dashboardStore, liveAgents } from "../../features/dashboard/catalog-store";
-import { listGroup, listGroupCollapsed, paneActivated, panePinned, paneTouched, preferencesStore, setListGroupCollapsed, togglePanePin } from "../../features/settings/preferences-store";
+import { listGroup, listGroupCollapsed, paneActivated, panePinned, paneTouched, preferencesStore, setListGroupCollapsed, togglePanePin, type PreferencesRecord } from "../../features/settings/preferences-store";
 import { acknowledgeAllCompletions, acknowledgePaneCompletion, restoreCompletions } from "../../features/dashboard/catalog-store";
 import { openGroupModeSheet } from "../../features/dashboard/components/group-mode-sheet";
 import { openCreateSheet, openQuickCreate } from "./create-bridge";
@@ -44,7 +47,7 @@ import { groupAgents, holdActivation, syncGroupCollapsed, toggleCollapsedForIds,
 import { isDesk } from "../../app/viewport";
 import { haptic } from "../../shared/ui/dom/feedback";
 import { herdLivenessModel, herdStatusModel } from "../../features/dashboard/model/herd-status";
-import { buildHerdViewModel, STATUS_JOIN, type HerdHostView, type HerdModelInput, type HerdStatus, type HerdViewModel } from "../../features/dashboard/model/herd-view";
+import { buildHerdViewModel, herdAttentionCount, STATUS_JOIN, type HerdHostView, type HerdModelInput, type HerdStatus, type HerdViewModel } from "../../features/dashboard/model/herd-view";
 import { morphingPane } from "../../app/transition";
 import { openBoard } from "../board/board-bridge";
 import { boardStore, clearBoardReturn } from "../../features/board/layout-store";
@@ -186,14 +189,23 @@ export function resetHerdListOrder(): void {
  * and `lastHerdSig` is the list's own signature, written with every write that
  * does.
  */
-export function herdAgentsKey(snapshot: object): string {
-  const record = snapshot as { snapshotLoaded: boolean; lastHerdSig: string };
-  return `${record.snapshotLoaded ? 1 : 0}\u0000${record.lastHerdSig}`;
-}
+export { herdAgentsKey } from "../../features/dashboard/catalog-store";
 
 /** The open session: the only thing the herd surfaces read from the session domain. */
-export function herdSessionKey(snapshot: object): string {
-  return (snapshot as { paneId: string }).paneId;
+export { herdSessionKey } from "../../features/session/session-store";
+
+/**
+ * What the herd surfaces render from the preferences domain. The domain owns
+ * every device-local choice, and most of them — a terminal's font, its wrap, the
+ * key pad, the compose mode — are no part of the list a subscription is for: a
+ * reader changing one beside the rail must not build the whole list again.
+ */
+export function herdPreferencesKey(snapshot: object): string {
+  const record = snapshot as Pick<PreferencesRecord, "listGroup" | "listGroupCollapsed" | "paneTouched" | "paneActivated" | "panePinned">;
+  const stamps = (map: Record<string, number>) => Object.keys(map).map((paneId) => `${paneId}=${map[paneId]}`).join(",");
+  const folds = (map: Record<string, boolean>) => Object.keys(map).map((id) => `${id}=${map[id] ? 1 : 0}`).join(",");
+  return `${record.listGroup}\u0000${stamps(record.paneActivated)}\u0000${stamps(record.paneTouched)}`
+    + `\u0000${stamps(record.panePinned)}\u0000${folds(record.listGroupCollapsed)}`;
 }
 
 /**
@@ -247,14 +259,32 @@ function troubleBrief(status: HerdStatus, line: string, retry: boolean): readonl
   return parts.length > 1 && parts[0] === t("chrome.connected") ? parts.slice(1) : parts;
 }
 
+/**
+ * The verdict on its own — the reachability the list is read under, without
+ * grouping or cards. The host panel's title needs this and nothing else, so it
+ * is not handed a whole list to read one word from.
+ */
+function herdStatus(): HerdStatus {
+  const runtime = runtimeStore.get();
+  const connected = liveSession()?.isConnected() === true;
+  const online = networkOnline();
+  return herdStatusModel({
+    checking: liveSession()?.isChecking?.() === true,
+    connected,
+    networkOnline: online,
+    runtimeKind: runtime.runtimeKind,
+    herdHost: runtime.herdHost,
+    reading: runtime.identityPending,
+  });
+}
+
 export function readHerdInput(painted: HerdPaint): HerdModelInput {
   const dashboard = dashboardStore.get();
   const preferences = preferencesStore.get();
   const runtime = runtimeStore.get();
   const connected = liveSession()?.isConnected() === true;
   const online = networkOnline();
-  const reachability = { connected, networkOnline: online, runtimeKind: runtime.runtimeKind };
-  const status = herdStatusModel({ checking: liveSession()?.isChecking?.() === true, ...reachability, herdHost: runtime.herdHost, reading: runtime.identityPending });
+  const status = herdStatus();
   return {
     agents: dashboard.agents,
     listGroup: listGroup(),
@@ -265,7 +295,7 @@ export function readHerdInput(painted: HerdPaint): HerdModelInput {
     selectedPaneId: openPaneId(),
     attention: painted,
     listEpoch: roster.epoch,
-    liveness: herdLivenessModel(reachability),
+    liveness: herdLivenessModel({ connected, networkOnline: online, runtimeKind: runtime.runtimeKind }),
     status,
     reading: runtime.identityPending,
     snapshotLoaded: dashboard.snapshotLoaded,
@@ -283,6 +313,28 @@ export function readHerdInput(painted: HerdPaint): HerdModelInput {
     boardOpen: navigationStore.get().screen === "board",
     settingsOpen: SETTINGS_SCREENS.has(navigationStore.get().screen),
     boardTabId: boardStore.get().boardTabId,
+  };
+}
+
+/** The few things the badge counts with; see `herdAttentionCount`. */
+export type HerdAttentionInput = Parameters<typeof herdAttentionCount>[0];
+
+/**
+ * The tab bar's count, read without projecting the list: the rows and the
+ * verdict a status is claimed under. No header copy is written and nothing is
+ * grouped, because the bar shows how many sessions wait, not what they are.
+ */
+export function readHerdAttentionInput(): HerdAttentionInput {
+  const runtime = runtimeStore.get();
+  const connected = liveSession()?.isConnected() === true;
+  const online = networkOnline();
+  return {
+    agents: dashboardStore.get().agents,
+    connected,
+    networkOnline: online,
+    reading: runtime.identityPending,
+    runtimeKind: runtime.runtimeKind,
+    liveness: herdLivenessModel({ connected, networkOnline: online, runtimeKind: runtime.runtimeKind }),
   };
 }
 
@@ -320,11 +372,15 @@ export function unreachableHerdView(host: HerdHostView): HerdViewModel {
 }
 
 /**
- * Consume attention, acknowledge a visible completion batch, reconcile the
- * accordion defaults and project the herd view model. Called once per paint by
- * the imperative boundary — never from inside a React render.
+ * Consume attention, acknowledge a visible completion batch and reconcile the
+ * accordion defaults. Called once per paint by the imperative boundary — never
+ * from inside a React render.
+ *
+ * It projects nothing: the route renders the list from the domains it
+ * subscribes to, so a view built here would be a second projection of the same
+ * paint that nobody reads.
  */
-export function presentHerdView(): HerdViewModel {
+export function consumeHerdAttention(): void {
   // Action-time boundary: read the live owner records, not the published
   // snapshots, so a typed action that landed since the last commit is visible
   // here. React projections keep using readHerdInput's stable snapshots.
@@ -347,7 +403,6 @@ export function presentHerdView(): HerdViewModel {
     attention = snapshot;
     for (const listener of [...attentionListeners]) listener();
   }
-  return buildHerdViewModel(readHerdInput(attention));
 }
 
 /**
@@ -374,7 +429,7 @@ export function herdActionPorts(): HerdActionPorts {
     },
     openPaneMenu: openListPaneMenu,
     openWorkspaceMenu: openListWorkspaceMenu,
-    openHostMenu: () => openHostMenu(readHerdHost(readHerdInput(attention).status)),
+    openHostMenu: () => openHostMenu(readHerdHost(herdStatus())),
     openGroupModeMenu: openGroupModeSheet,
     togglePin: togglePanePin,
     markRead: (paneId) => {

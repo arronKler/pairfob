@@ -10,6 +10,17 @@ import { attachT } from "./attach-copy";
 import { attachmentsAllowed } from "./attachments-controller";
 import { openAttachmentPicker } from "./attach-picker";
 
+/** Stable across renders: an inline subscribe would detach and reattach on every one. */
+function subscribeAttachAllowed(listener: () => void): () => void {
+  const unsubs = [
+    sessionStore.subscribe(listener),
+    computersStore.subscribe(listener),
+    connectionStore.subscribe(listener),
+    capabilitiesStore.subscribe(listener),
+  ];
+  return () => unsubs.forEach((unsubscribe) => unsubscribe());
+}
+
 /**
  * The one attach affordance, mounted in every compose mode (guided, agent
  * chat, full terminal batch and full terminal live). Hidden (never merely
@@ -22,18 +33,7 @@ import { openAttachmentPicker } from "./attach-picker";
  * the capability grant, and a selection must outlive it.
  */
 export function AttachButton() {
-  const allowed = useSyncExternalStore(
-    (listener) => {
-      const unsubs = [
-        sessionStore.subscribe(listener),
-        computersStore.subscribe(listener),
-        connectionStore.subscribe(listener),
-        capabilitiesStore.subscribe(listener),
-      ];
-      return () => unsubs.forEach((unsubscribe) => unsubscribe());
-    },
-    attachmentsAllowed,
-  );
+  const allowed = useSyncExternalStore(subscribeAttachAllowed, attachmentsAllowed, attachmentsAllowed);
   if (!allowed) return null;
   return <Button
     type="button"
