@@ -16,23 +16,63 @@ function idleCopyButtons() {
   });
 }
 
-document.querySelectorAll(".copy").forEach((button) => {
-  button.addEventListener("click", async () => {
-    const text = button.getAttribute("data-copy") || "";
-    const labels = copyLabel();
-    try {
-      await navigator.clipboard.writeText(text);
-      trackCopy(text);
-      button.dataset.copied = "1";
-      button.textContent = labels.done;
-      window.setTimeout(() => {
-        delete button.dataset.copied;
-        button.textContent = copyLabel().idle;
-      }, 1400);
-    } catch {
-      button.textContent = labels.fail;
+// Insecure origins and in-app browsers have no async Clipboard API; the old
+// selection copy still works there, inside the click's user gesture.
+function copyBySelection(text) {
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } finally {
+    area.remove();
+  }
+  if (!copied) throw new Error("copy failed");
+}
+
+async function writeClipboard(text) {
+  try {
+    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+      throw new Error("no clipboard");
     }
-  });
+    await navigator.clipboard.writeText(text);
+  } catch {
+    copyBySelection(text);
+  }
+}
+
+// A clipboard write that never settles must still answer: the page shows the
+// button state, not silence.
+const COPY_TIMEOUT_MS = 1500;
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest && event.target.closest(".copy");
+  if (!button) return;
+  const text = button.getAttribute("data-copy") || "";
+  const labels = copyLabel();
+  try {
+    await Promise.race([
+      writeClipboard(text),
+      new Promise((_, reject) => window.setTimeout(() => reject(new Error("copy timeout")), COPY_TIMEOUT_MS)),
+    ]);
+    trackCopy(text);
+    button.dataset.copied = "1";
+    button.textContent = labels.done;
+    window.setTimeout(() => {
+      delete button.dataset.copied;
+      button.textContent = copyLabel().idle;
+    }, 1400);
+  } catch {
+    button.textContent = labels.fail;
+    window.setTimeout(() => {
+      if (!button.dataset.copied) button.textContent = copyLabel().idle;
+    }, 1800);
+  }
 });
 
 window.addEventListener("pairfob-lang", idleCopyButtons);
