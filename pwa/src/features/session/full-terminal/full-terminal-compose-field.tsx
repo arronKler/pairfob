@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { useCompose, usePaneId } from "../hooks";
+import { useComposeDraft, useComposeFocused, usePaneId } from "../hooks";
 import { t } from "../../../lib/i18n";
 import { OPERATION_INPUT_LIMITS } from "../../../lib/operations";
 import { hardwareKeyboard, useHardwareKeyboard } from "../../../app/input-mode";
@@ -26,14 +26,17 @@ export function FullTerminalCompose({ send, keysButton = false }: FullTerminalCo
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const sendRef = useRef(send);
   sendRef.current = send;
-  const compose = useCompose();
+  // The form draws the button's face, not the field's focus or live choice: a
+  // focus change must not repaint it, and the text reaches React only here.
+  const draft = useComposeDraft();
+  const focused = useComposeFocused();
   const paneId = usePaneId();
   // Return's meaning is a preference the hint line states.
   usePreferenceField((prefs) => prefs.composeEnterSends);
   // Return adds a line only where there is no Shift+Enter: the keyboard decides, not the width.
   const phone = !useHardwareKeyboard();
   const keysInPlace = useKeyboardHintsInPlace();
-  const sendState = useSendKind({ paneId, hasText: Boolean(compose.composeDraft.trim()), live: false, submitting: false });
+  const sendState = useSendKind({ paneId, hasText: Boolean(draft.trim()), live: false, submitting: false });
   const stopTarget = useFullTerminalStopTarget(paneId, sendRef);
 
   useLayoutEffect(() => {
@@ -58,7 +61,7 @@ export function FullTerminalCompose({ send, keysButton = false }: FullTerminalCo
   return <form ref={formRef} className="full-terminal-compose-form">
     <label className="sr-only" htmlFor="full-terminal-compose">{aria}</label>
     <AttachButton />
-    <ComposeFrame field={fieldRef} draft={compose.composeDraft} live={false} focused={compose.composeFocused}
+    <ComposeFrame field={fieldRef} draft={draft} live={false} focused={focused}
       foldable={phone} onResize={() => { if (fieldRef.current) fitComposeHeight(fieldRef.current); }}>
       <textarea
         ref={fieldRef}

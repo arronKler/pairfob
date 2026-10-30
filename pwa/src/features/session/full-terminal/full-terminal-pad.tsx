@@ -3,7 +3,7 @@ import { ChevronDown, Ellipsis } from "lucide-react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { composeFocused, composeIME, composeLive } from "../compose-store";
 import { sessionMayTakeFocus } from "../focus";
-import { useCompose, usePaneId } from "../hooks";
+import { useComposeLive, usePaneId } from "../hooks";
 import { useKeysExpanded } from "../../settings/hooks";
 import { keysExpanded, setKeysExpanded } from "../../settings/preferences-store";
 import { t } from "../../../lib/i18n";
@@ -260,8 +260,9 @@ export function FullTerminalPad({ options, onPage }: FullTerminalPadProps) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
   const padRef = useRef<HTMLDivElement>(null);
-  const compose = useCompose();
-  const live = compose.composeLive;
+  // The pad draws the live/batch switch and nothing else of the field: a
+  // keystroke or a focus change must not repaint the whole key grid.
+  const live = useComposeLive();
   const keyboardOpen = useSoftKeyboardOpen();
   const hardware = options.hardwareKeyboard;
   const pointer = useDeskPointer();

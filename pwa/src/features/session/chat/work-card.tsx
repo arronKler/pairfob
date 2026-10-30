@@ -42,6 +42,30 @@ function useElapsed(start: number | undefined, end: number | undefined, live: bo
   return t(live ? "work.elapsedLive" : "work.elapsed", { time: formatElapsed(until - start) });
 }
 
+/**
+ * The card's state line under its title: elapsed · model · outcome.
+ *
+ * The elapsed second ticks while the turn runs, so it lives here rather than in
+ * the card: a card that took the tick would redraw its steps, filters and
+ * disclosure once a second for a line that is the only thing changing.
+ */
+function WorkDetailLine({ tone, start, end, live, modelText, models, outcomeDetail }: {
+  tone: TurnTone; start?: number; end?: number; live: boolean; modelText: string;
+  models?: AgentTraceModel[]; outcomeDetail: string;
+}) {
+  const elapsed = useElapsed(start, end, live);
+  const detail = [elapsed, modelText, outcomeDetail].filter(Boolean).join(" · ");
+  if (!detail) return null;
+  return <Swap on={tone} className={`work-detail${modelText ? " has-model" : ""}`} title={detail}>
+    {modelText ? <>
+      {elapsed && <span className="work-meta-fixed">{elapsed}{" · "}</span>}
+      <span className="work-meta-model">{models?.length === 1 ? models[0].model : modelText}</span>
+      {models?.length === 1 && models[0].effort && <span className="work-meta-fixed">{" · "}{models[0].effort}</span>}
+      {outcomeDetail && <span className="work-meta-outcome">{" · "}{outcomeDetail}</span>}
+    </> : detail}
+  </Swap>;
+}
+
 type OpenStep = (item: AgentTraceItem, steps: AgentTraceItem[]) => void;
 
 /**
@@ -77,9 +101,7 @@ export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept
   const [all, setAll] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const open = useHeldOpen(live, follow);
-  const elapsed = useElapsed(span?.start, span?.end, live && outcome.tone === "running");
   const modelText = modelSummary(models);
-  const detail = [elapsed, modelText, outcome.detail].filter(Boolean).join(" · ");
   const failed = entries.filter((item) => item.type === "tool" && stepState(item, verified) === "error");
   const edits = entries.filter((item) => item.type === "tool" && stepCategory(item) === "edit");
   const filters = entries.length >= FILTER_FROM && (failed.length > 0 || edits.length > 0);
@@ -117,14 +139,9 @@ export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept
       <span className="work-head-copy">
         {/* The words swap when the turn changes state. A step count and the elapsed second are the same state, replaced in place. */}
         <Swap on={outcome.tone} className="work-title">{outcome.title}</Swap>
-        {detail ? <Swap on={outcome.tone} className={`work-detail${modelText ? " has-model" : ""}`} title={detail}>
-          {modelText ? <>
-            {elapsed && <span className="work-meta-fixed">{elapsed}{" · "}</span>}
-            <span className="work-meta-model">{models?.length === 1 ? models[0].model : modelText}</span>
-            {models?.length === 1 && models[0].effort && <span className="work-meta-fixed">{" · "}{models[0].effort}</span>}
-            {outcome.detail && <span className="work-meta-outcome">{" · "}{outcome.detail}</span>}
-          </> : detail}
-        </Swap> : null}
+        <WorkDetailLine tone={outcome.tone} start={span?.start} end={span?.end}
+          live={live && outcome.tone === "running"} modelText={modelText} models={models}
+          outcomeDetail={outcome.detail ?? ""} />
       </span>
       {body && <ChevronRight className="work-chevron" size={16} aria-hidden="true" />}
     </>}>

@@ -10,7 +10,7 @@ import {
 } from "../compose-store";
 import { liveSession } from "../../computers/catalog-store";
 import { openPaneId } from "../session-store";
-import { useAgentCard, useChat, useCompose, usePaneId } from "../hooks";
+import { useAgentCard, useChatField, useComposeDraft, useComposeFocused, usePaneId } from "../hooks";
 import { currentViewIncarnation } from "../drafts/compose-drafts";
 import { fitOperationPrompt, OPERATION_INPUT_LIMITS } from "../../../lib/operations";
 import { t } from "../../../lib/i18n";
@@ -116,9 +116,12 @@ export function AgentCompose() {
   const [limited, setLimited] = useState(false);
   const allowed = canSend();
   const busy = operationBusy();
-  const compose = useCompose();
-  const follow = useChat().agentTraceFollow;
-  const draft = compose.composeDraft;
+  // The dock draws the draft and its focus, and folds with the reading
+  // posture: a transcript poll or an IME/live publish must not repaint it for
+  // fields it does not show.
+  const draft = useComposeDraft();
+  const focused = useComposeFocused();
+  const follow = useChatField((chat) => chat.agentTraceFollow);
   const paneId = usePaneId();
   const selected = useAgentCard(paneId);
   // Return's meaning is a preference the hint line states.
@@ -205,7 +208,7 @@ export function AgentCompose() {
     <AttachmentTray compact={keyboardOpen} />
     <form className="dock-form" onSubmit={event => { event.preventDefault(); void submitAgentMessage(); }}>
       <AttachButton />
-      <ComposeFrame field={input} draft={draft} live={false} focused={compose.composeFocused} foldable={phone}
+      <ComposeFrame field={input} draft={draft} live={false} focused={focused} foldable={phone}
         onResize={() => { if (input.current) sizeField(input.current); }}>
         <textarea ref={input} id={composeId} aria-label={t("chat.composeAria")} aria-describedby={limited ? statusId : undefined}
           rows={1} enterKeyHint={phone ? phoneEnterKeyHint() : "send"} maxLength={OPERATION_INPUT_LIMITS.prompt}
