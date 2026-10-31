@@ -12,7 +12,7 @@
 import { Plus } from "lucide-react";
 import { useContext } from "react";
 import { capabilityEnabled, advertisedAgentKinds } from "../../features/operations/capabilities-store";
-import { computersStore, liveSession } from "../../features/computers/catalog-store";
+import { computersStore, credential, liveSession } from "../../features/computers/catalog-store";
 import { liveAgents, selectedAgent } from "../../features/dashboard/catalog-store";
 import { runtimeStore } from "../../features/connection/runtime-store";
 import { boardStore } from "../../features/board/layout-store";
@@ -23,6 +23,7 @@ import { askCreate, NEW_WORKSPACE, type CreateRequest, type CreateWorkspaceOptio
 import { loadLastAgentKind } from "../../features/operations/operation-form-model";
 import { computerTitle } from "../../lib/computer-catalog";
 import type { DashboardAgentCard } from "../../lib/dashboard";
+import { readDirIndexCache, writeDirIndexCache, type DirIndexPort } from "../../lib/dir-index";
 import { t } from "../../lib/i18n";
 import { MenuChoice, MenuGroup, showActionSheet, type ActionSheetController } from "../../shared/ui/overlay";
 import { PopoverKindContext } from "../../shared/ui/overlay/popover-frame";
@@ -105,6 +106,19 @@ export async function openCreateSheet(options: { workspaceId?: string; newWorksp
   const { options: workspaces, anchors } = workspaceChoices(options.workspaceId ?? contextWorkspace());
   const kinds = [...advertisedAgentKinds()];
   const session = liveSession();
+  const memory = loadCreateMemory();
+  const dirFetch = session?.dirIndex;
+  // The cache belongs to one computer: a daemon id survives a hostname change,
+  // and the host name is the fallback when the catalog has no credential.
+  const machine = credential()?.daemonId || hostName();
+  const dirs: DirIndexPort | undefined = capabilityEnabled("search_dirs") && dirFetch ? {
+    cached: () => readDirIndexCache(machine),
+    fetch: async version => {
+      if (liveSession() !== session || session?.isConnected() !== true) throw new Error("the session changed");
+      return dirFetch(version);
+    },
+    save: index => writeDirIndexCache(machine, index),
+  } : undefined;
   let handled = false;
   const request = await askCreate({
     host: hostName(),
@@ -112,7 +126,9 @@ export async function openCreateSheet(options: { workspaceId?: string; newWorksp
     initial: options.newWorkspace || options.dir || !workspaces.length ? NEW_WORKSPACE : workspaces[0].id,
     ...(options.dir ? { initialDir: options.dir } : {}),
     kinds,
-    memory: loadCreateMemory(),
+    memory,
+    recents: memory.dirs,
+    ...(dirs ? { dirs } : {}),
     lastKind: loadLastAgentKind(kinds),
     canCreateTab,
     canCreateWorkspace,

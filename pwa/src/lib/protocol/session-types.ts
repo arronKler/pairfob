@@ -1,5 +1,6 @@
 import type { WorkspaceReference } from "./workspace-reference";
 import type { WorkspaceSearchPage } from "../workspace";
+import type { DirIndex } from "../dir-index";
 import type { RecoveryClock } from "./recovery-diagnostics";
 import type { AgentInspection } from "../agent-inspect";
 import type { QuotaReport } from "../agent-quota-report";
@@ -135,6 +136,11 @@ export type LiveSession = {
   workspaceResolve?: (paneId: string, root: string, path: string) => Promise<WorkspaceReference>;
   /** Files of the pane's workspace by name; only callable when capabilities.search_files is true. */
   workspaceSearch?: (paneId: string, root: string, query: string, limit?: number) => Promise<WorkspaceSearchPage>;
+  /**
+   * The computer's allowed directories, or null when the phone's cached
+   * version is still current. Only callable when capabilities.search_dirs is true.
+   */
+  dirIndex?: (version?: string) => Promise<DirIndex | null>;
   /** Files the agent's edit tools wrote since the last prompt; null without capabilities.trace_writes. */
   agentTurnWrites?: (paneId: string) => Promise<string[] | null>;
   workspaceOpen: (paneId: string) => Promise<WorkspaceDescriptor>;

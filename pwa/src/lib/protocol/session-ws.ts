@@ -95,6 +95,7 @@ import {
 } from "./session-upload-readiness.ts";
 import { TerminalRPC } from "./terminal-rpc.ts";
 import { AgentTraceRPC } from "./agent-trace.ts";
+import { parseDirIndex } from "../dir-index.ts";
 
 export { validateSessionMessage } from "./session-message.ts";
 export { validateSessionEstablished } from "./session-handshake.ts";
@@ -428,6 +429,7 @@ class ReconnectingSession implements LiveSession {
   workspaceResolve = async (paneId: string, root: string, path: string) => parseWorkspaceReference(await this.readRPC("WorkspaceResolve", { pane_id: paneId, root, path }));
   workspaceSearch = async (paneId: string, root: string, query: string, limit = 30) =>
     parseWorkspaceSearch(await this.readRPC("WorkspaceSearch", { pane_id: paneId, root, query, limit }), query);
+  dirIndex = async (version = "") => parseDirIndex(await this.readRPC("DirIndex", { version }));
   workspaceOpen = async (paneId: string) => parseWorkspaceDescriptor(await this.readRPC("WorkspaceOpen", { pane_id: paneId }));
   workspaceList = async (paneId: string, path = "", cursor = "", limit = 120, root?: string) =>
     parseWorkspaceDirectory(await this.readRPC(root === undefined ? "WorkspaceList" : "WorkspaceListAtRoot", { pane_id: paneId, path, cursor, limit, ...(root === undefined ? {} : { root }) }));

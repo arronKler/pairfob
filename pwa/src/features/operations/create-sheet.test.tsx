@@ -4,6 +4,7 @@ import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { expectDifferentNode, expectSameNode } from "../../../test-support/node-identity";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { setLang, t } from "../../lib/i18n";
+import type { DirIndex, DirIndexPort } from "../../lib/dir-index";
 import { bindOverlayOrigin } from "../../shared/ui/overlay/origin";
 import { loadCreateMemory, type CreateMemory } from "./create-memory";
 import { askCreate, NEW_WORKSPACE, type CreateRequest, type CreateSheetInput } from "./create-sheet";
@@ -373,5 +374,84 @@ describe("create sheet", () => {
     expect(button(".create-kind.on").textContent).toContain("pi");
     await submit();
     expect((await result as Extract<CreateRequest, { kind: "tab" }>).agentKind).toBe("pi");
+  });
+
+  const index: DirIndex = {
+    version: "0123456789abcdef",
+    truncated: false,
+    entries: [
+      { path: "/work/alpha", name: "alpha", parent: "/work", repo: true },
+      { path: "/work/pair-app", name: "pair-app", parent: "/work", repo: false },
+      { path: "/work/pair-app/docs", name: "docs", parent: "/work/pair-app", repo: false },
+    ],
+  };
+
+  function dirPort(fetch: DirIndexPort["fetch"]): { port: DirIndexPort; saved: DirIndex[] } {
+    const saved: DirIndex[] = [];
+    return { saved, port: { cached: () => null, fetch, save: (value) => { saved.push(value); } } };
+  }
+
+  test("the directory search row exists only with the capability", async () => {
+    await open({ initial: NEW_WORKSPACE });
+    expect(sheet().textContent).not.toContain(t("create.dirSearch"));
+    act(closeTestDialogs);
+    await open({ initial: NEW_WORKSPACE, dirs: dirPort(async () => index).port });
+    expect(button(".create-dir", t("create.dirSearch"))).not.toBeNull();
+  });
+
+  test("the search lists allowed locations, filters locally and fills the picked path", async () => {
+    const { port, saved } = dirPort(async (version) => {
+      expect(version).toBe("");
+      return index;
+    });
+    const { result } = await open({ initial: NEW_WORKSPACE, dirs: port, recents: ["/work/old"] });
+    await act(async () => { button(".create-dir", t("create.dirSearch")).click(); await settle(); });
+    // The empty query shows the roots' top-level directories, then this phone's own.
+    expect([...sheet().querySelectorAll(".create-dir-row .create-dir-name")].map((node) => node.textContent))
+      .toEqual(["alpha", "pair-app", "old"]);
+    expect([...sheet().querySelectorAll(".create-dir-row .create-dir-tag")].map((node) => node.textContent))
+      .toEqual([t("create.dirRepoTag")]);
+    expect(saved).toEqual([index]);
+    // One keystroke filters the local array; nothing else is asked of the computer.
+    type(".create-input", "pair");
+    expect([...sheet().querySelectorAll(".create-dir-row .create-dir-name")].map((node) => node.textContent))
+      .toEqual(["pair-app", "docs"]);
+    act(() => button(".create-dir-row", "pair-app").click());
+    expect(sheet().querySelector(".create-summary")?.textContent).toBe(t("create.summaryWs", { dir: "/work/pair-app", kind: "codex" }));
+    // The pick is neither a recent directory nor an open workspace, so the form gives it a row.
+    expect(sheet().textContent).toContain(t("create.dirPicked"));
+    expect([...sheet().querySelectorAll(".create-dir.is-selected .create-dir-path")].map((node) => node.textContent))
+      .toEqual(["/work/pair-app"]);
+    await submit();
+    expect(await result).toEqual({ kind: "conversation", cwd: "/work/pair-app", agentKind: "codex", label: "" });
+  });
+
+  test("a search reopened on a deep pick leads with it instead of the roots' neighbours", async () => {
+    const { port } = dirPort(async () => index);
+    await open({ initial: NEW_WORKSPACE, dirs: port });
+    await act(async () => { button(".create-dir", t("create.dirSearch")).click(); await settle(); });
+    type(".create-input", "docs");
+    act(() => button(".create-dir-row", "docs").click());
+    expect(sheet().querySelector(".create-summary")?.textContent).toBe(t("create.summaryWs", { dir: "/work/pair-app/docs", kind: "codex" }));
+    await act(async () => { button(".create-dir", t("create.dirSearch")).click(); await settle(); });
+    expect([...sheet().querySelectorAll(".create-dir-row .create-dir-name")].map((node) => node.textContent))
+      .toEqual(["docs", "alpha", "pair-app"]);
+    expect(sheet().querySelector(".create-dir-row[aria-current] .create-dir-parent")?.textContent).toBe("/work/pair-app");
+  });
+
+  test("a failed search says so, keeps the typed path available, and retries", async () => {
+    let broken = true;
+    const { port } = dirPort(async () => {
+      if (broken) throw new Error("offline");
+      return index;
+    });
+    await open({ initial: NEW_WORKSPACE, dirs: port });
+    await act(async () => { button(".create-dir", t("create.dirSearch")).click(); await settle(); });
+    expect(sheet().querySelector('[role="alert"]')?.textContent).toContain(t("create.dirSearchFailed"));
+    broken = false;
+    await act(async () => { button(".text-link", t("create.dirSearchRetry")).click(); await settle(); });
+    expect(sheet().querySelector('[role="alert"]')).toBeNull();
+    expect([...sheet().querySelectorAll(".create-dir-row .create-dir-name")].map((node) => node.textContent))
+      .toEqual(["alpha", "pair-app"]);
   });
 });

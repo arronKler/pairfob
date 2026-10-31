@@ -135,6 +135,42 @@
   font-size: var(--text-caption);
 }
 
+/* --- Directory search -----------------------------------------------------------
+   Two lines per row: the name over the path it lives in, with the repo and
+   open marks at the end. Each row stays a finger target, not a list line. */
+.create-sheet-body > .create-input { margin-bottom: 4px; }
+
+.create-dir-row { min-height: 52px; }
+.create-dir-row.is-active { background: var(--pressed); }
+
+.create-dir-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.create-dir-name {
+  font-weight: 600;
+  font-size: var(--text-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.create-dir-parent {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--text-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.create-dir-tags { flex: none; display: flex; gap: 4px; }
+.create-dir-notice { margin: 8px 2px 0; }
+
 /* Scoped under the sheet so the pairing screen's global `input[type="text"]`
    (wide-tracked mono code entry) does not win on specificity. */
 .create-sheet-body .create-input {

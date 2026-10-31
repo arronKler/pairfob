@@ -1,5 +1,6 @@
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, Search } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import type { DirIndexPort } from "../../lib/dir-index";
 import { t } from "../../lib/i18n";
 import { OPERATION_INPUT_LIMITS } from "../../lib/operations";
 import { SheetFrame } from "../../shared/ui/overlay/action-sheet";
@@ -14,6 +15,7 @@ import { SheetSwap } from "./sheet-swap";
 import { AgentKindGrid, kindName } from "./agent-kind-grid";
 import { AgentKindPickerPanel } from "./agent-kind-picker";
 import type { CreateMemory } from "./create-memory";
+import { DirPicker } from "./dir-picker";
 import { defaultAgentKind, type SheetOutcome } from "./operation-form-model";
 
 export const NEW_WORKSPACE = "pairfob:new-workspace";
@@ -33,6 +35,10 @@ export type CreateSheetInput = {
   canCreateTab: boolean;
   canCreateWorkspace: boolean;
   canCreateWorktree: boolean;
+  /** Directory search, only when the computer advertises search_dirs. */
+  dirs?: DirIndexPort;
+  /** Directories this phone created before, for the search page's empty state. */
+  recents?: string[];
   /** With a new workspace: a directory to start on (e.g. a recent one picked from the empty list). */
   initialDir?: string;
   onCreate?: (request: CreateRequest) => Promise<SheetOutcome>;
@@ -80,16 +86,16 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
     setError(message);
     setRefused(last => ({ field: otherPath === null ? "dir" : "path", count: last.count + 1 }));
   };
-  // The full list replaces the form in place (not a pushed sheet page: the
-  // sheet unmounts its root while a page is up), so the form keeps everything
-  // already chosen while the reader browses. It still travels as a page does:
-  // the list comes in from the right, the form comes back from the left, and
-  // the card eases between their heights (`SheetSwap`).
-  const [picking, setPicking] = useState(false);
+  // The full list or the directory search replaces the form in place (not a
+  // pushed sheet page: the sheet unmounts its root while a page is up), so the
+  // form keeps everything already chosen while the reader browses. It still
+  // travels as a page does: the list comes in from the right, the form comes
+  // back from the left, and the card eases between their heights (`SheetSwap`).
+  const [view, setView] = useState<"form" | "kinds" | "dirs">("form");
   const [back, setBack] = useState(false);
-  const leavePicker = () => { setPicking(false); setBack(true); };
-  // Escape takes back the list first, then the sheet.
-  useEscapeStep(picking, leavePicker);
+  const leaveView = () => { setView("form"); setBack(true); };
+  // Escape takes back the list or the search first, then the sheet.
+  useEscapeStep(view !== "form", leaveView);
   // "Another directory" is pressed to type one: that press, and nothing else, puts the reader in the field.
   const pathField = useRef<HTMLInputElement>(null);
   const [typing, setTyping] = useState(0);
@@ -103,6 +109,10 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
   const openHere = isNew && !worktree ? input.workspaces.find((item) => item.path && item.path === path) : undefined;
   const recentDirs = memory.dirs.filter((item) => !input.workspaces.some((space) => space.path === item));
   const openDirs = input.workspaces.filter((item) => item.path);
+  // A directory found by search is in neither list, and the summary alone is a
+  // thin answer to "which one did I pick". It takes a row of its own instead,
+  // and only once picked: a typed path already shows in its own field.
+  const pickedDir = otherPath === null && dir && !recentDirs.includes(dir) && !openDirs.some((space) => space.path === dir) ? dir : "";
   // What a line last said stays in it while it shuts.
   const shownPath = useRef("");
   if (!isNew && workspace?.path) shownPath.current = workspace.path;
@@ -155,10 +165,17 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
   // The desk form submits on Enter from its fields and its choices (`useDeskEnter`).
   const submitOnEnter = useDeskEnter(submit);
 
-  if (picking) {
-    return <SheetSwap key="picker">
-      <AgentKindPickerPanel kinds={input.kinds} memory={memory} selected={kind} onBack={leavePicker}
-        onPick={(next) => { setKind(next); leavePicker(); }} onPinsChange={setMemory} />
+  if (view === "kinds") {
+    return <SheetSwap key="kinds">
+      <AgentKindPickerPanel kinds={input.kinds} memory={memory} selected={kind} onBack={leaveView}
+        onPick={(next) => { setKind(next); leaveView(); }} onPinsChange={setMemory} />
+    </SheetSwap>;
+  }
+  if (view === "dirs" && input.dirs) {
+    return <SheetSwap key="dirs">
+      <DirPicker port={input.dirs} current={path} workspaces={input.workspaces}
+        recents={input.recents ?? []} onBack={leaveView}
+        onPick={(picked) => { setDir(picked); setOtherPath(null); setError(""); leaveView(); }} />
     </SheetSwap>;
   }
 
@@ -215,10 +232,18 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
       <FormFold open={isNew}>
         <p className="create-hint">{t("create.pathHelp", { host: input.host })}</p>
         <div className="create-dirs" data-field="dir">
+          {pickedDir ? <p className="create-dir-group">{t("create.dirPicked")}</p> : null}
+          {pickedDir ? dirRow(pickedDir, false) : null}
           {recentDirs.length ? <p className="create-dir-group">{t("create.dirRecent")}</p> : null}
           {recentDirs.map((value) => dirRow(value, false))}
           {openDirs.length ? <p className="create-dir-group">{t("create.dirOpen")}</p> : null}
           {openDirs.map((space) => dirRow(space.path, true))}
+          {input.dirs ? (
+            <Button className="menu-item create-dir" onClick={() => { setView("dirs"); setBack(false); }}>
+              <Search size={16} aria-hidden="true" />
+              <span className="create-dir-path">{t("create.dirSearch")}</span>
+            </Button>
+          ) : null}
           <Button className={`menu-item create-dir${otherPath !== null ? " is-selected" : ""}`} aria-expanded={otherPath !== null}
             onClick={() => { setOtherPath(otherPath ?? ""); setTyping(count => count + 1); }}>
             <Pencil size={16} aria-hidden="true" />
@@ -266,7 +291,7 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
       <FormFold open={!worktree}>
         <p className="create-hint">{t("create.agentHelp")}</p>
         <AgentKindGrid kinds={input.kinds} memory={memory} selected={kind} lastKind={input.lastKind}
-          onSelect={setKind} onShowAll={() => { setPicking(true); setBack(false); }} />
+          onSelect={setKind} onShowAll={() => { setView("kinds"); setBack(false); }} />
       </FormFold>
       {!input.kinds.length && !worktree ? <p className="create-hint">{t("create.noKinds")}</p> : null}
 

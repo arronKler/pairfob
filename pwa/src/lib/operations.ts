@@ -28,6 +28,7 @@ export const OPERATION_CAPABILITY_KEYS = [
   "trace_writes",
   "git_change_stats",
   "search_files",
+  "search_dirs",
 ] as const;
 
 export type OperationCapability = typeof OPERATION_CAPABILITY_KEYS[number];
@@ -60,6 +61,7 @@ export const NO_OPERATION_CAPABILITIES: OperationCapabilities = {
   trace_writes: false,
   git_change_stats: false,
   search_files: false,
+  search_dirs: false,
 };
 
 export const OPERATION_INPUT_LIMITS = {
@@ -415,7 +417,7 @@ export function parseRuntimeOperationsConfig(value: unknown): RuntimeOperationsC
 
 	const rawCapabilities = isRecord(config.capabilities) ? config.capabilities : {};
 	const capabilities = { ...NO_OPERATION_CAPABILITIES };
-	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "download_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers", "trace_labels", "trace_times", "trace_models", "trace_writes", "git_change_stats", "search_files"]);
+	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "download_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers", "trace_labels", "trace_times", "trace_models", "trace_writes", "git_change_stats", "search_files", "search_dirs"]);
 	// A capability this build does not know is ignored rather than rejected: keys
 	// are additive, and a packaged client (the Android shell bundles its page)
 	// cannot be replaced before the daemon that advertises them. Known keys must
