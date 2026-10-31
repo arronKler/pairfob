@@ -24,6 +24,7 @@ function fixture() {
   put("pwa/src/lib/protocol/client.ts", "protocol\n");
   put("internal/daemon/rpc.go", "backend\n");
   put("workers/pairfob-origin/wrangler.jsonc", '{"vars":{"BUILD":"old","P2P_OPEN":"1"}}\n');
+  put("site/img/home/en/tablet.webp", "old still\n");
   git("add", "."); git("commit", "-qm", "verified baseline");
   return { root, git, put, base: git("rev-parse", "HEAD") };
 }
@@ -43,12 +44,29 @@ test("UI deletions are allowed", () => {
 });
 
 for (const path of ["internal/daemon/rpc.go", "proto/new.json", "workers/pairfob-origin/src/new.ts",
-  "pwa/src/lib/protocol/client.ts", "scripts/verify.sh", "go.mod"]) {
+  "pwa/src/lib/protocol/client.ts", "scripts/verify.sh", "go.mod",
+  "site/index.html", "site/site.js", "site/doc/faq.md", "site/img/home/en/notes.txt", "site/img/logo.ico"]) {
   test(`requires full verification for ${path}`, () => {
     const f = fixture(); f.put(path, "changed\n");
     expect(() => checkPwaScope(f.root, f.base)).toThrow("Full verify required");
   });
 }
+
+test("accepts the product stills a UI change renders, and the README images beside them", () => {
+  const f = fixture();
+  f.put("pwa/src/view.ts", "new UI\n");
+  f.put("site/img/home/en/tablet.webp", "new still\n");
+  f.put("site/img/readme/zh.webp", "new strip\n");
+  expect(checkPwaScope(f.root, f.base).sort()).toEqual([
+    "pwa/src/view.ts", "site/img/home/en/tablet.webp", "site/img/readme/zh.webp",
+  ]);
+});
+
+test("rejects a still that is a symlink out of the site tree", () => {
+  const f = fixture();
+  symlinkSync("../../../internal/daemon/rpc.go", join(f.root, "site/img/home/en/link.webp"));
+  expect(() => checkPwaScope(f.root, f.base)).toThrow("Full verify required");
+});
 
 test("does not hide a backend deletion behind a rename into PWA", () => {
   const f = fixture(); f.git("mv", "internal/daemon/rpc.go", "pwa/src/rpc.go");

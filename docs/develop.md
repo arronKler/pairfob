@@ -464,12 +464,14 @@ or worktree unless explicitly requested:
 ```
 
 Set the origin's `BUILD` stamp before this command. The scope check includes
-committed, staged, unstaged and untracked changes; it permits only PWA changes
-and a BUILD-only origin config edit. Protocol files in `pwa/src/lib/protocol/`
-require the full gate, as do backend, site, release-tooling or other changes.
-Any protocol/cross-language behavior change needs the full gate regardless of
-its location. Do not choose an unverified `HEAD` just to satisfy the scope
-check.
+committed, staged, unstaged and untracked changes; it permits PWA changes, the
+product stills and README images under `site/img/` (image files only — a change
+of screen usually re-renders them), and a BUILD-only origin config edit.
+Protocol files in `pwa/src/lib/protocol/` require the full gate, as do every
+other site file (pages, scripts, docs), backend, release-tooling and any other
+change. Any protocol/cross-language behavior change needs the full gate
+regardless of its location. Do not choose an unverified `HEAD` just to satisfy
+the scope check.
 
 This path retains all PWA tests, QA, typechecks, fresh builds and Worker
 integration checks, while reusing the unchanged backend's prior verification.
