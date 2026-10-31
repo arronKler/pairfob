@@ -107,7 +107,7 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 
 func liveRuntimeKind(configured string, descriptor runtime.Descriptor, err error) string {
 	if err == nil && descriptor.Runtime != "" {
-		return descriptor.Runtime
+		return wireRuntimeKind(descriptor.Runtime)
 	}
 	if fault, ok := runtime.AsFault(err); ok && (fault.Code == runtime.CodeOffline || fault.Code == runtime.CodeTimeout) {
 		return "offline"
@@ -115,7 +115,17 @@ func liveRuntimeKind(configured string, descriptor runtime.Descriptor, err error
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "offline"
 	}
-	return configured
+	return wireRuntimeKind(configured)
+}
+
+// wireRuntimeKind keeps GetConfig.runtime inside the frozen wire enum. A
+// packaged client cannot learn a new value before the daemon sends it, so
+// herdr-core reports as herdr; capabilities are what separate the two.
+func wireRuntimeKind(kind string) string {
+	if kind == "herdr-core" {
+		return "herdr"
+	}
+	return kind
 }
 
 func (e *Engine) rpcSnapshot(s *sess, id string, params json.RawMessage) {
