@@ -16,6 +16,9 @@
 @use "./app/layout/styles/desk";
 @use "./app/layout/styles/desk-rail";
 @use "./app/layout/styles/desk-empty";
+/* The chat's own dock and header step-aside, after the shared dock rules they refine. */
+@use "./features/session/chat/agent-compose";
+@use "./features/session/chat/agent-chat-chrome";
 @use "./styles/switcher";
 @use "./features/computers/styles/computers";
 @use "./features/settings/styles/settings";
