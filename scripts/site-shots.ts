@@ -36,7 +36,9 @@ const SHOTS: Shot[] = [
   // Under a finger, as on the phone it stands for: with a mouse the diff tells
   // its reader about the keyboard and keeps "view in file" for the hover.
   { name: "workspace-diff", scene: "workspace-diff", ...PHONE, touch: true },
-  { name: "chat-complete", scene: "chat-complete", ...PHONE },
+  // The chat dock is one row under a finger and two under a mouse: the phone
+  // still is the phone.
+  { name: "chat-complete", scene: "chat-complete", ...PHONE, touch: true },
   { name: "settings", scene: "settings", ...PHONE },
   // iPad landscape: the two-column desk layout, operated by touch (the mouse
   // variant has hover rows, a collapsed key row and a keyboard hint).
