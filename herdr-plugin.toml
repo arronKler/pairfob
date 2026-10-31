@@ -1,6 +1,6 @@
 id = "pairfob"
 name = "Pairfob"
-version = "1.4.9"
+version = "1.4.10"
 min_herdr_version = "0.8.2"
 description = "Your Herdr agents on your phone in one QR scan. No Tailscale or ports, no app or account, end-to-end encrypted."
 platforms = ["linux", "macos"]

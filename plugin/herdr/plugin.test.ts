@@ -80,7 +80,7 @@ describe("Herdr plugin manifest", () => {
 
     expect(manifest.id).toBe("pairfob");
     expect(manifest.name).toBe("Pairfob");
-    expect(manifest.version).toBe("1.4.9");
+    expect(manifest.version).toBe("1.4.10");
     expect(manifest.min_herdr_version).toBe("0.8.2");
     expect(manifest.platforms).toEqual(["linux", "macos"]);
     expect(manifest.actions).toEqual([
