@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { operationBusy } from "../../operations/capabilities-store";
 import {
   composeDraft,
@@ -16,7 +16,7 @@ import { fitOperationPrompt, OPERATION_INPUT_LIMITS } from "../../../lib/operati
 import { t } from "../../../lib/i18n";
 import { showError } from "../../../app/notices-store";
 import { appRoot } from "../../../app/dom-root";
-import { hardwareKeyboard, useHardwareKeyboard } from "../../../app/input-mode";
+import { hardwareKeyboard, hasTouch, useHardwareKeyboard } from "../../../app/input-mode";
 import { canSend, leaveAgentChat, refreshAgentTrace, stickAgentStream, submitAgentPrompt } from "./agent-chat-controller";
 import { publishAgentChatUI } from "./agent-chat-ui";
 import { pageAgentStreamFromField } from "./reading-keys";
@@ -42,8 +42,34 @@ function composeOwnerMoved(
 
 /** Grow with the draft and keep a following stream on its tail. */
 function sizeField(field: HTMLTextAreaElement): void {
-  fitComposeHeight(field);
+  fitComposeHeight(field, agentFieldMinPx());
   stickAgentStream();
+}
+
+/**
+ * The chat dock's field rests as tall as its frame's field row: 36px in the
+ * two-row frame a fine pointer gets, 44px in the one row a finger gets. The
+ * pointer decides, not the width, so a narrow window driven by a mouse keeps
+ * the mouse's frame and a wide touch tablet keeps the finger's.
+ */
+const FIELD_MIN_FINE_PX = 36;
+const FIELD_MIN_COARSE_PX = 44;
+const COARSE_POINTER = "(any-pointer: coarse)";
+
+function agentFieldMinPx(): number {
+  return hasTouch() ? FIELD_MIN_COARSE_PX : FIELD_MIN_FINE_PX;
+}
+
+function subscribeCoarsePointer(listener: () => void): () => void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => undefined;
+  const media = window.matchMedia(COARSE_POINTER);
+  media.addEventListener?.("change", listener);
+  return () => media.removeEventListener?.("change", listener);
+}
+
+/** {@link hasTouch} for a component that must re-fit when the pointer changes. */
+function useCoarsePointer(): boolean {
+  return useSyncExternalStore(subscribeCoarsePointer, hasTouch, () => false);
 }
 
 function showDraft(text: string): void {
@@ -132,6 +158,7 @@ export function AgentCompose() {
   const hasMessage = Boolean(draft.trim()) || send.attachments.readyPaths.length > 0;
   const keyboardOpen = useSoftKeyboardOpen();
   const pointer = useDeskPointer();
+  const coarse = useCoarsePointer();
   const keysInPlace = useKeyboardHintsInPlace();
   const stopTarget = useMemo<StopTarget | null>(() => paneId ? {
     paneId,
@@ -193,6 +220,9 @@ export function AgentCompose() {
     return () => { bindings.abort(); cancelAnimationFrame(frame); };
   }, []);
   useLayoutEffect(() => () => { resetSendGate(); cancelStop(); }, [paneId]);
+  // A tablet can gain or lose its mouse mid-session: the frame changes row
+  // count under the pointer query, and the field takes its new resting height.
+  useLayoutEffect(() => { if (input.current) sizeField(input.current); }, [coarse]);
   const prompt = t(!allowed ? "chat.cantSendPh" : selected?.status === "working" ? "chat.placeholderWorking" : "chat.placeholder");
   // A tablet with a keyboard has no hint line under the field: the field says what Enter does.
   const placeholder = keysInPlace && allowed ? `${prompt} · ${t("deskDock.hintChat")}` : prompt;
@@ -206,7 +236,7 @@ export function AgentCompose() {
       </div>
     </Fold>
     <AttachmentTray compact={keyboardOpen} />
-    <form className="dock-form" onSubmit={event => { event.preventDefault(); void submitAgentMessage(); }}>
+    <form className="dock-form agent-compose" onSubmit={event => { event.preventDefault(); void submitAgentMessage(); }}>
       <AttachButton />
       <ComposeFrame field={input} draft={draft} live={false} focused={focused} foldable={phone}
         onResize={() => { if (input.current) sizeField(input.current); }}>
@@ -221,6 +251,7 @@ export function AgentCompose() {
           kind={send.kind === "enter" ? "send" : send.kind}
           percent={send.attachments.pendingPercent}
           className="send-btn"
+          compact
           // A prompt is never a bare Enter: with nothing to send the button rests.
           disabled={(send.kind === "send" || send.kind === "enter") && (!allowed || busy || !hasMessage)}
           onSend={() => void submitAgentMessage()}

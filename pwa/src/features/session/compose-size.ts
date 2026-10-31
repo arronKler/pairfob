@@ -311,8 +311,12 @@ function easeCollapse(field: HTMLTextAreaElement, from: number, to: number): voi
  * A field made shorter than it was (the pad opening over a phone on its side,
  * the keyboard rising) keeps the line with the caret in view, and in the dense
  * dock it stands on whole lines (`showWholeLines`).
+ *
+ * `min` is the field's resting height, for a surface whose own frame starts
+ * shorter or taller than the shared dock's (`COMPOSE_MIN_PX`). It never raises
+ * the cap: a surface with less room keeps its cap and scrolls inside.
  */
-export function fitComposeHeight(field: HTMLTextAreaElement): boolean {
+export function fitComposeHeight(field: HTMLTextAreaElement, min = COMPOSE_MIN_PX): boolean {
   const before = field.style.height;
   // Mid-collapse the box is between two heights; what is measured below is the field itself.
   const moving = collapsing.get(field);
@@ -329,7 +333,7 @@ export function fitComposeHeight(field: HTMLTextAreaElement): boolean {
   const borders = Math.max(0, field.offsetHeight - field.clientHeight);
   const content = contentHeight(field) + borders;
   field.style.overflowY = "";
-  const next = Math.min(Math.max(content, COMPOSE_MIN_PX), max);
+  const next = Math.min(Math.max(content, min), max);
   field.style.height = `${next}px`;
   if (field.offsetHeight < was) revealCaretLine(field);
   showWholeLines(field, room.terminalFloor !== undefined);

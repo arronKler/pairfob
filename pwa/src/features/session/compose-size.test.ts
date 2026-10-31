@@ -120,6 +120,23 @@ describe("fitting the field to its draft", () => {
     expect(el.style.height).toBe(`${COMPOSE_MIN_PX}px`);
   });
 
+  test("a surface's own resting height leaves every other dock's alone, and cannot pass its cap", async () => {
+    const fine = await field(4);
+    fitComposeHeight(fine.el, 36);
+    expect(fine.el.style.height).toBe("36px");
+    const coarse = await field(4);
+    fitComposeHeight(coarse.el, 44);
+    expect(coarse.el.style.height).toBe("44px");
+    // No minimum argument, no change: the shared dock still rests at COMPOSE_MIN_PX.
+    const shared = await field(4);
+    fitComposeHeight(shared.el);
+    expect(shared.el.style.height).toBe(`${COMPOSE_MIN_PX}px`);
+    // A tall draft still stops at the room it has, whatever its minimum asks for.
+    const capped = await field(2000);
+    fitComposeHeight(capped.el, 44);
+    expect(capped.el.style.height).toBe(capped.el.style.maxHeight);
+  });
+
   test("a draft taller than the room stops at the cap, where scrolling inside is right", async () => {
     const { el } = await field(2000);
     fitComposeHeight(el);

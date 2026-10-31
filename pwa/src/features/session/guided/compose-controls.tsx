@@ -1,4 +1,4 @@
-import { CornerDownLeft, Keyboard, Square } from "lucide-react";
+import { ArrowUp, CornerDownLeft, Keyboard, Square } from "lucide-react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { t } from "../../../lib/i18n";
 import { MOTION_MS } from "../../../shared/ui/dom/motion";
@@ -285,14 +285,24 @@ export type SendButtonProps = {
   /** Long press stops while the pane works and the button is a send button. */
   longPressStops: boolean;
   disabled?: boolean;
+  /**
+   * Draw an idle send / enter as a round arrow instead of its word. Only the
+   * label changes: the kind's aria name, submit, click, long press and eased
+   * width are the same, and every other kind keeps its labelled face.
+   */
+  compact?: boolean;
 };
 
-function sendContent(kind: SendKind, percent: number): { label: ReactNode; aria: string } {
+function sendContent(kind: SendKind, percent: number, compact: boolean): { label: ReactNode; aria: string } {
   switch (kind) {
     case "enter":
-      return { label: <CornerDownLeft size={19} aria-hidden="true" />, aria: t("compose.enterAria") };
+      return compact
+        ? { label: <ArrowUp size={18} aria-hidden="true" />, aria: t("compose.enterAria") }
+        : { label: <CornerDownLeft size={19} aria-hidden="true" />, aria: t("compose.enterAria") };
     case "send":
-      return { label: t("compose.send"), aria: t("compose.sendEnterAria") };
+      return compact
+        ? { label: <ArrowUp size={18} aria-hidden="true" />, aria: t("compose.sendEnterAria") }
+        : { label: t("compose.send"), aria: t("compose.sendEnterAria") };
     case "busy":
       return { label: t("compose.sending"), aria: t("compose.sendingAria") };
     case "wait":
@@ -312,11 +322,11 @@ function sendContent(kind: SendKind, percent: number): { label: ReactNode; aria:
  * (`Swap`, which is still when the same kind is drawn again) and the width
  * eases (`useEasedWidth`).
  */
-export function SendButton({ kind, percent, className, onSend, submitsForm = false, stopTarget, longPressStops, disabled = false }: SendButtonProps) {
+export function SendButton({ kind, percent, className, onSend, submitsForm = false, stopTarget, longPressStops, disabled = false, compact = false }: SendButtonProps) {
   const ref = useRef<HTMLButtonElement>(null);
   useSendPointer(ref, longPressStops && kind === "send" && stopTarget ? () => startStop(stopTarget) : undefined);
   useEasedWidth(ref, kind);
-  const { label, aria } = sendContent(kind, percent);
+  const { label, aria } = sendContent(kind, percent, compact);
   // A stop still arming keeps its look (no grey flash) and only ignores taps.
   const armed = useStopArmed(kind, ref);
   // Once a stop is under way the button already has the width of its widest

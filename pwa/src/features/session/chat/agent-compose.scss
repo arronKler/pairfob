@@ -1,2 +1,155 @@
 /* The agent dock's own form: one frame around the field and its tools, one row
    under a finger and two under a mouse. See agent-compose.tsx. */
+
+/* The dock's gutter and the room its frame has. The frame itself follows the
+   pointer: a fine pointer gets the field above, attach and send below; a finger
+   gets all three in one 44px row. */
+.agent-dock {
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+}
+
+.agent-dock .dock-form.agent-compose {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  /* The field's row is its resting height and grows with the draft; the tools'
+     row stays 32px, so attach and send sit under the field as it grows. */
+  grid-template-rows: minmax(36px, auto) 32px;
+  grid-template-areas:
+    "field field"
+    "attach send";
+  gap: 5px 8px;
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 8px 8px 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--sink);
+}
+
+/* The frame, not the borderless field, carries the focus mark. */
+.agent-dock .dock-form.agent-compose:has(.compose-field > textarea:focus) {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.agent-dock .agent-compose .compose-field {
+  grid-area: field;
+  min-height: 36px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.agent-dock .agent-compose .compose-field > textarea {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.agent-dock .agent-compose .compose-field > textarea:focus {
+  box-shadow: none;
+}
+
+.agent-dock .agent-compose .attach-btn {
+  grid-area: attach;
+  justify-self: start;
+  align-self: center;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+}
+
+.agent-dock .agent-compose .attach-glyph {
+  width: 18px;
+  height: 18px;
+}
+
+.agent-dock .agent-compose .send-slot {
+  grid-area: send;
+  justify-self: end;
+  align-self: center;
+}
+
+/* The idle send is one round mark; stop, wait, busy and force keep the labelled
+   button, at this frame's height and its own horizontal padding. */
+.agent-dock .agent-compose .send-btn {
+  height: 32px;
+  min-height: 32px;
+}
+
+.agent-dock .agent-compose .send-btn.send-kind-send {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: transparent;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.agent-dock .agent-compose .send-btn.send-kind-send:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* One row under a finger: 44px targets inside the same frame. The dock's
+   6px + 6px padding and the frame's border make the whole dock about 59px. */
+@media (any-pointer: coarse) {
+  .agent-dock {
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .agent-dock .dock-form.agent-compose {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    padding: 0 2px;
+  }
+
+  .agent-dock .agent-compose .compose-field {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
+
+  .agent-dock .agent-compose .compose-field > textarea {
+    min-height: 44px;
+    height: 44px;
+    padding: 0 4px;
+    /* The literal 16px keeps iOS from zooming a focused field. */
+    font-size: 16px;
+  }
+
+  .agent-dock .agent-compose .attach-btn {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .agent-dock .agent-compose .attach-glyph {
+    width: 20px;
+    height: 20px;
+  }
+
+  .agent-dock .agent-compose .send-btn,
+  .agent-dock .agent-compose .send-btn.send-kind-send {
+    width: auto;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .agent-dock .agent-compose .send-btn.send-kind-send {
+    width: 44px;
+    padding: 0;
+  }
+}

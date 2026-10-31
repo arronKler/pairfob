@@ -12,6 +12,7 @@ import { applyCapabilities, clearCapabilities } from "../../operations/capabilit
 import { setComposeDraft } from "../compose-store";
 import { selectPane } from "../session-store";
 import { emulateTouchDevice } from "../touch-realm";
+import { SendButton } from "../guided/compose-controls";
 
 const { AgentCompose } = await import("./agent-compose");
 
@@ -21,6 +22,19 @@ const { AgentCompose } = await import("./agent-compose");
  * and stays silent where there is no Shift+Enter to describe.
  */
 const hint = () => appRoot().querySelector(".agent-dock .dock-mode-hint")?.textContent ?? null;
+const field = () => appRoot().querySelector<HTMLTextAreaElement>(".agent-dock textarea")!;
+
+/** A pane the chat can prompt, so the idle button is a real send rather than a resting one. */
+function canPrompt(): void {
+  act(() => {
+    applyCapabilities({ ...NO_OPERATION_CAPABILITIES, prompt_agent: true }, []);
+    replaceAgentsFromSnapshot({
+      workspaces: [{ workspace_id: "w1", label: "demo", cwd: "/repo" }],
+      tabs: [{ tab_id: "t1", workspace_id: "w1", label: "main" }],
+      panes: [{ pane_id: "p1", workspace_id: "w1", tab_id: "t1", cwd: "/repo", agent: "codex", agent_status: "idle" }],
+    });
+  });
+}
 
 function paint(width: number, height: number): void {
   happy.happyDOM.setWindowSize({ width, height });
@@ -96,5 +110,77 @@ describe("chat dock keyboard hint", () => {
     paint(390, 844);
     expect(hint()).toBeNull();
     expect(appRoot().querySelector(".agent-dock .dock-mode")).toBeNull();
+  });
+});
+
+describe("the chat dock is one frame", () => {
+  test("attach, field and send stand inside the form's own frame", () => {
+    paint(1440, 900);
+    const form = appRoot().querySelector(".agent-dock form")!;
+    expect(form.classList.contains("dock-form")).toBeTrue();
+    expect(form.classList.contains("agent-compose")).toBeTrue();
+    const fieldBox = form.querySelector(":scope > .compose-field")!;
+    expect(fieldBox.querySelector(":scope > textarea")).not.toBeNull();
+    const slot = form.querySelector(":scope > .send-slot")!;
+    expect(slot.querySelector(":scope > .send-btn")).not.toBeNull();
+  });
+
+  test("the field rests at the height of a mouse's two-row frame", () => {
+    paint(1440, 900);
+    expect(field().style.height).toBe("36px");
+  });
+
+  test("a finger's one-row frame gives the field its 44px resting height", () => {
+    restorePointer = emulateTouchDevice();
+    paint(390, 844);
+    expect(field().style.height).toBe("44px");
+  });
+});
+
+describe("the idle send is a round arrow", () => {
+  test("under a mouse it is the arrow, with the send aria name", () => {
+    canPrompt();
+    paint(1440, 900);
+    act(() => { setComposeDraft("hello"); });
+    const button = appRoot().querySelector<HTMLButtonElement>(".agent-dock .send-btn")!;
+    expect(button.dataset.sendKind).toBe("send");
+    expect(button.getAttribute("aria-label")).toBe(t("compose.sendEnterAria"));
+    expect(button.querySelector("svg")).not.toBeNull();
+    expect(button.textContent).toBe("");
+  });
+
+  test("a finger's button is the same arrow", () => {
+    restorePointer = emulateTouchDevice();
+    canPrompt();
+    paint(390, 844);
+    act(() => { setComposeDraft("hello"); });
+    const button = appRoot().querySelector<HTMLButtonElement>(".agent-dock .send-btn")!;
+    expect(button.querySelector("svg")).not.toBeNull();
+    expect(button.textContent).toBe("");
+  });
+
+  test("a labelled kind keeps its word even when compact", () => {
+    act(() => {
+      renderReact(createElement(SendButton, {
+        kind: "stop", percent: 0, className: "send-btn", compact: true,
+        onSend: () => undefined, stopTarget: null, longPressStops: false,
+      }));
+    });
+    const button = appRoot().querySelector<HTMLButtonElement>(".send-btn")!;
+    expect(button.textContent).toBe(t("compose2.stop"));
+    expect(button.querySelector("svg")).not.toBeNull(); // the square mark, not an arrow face
+    expect(button.getAttribute("aria-label")).toBe(t("compose2.stopAria"));
+  });
+
+  test("a caller that does not ask for compact keeps its word", () => {
+    act(() => {
+      renderReact(createElement(SendButton, {
+        kind: "send", percent: 0, className: "send-btn",
+        onSend: () => undefined, stopTarget: null, longPressStops: false,
+      }));
+    });
+    const button = appRoot().querySelector<HTMLButtonElement>(".send-btn")!;
+    expect(button.textContent).toBe(t("compose.send"));
+    expect(button.getAttribute("aria-label")).toBe(t("compose.sendEnterAria"));
   });
 });
