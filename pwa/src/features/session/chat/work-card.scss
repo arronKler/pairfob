@@ -2,24 +2,24 @@
 // delivery state, and the step sheet. Same surfaces and status hues as the
 // session list and settings groups.
 
+// The turn's summary: no frame of its own, one line over the steps it opens.
 .work-card {
   flex: none;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  overflow: hidden;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 // The card's one line. With steps to show it is the button that opens them.
 .work-head {
   width: 100%;
-  min-height: 48px;
+  min-height: 32px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
+  gap: 7px;
+  padding: 2px 6px;
   border: 0;
-  border-radius: 0;
+  border-radius: 7px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -40,8 +40,13 @@ button.work-head:active { background: var(--surface-2); }
   button.work-head:hover { background: var(--surface-2); }
 }
 
-// The card clips at its corners and the folding body clips its rows, so a ring
-// drawn outside these controls would be cut: it is drawn inside them.
+// A finger gets the row a step row keeps, even with both lines on one baseline.
+@media (any-pointer: coarse) {
+  .work-head { min-height: 44px; }
+}
+
+// The folding body clips its rows, so a ring drawn outside these controls
+// would be cut: it is drawn inside them.
 .work-head:focus-visible,
 .work-step:focus-visible,
 .work-earlier:focus-visible { outline-offset: -2px; }
@@ -50,18 +55,38 @@ button.work-head:active { background: var(--surface-2); }
   flex: 1 1 auto;
   min-width: 0;
   display: grid;
+  gap: 1px;
+}
+
+// From the 720px tier the two lines share one baseline and each truncates; a
+// narrower header keeps the title over the meta instead of cutting both short.
+@media (min-width: 720px) {
+  .work-head-copy {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .work-head-copy .work-title,
+  .work-head-copy .work-detail {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .work-title {
-  font-size: var(--text-body);
-  font-weight: 600;
-  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
   line-height: 1.35;
 }
 
 .work-detail {
-  font-size: var(--text-secondary);
+  font-size: 0.75rem;
   color: var(--muted);
+  opacity: 0.8;
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -70,12 +95,14 @@ button.work-head:active { background: var(--surface-2); }
 
 .work-tone {
   flex: none;
+  width: 14px;
+  height: 14px;
   color: var(--muted);
 }
 
 .work-tone.spinner {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .work-card.is-done .work-tone { color: var(--ok); }
@@ -95,6 +122,8 @@ button.work-head:active { background: var(--surface-2); }
 
 .work-chevron {
   flex: none;
+  width: 14px;
+  height: 14px;
   color: var(--muted);
   transition: transform var(--dur-1) var(--ease);
 }
@@ -102,7 +131,6 @@ button.work-head:active { background: var(--surface-2); }
 .work-head[aria-expanded="true"] .work-chevron { transform: rotate(90deg); }
 
 .work-body {
-  border-top: 1px solid var(--line);
   padding: 4px 0;
 }
 
