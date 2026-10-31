@@ -13,7 +13,7 @@
 // The card's one line. With steps to show it is the button that opens them.
 .work-head {
   width: 100%;
-  min-height: 32px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -40,9 +40,9 @@ button.work-head:active { background: var(--surface-2); }
   button.work-head:hover { background: var(--surface-2); }
 }
 
-// A finger gets the row a step row keeps, even with both lines on one baseline.
-@media (any-pointer: coarse) {
-  .work-head { min-height: 44px; }
+// A mouse gets the compact row; a finger keeps the 44px target.
+@media (hover: hover) and (pointer: fine) {
+  .work-head { min-height: 32px; }
 }
 
 // The folding body clips its rows, so a ring drawn outside these controls
@@ -84,7 +84,7 @@ button.work-head:active { background: var(--surface-2); }
 }
 
 .work-detail {
-  font-size: 0.75rem;
+  font-size: var(--text-secondary);
   color: var(--muted);
   opacity: 0.8;
   line-height: 1.35;
