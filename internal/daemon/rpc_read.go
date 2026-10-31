@@ -86,6 +86,9 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 		"git_change_stats": describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
 		// search_files: WorkspaceSearch finds files of the pane's workspace by name.
 		"search_files": describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		// search_dirs: DirIndex lists allowed directories without the runtime,
+		// so Herdr being offline does not take the create sheet's search away.
+		"search_dirs": true,
 	}
 	agentKinds := make([]string, 0, len(descriptor.AgentKinds))
 	for _, kind := range descriptor.AgentKinds {

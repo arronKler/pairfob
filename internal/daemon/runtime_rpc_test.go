@@ -102,7 +102,7 @@ func TestRuntimeRPCNewOperationsAndDeduplication(t *testing.T) {
 		t.Fatalf("unexpected config: %s", configRaw)
 	}
 	capabilities, ok := config["capabilities"].(map[string]any)
-	if !ok || len(capabilities) != 26 || capabilities["download_file"] != true || capabilities["trace_markers"] != true || capabilities["trace_labels"] != true || capabilities["trace_models"] != true || capabilities["trace_times"] != true || capabilities["trace_writes"] != true || capabilities["git_change_stats"] != true || capabilities["search_files"] != true || capabilities["list_sessions"] != false || capabilities["create_conversation"] != true || capabilities["zoom_pane"] != true || capabilities["upload_file"] != true || capabilities["upload_file_v2"] != true || capabilities["worktrees"] != nil || capabilities["layout"] != nil {
+	if !ok || len(capabilities) != 27 || capabilities["download_file"] != true || capabilities["trace_markers"] != true || capabilities["trace_labels"] != true || capabilities["trace_models"] != true || capabilities["trace_times"] != true || capabilities["trace_writes"] != true || capabilities["git_change_stats"] != true || capabilities["search_files"] != true || capabilities["search_dirs"] != true || capabilities["list_sessions"] != false || capabilities["create_conversation"] != true || capabilities["zoom_pane"] != true || capabilities["upload_file"] != true || capabilities["upload_file_v2"] != true || capabilities["worktrees"] != nil || capabilities["layout"] != nil {
 		t.Fatalf("unexpected capability contract: %s", configRaw)
 	}
 
@@ -248,10 +248,18 @@ func TestGetConfigTracksRecoveringRuntimeAvailability(t *testing.T) {
 	}
 	offline := decodeResult(t, offlineRaw)
 	offlineCapabilities := offline["capabilities"].(map[string]any)
-	if offline["runtime"] != "offline" || len(offlineCapabilities) != 26 {
+	if offline["runtime"] != "offline" || len(offlineCapabilities) != 27 {
 		t.Fatalf("offline config did not fail closed: %s", offlineRaw)
 	}
 	for capability, available := range offlineCapabilities {
+		// Directory listing is local to this computer; only runtime-backed
+		// capabilities fail closed with Herdr.
+		if capability == "search_dirs" {
+			if available != true {
+				t.Fatalf("offline capability %s was not available: %s", capability, offlineRaw)
+			}
+			continue
+		}
 		if available != false {
 			t.Fatalf("offline capability %s remained available: %s", capability, offlineRaw)
 		}

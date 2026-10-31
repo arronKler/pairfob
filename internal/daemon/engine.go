@@ -202,6 +202,8 @@ type Engine struct {
 	quotas       quotaCache
 	QuotaSources func() []runtimeapi.QuotaSource
 
+	dirs dirIndexer
+
 	media            *mediaRegistry
 	mediaTestHold    <-chan struct{}
 	mediaTestEntered chan<- struct{}

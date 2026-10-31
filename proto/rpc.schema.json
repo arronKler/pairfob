@@ -210,7 +210,8 @@
         "trace_models": { "type": "boolean" },
         "trace_writes": { "type": "boolean" },
         "git_change_stats": { "type": "boolean" },
-        "search_files": { "type": "boolean" }
+        "search_files": { "type": "boolean" },
+        "search_dirs": { "type": "boolean" }
       },
       "additionalProperties": false
     },
@@ -1290,6 +1291,7 @@
             "SplitPane",
             "PromptAgent",
             "ListWorktrees",
+            "DirIndex",
             "WorkspaceOpen",
             "WorkspaceResolve",
             "WorkspaceSearch",
@@ -1890,6 +1892,21 @@
                   "root": { "type": "string", "minLength": 1, "maxLength": 4096 },
                   "query": { "type": "string", "maxLength": 128 },
                   "limit": { "type": "integer", "minimum": 0, "maximum": 50 }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "op": { "const": "DirIndex" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "properties": {
+                  "session": { "$ref": "#/$defs/session" },
+                  "version": { "type": "string", "maxLength": 64 }
                 },
                 "additionalProperties": false
               }
