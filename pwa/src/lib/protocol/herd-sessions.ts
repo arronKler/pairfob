@@ -19,6 +19,7 @@ export const HERD_SESSION_SCOPED_OPS: ReadonlySet<string> = new Set([
   "AgentInspect", "AgentTrace", "AgentTraceDetail", "AgentTraceSummary", "AgentTraceModelSummary",
   "ClosePane", "CloseTab", "CloseWorkspace",
   "CreateConversation", "CreateTab", "CreateWorktree",
+  "DirIndex",
   "GetConfig", "GitBranches", "GitDiff", "GitStatus", "History",
   "ListWorktrees", "OpenWorktree", "PaneRead", "PromptAgent",
   "RenamePane", "RenameTab", "RenameWorkspace", "ResizePane",
