@@ -1,4 +1,6 @@
 import type { MediaReadOptions } from "../src/lib/protocol/workspace-media";
+import { parseDirIndex } from "../src/lib/dir-index";
+import { dirIndex as dirIndexFixture } from "./dir-index";
 import { createPreviewFiles } from "./preview-files";
 import { boardLayoutFixture } from "./board-layout";
 import type { SplitPaneInput, ResizePaneInput, SwapPaneInput, ZoomPaneInput } from "../src/lib/operations";
@@ -56,6 +58,8 @@ export type SessionSource = {
   status?: () => GitStatus;
   /** The pairfob build the computer reports; the release (`/dl/VERSION`) when a scene names none. */
   build?: string;
+  /** What this computer answers a directory index read with, before the phone parses it. */
+  dirIndex?: () => unknown;
 };
 
 /** Every request is local and logged. Holds/errors allow deliberate async interaction probes. */
@@ -252,6 +256,7 @@ export function createSession(source: SessionSource = {}): FixtureSession {
       { path: data.ROOT, branch: "main", label: "Main workspace", is_bare: false, is_detached: false, is_prunable: false, is_linked_worktree: false, open_workspace_id: "w1" },
       { path: "/work/pairfob-react", branch: "feature/react", label: "React migration", is_bare: false, is_detached: false, is_prunable: false, is_linked_worktree: true, open_workspace_id: null },
     ] })),
+    dirIndex: (version?: string) => request("dirIndex", [version], () => parseDirIndex(source.dirIndex?.() ?? dirIndexFixture(version))),
     createWorktree: (params: unknown) => mutation("createWorktree", [params], () => ({ ...created(), path: "/work/pairfob-react", branch: "feature/react" })),
     openWorktree: (params: unknown) => mutation("openWorktree", [params], () => ({ ...created(), path: "/work/pairfob-react", branch: "feature/react" })),
     resizePane: (params: ResizePaneInput) => mutation("resizePane", [params], () => { board.resize(params); return created(); }),
