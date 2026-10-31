@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import worker from "./index";
 
-const files = ["VERSION", "SHA256SUMS", "release.json", "pairfob-darwin-amd64", "pairfob-darwin-arm64", "pairfob-linux-amd64", "pairfob-linux-arm64"];
+const files = ["VERSION", "SHA256SUMS", "release.json", "pairfob-darwin-amd64", "pairfob-darwin-arm64", "pairfob-linux-amd64", "pairfob-linux-arm64",
+  "pairfob-chat-darwin-amd64", "pairfob-chat-darwin-arm64", "pairfob-chat-linux-amd64", "pairfob-chat-linux-arm64"];
 
 test("canonical and legacy daemon URLs stream the same assets without redirects or stale caching", async () => {
   for (const name of files) {

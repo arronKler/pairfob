@@ -3,6 +3,10 @@ const FILES = new Set([
   "VERSION", "SHA256SUMS", "release.json",
   "pairfob-darwin-amd64", "pairfob-darwin-arm64",
   "pairfob-linux-amd64", "pairfob-linux-arm64",
+  // install.sh installs pairfob-chat beside the daemon when SHA256SUMS lists
+  // it, and the daemon manifest lists it, so the guard has to let it through.
+  "pairfob-chat-darwin-amd64", "pairfob-chat-darwin-arm64",
+  "pairfob-chat-linux-amd64", "pairfob-chat-linux-arm64",
 ]);
 const ORIGINS = new Set(["https://pairfob.com", "https://localhost"]);
 
