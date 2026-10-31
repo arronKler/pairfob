@@ -623,6 +623,9 @@ export const zh = {
   "chat.copyReply": "复制回答",
   "chat.copyReplyAria": "复制这条 Agent 回答",
   "chat.copiedReply": "已复制回答",
+  "chat.copyPromptAria": "复制这条消息",
+  "chat.copiedPromptAria": "已复制这条消息",
+  "chat.showHeader": "显示会话标题",
 
   "ft.opening": "正在打开终端…",
   "ft.preparing": "正在准备终端组件并建立加密连接…",

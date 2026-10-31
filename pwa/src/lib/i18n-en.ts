@@ -620,6 +620,9 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chat.copyReply": "Copy reply",
   "chat.copyReplyAria": "Copy this agent reply",
   "chat.copiedReply": "Reply copied",
+  "chat.copyPromptAria": "Copy this message",
+  "chat.copiedPromptAria": "Message copied",
+  "chat.showHeader": "Show session header",
 
   "ft.opening": "Opening the terminal…",
   "ft.preparing": "Preparing the terminal and establishing an encrypted connection…",
