@@ -95,6 +95,17 @@ complete-terminal geometry. It writes captures under
 `/tmp/pairfob-notifications-qa`. This does not test Safari, APNs delivery,
 lock-screen presentation or notification deep links on a physical iPhone.
 
+The chat's Codex anatomy has its own check. `scripts/qa-chat-anatomy.mjs`,
+piped the same way, drives `chat-complete` and `chat-pi-unread` at 390, 820 and
+1024 pixels under touch and at 1440 pixels with a mouse and keyboard. It
+asserts the dock's one or two rows and its 44px or 32px targets, the 16px
+transcript gutter and the 768px reading column, the prompt bubble and its time
+row, the open reply, the one-row work summary, the header stepping aside and
+returning with the tail pinned, and typing to send. It writes captures under
+`/tmp/pairfob-chat-anatomy-qa`. The jump chip's smooth glide is not covered:
+this Chromium ignores `scrollTo({ behavior: "smooth" })`, so only the instant
+fallback runs.
+
 - `terminal-loading` and `terminal-error` are marked `shellOnly=true`: they deliberately render the production FullTerminalScreen shell with an inactive engine (no xterm, no TerminalOpen) to verify shell/control React ownership and visual parity. The shell renders through a QA-owned standalone React root with an explicit create/unmount lifetime (never the production paint bridge or its global legacy root), and that root is retired before any ordinary scene remounts the App. WebGL/frame behavior and terminal bridge lifecycle are covered by `terminal-live` / `terminal-open-error` (real engine in the browser; mock engine in the bun smoke).
 - A complete-terminal scene opens its terminal while the page is still loading, which no reader does, and Chromium on macOS draws canvas text lighter then than once the page has settled. So a capture of one of these scenes is not the weight a reader sees, and about one load in ten comes up heavier in part or in whole (measured on an unmodified tree: the glyph atlas keeps whatever it was first drawn with, and a rebuilt atlas is back to the usual). Opened from the session menu after the page has settled, the terminal drew the same pixels forty times out of forty. Compare captures of these scenes only against a control taken the same way, and expect the cursor's cell to differ: it blinks.
 - Camera is deterministically denied, clipboard is local, Notification permission requests return denied, credential IndexedDB is blocked, and no real push subscription/handshake/pairing is performed. Add separately authorized live/device checks for these paths.
