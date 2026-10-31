@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef } from "react";
 import { t } from "../../lib/i18n";
 import type { WorkspaceEntry } from "../../lib/workspace";
 import { Button, Chevron } from "../../shared/ui/primitives";
-import { liveSession } from "../computers/catalog-store";
+import { useLiveSession } from "../computers/hooks";
 import { useCapabilities } from "../operations/hooks";
 import { loadDirectory, loadWorkspaceFile } from "./actions";
 import { bindWorkspaceFileActions, openWorkspaceFileMenu, workspaceMutationTarget } from "./file-actions";
@@ -30,7 +30,7 @@ export function FileRow({ entry, snapshot, marks, recent }: {
   entry: WorkspaceEntry; snapshot: WorkspaceSnapshot; marks: GitMarks; recent?: "recent" | "turn" | "search";
 }) {
   const open = useRef<HTMLButtonElement>(null);
-  const session = liveSession();
+  const session = useLiveSession();
   const paneId = snapshot.paneId;
   const root = snapshot.descriptor?.root;
   const directory = snapshot.directory;

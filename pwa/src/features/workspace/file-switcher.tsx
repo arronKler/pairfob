@@ -6,7 +6,7 @@ import { showActionSheet, type ActionSheetController } from "../../shared/ui/ove
 import { MenuGroup, MenuRow } from "../../shared/ui/overlay/menu-controls";
 import { useMenuItemRole } from "../../shared/ui/overlay/popover-frame";
 import { Button } from "../../shared/ui/primitives";
-import { liveSession } from "../computers/catalog-store";
+import { useLiveSession } from "../computers/hooks";
 import { closeWorkspaceDetail, loadGitDiff, loadWorkspaceFile } from "./actions";
 import { changeKindLabel, layerLabel } from "./format";
 import { GitMark } from "./git-mark";
@@ -68,7 +68,7 @@ function Switcher({ modal }: { modal: ActionSheetController }) {
   const [query, setQuery] = useState("");
   const root = snapshot.descriptor?.root ?? "";
   const steps = reviewOrder(snapshot.status?.changes ?? []);
-  const notes = diffNoteCounts(liveSession(), snapshot.paneId);
+  const notes = diffNoteCounts(useLiveSession(), snapshot.paneId);
   const needle = query.trim().toLowerCase();
   const shown = needle ? steps.filter((step) => step.path.toLowerCase().includes(needle)) : steps;
   const layered = new Set(steps.filter((step, index) => steps.findIndex((other) => other.path === step.path) !== index).map((step) => step.path));

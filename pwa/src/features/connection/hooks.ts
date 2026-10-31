@@ -23,6 +23,20 @@ export function useConnectionPhase(): Phase {
   return useSyncExternalStore(connectionStore.subscribe, connectionPhase, connectionPhase);
 }
 
+const retryingUnreachableOf = () => connectionStore.get().retryingUnreachable;
+
+/** Whether the "cannot reach" page is retrying, for the shell that keeps it up. */
+export function useRetryingUnreachable(): boolean {
+  return useSyncExternalStore(connectionStore.subscribe, retryingUnreachableOf, retryingUnreachableOf);
+}
+
+const connectFailureOf = () => connectionStore.get().connectFailure;
+
+/** Why the last connect attempt failed, for a page that explains it. */
+export function useConnectFailure(): string {
+  return useSyncExternalStore(connectionStore.subscribe, connectFailureOf, connectFailureOf);
+}
+
 const bootBlockedOf = () => connectionStore.get().bootBlocked;
 const networkOnlineOf = () => connectionStore.get().networkOnline;
 

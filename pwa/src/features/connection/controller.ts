@@ -55,6 +55,7 @@ import { resetHerdAttention } from "../../lib/herd-attention";
 import { clearPaneBufferCache, rememberPaneBuffer, restorePaneBuffer } from "../session/pane-buffer";
 import { clearBoardPreviews } from "../board/preview/store";
 import { liveView, liveViewIsCurrent } from "./generations";
+import { hasRetainedView } from "./retained-view";
 import { openPaneWithOwner as openOwnedPane, type PaneNavigation } from "./open-pane";
 import { observeP2PAttempt, observeSessionEvent } from "./session-events";
 import { refreshSnapshot as observeSnapshot } from "./snapshot";
@@ -144,6 +145,21 @@ const connectComputerSession: SessionConnector = (credential, observeP2PAttempt)
   });
 function monotonicNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
+}
+
+/**
+ * The computers this page can switch to without a round trip: it holds their
+ * session and the view it kept for it. The picker names exactly the switches
+ * that paint in the tap's own turn, so it never promises what `establish` then
+ * has to wait for. Reads page-local state only: no request leaves the device.
+ */
+export function instantComputers(): ReadonlySet<string> {
+  const instant = new Set<string>();
+  for (const pair of computersStore.get().computers) {
+    const session = computerSessions.held(pair);
+    if (session && hasRetainedView(pair, session.herdSession?.() ?? null)) instant.add(pair.daemonId);
+  }
+  return instant;
 }
 
 function viewIsCurrent(session: LiveSession, viewVersion: number): boolean {

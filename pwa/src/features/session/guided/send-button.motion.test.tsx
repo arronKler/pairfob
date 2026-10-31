@@ -19,6 +19,12 @@ type Move = { frames: Keyframe[]; duration: number; cancelled: boolean };
 let moves: Move[] = [];
 let widths: Partial<Record<SendKind, number>> = {};
 let restore: Array<() => void> = [];
+let resized: ResizeObserverCallback | null = null;
+
+/** The entry a browser delivers for a box that settled at `width`. */
+function deliver(width: number): void {
+  act(() => resized?.([{ borderBoxSize: [{ inlineSize: width, blockSize: 46 }], contentRect: { width } } as unknown as ResizeObserverEntry], {} as ResizeObserver));
+}
 
 /** Layout for a DOM that has none: every send button is as wide as `widths` says its kind is, and records its moves. */
 function fakeLayout(): void {
@@ -39,7 +45,21 @@ function fakeLayout(): void {
       return { playState: "finished", cancel: () => { move.cancelled = true; } };
     },
   });
+  // A DOM without layout reports no size of its own; the test says when a box settled.
+  const view = document.defaultView as unknown as { ResizeObserver: typeof ResizeObserver };
+  const observer = view.ResizeObserver ?? globalThis.ResizeObserver;
+  resized = null;
+  const fake = class {
+    constructor(callback: ResizeObserverCallback) { resized = callback; }
+    observe() { /* the test delivers, the browser would */ }
+    unobserve() { /* one box, one observation */ }
+    disconnect() { resized = null; }
+  } as unknown as typeof ResizeObserver;
+  view.ResizeObserver = fake;
+  globalThis.ResizeObserver = fake;
   restore.push(() => {
+    view.ResizeObserver = observer;
+    globalThis.ResizeObserver = observer;
     delete (proto as unknown as Record<string, unknown>).getBoundingClientRect;
     if (animate) Object.defineProperty(proto, "animate", animate);
     else delete (proto as unknown as Record<string, unknown>).animate;
@@ -113,6 +133,8 @@ describe("the width of a button that changed kind", () => {
     act(() => renderReact(button("wait", 12)));
     widths.wait = 140;
     act(() => renderReact(button("wait", 99)));
+    // The browser reports the box the label grew to; a label growing is not a move.
+    deliver(140);
     expect(moves).toEqual([]);
     // The width it grew to is where the next change starts from.
     act(() => renderReact(button("send")));

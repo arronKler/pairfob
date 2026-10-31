@@ -112,7 +112,9 @@ function AssistantReply({ items, final, anchor, part, onCopy }: {
 }) {
   const [fileOwner] = useState(captureFileLinkOwner);
   const text = replyText(items);
-  const html = renderMarkdown(text, true);
+  // A page of older history re-renders every turn, and a turn that gained a step
+  // re-renders its reply: the words are parsed once for the text that carries them.
+  const html = useMemo(() => renderMarkdown(text, true), [text]);
   const code = useCodeCopy(html, final ? onCopy : undefined);
   // The turn ended on this reply: its actions come in after the card above has folded.
   const finished = useTurned(final);

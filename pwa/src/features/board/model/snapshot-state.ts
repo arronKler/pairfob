@@ -40,12 +40,46 @@ export function initialBoardViewState(): BoardViewState {
   };
 }
 
-export function applyBoardSnapshot(
-  target: BoardViewState,
+/** What one snapshot says the board shows, before it is written to the record. */
+export type DerivedBoardState = ReturnType<typeof boardStateFromSnapshot>;
+
+export function deriveBoardState(
   snapshot: SnapshotWire,
   agents: DashboardAgentCard[],
-): void {
-  const board = boardStateFromSnapshot(snapshot, agents, target.boardWorkspaceId, target.boardTabId);
+  workspaceId: string,
+  tabId: string,
+): DerivedBoardState {
+  return boardStateFromSnapshot(snapshot, agents, workspaceId, tabId);
+}
+
+function sameSpaces(left: readonly BoardSpace[], right: readonly BoardSpace[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((space, index) => space.id === right[index].id && space.label === right[index].label);
+}
+
+function sameTabs(left: readonly BoardTab[], right: readonly BoardTab[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((tab, index) =>
+    tab.id === right[index].id && tab.workspaceId === right[index].workspaceId && tab.label === right[index].label);
+}
+
+/**
+ * Whether the record already says what this derivation says.
+ *
+ * `lastLayoutSig` is the layout's own complete signature, so an identical poll
+ * writes nothing and the board domain publishes nothing. A refit means the
+ * record's focus moved, which the ids below already report.
+ */
+export function boardStateIsCurrent(record: BoardViewState, board: DerivedBoardState): boolean {
+  if (board.refit) return false;
+  return record.lastLayoutSig === board.lastLayoutSig
+    && record.boardWorkspaceId === board.boardWorkspaceId
+    && record.boardTabId === board.boardTabId
+    && sameSpaces(record.workspaceList, board.workspaceList)
+    && sameTabs(record.tabList, board.tabList);
+}
+
+export function applyDerivedBoardState(target: BoardViewState, board: DerivedBoardState): void {
   target.layouts = board.layouts;
   target.workspaceList = board.workspaceList;
   target.tabList = board.tabList;
@@ -53,4 +87,12 @@ export function applyBoardSnapshot(
   target.boardWorkspaceId = board.boardWorkspaceId;
   target.boardTabId = board.boardTabId;
   if (board.refit) target.boardFitted = false;
+}
+
+export function applyBoardSnapshot(
+  target: BoardViewState,
+  snapshot: SnapshotWire,
+  agents: DashboardAgentCard[],
+): void {
+  applyDerivedBoardState(target, deriveBoardState(snapshot, agents, target.boardWorkspaceId, target.boardTabId));
 }

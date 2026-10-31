@@ -6,7 +6,7 @@
  * ports until core's declarative shell owns them.
  */
 import { boardStore } from "../board/layout-store";
-import { applySnapshot, dashboardStore, setRefreshBusy } from "../dashboard/catalog-store";
+import { applySnapshot, dashboardStore, refreshBusy, setRefreshBusy } from "../dashboard/catalog-store";
 import { currentScreen, setScreen } from "../../app/navigation-store";
 import { applyHerdTouches } from "../settings/preferences-store";
 import {
@@ -76,7 +76,7 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
   const session = ports.currentLive();
   const viewVersion = liveView();
   if (!session || !session.isConnected() || !ports.networkOnline() || !ports.documentVisible()) return;
-  if (dashboardStore.get().refreshBusy) {
+  if (refreshBusy()) {
     queueSnapshot();
     return;
   }
@@ -125,7 +125,9 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
         return;
       }
       ports.patchChromeTitle();
-      if (ports.isDesk()) ports.commitView();
+      // An idle poll that moved nothing prepares the frame it already
+      // publishes; a selection that did move requests its own commit.
+      if (ports.isDesk() && !(unchanged && layoutUnchanged)) ports.commitView();
       return;
     }
     if (screen === "workspace" && openPaneId() && !agents.some((agent) => agent.paneId === openPaneId())) {

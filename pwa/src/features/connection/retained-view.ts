@@ -65,13 +65,32 @@ export function retainedViewFor(
   pair: Pick<PairResult, "daemonId" | "deviceId" | "fp">,
   herdSession: string | null,
 ): RetainedView | null {
+  const view = matching(pair, herdSession);
+  // A view that no longer answers for this credential belongs to a computer
+  // this page no longer holds; the next switch reads it fresh anyway.
+  if (!view) views.delete(pair.daemonId);
+  return view;
+}
+
+/**
+ * Whether a switch would paint this computer's kept view, for a picker that
+ * names the switches that need no round trip. A query: nothing is dropped.
+ */
+export function hasRetainedView(
+  pair: Pick<PairResult, "daemonId" | "deviceId" | "fp">,
+  herdSession: string | null,
+): boolean {
+  return matching(pair, herdSession) !== null;
+}
+
+function matching(
+  pair: Pick<PairResult, "daemonId" | "deviceId" | "fp">,
+  herdSession: string | null,
+): RetainedView | null {
   const view = views.get(pair.daemonId);
   if (!view) return null;
-  if (view.deviceId !== pair.deviceId || view.fingerprint !== pair.fp || view.herdSession !== herdSession) {
-    views.delete(pair.daemonId);
-    return null;
-  }
-  return view;
+  const sameOwner = view.deviceId === pair.deviceId && view.fingerprint === pair.fp;
+  return sameOwner && view.herdSession === herdSession ? view : null;
 }
 
 /** Adopt a kept view. False and no write unless the credential already names its daemon. */

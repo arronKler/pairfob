@@ -1,7 +1,7 @@
 import { Monitor, Plus, RefreshCw, Server, SlidersHorizontal } from "lucide-react";
 import { beginAddComputer, machineLinks, openComputers, switchComputer } from "../../features/computers/actions";
 import { computersStore, currentDaemonId } from "../../features/computers/catalog-store";
-import { reconnectLiveSessions } from "../../features/connection/controller";
+import { reconnectLiveSessions, instantComputers } from "../../features/connection/controller";
 import { openSettingsSection } from "../../features/settings/actions";
 import { computerTitle } from "../../lib/computer-catalog";
 import { t } from "../../lib/i18n";
@@ -17,6 +17,9 @@ import type { HerdHostView } from "../../features/dashboard/model/herd-view";
 export function openHostMenu(host: HerdHostView): void {
   const current = currentDaemonId();
   const computers = computersStore.get().computers;
+  // Which rows would paint at once: this page holds their session and the view
+  // it kept for it. Page-local state only, so opening the panel stays free.
+  const instant = instantComputers();
   showActionSheet(t("host.sheetTitle"), (modal) => (
     <>
       {host.tone !== "live" && host.tone !== "demo" ? (
@@ -28,7 +31,7 @@ export function openHostMenu(host: HerdHostView): void {
         return (
           <MenuChoice key={pair.daemonId} modal={modal} icon={<Monitor size={18} aria-hidden="true" />}
             title={selected ? host.name : computerTitle(pair)}
-            detail={selected ? host.line : undefined}
+            detail={selected ? host.line : instant.has(pair.daemonId) ? t("computers.held") : undefined}
             selected={selected}
             action={selected ? undefined : () => switchComputer(pair.daemonId)} />
         );

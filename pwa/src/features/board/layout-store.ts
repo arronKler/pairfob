@@ -1,6 +1,8 @@
 import type { DashboardAgentCard, SnapshotWire } from "../../lib/dashboard";
 import type { TabLayoutView } from "../../lib/layout";
-import { applyBoardSnapshot, initialBoardViewState, type BoardViewState } from "./model/snapshot-state";
+import {
+  applyDerivedBoardState, boardStateIsCurrent, deriveBoardState, initialBoardViewState, type BoardViewState,
+} from "./model/snapshot-state";
 import { createDomain, detach, type DomainView } from "../../shared/model/domain-store";
 
 /**
@@ -15,13 +17,21 @@ type BoardSnapshot = DomainView<BoardRecord>;
 
 const boardDomain = createDomain<BoardRecord>("board", initialBoardViewState());
 export const boardStore = boardDomain.store;
-const { read, write, stage } = boardDomain.controller;
+const { read, write, writeIf, stage } = boardDomain.controller;
 
 
-/** Fold a fresh daemon snapshot into the catalog and camera focus. */
+/**
+ * Fold a fresh daemon snapshot into the catalog and camera focus.
+ *
+ * A poll that says what the board already says writes nothing, so the domain
+ * neither copies the catalog nor wakes a subscriber.
+ */
 export function projectSnapshot(snapshot: SnapshotWire, agents: DashboardAgentCard[]): void {
-  write((record) => {
-    applyBoardSnapshot(record, snapshot, agents);
+  writeIf((record) => {
+    const board = deriveBoardState(snapshot, agents, record.boardWorkspaceId, record.boardTabId);
+    if (boardStateIsCurrent(record, board)) return false;
+    applyDerivedBoardState(record, board);
+    return true;
   });
 }
 

@@ -232,6 +232,10 @@ test("a nested synchronous navigation commits through the recommit path, consumi
     });
     let outer: unknown;
     await act(async () => {
+      // A composition the board commit can leave: the frame it publishes is what
+      // this scenario lands on.
+      setScreen("home");
+      commitView();
       nextTransition("fade");
       setScreen("board");
       armed = true;

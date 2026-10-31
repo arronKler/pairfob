@@ -3,10 +3,13 @@ import { useEffect, useState } from "react";
 import { computerTitle } from "../../lib/computer-catalog";
 import { t } from "../../lib/i18n";
 import { formatDeviceAge } from "../../lib/ui-model";
+import type { PairResult } from "../../lib/protocol/client";
 import { beginAddComputer, forgetComputer, resumeComputer } from "../../features/computers/actions";
 import { computers, credential } from "../../features/computers/catalog-store";
+import { useComputers, useCredential } from "../../features/computers/hooks";
 import { unreachableHop } from "../../features/connection/connection-path";
 import { connectFailure, setRetryingUnreachable } from "../../features/connection/connection-store";
+import { useConnectFailure } from "../../features/connection/hooks";
 import { pointerFine } from "../../app/input-mode";
 import { MenuChoice, showActionSheet } from "../../shared/ui/overlay";
 import { Button, StatusDot, Swap } from "../../shared/ui/primitives";
@@ -29,15 +32,26 @@ export function retryUnreachable(): void {
   void resumeComputer(pair);
 }
 
-/** The computer this page is about and what broke on the way to it, in the header's words. */
-export function unreachableHost(): { name: string; line: string; relay: boolean } {
-  const pair = target();
-  const relay = (unreachableHop(connectFailure()) ?? "computer") === "relay";
+function hostView(pair: PairResult | null, failure: string): { name: string; line: string; relay: boolean } {
+  const relay = (unreachableHop(failure) ?? "computer") === "relay";
   return {
     name: pair ? computerTitle(pair) : t("boot.computer"),
     line: relay ? t("unreach.lineRelay") : t("unreach.lineComputer", { when: formatDeviceAge(pair?.lastSeen) }),
     relay,
   };
+}
+
+/** The computer this page is about and what broke on the way to it, in the header's words. */
+export function unreachableHost(): { name: string; line: string; relay: boolean } {
+  return hostView(target(), connectFailure());
+}
+
+/** The same reading, followed: the page repaints when the computer or the failure moves. */
+function useUnreachableHost(): { name: string; line: string; relay: boolean } {
+  const current = useCredential();
+  const saved = useComputers().computers;
+  const failure = useConnectFailure();
+  return hostView(current ?? saved[0] ?? null, failure);
 }
 
 /** The computer panel behind the title: retry, add another computer, forget this one. */
@@ -145,7 +159,7 @@ export function UnreachableBody({ retrying }: { retrying: boolean }) {
  * (`unreachable-desk.tsx`).
  */
 export function UnreachableShell({ retrying = false }: { retrying?: boolean }) {
-  const { name, line } = unreachableHost();
+  const { name, line } = useUnreachableHost();
   return (
     <div className="page herd-page unreachable-shell">
       <h1 className="sr-only">{t("tabs.sessions")}</h1>

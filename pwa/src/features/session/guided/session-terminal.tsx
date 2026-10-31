@@ -2,7 +2,8 @@ import { ArrowDown } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { lineFillBackground, paintLines, plainCellClass, spanCss, spanInk, type StyledLine } from "../../../lib/ansi";
 import { t } from "../../../lib/i18n";
-import { openPaneId, paneFollow, paneLoaded, paneUnread, sessionStore, setPaneFollow, termSelect } from "../session-store";
+import { paneFollow, paneLoaded, paneUnread, sessionStore, setPaneFollow, termSelect } from "../session-store";
+import { usePaneId } from "../hooks";
 import { termWrap } from "../../settings/preferences-store";
 import { haptic } from "../../../lib/dom";
 import { echoGhost, echoStoreRevision, subscribeEcho } from "./echo";
@@ -147,7 +148,7 @@ export function SessionTerminal({ onRow }: { onRow?: (index: number, at?: RowPre
   // the terminal, and the rows it did not change skip their render entirely.
   const painted = useMemo(() => paintLines(model.lines), [model]);
   const live = painted.length ? painted : EMPTY_LINES;
-  const ghost = echoGhost(openPaneId());
+  const ghost = echoGhost(usePaneId());
   const ghostAt = ghost.text ? ghostRowIndex(live) : -1;
 
   useEffect(() => {

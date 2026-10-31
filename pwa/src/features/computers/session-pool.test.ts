@@ -271,6 +271,26 @@ describe("page-local computer sessions", () => {
     expect(pool.reuse(pair("missing"))).toBeNull();
   });
 
+  test("answers which computers it holds, without changing what eviction sees", async () => {
+    const pool = new ComputerSessions(2);
+    const sessions = new Map<string, FakeSession>();
+    const connect = async (credential: PairResult) => {
+      const session = fakeSession();
+      sessions.set(credential.daemonId, session);
+      return session;
+    };
+    await pool.activate(pair("a"), connect);
+    await pool.activate(pair("b"), connect);
+
+    expect(pool.held(pair("a"))).toBe(sessions.get("a"));
+    expect(pool.held(pair("a", "phone_new"))).toBeNull();
+    expect(pool.held(pair("missing"))).toBeNull();
+
+    // Asking is not use: the answer must not protect "a" from the next eviction.
+    await pool.activate(pair("c"), connect);
+    expect(sessions.get("a")?.closed).toBe(1);
+  });
+
   test("a hand-off keeps the computer on screen out of the eviction order", async () => {
     const pool = new ComputerSessions(2);
     const sessions = new Map<string, FakeSession>();

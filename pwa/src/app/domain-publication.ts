@@ -6,7 +6,7 @@ import { chatStore } from "../features/session/chat/trace-store";
 import { composeStore } from "../features/session/compose-store";
 import { computersStore } from "../features/computers/catalog-store";
 import { connectionStore } from "../features/connection/connection-store";
-import { dashboardStore } from "../features/dashboard/catalog-store";
+import { dashboardStore, refreshBusyStore } from "../features/dashboard/catalog-store";
 import { navigationStore } from "./navigation-store";
 import { noticesStore } from "./notices-store";
 import { pairingStore } from "../features/pairing/form-store";
@@ -40,6 +40,7 @@ export const domainStores: readonly AnyDomainStore[] = Object.freeze([
   sessionStore,
   boardStore,
   dashboardStore,
+  refreshBusyStore,
   noticesStore,
   runtimeStore,
   capabilitiesStore,

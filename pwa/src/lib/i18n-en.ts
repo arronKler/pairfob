@@ -534,6 +534,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "computers.multiLede": "This device has paired more than one computer. Connect to one, or add another.",
   "computers.addHint": "Install pairfob, then run pairfob pair. This adds a credential; it does not replace this one.",
   "computers.current": "Connected now",
+  "computers.held": "Connected · switches instantly",
   "computers.currentPill": "Current",
   "computers.lastUsed": "Last used · {when}",
   "computers.neverConnected": "Not connected yet",

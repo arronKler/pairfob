@@ -8,6 +8,7 @@ import { applyRuntimeIdentity, resetRuntime, runtimeStore } from "./runtime-stor
 import {
   adoptRetainedView,
   forgetRetainedView,
+  hasRetainedView,
   resetRetainedViewsForTests,
   retainLiveView,
   retainedViewFor,
@@ -97,6 +98,19 @@ describe("a computer's kept view", () => {
     expect(dashboardStore.get().snapshotLoaded).toBeTrue();
     expect(runtimeStore.get().herdHost).toBe("a");
     expect(runtimeStore.get().runtimeKind).toBe("herdr");
+  });
+
+  test("answers whether a switch would paint the kept view, and drops nothing", () => {
+    const a = pair("a");
+    painted(a, "a1", "work");
+    retainLiveView();
+
+    expect(hasRetainedView(a, "work")).toBeTrue();
+    // A bookmark on another computer, another device, or another Herdr session
+    // is no answer — but asking is not a lookup, so the view survives.
+    expect(hasRetainedView(a, "other")).toBeFalse();
+    expect(hasRetainedView(pair("a", "phone_new"), "work")).toBeFalse();
+    expect(retainedViewFor(a, "work")).not.toBeNull();
   });
 
   test("is forgotten with the computer it belongs to", () => {

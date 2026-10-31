@@ -46,6 +46,7 @@ let recommitUsed = 0;
 let scheduled = false;
 let scheduledToken = 0;
 let lastLayoutKey = "";
+let commitCount = 0;
 
 /**
  * Ask for a commit without forcing one. Domain actions that change the
@@ -122,6 +123,7 @@ export function commitApp(options: CommitOptions = {}): void {
   }
 
   const previousKey = lastLayoutKey;
+  commitCount += 1;
   const layout = preparePublishedCommit();
   const navigation = layout.key !== previousKey;
   lastLayoutKey = layout.key;
@@ -169,6 +171,11 @@ export function isCommitting(): boolean {
   return committing || notifying;
 }
 
+/** Commits this page has run, for a caller proving one was scheduled and spent. */
+export function commitsRun(): number {
+  return commitCount;
+}
+
 /** The composition key the last commit rendered. */
 export function lastCommittedLayoutKey(): string {
   return lastLayoutKey;
@@ -182,6 +189,7 @@ export function noteCommittedLayout(key: string): void {
 /** Forget the committed composition and any pending request (unmount, fixtures). */
 export function resetCommitState(): void {
   lastLayoutKey = "";
+  commitCount = 0;
   scheduled = false;
   scheduledToken += 1;
   recommit = false;

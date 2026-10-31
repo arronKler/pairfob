@@ -1,5 +1,5 @@
 import { Check, ChevronLeft, ChevronRight, CircleAlert, Copy } from "lucide-react";
-import { useCallback, useEffect, useReducer, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { t } from "../../../lib/i18n";
 import { renderMarkdown } from "../../../lib/agent-markdown";
@@ -114,21 +114,32 @@ function prettyJSON(input: string): string {
   }
 }
 
-function commandText(input: string): string {
-  const rows = flatArguments(input);
-  const command = rows?.find(([key]) => key === "command" || key === "cmd" || key === "script")?.[1];
-  return command ?? "";
+/**
+ * The step's arguments, read once per input.
+ *
+ * The sheet repaints as the turn moves (a running step's output arrives in
+ * place), and a write's arguments can be a whole file: parsing them on every
+ * repaint is work for words that did not change.
+ */
+function useArgumentParts(input: string): { rows: Array<[string, string]> | null; command: string; pretty: string } {
+  return useMemo(() => {
+    const rows = flatArguments(input);
+    return {
+      rows,
+      command: rows?.find(([key]) => key === "command" || key === "cmd" || key === "script")?.[1] ?? "",
+      pretty: rows ? "" : prettyJSON(input),
+    };
+  }, [input]);
 }
 
 function Arguments({ item, input }: { item: AgentTraceItem; input: string }) {
-  if (stepCategory(item) === "command") {
-    const command = commandText(input);
-    if (command) return <Section title={t("sheet.command")} copy={command}><pre className="step-code">{command}</pre></Section>;
+  const { rows, command, pretty } = useArgumentParts(input);
+  if (stepCategory(item) === "command" && command) {
+    return <Section title={t("sheet.command")} copy={command}><pre className="step-code">{command}</pre></Section>;
   }
-  const rows = flatArguments(input);
   return <Section title={t("sheet.params")} copy={input}>
     {rows ? <dl className="step-args">{rows.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
-      : <pre className="step-code">{prettyJSON(input)}</pre>}
+      : <pre className="step-code">{pretty}</pre>}
   </Section>;
 }
 
@@ -154,6 +165,9 @@ function StepSheetBody({ paneId, item, verified }: { paneId: string; item: Agent
   const changed = useCallback(() => flushSync(refresh), []);
   const ref = item.detailRef;
   const detail: AgentTraceDetailState = ref ? toolDetailView(paneId, ref) : { status: "ready" };
+  // The sheet follows the trace, so it repaints while it is open; its words are
+  // parsed once for the text that carries them.
+  const html = useMemo(() => (item.type === "assistant" ? renderMarkdown(item.text || "") : ""), [item.type, item.text]);
   useEffect(() => {
     if (!ref || detail.status !== "idle") return;
     let open = true;
@@ -166,7 +180,7 @@ function StepSheetBody({ paneId, item, verified }: { paneId: string; item: Agent
   }
   if (item.type === "assistant") {
     // The Markdown renderer returns sanitized allowlisted HTML.
-    return <div className="step-sheet-body"><div className="agent-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.text || "") }} /></div>;
+    return <div className="step-sheet-body"><div className="agent-md" dangerouslySetInnerHTML={{ __html: html }} /></div>;
   }
   return <div className="step-sheet-body">
     <div className="step-sheet-state"><StatePill state={stepState(item, verified)} /></div>

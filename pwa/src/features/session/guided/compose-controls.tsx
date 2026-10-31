@@ -223,6 +223,13 @@ function useSendPointer(ref: RefObject<HTMLButtonElement | null>, onLongPress: (
  * every frame of the move over a box whose height is the computer's rows; its
  * button changes width at once, as it did, and a stop under way holds one
  * width for its steps (`.send-reserve`).
+ *
+ * The box it starts from is the observer's to keep: a size the browser already
+ * reported needs no second read, and reading it on every commit would lay the
+ * page out again after every keystroke and every terminal patch, for a box that
+ * did not move. The observer also follows the changes that are not this
+ * control's own — a language switch, another width tier — where the same face
+ * gets a new width without a commit of its own.
  */
 function useEasedWidth(ref: RefObject<HTMLButtonElement | null>, kind: SendKind): void {
   const shown = useRef(kind);
@@ -231,15 +238,30 @@ function useEasedWidth(ref: RefObject<HTMLButtonElement | null>, kind: SendKind)
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const moving = move.current?.playState === "running";
-    if (shown.current === kind) {
-      // The same kind drawn again: a count ticking in the label is not a move.
-      if (!moving) width.current = el.getBoundingClientRect().width;
-      return;
-    }
+    // The box as it stands at mount: the first move starts from here even
+    // before the observer has reported anything.
+    width.current = el.getBoundingClientRect().width;
+    const Observer = el.ownerDocument.defaultView?.ResizeObserver;
+    if (!Observer) return;
+    // The size is read off the entry, not the element: measuring here would lay
+    // the page out again inside a resize pass. A move's own frames are welcome
+    // here: a move under way starts from where the box is, not from this, and
+    // the last frame leaves it on the width the move ended at.
+    const observer = new Observer((entries) => {
+      const entry = entries.at(-1);
+      const box = entry?.borderBoxSize;
+      const size = (Array.isArray(box) ? box[0] : box)?.inlineSize;
+      width.current = size ?? entry?.contentRect.width ?? null;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || shown.current === kind) return;
     shown.current = kind;
     // Mid-move the box is still on its way; the next move starts from where it is.
-    const from = moving ? el.getBoundingClientRect().width : width.current;
+    const from = move.current?.playState === "running" ? el.getBoundingClientRect().width : width.current;
     move.current?.cancel();
     move.current = null;
     const to = el.getBoundingClientRect().width;
@@ -247,7 +269,7 @@ function useEasedWidth(ref: RefObject<HTMLButtonElement | null>, kind: SendKind)
     if (from === null || Math.abs(from - to) < 1 || el.closest(".full-terminal-pad")) return;
     // Clipped on the way: a longer label does not hang out of a box still growing to it.
     move.current = playMove(el, [{ width: `${from}px`, overflow: "hidden" }, { width: `${to}px`, overflow: "hidden" }], MOTION_MS.element);
-  });
+  }, [kind]);
   useLayoutEffect(() => () => { move.current?.cancel(); }, []);
 }
 

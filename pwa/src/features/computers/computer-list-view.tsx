@@ -81,7 +81,7 @@ export function ComputerListView({ view, onSwitch, onForget, onAdd, onBack, noti
                   : <SetAction disabled={pending !== null} onClick={() => {
                       setPending(row.daemonId);
                       void Promise.resolve(onSwitch(row.daemonId)).finally(() => setPending(null));
-                    }}>{t("set.connect")}</SetAction>}
+                    }}>{t(row.held ? "set.switchTo" : "set.connect")}</SetAction>}
               </Swap>
             </span>} />
         ))}

@@ -79,6 +79,15 @@ function agent(id: string, workspace = "alpha", status: DashboardAgentCard["stat
     tabId: `${workspace}:tab`, cwd: `/work/${workspace}`, agent: "codex", hasAgent: true, status };
 }
 
+/**
+ * A socket drop is a connection publication. The page follows that domain and
+ * re-reads `isConnected()` from the handle, so a flip alone has nothing to follow.
+ */
+function setConnected(value: boolean): void {
+  connected = value;
+  act(() => setNetworkOnline(true));
+}
+
 /** Seed the herd rows through the dashboard owner action, inside act. */
 function seed(rows: DashboardAgentCard[]): void {
   act(() => {
@@ -218,7 +227,7 @@ describe("React herd list", () => {
   test("unverifiable cards retain their known rows while replacing stale status pills", () => {
     seed([agent("p1", "alpha", "done")]);
     selectPane("p1");
-    connected = false;
+    setConnected(false);
     paint();
     const card = app().querySelector(".card")!;
     expect(card.classList.contains("unverifiable")).toBe(true);
@@ -267,10 +276,10 @@ describe("React herd list", () => {
     menu(card);
     expect(document.querySelector("dialog")).toBeNull();
     act(() => setOperationBusy(false));
-    connected = false;
+    setConnected(false);
     menu(card);
     expect(document.querySelector("dialog")).toBeNull();
-    connected = true;
+    setConnected(true);
     card.focus();
     menu(card);
     expect(document.querySelector(".modal-title")?.textContent).toContain("Renamed pane");
@@ -296,7 +305,7 @@ describe("React herd list", () => {
     expect(app().querySelector<HTMLButtonElement>(".create-fab")?.disabled).toBe(true);
     expect(app().querySelector(".create-fab")?.textContent).toBe(t("home.creating"));
     act(() => setOperationBusy(false));
-    connected = false;
+    setConnected(false);
     paint();
     expect(app().querySelector<HTMLButtonElement>(".create-fab")?.disabled).toBe(true);
   });

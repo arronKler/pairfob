@@ -153,7 +153,15 @@ export function StepList({ steps, hidden, listKey, breaks = [], folds = true, ar
   const groups = listKey === "all" && folds
     ? groupSteps(visible, breaks.map((at) => at - hidden).filter((at) => at >= 0))
     : visible.map((item) => ({ items: [item], steps: [item], category: stepCategory(item) }));
-  const firstOf = new Map(groups.map((group) => [group, visible.indexOf(group.steps[0]!)]));
+  // The rows keep the steps' order and cover them whole, so each row's first
+  // step is the running total: asking `visible` for every row would make a long
+  // card quadratic in its own steps.
+  const firstOf = new Map<StepGroup, number>();
+  let first = 0;
+  for (const group of groups) {
+    firstOf.set(group, first);
+    first += group.steps.length;
+  }
   // `arrivals.from` counts steps in the whole list, so a row's own step index is
   // the window offset plus its place among the rows drawn.
   const arrived = (row: number): boolean => hidden + row >= arrivals.from;

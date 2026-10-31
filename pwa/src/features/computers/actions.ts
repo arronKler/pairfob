@@ -26,7 +26,7 @@ import { friendlyDeviceLabel } from "../../lib/ui-model";
 import { track } from "../../lib/telemetry";
 import { relayOrigin } from "../../lib/runtime-config";
 import {
-  closeComputerSession, establish, landAfterDisconnect, refreshFromSession, reloadComputers,
+  closeComputerSession, establish, instantComputers, landAfterDisconnect, refreshFromSession, reloadComputers,
   startPolling, stopPolling,
 } from "../connection/controller";
 import { askConfirm } from "../../shared/ui/overlay/basic-dialogs";
@@ -85,6 +85,9 @@ export function computersPageInput(withBack: boolean, desk: boolean, snapshots: 
     credentialDaemonId: computersSnapshot.credential?.daemonId ?? null,
     live: connection.phase === "live",
     lastUsedDaemonId: computersSnapshot.lastUsedDaemonId,
+    // Page-local pool state, not a domain: the picker names which switches this
+    // page can paint without a round trip.
+    heldDaemonIds: instantComputers(),
     computersFrom: navigation.computersFrom,
     desk,
     paneId: session.paneId,

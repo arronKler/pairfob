@@ -29,6 +29,7 @@ describe("computers view model", () => {
       credentialDaemonId: null,
       live: false,
       lastUsedDaemonId: null,
+      heldDaemonIds: new Set(),
       computersFrom: "home",
       desk: false,
       paneId: "",
@@ -48,6 +49,7 @@ describe("computers view model", () => {
       credentialDaemonId: desk.daemonId,
       live: true,
       lastUsedDaemonId: desk.daemonId,
+      heldDaemonIds: new Set(),
       computersFrom: "settings",
       desk: false,
       paneId: "",
@@ -63,6 +65,26 @@ describe("computers view model", () => {
     expect(view.rows[1]?.currentPill).toBeNull();
     expect(view.rows[1]?.meta).toBe("尚未连上过");
     expect(view.showManualUpdateHelp).toBeFalse();
+  });
+
+  test("a held computer is named connected, and the current one keeps its own line", () => {
+    setLang("zh");
+    const view = computersViewModel({
+      computers: [desk, studio],
+      credentialDaemonId: desk.daemonId,
+      live: true,
+      lastUsedDaemonId: desk.daemonId,
+      heldDaemonIds: new Set([desk.daemonId, studio.daemonId]),
+      computersFrom: "home",
+      desk: false,
+      paneId: "",
+      withBack: true,
+    });
+    expect(view.rows[0]?.held).toBeTrue();
+    expect(view.rows[0]?.meta).toBe("当前连接");
+    expect(view.rows[1]?.held).toBeTrue();
+    // The age of a computer whose list is already on this page says nothing.
+    expect(view.rows[1]?.meta).toBe("已连接 · 即时切换");
   });
 
   test("back from settings stays on settings; desk with a pane returns to the pane", () => {

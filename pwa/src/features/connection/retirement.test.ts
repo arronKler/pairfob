@@ -10,7 +10,7 @@ import {
   setSessionTransport,
   setTransportSwitching,
 } from "./connection-store";
-import { dashboardStore, replaceAgentsFromSnapshot } from "../dashboard/catalog-store";
+import { dashboardStore, refreshBusy, replaceAgentsFromSnapshot } from "../dashboard/catalog-store";
 import { applyRuntimeIdentity, runtimeStore, setPushEnabled } from "./runtime-store";
 import { paneReadBusy, queueSnapshot, resetPaneView, selectPane, sessionStore, setFullTerminal, setPaneReadBusy, snapshotIsPending } from "../session/session-store";
 import { domainStores } from "../../app/domain-publication";
@@ -109,7 +109,7 @@ describe("session retirement", () => {
     expect(operationBusy()).toBe(false);
     expect(dashboardStore.get().agents).toEqual([]);
     expect(dashboardStore.get().lastHerdSig).toBe("");
-    expect(dashboardStore.get().refreshBusy).toBe(false);
+    expect(refreshBusy()).toBe(false);
     expect(sessionStore.get().paneId).toBe("");
     expect(sessionStore.get().fullTerminal).toBe(false);
     expect(sessionStore.get().paneText).toBe("");

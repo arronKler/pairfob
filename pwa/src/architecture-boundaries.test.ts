@@ -130,10 +130,15 @@ const layers: LayerPolicy[] = [
   {
     // Computer catalog projection, session pool and list view. `actions.ts` is
     // the feature's one connected adapter: resume/switch/forget talk to live.
+    // `hooks.ts` hands a screen the live handle, whose `isConnected()` is
+    // answered by the socket: the answer moves with the connection domain, so
+    // the hook follows that feature's public hooks. Its own edges are audited
+    // by the `features/connection` policy below, not re-audited here.
     name: "features/computers",
     root: "features/computers",
     allowedRoots: ["features/computers/", "shared/", "lib/"],
-    allowedModules: [],
+    allowedModules: ["features/connection/hooks"],
+    opaque: ["features/connection/hooks"],
     prohibitedModules: applicationModules,
     prohibitedRoots: ["ui/", "pages/", "app/"],
     exclude: ["features/computers/actions", "features/computers/cancel-add"],

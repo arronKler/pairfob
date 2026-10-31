@@ -128,16 +128,30 @@ export class ComputerSessions {
    * null when this computer has no matching pooled entry; never connects.
    */
   reuse(pair: PairResult): ActivatedSession | null {
-    const existing = this.entries.get(pair.daemonId);
-    if (!existing || existing.deviceId !== pair.deviceId || existing.fingerprint !== pair.fp) return null;
-    existing.activated = ++this.activation;
+    const entry = this.match(pair);
+    if (!entry) return null;
+    entry.activated = ++this.activation;
     return {
-      session: existing.session,
+      session: entry.session,
       reused: true,
-      lastLatencyMs: existing.lastLatencyMs,
-      transport: existing.transport,
-      lastP2PAttempt: existing.lastP2PAttempt,
+      lastLatencyMs: entry.lastLatencyMs,
+      transport: entry.transport,
+      lastP2PAttempt: entry.lastP2PAttempt,
     };
+  }
+
+  /**
+   * The session this page holds for the credential, if any, without the side
+   * effects of `reuse`: the picker asks which switches would not connect.
+   */
+  held(pair: Pick<PairResult, "daemonId" | "deviceId" | "fp">): LiveSession | null {
+    return this.match(pair)?.session ?? null;
+  }
+
+  /** The entry a switch to this credential would take over, when one matches. */
+  private match(pair: Pick<PairResult, "daemonId" | "deviceId" | "fp">): SessionEntry | null {
+    const entry = this.entries.get(pair.daemonId);
+    return entry && entry.deviceId === pair.deviceId && entry.fingerprint === pair.fp ? entry : null;
   }
 
   bind(

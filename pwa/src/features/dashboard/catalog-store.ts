@@ -33,7 +33,6 @@ export type DashboardRecord = {
   runtimeAgentStatuses: RuntimeAgentStatuses;
   completionSeen: SeenCompletions;
   lastHerdSig: string;
-  refreshBusy: boolean;
   /**
    * A snapshot has been read for this session. Until then an empty `agents`
    * means "not read yet" (the list shows placeholder rows), not "no sessions".
@@ -54,11 +53,22 @@ const dashboardDomain = createDomain<DashboardRecord>("dashboard", {
   runtimeAgentStatuses: {},
   completionSeen: {},
   lastHerdSig: "",
-  refreshBusy: false,
   snapshotLoaded: false,
 });
 export const dashboardStore = dashboardDomain.store;
 const { read, write, writeIf } = dashboardDomain.controller;
+
+/**
+ * The observation controller's in-flight flag.
+ *
+ * It is its own domain on purpose: the controller raises and clears it twice per
+ * poll, and publishing the herd list — a deep copy of every card — for a flag no
+ * screen draws would be the poll's most expensive write. Its publication is
+ * still the reentry point the controller revalidates its owner against.
+ */
+const refreshDomain = createDomain<{ busy: boolean }>("snapshot-refresh", { busy: false });
+export const refreshBusyStore = refreshDomain.store;
+const { read: readRefresh, write: writeRefresh } = refreshDomain.controller;
 
 
 /** Per daemon, Herdr session and device; the default retains its original key. */
@@ -77,18 +87,27 @@ export function saveCompletionSeen(): void {
 export { loadCompletionSeen };
 
 export function setRefreshBusy(busy: boolean): void {
-  if (read().refreshBusy === busy) return;
-  write((record) => {
-    record.refreshBusy = busy;
+  if (readRefresh().busy === busy) return;
+  writeRefresh((record) => {
+    record.busy = busy;
   });
+}
+
+/** Whether a Snapshot read is in flight for this view. */
+export function refreshBusy(): boolean {
+  return readRefresh().busy;
+}
+
+/** The flag's publication, for a caller that revalidates ownership when a poll starts or ends. */
+export function subscribeRefreshBusy(listener: () => void): () => void {
+  return refreshDomain.store.subscribe(listener);
 }
 
 /**
  * What a screen that draws the rows renders from this domain, as a scalar:
- * which rows, not which record carries them. The domain publishes for the
- * refresh flag and for a snapshot that reported the same list; neither changes
- * a row, and `lastHerdSig` is the list's own signature, written with every
- * write that does.
+ * which rows, not which record carries them. The domain publishes for a
+ * snapshot that reported the same list; that changes no row, and `lastHerdSig`
+ * is the list's own signature, written with every write that does.
  */
 export function herdAgentsKey(snapshot: object): string {
   const record = snapshot as { snapshotLoaded: boolean; lastHerdSig: string };
@@ -269,9 +288,9 @@ export function resetDashboard(): void {
     record.runtimeAgentStatuses = {};
     record.completionSeen = {};
     record.lastHerdSig = "";
-    record.refreshBusy = false;
     record.snapshotLoaded = false;
   });
+  setRefreshBusy(false);
 }
 
 /**
@@ -288,7 +307,6 @@ export function captureDashboardProjection(): () => void {
     runtimeAgentStatuses: detach(read().runtimeAgentStatuses),
     completionSeen: detach(read().completionSeen),
     lastHerdSig: read().lastHerdSig,
-    refreshBusy: read().refreshBusy,
     snapshotLoaded: read().snapshotLoaded,
   };
   let used = false;
@@ -304,7 +322,6 @@ export function captureDashboardProjection(): () => void {
       record.runtimeAgentStatuses = detach(captured.runtimeAgentStatuses);
       record.completionSeen = detach(captured.completionSeen);
       record.lastHerdSig = captured.lastHerdSig;
-      record.refreshBusy = captured.refreshBusy;
       record.snapshotLoaded = captured.snapshotLoaded;
     });
   };
@@ -325,7 +342,7 @@ export function dashboardProjection(): DashboardProjection {
   };
 }
 
-/** Adopt a kept projection. completionSeen / refreshBusy are never adopted. */
+/** Adopt a kept projection. completionSeen is never adopted. */
 export function adoptDashboardProjection(projection: DashboardProjection): void {
   write((record) => {
     record.agents = detach(projection.agents);

@@ -13,20 +13,20 @@ import type { ComputersViewModel } from "./model";
  * connection being made and the "current" tag take turns in one slot, each
  * swapped in, and the slot is as wide as Connect whichever stands in it.
  */
-const row = (daemonId: string, title: string, current: boolean) => ({
-  daemonId, title, current, currentPill: current ? "当前" : null, meta: current ? "已连接" : "上次连接：昨天",
+const row = (daemonId: string, title: string, current: boolean, held = false) => ({
+  daemonId, title, current, held, currentPill: current ? "当前" : null, meta: current ? "已连接" : held ? "已连接 · 即时切换" : "上次连接：昨天",
   forgetAria: `忘记 ${title}`, forgetLabel: "忘记",
 });
-const model = (current: string): ComputersViewModel => ({
+const model = (current: string, held: string[] = []): ComputersViewModel => ({
   withBack: true, backTitle: "电脑", backTarget: "settings", heading: null,
-  rows: [row("a", "MacBook Pro", current === "a"), row("b", "Mac mini", current === "b")],
+  rows: [row("a", "MacBook Pro", current === "a", held.includes("a")), row("b", "Mac mini", current === "b", held.includes("b"))],
   addLabel: "添加电脑", addHint: "", showManualUpdateHelp: false, pageClass: "",
 });
 
 let connect: (() => void) | null = null;
 const switched: string[] = [];
-function paint(current: string): void {
-  renderReact(<ComputerListView view={model(current)} onForget={() => {}} onAdd={() => {}} onBack={() => {}}
+function paint(current: string, held: string[] = []): void {
+  renderReact(<ComputerListView view={model(current, held)} onForget={() => {}} onAdd={() => {}} onBack={() => {}}
     onSwitch={(daemonId) => { switched.push(daemonId); return new Promise<void>((resolve) => { connect = resolve; }); }} />);
 }
 const items = () => [...appRoot().querySelectorAll<HTMLElement>(".computer-item")];
@@ -71,6 +71,18 @@ test("connecting swaps the spinner in where Connect stood, then the tag where th
   expect(face(second).classList.contains("swap-in")).toBe(true);
   expect(face(first).querySelector("button.set-action")?.textContent).toBe(t("set.connect"));
   expect(face(first).classList.contains("swap-in")).toBe(true);
+});
+
+test("a held row offers Switch where a cold one offers Connect, and says so", () => {
+  paint("a", ["b"]);
+  const held = items()[1];
+  expect(held.querySelector(".set-item-sub")?.textContent).toBe("已连接 · 即时切换");
+  expect(held.querySelector("button.set-action")?.textContent).toBe("切换");
+
+  paint("a");
+  const cold = items()[1];
+  expect(cold.querySelector("button.set-action")?.textContent).toBe(t("set.connect"));
+  expect(cold.querySelector(".set-item-sub")?.textContent).toBe("上次连接：昨天");
 });
 
 test("under Edit the slot holds Forget and nothing keeps it wide", () => {

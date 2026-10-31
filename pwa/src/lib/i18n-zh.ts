@@ -537,6 +537,7 @@ export const zh = {
   "computers.multiLede": "这台设备已经配对过多台电脑。连其中一台，或再添加一台。",
   "computers.addHint": "先装 pairfob 再执行 pairfob pair。只是多一条凭证，不会替换现在这台。",
   "computers.current": "当前连接",
+  "computers.held": "已连接 · 即时切换",
   "computers.currentPill": "当前",
   "computers.lastUsed": "上次使用 · {when}",
   "computers.neverConnected": "尚未连上过",

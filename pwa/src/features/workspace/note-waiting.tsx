@@ -4,7 +4,7 @@ import { t } from "../../lib/i18n";
 import type { GitLayer } from "../../lib/workspace";
 import { showActionSheet, type ActionSheetController } from "../../shared/ui/overlay/action-sheet";
 import { MenuGroup, MenuRow } from "../../shared/ui/overlay/menu-controls";
-import { liveSession } from "../computers/catalog-store";
+import { useLiveSession } from "../computers/hooks";
 import { loadGitDiff } from "./actions";
 import { getWorkspaceSnapshot } from "./store";
 import { ownFilesDialog } from "./surface-dialogs";
@@ -23,7 +23,7 @@ const folderOf = (path: string): string => path.includes("/") ? path.slice(0, pa
 
 function Waiting({ modal }: { modal: ActionSheetController }) {
   const snapshot = getWorkspaceSnapshot();
-  const rows = [...diffNoteCounts(liveSession(), snapshot.paneId)].map(([key, count]) => {
+  const rows = [...diffNoteCounts(useLiveSession(), snapshot.paneId)].map(([key, count]) => {
     const layer = key.slice(0, key.indexOf(":")) as GitLayer;
     return { key, layer, path: key.slice(key.indexOf(":") + 1), count };
   }).sort((left, right) => left.path.localeCompare(right.path) || (left.layer === right.layer ? 0 : left.layer === "staged" ? -1 : 1));

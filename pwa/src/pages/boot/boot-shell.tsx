@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { computerTitle } from "../../lib/computer-catalog";
 import { t } from "../../lib/i18n";
 import { resumeComputer } from "../../features/computers/actions";
-import { computers, credential } from "../../features/computers/catalog-store";
+import { useComputers, useCredential } from "../../features/computers/hooks";
 import { connectionWait, SLOW_CONNECT_MS, type PathHop } from "../../features/connection/connection-path";
-import { phase as currentPhase, retryingUnreachable } from "../../features/connection/connection-store";
 import { ReadingFrame } from "./reading-frame";
 import { HerdSkeleton } from "../../features/dashboard/components/herd-skeleton";
 import { MenuChoice, showActionSheet } from "../../shared/ui/overlay";
@@ -14,7 +13,7 @@ import { MOTION_MS } from "../../shared/ui/dom/motion";
 import type { PairResult } from "../../lib/protocol/client";
 import { ConnectionPathCard } from "./connection-path-card";
 import { UnreachableShell } from "./unreachable-shell";
-import { useBootBlocked } from "../../features/connection/hooks";
+import { useBootBlocked, useConnectionPhase, useRetryingUnreachable } from "../../features/connection/hooks";
 import { BootRecovery } from "./boot-recovery";
 
 /**
@@ -29,23 +28,24 @@ import { BootRecovery } from "./boot-recovery";
  */
 export function BootShell() {
   const bootBlocked = useBootBlocked();
+  const reading = useConnectionPhase() === "boot";
+  const retrying = useRetryingUnreachable();
   if (bootBlocked) return <div className="page herd-page boot-shell"><BootRecovery block={bootBlocked} /></div>;
-  const reading = currentPhase() === "boot";
   if (reading) return <ReadingFrame />;
-  return !reading && retryingUnreachable() ? <UnreachableShell retrying /> : <BootFrame reading={reading} />;
+  return retrying ? <UnreachableShell retrying /> : <BootFrame />;
 }
 
-function BootFrame({ reading }: { reading: boolean }) {
-  const current = reading ? null : credential();
+function BootFrame() {
+  const current = useCredential();
   const name = current ? computerTitle(current) : "";
-  const slow = useSlowConnect(!reading);
+  const slow = useSlowConnect();
   const showing = !!slow && !!current;
   // What the card last said stays in it while it shuts.
   const shown = useRef<{ pair: PairResult; name: string; hop: PathHop; seconds: number } | null>(null);
   if (slow && current) shown.current = { pair: current, name, hop: slow.hop, seconds: slow.seconds };
   const card = usePresence(showing, MOTION_MS.panel);
-  const line = reading ? t("boot.reading")
-    : slow ? t(slow.hop === "relay" ? "slow.lineRelay" : "slow.lineComputer", { n: String(slow.seconds) })
+  const line = slow
+    ? t(slow.hop === "relay" ? "slow.lineRelay" : "slow.lineComputer", { n: String(slow.seconds) })
     : t("boot.connectingLine");
   return (
     <div className="page herd-page boot-shell">
@@ -75,16 +75,14 @@ function BootFrame({ reading }: { reading: boolean }) {
 }
 
 /** The wait so far, once it is slow; re-read every second from the recorded stages. */
-function useSlowConnect(active: boolean): { hop: PathHop; seconds: number } | null {
+function useSlowConnect(): { hop: PathHop; seconds: number } | null {
   // The interval only repaints; each render reads the clock, so a new connect
   // attempt is never measured against a time kept from an earlier one.
   const [, tick] = useState(0);
   useEffect(() => {
-    if (!active) return;
     const timer = window.setInterval(() => tick((count) => count + 1), 1000);
     return () => window.clearInterval(timer);
-  }, [active]);
-  if (!active) return null;
+  }, []);
   const now = Date.now();
   const wait = connectionWait();
   if (!wait || now - wait.since < SLOW_CONNECT_MS) return null;
@@ -93,7 +91,7 @@ function useSlowConnect(active: boolean): { hop: PathHop; seconds: number } | nu
 
 function SlowPanel({ pair, name, hop, seconds }: { pair: PairResult; name: string; hop: PathHop; seconds: number }) {
   const relay = hop === "relay";
-  const others = computers().filter((item) => item.daemonId !== pair.daemonId);
+  const others = useComputers().computers.filter((item) => item.daemonId !== pair.daemonId);
   const node = (state: "ok" | "wait" | "idle", note: string) => ({ state, note });
   // A waiting note counts seconds; it is one note for as long as the hop waits.
   const waiting = (note: string) => ({ ...node("wait", note), says: "wait" });

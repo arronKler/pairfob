@@ -3,7 +3,7 @@ import "../../../test-support/boot-dom";
 import type { SnapshotWire } from "../../lib/dashboard";
 
 const { acknowledgeAllCompletions, acknowledgePaneCompletion, applySnapshot, dashboardStore, liveAgents, markPaneSubmitted, replaceAgentsFromSnapshot, resetDashboard,
-  reloadCompletionSeen, loadCompletionSeen, restoreCompletions, selectedAgent, setRefreshBusy } = await import("./catalog-store");
+  reloadCompletionSeen, loadCompletionSeen, restoreCompletions, selectedAgent, setRefreshBusy, refreshBusy } = await import("./catalog-store");
 const { boardStore, resetBoardCatalog } = await import("../board/layout-store");
 const { preferencesStore, setPaneTermMode } = await import("../settings/preferences-store");
 const { selectPane, sessionStore, openPaneId } = await import("../session/session-store");
@@ -193,13 +193,14 @@ describe("dashboard domain", () => {
 
   test("a manual refresh flag belongs to the herd list, and a reset fails closed", () => {
     setRefreshBusy(true);
-    expect(dashboardStore.get().refreshBusy).toBeTrue();
+    expect(refreshBusy()).toBeTrue();
     setRefreshBusy(true);
-    expect(dashboardStore.get().refreshBusy).toBeTrue();
+    expect(refreshBusy()).toBeTrue();
 
     resetDashboard();
+    expect(refreshBusy()).toBeFalse();
     expect(dashboardStore.get()).toEqual({
-      agents: [], runtimeAgentStatuses: {}, completionSeen: {}, lastHerdSig: "", refreshBusy: false, snapshotLoaded: false,
+      agents: [], runtimeAgentStatuses: {}, completionSeen: {}, lastHerdSig: "", snapshotLoaded: false,
     });
     // The board catalog is another domain's data: resetting the herd list keeps it.
     expect(boardStore.get().workspaceList.map((space) => space.id)).toEqual(["w1"]);

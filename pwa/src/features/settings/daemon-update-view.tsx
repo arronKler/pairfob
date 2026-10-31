@@ -15,7 +15,8 @@ import { updateInProgress, type UpdateStatus } from "../../lib/daemon-update-sta
 import { legacyBuild, newerRelease, sameRelease } from "../../lib/daemon-version";
 import { askConfirm } from "../../shared/ui/overlay/basic-dialogs";
 import { t } from "../../lib/i18n";
-import { currentDaemonId, liveSession } from "../computers/catalog-store";
+import { liveSession } from "../computers/catalog-store";
+import { useCredential, useLiveSession } from "../computers/hooks";
 import { Button, SetNavItem, Spinner } from "../../shared/ui/primitives";
 import { openSettingsSection } from "./actions";
 import { PageRefresh } from "./page-refresh";
@@ -42,9 +43,9 @@ function laterDismissed(key: string): boolean {
   }
 }
 
-function laterKeyFor(view: DaemonVersion): string {
+function laterKeyFor(view: DaemonVersion, daemonId: string | null): string {
   const issue = configIncompatible(view) ? `incompatible:${view.build}` : legacyBuild(view.build) ? "legacy" : view.latest;
-  return `pairfob-update-later:${currentDaemonId()}:${issue}`;
+  return `pairfob-update-later:${daemonId}:${issue}`;
 }
 
 /** Whether an update is on its way: asked for, running, or sent without an answer yet. */
@@ -132,10 +133,11 @@ function Line({ tone, children, live = false }: { tone?: "error" | "warn" | "ok"
 }
 
 function UpdateButton({ view, label }: { view: DaemonVersion; label: string }) {
+  const live = useLiveSession();
   return (
     <Button
       className="btn btn-primary daemon-update-start"
-      disabled={updateBusy(view) || !view.status?.available || !liveSession()?.isConnected()}
+      disabled={updateBusy(view) || !view.status?.available || !live?.isConnected()}
       onClick={() => {
         const session = liveSession();
         void askConfirm({ title: t("confirm.updateTitle"), message: t("confirm.updateEffect"),
@@ -157,11 +159,11 @@ function checkResult(view: DaemonVersion): ReactNode {
   return <Line tone="ok" live>{sameRelease(view.build, view.latest) ? <><Check size={14} aria-hidden="true" />{t("update.latest")}</> : t("update.noAuto")}</Line>;
 }
 
-function StageBody({ view, stage }: { view: DaemonVersion; stage: Stage }) {
+function StageBody({ view, stage, daemonId }: { view: DaemonVersion; stage: Stage; daemonId: string | null }) {
   const status = view.status;
   switch (stage) {
     case "incompatible":
-      return <><Line tone="warn">{t("update.incompatibleNote")}</Line><PageRefresh key={currentDaemonId()} /></>;
+      return <><Line tone="warn">{t("update.incompatibleNote")}</Line><PageRefresh key={daemonId ?? ""} /></>;
     case "busy":
       return <><UpdateSteps phase={status?.phase} /><p className="set-note">{t("update.busyNote")}</p></>;
     case "uncertain":
@@ -222,7 +224,8 @@ function CheckButton({ view }: { view: DaemonVersion }) {
  */
 function DetailedBody({ view }: { view: DaemonVersion }) {
   const stage = updateStage(view);
-  const body = StageBody({ view, stage });
+  const daemonId = useCredential()?.daemonId ?? null;
+  const body = StageBody({ view, stage, daemonId });
   // A finished update is news once: leaving the page lets go of it.
   useEffect(() => () => {
     const current = daemonVersion();
@@ -276,7 +279,8 @@ export function DaemonUpdate({ compact = false }: { compact?: boolean }) {
   const detailed = !compact;
   const [hiddenKey, setHiddenKey] = useState("");
   const view = daemonVersion();
-  const laterKey = view ? laterKeyFor(view) : "";
+  const daemonId = useCredential()?.daemonId ?? null;
+  const laterKey = view ? laterKeyFor(view, daemonId) : "";
   let inner: ReactNode = null;
   if (!view) {
     inner = detailed ? <ManualUpdateHelp inline /> : null;
@@ -292,7 +296,7 @@ export function DaemonUpdate({ compact = false }: { compact?: boolean }) {
   return (
     <div
       className="daemon-update-host"
-      data-react-daemon-update={currentDaemonId() || ""}
+      data-react-daemon-update={daemonId || ""}
       data-react-daemon-detailed={detailed ? "true" : "false"}
       data-detailed={detailed ? "true" : "false"}
       hidden={!inner}

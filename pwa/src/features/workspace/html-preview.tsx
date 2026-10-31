@@ -4,7 +4,8 @@ import { connectionStore } from '../connection/connection-store';
 import { dashboardStore } from "../dashboard/catalog-store";
 import "./workspace-preview.scss";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { computersStore, liveSession } from '../computers/catalog-store';
+import { computersStore } from '../computers/catalog-store';
+import { useLiveSession } from '../computers/hooks';
 import { t } from '../../lib/i18n';
 import { messageOf } from '../../lib/notices';
 import { ProtocolError } from '../../lib/protocol/errors';
@@ -68,7 +69,7 @@ export function HTMLPreview({ snapshot, wrap, controls, found = null }: {
   found?: FoundLines | null;
 }) {
   const file = snapshot.file!;
-  const session = liveSession();
+  const session = useLiveSession();
   const contentVersion = useSyncExternalStore(subscribeWorkspace, workspaceContentVersion);
   const { mode, started, reload } = controls;
   const network = useSyncExternalStore(connectionStore.subscribe, connectionStore.get);

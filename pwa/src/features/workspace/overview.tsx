@@ -5,7 +5,7 @@ import { diffNoteCounts } from "../../lib/diff-notes";
 import { t } from "../../lib/i18n";
 import { Button } from "../../shared/ui/primitives";
 import { openCommandPalette } from "../command-palette";
-import { liveSession } from "../computers/catalog-store";
+import { useLiveSession } from "../computers/hooks";
 import { loadGitDiff, loadWorkspaceFile, showWorkspaceTab } from "./actions";
 import { fileSearchOffered } from "./file-search";
 import { branchParts } from "./header";
@@ -51,7 +51,7 @@ export function WorkspaceOverview({ snapshot, onBranches }: { snapshot: Workspac
   const progress = reviewProgress(snapshot);
   const totals = changeTotals(snapshot);
   let waiting = 0;
-  for (const count of diffNoteCounts(liveSession(), snapshot.paneId).values()) waiting += count;
+  for (const count of diffNoteCounts(useLiveSession(), snapshot.paneId).values()) waiting += count;
   const branch = branchParts(snapshot);
   const next = progress.next;
   const search = fileSearchOffered();

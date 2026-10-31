@@ -19,6 +19,8 @@ export type ComputerRowModel = {
   title: string;
   meta: string;
   current: boolean;
+  /** This page holds its session and the view it kept, so its switch paints at once. */
+  held: boolean;
   currentPill: string | null;
   forgetAria: string;
   forgetLabel: string;
@@ -43,6 +45,8 @@ export type ComputersViewInput = {
   /** The application is on an established session, so the picker is a settings page. */
   live: boolean;
   lastUsedDaemonId: string | null;
+  /** Daemons whose switch this page paints in the tap's own turn. */
+  heldDaemonIds: ReadonlySet<string>;
   computersFrom: "home" | "settings";
   desk: boolean;
   paneId: string;
@@ -56,9 +60,11 @@ function heading(computers: readonly PairResult[]): { title: string; lede: strin
     : { title: t("computers.offlineTitle"), lede: t("computers.offlineLede") };
 }
 
-function rowMeta(pair: PairResult, current: boolean, lastUsedDaemonId: string | null): string {
+function rowMeta(pair: PairResult, current: boolean, held: boolean, lastUsedDaemonId: string | null): string {
   const lastSeen = pair.lastSeen || pair.createdAt;
   if (current) return t("computers.current");
+  // A held computer's age is beside the point: its list is already on this page.
+  if (held) return t("computers.held");
   if (lastUsedDaemonId === pair.daemonId) return t("computers.lastUsed", { when: formatDeviceAge(lastSeen) });
   return lastSeen ? t("device.lastUsed", { when: formatDeviceAge(lastSeen) }) : t("computers.neverConnected");
 }
@@ -78,13 +84,15 @@ export function computersViewModel(input: ComputersViewInput): ComputersViewMode
     heading: withBack ? null : heading(computers),
     rows: computers.map(pair => {
       const current = live && credentialDaemonId === pair.daemonId;
+      const held = input.heldDaemonIds.has(pair.daemonId);
       const title = computerTitle(pair);
       return {
         daemonId: pair.daemonId,
         title,
         current,
+        held,
         currentPill: current ? t("computers.currentPill") : null,
-        meta: rowMeta(pair, current, lastUsedDaemonId),
+        meta: rowMeta(pair, current, held, lastUsedDaemonId),
         forgetAria: t("computers.forgetAria", { title }),
         forgetLabel: t("forget"),
       };

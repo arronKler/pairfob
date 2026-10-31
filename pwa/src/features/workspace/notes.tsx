@@ -27,7 +27,8 @@ import { forgetSentDiffNotes, sentDiffNotesFor, sentNoteState, type SentDiffNote
 import { sendAllDiffNotesToAgent, sendDiffNotesToAgent } from "../../features/operations/controller";
 import { operationBusy } from "../operations/capabilities-store";
 import { useCapabilities } from "../operations/hooks";
-import { liveSession } from "../computers/catalog-store";
+import { useLiveSession } from "../computers/hooks";
+import type { LiveSession } from "../../lib/protocol/client";
 import { useAgentCard, usePaneId } from "../session/hooks";
 import { usePresence } from "../../shared/react/use-presence";
 import { MOTION_MS } from "../../shared/ui/dom/motion";
@@ -260,7 +261,8 @@ export function DiffNotesBar(props: NotesBarProps) {
   const agent = useAgentCard(usePaneId());
   useEffect(watchSentNotes, []);
   const sendKey = useKeyHint("sendNotes");
-  const bar = notesBar(props, { capabilities, agent, sendKey });
+  const live = useLiveSession();
+  const bar = notesBar(props, { capabilities, agent, sendKey, live });
   const last = useRef<NotesBar | null>(null);
   if (bar) last.current = bar;
   const { leaving } = usePresence(bar !== null, MOTION_MS.element);
@@ -272,17 +274,17 @@ type NotesBarProps = { path: string; layer: GitLayer; paneId: string; beside?: b
 type NotesBar = ReactElement<{ className: string; inert?: boolean }>;
 
 /** The bar for what the stores hold now; null when there is nothing to say. */
-function notesBar({ path, layer, paneId, beside = false, returnView = "guided" }: NotesBarProps, { capabilities, agent, sendKey }: {
+function notesBar({ path, layer, paneId, beside = false, returnView = "guided" }: NotesBarProps, { capabilities, agent, sendKey, live }: {
   capabilities: ReturnType<typeof useCapabilities>; agent: ReturnType<typeof useAgentCard>;
-  sendKey: ReturnType<typeof useKeyHint>;
+  sendKey: ReturnType<typeof useKeyHint>; live: LiveSession | null;
 }): NotesBar | null {
   const count = diffNotesFor(path, layer).length;
   if (!capabilities.operationCapabilities.prompt_agent) return null;
-  const place = diffNotePlace(liveSession(), paneId);
+  const place = diffNotePlace(live, paneId);
   const sent = sentDiffNotesFor(place, path, layer);
   const state = sentNoteState(sent);
   // Notes waiting elsewhere: on other files, and on this file's other layer, which is no other file.
-  const counts = diffNoteCounts(liveSession(), paneId);
+  const counts = diffNoteCounts(live, paneId);
   counts.delete(`${layer}:${path}`);
   const elsewhere = counts.size;
   const otherFiles = new Set([...counts.keys()].map((key) => key.slice(key.indexOf(":") + 1)).filter((other) => other !== path)).size;

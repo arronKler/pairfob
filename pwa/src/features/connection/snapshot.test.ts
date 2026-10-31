@@ -5,7 +5,8 @@ import type { PairResult } from "../../lib/protocol/client";
 import { attachLiveSession, liveSession, setCredential } from "../computers/catalog-store";
 import { setScreen } from "../../app/navigation-store";
 import { noteRelayRtt, setSessionTransport } from "./connection-store";
-import { applySnapshot, dashboardStore, resetDashboard, setRefreshBusy } from "../dashboard/catalog-store";
+import { applySnapshot, dashboardStore, refreshBusy, resetDashboard, setRefreshBusy, subscribeRefreshBusy } from "../dashboard/catalog-store";
+import { boardStore, resetBoardCatalog } from "../board/layout-store";
 import { adoptDaemonPreferences, preferencesStore } from "../settings/preferences-store";
 import { batch } from "../../shared/model/domain-store";
 import {
@@ -58,6 +59,7 @@ beforeEach(() => {
   reads = 0;
   calls = [];
   resetDashboard();
+  resetBoardCatalog();
   resetObservationLifecycle();
   selectPane("");
   setScreen("home");
@@ -133,8 +135,8 @@ describe("snapshot observation ownership", () => {
 
   test("the initial busy publication retiring the owner prevents the old RPC", async () => {
     let replaced = false;
-    stops.push(dashboardStore.subscribe(() => {
-      if (replaced || !dashboardStore.get().refreshBusy) return;
+    stops.push(subscribeRefreshBusy(() => {
+      if (replaced || !refreshBusy()) return;
       replaced = true;
       replaceOwner();
     }));
@@ -147,11 +149,38 @@ describe("snapshot observation ownership", () => {
     await refreshSnapshot(snapshotPorts);
     expect(reads).toBe(1);
     expect(dashboardStore.get().agents.map((agent) => agent.paneId)).toEqual(["old-A"]);
-    expect(dashboardStore.get().refreshBusy).toBe(false);
+    expect(refreshBusy()).toBe(false);
     calls = [];
     await refreshSnapshot(snapshotPorts);
     expect(reads).toBe(2);
     expect(calls).toEqual([]);
+  });
+
+  test("an unchanged poll on a desk pane patches chrome without re-preparing the composition", async () => {
+    setScreen("pane");
+    selectPane("old-A");
+    const desk: SnapshotPorts = { ...snapshotPorts, isDesk: () => true };
+    await refreshSnapshot(desk);
+    expect(dashboardStore.get().agents.map((agent) => agent.paneId)).toEqual(["old-A"]);
+    expect(calls).toEqual(["chrome", "commitView"]);
+    calls = [];
+    let boardPublishes = 0;
+    stops.push(boardStore.subscribe(() => { boardPublishes += 1; }));
+    await refreshSnapshot(desk);
+    expect(reads).toBe(2);
+    expect(calls).toEqual(["chrome"]);
+    // The board is projected on every poll and this one says what it already says.
+    expect(boardPublishes).toBe(0);
+    // A herd that moved still re-prepares the composition.
+    (session as unknown as { snapshot: () => Promise<unknown> }).snapshot = async () => ({
+      panes: [
+        { pane_id: "old-A", workspace_id: "w", tab_id: "t", agent: "codex", agent_status: "idle" },
+        { pane_id: "extra-B", workspace_id: "w", tab_id: "t", agent: "codex", agent_status: "idle" },
+      ],
+    });
+    calls = [];
+    await refreshSnapshot(desk);
+    expect(calls).toEqual(["chrome", "commitView"]);
   });
 
   test("production snapshot invalidates active and background occupant caches without losing the draft", async () => {

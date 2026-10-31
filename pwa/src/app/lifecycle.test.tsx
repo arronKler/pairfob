@@ -7,7 +7,7 @@ import { happy } from "../../test-support/dom";
 import type { LiveSession } from "../lib/protocol/client";
 
 const { applicationIsRunning, startApplication, stopApplication } = await import("./bootstrap");
-const { commitApp, isCommitting, requestCommit, resetCommitState } = await import("./commit");
+const { commitApp, commitsRun, isCommitting, requestCommit, resetCommitState } = await import("./commit");
 const { appRoot } = await import("./dom-root");
 const { appHost, registerAppHost, releaseAppHost } = await import("./host");
 const { frameStore, getAppFrame, registerSessionOwnerPreparer, resetFrame } = await import("./frame");
@@ -405,26 +405,24 @@ describe("start and stop", () => {
 describe("retained commit controls", () => {
   test("explicit commit cancels a queued request and unmount cancels later work", async () => {
     act(() => { mountApp(); });
-    let frames = 0;
-    const release = frameStore.subscribe(() => { frames += 1; });
+    const before = commitsRun();
     await act(async () => {
       requestCommit();
       commitApp();
       await Promise.resolve();
     });
-    expect(frames).toBe(1);
+    expect(commitsRun()).toBe(before + 1);
     await act(async () => {
       requestCommit();
       unmountApp();
     });
-    const count = frames;
+    const count = commitsRun();
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(frames).toBe(count);
+    expect(commitsRun()).toBe(count);
     expect(appHost()).toBeNull();
     expect(isAppMounted()).toBeFalse();
-    release();
   });
 });

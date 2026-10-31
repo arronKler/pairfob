@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react";
 import { useDomain } from "../../shared/react/use-domain";
 import type { ListGroup } from "../../lib/ranking";
-import { preferencesStore } from "./preferences-store";
+import { paneTermMode, preferencesStore } from "./preferences-store";
+import type { TermMode } from "../../lib/terminal-mode";
 import type { QuickCommand } from "./quick-command-model";
 
 /** React snapshot for the device-local preferences domain. Owned by the settings feature. */
@@ -36,6 +37,14 @@ const quickCommandsKey = () => JSON.stringify(preferencesStore.get().quickComman
 export function useQuickCommands(): readonly QuickCommand[] | null {
   useSyncExternalStore(preferencesStore.subscribe, quickCommandsKey, quickCommandsKey);
   return preferencesStore.get().quickCommands;
+}
+
+/**
+ * The terminal mode of one pane, followed. The preferences domain publishes a
+ * pinch, a font size and every other pane's choice too; this sheet draws one.
+ */
+export function usePaneTermMode(paneId: string): TermMode {
+  return usePreferenceField(() => paneTermMode(paneId));
 }
 
 const listGroupOf = () => preferencesStore.get().listGroup;

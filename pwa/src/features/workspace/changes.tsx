@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { diffNoteCounts } from "../../lib/diff-notes";
 import { t } from "../../lib/i18n";
 import { Button, Chevron, Fold } from "../../shared/ui/primitives";
-import { liveSession } from "../computers/catalog-store";
+import { useLiveSession } from "../computers/hooks";
 import { loadGitDiff, showMoreWorkspaceChanges, toggleWorkspaceChangeGroup } from "./actions";
 import { changeKindLabel, formatModifiedAge, layerLabel } from "./format";
 import { FileIcon } from "./file-icon";
@@ -211,7 +211,7 @@ export function ChangeList({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const changes = status?.changes ?? [];
   // The rows and the stepper's order are one derivation (`listedChanges`); the limit only says how far down it is drawn.
   const listed = listedChanges(changes, snapshot.changeLimit);
-  const notes = diffNoteCounts(liveSession(), snapshot.paneId);
+  const notes = diffNoteCounts(useLiveSession(), snapshot.paneId);
   const reveal = snapshot.revealNav;
   const written = new Set(useTurnWrites(snapshot.paneId, snapshot.descriptor?.root));
   return <section className={`workspace-panel workspace-changes${reveal ? " workspace-reveal" : ""}`}>

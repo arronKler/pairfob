@@ -13,7 +13,7 @@ import { layoutSelectedPane } from "../../operations/controller";
 import { useCapabilities } from "../../operations/hooks";
 import { useNetworkOnline } from "../../connection/hooks";
 import { openPane } from "../../connection/controller";
-import { liveSession } from "../../computers/catalog-store";
+import { useLiveSession } from "../../computers/hooks";
 import { useListGroup } from "../../settings/hooks";
 import { openBoard } from "../../../pages/board/board-bridge";
 import { MenuGroup, MenuRow, MenuSetting, MenuSwitch } from "../../../shared/ui/overlay/menu-controls";
@@ -52,8 +52,9 @@ export function PaneLayoutPage({ modal, agent }: { modal: ActionSheetController;
   const [message, setMessage] = useState("");
   const pendingRef = useRef(false);
   const layout = useTabLayout(agent);
+  const live = useLiveSession();
   const model: PaneMenuModel = { title: "", subtitle: "", entries: [], notice: "", layout, paneId: agent.paneId,
-    disabledReason: !networkOnline || !liveSession()?.isConnected() ? t("boardMenu.offline")
+    disabledReason: !networkOnline || !live?.isConnected() ? t("boardMenu.offline")
       : operationBusy || pending ? t("boardMenu.busy") : "" };
   const split = !!layout && layout.panes.length > 1;
   const valid = () => liveAgents().some(pane => pane.paneId === agent.paneId && pane.tabId === agent.tabId);

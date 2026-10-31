@@ -6,12 +6,12 @@ import { highlightBoardPane } from "../../features/board/interaction-store";
 import { AgentKindGrid, kindName } from "../../features/operations/agent-kind-grid";
 import { AgentKindPickerPanel } from "../../features/operations/agent-kind-picker";
 import { SheetSwap } from "../../features/operations/sheet-swap";
+import { useLiveSession } from "../../features/computers/hooks";
 import { advertisedAgentKinds } from "../../features/operations/capabilities-store";
 import { splitSelectedPane, type SheetOutcome } from "../../features/operations/controller";
 import { loadCreateMemory, rememberCreate } from "../../features/operations/create-memory";
 import { defaultAgentKind, loadLastAgentKind } from "../../features/operations/operation-form-model";
 import { useNetworkOnline } from "../../features/connection/hooks";
-import { liveSession } from "../../features/computers/catalog-store";
 import { useCapabilities } from "../../features/operations/hooks";
 import { Button, Spinner } from "../../shared/ui/primitives";
 import { showActionSheet, type ActionSheetController } from "../../shared/ui/overlay";
@@ -46,8 +46,9 @@ function BoardSplitSheet({ modal, card, direction, target, reveal }: {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const running = useRef(false);
+  const live = useLiveSession();
   // While this sheet's own split runs it holds the lock; the busy reason is ours, not news.
-  const reason = !networkOnline || !liveSession()?.isConnected() ? t("boardMenu.offline")
+  const reason = !networkOnline || !live?.isConnected() ? t("boardMenu.offline")
     : operationBusy && !pending ? t("boardMenu.busy") : "";
   const tabId = card.tabId ?? "";
   /** One submission at a time; success closes the sheet, failure stays with the reason. */
