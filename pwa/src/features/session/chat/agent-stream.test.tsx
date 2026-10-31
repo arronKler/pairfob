@@ -4,9 +4,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
 import { appRoot } from "../../../app/dom-root";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
-import { setLang, t } from "../../../lib/i18n";
+import { locale, setLang, t } from "../../../lib/i18n";
 import type { AgentTraceItem } from "../../../lib/operations";
 import { AgentStream, copiedCode } from "./agent-stream";
+import { TurnHead, type TraceAnchorData } from "./turn-parts";
 import { COPIED_MS } from "../copy-confirm";
 
 beforeEach(async () => { await resetTestDOM(); setLang("zh"); });
@@ -287,6 +288,50 @@ test("attachment paths become chips and long prompts fold", () => {
   act(() => renderReact(<AgentStream items={[{ type: "user", text }]} working={false} empty={empty} />));
   expect(appRoot().querySelector(".agent-user-text")?.textContent).toBe("Look at this");
   expect([...appRoot().querySelectorAll(".agent-user-files li")].map(node => node.textContent)).toEqual(["shot.png"]);
+});
+
+const promptAnchor: TraceAnchorData = {
+  "data-trace-anchor": "turn:0:user", "data-trace-ordinal": 0, "data-trace-ordinal-end": 0,
+};
+
+test("the prompt is a bubble with its words, a time row under it, and its anchor", () => {
+  const at = Date.UTC(2026, 9, 12, 9, 5);
+  act(() => renderReact(<AgentStream items={[{ type: "user", text: "Inspect this change", at }]} working={false} empty={empty} />));
+  const article = appRoot().querySelector<HTMLElement>(".agent-user")!;
+  expect(article.getAttribute("data-trace-anchor")).toMatch(/:user$/);
+  const bubble = article.querySelector<HTMLElement>(".agent-user-bubble")!;
+  expect(bubble.querySelector(".agent-user-text")?.textContent).toBe("Inspect this change");
+  const time = article.querySelector<HTMLTimeElement>(".agent-user-meta time")!;
+  expect(time.getAttribute("datetime")).toBe(new Date(at).toISOString());
+  expect(time.textContent).toBe(new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit" }).format(new Date(at)));
+  act(unmountReact);
+  // An old daemon stamps no time: the row stays, the clock does not.
+  act(() => renderReact(<AgentStream items={[{ type: "user", text: "No clock" }]} working={false} empty={empty} />));
+  expect(appRoot().querySelector(".agent-user-meta")).not.toBeNull();
+  expect(appRoot().querySelector(".agent-user-meta time")).toBeNull();
+});
+
+test("copying a prompt copies its words, not the attachment paths, and confirms on the button", async () => {
+  const copied: string[] = [];
+  act(() => renderReact(<TurnHead item={{ type: "user", text: "Look at this\n\n/Users/me/repo/.pairfob/attachments/0f1e/shot.png" }}
+    anchorData={promptAnchor} onCopy={async (text) => { copied.push(text); return true; }} />));
+  const button = appRoot().querySelector<HTMLButtonElement>(".agent-user-copy")!;
+  expect(button.getAttribute("aria-label")).toBe(t("chat.copyPromptAria"));
+  await act(async () => { button.click(); await Promise.resolve(); await Promise.resolve(); });
+  expect(copied).toEqual(["Look at this"]);
+  expect(button.querySelector(".copy-ack")?.getAttribute("data-state")).toBe("copied");
+  expect(button.getAttribute("aria-label")).toBe(t("chat.copiedPromptAria"));
+});
+
+test("a prompt with no words offers no copy, and a slash command has no prompt row", () => {
+  act(() => renderReact(<TurnHead item={{ type: "user", text: "/Users/me/repo/.pairfob/attachments/0f1e/shot.png" }}
+    anchorData={promptAnchor} onCopy={() => true} />));
+  expect(appRoot().querySelector(".agent-user-copy")).toBeNull();
+  expect(appRoot().querySelector(".agent-user-files li")?.textContent).toBe("shot.png");
+  act(unmountReact);
+  act(() => renderReact(<TurnHead item={{ type: "command", text: "/clear" }} anchorData={promptAnchor} onCopy={() => true} />));
+  expect(appRoot().querySelector(".agent-command-text")?.textContent).toBe("/clear");
+  expect(appRoot().querySelector(".agent-user-meta")).toBeNull();
 });
 
 test("duplicate prompts remain separate turns and unsafe Markdown cannot introduce active elements", () => {

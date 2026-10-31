@@ -317,7 +317,7 @@ const TraceTurn = memo(function TraceTurn({ turn, state, anchor, kept, onCopy, o
   // The agent stopped to ask while this turn was on screen: its card is raised, not just drawn.
   const asked = useTurned(live && waiting);
   return <>
-    {turn.user && <TurnHead item={turn.user} anchorData={anchorData(anchor, "user")} arriving={state.sent} />}
+    {turn.user && <TurnHead item={turn.user} anchorData={anchorData(anchor, "user")} arriving={state.sent} onCopy={onCopy} />}
     {state.pending && !turn.items.length && <PendingCard {...state.pending} arriving={state.sent} />}
     {preamble.map((item, index) => <FindingBubble key={`${anchor.key}:pre:${index}`} item={item}
       anchor={anchor} part={`pre-${index}`} onOpen={(step) => onOpenStep(step, steps, { key: anchor.key, ordinal: anchor.ordinal })} />)}

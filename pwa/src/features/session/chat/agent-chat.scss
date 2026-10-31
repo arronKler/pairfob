@@ -23,7 +23,7 @@
   min-height: 0;
   overflow-x: hidden;
   overflow-y: scroll;
-  padding: 12px 14px 18px;
+  padding: 26px 16px 20px;
   touch-action: pan-y pinch-zoom;
   overscroll-behavior: contain;
   overflow-anchor: none;
@@ -127,7 +127,11 @@
 }
 
 // A turn starts with the reader's prompt; the space above it separates turns.
-.agent-user,
+// With the list's 10px gap, two turns sit about 30px apart.
+.agent-user {
+  margin-top: 20px;
+}
+
 .agent-command {
   margin-top: 16px;
 }
@@ -140,15 +144,77 @@
   margin-top: 0;
 }
 
+/* The reader's prompt: words in a bubble, and a quiet row under it saying when
+   they were recorded and offering them back. The turn, not the bubble, is what
+   the transcript lays out and anchors. */
 .agent-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   align-self: flex-end;
-  max-width: 86%;
-  padding: 9px 12px;
-  border-radius: var(--r-lg) var(--r-lg) 6px var(--r-lg);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  font: 400 0.9rem/1.5 var(--font);
+  max-width: min(34rem, 86%);
+  min-width: 0;
   color: var(--ink);
+}
+
+.agent-user-bubble {
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--r-md);
+  background: var(--ink-08);
+  font: 400 0.8125rem/1.428 var(--font);
+  color: var(--ink);
+}
+
+.agent-user-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1px;
+  max-width: 100%;
+  min-height: 24px;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.agent-user-meta time {
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-user-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--r-sm);
+}
+
+.agent-user-copy:focus-visible,
+.agent-user-copy:active {
+  color: var(--ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .agent-user-copy:hover { color: var(--ink); }
+}
+
+/* A finger needs the row to be a real target, not a 26px sliver. */
+@media (any-pointer: coarse) {
+  .agent-user-meta {
+    min-height: 44px;
+  }
+
+  .agent-user-copy {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .agent-user-text {
@@ -188,7 +254,7 @@
   max-width: 100%;
   padding: 3px 8px;
   border-radius: 999px;
-  background: var(--surface);
+  background: transparent;
   color: var(--muted);
   font: 400 var(--text-caption)/1.3 var(--mono);
 }
@@ -281,8 +347,14 @@
   margin-top: 8px;
 }
 
+/* The copy mark sits at the prose's own left edge, not a pill's padding inside it. */
+.agent-reply-actions {
+  margin-top: 6px;
+  margin-left: -8px;
+}
+
 .agent-md {
-  font: 400 0.92rem/1.55 var(--font);
+  font: 400 0.875rem/1.62 var(--font);
   color: var(--ink);
   overflow-wrap: anywhere;
   // A note under a running card becomes the reply when the turn ends: its ink arrives, it is not swapped.
@@ -292,18 +364,8 @@
 .agent-md > :first-child { margin-top: 0; }
 .agent-md > :last-child { margin-bottom: 0; }
 
-/* The reply carries the turn's answer, so it is the one block drawn as a card:
-   its own surface, a firmer edge, and a lift off the transcript. The shape is
-   the same while the turn runs, so the text does not reflow when it ends; only
-   the copy action arrives. */
-.agent-assistant .agent-md {
-  padding: 12px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
-}
-
+/* The reply is open prose, not a card: no edge, ground or lift. A finding
+   already speaks in this voice, so both read as the agent's words in the flow. */
 .agent-md h1,
 .agent-md h2,
 .agent-md h3,
@@ -524,10 +586,10 @@
   min-height: 0;
 }
 
-// Desktop: a reading column instead of a 900px line.
+// Desktop: a reading column instead of a 900px line, thread and dock aligned.
 .desk .agent-stream-inner,
 .desk .agent-dock {
   width: 100%;
-  max-width: 720px;
+  max-width: 768px;
   margin-inline: auto;
 }
