@@ -3,7 +3,7 @@ import { ArrowDown } from "lucide-react";
 import { isAgentChat, openPaneId } from "../session-store";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { followTrace, setTraceFollow } from "./trace-store";
-import { glidingToTail } from "./tail-glide";
+import { glidingToTail, pinTail } from "./tail-glide";
 import { computersStore } from "../../computers/catalog-store";
 import { useAgentCard, useChat, usePaneId } from "../hooks";
 import { t } from "../../../lib/i18n";
@@ -99,6 +99,16 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
     if (element && !restoreAgentViewport(element, paneId, ownerKey) && reading.current.follow) element.scrollTop = element.scrollHeight;
     return () => rememberAgentPosture(paneId, ownerKey, reading.current);
   }, [paneId]);
+  useLayoutEffect(() => {
+    const element = stream.current;
+    const Observer = element?.ownerDocument.defaultView?.ResizeObserver;
+    if (!element || !Observer) return;
+    // The header's step-aside changes the stream's box while the reader stays
+    // at the tail; keep the latest turn against the dock as it grows back.
+    const observer = new Observer(() => { if (reading.current.follow) pinTail(element); });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     let retired = false;
     const session = computersStore.get().live;
