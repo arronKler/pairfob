@@ -1,2 +1,90 @@
 /* The chat header steps aside while the reader is up in the transcript, and a
    peek strip brings it back. See agent-chat.tsx. */
+
+/*
+  A 1fr -> 0fr row carries the header away. The inner block clips it, so the
+  wrapper ends at zero and the transcript owns the status-bar inset.
+
+  The wrapper also carries the `chrome` name: the pane's view transitions and
+  the in-page notice look for the header as the pane's direct child. Its own
+  box stays invisible; SessionIdentity still draws the header inside it.
+*/
+.agent-chrome.chrome {
+  display: grid;
+  grid-template-rows: 1fr;
+  align-items: stretch;
+  gap: 0;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: grid-template-rows var(--dur-2) var(--ease);
+}
+
+.agent-chrome.chrome[data-collapsed="1"] { grid-template-rows: 0fr; }
+
+/* The keyboard fold belongs to the header inside; the wrapper stays a track. */
+html[data-kb="open"] .agent-chrome.chrome {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.agent-chrome-inner {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/*
+  The strip belongs to the collapsed header only: it sits under the status-bar
+  inset, inside the transcript's top padding, and takes no pointer events while
+  the header is on screen.
+*/
+.agent-peek {
+  position: absolute;
+  z-index: 3;
+  top: env(safe-area-inset-top, 0px);
+  right: 0;
+  left: 0;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-2) var(--ease);
+}
+
+.agent-peek:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.agent-peek-handle {
+  width: 48px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ink-thumb);
+}
+
+.agent-chrome[data-collapsed="1"] .agent-peek {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Collapsed, the header no longer carries the status-bar padding; the
+   transcript keeps that inset so its first line still clears the notch. */
+.agent-chat-root:has(.agent-chrome[data-collapsed="1"]) .agent-stream {
+  padding-top: calc(26px + env(safe-area-inset-top, 0px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-chrome.chrome,
+  .agent-peek { transition: none; }
+}

@@ -1,7 +1,7 @@
 import { PromptProgressView, usePromptProgressNote } from "./prompt-progress-view";
 import { ArrowDown } from "lucide-react";
 import { isAgentChat, openPaneId } from "../session-store";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { followTrace, setTraceFollow } from "./trace-store";
 import { glidingToTail } from "./tail-glide";
 import { computersStore } from "../../computers/catalog-store";
@@ -27,9 +27,22 @@ import { Button } from "../../../shared/ui/primitives";
 import { noticeKeepsItsPlace, SessionNotice } from "../session-notice";
 import { SessionIdentity } from "../guided/session-chrome";
 
-function AgentChatChrome({ includeBack, handlers }: { includeBack: boolean; handlers: SessionHandlers }) {
+function AgentChatChrome({ includeBack, handlers, follow }: { includeBack: boolean; handlers: SessionHandlers; follow: boolean }) {
   const selected = useAgentCard(usePaneId());
-  return <SessionIdentity agent={selected} fallbackTitle={t("mode.agent")} includeBack={includeBack} handlers={handlers} />;
+  // A peek brings the header back while the reader stays up in the transcript;
+  // reaching the tail again hands it back to the scroll posture.
+  const [peeked, setPeeked] = useState(false);
+  if (follow && peeked) setPeeked(false);
+  const collapsed = !follow && !peeked;
+  return <div className="chrome agent-chrome" data-collapsed={collapsed ? "1" : undefined}>
+    <div className="agent-chrome-inner" inert={collapsed} aria-hidden={collapsed ? "true" : undefined}>
+      <SessionIdentity agent={selected} fallbackTitle={t("mode.agent")} includeBack={includeBack} handlers={handlers} />
+    </div>
+    <Button className="agent-peek" aria-label={t("chat.showHeader")} tabIndex={collapsed ? 0 : -1}
+      aria-hidden={collapsed ? undefined : "true"} inert={!collapsed} onClick={() => setPeeked(true)}>
+      <span className="agent-peek-handle" aria-hidden="true" />
+    </Button>
+  </div>;
 }
 
 type AgentChatProps = { includeBack: boolean; handlers: SessionHandlers };
@@ -96,7 +109,7 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
     return () => { retired = true; };
   }, [paneId, chat.agentTraceLoadState]);
   return <div className="pane-root agent-chat-root" data-react-agent-chat="" data-back={includeBack ? "1" : "0"}>
-    <AgentChatChrome includeBack={includeBack} handlers={handlers} />
+    <AgentChatChrome includeBack={includeBack} handlers={handlers} follow={chat.agentTraceFollow} />
     <SessionNotice value={standing} inPage />
     <SessionNotice value={passing} />
     <div className="agent-stream-wrap">

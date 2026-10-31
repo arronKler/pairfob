@@ -232,6 +232,47 @@ describe("agent-chat remembers its mode per pane", () => {
     expectSameNode(older, app.querySelector(".agent-stream-inner")?.firstElementChild);
   }));
 
+  test("the header steps aside while the reader is away from the tail", async () => await act(async () => {
+    bootAgentChat();
+    const chrome = (): Element | null => app.querySelector(".agent-chrome");
+    const inner = (): Element | null => app.querySelector(".agent-chrome-inner");
+    const peek = (): HTMLButtonElement | null => app.querySelector(".agent-peek");
+
+    // A fresh visit at the tail keeps the header in place and the peek out of reach.
+    expect(chrome()?.getAttribute("data-collapsed")).toBeNull();
+    expect(inner()?.hasAttribute("inert")).toBe(false);
+    expect(peek()?.tabIndex).toBe(-1);
+    expect(app.querySelector(".agent-chrome .chrome-title")).toBeTruthy();
+
+    // Scrolled away: the header leaves the page, its controls leave the tab order.
+    applyTrace({ agentTraceFollow: false });
+    paintPane();
+    expect(chrome()?.getAttribute("data-collapsed")).toBe("1");
+    expect(inner()?.hasAttribute("inert")).toBe(true);
+    expect(inner()?.getAttribute("aria-hidden")).toBe("true");
+    expect(peek()?.tabIndex).toBe(0);
+    expect(peek()?.getAttribute("aria-hidden")).toBeNull();
+    expect(peek()?.getAttribute("aria-label")).toBe("显示会话标题");
+
+    // The peek reveals it until the reader is back at the tail.
+    peek()!.click();
+    await Promise.resolve();
+    expect(chrome()?.getAttribute("data-collapsed")).toBeNull();
+    expect(inner()?.hasAttribute("inert")).toBe(false);
+    expect(inner()?.getAttribute("aria-hidden")).toBeNull();
+    expect(peek()?.tabIndex).toBe(-1);
+
+    applyTrace({ agentTraceFollow: true });
+    paintPane();
+    expect(chrome()?.getAttribute("data-collapsed")).toBeNull();
+    expect(inner()?.hasAttribute("inert")).toBe(false);
+
+    // The tail clears the peek too: the next scroll away starts collapsed again.
+    applyTrace({ agentTraceFollow: false });
+    paintPane();
+    expect(chrome()?.getAttribute("data-collapsed")).toBe("1");
+  }));
+
   test("‹ returns to the session list and keeps agent-chat as the pane mode", async () => await act(async () => {
     bootAgentChat();
     click(".chrome .back");
