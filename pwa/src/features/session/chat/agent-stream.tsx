@@ -1,8 +1,9 @@
-import { memo, type ReactNode, type Ref } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import { groupAgentTurns, groupAgentTurnBlocks, processTitle, replyText, turnKey,
   type AgentTurn } from "../../../lib/agent-trace-view";
 import type { AgentTraceItem } from "../../../lib/operations";
+import type { AgentTraceDetailState } from "../../../lib/agent-trace-cache";
 import { langRevision, t } from "../../../lib/i18n";
 import type { AgentEmptySpec, DetailsState } from "./agent-chat-stream";
 import { AgentDetails } from "./agent-details";
@@ -50,7 +51,16 @@ type TraceTurnProps = {
   turn: AgentTurn; live: boolean; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks; onCopy?: CopyReply;
   /** Language revision: a finished turn shows t() copy, so it must re-render when the language changes. */
   lang: number;
+  /** Detail state of each item with a detailRef, in order: a change re-renders only the turn that owns it. */
+  details: readonly AgentTraceDetailState[];
 };
+
+const TURN_WINDOW = 20;
+
+function sameDetails(a: readonly AgentTraceDetailState[], b: readonly AgentTraceDetailState[]): boolean {
+  return a.length === b.length && a.every((state, index) => state.status === b[index].status
+    && state.message === b[index].message && state.detail === b[index].detail);
+}
 
 // Keep in step with the fields of AgentTraceItem (lib/operations.ts).
 function sameItem(a: AgentTraceItem, b: AgentTraceItem): boolean {
@@ -62,14 +72,13 @@ function sameItems(a: readonly AgentTraceItem[], b: readonly AgentTraceItem[]): 
   return a.length === b.length && a.every((item, index) => sameItem(item, b[index]));
 }
 
-/** A turn re-renders only when what it shows changed; tool detail hooks matter only to turns with detail refs. */
+/** A turn re-renders only when what it shows changed; hooks are stable, tool detail state is compared per turn. */
 function sameTurn(prev: TraceTurnProps, next: TraceTurnProps): boolean {
   if (next.live || prev.lang !== next.lang || prev.live !== next.live || prev.kept !== next.kept || prev.onCopy !== next.onCopy) return false;
   if (prev.anchor.key !== next.anchor.key || prev.anchor.ordinal !== next.anchor.ordinal
     || prev.anchor.ordinalFromEnd !== next.anchor.ordinalFromEnd) return false;
   if (prev.turn.user?.text !== next.turn.user?.text || !sameItems(prev.turn.items, next.turn.items)) return false;
-  if (prev.hooks.view === next.hooks.view && prev.hooks.need === next.hooks.need) return true;
-  return !next.turn.items.some(item => item.detailRef);
+  return sameDetails(prev.details, next.details);
 }
 
 const TraceTurn = memo(function TraceTurn({ turn, live, anchor, kept, hooks, onCopy }: TraceTurnProps) {
@@ -122,23 +131,56 @@ export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerm
   const turns = groupAgentTurns(items);
   const anchors = turnAnchors(turns);
   const lang = langRevision();
-  const hooks = { view: toolDetail, need: onNeedToolDetail };
-  return <div ref={streamRef} className="agent-stream" role="log" aria-label={t("chat.streamAria")}
+  const latest = useRef({ view: toolDetail, need: onNeedToolDetail });
+  latest.current = { view: toolDetail, need: onNeedToolDetail };
+  // Stable hooks: whatever the caller passes, a turn is not re-rendered because of a new closure.
+  const hooks = useMemo<ToolDetailHooks>(() => ({
+    view: item => latest.current.view?.(item) ?? { status: item.detailRef ? "idle" : "ready" },
+    need: ref => latest.current.need?.(ref),
+  }), []);
+  const [shown, setShown] = useState(TURN_WINDOW);
+  const first = Math.max(0, turns.length - shown);
+  const stream = useRef<HTMLDivElement | null>(null);
+  const grown = useRef<number | null>(null);
+  const setStream = (node: HTMLDivElement | null) => {
+    stream.current = node;
+    if (typeof streamRef === "function") streamRef(node);
+    else if (streamRef) (streamRef as { current: HTMLDivElement | null }).current = node;
+  };
+  const showMore = () => {
+    grown.current = stream.current ? stream.current.scrollHeight - stream.current.scrollTop : null;
+    setShown(count => count + TURN_WINDOW);
+  };
+  useLayoutEffect(() => {
+    // Keep the turn the owner was reading in place after older turns appear above it.
+    if (grown.current !== null && stream.current) stream.current.scrollTop = stream.current.scrollHeight - grown.current;
+    grown.current = null;
+  }, [shown]);
+  return <div ref={setStream} className="agent-stream" role="log" aria-label={t("chat.streamAria")}
     aria-busy={busy === true} tabIndex={0} data-sig={signature} onScroll={event => {
-      const stream = event.currentTarget;
-      const follow = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 32;
-      onFollow?.(follow, stream);
-      if (stream.scrollTop < 32) onNeedOlder?.();
+      const node = event.currentTarget;
+      const follow = node.scrollHeight - node.scrollTop - node.clientHeight < 32;
+      onFollow?.(follow, node);
+      if (node.scrollTop < 32) {
+        if (first > 0) showMore();
+        else onNeedOlder?.();
+      }
     }}>
     <div className="agent-stream-inner">
       {older}
       {(!items.length || empty.kind === "unavailable") && <EmptyPanel spec={empty} onRetry={onRetry} onTerminal={onTerminal} />}
       {truncated && items.length > 0 && <p className="agent-trace-limit">{t("chat.truncated")}</p>}
-      {turns.map((turn, index) => {
-        return <TraceTurn key={`${anchors[index].key}:${index}`} turn={turn} anchor={anchors[index]}
+      {first > 0 && <Button className="btn btn-small agent-show-earlier" onClick={showMore}>{t("chat.showEarlierTurns")}</Button>}
+      {turns.slice(first).map((turn, offset) => {
+        const index = first + offset;
+        const anchor = anchors[index];
+        return <TraceTurn key={`${anchor.key}:${anchor.ordinal}`} turn={turn} anchor={anchor}
           live={working && empty.kind !== "unavailable" && index === turns.length - 1}
-          kept={kept} hooks={hooks} onCopy={onCopyReply} lang={lang} />;
+          kept={kept} hooks={hooks} onCopy={onCopyReply} lang={lang}
+          details={toolDetail ? turn.items.filter(item => item.detailRef).map(item => toolDetail(item)) : NO_DETAILS} />;
       })}
     </div>
   </div>;
 }
+
+const NO_DETAILS: readonly AgentTraceDetailState[] = [];

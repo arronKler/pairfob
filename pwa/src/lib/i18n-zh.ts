@@ -512,6 +512,7 @@ export const zh = {
   "menu.composeBatch": "组字",
   "menu.composeLive": "实时",
 
+  "chat.showEarlierTurns": "显示更早的对话",
   "hist.loadEarlier": "加载更早内容",
 
   "trace.running": "正在执行",
