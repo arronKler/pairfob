@@ -15,6 +15,11 @@ const base = globalThis.PAIRFOB_QA_URL || "http://127.0.0.1:5186";
 const out = "/tmp/pairfob-chat-anatomy-qa";
 await (await import("node:fs/promises")).mkdir(out, { recursive: true });
 
+// The anatomy includes the palette: the armed send is an ink mark. A browser
+// someone switched to light keeps that choice in a cookie, so name the theme
+// this checks instead of inheriting whatever the profile last wore.
+await page.cdp("Network.setCookie", { name: "pairfob_theme", value: "dark", url: `${base}/` });
+
 async function scene(name, width, height, touch) {
   await page.cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
   await page.cdp("Emulation.setDeviceMetricsOverride", {
