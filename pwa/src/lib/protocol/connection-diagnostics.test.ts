@@ -1,12 +1,12 @@
 import { expect, test, spyOn } from "bun:test";
-import { connectionDiagnostics, recordConnectionDiagnostic } from "./connection-diagnostics";
+import { connectionDiagnostics, diagnosticCounts, recordConnectionDiagnostic } from "./connection-diagnostics";
 
 test("diagnostics stay bounded and omit unclassified strings and payloads even with storage blocked", () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
   Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get() { throw new Error("blocked"); } });
   try {
-    for (let i = 0; i < 205; i++) recordConnectionDiagnostic({ event: "disconnect", pending_rpcs: i });
-    expect(connectionDiagnostics()).toHaveLength(200);
+    for (let i = 0; i < 605; i++) recordConnectionDiagnostic({ event: "disconnect", pending_rpcs: i });
+    expect(connectionDiagnostics()).toHaveLength(600);
     recordConnectionDiagnostic({ event: "disconnect", reason: "secret 192.0.2.1", code: "token-secret", route_id: "../../private", sdp: "secret" } as never);
     const record = connectionDiagnostics().at(-1)!;
     expect(record.reason).toBe("other");
@@ -39,6 +39,7 @@ test("reload restores sanitized recent records and discards stale or malformed s
     first.recordConnectionDiagnostic({ event: "page_visible", route_id: "ab".repeat(16) });
     const reloaded = await fresh("reload");
     expect(reloaded.connectionDiagnostics().map((record) => record.event)).toEqual(["disconnect", "page_visible"]);
+    expect(reloaded.diagnosticCounts()).toEqual([expect.objectContaining({ event: "page_visible", count: 1 })]);
     stored = "{broken";
     expect((await fresh("corrupt")).connectionDiagnostics()).toHaveLength(0);
   } finally {
@@ -62,6 +63,24 @@ test("notification evidence correlates stages without persisting notification ta
   expect(JSON.stringify(connectionDiagnostics().at(-1))).not.toMatch(/secret|private/);
   recordConnectionDiagnostic({ event: "notify_deferred", reason: "hidden", notification_id: Infinity });
   expect(connectionDiagnostics().at(-1)?.notification_id).toBeUndefined();
+});
+
+test("a refused dial keeps the code the relay or the computer sent", () => {
+  for (const code of ["daemon_offline", "too_many_devices", "bad_token", "enroll_required", "unbound", "speed_test"]) {
+    recordConnectionDiagnostic({ event: "connect_failed", code });
+    expect(connectionDiagnostics().at(-1)?.code).toBe(code === "speed_test" ? "other" : code);
+  }
+});
+
+test("a day keeps its counts after the detail ring rolls over", () => {
+  const tally = () => diagnosticCounts()
+    .filter((row) => row.event === "connect_failed" && row.code === "daemon_offline")
+    .reduce((sum, row) => sum + row.count, 0);
+  const before = tally();
+  for (let i = 0; i < 700; i++) recordConnectionDiagnostic({ event: "connect_failed", code: "daemon_offline" });
+  expect(connectionDiagnostics().filter((record) => record.code === "daemon_offline").length).toBeLessThan(700);
+  expect(tally()).toBe(before + 700);
+  for (const row of diagnosticCounts()) expect(row.hour % 3_600_000).toBe(0);
 });
 
 test("catalog and boot evidence survives the sanitizer without accepting arbitrary fields", () => {

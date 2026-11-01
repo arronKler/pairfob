@@ -1,9 +1,9 @@
-import { connectionDiagnostics } from "../../lib/protocol/connection-diagnostics";
+import { connectionDiagnostics, diagnosticCounts } from "../../lib/protocol/connection-diagnostics";
 import { readWorkerNotificationEvidence } from "./notification-diagnostics";
 
 export async function exportConnectionDiagnostics(): Promise<void> {
   const worker_notifications = await readWorkerNotificationEvidence();
-  const report = { version: 1, exported_at: new Date().toISOString(), records: connectionDiagnostics(), worker_notifications };
+  const report = { version: 1, exported_at: new Date().toISOString(), records: connectionDiagnostics(), counts: diagnosticCounts(), worker_notifications };
   const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
   const anchor = document.createElement("a");
   anchor.href = url;

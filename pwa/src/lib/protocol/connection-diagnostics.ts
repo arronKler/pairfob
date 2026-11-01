@@ -30,9 +30,12 @@ export type ConnectionDiagnostic = ConnectionDetails & {
   other_origin_count?: number;
   notification_id?: number;
 };
+/** One row per hour, event and code. The detail ring rolls over; a day does not. */
+export type DiagnosticCount = { hour: number; event: string; code?: string; count: number };
 const KEY = "pairfob.connection-diagnostics.v1";
-const LIMIT = 200;
+const LIMIT = 600;
 const TTL = 24 * 60 * 60 * 1000;
+const BUCKET_MS = 60 * 60 * 1000;
 const TOKENS = new Set((
   "notify_sw_active notify_sw_shown notify_sw_click notify_sw_clients notify_sw_selected notify_sw_message notify_sw_ack " +
   "notify_sw_focus notify_sw_navigate notify_sw_client_error notify_sw_open notify_sw_error captured sent missing " +
@@ -52,6 +55,13 @@ const TOKENS = new Set((
   "websocket_closed websocket_error heartbeat_send_failed encrypted_send_failed " +
   "relay p2p new checking connected completed disconnected failed closed connecting open closing " +
   "heartbeat_timeout timeout cancelled offline daemon_replaced bad_frame bad_message backpressure " +
+  // Codes the relay and the computer refuse a dial with. A refusal arrives as
+  // the hello's `error.code`, so an allowlist that lacks them reports every
+  // refused dial as `other` and an export cannot say which one it was.
+  "daemon_offline too_many_devices pair_busy pairing_replaced enroll_required bad_token index_unavailable wrong_ws conflict " +
+  "aborted app_load_failed bad_link bad_pair_code bad_result forbidden hash_mismatch internal invalid_argument " +
+  "invalid_pair_code invalid_pair_ref lost pairing_cancelled reconnecting rejected stale_prompt too_large transcript_unavailable " +
+  "unknown_op unknown_outcome workspace_not_found " +
   "rpc_timeout Snapshot PaneRead History AgentTrace AgentTraceSummary AgentTraceDetail GetConfig Ping " +
   "kicked revoked expired denied not_ready closed ws_open_failed wrong_protocol error other"
 ).split(" "));
@@ -61,6 +71,7 @@ const asset = import.meta.url.split("/").at(-1) || "";
 const assetPattern = /^index-[A-Za-z0-9_-]{8,32}\.js$/;
 const pwaAsset = assetPattern.test(asset) ? asset : undefined;
 let records: ConnectionDiagnostic[] = [];
+const counts = new Map<string, DiagnosticCount>();
 let loaded = false;
 
 // Project both new records and persisted input onto the same content-free schema.
@@ -84,24 +95,62 @@ export function sanitizeConnectionDiagnostic(input: unknown, now: number): Conne
   return out as ConnectionDiagnostic;
 }
 
+const countKey = (row: DiagnosticCount): string => `${row.hour}|${row.event}|${row.code || ""}`;
+
+function sanitizeCount(input: unknown, now: number): DiagnosticCount | null {
+  if (!input || typeof input !== "object") return null;
+  const source = input as Record<string, unknown>;
+  if (typeof source.hour !== "number" || !Number.isFinite(source.hour) || source.hour < now - TTL || source.hour > now + 60_000) return null;
+  if (typeof source.event !== "string" || !TOKENS.has(source.event)) return null;
+  const count = source.count;
+  if (typeof count !== "number" || !Number.isFinite(count) || count < 1) return null;
+  const row: DiagnosticCount = { hour: source.hour, event: source.event, count: Math.min(Math.round(count), 1_000_000) };
+  if (typeof source.code === "string" && TOKENS.has(source.code)) row.code = source.code;
+  return row;
+}
+
 export function connectionDiagnostics(): ConnectionDiagnostic[] {
   const now = Date.now();
   if (!loaded) {
     loaded = true;
     try {
       const raw: unknown = JSON.parse(sessionStorage.getItem(KEY) || "[]");
-      if (Array.isArray(raw)) records = raw.slice(-LIMIT).map((item) => sanitizeConnectionDiagnostic(item, now)).filter((item): item is ConnectionDiagnostic => item !== null);
+      // Earlier builds stored the bare record array; both shapes load.
+      const stored: { records?: unknown; counts?: unknown } = Array.isArray(raw)
+        ? { records: raw }
+        : raw && typeof raw === "object" ? raw as { records?: unknown; counts?: unknown } : {};
+      if (Array.isArray(stored.records)) records = stored.records.slice(-LIMIT).map((item) => sanitizeConnectionDiagnostic(item, now)).filter((item): item is ConnectionDiagnostic => item !== null);
+      if (Array.isArray(stored.counts)) for (const item of stored.counts) {
+        const row = sanitizeCount(item, now);
+        if (row) counts.set(countKey(row), row);
+      }
     } catch { /* Memory-only diagnostics when storage is unavailable. */ }
   }
   records = records.filter((record) => record.at >= now - TTL).slice(-LIMIT);
+  for (const [key, row] of counts) if (row.hour < now - TTL) counts.delete(key);
   return records.map((record) => ({ ...record }));
 }
 
-export function recordConnectionDiagnostic(input: Omit<ConnectionDiagnostic, "at">): void {
+function tally(record: ConnectionDiagnostic, now: number): void {
+  const row: DiagnosticCount = { hour: Math.floor(now / BUCKET_MS) * BUCKET_MS, event: record.event, count: 1 };
+  if (record.code) row.code = record.code;
+  const existing = counts.get(countKey(row));
+  if (existing) existing.count++;
+  else counts.set(countKey(row), row);
+}
+
+export function diagnosticCounts(): DiagnosticCount[] {
   connectionDiagnostics();
-  const record = sanitizeConnectionDiagnostic({ ...input, pwa_asset: pwaAsset, at: Date.now() }, Date.now());
+  return [...counts.values()].sort((a, b) => a.hour - b.hour || a.event.localeCompare(b.event)).map((row) => ({ ...row }));
+}
+
+export function recordConnectionDiagnostic(input: Omit<ConnectionDiagnostic, "at">): void {
+  const now = Date.now();
+  connectionDiagnostics();
+  const record = sanitizeConnectionDiagnostic({ ...input, pwa_asset: pwaAsset, at: now }, now);
   if (!record) return;
   records.push(record);
   records = records.slice(-LIMIT);
-  try { sessionStorage.setItem(KEY, JSON.stringify(records)); } catch { /* Best effort; never affect connection recovery. */ }
+  tally(record, now);
+  try { sessionStorage.setItem(KEY, JSON.stringify({ records, counts: [...counts.values()] })); } catch { /* Best effort; never affect connection recovery. */ }
 }
