@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PATH_CHECK_FLOOR_MS, pathCheckDue, HELLO_WINDOW_MS, HelloBudget, RECONNECT_BASE_MS, RECONNECT_MAX_MS, STANDBY_HELLO_LIMIT, reconnectDelay } from "./reconnect-policy.ts";
+import { DAEMON_OFFLINE_MAX_MS, PATH_CHECK_FLOOR_MS, pathCheckDue, HELLO_WINDOW_MS, HelloBudget, RECONNECT_BASE_MS, RECONNECT_MAX_MS, STANDBY_HELLO_LIMIT, reconnectDelay, reconnectMax } from "./reconnect-policy.ts";
 
 const sessionSource = await Bun.file(new URL("./session-ws.ts", import.meta.url)).text();
 
@@ -20,6 +20,21 @@ describe("mobile reconnect backoff", () => {
     const start = sessionSource.indexOf("private onDisconnect(");
     const body = sessionSource.slice(start, sessionSource.indexOf("private scheduleReconnect(", start));
     expect(body).toContain("this.scheduleReconnect(true)");
+  });
+
+  test("a relay with no daemon attached backs off to a minute instead of every 15 s", () => {
+    expect(reconnectMax("daemon_offline")).toBe(DAEMON_OFFLINE_MAX_MS);
+    expect(reconnectMax("timeout")).toBe(RECONNECT_MAX_MS);
+    expect(reconnectMax()).toBe(RECONNECT_MAX_MS);
+    const delays = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((attempt) => reconnectDelay(attempt, () => 0.5, reconnectMax("daemon_offline")));
+    expect(delays).toEqual([500, 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 60_000, 60_000]);
+    expect(reconnectDelay(8, () => 0.5)).toBe(RECONNECT_MAX_MS);
+  });
+
+  test("a failed dial's code chooses the ceiling for the next one", () => {
+    const body = sessionSource.slice(sessionSource.indexOf("private scheduleReconnect("));
+    expect(body).toContain("reconnectMax(this.lastConnectCode)");
+    expect(body).toContain("this.lastConnectCode = protocolError.code");
   });
 });
 

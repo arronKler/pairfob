@@ -57,7 +57,7 @@ import {
 } from "./attachments.ts";
 import { relayOrigin } from "./frame-socket.ts";
 import type { PairResult } from "./pair-ws.ts";
-import { HelloBudget, reconnectDelay } from "./reconnect-policy.ts";
+import { HelloBudget, reconnectDelay, reconnectMax } from "./reconnect-policy.ts";
 import { parseNetworkMode, type NetworkMode } from "../network-mode.ts";
 import { DirectSessionDriver, type P2PAttemptObservation } from "./session-direct.ts";
 import { connectSession } from "./session-connect.ts";
@@ -147,6 +147,7 @@ class ReconnectingSession implements LiveSession {
   private networkMode: NetworkMode = "auto";
   private networkAvailable = true;
   private attempt = 0;
+  private lastConnectCode = "";
   private lastRttMs: number | null = null;
   private lastTransport: "relay" | "p2p" = "relay";
   private readonly transportSwitch = new TransportSwitchBarrier();
@@ -689,6 +690,7 @@ class ReconnectingSession implements LiveSession {
     this.transport = transport;
     this.firstReads.hold(transport, reads);
     this.attempt = 0;
+    this.lastConnectCode = "";
     // A computer that was updated comes back on a new connection.
     this.quotaWire.legacy = false;
     transport.onDisconnect((error) => this.onDisconnect(transport, error));
@@ -749,7 +751,7 @@ class ReconnectingSession implements LiveSession {
 
   private scheduleReconnect(immediate = false): void {
     if (this.stopped || !this.networkAvailable || pageHidden() || this.reconnecting || this.reconnectTimer !== null) return;
-    const delay = immediate ? 0 : reconnectDelay(this.attempt++);
+    const delay = immediate ? 0 : reconnectDelay(this.attempt++, Math.random, reconnectMax(this.lastConnectCode));
     this.emit({ type: "reconnecting", message: immediate ? "正在重新连接" : `${Math.ceil(delay / 1000)} 秒后重连` });
     this.reconnectTimer = globalThis.setTimeout(async () => {
       this.reconnectTimer = null;
@@ -761,6 +763,7 @@ class ReconnectingSession implements LiveSession {
       } catch (error) {
         if (this.stopped || !this.networkAvailable) return;
         const protocolError = error instanceof ProtocolError ? error : new ProtocolError("disconnected", String(error));
+        this.lastConnectCode = protocolError.code;
         if (TERMINAL_CODES.has(protocolError.code)) {
           this.stopped = true;
           this.unwatchVisibility();
