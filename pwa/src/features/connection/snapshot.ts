@@ -176,13 +176,22 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
  * dashboard catalog is all the local notification producer needs, so nothing
  * visible, navigational or pane-reading runs. A foreground Snapshot in flight
  * already owns the busy flag and will update the catalog itself.
+ *
+ * `isConnected()` is false on a hidden page by design: the session keeps
+ * `checking` until the reader returns and the probe verifies the path. The
+ * answer reads stale there, not dead, and the poke that reached this lane
+ * arrived on the transport, so the session is what to ask, not the page.
  */
 export async function refreshSnapshotInBackground(ports: SnapshotStatusPorts): Promise<void> {
   const session = ports.currentLive();
   const viewVersion = liveView();
-  if (!session || !session.isConnected() || !ports.networkOnline() || refreshBusy()) return;
+  if (!session || !ports.networkOnline() || refreshBusy()) return;
   setRefreshBusy(true);
-  if (!viewIsCurrent(session, viewVersion, ports)) return;
+  if (!viewIsCurrent(session, viewVersion, ports)) {
+    // Nothing was sent; leaving the flag would strand the lane for good.
+    setRefreshBusy(false);
+    return;
+  }
   try {
     const snapshot = (await session.snapshot()) as SnapshotWire;
     if (!viewIsCurrent(session, viewVersion, ports)) return;

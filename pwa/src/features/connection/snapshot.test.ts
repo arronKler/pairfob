@@ -136,6 +136,17 @@ describe("snapshot observation ownership", () => {
     expect(reads).toBe(1);
   });
 
+  test("a hidden page folds the background Snapshot while the session still reports checking", async () => {
+    // The poke reached the page on the transport; `checking` only means the
+    // reader has not returned to verify the path yet.
+    session.isConnected = () => false;
+    const background: SnapshotStatusPorts = { currentLive: liveSession, networkOnline: () => true, now: () => 12345 };
+    await refreshSnapshotInBackground(background);
+    expect(reads).toBe(1);
+    expect(dashboardStore.get().agents.map((agent) => agent.paneId)).toEqual(["old-A"]);
+    expect(refreshBusy()).toBeFalse();
+  });
+
   test("the background lane waits for an in-flight foreground Snapshot", async () => {
     const background: SnapshotStatusPorts = { currentLive: liveSession, networkOnline: () => true, now: () => 12345 };
     setRefreshBusy(true);

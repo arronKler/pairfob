@@ -15,18 +15,18 @@ type Request = { id: string; method: string } & Record<string, unknown>;
 function nativeFixture(permission: "granted" | "denied" | "prompt" = "granted", running = true) {
   const requests: Request[] = [];
   let failPost = false;
-  let keepAlive = running;
+  let backgroundSync = running;
   const port = {
     postMessage(raw: string) {
       const request = JSON.parse(raw) as Request;
       requests.push(request);
       let ok = true;
       let value: unknown = {};
-      if (request.method === "status") value = { permission, keepAlive };
+      if (request.method === "status") value = { permission, backgroundSync };
       else if (request.method === "requestPermission") value = { permission };
-      else if (request.method === "setKeepAlive") {
-        keepAlive = request.on === true;
-        value = { keepAlive };
+      else if (request.method === "setBackgroundSync") {
+        backgroundSync = request.on === true;
+        value = { backgroundSync };
       } else if (request.method === "post") {
         ok = !failPost;
         value = failPost ? undefined : { posted: true };
@@ -62,14 +62,14 @@ function show() {
 
 let controller: AbortController;
 
-async function setup(options: { visible?: boolean; live?: boolean; enabled?: boolean; persisted?: boolean; keepAliveRunning?: boolean } = {}) {
-  const fixture = nativeFixture("granted", options.keepAliveRunning ?? true);
+async function setup(options: { visible?: boolean; live?: boolean; enabled?: boolean; persisted?: boolean; backgroundSyncRunning?: boolean } = {}) {
+  const fixture = nativeFixture("granted", options.backgroundSyncRunning ?? true);
   (window as unknown as { PairfobNotify?: typeof fixture.port }).PairfobNotify = fixture.port;
   localStorage.clear();
   setCredential(pair);
   setPhase(options.live === false ? "resuming" : "live");
   if (options.visible) show(); else hide();
-  if (options.persisted) localStorage.setItem("pairfob:localPush", JSON.stringify({ enabled: true, keepAlive: true }));
+  if (options.persisted) localStorage.setItem("pairfob:localPush", JSON.stringify({ enabled: true, backgroundSync: true }));
   else if (options.enabled !== false) await enableLocalNotifications();
   fixture.requests.length = 0;
   controller = new AbortController();
@@ -199,8 +199,8 @@ test("an aborted page lifetime stops raising notices", async () => {
   expect(posts()).toHaveLength(0);
 });
 
-test("booting with the choice persisted restores a lost keep-alive notification", async () => {
-  const { requests } = await setup({ persisted: true, keepAliveRunning: false });
+test("booting with the choice persisted restores a lost background sync notification", async () => {
+  const { requests } = await setup({ persisted: true, backgroundSyncRunning: false });
   for (let i = 0; i < 10; i++) await Promise.resolve();
-  expect(requests.some((request) => request.method === "setKeepAlive" && request.on === true)).toBeTrue();
+  expect(requests.some((request) => request.method === "setBackgroundSync" && request.on === true)).toBeTrue();
 });

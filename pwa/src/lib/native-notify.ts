@@ -10,7 +10,7 @@ export type NativeNotificationPermission = "granted" | "denied" | "prompt";
 
 export type NativeNotificationStatus = {
   permission: NativeNotificationPermission;
-  keepAlive: boolean;
+  backgroundSync: boolean;
 };
 
 export type NativeNotification = {
@@ -26,7 +26,7 @@ export type NativeNotifyBridge = {
   post(notification: NativeNotification): Promise<void>;
   cancel(tag: string): Promise<void>;
   cancelAll(): Promise<void>;
-  setKeepAlive(on: boolean): Promise<boolean>;
+  setBackgroundSync(on: boolean): Promise<boolean>;
   ready(): Promise<{ url: string | null }>;
   onTap(listener: (url: string) => void): () => void;
 };
@@ -97,8 +97,8 @@ export function createNativeNotify(
   return {
     status: async () => {
       const value = await request("status");
-      if (!isObject(value) || typeof value.keepAlive !== "boolean") throw new Error(INVALID);
-      return { permission: permission(value.permission), keepAlive: value.keepAlive };
+      if (!isObject(value) || typeof value.backgroundSync !== "boolean") throw new Error(INVALID);
+      return { permission: permission(value.permission), backgroundSync: value.backgroundSync };
     },
     // The OS permission dialog can stay up for the better part of a minute.
     requestPermission: async () => {
@@ -117,10 +117,10 @@ export function createNativeNotify(
       const value = await request("cancelAll");
       if (!isObject(value)) throw new Error(INVALID);
     },
-    setKeepAlive: async (on) => {
-      const value = await request("setKeepAlive", { on });
-      if (!isObject(value) || typeof value.keepAlive !== "boolean") throw new Error(INVALID);
-      return value.keepAlive;
+    setBackgroundSync: async (on) => {
+      const value = await request("setBackgroundSync", { on });
+      if (!isObject(value) || typeof value.backgroundSync !== "boolean") throw new Error(INVALID);
+      return value.backgroundSync;
     },
     ready: async () => {
       const value = await request("ready");

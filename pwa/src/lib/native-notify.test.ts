@@ -30,9 +30,9 @@ test("concurrent requests correlate out of order and carry their own fields", as
   expect(sent.map((item) => item.method)).toEqual(["status", "requestPermission", "post"]);
   expect(sent[2]).toMatchObject(notice);
   reply(2, { posted: true });
-  reply(0, { permission: "granted", keepAlive: true });
+  reply(0, { permission: "granted", backgroundSync: true });
   reply(1, { permission: "granted" });
-  expect(await status).toEqual({ permission: "granted", keepAlive: true });
+  expect(await status).toEqual({ permission: "granted", backgroundSync: true });
   expect(await permission).toBe("granted");
   await posted;
 });
@@ -42,12 +42,12 @@ test("a malformed reply rejects only its call and never throws out of the event 
   const status = bridge.status();
   port.onmessage?.({ data: "not JSON" });
   port.onmessage?.({ data: "null" });
-  reply(0, { permission: "sometimes", keepAlive: true });
+  reply(0, { permission: "sometimes", backgroundSync: true });
   await expect(status).rejects.toThrow("invalid native notification response");
 
   const next = bridge.status();
-  reply(1, { permission: "prompt", keepAlive: false });
-  expect(await next).toEqual({ permission: "prompt", keepAlive: false });
+  reply(1, { permission: "prompt", backgroundSync: false });
+  expect(await next).toEqual({ permission: "prompt", backgroundSync: false });
 
   const post = bridge.post(notice);
   reply(2, { posted: false });
@@ -98,14 +98,14 @@ test("ready consumes a tap from a cold start and rejects a malformed one", async
   expect(sent.map((item) => item.method)).toEqual(["ready", "ready", "ready"]);
 });
 
-test("keep-alive, cancel and cancelAll settle through their native replies", async () => {
+test("background sync, cancel and cancelAll settle through their native replies", async () => {
   const { bridge, sent, reply } = fixture();
-  const keep = bridge.setKeepAlive(true);
+  const keep = bridge.setBackgroundSync(true);
   const cancelled = bridge.cancel("pairfob-pane-p1");
   const all = bridge.cancelAll();
-  expect(sent[0]).toMatchObject({ method: "setKeepAlive", on: true });
+  expect(sent[0]).toMatchObject({ method: "setBackgroundSync", on: true });
   expect(sent[1]).toMatchObject({ method: "cancel", tag: "pairfob-pane-p1" });
-  reply(0, { keepAlive: true });
+  reply(0, { backgroundSync: true });
   reply(1, { cancelled: true });
   reply(2, {});
   expect(await keep).toBe(true);

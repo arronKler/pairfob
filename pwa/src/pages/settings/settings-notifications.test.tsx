@@ -18,9 +18,9 @@ function nativeFixture(permission: "granted" | "denied" | "prompt") {
     postMessage(raw) {
       const request = JSON.parse(raw) as { id: string; method: string };
       requests.push(request);
-      const value = request.method === "status" ? { permission, keepAlive: false }
+      const value = request.method === "status" ? { permission, backgroundSync: false }
         : request.method === "requestPermission" ? { permission }
-        : request.method === "setKeepAlive" ? { keepAlive: true }
+        : request.method === "setBackgroundSync" ? { backgroundSync: true }
         : request.method === "cancelAll" ? {}
         : { posted: true };
       port.onmessage?.({ data: JSON.stringify({ id: request.id, ok: true, value }) });
@@ -58,12 +58,12 @@ afterEach(() => {
 });
 
 describe("native notification row", () => {
-  test("turning on shows the green state and the keep-alive explanation, and the same control turns it off", async () => {
+  test("turning on shows the green state and the background sync explanation, and the same control turns it off", async () => {
     const { requests } = nativeFixture("granted");
     const root = host();
     renderReactScreen(root, <NotificationItem input={{ channel: "native" }} />);
     await settle();
-    expect(root.querySelector(".notification-keepalive")).toBeNull();
+    expect(root.querySelector(".notification-sync")).toBeNull();
     const enable = button("开启", root);
     expect(enable).toBeDefined();
     act(() => enable!.click());
@@ -71,7 +71,7 @@ describe("native notification row", () => {
     expect(button("已开启", root)).toBeDefined();
     const fold = root.querySelector<HTMLElement>(".notification-item .fold");
     expect(fold?.classList.contains("is-shut")).toBe(false);
-    expect(root.textContent).toContain("保留一条安静的“已连接”通知");
+    expect(root.textContent).toContain("每 15 分钟左右会在后台连一次电脑");
     act(() => button("已开启", root)!.click());
     await settle();
     expect(button("开启", root)).toBeDefined();

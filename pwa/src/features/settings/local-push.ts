@@ -10,22 +10,22 @@ import { nativeNotify, type NativeNotificationPermission, type NativeNotificatio
 
 const KEY = "pairfob:localPush";
 
-type LocalPushRecord = { enabled: boolean; keepAlive: boolean };
+type LocalPushRecord = { enabled: boolean; backgroundSync: boolean };
 
-const OFF: LocalPushRecord = { enabled: false, keepAlive: false };
+const OFF: LocalPushRecord = { enabled: false, backgroundSync: false };
 const listeners = new Set<() => void>();
 let memory: LocalPushRecord | null = null;
 let revision = 0;
-// What the bridge last said about its ongoing notification. Absent a bridge it
-// stays false, so a hidden page never opens the background lane on a guess.
-let keepAlive = false;
+// What the bridge last said about the scheduled job. Absent a bridge it stays
+// false, so a hidden page never opens the background lane on a guess.
+let backgroundSync = false;
 
 function parse(raw: string | null): LocalPushRecord | null {
   if (raw === null) return null;
   try {
     const value = JSON.parse(raw) as Partial<LocalPushRecord> | null;
     if (!value || typeof value !== "object") return null;
-    return { enabled: value.enabled === true, keepAlive: value.keepAlive === true };
+    return { enabled: value.enabled === true, backgroundSync: value.backgroundSync === true };
   } catch {
     return null;
   }
@@ -59,16 +59,16 @@ export function subscribeLocalPush(listener: () => void): () => void {
   return () => { listeners.delete(listener); };
 }
 
-export function keepAliveEnabled(): boolean {
-  return keepAlive;
+export function backgroundSyncEnabled(): boolean {
+  return backgroundSync;
 }
 
-/** Read the native status and cache its keep-alive fact; null when there is no bridge. */
+/** Read the native status and cache its background sync fact; null when there is no bridge. */
 export async function refreshLocalPush(): Promise<NativeNotificationStatus | null> {
   const bridge = nativeNotify();
   if (!bridge) return null;
   const status = await bridge.status();
-  keepAlive = status.keepAlive;
+  backgroundSync = status.backgroundSync;
   return status;
 }
 
@@ -84,19 +84,19 @@ export async function enableLocalNotifications(): Promise<void> {
     throw new Error(t("notify.enableFailed"));
   }
   if (permission !== "granted") throw new Error(t("err.pushPermission"));
-  // A frozen page raises nothing, so the keep-alive has to be real before the
-  // choice is stored; following the click alone would promise notices the OS
-  // never lets the page run to send.
-  if (!await bridge.setKeepAlive(true).catch(() => false)) throw new Error(t("notify.enableFailed"));
-  keepAlive = true;
-  write({ enabled: true, keepAlive: true });
+  // The stored choice promises notices while the app is closed, so the schedule
+  // has to be real before it is written. A click alone would promise notices
+  // nothing ever wakes the page to send.
+  if (!await bridge.setBackgroundSync(true).catch(() => false)) throw new Error(t("notify.enableFailed"));
+  backgroundSync = true;
+  write({ enabled: true, backgroundSync: true });
 }
 
 export async function disableLocalNotifications(): Promise<void> {
   const bridge = nativeNotify();
-  write({ enabled: false, keepAlive: false });
-  keepAlive = false;
+  write({ enabled: false, backgroundSync: false });
+  backgroundSync = false;
   // Both native steps are independent and idempotent; a failed one must not
   // leave the other running after the page already says off.
-  if (bridge) await Promise.allSettled([bridge.cancelAll(), bridge.setKeepAlive(false)]);
+  if (bridge) await Promise.allSettled([bridge.cancelAll(), bridge.setBackgroundSync(false)]);
 }

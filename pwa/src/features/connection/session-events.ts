@@ -78,8 +78,8 @@ export function observeSessionEvent(
     if (currentScreen() === "settings") ports.commitView();
     return;
   }
-  // Hidden pages stop both fallback loops, but a page holding the notification
-  // keep-alive still follows agent status: the Snapshot is what the local
+  // Hidden pages stop both fallback loops, but a page this phone wakes to raise
+  // notices still follows agent status: the Snapshot is what the local
   // notification producer reads. No pane lane, chrome or polling wakes here.
   if (event.type === "poke" && (ports.documentVisible() || (event.reason === "agent_status" && ports.backgroundAttention()))) {
     const action = pokeRefreshAction(currentScreen(), openPaneId(), event.paneId, event.reason);

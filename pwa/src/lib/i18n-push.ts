@@ -10,8 +10,8 @@ export const zhPush = {
   "notify.localAgent": "Agent",
   "notify.androidDenied": "Android 已拒绝 Pairfob 的通知权限。请到系统设置中允许通知，再回到这里开启。",
   "notify.androidDeniedState": "已拒绝",
-  "notify.keepAlive": "开启后，Pairfob 会保留一条安静的“已连接”通知。切到后台后的几分钟内还能通知到你，再久 Android 会冻结网页，直到你回到应用。",
-  "notify.keepAliveOff": "点按「已开启」即可关闭通知，这条常驻通知也会一并消失。",
+  "notify.backgroundSync": "开启后，Pairfob 每 15 分钟左右会在后台连一次电脑，任务完成或需要你处理时通知你。手机休眠或省电时 Android 会推迟，最晚可能几小时。",
+  "notify.backgroundSyncOff": "点按「已开启」即可关闭通知，后台检查也会停止。",
   "notify.disableAria": "关闭通知",
   "notify.enableFailed": "通知没有开启，请稍后再试。",
 } as const;
@@ -28,8 +28,8 @@ export const enPush: { [K in keyof typeof zhPush]: string } = {
   "notify.localAgent": "Agent",
   "notify.androidDenied": "Android has blocked notifications for Pairfob. Allow them in system settings, then turn them on here.",
   "notify.androidDeniedState": "Blocked",
-  "notify.keepAlive": "While this is on, Pairfob keeps a quiet “connected” notification. It can reach you for a few minutes after you leave the app; after that Android freezes the page until you come back.",
-  "notify.keepAliveOff": "Tap “On” to turn notifications off; the ongoing notification goes away with them.",
+  "notify.backgroundSync": "While this is on, Pairfob connects to your computer about every 15 minutes and tells you when a turn finishes or needs you. Android delays this while the phone sleeps and may wait hours.",
+  "notify.backgroundSyncOff": "Tap “On” to turn notifications off; the background checks stop too.",
   "notify.disableAria": "Turn off notifications",
   "notify.enableFailed": "Notifications did not turn on. Try again in a moment.",
 };

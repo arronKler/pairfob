@@ -56,16 +56,16 @@ function failureReason(error: unknown): string {
 export function bindLocalNotifications(signal: AbortSignal): void {
   const bridge = nativeNotify();
   if (!bridge) return;
-  const settleKeepAlive = async () => {
-    // The connection lane reads keep-alive from this cache before it decides to
+  const settleBackgroundSync = async () => {
+    // The connection lane reads background sync from this cache before it decides to
     // follow a poke while hidden, so read it at bind time.
     const status = await refreshLocalPush();
-    if (!status || status.keepAlive || status.permission !== "granted" || !localNotificationsEnabled()) return;
-    // A restarted WebView finds the foreground service gone while the choice
-    // persists; the hidden attention lane depends on it coming back.
-    if (await bridge.setKeepAlive(true).catch(() => false)) await refreshLocalPush();
+    if (!status || status.backgroundSync || status.permission !== "granted" || !localNotificationsEnabled()) return;
+    // An update or a reboot can drop the persisted job while the choice stays
+    // on; the hidden attention lane depends on the schedule coming back.
+    if (await bridge.setBackgroundSync(true).catch(() => false)) await refreshLocalPush();
   };
-  void settleKeepAlive().catch(() => undefined);
+  void settleBackgroundSync().catch(() => undefined);
   let previous = new Map(liveAgents().map((agent) => [agent.paneId, agent.status]));
   const postedAt = new Map<string, number>();
   const raise = (agent: DashboardAgentCard, kind: LocalNoticeKind, daemonId: string) => {

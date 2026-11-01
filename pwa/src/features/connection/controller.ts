@@ -1,7 +1,7 @@
 import { bindCatalogSessionRestoration } from "../computers/cancel-add";
 import { markAppPerformance } from "../../lib/performance-marks";
 import { bindInactiveNetworkPreference } from "../settings/network-preference";
-import { keepAliveEnabled, localNotificationsEnabled } from "../settings/local-push";
+import { backgroundSyncEnabled, localNotificationsEnabled } from "../settings/local-push";
 import { acceptDaemonVersion, markDaemonConfigIncompatible } from "../settings/daemon-update";
 import { t } from "../../lib/i18n";
 import type { NetworkMode } from "../../lib/network-mode";
@@ -262,7 +262,7 @@ export async function establish(pair: PairResult, connect: SessionConnector = co
 const sessionEventPorts = {
   documentVisible: () => document.visibilityState === "visible",
   backgroundAttention: () => document.visibilityState === "hidden"
-    && keepAliveEnabled() && localNotificationsEnabled(),
+    && backgroundSyncEnabled() && localNotificationsEnabled(),
   commitView,
   clearNotice,
   showStatus,

@@ -88,7 +88,7 @@ function WebNotificationItem({ input }: { input: WebNotificationRowInput }) {
 }
 
 function LocalNotificationItem() {
-  const [status, setStatus] = useState<{ permission: NativeNotificationPermission; keepAlive: boolean } | null>(null);
+  const [status, setStatus] = useState<{ permission: NativeNotificationPermission; backgroundSync: boolean } | null>(null);
   const [reading, setReading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -155,9 +155,9 @@ function LocalNotificationItem() {
   return <div className="set-item-group notification-item" data-native="true">
     <SetItem label={t("settings.notifications")} sub={sub} subTone={subTone} trailing={trailing} />
     <Fold open={on} lazy>
-      <div className="notification-keepalive">
-        <p>{t("notify.keepAlive")}</p>
-        <p>{t("notify.keepAliveOff")}</p>
+      <div className="notification-sync">
+        <p>{t("notify.backgroundSync")}</p>
+        <p>{t("notify.backgroundSyncOff")}</p>
       </div>
     </Fold>
   </div>;

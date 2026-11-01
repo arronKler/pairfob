@@ -154,13 +154,13 @@ test("hidden status events do not start network reads", async () => {
   expect(runtime.reads()).toBe(before);
 });
 
-test("hidden status events fold the catalog when the notification keep-alive is on", async () => {
+test("hidden status events fold the catalog when the notification background sync is on", async () => {
   const port = {
     postMessage(raw: string) {
       const request = JSON.parse(raw) as { id: string; method: string; on?: boolean };
-      const value = request.method === "status" ? { permission: "granted", keepAlive: true }
+      const value = request.method === "status" ? { permission: "granted", backgroundSync: true }
         : request.method === "requestPermission" ? { permission: "granted" }
-        : request.method === "setKeepAlive" ? { keepAlive: request.on === true }
+        : request.method === "setBackgroundSync" ? { backgroundSync: request.on === true }
         : request.method === "cancelAll" ? {}
         : { posted: true };
       port.onmessage?.({ data: JSON.stringify({ id: request.id, ok: true, value }) });
