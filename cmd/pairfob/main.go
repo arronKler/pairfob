@@ -147,6 +147,7 @@ func runDaemon(store *state.Store, sock string) error {
 	}
 	target := eng.ConfigureRuntime(runtimeConfig)
 	gateway.Attach(eng)
+	go eng.MonitorPush(nil, 2*time.Second)
 	go func() {
 		if serveErr := gateway.Serve(); serveErr != nil && !errors.Is(serveErr, net.ErrClosed) {
 			log.Printf("tailnet gateway: %v", serveErr)
