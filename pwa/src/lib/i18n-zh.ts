@@ -673,7 +673,7 @@ export const zh = {
   "chat.detailFailed": "详情暂时加载失败",
   "chat.noTrace": "当前无法读取此会话的记录。",
   "chat.readingProcess": "正在读取执行过程",
-  "chat.noChat": "还没有对话",
+  "chat.noChat": "新会话，之前的对话不在这里显示",
   "chat.terminalHint": "发送的消息仍可执行。请到终端查看回复，不要因为这里没有显示而重复发送。",
   "chat.openTerminal": "到终端查看",
   "chat.sendBelow": "在下面给 Agent 发一条",

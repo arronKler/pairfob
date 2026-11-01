@@ -670,7 +670,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chat.detailFailed": "Details are temporarily unavailable",
   "chat.noTrace": "The conversation record is currently unavailable.",
   "chat.readingProcess": "Reading the run",
-  "chat.noChat": "No chat yet",
+  "chat.noChat": "New session. Earlier conversation is not shown",
   "chat.terminalHint": "Sent messages can still run. Check replies in the terminal; do not resend just because they are missing here.",
   "chat.openTerminal": "View terminal",
   "chat.sendBelow": "Message the agent below",
