@@ -481,11 +481,10 @@ impl Worker {
                 let Some(surface) = self.wire_surface.as_mut() else {
                     return;
                 };
-                if !surface_patch::fits(surface, &patch) {
-                    self.disconnected("the surface updates fell out of step".into());
+                if let Err(error) = surface_patch::apply_patch(surface, *patch) {
+                    self.disconnected(format!("the surface updates fell out of step ({error})"));
                     return;
                 }
-                surface_patch::apply(surface, *patch);
                 self.emit_frame();
             }
             ClientEvent::Response {
@@ -503,6 +502,9 @@ impl Worker {
                 } else {
                     self.on_response(&method, &response);
                 }
+            }
+            ClientEvent::Error(message) => {
+                self.emit(AppEvent::Notice(Notice::warning(message)));
             }
             ClientEvent::Disconnected(reason) => self.disconnected(reason),
         }

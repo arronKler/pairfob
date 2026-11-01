@@ -55,6 +55,9 @@ pub enum ClientShellCommandAction {
     Pane,
     Popup,
     PluginAction,
+    /// A newer Herdr may add an action this build does not run. The snapshot
+    /// still parses so the rest of the workspace keeps working.
+    #[serde(other)]
     Unknown,
 }
 
@@ -86,6 +89,7 @@ pub struct ClientShellWorkspace {
     pub tokens: Vec<(String, String)>,
     pub worktree: Option<ClientShellWorktree>,
     pub focused: bool,
+    #[serde(deserialize_with = "deserialize_agent_status")]
     pub agent_status: AgentStatus,
 }
 
@@ -105,6 +109,7 @@ pub struct ClientShellTab {
     pub custom_label: bool,
     pub zoomed: bool,
     pub focused: bool,
+    #[serde(deserialize_with = "deserialize_agent_status")]
     pub agent_status: AgentStatus,
 }
 
@@ -131,6 +136,7 @@ pub struct ClientShellAgent {
     pub title: Option<String>,
     pub terminal_title: Option<String>,
     pub terminal_title_stripped: Option<String>,
+    #[serde(deserialize_with = "deserialize_agent_status")]
     pub agent_status: AgentStatus,
     pub state_change_seq: u64,
     pub state_labels: Vec<(String, String)>,
@@ -146,4 +152,49 @@ pub enum AgentStatus {
     Blocked,
     Done,
     Unknown,
+}
+
+/// Herdr adds agent states over time. A state this build does not know is
+/// `Unknown`, not a reason to reject the whole snapshot.
+fn deserialize_agent_status<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<AgentStatus, D::Error> {
+    if !deserializer.is_human_readable() {
+        return AgentStatus::deserialize(deserializer);
+    }
+    Ok(match String::deserialize(deserializer)?.as_str() {
+        "idle" => AgentStatus::Idle,
+        "working" => AgentStatus::Working,
+        "blocked" => AgentStatus::Blocked,
+        "done" => AgentStatus::Done,
+        _ => AgentStatus::Unknown,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(serde::Deserialize)]
+    struct Status {
+        #[serde(deserialize_with = "deserialize_agent_status")]
+        agent_status: AgentStatus,
+    }
+
+    #[test]
+    fn a_new_agent_state_from_a_newer_herdr_reads_as_unknown() {
+        let status: Status = serde_json::from_str(r#"{"agent_status":"reviewing"}"#).unwrap();
+        assert_eq!(status.agent_status, AgentStatus::Unknown);
+
+        let status: Status = serde_json::from_str(r#"{"agent_status":"working"}"#).unwrap();
+        assert_eq!(status.agent_status, AgentStatus::Working);
+    }
+
+    #[test]
+    fn an_action_this_build_does_not_know_keeps_the_snapshot() {
+        let action: ClientShellCommandAction = serde_json::from_str(r#""RevealPane""#).unwrap();
+        assert_eq!(action, ClientShellCommandAction::Unknown);
+        let action: ClientShellCommandAction = serde_json::from_str(r#""PluginAction""#).unwrap();
+        assert_eq!(action, ClientShellCommandAction::PluginAction);
+    }
 }

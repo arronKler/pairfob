@@ -16,8 +16,7 @@ use gpui::{point, px, Point};
 use gpui::{Bounds, Context, FocusHandle, Pixels, ScrollHandle, Window};
 
 use crate::app::{App, AppEvent, Connection, Notice};
-use crate::chat::ChatEvent;
-use crate::herdr::{Desktop, EngineHandle};
+use crate::herdr::{ConnectTarget, Desktop, EngineHandle};
 use crate::model::{PaneId, Size, SplitRect, TabId};
 use crate::terminal::Theme;
 
@@ -43,6 +42,8 @@ use super::theme::{Appearance, Chrome};
 /// old frames is safe because newer frames replace them.
 const MAILBOX_LIMIT: usize = 2048;
 const TICK_INTERVAL: Duration = Duration::from_millis(250);
+/// How long a notice stays on screen when nothing replaces it.
+const NOTICE_TTL: Duration = Duration::from_secs(10);
 
 /// A divider being dragged. The endpoint is told once, on release, so the
 /// layout command lane never queues a request per mouse sample.
@@ -51,6 +52,16 @@ pub(crate) struct SplitDrag {
     pub(crate) tab: TabId,
     pub(crate) split: SplitRect,
     pub(crate) ratio: f32,
+}
+
+/// A scrollbar thumb being dragged. The target moves with the pointer, and the
+/// endpoint hears about a new offset only when it changes.
+#[derive(Clone, Debug)]
+pub(crate) struct ScrollDrag {
+    pub(crate) bar: super::canvas_paint::ScrollBar,
+    /// Where inside the thumb the pointer grabbed it.
+    pub(crate) grab: f32,
+    pub(crate) sent: Option<u64>,
 }
 
 pub(crate) struct PairfobWindow {
@@ -70,6 +81,8 @@ pub(crate) struct PairfobWindow {
     pub(crate) filter: String,
     pub(crate) filter_active: bool,
     pub(crate) split_drag: Option<SplitDrag>,
+    /// The scrollbar thumb under the pointer, while it is held.
+    pub(crate) scroll_drag: Option<ScrollDrag>,
     /// The attached chat process, and the panes whose user opened its column.
     pub(crate) chat: Option<ChatSession>,
     pub(crate) chat_panes: HashSet<PaneId>,
@@ -77,7 +90,10 @@ pub(crate) struct PairfobWindow {
     pub(crate) chat_attempted: Option<(PaneId, String)>,
     /// The chat composer's text, including text the input method committed.
     pub(crate) composer: String,
-    pub(crate) chat_mailbox: Arc<Mutex<VecDeque<ChatEvent>>>,
+    /// Images pending for the next prompt. They live on the window rather than
+    /// the attachment, so a chat reconnect keeps them.
+    pub(crate) attachments: Vec<crate::chat::attach::PendingAttachment>,
+    pub(crate) attach_error: Option<String>,
     pub(crate) wake: async_channel::Sender<()>,
     pub(crate) cell: CellMetrics,
     /// Text size the user picked, in points; the cell is measured from it.
@@ -109,6 +125,12 @@ pub(crate) struct PairfobWindow {
     pub(crate) selection: Option<Selection>,
     /// The drag in flight; the selection is only written once it moves.
     pub(crate) drag: Option<Selection>,
+    /// The pane the close shortcut armed, and when. A second press on the
+    /// same pane inside four seconds closes it.
+    pub(crate) close_confirm: Option<(PaneId, Instant)>,
+    /// The notice currently on screen and when it appeared, so a stale one
+    /// leaves instead of staying until something else replaces it.
+    notice_seen: Option<(String, Instant)>,
     pub(crate) menu: Option<ContextMenu>,
     pub(crate) menu_hover: Option<MenuAction>,
     /// Sub-cell wheel motion carried to the next scroll event.
@@ -139,10 +161,14 @@ pub(crate) struct PairfobWindow {
 impl PairfobWindow {
     pub fn new(
         desktop: Desktop,
-        session: Option<String>,
+        target: ConnectTarget,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let session = match &target {
+            ConnectTarget::Session { name, .. } => Some(name.clone()),
+            _ => None,
+        };
         let Desktop { handle, events } = desktop;
         let mailbox = Arc::new(Mutex::new(VecDeque::new()));
         let (wake_tx, wake_rx) = async_channel::bounded::<()>(1);
@@ -175,12 +201,14 @@ impl PairfobWindow {
             filter: String::new(),
             filter_active: false,
             split_drag: None,
+            scroll_drag: None,
             chat: None,
             chat_panes: HashSet::new(),
             chat_error: None,
             chat_attempted: None,
             composer: String::new(),
-            chat_mailbox: Arc::new(Mutex::new(VecDeque::new())),
+            attachments: Vec::new(),
+            attach_error: None,
             wake: wake_tx,
             cell,
             font_size,
@@ -189,7 +217,7 @@ impl PairfobWindow {
             ops_cache: Rc::new(RefCell::new(crate::terminal::paint::OpsCache::default())),
             canvas_bounds: Rc::new(Cell::new(None)),
             resize_tx,
-            boot: Boot::start(session),
+            boot: Boot::start(target),
             updater,
             update_revision,
             pairing: None,
@@ -203,6 +231,8 @@ impl PairfobWindow {
             marked_selection: None,
             selection: None,
             drag: None,
+            close_confirm: None,
+            notice_seen: None,
             menu: None,
             menu_hover: None,
             wheel_remainder: 0.,
@@ -338,14 +368,7 @@ impl PairfobWindow {
             }
             changed = true;
         }
-        let chat_events: Vec<ChatEvent> = match self.chat_mailbox.lock() {
-            Ok(mut queue) => queue.drain(..).collect(),
-            Err(_) => Vec::new(),
-        };
-        for event in chat_events {
-            self.apply_chat_event(event);
-            changed = true;
-        }
+        changed |= self.apply_chat_events();
         self.sync_chat(cx);
         if self.boot.poll() {
             changed = true;
@@ -400,6 +423,21 @@ impl PairfobWindow {
 
         if let Some(sheet) = self.devices.as_mut() {
             changed |= sheet.poll(Instant::now());
+        }
+
+        if let Some(text) = self.app.notice.as_ref().map(|notice| notice.text.clone()) {
+            match &self.notice_seen {
+                Some((shown, at)) if shown == &text => {
+                    if at.elapsed() >= NOTICE_TTL {
+                        self.app.notice = None;
+                        self.notice_seen = None;
+                        changed = true;
+                    }
+                }
+                _ => self.notice_seen = Some((text, Instant::now())),
+            }
+        } else {
+            self.notice_seen = None;
         }
 
         if changed {
@@ -515,6 +553,7 @@ impl PairfobWindow {
 
     pub(crate) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_collapsed = !self.sidebar_collapsed;
+        self.save_geometry();
         cx.notify();
     }
 
@@ -648,7 +687,16 @@ impl PairfobWindow {
         cx.notify();
     }
 
+    pub(crate) fn restart_service(&mut self, cx: &mut Context<Self>) {
+        self.boot
+            .run_service(crate::process::ServiceAction::Restart);
+        cx.notify();
+    }
+
     pub(crate) fn retry(&mut self, cx: &mut Context<Self>) {
+        // The banner's Retry must also release an engine that stopped at a
+        // version or handshake refusal; `boot` only knows about the socket.
+        let _ = self.handle.reconnect();
         self.boot.retry();
         cx.notify();
     }

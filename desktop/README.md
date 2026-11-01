@@ -73,7 +73,8 @@ Right, Split Down, Zoom or Unzoom Pane, Close Pane, Rename Pane, Switch to Chat
 or TUI, Scroll to Bottom, and the text-size rows. The pane rows appear only when
 the daemon advertises the method, and the clipboard rows keep the usual Cmd+C,
 Cmd+A and Cmd+V shortcuts. A pane scrolled away from the bottom shows a slim
-scrollbar on its right edge.
+scrollbar on its right edge; dragging its thumb moves through the scrollback,
+and a click above or below the thumb jumps there.
 
 The title band drags the window, a double-click zooms or minimises it following
 the system's double-click setting, and the window resizes from its border.
@@ -89,6 +90,11 @@ the system's double-click setting, and the window resizes from its border.
 | `Cmd+Opt+Shift+arrow` | resize the focused pane toward that edge |
 | `Cmd+Shift+F` | filter the session list |
 | `Cmd+D` / `Cmd+Shift+D` | split right / down |
+| `Cmd+Shift+W` | close the focused pane, armed by a first press |
+
+On Linux the application modifier is Ctrl, the platform's own shortcut key;
+Super belongs to the window manager. Terminal control keys keep reaching the
+program unless the table names them.
 
 ### Find
 
@@ -145,8 +151,10 @@ exits. Nothing logs a pairing code, an offer URL, a QR payload, a key, or
 clipboard contents.
 
 The ⋯ button's Diagnostics drawer shows the build, the connection state, the
-last 40 log lines and the output of `pairfob doctor`. **Copy diagnostics**
-puts all of that on the clipboard as one block to paste into a bug report.
+last 40 log lines and the output of `pairfob doctor`. **Restart pairfob
+service** runs `pairfob service restart`, so a daemon that stopped can be
+brought back without leaving the window. **Copy diagnostics** puts all of that
+on the clipboard as one block to paste into a bug report.
 
 ## Devices
 

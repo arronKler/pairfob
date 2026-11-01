@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use gpui::prelude::*;
 use gpui::{
-    div, list, px, AnyElement, Context, ElementId, ExternalPaths, FontWeight, MouseButton,
-    MouseDownEvent, SharedString, Window,
+    canvas, div, list, px, AnyElement, Context, ElementId, ElementInputHandler, ExternalPaths,
+    FontWeight, MouseButton, MouseDownEvent, SharedString, Window,
 };
 
 use crate::chat::attach::PendingAttachment;
@@ -231,8 +231,13 @@ impl PairfobWindow {
             .children(plan_block(&state.plan, chrome))
             .children(queue_block(&state.queue, chrome, cx))
             .children(permission_block(state.permission.as_ref(), chrome, cx))
-            .children(chat_error_line(chat, &state.error, chrome))
-            .children(attachment_row(&chat.attachments, chrome, cx))
+            .children(chat_error_line(
+                chat,
+                self.attach_error.as_deref(),
+                &state.error,
+                chrome,
+            ))
+            .children(attachment_row(&self.attachments, chrome, cx))
             .child(self.composer(chat, chrome, cx));
 
         if let Some(menu) = chat.menu {
@@ -278,7 +283,7 @@ impl PairfobWindow {
             format!("{percent}% · ${:.2}", usage.cost_usd)
         });
         let auto = state.state.auto_accept;
-        let empty = text.is_none() && chat.attachments.is_empty();
+        let empty = text.is_none() && self.attachments.is_empty();
 
         let attach = if self.chat_target().is_some() {
             small_button(
@@ -410,6 +415,22 @@ impl PairfobWindow {
                 send
             });
 
+        // The chat column replaces the terminal canvas, so it must register
+        // its own input handler. Without one the platform has nowhere to send
+        // a committed character or a paste.
+        let entity = cx.entity();
+        let focus = self.focus.clone();
+        let input = canvas(
+            |_, _, _| (),
+            move |bounds, _, window, cx| {
+                window.handle_input(&focus, ElementInputHandler::new(bounds, entity.clone()), cx);
+            },
+        )
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full();
+
         div()
             .flex_none()
             .px(px(16.))
@@ -417,6 +438,7 @@ impl PairfobWindow {
             .pt(px(4.))
             .child(
                 div()
+                    .relative()
                     .flex()
                     .flex_col()
                     .rounded(px(layout::RADIUS_CARD))
@@ -426,7 +448,8 @@ impl PairfobWindow {
                     .px(px(6.))
                     .py(px(4.))
                     .child(field)
-                    .child(row),
+                    .child(row)
+                    .child(input),
             )
             .children((self.content_width() >= COMPACT_CHAT_WIDTH).then(|| {
                 div()
@@ -498,11 +521,16 @@ impl PairfobWindow {
     }
 }
 
-fn chat_error_line(chat: &ChatSession, adapter_error: &str, chrome: &Chrome) -> Option<AnyElement> {
+fn chat_error_line(
+    chat: &ChatSession,
+    attach_error: Option<&str>,
+    adapter_error: &str,
+    chrome: &Chrome,
+) -> Option<AnyElement> {
     let message = chat
         .error
         .as_deref()
-        .or(chat.attach_error.as_deref())
+        .or(attach_error)
         .or(Some(adapter_error))?;
     if message.trim().is_empty() {
         return None;

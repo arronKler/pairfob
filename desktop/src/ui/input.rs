@@ -5,8 +5,8 @@
 use std::ops::Range;
 
 use gpui::{
-    point, px, size, Bounds, ClipboardItem, Context, EntityInputHandler, KeyDownEvent, Pixels,
-    Point, UTF16Selection, Window,
+    point, px, size, Bounds, ClipboardEntry, ClipboardItem, Context, EntityInputHandler,
+    KeyDownEvent, Pixels, Point, UTF16Selection, Window,
 };
 
 use crate::app::input::{KeyCode, KeyInput, Modifiers as KeyModifiers};
@@ -89,6 +89,20 @@ impl PairfobWindow {
             return;
         }
 
+        if self.text_field_active() {
+            // A printable key belongs to the input method. `replace_text_in_range`
+            // is the only path that inserts text into a field, and stopping the
+            // key here keeps the platform from ever calling it.
+            if types_text(event) {
+                return;
+            }
+            if is_paste(key, modifiers) {
+                self.paste_text(_window, cx);
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         if self.filter_active {
             match key {
                 "escape" => {
@@ -106,7 +120,7 @@ impl PairfobWindow {
             return;
         }
 
-        if modifiers.platform {
+        if modifiers.secondary(cx) {
             let handled = match key {
                 "f" if modifiers.shift => {
                     self.start_filter(_window, cx);
@@ -185,7 +199,7 @@ impl PairfobWindow {
                     true
                 }
                 "w" if modifiers.shift => {
-                    self.close_focused_pane();
+                    self.confirm_close_focused_pane(cx);
                     self.focus_canvas(_window, cx);
                     true
                 }
@@ -259,6 +273,30 @@ impl PairfobWindow {
             );
             cx.stop_propagation();
         }
+    }
+
+    /// Whether a filter, search, rename or chat field has the keyboard.
+    pub(crate) fn text_field_active(&self) -> bool {
+        self.filter_active || self.find.is_some() || self.rename.is_some() || self.chat_visible()
+    }
+
+    /// Paste into the active text field. A screenshot on the clipboard belongs
+    /// to the chat; everything else goes through the same input handler path
+    /// the platform uses, so IME commit and paste share one insert.
+    fn paste_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(item) = cx.read_from_clipboard() else {
+            return;
+        };
+        if self.chat_visible() {
+            if let Some(image) = item.entries.iter().find_map(|entry| match entry {
+                ClipboardEntry::Image(image) => Some(image),
+                _ => None,
+            }) {
+                self.chat_attach_image(image, cx);
+                return;
+            }
+        }
+        EntityInputHandler::paste(self, item, window, cx);
     }
 
     pub(crate) fn send_input(&mut self, input: KeyInput, cx: &mut Context<Self>) {
@@ -428,6 +466,19 @@ impl EntityInputHandler for PairfobWindow {
     }
 }
 
+/// A key that types a character without an application modifier. Shift and
+/// Alt are allowed, because they shape the character rather than bind it.
+pub(super) fn types_text(event: &KeyDownEvent) -> bool {
+    let keystroke = &event.keystroke;
+    keystroke
+        .key_char
+        .as_ref()
+        .is_some_and(|text| !text.is_empty() && text.chars().all(|ch| !ch.is_control()))
+        && !keystroke.modifiers.control
+        && !keystroke.modifiers.platform
+        && !keystroke.modifiers.function
+}
+
 fn is_paste(key: &str, modifiers: gpui::Modifiers) -> bool {
     key == "v" && (modifiers.platform || modifiers.control)
 }
@@ -556,6 +607,50 @@ mod tests {
         assert!(is_select_all("a", mods(true, false, true, false)));
         assert!(!is_select_all("a", mods(true, false, false, false)));
         assert!(!is_copy("v", mods(false, false, false, true)));
+    }
+
+    fn key_event(key: &str, key_char: Option<&str>, modifiers: gpui::Modifiers) -> KeyDownEvent {
+        KeyDownEvent {
+            keystroke: gpui::Keystroke {
+                modifiers,
+                key: key.to_owned(),
+                key_char: key_char.map(str::to_owned),
+            },
+            is_held: false,
+            prefer_character_input: false,
+        }
+    }
+
+    #[test]
+    fn printable_keys_belong_to_the_text_field_not_the_shortcut_table() {
+        let none = mods(false, false, false, false);
+        assert!(types_text(&key_event("a", Some("a"), none)));
+        assert!(types_text(&key_event(
+            "a",
+            Some("A"),
+            mods(false, false, true, false)
+        )));
+        assert!(types_text(&key_event(
+            "s",
+            Some("ß"),
+            mods(false, true, false, false)
+        )));
+        assert!(types_text(&key_event("space", Some(" "), none)));
+        assert!(
+            !types_text(&key_event("a", None, none)),
+            "dead keys are not text"
+        );
+        assert!(!types_text(&key_event("enter", Some("\r"), none)));
+        assert!(!types_text(&key_event(
+            "a",
+            Some("a"),
+            mods(true, false, false, false)
+        )));
+        assert!(!types_text(&key_event(
+            "a",
+            Some("a"),
+            mods(false, false, false, true)
+        )));
     }
 
     #[test]

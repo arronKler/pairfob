@@ -36,7 +36,33 @@ impl super::window::PairfobWindow {
         let Some(pane) = self.app.focused_pane() else {
             return;
         };
+        self.close_confirm = None;
         let _ = self.handle.close_pane(pane);
+    }
+
+    /// The close shortcut arms first. Closing a pane ends the program in it,
+    /// so one keystroke must not do it by accident.
+    pub(crate) fn confirm_close_focused_pane(&mut self, cx: &mut Context<Self>) {
+        let Some(pane) = self.app.focused_pane() else {
+            return;
+        };
+        let armed = self.close_confirm.as_ref().is_some_and(|(armed, at)| {
+            armed == &pane && at.elapsed() < std::time::Duration::from_secs(4)
+        });
+        if armed {
+            self.close_confirm = None;
+            let _ = self.handle.close_pane(pane);
+        } else {
+            self.close_confirm = Some((pane.clone(), std::time::Instant::now()));
+            self.notify(
+                Notice::warning(format!(
+                    "Press the close shortcut again to close {}.",
+                    pane.as_str()
+                )),
+                cx,
+            );
+        }
+        cx.notify();
     }
 
     /// ⌘+ / ⌘− step the text size; the cell is measured again from the new
@@ -98,14 +124,21 @@ impl super::window::PairfobWindow {
             None => crate::herdr::ConnectTarget::Local,
         };
         self.handle.shutdown();
+        // A fresh mailbox keeps the old engine's last events from landing in
+        // the new session's app state.
+        self.mailbox = Arc::new(std::sync::Mutex::new(std::collections::VecDeque::new()));
         self.app = App::default();
         self.chat = None;
         self.chat_panes.clear();
         self.chat_error = None;
         self.chat_attempted = None;
         self.composer.clear();
+        self.attachments.clear();
+        self.attach_error = None;
         self.selection = None;
         self.drag = None;
+        self.scroll_drag = None;
+        self.wheel_slide = None;
         self.menu = None;
         self.find = None;
         self.rename = None;

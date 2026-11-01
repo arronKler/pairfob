@@ -44,6 +44,7 @@ fn await_session(
             Ok(ClientEvent::Surface(value)) => surface = Some(*value),
             // A patch only lands after the full surface this test waits for.
             Ok(ClientEvent::Patch(_)) => {}
+            Ok(ClientEvent::Error(message)) => panic!("server error before a frame: {message}"),
             Ok(ClientEvent::Disconnected(reason)) => panic!("disconnected: {reason}"),
             Ok(ClientEvent::Response {
                 method, response, ..

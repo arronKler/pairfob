@@ -11,6 +11,7 @@ mod scroll;
 pub mod search;
 mod selfcheck;
 mod surface_patch;
+mod target;
 pub mod wire;
 
 pub use connect::{

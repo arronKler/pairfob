@@ -6,7 +6,8 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sha2::{Digest, Sha256};
 
@@ -17,6 +18,7 @@ use super::VERSION;
 const MANIFEST_LIMIT: u64 = 1 << 20;
 const MANIFEST_TIMEOUT_SECONDS: u64 = 20;
 const ARTIFACT_TIMEOUT_SECONDS: u64 = 300;
+const VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Updated {
@@ -111,6 +113,9 @@ pub fn install_with_current(
         .ok_or_else(|| format!("no desktop build is published for {target}"))?;
     let name = format!("pairfob-desktop-{target}");
     let url = format!("{base}/{name}");
+    // Two windows that both replace the executable can roll one install back
+    // over the other, so the second refuses until the first lets go.
+    let _lock = InstallLock::take(dest)?;
     let temporary = temporary_path(dest);
     let result = download_and_replace(&url, file, &manifest.version, &temporary, dest);
     if result.is_err() {
@@ -150,11 +155,10 @@ fn download_and_replace(
     if let Err(error) = verify_version(dest, version) {
         let backup = backup_path(dest);
         let _ = fs::remove_file(dest);
-        if backup.exists() {
-            restore(&backup, dest);
-            return Err(format!("{error}; the previous build was restored"));
-        }
-        return Err(error);
+        return match restore_note(&backup, dest) {
+            Some(note) => Err(format!("{error}{note}")),
+            None => Err(error),
+        };
     }
     Ok(())
 }
@@ -173,13 +177,66 @@ fn replace(temporary: &Path, dest: &Path) -> Result<(), String> {
         })?;
     }
     if let Err(error) = fs::rename(temporary, dest) {
-        restore(&backup, dest);
+        let note = restore_note(&backup, dest).unwrap_or_default();
         return Err(format!(
-            "could not install the new build at {}: {error}",
+            "could not install the new build at {}: {error}{note}",
             dest.display()
         ));
     }
     Ok(())
+}
+
+/// One install at a time across processes. The lock is a file beside the
+/// executable; a lock whose owner is gone is cleared, because that install
+/// died without finishing and its replacement never happened.
+struct InstallLock {
+    path: PathBuf,
+}
+
+impl InstallLock {
+    fn take(dest: &Path) -> Result<Self, String> {
+        let name = dest
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("pairfob-desktop");
+        let path = dest.with_file_name(format!(".{name}.update-lock"));
+        for _ in 0..2 {
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(mut file) => {
+                    let _ = std::io::Write::write_all(
+                        &mut file,
+                        std::process::id().to_string().as_bytes(),
+                    );
+                    return Ok(Self { path });
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let owner = fs::read_to_string(&path)
+                        .ok()
+                        .and_then(|text| text.trim().parse::<i32>().ok());
+                    if owner.is_some_and(owner_alive) {
+                        return Err("another Pairfob is installing this update".into());
+                    }
+                    let _ = fs::remove_file(&path);
+                }
+                Err(error) => return Err(format!("could not take the update lock: {error}")),
+            }
+        }
+        Err("another Pairfob is installing this update".into())
+    }
+}
+
+impl Drop for InstallLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn owner_alive(pid: i32) -> bool {
+    pid > 0 && unsafe { libc::kill(pid, 0) } == 0
 }
 
 fn backup_path(dest: &Path) -> PathBuf {
@@ -190,24 +247,79 @@ fn backup_path(dest: &Path) -> PathBuf {
     dest.with_file_name(format!(".{name}.update-backup"))
 }
 
-fn restore(backup: &Path, dest: &Path) {
-    if backup.exists() {
-        let _ = fs::rename(backup, dest);
+fn restore(backup: &Path, dest: &Path) -> bool {
+    backup.exists() && fs::rename(backup, dest).is_ok()
+}
+
+/// What a failed install says about the previous build. `None` means there was
+/// no previous build to restore.
+fn restore_note(backup: &Path, dest: &Path) -> Option<String> {
+    if !backup.exists() {
+        return None;
     }
+    Some(if restore(backup, dest) {
+        "; the previous build was restored".to_owned()
+    } else {
+        format!(
+            "; the previous build could not be restored, and remains at {}",
+            backup.display()
+        )
+    })
 }
 
 fn verify_version(dest: &Path, want: &str) -> Result<(), String> {
-    let output = Command::new(dest)
+    let mut child = Command::new(dest)
         .arg("--version")
         .stdin(Stdio::null())
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|error| format!("the new build did not run: {error}"))?;
-    let text = String::from_utf8_lossy(&output.stdout);
+    let stdout = child.stdout.take().map(read_in_background);
+    let stderr = child.stderr.take().map(read_in_background);
+    let deadline = Instant::now() + VERIFY_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("could not check the new build: {error}"));
+            }
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!(
+                "the new build did not answer --version in time ({} seconds)",
+                VERIFY_TIMEOUT.as_secs()
+            ));
+        }
+        thread::sleep(Duration::from_millis(25));
+    };
+    let stdout = join_output(stdout);
+    let _ = join_output(stderr);
+    let text = String::from_utf8_lossy(&stdout);
     let got = text.split_whitespace().last().unwrap_or("");
-    if output.status.success() && Version::parse(got) == Version::parse(want) {
+    if status.success() && Version::parse(got) == Version::parse(want) {
         return Ok(());
     }
     Err(format!("the new build reported {got:?}, expected {want}"))
+}
+
+fn read_in_background(mut pipe: impl Read + Send + 'static) -> thread::JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = pipe.read_to_end(&mut bytes);
+        bytes
+    })
+}
+
+fn join_output(output: Option<thread::JoinHandle<Vec<u8>>>) -> Vec<u8> {
+    output
+        .and_then(|handle| handle.join().ok())
+        .unwrap_or_default()
 }
 
 pub fn relaunch(dest: &Path) -> Result<(), String> {
@@ -308,4 +420,31 @@ fn set_executable(path: &Path) -> Result<(), String> {
 #[cfg(not(unix))]
 fn set_executable(_path: &Path) -> Result<(), String> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_second_install_waits_for_the_first_and_a_dead_owner_is_cleared() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("pairfob-desktop");
+
+        let first = InstallLock::take(&dest).expect("the first install takes the lock");
+        assert!(
+            InstallLock::take(&dest).is_err(),
+            "a live owner keeps the second install out"
+        );
+        drop(first);
+        let second = InstallLock::take(&dest).expect("the released lock is free");
+        drop(second);
+
+        let lock = dest.with_file_name(".pairfob-desktop.update-lock");
+        fs::write(&lock, i32::MAX.to_string()).unwrap();
+        assert!(!owner_alive(i32::MAX), "the probe pid is not running");
+        let stale = InstallLock::take(&dest).expect("a dead owner's lock is cleared");
+        drop(stale);
+        assert!(!lock.exists(), "the lock is removed when it is released");
+    }
 }

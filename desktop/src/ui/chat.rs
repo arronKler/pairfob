@@ -31,18 +31,16 @@ pub(crate) struct ChatSession {
     pub(crate) handle: ChatHandle,
     pub(crate) connected: bool,
     pub(crate) error: Option<String>,
-    /// Images picked, dropped or pasted for the next prompt. They leave this
-    /// list only when the chat accepts the prompt.
-    pub(crate) attachments: Vec<PendingAttachment>,
-    /// A local refusal from an attachment, kept apart from the socket's own
-    /// error so the next good pick clears it.
-    pub(crate) attach_error: Option<String>,
     /// Set when the view fell behind the transcript and needs a new snapshot.
     pub(crate) resync: bool,
     pub(crate) menu: Option<ChatMenu>,
     pub(crate) list: ListState,
     pub(crate) list_count: usize,
     pub(crate) measured_revision: u64,
+    /// This attachment's event queue. A reconnect builds a new session with a
+    /// new queue, so an event from the old socket can never land in the new
+    /// transcript.
+    pub(crate) inbox: Arc<Mutex<std::collections::VecDeque<ChatEvent>>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,7 +55,12 @@ pub(crate) struct ChatMenu {
 }
 
 impl ChatSession {
-    fn new(pane: PaneId, id: String, handle: ChatHandle) -> Self {
+    fn new(
+        pane: PaneId,
+        id: String,
+        handle: ChatHandle,
+        inbox: Arc<Mutex<std::collections::VecDeque<ChatEvent>>>,
+    ) -> Self {
         let list = ListState::new(0, ListAlignment::Top, px(600.));
         Self {
             pane,
@@ -66,13 +69,12 @@ impl ChatSession {
             handle,
             connected: false,
             error: None,
-            attachments: Vec::new(),
-            attach_error: None,
             resync: false,
             menu: None,
             list,
             list_count: 0,
             measured_revision: 0,
+            inbox,
         }
     }
 }
@@ -146,12 +148,14 @@ impl PairfobWindow {
         self.chat_attempted = Some((pane.clone(), id.to_owned()));
         match chat::attach(id, None) {
             Ok(connection) => {
-                spawn_chat_pump(
-                    connection.events,
-                    Arc::clone(&self.chat_mailbox),
-                    self.wake.clone(),
-                );
-                self.chat = Some(ChatSession::new(pane, id.to_owned(), connection.handle));
+                let inbox = Arc::new(Mutex::new(std::collections::VecDeque::new()));
+                spawn_chat_pump(connection.events, Arc::clone(&inbox), self.wake.clone());
+                self.chat = Some(ChatSession::new(
+                    pane,
+                    id.to_owned(),
+                    connection.handle,
+                    inbox,
+                ));
                 self.chat_error = None;
             }
             Err(error) => {
@@ -169,42 +173,23 @@ impl PairfobWindow {
         self.focus_canvas(window, cx);
     }
 
-    pub(crate) fn apply_chat_event(&mut self, event: ChatEvent) {
+    /// Drain this attachment's queue. The queue belongs to the session, so a
+    /// late event from an earlier socket is never applied here.
+    pub(crate) fn apply_chat_events(&mut self) -> bool {
         let Some(chat) = self.chat.as_mut() else {
-            return;
+            return false;
         };
-        match event {
-            ChatEvent::Welcome { .. } => {
-                chat.connected = true;
-            }
-            ChatEvent::Snapshot { epoch, seq, state } => {
-                chat.state.borrow_mut().apply_snapshot(&epoch, seq, *state);
-                chat.connected = true;
-                chat.error = None;
-                chat.resync = false;
-            }
-            ChatEvent::Changes { epoch, changes } => {
-                for change in &changes {
-                    if let Err(error) = chat.state.borrow_mut().apply_change(&epoch, change) {
-                        chat.error = Some(error.to_string());
-                        chat.resync = true;
-                        break;
-                    }
-                }
-            }
-            ChatEvent::Result { ok, error, .. } => {
-                if !ok {
-                    chat.error = Some(match error {
-                        Some(error) => format!("{}: {}", error.code, error.message),
-                        None => "the command failed".to_owned(),
-                    });
-                }
-            }
-            ChatEvent::Closed(reason) => {
-                chat.connected = false;
-                chat.error = Some(reason);
-            }
+        let events: Vec<ChatEvent> = match chat.inbox.lock() {
+            Ok(mut queue) => queue.drain(..).collect(),
+            Err(_) => Vec::new(),
+        };
+        if events.is_empty() {
+            return false;
         }
+        for event in events {
+            apply_chat_event(chat, event);
+        }
+        true
     }
 
     pub(crate) fn send_chat(&mut self, cx: &mut Context<Self>) {
@@ -216,11 +201,20 @@ impl PairfobWindow {
             }
             return;
         };
-        if text.trim().is_empty() && chat.attachments.is_empty() {
+        if text.trim().is_empty() && self.attachments.is_empty() {
             return;
         }
-        if !crate::chat::attach::fits_frame(&text, &chat.attachments) {
-            chat.attach_error = Some(
+        if !chat.connected {
+            // A closed socket keeps its writer channel open, so a queued
+            // prompt looks accepted and is then dropped. Keep the text and
+            // let the next attach take it.
+            chat.error = Some("chat is not connected; the message was kept".into());
+            self.composer = text;
+            cx.notify();
+            return;
+        }
+        if !crate::chat::attach::fits_frame(&text, &self.attachments) {
+            self.attach_error = Some(
                 "These attachments do not fit one chat frame (4 MiB); remove one and try again."
                     .into(),
             );
@@ -228,7 +222,7 @@ impl PairfobWindow {
             cx.notify();
             return;
         }
-        let attachments = chat
+        let attachments = self
             .attachments
             .iter()
             .map(PendingAttachment::to_wire)
@@ -239,8 +233,8 @@ impl PairfobWindow {
             cx.notify();
             return;
         }
-        chat.attachments.clear();
-        chat.attach_error = None;
+        self.attachments.clear();
+        self.attach_error = None;
         cx.notify();
     }
 
@@ -345,6 +339,44 @@ impl PairfobWindow {
             if at_end {
                 chat.list.scroll_to_end();
             }
+        }
+    }
+}
+
+fn apply_chat_event(chat: &mut ChatSession, event: ChatEvent) {
+    match event {
+        ChatEvent::Welcome { .. } => {
+            chat.connected = true;
+        }
+        ChatEvent::Snapshot { epoch, seq, state } => {
+            chat.state.borrow_mut().apply_snapshot(&epoch, seq, *state);
+            chat.connected = true;
+            chat.error = None;
+            chat.resync = false;
+        }
+        ChatEvent::Changes { epoch, changes } => {
+            for change in &changes {
+                if let Err(error) = chat.state.borrow_mut().apply_change(&epoch, change) {
+                    chat.error = Some(error.to_string());
+                    chat.resync = true;
+                    break;
+                }
+            }
+        }
+        ChatEvent::Result { ok, error, .. } => {
+            if !ok {
+                chat.error = Some(match error {
+                    Some(error) => format!("{}: {}", error.code, error.message),
+                    None => "the command failed".to_owned(),
+                });
+            }
+        }
+        ChatEvent::Closed(reason) => {
+            chat.connected = false;
+            chat.error = Some(reason);
+            // The next tick attaches again. If the process is gone the attach
+            // reports one error and the placeholder offers Try again.
+            chat.resync = true;
         }
     }
 }

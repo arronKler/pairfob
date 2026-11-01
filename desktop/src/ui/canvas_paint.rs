@@ -24,6 +24,8 @@ const SCROLLBAR_INSET: f32 = 3.;
 /// The track keeps this much clearance inside the pane's top and bottom.
 const SCROLLBAR_MARGIN: f32 = 6.;
 const SCROLLBAR_MIN_THUMB: f32 = 24.;
+/// The painted thumb is 3px wide; the pointer may land this far either side.
+const GRAB_MARGIN: f32 = 5.;
 
 /// Paints the frame inside one layer and hands back the cursor op, which the
 /// caller draws after the layer so it lands on top of the text it covers.
@@ -156,6 +158,51 @@ pub(crate) fn preview(
     }
 }
 
+/// One pane's scrollbar in window pixels. The paint pass and the hit test read
+/// the same numbers, so a drag starts on the thumb the screen shows.
+#[derive(Clone, Debug)]
+pub(crate) struct ScrollBar {
+    pub(crate) pane: PaneRect,
+    pub(crate) thumb: Bounds<Pixels>,
+    pub(crate) track_top: f32,
+    pub(crate) track_height: f32,
+    pub(crate) max_offset: u64,
+}
+
+impl ScrollBar {
+    /// The offset (rows from the bottom) whose thumb centre sits under `y`,
+    /// given the pointer's grab offset inside the thumb.
+    pub(crate) fn offset_at(&self, y: f32, grab: f32) -> u64 {
+        let travel = self.track_height - f32::from(self.thumb.size.height);
+        if travel <= 0. {
+            return self.max_offset;
+        }
+        let ratio = ((y - self.track_top - grab) / travel).clamp(0., 1.);
+        ((1. - ratio) * self.max_offset as f32).round() as u64
+    }
+}
+
+/// Whether `position` is on the scrollbar's grab band, which is wider than the
+/// painted thumb because a 3px target is a mouse target, not a finger one.
+pub(crate) fn scrollbar_at(
+    panes: &[PaneRect],
+    bounds: Bounds<Pixels>,
+    cell: &CellMetrics,
+    position: gpui::Point<Pixels>,
+) -> Option<ScrollBar> {
+    panes
+        .iter()
+        .filter_map(|pane| scroll_bar(pane, bounds, cell))
+        .find(|bar| {
+            let x = f32::from(position.x);
+            let y = f32::from(position.y);
+            x >= f32::from(bar.thumb.origin.x) - GRAB_MARGIN
+                && x <= f32::from(bar.thumb.origin.x) + SCROLLBAR_WIDTH + GRAB_MARGIN
+                && y >= bar.track_top
+                && y <= bar.track_top + bar.track_height
+        })
+}
+
 /// A macOS-style overlay thumb for every pane scrolled away from the bottom.
 pub(crate) fn scrollbars(
     frame: &Frame,
@@ -165,18 +212,13 @@ pub(crate) fn scrollbars(
     window: &mut Window,
 ) {
     for pane in &frame.panes {
-        let Some(rect) = scrollbar_rect(pane, bounds, cell) else {
-            continue;
-        };
-        window.paint_quad(fill(rect, tone(color)));
+        if let Some(bar) = scroll_bar(pane, bounds, cell) {
+            window.paint_quad(fill(bar.thumb, tone(color)));
+        }
     }
 }
 
-fn scrollbar_rect(
-    pane: &PaneRect,
-    bounds: Bounds<Pixels>,
-    cell: &CellMetrics,
-) -> Option<Bounds<Pixels>> {
+fn scroll_bar(pane: &PaneRect, bounds: Bounds<Pixels>, cell: &CellMetrics) -> Option<ScrollBar> {
     let scroll = pane.scroll?;
     if scroll.offset_from_bottom == 0
         || scroll.max_offset_from_bottom == 0
@@ -197,10 +239,16 @@ fn scrollbar_rect(
         .max(SCROLLBAR_MIN_THUMB)
         .min(track_height);
     let top = pane_top + SCROLLBAR_MARGIN + (track_height - thumb_height) * (1. - offset / max);
-    Some(Bounds::new(
-        point(px(pane_right - SCROLLBAR_INSET - SCROLLBAR_WIDTH), px(top)),
-        size(px(SCROLLBAR_WIDTH), px(thumb_height)),
-    ))
+    Some(ScrollBar {
+        pane: pane.clone(),
+        thumb: Bounds::new(
+            point(px(pane_right - SCROLLBAR_INSET - SCROLLBAR_WIDTH), px(top)),
+            size(px(SCROLLBAR_WIDTH), px(thumb_height)),
+        ),
+        track_top: pane_top + SCROLLBAR_MARGIN,
+        track_height,
+        max_offset: scroll.max_offset_from_bottom,
+    })
 }
 
 fn cell_rect(
@@ -334,20 +382,18 @@ mod tests {
             viewport_rows: 10,
         };
         assert_eq!(
-            scrollbar_rect(&pane(mid), bounds, &cell()),
+            scroll_bar(&pane(mid), bounds, &cell()).map(|bar| bar.thumb),
             Some(Bounds::new(point(px(794.), px(53.)), size(px(3.), px(94.))))
         );
-        assert_eq!(
-            scrollbar_rect(
-                &pane(Scroll {
-                    offset_from_bottom: 0,
-                    ..mid
-                }),
-                bounds,
-                &cell()
-            ),
-            None
-        );
+        assert!(scroll_bar(
+            &pane(Scroll {
+                offset_from_bottom: 0,
+                ..mid
+            }),
+            bounds,
+            &cell()
+        )
+        .is_none());
     }
 
     #[test]
@@ -358,8 +404,45 @@ mod tests {
             max_offset_from_bottom: 1_000,
             viewport_rows: 1,
         };
-        let rect = scrollbar_rect(&pane(long), bounds, &cell()).expect("scrolled");
-        assert_eq!(f32::from(rect.size.height), 24.);
-        assert_eq!(f32::from(rect.origin.y), 6.);
+        let bar = scroll_bar(&pane(long), bounds, &cell()).expect("scrolled");
+        assert_eq!(f32::from(bar.thumb.size.height), 24.);
+        assert_eq!(f32::from(bar.thumb.origin.y), 6.);
+    }
+
+    #[test]
+    fn dragging_the_thumb_reaches_both_ends_of_the_scrollback() {
+        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(800.), px(200.)));
+        let bar = scroll_bar(
+            &pane(Scroll {
+                offset_from_bottom: 5,
+                max_offset_from_bottom: 10,
+                viewport_rows: 10,
+            }),
+            bounds,
+            &cell(),
+        )
+        .expect("scrolled");
+        let grab = f32::from(bar.thumb.size.height) / 2.;
+
+        assert_eq!(bar.offset_at(bar.track_top, grab), 10);
+        assert_eq!(bar.offset_at(bar.track_top + bar.track_height, grab), 0);
+        let middle = bar.track_top + bar.track_height / 2.;
+        assert_eq!(bar.offset_at(middle, grab), 5);
+    }
+
+    #[test]
+    fn the_grab_band_reaches_past_the_painted_thumb_but_not_the_pane() {
+        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(800.), px(200.)));
+        let held = vec![pane(Scroll {
+            offset_from_bottom: 5,
+            max_offset_from_bottom: 10,
+            viewport_rows: 10,
+        })];
+        let on_band = point(px(795.), px(100.));
+        assert!(scrollbar_at(&held, bounds, &cell(), on_band).is_some());
+        let far_left = point(px(760.), px(100.));
+        assert!(scrollbar_at(&held, bounds, &cell(), far_left).is_none());
+        let above_track = point(px(795.), px(2.));
+        assert!(scrollbar_at(&held, bounds, &cell(), above_track).is_none());
     }
 }
