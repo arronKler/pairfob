@@ -1,15 +1,16 @@
+import { nativeNotify, type NativeNotifyBridge } from "./native-notify";
 import { isNativeRuntime } from "./runtime-config";
 
 /**
  * How notifications reach this build. Web Push is the existing path; a native
- * shell must register a device push channel instead, globally FCM and per OEM
- * in mainland China. The scaffold declares the shape but wires no channel yet.
+ * shell raises local notifications through its bridge, and a device push
+ * channel (FCM, per OEM in mainland China) could join it later.
  */
-export type PushChannel = "web" | "fcm" | "hms" | "mipush" | "oppo" | "vivo" | "honor" | "aggregator";
+export type PushChannel = "web" | "local" | "fcm" | "hms" | "mipush" | "oppo" | "vivo" | "honor" | "aggregator";
 
 export type NativePlatform = {
   kind: "android" | "ios";
-  /** Empty until the native push phase registers a channel. */
+  /** Empty when the shell exposes no notification bridge. */
   pushChannels: PushChannel[];
 };
 
@@ -19,14 +20,17 @@ function nativeKind(): NativePlatform["kind"] {
 }
 
 /** The native shell's platform facts, or null in the hosted web build. */
-export function nativePlatform(): NativePlatform | null {
-  if (!isNativeRuntime()) return null;
-  return { kind: nativeKind(), pushChannels: [] };
+export function nativePlatform(
+  native = isNativeRuntime(),
+  notify: Pick<NativeNotifyBridge, "post"> | null = nativeNotify(),
+): NativePlatform | null {
+  if (!native) return null;
+  return { kind: nativeKind(), pushChannels: notify ? ["local"] : [] };
 }
 
 /**
- * Whether this build has a native push path to call. A future FCM/OEM
- * implementation fills `pushChannels`; until then the settings UI stays off
+ * Whether this build has a native notification path to call. The local bridge
+ * is the one channel today; a shell without it keeps the Settings row off
  * instead of pretending Web Push works inside a WebView.
  */
 export function nativePushAvailable(platform: NativePlatform | null = nativePlatform()): boolean {

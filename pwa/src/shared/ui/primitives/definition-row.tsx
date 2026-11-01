@@ -53,7 +53,7 @@ export function SetNavItem({ leading, value, valueTone, onClick, ariaLabel, disa
 
 /** A compact trailing action inside an item (开启 / 解除 / 导出 / 连接). */
 export function SetAction({ tone = "plain", className = "", ...props }: Omit<Parameters<typeof Button>[0], "className"> & {
-  tone?: "plain" | "fill" | "danger"; className?: string;
+  tone?: "plain" | "fill" | "danger" | "ok"; className?: string;
 }) {
   return <Button {...props} className={`set-action${tone === "plain" ? "" : ` is-${tone}`}${className ? ` ${className}` : ""}`} />;
 }

@@ -6,7 +6,7 @@ import { usePreferences } from "../../features/settings/hooks";
 import { computerTitle } from "../../lib/computer-catalog";
 import { t } from "../../lib/i18n";
 import { leaveSettings } from "../../features/settings/actions";
-import { supportsWebPush } from "../../lib/platform";
+import { nativePushAvailable, supportsWebPush } from "../../lib/platform";
 import { isNativeRuntime } from "../../lib/runtime-config";
 import { useLang } from "../../features/settings/language";
 import { setSettingsSection, settingsSection, subscribeSettingsSection } from "../../features/settings/settings-section";
@@ -86,14 +86,16 @@ export function SettingsContent({ withBack }: { withBack: boolean }) {
           defaultTermMode: preferences.defaultTermMode,
           defaultComposeLive: preferences.defaultComposeLive,
           composeEnterSends: preferences.composeEnterSends,
-          notification: isNativeRuntime() ? null : {
-            loading: runtime.settingsLoading,
-            connected,
-            supported: supportsWebPush(),
-            pushEnabled: runtime.pushEnabled,
-            pushSubscribed: runtime.pushSubscribed,
-            error: runtime.pushConfigError,
-          },
+          notification: nativePushAvailable() ? { channel: "native" }
+            : isNativeRuntime() ? null : {
+              channel: "web",
+              loading: runtime.settingsLoading,
+              connected,
+              supported: supportsWebPush(),
+              pushEnabled: runtime.pushEnabled,
+              pushSubscribed: runtime.pushSubscribed,
+              error: runtime.pushConfigError,
+            },
           desk: withBack,
         }} />
       )}

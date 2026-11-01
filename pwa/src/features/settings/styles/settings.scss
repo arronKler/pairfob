@@ -210,8 +210,19 @@
 .notification-item .set-item-sub,
 .set-radio .set-item-sub { text-wrap: balance; }
 
+.notification-keepalive {
+  display: grid;
+  gap: 6px;
+  padding: 2px var(--set-pad) 14px;
+  color: var(--muted);
+  font-size: var(--text-secondary);
+  line-height: 1.55;
+  text-wrap: balance;
+}
+
 .set-item-sub.is-error,
 .set-item.is-error .set-item-label { color: var(--error); }
+.set-item-sub.is-warn { color: var(--warn); }
 
 .set-item.is-quiet .set-item-label,
 .set-item.is-error .set-item-label { font-size: var(--text-body); }
@@ -321,6 +332,8 @@
 .set-action.is-fill::before { background: var(--accent); }
 .set-action.is-danger { color: var(--danger-bright); }
 .set-action.is-danger::before { background: rgba(255, 107, 94, 0.12); }
+.set-action.is-ok { color: var(--ok); }
+.set-action.is-ok::before { background: rgba(70, 214, 140, 0.12); }
 .set-action:disabled { color: var(--muted); opacity: 0.55; }
 .set-action:disabled::before { background: var(--surface-2); }
 .set-action:active:not(:disabled)::before { filter: brightness(1.2); }

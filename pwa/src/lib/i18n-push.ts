@@ -5,6 +5,15 @@ export const zhPush = {
   "push.later": "稍后",
   "push.inviteFailed": "通知尚未开启。请查看提示，或稍后到设置中重试。",
   "push.otherComputer": "这个浏览器无法再为这台电脑单独开启通知，另一台电脑的通知不受影响。请使用另一个浏览器配置文件为这台电脑开启通知。",
+  "notify.localNeedsYou": "Pairfob · 需要你处理",
+  "notify.localDone": "Pairfob · 本轮结束",
+  "notify.localAgent": "Agent",
+  "notify.androidDenied": "Android 已拒绝 Pairfob 的通知权限。请到系统设置中允许通知，再回到这里开启。",
+  "notify.androidDeniedState": "已拒绝",
+  "notify.keepAlive": "开启后，Pairfob 会保留一条安静的“已连接”通知，任务完成或需要你处理时才能通知到你。",
+  "notify.keepAliveOff": "点按「已开启」即可关闭通知，这条常驻通知也会一并消失。",
+  "notify.disableAria": "关闭通知",
+  "notify.enableFailed": "通知没有开启，请稍后再试。",
 } as const;
 
 export const enPush: { [K in keyof typeof zhPush]: string } = {
@@ -14,4 +23,13 @@ export const enPush: { [K in keyof typeof zhPush]: string } = {
   "push.later": "Later",
   "push.inviteFailed": "Notifications are not on yet. Check the message, or try again in Settings later.",
   "push.otherComputer": "This browser could not add notifications from this computer; notifications from your other computer are unaffected. Use another browser profile to enable notifications from this one.",
+  "notify.localNeedsYou": "Pairfob · Needs you",
+  "notify.localDone": "Pairfob · Turn finished",
+  "notify.localAgent": "Agent",
+  "notify.androidDenied": "Android has blocked notifications for Pairfob. Allow them in system settings, then turn them on here.",
+  "notify.androidDeniedState": "Blocked",
+  "notify.keepAlive": "While this is on, Pairfob keeps a quiet “connected” notification so notices can reach you when a task finishes or needs you.",
+  "notify.keepAliveOff": "Tap “On” to turn notifications off; the ongoing notification goes away with them.",
+  "notify.disableAria": "Turn off notifications",
+  "notify.enableFailed": "Notifications did not turn on. Try again in a moment.",
 };
