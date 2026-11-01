@@ -58,12 +58,17 @@ version. A fix ships with a higher version code; do not try to downgrade.
 - Open files and changes, attach a small non-sensitive file in a test session,
   and check the result on the computer.
 - Rotate the device and try a hardware keyboard if you have one.
+- Turn on notifications in Settings, send the app to the background, and check
+  that a notice arrives when a session finishes or needs input.
 - Update over an older beta, then confirm pairing and preferences remain.
 
 ## Current limits
 
-- No Android background push notifications. Keep the app in the foreground to
-  watch a session; background execution and reconnect timing depend on Android.
+- No vendor push channel (FCM or an OEM one), so a notice only arrives while
+  the app process is alive. Turning notifications on in Settings starts a
+  foreground service and shows a quiet ongoing row that keeps it alive. Without
+  that, Android may freeze a backgrounded app and nothing is raised. Delivery
+  timing still depends on Android.
 - Mainland China network availability and vendor-specific Android behavior are
   not yet broadly validated. Android 7.0 is the minimum install version, not a
   claim that every supported Android version has been tested.

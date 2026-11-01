@@ -195,13 +195,46 @@ switching.
 - The PWA's service worker is not registered in native mode. The native build
   carries its own CSP meta tag (`vite.config.ts`), scoped to the configured
   relay and its WebSocket origin.
+- Notices reach the system notification shade. See **Notifications** below.
+
+## Notifications
+
+A WebView has no Web Push, so the shell raises notices itself.
+`NotifyBridge` installs an origin-restricted WebView message listener before
+navigation, beside `UpdateBridge`. Only the `https://localhost` main frame can
+post, cancel, or ask for permission. Debug builds also allow
+`http://localhost`.
+
+The PWA keeps the decision of when a notice is due. A visible page shows its own
+attention strip and posts nothing. A hidden page that holds the keep-alive
+follows agent status on the existing session and posts one notice per pane
+through the bridge, using the same transition rule and 30 second window as the
+daemon's Web Push path. A tap opens `/pair#notify=1&d=…&pane=…`, the same deep
+link the browser receives.
+
+Two channels carry the notices. `pairfob-agents` is high importance and
+vibrates. `pairfob-connection` is low importance and silent; it holds the
+ongoing keep-alive notice. Notices are keyed by pane tag, so a finished turn
+replaces a stale needs-you row instead of stacking.
+
+**The keep-alive is a foreground service.** Android freezes a backgrounded
+WebView, so a notice cannot be raised from a page the system has stopped.
+Turning notifications on starts `KeepAliveService`, which shows a quiet ongoing
+notification and keeps the process running. The trade-off is visible on purpose.
+The user sees a permanent "Pairfob is connected" row for as long as notifications
+are on. Turning notifications off stops the service and removes the row.
+
+`POST_NOTIFICATIONS` is requested on API 33 and later when the user turns
+notifications on, not at first launch. Below API 33 only the system settings
+screen can change the permission, so the row never offers a prompt it cannot
+show.
 
 ## Not in this scaffold
 
-- FCM/HMS/MiPush/OPPO/vivo/Honor/aggregator push delivery. The PWA already
-  exposes the platform seam in `pwa/src/lib/platform.ts`; this shell reports
-  `kind: "android"` with an empty `pushChannels` list, so web-push-only UI is
-  hidden and no push is attempted.
+- FCM/HMS/MiPush/OPPO/vivo/Honor/aggregator delivery, which would let a notice
+  arrive with the app process gone. The shell raises local notices instead and
+  reports `pushChannels: ["local"]`; a WebView without the bridge keeps the list
+  empty and the row hidden.
 - Play Store packaging and OTA updates.
 - iOS. `NativePlatform` accepts `"ios"` but no iOS project exists here.
 - Native deep-link and QR plugins. The typed pairing code path is the
