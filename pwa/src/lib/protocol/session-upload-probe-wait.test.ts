@@ -23,7 +23,7 @@ describe("upload probe-wait gate integration (isolated child process)", () => {
     if (exit !== 0) {
       throw new Error(`isolated probe-wait test exited ${exit}\n${stdout}\n${stderr}`);
     }
-    expect(stderr).toContain("10 pass");
+    expect(stderr).toContain("11 pass");
     expect(stderr).toContain("0 fail");
   }, 30_000);
 });

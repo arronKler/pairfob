@@ -16,6 +16,7 @@ import { pumpWindowedUpload, UPLOAD_WINDOW_MAX_IN_FLIGHT, type WindowWrite } fro
 // SHA-256 and canonical base64 run on the supplied off-thread codec; the
 // transfer layer owns neither the hash nor the slice encode anymore.
 import { encodeAttachmentChunk, hashAttachmentOffThread } from "./attachment-codec.ts";
+import { newUUID } from "./ids";
 
 export const ATTACHMENT_MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const ATTACHMENT_MAX_BATCH_BYTES = 40 * 1024 * 1024;
@@ -345,7 +346,7 @@ export async function uploadAttachment(
   checkAbort(options?.signal); // a sync observer may abort before hashing
   const digest = await hashAttachmentFile(file, options?.signal);
   const checkpoint: AttachmentCheckpoint = {
-    uploadId: crypto.randomUUID(),
+    uploadId: newUUID(),
     paneId,
     name: file.name,
     size: file.size,

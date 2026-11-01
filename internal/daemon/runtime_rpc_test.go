@@ -226,7 +226,7 @@ func TestRuntimeRPCNewOperationsAndDeduplication(t *testing.T) {
 	}
 }
 
-func TestDirectGatewayDoesNotAdvertiseP2PUploads(t *testing.T) {
+func TestDirectGatewayAdvertisesUploads(t *testing.T) {
 	fake := runtime.NewFake()
 	engine, client := runtimeRPCClient(t, fake)
 	engine.DirectMux = true
@@ -236,8 +236,8 @@ func TestDirectGatewayDoesNotAdvertiseP2PUploads(t *testing.T) {
 		t.Fatal(err)
 	}
 	capabilities := decodeResult(t, configRaw)["capabilities"].(map[string]any)
-	if capabilities["upload_file"] != false || capabilities["upload_file_v2"] != false {
-		t.Fatalf("direct gateway advertised unavailable uploads: %s", configRaw)
+	if capabilities["upload_file"] != true || capabilities["upload_file_v2"] != true {
+		t.Fatalf("direct gateway did not advertise uploads: %s", configRaw)
 	}
 }
 

@@ -51,6 +51,7 @@ import {
   sniffFormat,
   thumbnailRejectReason,
 } from "./attachment-image-policy.ts";
+import { newUUID } from "./ids";
 
 export type AttachmentImageResult = {
   file: File;
@@ -232,7 +233,7 @@ function createDefaultWorker(): ImageWorkerHandle {
 }
 
 function newJobId(): string {
-  return crypto.randomUUID();
+  return newUUID();
 }
 
 function isJpegSignature(bytes: Uint8Array): boolean {

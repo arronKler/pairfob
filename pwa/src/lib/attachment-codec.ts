@@ -36,6 +36,7 @@ import {
   type CodecRequest,
   type CodecSha256Request,
 } from "./attachment-codec-protocol.ts";
+import { newUUID } from "./ids";
 
 export const CODEC_MAX_ACTIVE_JOBS = 4;
 export const CODEC_MAX_WAITING_JOBS = 8;
@@ -149,7 +150,7 @@ class WorkerUnavailableError extends Error {
 }
 
 function newJobId(): string {
-  return crypto.randomUUID();
+  return newUUID();
 }
 
 async function invokeOnce(

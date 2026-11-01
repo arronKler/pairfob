@@ -28,6 +28,7 @@ import {
 import { requestThumbnail } from "./attachments-thumbnails";
 // Type-only: the journal codec imports only types back from this feature.
 import type { AttachmentJournalRecord } from "../../../lib/attachment-journal-codec";
+import { newUUID } from "../../../lib/ids";
 
 export type { AttachmentScope } from "./attach-model";
 
@@ -291,7 +292,7 @@ export function adoptIncoming(key: string, scope: AttachmentScope, files: readon
     const queue = record.queues[key] ?? { scopeKey: key, items: [], notice: "" };
     const items = [...queue.items];
     for (const file of files) {
-      const localId = `att_${crypto.randomUUID()}`;
+      const localId = `att_${newUUID()}`;
       adoptRuntime(key, localId, scope, file);
       items.push(newItem(metaFromFile(file), localId));
       added.push(localId);
@@ -616,7 +617,7 @@ export function reissueAttachment(key: string, localId: string): string | null {
   const entry = runtime.get(runtimeId(key, localId));
   if (!item || !entry || entry.checkpoint) return null;
   if (item.status !== "committed" && item.status !== "cancelled") return null;
-  const nextId = `att_${crypto.randomUUID()}`;
+  const nextId = `att_${newUUID()}`;
   const thumbPending = item.kind === "image" && !entry.objectUrl;
   entry.thumbAbort?.abort();
   entry.thumbAbort = null;

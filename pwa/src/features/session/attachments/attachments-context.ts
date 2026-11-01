@@ -15,7 +15,7 @@
  * extracted image-edit module's port loader, avoiding a controller↔edit cycle.
  */
 import { currentDaemonId, liveSession } from "../../computers/catalog-store";
-import { phase, connectionStore } from "../../connection/connection-store";
+import { phase, connectionStore, p2pEnabled } from "../../connection/connection-store";
 import { capabilityEnabled } from "../../operations/capabilities-store";
 import { openPaneId } from "../session-store";
 import { setAttachmentEditPortLoader } from "./attachments-edit";
@@ -94,7 +94,8 @@ export class AttachmentP2PUnavailable extends Error {}
 export function attachmentP2PReady(): boolean {
   const connection = connectionStore.get();
   const session = liveSession();
-  return connection.sessionTransport === "p2p" && !connection.transportSwitching
+  const transportReady = !p2pEnabled() || connection.sessionTransport === "p2p";
+  return transportReady && !connection.transportSwitching
     && !!session?.isConnected() && !session.isChecking?.();
 }
 

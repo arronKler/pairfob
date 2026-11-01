@@ -49,13 +49,8 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 		"zoom_pane":           descriptor.Supports(runtime.FeatureLayoutZoom),
 		"rename_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
 		"delete_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
-		// The active Tailnet gateway does not provide the P2P data transport
-		// required by the browser upload pipeline. Do not open a file picker for
-		// an operation the connected transport cannot complete.
-		"upload_file": !e.DirectMux && describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
-		// upload_file_v2 uses the same browser P2P transport requirement as the
-		// legacy upload pipeline, so it remains unavailable on DirectMux.
-		"upload_file_v2": !e.DirectMux && describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		"upload_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		"upload_file_v2":      describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
 	}
 	agentKinds := make([]string, 0, len(descriptor.AgentKinds))
 	for _, kind := range descriptor.AgentKinds {

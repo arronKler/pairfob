@@ -121,18 +121,18 @@ function gatePending(live: Live): number {
 
 async function withSession(
   run: (live: Live, wire: ProbeWire) => Promise<void>,
-  options: { p2p?: boolean } = {},
+  options: { p2p?: boolean; sessionP2P?: boolean } = {},
 ): Promise<void> {
   relay = new ProbeWire("relay", 1);
   direct = new ProbeWire("p2p", 2);
   const originalRTC = Object.getOwnPropertyDescriptor(globalThis, "RTCPeerConnection");
   Object.defineProperty(globalThis, "RTCPeerConnection", { configurable: true, writable: true, value: class {} });
-  const live = await sessionOverWS(URL_, pair as never, { networkMode: "relay", p2p: true });
+  const live = await sessionOverWS(URL_, pair as never, { networkMode: "relay", p2p: options.sessionP2P ?? true });
   try {
     active = relay;
     // The failed-switch scenario starts on Relay; transfer/probe cases
     // establish P2P through the production switch barrier.
-    if (!options.p2p) {
+    if (!options.p2p && options.sessionP2P !== false) {
       const switching = live.switchTransport("p2p");
       const commit = await relay.wait("TransportCommit") as { id: string; params: { attempt_id: string } };
       relay.reply(commit, { attempt_id: commit.params.attempt_id, route_id: bytesToHex(direct.route), transport: "webrtc" });
@@ -350,3 +350,21 @@ test("Relay blocks upload families while Status and cancellation remain usable",
   wire.reply(removeV2, v2State({ state: "cancelled" }));
   await cancelV2;
 }, { p2p: true }));
+
+test("a session created with p2p false sends upload Begin, Write and Commit on the relay", () => withSession(async (live, wire) => {
+  const input = { pane_id: PANE, upload_id: UPLOAD_ID, name: "a.bin", size: 262144, sha256: SHA, mime: "application/octet-stream" };
+  const begin = live.workspaceUploadBeginV2(input);
+  const [beginReq] = await requestsFor("WorkspaceUploadBeginV2", 1);
+  wire.reply(beginReq, v2State({ offset: 0 }));
+  await begin;
+  const write = live.workspaceUploadWriteV2(writeInput(0));
+  const [writeReq] = await requestsFor("WorkspaceUploadWriteV2", 1);
+  wire.reply(writeReq, v2State());
+  await write;
+  const commit = live.workspaceUploadCommitV2(PANE, UPLOAD_ID);
+  const [commitReq] = await requestsFor("WorkspaceUploadCommitV2", 1);
+  wire.reply(commitReq, { ...v2State({ offset: 262_144, state: "committed" }),
+    path: "/repo/.pairfob/attachments/1b7f/a.bin", relative_path: ".pairfob/attachments/1b7f/a.bin",
+    name: "a.bin", mime: "application/octet-stream" });
+  await commit;
+}, { sessionP2P: false }));

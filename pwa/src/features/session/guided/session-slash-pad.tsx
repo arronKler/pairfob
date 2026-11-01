@@ -17,6 +17,7 @@ import { addQuickCommand, arrangeCommandPad, moveQuickCommand, stepQuickCommand,
 import { selectPadKind } from "./slash-pad";
 import { insertQuickCommand, insertSlashCommand } from "./compose";
 import { PadChromeButton } from "../compose-focus";
+import { newUUID } from "../../../lib/ids";
 
 /** How long a deleted command can be brought back from the pad itself. */
 const UNDO_MS = 5000;
@@ -80,7 +81,7 @@ function CommandPad({ agent, slash, commands, onSelect, onCustomSelect, memory }
   const create = async () => {
     const edit = await editQuickCommand({ draft: composeDraft() });
     if (edit?.action !== "save") return;
-    const added = addQuickCommand(latest.current, { id: crypto.randomUUID(), label: edit.label, text: edit.text });
+    const added = addQuickCommand(latest.current, { id: newUUID(), label: edit.label, text: edit.text });
     if (!added) { showStatus(t("pad.limit")); return; }
     if (setQuickCommands(added.commands) && added.placement === "last") showStatus(t("pad.addedLast"));
   };

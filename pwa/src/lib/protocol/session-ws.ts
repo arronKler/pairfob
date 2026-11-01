@@ -538,8 +538,9 @@ class ReconnectingSession implements LiveSession {
       return { ok: false, error: new ProtocolError("disconnected", "连接已恢复到新的会话，本次上传操作未发送；请刷新确认后继续") };
     }
     // Status and cancellation remain available for reconciliation/cleanup.
-    // Begin, file bytes and commit must never use the relay.
-    if (requireDirect && captured.transport.kind !== "p2p") {
+    // A session created with p2p keeps Begin, file bytes and commit off the
+    // relay; a p2p-off session (the Tailnet gateway) has no direct transport.
+    if (requireDirect && this.options.p2p === true && captured.transport.kind !== "p2p") {
       return { ok: false, error: new ProtocolError("disconnected", "文件上传仅支持 P2P 直连；请在设置中切换到 P2P，连接成功后手动重试或续传") };
     }
     if (this.checking) return null;
