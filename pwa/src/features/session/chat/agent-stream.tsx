@@ -1,9 +1,9 @@
-import type { ReactNode, Ref } from "react";
+import { memo, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import { groupAgentTurns, groupAgentTurnBlocks, processTitle, replyText, turnKey,
   type AgentTurn } from "../../../lib/agent-trace-view";
 import type { AgentTraceItem } from "../../../lib/operations";
-import { t } from "../../../lib/i18n";
+import { langRevision, t } from "../../../lib/i18n";
 import type { AgentEmptySpec, DetailsState } from "./agent-chat-stream";
 import { AgentDetails } from "./agent-details";
 import { AgentStep, type ToolDetailHooks } from "./agent-process";
@@ -46,9 +46,33 @@ function ProcessCard({ turn, items, blockIndex, live, anchor, kept, hooks }: {
   </AgentDetails>;
 }
 
-function TraceTurn({ turn, live, anchor, kept, hooks, onCopy }: {
+type TraceTurnProps = {
   turn: AgentTurn; live: boolean; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks; onCopy?: CopyReply;
-}) {
+  /** Language revision: a finished turn shows t() copy, so it must re-render when the language changes. */
+  lang: number;
+};
+
+// Keep in step with the fields of AgentTraceItem (lib/operations.ts).
+function sameItem(a: AgentTraceItem, b: AgentTraceItem): boolean {
+  return a === b || (a.type === b.type && a.text === b.text && a.name === b.name && a.input === b.input
+    && a.output === b.output && a.toolState === b.toolState && a.detailRef === b.detailRef);
+}
+
+function sameItems(a: readonly AgentTraceItem[], b: readonly AgentTraceItem[]): boolean {
+  return a.length === b.length && a.every((item, index) => sameItem(item, b[index]));
+}
+
+/** A turn re-renders only when what it shows changed; tool detail hooks matter only to turns with detail refs. */
+function sameTurn(prev: TraceTurnProps, next: TraceTurnProps): boolean {
+  if (next.live || prev.lang !== next.lang || prev.live !== next.live || prev.kept !== next.kept || prev.onCopy !== next.onCopy) return false;
+  if (prev.anchor.key !== next.anchor.key || prev.anchor.ordinal !== next.anchor.ordinal
+    || prev.anchor.ordinalFromEnd !== next.anchor.ordinalFromEnd) return false;
+  if (prev.turn.user?.text !== next.turn.user?.text || !sameItems(prev.turn.items, next.turn.items)) return false;
+  if (prev.hooks.view === next.hooks.view && prev.hooks.need === next.hooks.need) return true;
+  return !next.turn.items.some(item => item.detailRef);
+}
+
+const TraceTurn = memo(function TraceTurn({ turn, live, anchor, kept, hooks, onCopy }: TraceTurnProps) {
   const blocks = groupAgentTurnBlocks(turn.items);
   const finalReply = !live && blocks.at(-1)?.type === "reply" ? blocks.length - 1 : -1;
   let lastProcess = -1;
@@ -64,7 +88,7 @@ function TraceTurn({ turn, live, anchor, kept, hooks, onCopy }: {
       <Spinner /><span>{turn.items.length ? t("trace.runningSteps", { n: turn.items.length }) : t("chat.runningEllipsis")}</span>
     </div>}
   </>;
-}
+}, sameTurn);
 
 function EmptyPanel({ spec, onRetry, onTerminal }: { spec: AgentEmptySpec; onRetry?: () => void; onTerminal?: () => void }) {
   return <div className={`agent-empty agent-empty-${spec.kind}`} role={spec.kind === "error" ? "alert" : "status"}>
@@ -76,17 +100,16 @@ function EmptyPanel({ spec, onRetry, onTerminal }: { spec: AgentEmptySpec; onRet
   </div>;
 }
 
-function turnAnchor(turn: AgentTurn, index: number, turns: readonly AgentTurn[]): TraceAnchor {
-  const key = turnKey(turn);
-  let ordinal = 0;
-  let ordinalFromEnd = 0;
-  for (let cursor = 0; cursor < index; cursor += 1) {
-    if (turnKey(turns[cursor]) === key) ordinal += 1;
-  }
-  for (let cursor = index + 1; cursor < turns.length; cursor += 1) {
-    if (turnKey(turns[cursor]) === key) ordinalFromEnd += 1;
-  }
-  return { key, ordinal, ordinalFromEnd };
+function turnAnchors(turns: readonly AgentTurn[]): TraceAnchor[] {
+  const keys = turns.map(turnKey);
+  const total = new Map<string, number>();
+  for (const key of keys) total.set(key, (total.get(key) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return keys.map(key => {
+    const ordinal = seen.get(key) ?? 0;
+    seen.set(key, ordinal + 1);
+    return { key, ordinal, ordinalFromEnd: (total.get(key) ?? 1) - ordinal - 1 };
+  });
 }
 
 export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerminal, onNeedOlder, onFollow, onCopyReply,
@@ -97,6 +120,8 @@ export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerm
   older?: ReactNode; streamRef?: Ref<HTMLDivElement>; signature?: string;
 }) {
   const turns = groupAgentTurns(items);
+  const anchors = turnAnchors(turns);
+  const lang = langRevision();
   const hooks = { view: toolDetail, need: onNeedToolDetail };
   return <div ref={streamRef} className="agent-stream" role="log" aria-label={t("chat.streamAria")}
     aria-busy={busy === true} tabIndex={0} data-sig={signature} onScroll={event => {
@@ -110,10 +135,9 @@ export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerm
       {(!items.length || empty.kind === "unavailable") && <EmptyPanel spec={empty} onRetry={onRetry} onTerminal={onTerminal} />}
       {truncated && items.length > 0 && <p className="agent-trace-limit">{t("chat.truncated")}</p>}
       {turns.map((turn, index) => {
-        const anchor = turnAnchor(turn, index, turns);
-        return <TraceTurn key={`${turnKey(turn)}:${index}`} turn={turn} anchor={anchor}
+        return <TraceTurn key={`${anchors[index].key}:${index}`} turn={turn} anchor={anchors[index]}
           live={working && empty.kind !== "unavailable" && index === turns.length - 1}
-          kept={kept} hooks={hooks} onCopy={onCopyReply} />;
+          kept={kept} hooks={hooks} onCopy={onCopyReply} lang={lang} />;
       })}
     </div>
   </div>;

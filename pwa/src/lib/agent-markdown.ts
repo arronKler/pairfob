@@ -3,7 +3,7 @@ import remend from "remend";
 
 marked.use({ gfm: true, breaks: false });
 
-const CACHE_LIMIT = 32;
+const CACHE_LIMIT = 512;
 const cache = new Map<string, string>();
 
 const DROP = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "FORM", "LINK", "META", "BASE"]);

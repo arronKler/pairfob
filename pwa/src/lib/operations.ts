@@ -154,6 +154,7 @@ export type HistoryPage = {
 };
 
 export type AgentTraceType = "user" | "thinking" | "tool" | "assistant";
+// A new field here must also be compared in sameItem (features/session/chat/agent-stream.tsx).
 export type AgentTraceItem = {
   type: AgentTraceType;
   text?: string;

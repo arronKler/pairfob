@@ -50,3 +50,19 @@ describe("agent markdown", () => {
     expect(el.querySelector("strong")?.textContent).toBe("edit");
   });
 });
+
+describe("agent markdown cache", () => {
+  test("500 distinct texts rendered once are all served from the cache the second time", async () => {
+    const { marked } = await import("marked");
+    const { spyOn } = await import("bun:test");
+    const texts = Array.from({ length: 500 }, (_, n) => `cache entry **${n}**`);
+    for (const text of texts) renderMarkdown(text);
+    const parse = spyOn(marked, "parse");
+    try {
+      for (const text of texts) renderMarkdown(text);
+      expect(parse).not.toHaveBeenCalled();
+    } finally {
+      parse.mockRestore();
+    }
+  });
+});
