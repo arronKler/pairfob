@@ -205,12 +205,6 @@ export function restoreAgentTrace(paneId: string): boolean {
   const entry = cachedAgentTrace(paneId, currentAgentTraceOwnerKey());
   if (!entry) return false;
   adoptTracePage(entry);
-  if (entry.viewport) {
-    applyTrace({
-      agentTraceFollow: entry.viewport.follow,
-      agentTraceUnread: entry.viewport.unread,
-    });
-  }
   return true;
 }
 

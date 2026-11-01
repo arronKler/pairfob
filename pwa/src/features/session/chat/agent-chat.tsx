@@ -9,7 +9,7 @@ import { useDashboard } from "../../dashboard/hooks";
 import { t } from "../../../lib/i18n";
 import { loadToolDetail, toolDetailView } from "./agent-chat-detail";
 import { chatDockNotice, copyAgentReply, currentAgentTraceOwnerKey, emptySpec, jumpToLatest, leaveAgentChat,
-  patchAgentChat, refreshAgentTrace, rememberAgentViewport, restoreAgentViewport, streamSig, visibleItems,
+  patchAgentChat, refreshAgentTrace, rememberAgentViewport, streamSig, visibleItems,
 } from "./agent-chat-controller";
 import { agentChatUIRevision, publishAgentChatUI, subscribeAgentChatUI } from "./agent-chat-ui";
 import type { SessionHandlers } from "../guided/view";
@@ -53,7 +53,9 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   useLayoutEffect(() => {
     const element = stream.current;
     const ownerKey = currentAgentTraceOwnerKey();
-    if (element) restoreAgentViewport(element, paneId, ownerKey);
+    // Opening shows the latest message; a cached viewport never positions it.
+    followTrace();
+    if (element) element.scrollTop = element.scrollHeight;
     return () => {
       if (element) rememberAgentViewport(element, paneId, ownerKey, reading.current);
     };

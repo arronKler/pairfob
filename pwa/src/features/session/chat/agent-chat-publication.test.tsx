@@ -18,7 +18,7 @@ import { replaceAgentsFromSnapshot } from "../../dashboard/catalog-store";
 import { setPhase } from "../../connection/connection-store";
 import { setCredential } from "../../computers/catalog-store";
 import { bumpViewIncarnation, resetComposeDrafts, switchComposeView } from "../drafts/compose-drafts";
-import { cachedAgentTrace, clearAgentTraceCache } from "../../../lib/agent-trace-cache";
+import { cacheAgentTrace, cachedAgentTrace, clearAgentTraceCache } from "../../../lib/agent-trace-cache";
 import { NO_OPERATION_CAPABILITIES } from "../../../lib/operations";
 import type { LiveSession } from "../../../lib/protocol/client";
 import { setLang } from "../../../lib/i18n";
@@ -344,12 +344,12 @@ test("scrolling up during a tail request preserves the latest reading position",
 });
 
 test("jump-to-latest clears published unread and hides mounted jump button without global paint", async () => {
-  applyTrace({ agentTraceFollow: false, agentTraceUnread: true });
   // Observe the no-global-paint contract through the real installed App host:
   // the mounted chat's update rides its own domain subscription, and the host
   // neither commits nor queued a commit during it.
   mountTestApp();
   commitTest();
+  await act(async () => applyTrace({ agentTraceFollow: false, agentTraceUnread: true }));
   watchHostCommits();
   expect(appRoot().querySelector<HTMLButtonElement>(".agent-jump")!.hidden).toBeFalse();
   await act(async () => appRoot().querySelector<HTMLButtonElement>(".agent-jump")!.click());
@@ -466,22 +466,31 @@ test("view cleanup saves the retired owner's reading posture", async () => {
   });
 });
 
-test("same daemon session and occupant restore cached reading position after transport replacement", async () => {
+test("opening a chat lands on the latest message whatever viewport the cache holds", async () => {
   await act(async () => mount());
   await act(async () => { await refreshAgentTrace(); });
   const ownerKey = currentAgentTraceOwnerKey();
   const oldStream = appRoot().querySelector<HTMLElement>(".agent-stream")!;
-  setStreamSize(oldStream, 1000, 135);
-  await act(async () => oldStream.dispatchEvent(new window.Event("scroll", { bubbles: true })));
+  const firstTurn = oldStream.querySelector<HTMLElement>("[data-trace-anchor]")!.dataset.traceAnchor!;
+  await act(async () => unmountSyncRoot());
+  cacheAgentTrace("p1", {
+    ...cachedAgentTrace("p1", ownerKey)!,
+    viewport: { follow: false, unread: false, anchor: firstTurn, offset: 0, scrollTop: 0, edge: "start" },
+  });
 
   withLive({});
   expect(currentAgentTraceOwnerKey()).toBe(ownerKey);
   applyTrace({ agentTraceItems: [], agentTraceLoadState: "cold", agentTraceFollow: true, agentTraceUnread: false });
   expect(restoreAgentTrace("p1")).toBeTrue();
-  await act(async () => mount());
-  const restored = appRoot().querySelector<HTMLElement>(".agent-stream")!;
-  expect(restored.scrollTop).toBe(135);
-  expect(chatSnapshot().agentTraceFollow).toBeFalse();
+  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => 1000 });
+  try {
+    await act(async () => mount());
+  } finally {
+    delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight;
+  }
+  const reopened = appRoot().querySelector<HTMLElement>(".agent-stream")!;
+  expect(reopened.scrollTop).toBe(1000);
+  expect(chatSnapshot().agentTraceFollow).toBeTrue();
 });
 
 test("view cleanup saves the retired owner's reading posture", async () => {
@@ -502,10 +511,9 @@ test("view cleanup saves the retired owner's reading posture", async () => {
       agentTraceNext: null,
       agentTraceLoadState: "ready",
       agentTraceBusy: false,
-      agentTraceFollow: false,
-      agentTraceUnread: true,
     });
     mount();
+    applyTrace({ agentTraceFollow: false, agentTraceUnread: true });
     newStream = appRoot().querySelector<HTMLElement>(".agent-stream")!;
     setStreamSize(newStream, 2000, 140);
   }));
@@ -636,8 +644,8 @@ test("a same session and pane remount during nested follow does not scroll the r
     if (transitioned || !chatStore.get().agentTraceFollow) return;
     transitioned = true;
     bumpViewIncarnation();
-    applyTrace({ agentTraceFollow: false, agentTraceUnread: true });
     mount();
+    applyTrace({ agentTraceFollow: false, agentTraceUnread: true });
     next = appRoot().querySelector<HTMLElement>(".agent-stream")!;
     setStreamSize(next, 2000, 140);
   }));

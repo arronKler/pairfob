@@ -392,7 +392,6 @@ export async function applyScene(name: string, session: FixtureSession): Promise
       session.setTrace(trace);
       applyTrace({ agentTraceItems: trace, agentTraceTail: trace.length, agentTraceLoadState: "ready", agentTraceSig: JSON.stringify(trace) });
     }
-    if (name === "chat-pi-unread") applyTrace({ agentTraceFollow: false, agentTraceUnread: true });
     if (name === "chat-pi-compose") setComposeDraft("First line stays intact.\n第二行正在使用输入法组合。\nThird line verifies the narrow compose area.");
     if (name === "chat-draft") setComposeDraft("Review the interaction changes.\nKeep focus and selection stable.\nThen run the checks.");
     if (name === "chat-complete") {
@@ -415,6 +414,13 @@ export async function applyScene(name: string, session: FixtureSession): Promise
 const pendingReveal = () => new Promise<void>((resolve) => setTimeout(resolve, WORKSPACE_PENDING_DELAY_MS + 40));
 
 export function afterScenePaint(name: string): void {
+  if (name === "chat-pi-unread") {
+    // Opening a chat follows the tail, so the scrolled-away posture is set once it is open.
+    const stream = document.querySelector<HTMLElement>(".agent-stream");
+    if (stream) stream.scrollTop = 0;
+    applyTrace({ agentTraceFollow: false, agentTraceUnread: true });
+    return;
+  }
   if (name !== "guided-ime" && name !== "chat-pi-compose") return;
   const input = document.querySelector<HTMLTextAreaElement>(".dock textarea, .agent-dock textarea");
   if (!input) throw new Error(`QA ${name} fixture has no compose field`);

@@ -171,8 +171,9 @@ test("a new pane does not inherit the previous pane's expanded tools or lazy det
 test("older-page publication anchors against committed React content and keeps the stream node", async () => {
   const pending = deferred<AgentTracePage>();
   setSession({ agentTrace: () => pending.promise });
-  applyTrace({ agentTraceNext: "older-cursor", agentTraceFollow: false });
+  applyTrace({ agentTraceNext: "older-cursor" });
   act(mount);
+  act(() => { applyTrace({ agentTraceFollow: false }); });
   const original = stream();
   Object.defineProperties(original, {
     clientHeight: { configurable: true, value: 100 },
@@ -195,8 +196,8 @@ test("older-page publication anchors against committed React content and keeps t
 });
 
 test("a current-tail update preserves reading position and publishes the unread jump", () => {
-  applyTrace({ agentTraceFollow: false });
   act(mount);
+  act(() => { applyTrace({ agentTraceFollow: false }); });
   const original = stream();
   Object.defineProperties(original, { clientHeight: { value: 100 }, scrollHeight: { value: 600 } });
   original.scrollTop = 80;
@@ -312,8 +313,9 @@ test("late tool detail growth preserves the first visible message anchor", async
     { type: "tool", name: "Read", toolState: "done", detailRef: "detail-grow" },
     { type: "user", text: "Visible" },
     { type: "assistant", text: "Answer" },
-  ], agentTraceFollow: false });
+  ] });
   act(mount);
+  act(() => { applyTrace({ agentTraceFollow: false }); });
   const viewport = stream();
   const visible = [...viewport.querySelectorAll<HTMLElement>("[data-trace-anchor]")]
     .find((node) => node.textContent === "Visible")!;
