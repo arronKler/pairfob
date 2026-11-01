@@ -425,6 +425,7 @@ const snapshotPorts = {
   patchAgentChat,
   patchChromeTitle,
   showError,
+  showStatus,
   messageOf,
   commitView,
   now: Date.now,
@@ -504,7 +505,11 @@ async function performPaneRead(owner: PaneReadOwner, startedAt: number): Promise
       }
       return null;
     }
-    if (!(error instanceof ProtocolError && ["reconnecting", "disconnected"].includes(error.code))) {
+    if (error instanceof ProtocolError && error.code === "timeout") {
+      // Same split as the Snapshot poll: the connection retries a read that
+      // missed its deadline, so this is a status, not an error to act on.
+      if (!owner.session.verifyPath?.()) showStatus(t("err.retrying"));
+    } else if (!(error instanceof ProtocolError && ["reconnecting", "disconnected"].includes(error.code))) {
       showError(messageOf(error));
       commitView();
     }

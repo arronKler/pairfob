@@ -46,6 +46,8 @@ type Pending = {
   timer: ReturnType<typeof setTimeout>;
   /** `performance.now()` at which the caller stops waiting. */
   deadline: number;
+  /** `performance.now()` when the caller first waited; carried requests keep mine. */
+  startedAt: number;
   onLate?: (result: unknown) => void;
   /** Sealed and sent; a bulk job may still be waiting for send budget. */
   sent: boolean;
@@ -222,7 +224,7 @@ export class SessionTransport {
   private adopt(read: SentRead): void {
     const entry: Pending = {
       op: read.op, resolve: read.resolve, reject: read.reject, bulk: false, counted: false, abort: new AbortController(),
-      deadline: performance.now() + READ_RPC_TIMEOUT_MS, sent: true,
+      deadline: performance.now() + READ_RPC_TIMEOUT_MS, sent: true, startedAt: performance.now(),
       timer: globalThis.setTimeout(() => this.expireRPC(read.id, entry, read.op), READ_RPC_TIMEOUT_MS),
     };
     this.pending.set(read.id, entry);
@@ -283,6 +285,7 @@ export class SessionTransport {
       const abort = new AbortController();
       const entry: Pending = {
         op, resolve, reject, bulk, counted: bulk, abort, deadline: performance.now() + timeoutMs, onLate, sent: false,
+        startedAt: performance.now(),
         timer: globalThis.setTimeout(() => this.expireRPC(id, entry, op, onLate), timeoutMs),
       };
       this.bulkActive += bulk ? 1 : 0;
@@ -302,6 +305,10 @@ export class SessionTransport {
     entry.abort.abort();
     this.releaseBulk(entry);
     this.rememberLate(id, onLate);
+    // The only local record of a path stall: the computer may still answer PING
+    // while this read went unanswered, which is exactly the case the heartbeat
+    // cannot see. `pending_rpcs` is what remained stuck beside it.
+    this.diagnose("rpc_timeout", { code: "timeout", reason: op, elapsed_ms: performance.now() - entry.startedAt });
     entry.reject(new ProtocolError("timeout", `${op} 响应超时；写操作不会自动重试`));
   }
 
@@ -538,7 +545,7 @@ export class SessionTransport {
     }
   }
 
-  diagnose(event: string, details: ConnectionDetails & { code?: string } = {}): void {
+  diagnose(event: string, details: ConnectionDetails & { code?: string; elapsed_ms?: number } = {}): void {
     recordConnectionDiagnostic({
       ...this.recoveryDiagnostic?.(), event, route_id: Array.from(this.routeId, (byte) => byte.toString(16).padStart(2, "0")).join(""),
       transport: this.kind, hidden: this.hidden, pending_rpcs: this.pending.size,

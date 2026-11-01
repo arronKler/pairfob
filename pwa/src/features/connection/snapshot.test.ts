@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import "../../../test-support/boot-dom";
 import type { LiveSession } from "../../lib/protocol/session-types";
 import type { PairResult } from "../../lib/protocol/client";
+import { ProtocolError } from "../../lib/protocol/client";
 import { attachLiveSession, liveSession, setCredential } from "../computers/catalog-store";
 import { setScreen } from "../../app/navigation-store";
 import { noteRelayRtt, setSessionTransport } from "./connection-store";
@@ -49,6 +50,7 @@ const snapshotPorts: SnapshotPorts = {
   patchAgentChat: () => true,
   patchChromeTitle: () => calls.push("chrome"),
   showError: () => calls.push("error"),
+  showStatus: () => calls.push("status"),
   messageOf: String,
   commitView: () => calls.push("commitView"),
   now: () => 12345,
@@ -165,6 +167,23 @@ describe("snapshot observation ownership", () => {
     await refreshSnapshot(snapshotPorts);
     expect(replaced).toBe(true);
     expect(reads).toBe(0);
+  });
+
+  test("a read that gives up at its deadline reports a status, not the refresh error", async () => {
+    session.snapshot = async () => {
+      throw new ProtocolError("timeout", "Snapshot 响应超时；写操作不会自动重试");
+    };
+    await refreshSnapshot(snapshotPorts);
+    expect(calls).toEqual(["status", "commitView"]);
+  });
+
+  test("a read that gives up while a path check starts reports no separate notice", async () => {
+    session.snapshot = async () => {
+      throw new ProtocolError("timeout", "Snapshot 响应超时；写操作不会自动重试");
+    };
+    session.verifyPath = () => true;
+    await refreshSnapshot(snapshotPorts);
+    expect(calls).toEqual(["commitView"]);
   });
 
   test("an ordinary current Snapshot applies once and a repeat unchanged herd does not paint", async () => {

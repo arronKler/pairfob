@@ -14,6 +14,20 @@ export function reconnectDelay(attempt: number, random = Math.random): number {
  * instead of waiting out the probe deadline first.
  */
 export const STANDBY_AWAY_MS = 10_000;
+
+/**
+ * A read that gave up at its deadline is the first sign a path stalled: the
+ * heartbeat would not notice for another 25 s. Checking costs one Ping, so a
+ * run of timeouts spends at most one every floor.
+ */
+export const PATH_CHECK_FLOOR_MS = 10_000;
+
+/** Whether this read timeout should verify the path now instead of waiting for the heartbeat. */
+export function pathCheckDue(live: boolean, checking: boolean, lastCheckAt: number, now: number): boolean {
+  if (!live || checking) return false;
+  return lastCheckAt === 0 || now - lastCheckAt >= PATH_CHECK_FLOOR_MS;
+}
+
 export const HELLO_WINDOW_MS = 60_000;
 /** The computer admits ten DeviceHello1 per device a minute. A standby is a
  * guess, so it only spends while the dials that must happen keep most of them. */

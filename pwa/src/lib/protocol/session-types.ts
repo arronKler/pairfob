@@ -191,10 +191,16 @@ export type LiveSession = {
   /** Existing transport is being verified or undergoing its first recovery attempt. */
   isChecking?: () => boolean;
   switchTransport: (target: "auto" | "p2p" | "relay") => Promise<void>;
+  /**
+   * A read gave up at its deadline: verify the path now instead of waiting for
+   * the heartbeat. Returns true when a check started.
+   */
+  verifyPath?: () => boolean;
   /** `path` is a real network change; `probe` is foreground/visibility only. */
   reconnectNow: (reason?: ReconnectReason) => void;
   setNetworkAvailable: (available: boolean) => void;
   close: () => void;
 };
 
-export type ReconnectReason = "probe" | "path";
+/** `read` is a deadline expiry: the path is suspect but nothing else is. */
+export type ReconnectReason = "probe" | "path" | "read";

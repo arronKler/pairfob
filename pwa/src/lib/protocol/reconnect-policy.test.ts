@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { HELLO_WINDOW_MS, HelloBudget, RECONNECT_BASE_MS, RECONNECT_MAX_MS, STANDBY_HELLO_LIMIT, reconnectDelay } from "./reconnect-policy.ts";
+import { PATH_CHECK_FLOOR_MS, pathCheckDue, HELLO_WINDOW_MS, HelloBudget, RECONNECT_BASE_MS, RECONNECT_MAX_MS, STANDBY_HELLO_LIMIT, reconnectDelay } from "./reconnect-policy.ts";
 
 const sessionSource = await Bun.file(new URL("./session-ws.ts", import.meta.url)).text();
 
@@ -20,6 +20,16 @@ describe("mobile reconnect backoff", () => {
     const start = sessionSource.indexOf("private onDisconnect(");
     const body = sessionSource.slice(start, sessionSource.indexOf("private scheduleReconnect(", start));
     expect(body).toContain("this.scheduleReconnect(true)");
+  });
+});
+
+describe("read timeout path check", () => {
+  test("checks the path at most once per floor, and never while one is running or after a stop", () => {
+    expect(pathCheckDue(true, false, 0, 5_000)).toBe(true);
+    expect(pathCheckDue(true, false, 5_000, 5_000 + PATH_CHECK_FLOOR_MS - 1)).toBe(false);
+    expect(pathCheckDue(true, false, 5_000, 5_000 + PATH_CHECK_FLOOR_MS)).toBe(true);
+    expect(pathCheckDue(true, true, 0, 5_000)).toBe(false);
+    expect(pathCheckDue(false, false, 0, 5_000)).toBe(false);
   });
 });
 

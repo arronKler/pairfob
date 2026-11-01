@@ -537,3 +537,16 @@ describe("late TerminalOpen replies", () => {
     expect(terminalLateCleanup(transport, "TerminalInput", wire)).toBeUndefined();
   });
 });
+
+describe("client deadline diagnostics", () => {
+  test("a read that gives up at its deadline leaves the op and its budget", async () => {
+    const { c2s, s2c, route } = keys();
+    const transport = openTransport(new MockChannel(), c2s, s2c, route);
+    const error = await transport.rpc("Snapshot", {}, 20).catch((caught) => caught);
+    expect((error as ProtocolError).code).toBe("timeout");
+    const record = connectionDiagnostics().filter((item) => item.event === "rpc_timeout").at(-1)!;
+    expect(record).toMatchObject({ code: "timeout", reason: "Snapshot", transport: "p2p", pending_rpcs: 0 });
+    expect(record.elapsed_ms).toBeGreaterThanOrEqual(20);
+    transport.close();
+  });
+});

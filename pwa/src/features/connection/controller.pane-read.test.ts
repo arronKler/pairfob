@@ -33,6 +33,8 @@ import {
 } from "../session/session-store";
 import { resetGenerationsForTests } from "./generations";
 import { openPane, refreshPane, refreshPaneRead, stopPolling } from "./controller";
+import { clearNotice, visibleNotice } from "../../app/notices-store";
+import { ProtocolError } from "../../lib/protocol/client";
 
 let renders = 0;
 
@@ -298,6 +300,29 @@ describe("desk pane-read scheduling", () => {
     expect(observations.every((observation) => observation?.hash === "b".repeat(64))).toBeTrue();
     expect(calls).toBe(2);
     expect(paneReadPending()).toBeFalse();
+  });
+
+  test("a pane read that gives up at its deadline reports a status, not an error", async () => {
+    bootDeskPane("idle");
+    clearNotice();
+    attachLiveSession({
+      isConnected: () => true,
+      paneRead: async () => { throw new ProtocolError("timeout", "PaneRead 响应超时；写操作不会自动重试"); },
+    });
+    await refreshPaneRead();
+    expect(visibleNotice()?.tone).toBe("status");
+  });
+
+  test("a path check owns the report, so a read timeout raises no notice of its own", async () => {
+    bootDeskPane("idle");
+    clearNotice();
+    attachLiveSession({
+      isConnected: () => true,
+      paneRead: async () => { throw new ProtocolError("timeout", "PaneRead 响应超时；写操作不会自动重试"); },
+      verifyPath: () => true,
+    });
+    await refreshPaneRead();
+    expect(visibleNotice()).toBeNull();
   });
 
   afterEach(() => {

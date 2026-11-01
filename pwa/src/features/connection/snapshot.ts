@@ -38,6 +38,7 @@ export type SnapshotPorts = {
   patchAgentChat(): boolean;
   patchChromeTitle(): void;
   showError(text: string, persist?: boolean): void;
+  showStatus(text: string): void;
   messageOf(error: unknown): string;
   commitView(): void;
   now(): number;
@@ -152,7 +153,11 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
     ports.commitView();
   } catch (error) {
     if (!viewIsCurrent(session, viewVersion, ports)) return;
-    if (!(error instanceof ProtocolError && ["reconnecting", "disconnected"].includes(error.code))) {
+    if (error instanceof ProtocolError && error.code === "timeout") {
+      // A deadline expiry is repaired by the connection, not by the reader: the
+      // poll retries by itself. A path check reports its own progress.
+      if (!session.verifyPath?.()) ports.showStatus(t("err.retrying"));
+    } else if (!(error instanceof ProtocolError && ["reconnecting", "disconnected"].includes(error.code))) {
       ports.showError(ports.messageOf(error));
     }
     if (!viewIsCurrent(session, viewVersion, ports)) return;

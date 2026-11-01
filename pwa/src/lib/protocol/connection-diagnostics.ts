@@ -47,11 +47,12 @@ const TOKENS = new Set((
   "ice_gathered complete reflexive local partial ice_timeout " +
   "direct_failed p2p_unavailable unsupported unavailable offer signal answer channel_timeout channel_failed handshake commit probe unknown " +
   "transport_closed session_open session_close disconnect page_hidden page_visible probe_start probe_success probe_failed " +
-  "local_close transport_upgrade foreground probe path foreground_probe_failed path_probe_failed " +
+  "local_close transport_upgrade foreground probe path read foreground_probe_failed path_probe_failed read_probe_failed " +
   "data_channel_closed data_channel_error send_queue_full send_failed send_not_open ice_failed ice_grace_expired " +
   "websocket_closed websocket_error heartbeat_send_failed encrypted_send_failed " +
   "relay p2p new checking connected completed disconnected failed closed connecting open closing " +
   "heartbeat_timeout timeout cancelled offline daemon_replaced bad_frame bad_message backpressure " +
+  "rpc_timeout Snapshot PaneRead History AgentTrace AgentTraceSummary AgentTraceDetail GetConfig Ping " +
   "kicked revoked expired denied not_ready closed ws_open_failed wrong_protocol error other"
 ).split(" "));
 // Vite's immutable bundle name identifies the executing PWA, including records

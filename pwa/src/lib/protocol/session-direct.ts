@@ -15,7 +15,7 @@ import {
 } from "./direct-peer.ts";
 import { ProtocolError } from "./errors.ts";
 import { muxProtocolFromRelayURL } from "./mux.ts";
-import { STANDBY_AWAY_MS } from "./reconnect-policy.ts";
+import { pathCheckDue, STANDBY_AWAY_MS } from "./reconnect-policy.ts";
 import type { PairResult } from "./pair-ws.ts";
 import { SessionTransport } from "./session-transport.ts";
 import type { ReconnectReason, SessionEvent } from "./session-types.ts";
@@ -77,6 +77,7 @@ export class DirectSessionDriver {
   private awayMs = 0;
   private activityVersion = 0;
   private probeAttempt: { transport: SessionTransport; cancel(): void } | null = null;
+  private lastPathCheckAt = 0;
   /** Held while a direct candidate owns the switch; `standby` once a relay was prepared beside it. */
   private commitAttempt: { abandon: AbortController; standby: boolean } | null = null;
   private unwatchIce: (() => void) | null = null;
@@ -181,6 +182,15 @@ export class DirectSessionDriver {
     }
   }
 
+  /** A read gave up at its deadline while this transport still looked alive.
+   * The heartbeat would not notice for another 25 s. True when a check started. */
+  checkPath(transport: SessionTransport, live: boolean, checking: boolean): boolean {
+    const now = performance.now();
+    if (!pathCheckDue(live, checking, this.lastPathCheckAt, now)) return false;
+    this.lastPathCheckAt = now;
+    return this.probe(transport, "read");
+  }
+
   /** True when this call started a probe: duplicates and hidden pages start none. */
   probe(transport: SessionTransport, reason: ReconnectReason): boolean {
     if (this.hidden || pageHidden() || this.probeAttempt?.transport === transport) return false;
@@ -253,10 +263,11 @@ export class DirectSessionDriver {
         await transport.rpc("Ping", { t_ms: Date.now() }, timeout);
       } catch (error) {
         if (!current()) return;
-        // A network-change hint does not prove the existing path is broken.
-        // Renegotiate only after a failed encrypted read, then require a fresh
-        // response before enabling input. No user operation is replayed here.
-        if (transport.kind !== "p2p" || reason !== "path") throw error;
+        // A network-change hint or a read that timed out does not prove the
+        // existing path is broken the way a failed Ping does. Renegotiate only
+        // after the Ping failed, then require a fresh response before enabling
+        // input. No user operation is replayed here.
+        if (transport.kind !== "p2p" || (reason !== "path" && reason !== "read")) throw error;
         const repaired = await this.maybeRestart(transport);
         if (!current()) return;
         if (repaired !== "ok") throw error;
@@ -270,7 +281,7 @@ export class DirectSessionDriver {
     } catch (error) {
       if (current()) {
         const failure = error instanceof ProtocolError ? error : new ProtocolError("disconnected", "前台探测失败");
-        const cause = reason === "path" ? "path_probe_failed" : "foreground_probe_failed";
+        const cause = reason === "path" ? "path_probe_failed" : reason === "read" ? "read_probe_failed" : "foreground_probe_failed";
         transport.diagnose("probe_failed", { reason: cause, code: failure.code });
         transport.suspend(new ProtocolError(failure.code, failure.message, { reason: cause, ...failure.diagnostics }));
       }

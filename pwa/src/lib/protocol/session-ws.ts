@@ -262,6 +262,10 @@ class ReconnectingSession implements LiveSession {
 
   isConnected = (): boolean => this.transport !== null && !this.checking;
   isChecking = (): boolean => this.checking && !this.stopped;
+  /** A read missed its deadline: the connection verifies the path it used. */
+  verifyPath = (): boolean => this.transport !== null &&
+    this.direct.checkPath(this.transport, !this.stopped && this.networkAvailable, this.checking);
+
   switchTransport = async (target: NetworkMode): Promise<void> => {
     this.networkMode = target;
     await this.direct.switchTransport(target);
