@@ -182,8 +182,10 @@ export class DirectSessionDriver {
     }
   }
 
-  /** A read gave up at its deadline while this transport still looked alive.
-   * The heartbeat would not notice for another 25 s. True when a check started. */
+  /**
+   * A read gave up at its deadline while this transport still looked alive. The
+   * heartbeat would not notice for another 25 s. True when a check started.
+   */
   checkPath(transport: SessionTransport, live: boolean, checking: boolean): boolean {
     const now = performance.now();
     if (!pathCheckDue(live, checking, this.lastPathCheckAt, now)) return false;
