@@ -206,23 +206,28 @@ post, cancel, or ask for permission. Debug builds also allow
 `http://localhost`.
 
 The PWA keeps the decision of when a notice is due. A visible page shows its own
-attention strip and posts nothing. A hidden page that holds the keep-alive
-follows agent status on the existing session and posts one notice per pane
-through the bridge, using the same transition rule and 30 second window as the
-daemon's Web Push path. A tap opens `/pair#notify=1&d=…&pane=…`, the same deep
-link the browser receives.
+attention strip and posts nothing. A hidden page that still runs follows agent
+status on the existing session and posts one notice per pane through the
+bridge, using the same transition rule and 30 second window as the daemon's Web
+Push path. A tap opens `/pair#notify=1&d=…&pane=…`, the same deep link the
+browser receives.
 
 Two channels carry the notices. `pairfob-agents` is high importance and
 vibrates. `pairfob-connection` is low importance and silent; it holds the
 ongoing keep-alive notice. Notices are keyed by pane tag, so a finished turn
 replaces a stale needs-you row instead of stacking.
 
-**The keep-alive is a foreground service.** Android freezes a backgrounded
-WebView, so a notice cannot be raised from a page the system has stopped.
-Turning notifications on starts `KeepAliveService`, which shows a quiet ongoing
-notification and keeps the process running. The trade-off is visible on purpose.
-The user sees a permanent "Pairfob is connected" row for as long as notifications
-are on. Turning notifications off stops the service and removes the row.
+**The keep-alive buys minutes, not background delivery.** Measured on an
+emulator with notifications on and `KeepAliveService` running: a hidden page
+handled a session message and raised a notice 60 seconds after backgrounding,
+then handled nothing at 5 and 7 minutes while the same WebSocket stayed open.
+Battery saver was off and the device was active. The process survived; the page
+had stopped running. So a notice reaches the user for the first few minutes
+after they leave the app and not after that. A real background notice needs a
+push channel that wakes a stopped process, which is under **Not in this
+scaffold**. `KeepAliveService` keeps the process warm and makes the limit
+visible through its ongoing row; it does not restore page execution, and
+nothing in this shell can.
 
 `POST_NOTIFICATIONS` is requested on API 33 and later when the user turns
 notifications on, not at first launch. Below API 33 only the system settings

@@ -59,16 +59,20 @@ version. A fix ships with a higher version code; do not try to downgrade.
   and check the result on the computer.
 - Rotate the device and try a hardware keyboard if you have one.
 - Turn on notifications in Settings, send the app to the background, and check
-  that a notice arrives when a session finishes or needs input.
+  that a notice arrives for a session that finishes within the next minute or
+  so. Later notices are expected to miss; see **Current limits**.
 - Update over an older beta, then confirm pairing and preferences remain.
 
 ## Current limits
 
-- No vendor push channel (FCM or an OEM one), so a notice only arrives while
-  the app process is alive. Turning notifications on in Settings starts a
-  foreground service and shows a quiet ongoing row that keeps it alive. Without
-  that, Android may freeze a backgrounded app and nothing is raised. Delivery
-  timing still depends on Android.
+- No vendor push channel (FCM or an OEM one). Notices are raised locally, so
+  they reach you for the first few minutes after you leave the app, not after
+  that. Android freezes a backgrounded page within minutes even though the
+  process survives; turning notifications on starts a foreground service with a
+  quiet ongoing row, which keeps the process warm but does not keep the page
+  running. Measured on an emulator: a notice arrived at 60 seconds hidden and
+  not at 5 or 7 minutes. Reliable delivery while the app is closed needs a push
+  channel and is not in this beta.
 - Mainland China network availability and vendor-specific Android behavior are
   not yet broadly validated. Android 7.0 is the minimum install version, not a
   claim that every supported Android version has been tested.
