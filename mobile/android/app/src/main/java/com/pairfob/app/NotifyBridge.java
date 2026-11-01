@@ -1,7 +1,6 @@
 package com.pairfob.app;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -28,16 +27,16 @@ import org.json.JSONObject;
 /** Agent notifications belong only to the bundled app's main frame. */
 final class NotifyBridge {
     static final String EXTRA_URL = "pairfob.notify.url";
-    static final String CHANNEL_CONNECTION = "pairfob-connection";
 
     static final String CHANNEL_AGENTS = "pairfob-agents";
     private static final String LOG_TAG = "PairfobNotify";
     private static final String PREFS = "pairfob.notify";
     private static final String PREF_ASKED = "asked";
+    private static final String PREF_SYNC = "sync";
     private static final int NOTIFICATION_ID = 0;
     private static final long PERMISSION_TIMEOUT_MS = 60_000;
 
-    private final Activity activity;
+    private final Context context;
     private final WebView view;
     private final ActivityResultLauncher<String> permissionLauncher;
     private final boolean debug;
@@ -46,11 +45,16 @@ final class NotifyBridge {
     private String pendingTap;
     private PendingPermission pendingPermission;
 
-    NotifyBridge(Activity activity, WebView view, ActivityResultLauncher<String> permissionLauncher) {
-        this.activity = activity;
+    NotifyBridge(Context context, WebView view, ActivityResultLauncher<String> permissionLauncher) {
+        this.context = context;
         this.view = view;
         this.permissionLauncher = permissionLauncher;
-        debug = (activity.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        debug = (context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+    }
+
+    /** The offscreen sync page: it reads status but never asks for a permission. */
+    NotifyBridge(Context context, WebView view) {
+        this(context, view, null);
     }
 
     void install() {
@@ -82,7 +86,7 @@ final class NotifyBridge {
                     requestPermission(reply, id);
                     break;
                 case "post":
-                    ensureChannels(activity);
+                    ensureChannels(context);
                     if (!canPost()) {
                         android.util.Log.w(LOG_TAG, "Notification rejected: not granted");
                         respond(reply, id, false, "notifications are disabled");
@@ -94,12 +98,11 @@ final class NotifyBridge {
                     cancel(request, reply, id);
                     break;
                 case "cancelAll":
-                    NotificationManagerCompat.from(activity).cancelAll();
-                    if (KeepAliveService.isRunning()) KeepAliveService.refreshNotification(activity);
+                    NotificationManagerCompat.from(context).cancelAll();
                     respond(reply, id, true, new JSONObject());
                     break;
-                case "setKeepAlive":
-                    setKeepAlive(request, reply, id);
+                case "setBackgroundSync":
+                    setBackgroundSync(request, reply, id);
                     break;
                 case "ready":
                     ready(reply, id);
@@ -116,10 +119,10 @@ final class NotifyBridge {
     }
 
     private void status(JavaScriptReplyProxy reply, String id) throws Exception {
-        ensureChannels(activity);
+        ensureChannels(context);
         respond(reply, id, true, new JSONObject()
             .put("permission", permissionState())
-            .put("keepAlive", KeepAliveService.isRunning()));
+            .put("backgroundSync", NotifySyncJobService.isScheduled(context)));
     }
 
     private void requestPermission(JavaScriptReplyProxy reply, String id) {
@@ -171,15 +174,15 @@ final class NotifyBridge {
         String body = text(request, "body", 500);
         String tag = text(request, "tag", 120);
         String url = tapUrl(request.get("url"));
-        Intent tap = new Intent(activity, MainActivity.class)
+        Intent tap = new Intent(context, MainActivity.class)
             .setAction("pairfob.notify." + tag)
             .putExtra(EXTRA_URL, url)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         // One request code per tag; a shared code would let the newest extras
         // replace every queued tap, since PendingIntents compare without extras.
-        PendingIntent content = PendingIntent.getActivity(activity, tag.hashCode(), tap,
+        PendingIntent content = PendingIntent.getActivity(context, tag.hashCode(), tap,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        NotificationCompat.Builder notification = new NotificationCompat.Builder(activity, CHANNEL_AGENTS)
+        NotificationCompat.Builder notification = new NotificationCompat.Builder(context, CHANNEL_AGENTS)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle(title)
             .setContentText(body)
@@ -188,32 +191,37 @@ final class NotifyBridge {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .setCategory(NotificationCompat.CATEGORY_STATUS);
-        NotificationManagerCompat.from(activity).notify(tag, NOTIFICATION_ID, notification.build());
+        NotificationManagerCompat.from(context).notify(tag, NOTIFICATION_ID, notification.build());
         respond(reply, id, true, new JSONObject().put("posted", true));
     }
 
     private void cancel(JSONObject request, JavaScriptReplyProxy reply, String id) throws Exception {
         String tag = text(request, "tag", 120);
-        NotificationManagerCompat.from(activity).cancel(tag, NOTIFICATION_ID);
+        NotificationManagerCompat.from(context).cancel(tag, NOTIFICATION_ID);
         respond(reply, id, true, new JSONObject().put("cancelled", true));
     }
 
-    private void setKeepAlive(JSONObject request, JavaScriptReplyProxy reply, String id) throws Exception {
+    private void setBackgroundSync(JSONObject request, JavaScriptReplyProxy reply, String id) throws Exception {
         boolean on = request.getBoolean("on");
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(PREF_SYNC, on).apply();
         if (on) {
-            try {
-                ContextCompat.startForegroundService(activity, new Intent(activity, KeepAliveService.class));
-                KeepAliveService.setRunning(true);
-            } catch (Exception error) {
-                android.util.Log.w(LOG_TAG, "Keep-alive start rejected: " + error.getClass().getSimpleName());
-                respond(reply, id, false, "foreground service is not allowed in the background");
-                return;
-            }
+            NotifySyncJobService.schedule(context);
         } else {
-            activity.stopService(new Intent(activity, KeepAliveService.class));
-            KeepAliveService.setRunning(false);
+            NotifySyncJobService.cancel(context);
         }
-        respond(reply, id, true, new JSONObject().put("keepAlive", KeepAliveService.isRunning()));
+        boolean scheduled = NotifySyncJobService.isScheduled(context);
+        if (on && !scheduled) {
+            respond(reply, id, false, "background sync is not available on this device");
+            return;
+        }
+        respond(reply, id, true, new JSONObject().put("backgroundSync", scheduled));
+    }
+
+    /** Whether the user asked for background delivery, before any job runs. */
+    static boolean backgroundSyncOn(Context context) {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(PREF_SYNC, false);
     }
 
     private void ready(JavaScriptReplyProxy reply, String id) throws Exception {
@@ -253,22 +261,19 @@ final class NotifyBridge {
         NotificationChannel agents = new NotificationChannel(CHANNEL_AGENTS,
             context.getString(R.string.notify_channel_agents), NotificationManager.IMPORTANCE_HIGH);
         agents.enableVibration(true);
-        NotificationChannel connection = new NotificationChannel(CHANNEL_CONNECTION,
-            context.getString(R.string.notify_channel_connection), NotificationManager.IMPORTANCE_LOW);
-        connection.setSound(null, null);
-        connection.enableVibration(false);
         manager.createNotificationChannel(agents);
-        manager.createNotificationChannel(connection);
+        // Older builds carried a keep-alive channel that nothing posts to now.
+        manager.deleteNotificationChannel("pairfob-connection");
     }
 
     private String permissionState() {
         if (Build.VERSION.SDK_INT >= 33
-                && ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
+                && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
             return asked() ? "denied" : "prompt";
         }
         // Below API 33, and after a grant, the app-wide switch still wins.
-        return NotificationManagerCompat.from(activity).areNotificationsEnabled() ? "granted" : "denied";
+        return NotificationManagerCompat.from(context).areNotificationsEnabled() ? "granted" : "denied";
     }
 
     private boolean canPost() {
@@ -276,12 +281,12 @@ final class NotifyBridge {
     }
 
     private boolean asked() {
-        return activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getBoolean(PREF_ASKED, false);
     }
 
     private void markAsked() {
-        activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(PREF_ASKED, true).apply();
     }
 

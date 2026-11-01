@@ -85,6 +85,16 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         applySystemBars();
+        // The visible page runs its own connection, so the sync job stands aside.
+        NotifySyncJobService.setAppVisible(true);
+    }
+
+    @Override
+    public void onPause() {
+        NotifySyncJobService.setAppVisible(false);
+        // An update or a system cleanup can drop the persisted job; re-arm it.
+        if (NotifyBridge.backgroundSyncOn(this)) NotifySyncJobService.schedule(this);
+        super.onPause();
     }
 
     private void applySystemBars() {

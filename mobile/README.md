@@ -212,22 +212,33 @@ bridge, using the same transition rule and 30 second window as the daemon's Web
 Push path. A tap opens `/pair#notify=1&d=…&pane=…`, the same deep link the
 browser receives.
 
-Two channels carry the notices. `pairfob-agents` is high importance and
-vibrates. `pairfob-connection` is low importance and silent; it holds the
-ongoing keep-alive notice. Notices are keyed by pane tag, so a finished turn
-replaces a stale needs-you row instead of stacking.
+**Background delivery is a scheduled job.** Measured on an emulator, a hidden
+page stops running a few minutes after the app leaves the screen: one message
+was handed to it at 60 seconds and ignored at five and seven minutes while the
+same WebSocket stayed open with battery saver off. A foreground service keeps
+the process alive and the page dead, so it buys nothing.
 
-**The keep-alive buys minutes, not background delivery.** Measured on an
-emulator with notifications on and `KeepAliveService` running: a hidden page
-handled a session message and raised a notice 60 seconds after backgrounding,
-then handled nothing at 5 and 7 minutes while the same WebSocket stayed open.
-Battery saver was off and the device was active. The process survived; the page
-had stopped running. So a notice reaches the user for the first few minutes
-after they leave the app and not after that. A real background notice needs a
-push channel that wakes a stopped process, which is under **Not in this
-scaffold**. `KeepAliveService` keeps the process warm and makes the limit
-visible through its ongoing row; it does not restore page execution, and
-nothing in this shell can.
+`NotifySyncJobService` wakes the app every fifteen minutes instead. It runs the
+bundled page offscreen in a `WebView` of its own, at the app's origin through
+`BundledAssets`, so the page reads the same IndexedDB session and the producer
+above runs unchanged. Notices are posted at whatever moment the page reaches a
+transition, not when the job started. The job holds the page for eight minutes,
+so a phone that wakes on schedule checks in about every fifteen minutes. Android
+defers periodic work while the screen is off and the phone is dozing, so a
+dormant phone can wait hours.
+
+Two things keep the schedule honest. `SyncBootReceiver` re-arms it after a
+reboot or an app update, since both drop persisted jobs. `MainActivity` marks
+the app visible from `onResume` to `onPause`, and a job that finds the app on
+screen stands aside for the page the user is already looking at. `open` waits
+ten seconds before building the WebView: a job can start while the activity is
+still stopping, and building one there holds the main thread long enough for a
+background ANR.
+
+Notices post to `pairfob-agents`, which is high importance and vibrates, and
+are keyed by pane tag, so a finished turn replaces a stale needs-you row
+instead of stacking. The keep-alive channel from older builds is deleted the
+first time the page checks in, since nothing posts to it now.
 
 `POST_NOTIFICATIONS` is requested on API 33 and later when the user turns
 notifications on, not at first launch. Below API 33 only the system settings

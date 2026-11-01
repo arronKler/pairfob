@@ -1,7 +1,4 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="notify_channel_agents">Agent 通知</string>
-    <string name="notify_channel_connection">保持连接</string>
-    <string name="keepalive_title">Pairfob 正在保持连接</string>
-    <string name="keepalive_text">回来就能看到 Agent 的进展</string>
 </resources>

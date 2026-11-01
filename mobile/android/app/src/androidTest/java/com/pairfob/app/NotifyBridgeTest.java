@@ -75,7 +75,7 @@ public class NotifyBridgeTest {
             waitFor(view, "!!window.replies?.['1']");
             assertEquals("true", evaluate(view, "replies['1'].ok"
                 + " && ['granted','denied','prompt'].includes(replies['1'].value.permission)"
-                + " && typeof replies['1'].value.keepAlive === 'boolean'"));
+                + " && typeof replies['1'].value.backgroundSync === 'boolean'"));
 
             evaluate(view, "PairfobNotify.postMessage(JSON.stringify({id:'2',method:'post',"
                 + "title:'Agent needs you',body:'A pane is waiting',tag:'pane-1',url:'/settings#notify=1'}))");
@@ -215,14 +215,13 @@ public class NotifyBridgeTest {
             waitFor(view, "replies['3']?.ok === true");
             await(manager, "pane-1", false);
 
-            evaluate(view, "PairfobNotify.postMessage(JSON.stringify({id:'4',method:'setKeepAlive',on:true}))");
-            waitFor(view, "replies['4']?.value?.keepAlive === true");
-            await(manager, null, true);
-            assertTrue("keep-alive service is running", KeepAliveService.isRunning());
+            evaluate(view, "PairfobNotify.postMessage(JSON.stringify({id:'4',method:'setBackgroundSync',on:true}))");
+            waitFor(view, "replies['4']?.value?.backgroundSync === true");
+            assertTrue("background sync is scheduled", NotifySyncJobService.isScheduled(context));
 
-            evaluate(view, "PairfobNotify.postMessage(JSON.stringify({id:'5',method:'setKeepAlive',on:false}))");
-            waitFor(view, "replies['5']?.value?.keepAlive === false");
-            await(manager, null, false);
+            evaluate(view, "PairfobNotify.postMessage(JSON.stringify({id:'5',method:'setBackgroundSync',on:false}))");
+            waitFor(view, "replies['5']?.value?.backgroundSync === false");
+            assertFalse("background sync is cancelled", NotifySyncJobService.isScheduled(context));
         }
     }
 }
