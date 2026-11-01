@@ -229,14 +229,14 @@ describe("agent-chat remembers its mode per pane", () => {
     paintPane();
     expect(app.querySelector(".agent-empty-working .agent-empty-title")?.textContent).toBe("正在执行");
     expect(app.querySelector(".agent-empty .spinner")).toBeTruthy();
-    expect(app.textContent).not.toContain("还没有对话");
+    expect(app.textContent).not.toContain("新会话，之前的对话不在这里显示");
 
     await new Promise<void>(resolve => setTimeout(resolve, 0));
     finish?.({ items: [], nextCursor: null, truncated: false });
     await Promise.resolve();
     await Promise.resolve();
     expect(app.querySelector(".agent-empty-working")).toBeTruthy();
-    expect(app.textContent).not.toContain("还没有对话");
+    expect(app.textContent).not.toContain("新会话，之前的对话不在这里显示");
   }));
 
   test("a cold idle conversation uses loading and only shows the empty action after success", async () => await act(async () => {
@@ -255,14 +255,14 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelector(".agent-empty-loading")).toBeTruthy();
     expect(app.querySelector(".agent-empty-title")?.textContent).toBe("正在读取执行过程");
     expect(app.querySelector(".agent-empty .spinner")).toBeTruthy();
-    expect(app.textContent).not.toContain("还没有对话");
+    expect(app.textContent).not.toContain("新会话，之前的对话不在这里显示");
     expect(app.querySelector(".agent-stream")?.getAttribute("aria-busy")).toBe("true");
 
     await new Promise<void>(resolve => setTimeout(resolve, 0));
     finish?.({ items: [], nextCursor: null, truncated: false });
     await Promise.resolve();
     await Promise.resolve();
-    expect(app.querySelector(".agent-empty-empty .agent-empty-title")?.textContent).toBe("还没有对话");
+    expect(app.querySelector(".agent-empty-empty .agent-empty-title")?.textContent).toBe("新会话，之前的对话不在这里显示");
     expect(app.querySelector(".agent-empty-sub")?.textContent).toContain("在下面");
     expect(app.querySelector(".agent-stream")?.getAttribute("aria-busy")).toBe("false");
   }));
@@ -275,7 +275,7 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(restoreAgentTrace("p1")).toBe(true);
     paintPane();
     expect(app.textContent).toContain("looks fine");
-    expect(app.textContent).not.toContain("还没有对话");
+    expect(app.textContent).not.toContain("新会话，之前的对话不在这里显示");
   }));
 
   test("the newest page paints before background context pagination finishes", async () => await act(async () => {
