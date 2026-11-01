@@ -16,6 +16,29 @@ const pair = (char: string) => ({ daemonId: `d_${char.repeat(20)}`, deviceId: "d
 const a = pair("a"), b = pair("b");
 let controller: AbortController;
 
+type NativePort = {
+  postMessage(message: string): void;
+  onmessage: ((event: { data: string }) => void) | null;
+};
+
+/** A native notification port that answers `ready`, optionally with a cold-start tap. */
+function nativeFixture(coldTap: string | null = null): NativePort {
+  const port: NativePort = {
+    postMessage(raw) {
+      const request = JSON.parse(raw) as { id: string; method: string };
+      if (request.method !== "ready") return;
+      port.onmessage?.({ data: JSON.stringify({ id: request.id, ok: true, value: { tap: coldTap ? { url: coldTap } : null } }) });
+    },
+    onmessage: null,
+  };
+  (window as unknown as { PairfobNotify?: NativePort }).PairfobNotify = port;
+  return port;
+}
+
+function tap(port: NativePort, url: string) {
+  port.onmessage?.({ data: JSON.stringify({ event: "tap", url }) });
+}
+
 async function flush() { for (let i = 0; i < 40; i++) await Promise.resolve(); }
 function capture(daemonId: string, paneId = "p1") { captureNotificationTarget({ daemonId, paneId }); }
 
@@ -38,6 +61,7 @@ afterEach(() => {
   setComputers([]);
   resetDashboard();
   setPhase("boot");
+  delete (window as unknown as { PairfobNotify?: unknown }).PairfobNotify;
 });
 
 test("a warm notification switches computers before consuming the pane target", async () => {
@@ -119,4 +143,47 @@ test("binding leaves the already captured cold-start intent to boot", async () =
   await flush();
   expect(dispatches).toBe(0);
   expect(notificationTarget()?.paneId).toBe("p1");
+});
+
+test("a native tap wakes the same notification path as a hash change", async () => {
+  const port = nativeFixture();
+  const calls: string[] = [];
+  bindNotificationLinks(controller.signal, {
+    switchComputer: async daemonId => { calls.push(`switch:${daemonId}`); },
+    refresh: async () => { calls.push("refresh"); },
+  });
+  await flush();
+  tap(port, `/pair#notify=1&d=${a.daemonId}&pane=p1`);
+  await flush();
+  expect(calls).toEqual(["refresh"]);
+  expect(notificationTarget()?.paneId).toBe("p1");
+});
+
+test("a tap that arrived during a cold start is consumed by ready", async () => {
+  nativeFixture(`/pair#notify=1&d=${a.daemonId}&pane=p1`);
+  const calls: string[] = [];
+  bindNotificationLinks(controller.signal, {
+    switchComputer: async daemonId => { calls.push(`switch:${daemonId}`); },
+    refresh: async () => { calls.push("refresh"); },
+  });
+  await flush();
+  expect(calls).toEqual(["refresh"]);
+});
+
+test("malformed native taps are ignored and an aborted page stops listening", async () => {
+  const port = nativeFixture();
+  let dispatches = 0;
+  bindNotificationLinks(controller.signal, {
+    switchComputer: async () => { dispatches++; },
+    refresh: async () => { dispatches++; },
+  });
+  await flush();
+  tap(port, "https://other.example/pair#notify=1&d=d_aaaaaaaaaaaaaaaaaaaa&pane=p1");
+  await flush();
+  expect(dispatches).toBe(0);
+  expect(notificationTarget()).toBeNull();
+  controller.abort();
+  tap(port, `/pair#notify=1&d=${a.daemonId}&pane=p1`);
+  await flush();
+  expect(dispatches).toBe(0);
 });

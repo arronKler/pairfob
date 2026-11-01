@@ -1,6 +1,7 @@
 import { bindCatalogSessionRestoration } from "../computers/cancel-add";
 import { markAppPerformance } from "../../lib/performance-marks";
 import { bindInactiveNetworkPreference } from "../settings/network-preference";
+import { keepAliveEnabled, localNotificationsEnabled } from "../settings/local-push";
 import { acceptDaemonVersion, markDaemonConfigIncompatible } from "../settings/daemon-update";
 import { t } from "../../lib/i18n";
 import type { NetworkMode } from "../../lib/network-mode";
@@ -58,7 +59,7 @@ import { liveView, liveViewIsCurrent } from "./generations";
 import { hasRetainedView } from "./retained-view";
 import { openPaneWithOwner as openOwnedPane, type PaneNavigation } from "./open-pane";
 import { observeP2PAttempt, observeSessionEvent } from "./session-events";
-import { refreshSnapshot as observeSnapshot } from "./snapshot";
+import { refreshSnapshot as observeSnapshot, refreshSnapshotInBackground } from "./snapshot";
 import type { LifecyclePorts } from "./ports";
 import {
   type LifecycleContext,
@@ -260,6 +261,8 @@ export async function establish(pair: PairResult, connect: SessionConnector = co
 
 const sessionEventPorts = {
   documentVisible: () => document.visibilityState === "visible",
+  backgroundAttention: () => document.visibilityState === "hidden"
+    && keepAliveEnabled() && localNotificationsEnabled(),
   commitView,
   clearNotice,
   showStatus,
@@ -267,7 +270,10 @@ const sessionEventPorts = {
   stopPolling: () => stopPolling(),
   retireAgentTraceReads: retireAgentTraceRefreshes,
   refreshRuntime: () => recoverVisibleSession(),
-  refreshSnapshot: () => refreshSnapshot(),
+  // A poke that survives the visibility gate is the hidden attention lane; it
+  // must fold the catalog without waking anything the visible path owns.
+  refreshSnapshot: () => document.visibilityState === "visible"
+    ? refreshSnapshot() : refreshSnapshotInBackground(snapshotPorts),
   wakePane: () => livePolling.wakePane(),
   preloadFullTerminal: preloadFullTerminalXterm,
   handleGuidedEvent: (event: SessionEvent) => guidedScrollController.handleEvent(event),

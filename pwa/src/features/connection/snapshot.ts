@@ -43,7 +43,12 @@ export type SnapshotPorts = {
   now(): number;
 };
 
-function viewIsCurrent(session: LiveSession, viewVersion: number, ports: SnapshotPorts): boolean {
+/** The background lane folds the catalog; it never paints, navigates or reads a pane. */
+export type SnapshotStatusPorts = Pick<SnapshotPorts, "currentLive" | "networkOnline" | "now">;
+
+type LiveOwnerPorts = Pick<SnapshotPorts, "currentLive">;
+
+function viewIsCurrent(session: LiveSession, viewVersion: number, ports: LiveOwnerPorts): boolean {
   return liveViewIsCurrent(session, viewVersion, ports.currentLive());
 }
 
@@ -157,5 +162,36 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
       setRefreshBusy(false);
       if (takeQueuedSnapshot()) void refreshSnapshot(ports);
     }
+  }
+}
+
+/**
+ * The hidden-page attention lane. An agent-status poke reaches here when the
+ * page holds the notification keep-alive; folding the Snapshot into the
+ * dashboard catalog is all the local notification producer needs, so nothing
+ * visible, navigational or pane-reading runs. A foreground Snapshot in flight
+ * already owns the busy flag and will update the catalog itself.
+ */
+export async function refreshSnapshotInBackground(ports: SnapshotStatusPorts): Promise<void> {
+  const session = ports.currentLive();
+  const viewVersion = liveView();
+  if (!session || !session.isConnected() || !ports.networkOnline() || refreshBusy()) return;
+  setRefreshBusy(true);
+  if (!viewIsCurrent(session, viewVersion, ports)) return;
+  try {
+    const snapshot = (await session.snapshot()) as SnapshotWire;
+    if (!viewIsCurrent(session, viewVersion, ports)) return;
+    noteSnapshotAt(ports.now());
+    if (!viewIsCurrent(session, viewVersion, ports)) return;
+    batch(() => {
+      const applied = applySnapshot(snapshot);
+      // Occupant caches must not survive a background fold, or the next
+      // visible refresh sees no change and keeps a stale trace.
+      invalidateChangedPaneOwners(applied.previous, dashboardStore.get().agents, openPaneId());
+    });
+  } catch {
+    // A hidden page has no screen to report on; the visible lane owns errors.
+  } finally {
+    if (viewIsCurrent(session, viewVersion, ports)) setRefreshBusy(false);
   }
 }

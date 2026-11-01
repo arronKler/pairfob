@@ -44,6 +44,7 @@ import type { OriginConfig } from "../lib/origin-config";
 import { recordConnectionDiagnostic } from "../lib/protocol/connection-diagnostics";
 import { bindOverlayOrigin } from "../shared/ui/overlay/origin";
 import { bindNotificationLinks } from "./notification-links";
+import { bindLocalNotifications } from "./local-notifications";
 import { markAppPerformance, resetAppPerformance } from "../lib/performance-marks";
 
 /**
@@ -190,6 +191,7 @@ export function startApplication(): () => void {
     bindLanguageChange(signal);
     capturePairingFragment();
     bindNotificationLinks(signal);
+    bindLocalNotifications(signal);
     // Bind the session feature's owner adoption on the frame seam before the
     // first commit: every prepared session composition (phone chat, desk chat,
     // guided, complete terminal) then adopts its owner before React renders.

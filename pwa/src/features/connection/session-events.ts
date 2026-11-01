@@ -20,6 +20,8 @@ import { pokeRefreshAction, shouldPullStatus } from "./poll-schedule";
 
 export type SessionEventPorts = {
   documentVisible(): boolean;
+  /** A hidden page that is still following agent status for local notifications. */
+  backgroundAttention(): boolean;
   commitView(): void;
   clearNotice(): void;
   showStatus(text: string, persist?: boolean): void;
@@ -76,7 +78,10 @@ export function observeSessionEvent(
     if (currentScreen() === "settings") ports.commitView();
     return;
   }
-  if (event.type === "poke" && ports.documentVisible()) {
+  // Hidden pages stop both fallback loops, but a page holding the notification
+  // keep-alive still follows agent status: the Snapshot is what the local
+  // notification producer reads. No pane lane, chrome or polling wakes here.
+  if (event.type === "poke" && (ports.documentVisible() || (event.reason === "agent_status" && ports.backgroundAttention()))) {
     const action = pokeRefreshAction(currentScreen(), openPaneId(), event.paneId, event.reason);
     if (action === "runtime") void ports.refreshRuntime();
     else if (action === "snapshot") {

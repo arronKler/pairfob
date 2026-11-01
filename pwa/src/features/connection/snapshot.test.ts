@@ -19,7 +19,7 @@ import {
   takeQueuedSnapshot,
 } from "../session/session-store";
 import { bumpLiveView, liveView } from "./generations";
-import { refreshSnapshot, type SnapshotPorts } from "./snapshot";
+import { refreshSnapshot, refreshSnapshotInBackground, type SnapshotPorts, type SnapshotStatusPorts } from "./snapshot";
 import { applyTrace, chatSnapshot } from "../session/chat/trace-store";
 import { refreshAgentTrace } from "../session/chat/agent-chat-controller";
 import { loadToolDetail, toolDetailView } from "../session/chat/agent-chat-detail";
@@ -118,6 +118,28 @@ describe("snapshot observation ownership", () => {
     const started = liveView();
     bumpLiveView();
     expect(liveView()).not.toBe(started);
+  });
+
+  test("the background lane folds the catalog without painting, navigating or reading a pane", async () => {
+    const background: SnapshotStatusPorts = { currentLive: liveSession, networkOnline: () => true, now: () => 12345 };
+    await refreshSnapshotInBackground(background);
+    expect(reads).toBe(1);
+    expect(dashboardStore.get().agents.map((agent) => agent.paneId)).toEqual(["old-A"]);
+    expect(calls).toEqual([]);
+    expect(refreshBusy()).toBeFalse();
+    // The visible lane keeps its own visibility gate: a hidden page does not
+    // inherit it through this path.
+    const hidden: SnapshotPorts = { ...snapshotPorts, documentVisible: () => false };
+    await refreshSnapshot(hidden);
+    expect(reads).toBe(1);
+  });
+
+  test("the background lane waits for an in-flight foreground Snapshot", async () => {
+    const background: SnapshotStatusPorts = { currentLive: liveSession, networkOnline: () => true, now: () => 12345 };
+    setRefreshBusy(true);
+    await refreshSnapshotInBackground(background);
+    expect(reads).toBe(0);
+    setRefreshBusy(false);
   });
 
   test("the timestamp publication cannot let the old response overwrite a replacement owner", async () => {

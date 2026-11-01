@@ -18,6 +18,7 @@ let pool: ComputerSessions;
 
 const eventPorts: SessionEventPorts = {
   documentVisible: () => true,
+  backgroundAttention: () => false,
   commitView: () => calls.push("commitView"),
   clearNotice: () => calls.push("clear"),
   showStatus: () => calls.push("status"),
@@ -170,6 +171,21 @@ describe("session event observation", () => {
     attachLiveSession(null);
     observeSessionEvent(pool, "A", session, { type: "terminal", code: "revoked" }, eventPorts);
     expect(calls).toEqual(["inactive"]);
+  });
+
+  test("a hidden page holding the notification keep-alive still folds an agent-status poke", () => {
+    const hidden: SessionEventPorts = {
+      ...eventPorts,
+      documentVisible: () => false,
+      backgroundAttention: () => true,
+    };
+    observeSessionEvent(pool, "A", session, { type: "poke", paneId: "p1", reason: "agent_status" }, hidden);
+    expect(calls).toEqual(["snapshot"]);
+    calls = [];
+    // Any other poke reason, or no keep-alive, leaves the hidden page idle.
+    observeSessionEvent(pool, "A", session, { type: "poke", paneId: "p1", reason: "pane_activity" }, hidden);
+    observeSessionEvent(pool, "A", session, { type: "poke", paneId: "p1", reason: "agent_status" }, { ...hidden, backgroundAttention: () => false });
+    expect(calls).toEqual([]);
   });
 
   test("a disconnect publication switching sessions stops only the retiring owner's effects", () => {

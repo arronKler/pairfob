@@ -5,7 +5,8 @@ import {
   networkOnline, notificationGeneration, notificationTarget, phase,
 } from "../features/connection/connection-store";
 import { parseNotificationURL, type NotificationTarget } from "../lib/notification-target";
-import { relayOrigin } from "../lib/runtime-config";
+import { nativeNotify } from "../lib/native-notify";
+import { pageOrigin, relayOrigin } from "../lib/runtime-config";
 import { t } from "../lib/i18n";
 import { messageOf } from "../lib/notices";
 import { showError } from "./notices-store";
@@ -91,7 +92,7 @@ export function bindNotificationLinks(signal: AbortSignal, ports?: NotificationP
       if (notificationGeneration() !== generation) wake();
     }
   };
-  const capture = (target: NotificationTarget, source: "hashchange" | "worker_message") => {
+  const capture = (target: NotificationTarget, source: "hashchange" | "worker_message" | "native_message") => {
     captureNotificationTarget(target);
     diagnose("notify_received", source);
     wake();
@@ -110,6 +111,23 @@ export function bindNotificationLinks(signal: AbortSignal, ports?: NotificationP
     // Acknowledging capture lets a new worker fall back for an older page.
     event.ports[0]?.postMessage({ type: "pairfob_notify_captured" });
   }, { signal });
+  const native = nativeNotify();
+  if (native) {
+    const stopTap = native.onTap(url => {
+      const target = parseNotificationURL(url, pageOrigin());
+      if (!target) { diagnose("notify_error", "invalid_target"); return; }
+      capture(target, "native_message");
+    });
+    signal.addEventListener("abort", stopTap, { once: true });
+    // `ready` registers this page and hands back a tap that landed while the
+    // WebView was still starting, before any listener existed.
+    void native.ready().then(({ url }) => {
+      if (!url || signal.aborted) return;
+      const target = parseNotificationURL(url, pageOrigin());
+      if (!target) { diagnose("notify_error", "invalid_target"); return; }
+      capture(target, "native_message");
+    }, () => undefined);
+  }
   document.addEventListener("visibilitychange", wake, { signal });
   const unsubscribe = connectionStore.subscribe(wake);
   signal.addEventListener("abort", unsubscribe, { once: true });

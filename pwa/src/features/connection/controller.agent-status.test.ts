@@ -17,6 +17,7 @@ import { applyPaneRead, selectPane, setAgentChat, setFullTerminal } from "../ses
 import { applyRuntimeIdentity, resetRuntime } from "./runtime-store";
 import { resetGenerationsForTests } from "./generations";
 import { closeComputerSession, establish, recoverVisibleSession, startPolling, stopPolling } from "./controller";
+import { disableLocalNotifications, enableLocalNotifications } from "../settings/local-push";
 
 function app(): HTMLElement {
   return document.getElementById("app") as HTMLElement;
@@ -151,6 +152,41 @@ test("hidden status events do not start network reads", async () => {
   runtime.change("done");
   await settle();
   expect(runtime.reads()).toBe(before);
+});
+
+test("hidden status events fold the catalog when the notification keep-alive is on", async () => {
+  const port = {
+    postMessage(raw: string) {
+      const request = JSON.parse(raw) as { id: string; method: string; on?: boolean };
+      const value = request.method === "status" ? { permission: "granted", keepAlive: true }
+        : request.method === "requestPermission" ? { permission: "granted" }
+        : request.method === "setKeepAlive" ? { keepAlive: request.on === true }
+        : request.method === "cancelAll" ? {}
+        : { posted: true };
+      port.onmessage?.({ data: JSON.stringify({ id: request.id, ok: true, value }) });
+    },
+    onmessage: null as ((event: { data: string }) => void) | null,
+  };
+  (window as unknown as { PairfobNotify?: typeof port }).PairfobNotify = port;
+  await enableLocalNotifications();
+  try {
+    const runtime = await boot(true);
+    let paneReads = 0;
+    runtime.session.paneRead = async () => {
+      paneReads += 1;
+      return { text: "read", hash: "b".repeat(64) };
+    };
+    const before = runtime.reads();
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    runtime.change("done");
+    await settle();
+    expect(runtime.reads()).toBe(before + 1);
+    expect(paneReads).toBe(0);
+    expect(dashboardStore.get().agents.find((agent) => agent.paneId === "p1")?.status).toBe("done");
+  } finally {
+    await disableLocalNotifications();
+    delete (window as unknown as { PairfobNotify?: unknown }).PairfobNotify;
+  }
 });
 
 test("slow foreground recovery gates polling and coalesces repeated triggers", async () => {
