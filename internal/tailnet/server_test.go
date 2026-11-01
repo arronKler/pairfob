@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -292,5 +293,26 @@ func TestGatewayEstablishesEncryptedSessionAndForwardsPing(t *testing.T) {
 	}
 	if responseBody.ID != "req_ping" || !responseBody.OK || responseBody.Result.Echo != 7 {
 		t.Fatalf("Ping response=%s", plaintext)
+	}
+}
+
+func TestGatewayPolicyAllowsBlobImages(t *testing.T) {
+	listener, err := Listen("127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	origin := "http://" + listener.Addr().String()
+	gateway := New(listener, origin)
+	go func() { _ = gateway.Serve() }()
+	t.Cleanup(gateway.Close)
+
+	response, err := http.Get(origin + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	policy := response.Header.Get("Content-Security-Policy")
+	if !strings.Contains(policy, "img-src 'self' data: blob:") {
+		t.Fatalf("policy = %q, want img-src 'self' data: blob:", policy)
 	}
 }
