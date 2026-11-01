@@ -114,6 +114,13 @@ describe("poke refresh router", () => {
     });
   }
 
+  test("an agent_trace poke reads only the open pane on the pane screen", () => {
+    expect(pokeRefreshAction("pane", "p1", "p1", "agent_trace")).toBe("trace");
+    expect(pokeRefreshAction("pane", "p1", "p2", "agent_trace")).toBe("ignore");
+    expect(pokeRefreshAction("home", "p1", "p1", "agent_trace")).toBe("ignore");
+    expect(pokeRefreshAction("board", "", "p1", "agent_trace")).toBe("ignore");
+  });
+
   test("Herdr availability transitions refresh configuration before screen data", async () => {
     expect(pokeRefreshAction("pane", "p1", undefined, "herdr_offline")).toBe("runtime");
     expect(pokeRefreshAction("pane", "p1", undefined, "herdr_online")).toBe("runtime");

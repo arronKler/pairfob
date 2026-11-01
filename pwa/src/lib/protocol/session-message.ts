@@ -16,7 +16,7 @@ const RPC_ERROR_CODES = new Set([
   "invalid_argument", "unsupported", "conflict", "agent_not_found", "worktree_not_found",
   "transcript_unavailable", "unknown_outcome", "partial_failure",
 ]);
-const POKE_REASONS = new Set(["agent_status", "herdr_offline", "herdr_online", "daemon_replaced"]);
+const POKE_REASONS = new Set(["agent_status", "herdr_offline", "herdr_online", "daemon_replaced", "agent_trace"]);
 
 export type ValidSessionMessage =
   | { kind: "request"; id: string; tMs: number }

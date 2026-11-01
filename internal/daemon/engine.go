@@ -103,6 +103,12 @@ type sess struct {
 	// epochFailed is set on post-seal send failure so this pointer cannot send
 	// again before lock-taking cleanup runs.
 	epochFailed atomic.Bool
+
+	// watch is the conversation this session last read; see trace_watch.go.
+	watchMu    sync.Mutex
+	watchPane  string
+	watchRef   journal.Ref
+	watchUntil time.Time
 }
 
 var errEpochFailed = errors.New("session transport epoch failed")
@@ -208,6 +214,8 @@ type Engine struct {
 	mediaSendHook    func(*sess, envelope.Frame)
 
 	uploads *uploadRegistry
+
+	traceWatch traceWatchState
 }
 
 const PairingTTLDefault = 180 * time.Second

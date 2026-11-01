@@ -212,6 +212,19 @@ func (r *Reader) Read(ref Ref, cursor *string, limit int) (Page, error) {
 	return readPage(path, ref, offset, limit, parse)
 }
 
+// TranscriptPath names the transcript file the trusted binding resolves to
+// without rescanning for a missing one. The watch of an open conversation
+// uses it to stat the file.
+func (r *Reader) TranscriptPath(ref Ref) (string, error) {
+	if !r.Supports(ref) {
+		return "", ErrUnavailable
+	}
+	if ref.Agent == "pi" {
+		return r.findPiTranscript(ref, false)
+	}
+	return r.transcriptPath(ref, false)
+}
+
 func (r *Reader) transcriptPath(ref Ref, refreshMissing bool) (string, error) {
 	path, _, err := r.transcriptPathBase(ref, refreshMissing)
 	return path, err

@@ -87,6 +87,8 @@ export function observeSessionEvent(
         // wake the tail lane that consumes that identity.
         if (wakeAfterSnapshot && stillActive() && ports.documentVisible()) ports.wakePane();
       }, () => undefined);
+    } else if (action === "trace") {
+      ports.wakePane();
     } else if (action === "paneread") {
       ports.wakePane();
       if (isAgentChat() && shouldPullStatus(true, Date.now(), lastSnapshotAt())) void ports.refreshSnapshot();

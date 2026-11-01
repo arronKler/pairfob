@@ -452,6 +452,12 @@ func (e *Engine) notifyHerd(ctx context.Context, event HerdPush) error {
 }
 
 func (e *Engine) sendPoke(reason, paneID string) {
+	e.pokeSessions(reason, paneID, nil)
+}
+
+// pokeSessions sends one Poke to the established sessions in only, or to all
+// of them when only is nil. One failing session does not stop the others.
+func (e *Engine) pokeSessions(reason, paneID string, only map[*sess]bool) {
 	params := map[string]any{"reason": reason}
 	if paneID != "" {
 		params["pane_id"] = paneID
@@ -463,7 +469,7 @@ func (e *Engine) sendPoke(reason, paneID string) {
 	e.mu.Lock()
 	sessions := make([]*sess, 0, len(e.sessions))
 	for _, s := range e.sessions {
-		if s.state == "established" {
+		if s.state == "established" && (only == nil || only[s]) {
 			sessions = append(sessions, s)
 		}
 	}

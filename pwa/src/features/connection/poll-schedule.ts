@@ -1,6 +1,6 @@
 export const SNAPSHOT_FALLBACK_MS = 15_000;
 export const PANE_READ_FALLBACK_MS = 1_500;
-export const AGENT_TRACE_IDLE_MS = 2_000;
+export const AGENT_TRACE_IDLE_MS = 10_000;
 /** Board previews are informational; pokes still refresh them immediately. */
 export const BOARD_PREVIEW_FALLBACK_MS = 15_000;
 
@@ -23,7 +23,7 @@ export function shouldPullStatus(changed: boolean, now: number, lastSnapshotAt: 
   return changed && now - lastSnapshotAt >= PANE_STATUS_FLOOR_MS;
 }
 
-export type PokeRefreshKind = "runtime" | "snapshot" | "paneread" | "ignore";
+export type PokeRefreshKind = "runtime" | "snapshot" | "paneread" | "trace" | "ignore";
 
 /**
  * Visible-screen poke routing. Hidden callers must not invoke this for work —
@@ -39,6 +39,8 @@ export function pokeRefreshAction(
 ): PokeRefreshKind {
   if (reason === "herdr_offline" || reason === "herdr_online") return "runtime";
   if (reason === "agent_status") return "snapshot";
+  // The journal of the open conversation changed: only that pane reads again.
+  if (reason === "agent_trace") return screen === "pane" && openPaneId && pokePaneId === openPaneId ? "trace" : "ignore";
   if (screen === "pane" && openPaneId) {
     return pokePaneId === openPaneId ? "paneread" : "ignore";
   }
