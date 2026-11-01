@@ -10,7 +10,7 @@ import type { AgentTracePage } from "../../../lib/operations";
 import { NO_OPERATION_CAPABILITIES } from "../../../lib/operations";
 import type { LiveSession } from "../../../lib/protocol/client";
 import { applyTrace, chatSnapshot, setTraceLoadState } from "./trace-store";
-import { leaveAgentChat, patchAgentChat, stickAgentStream, submitAgentPrompt } from "./agent-chat-controller";
+import { jumpToLatest, leaveAgentChat, patchAgentChat, stickAgentStream, submitAgentPrompt } from "./agent-chat-controller";
 import { applyCapabilities, setOperationBusy } from "../../operations/capabilities-store";
 import { setComposeDraft } from "../compose-store";
 import { clearNotice } from "../../../app/notices-store";
@@ -21,7 +21,7 @@ import { setPhase } from "../../connection/connection-store";
 import { setScreen } from "../../../app/navigation-store";
 import { bindSessionOwnerFromLive } from "../bind-live";
 import { AgentChatPane } from "./agent-chat";
-import { endTailGlide, glideToTail, glidingToTail, pinTail } from "./tail-glide";
+import { endTailGlide, glideToTail, glidingToTail, pinTail, pinnedTail } from "./tail-glide";
 
 const handlers = { onBack() {}, onWorkspace() {}, onMenu() {}, onSwitch() {} };
 const page: AgentTracePage = { items: [{ type: "user", text: "Question" }, { type: "assistant", text: "Reply" }], nextCursor: null, truncated: false };
@@ -114,6 +114,20 @@ test("a glide is one smooth scroll to the tail, and pinning the tail meanwhile r
   expect([stream.scrollTop, glides.length]).toEqual([600, 2]);
 });
 
+test("a box that shrinks under the glide moves the tail, so the glide is sent to it", () => {
+  const stream = happy.document.createElement("div") as unknown as HTMLElement;
+  const glides = boxed(stream, 100);
+  glideToTail(stream);
+  expect(glides).toEqual([{ top: 600, behavior: "smooth" }]);
+  pinTail(stream);
+  expect(glides).toHaveLength(1);
+  // The header returns over the stream: the transcript is the same, the view is not.
+  Object.defineProperty(stream, "clientHeight", { configurable: true, value: 50 });
+  pinTail(stream);
+  expect(glides).toHaveLength(2);
+  expect(glides[1]).toEqual({ top: 600, behavior: "smooth" });
+});
+
 test("the reader's own scroll ends a glide at once", () => {
   for (const input of ["wheel", "touchstart", "pointerdown", "keydown"]) {
     const stream = happy.document.createElement("div") as unknown as HTMLElement;
@@ -159,6 +173,40 @@ test("a prompt sent from the tail scrolls in; the glide keeps the reader followi
   expect(glides.every((glide) => glide.behavior === "smooth")).toBeTrue();
   await act(async () => { await sent; });
   expect(chatSnapshot().agentTraceFollow).toBeTrue();
+});
+
+test("a pin's own scroll is not the reader leaving when the box moves under it", () => {
+  const stream = happy.document.createElement("div") as unknown as HTMLElement;
+  boxed(stream, 380);
+  pinTail(stream);
+  expect([stream.scrollTop, pinnedTail(stream)]).toEqual([600, true]);
+  // The header returns: the box moves under the same top, and nothing scrolled it.
+  Object.defineProperty(stream, "clientHeight", { configurable: true, value: 50 });
+  expect(pinnedTail(stream)).toBeTrue();
+  // The reader's own scroll is theirs.
+  stream.scrollTop = 570;
+  expect(pinnedTail(stream)).toBeFalse();
+  // And their hand on the stream retires the pin, even if the place matches again.
+  stream.scrollTop = 600;
+  fire(stream, "wheel");
+  expect(pinnedTail(stream)).toBeFalse();
+});
+
+test("the header keeps its place while a glide runs, and returns once the reader is back at the tail", () => {
+  applyTrace({ agentTraceFollow: false });
+  const stream = mount();
+  const glides = boxed(stream, 100);
+  const collapsed = (): string | null | undefined => appRoot().querySelector(".agent-chrome")?.getAttribute("data-collapsed");
+  expect(collapsed()).toBe("1");
+  act(() => { jumpToLatest(); });
+  // The reader follows the jump, but the header's return would change the box
+  // the scroll is measured against: it waits.
+  expect(chatSnapshot().agentTraceFollow).toBeTrue();
+  expect(glides).toEqual([{ top: 600, behavior: "smooth" }]);
+  expect(collapsed()).toBe("1");
+  stream.scrollTop = 500;
+  act(() => fire(stream, "scroll"));
+  expect(collapsed()).toBeNull();
 });
 
 test("a prompt sent from further up takes the reader to it at once", async () => {

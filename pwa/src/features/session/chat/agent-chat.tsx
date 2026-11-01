@@ -3,7 +3,7 @@ import { ArrowDown } from "lucide-react";
 import { isAgentChat, openPaneId } from "../session-store";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { followTrace, setTraceFollow } from "./trace-store";
-import { glidingToTail, pinTail } from "./tail-glide";
+import { glidingToTail, pinTail, subscribeTailGlide } from "./tail-glide";
 import { computersStore } from "../../computers/catalog-store";
 import { useAgentCard, useChat, usePaneId } from "../hooks";
 import { t } from "../../../lib/i18n";
@@ -57,6 +57,13 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   useSyncExternalStore(subscribeVisibleNotice, visibleNotice);
   const paneId = usePaneId();
   const chat = useChat();
+  const readGlide = useCallback(() => glidingToTail(stream.current), []);
+  const gliding = useSyncExternalStore(subscribeTailGlide, readGlide, () => false);
+  // The header's step-aside changes the stream's box. A glide measures its
+  // travel against that box, so it keeps the place the header had until the
+  // reader is back at the tail; only then does the header return.
+  const headerFollow = useRef(chat.agentTraceFollow);
+  if (!gliding) headerFollow.current = chat.agentTraceFollow;
   const reading = useRef({ follow: chat.agentTraceFollow, unread: chat.agentTraceUnread });
   reading.current = { follow: chat.agentTraceFollow, unread: chat.agentTraceUnread };
   const agent = useAgentCard(paneId);
@@ -119,7 +126,7 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
     return () => { retired = true; };
   }, [paneId, chat.agentTraceLoadState]);
   return <div className="pane-root agent-chat-root" data-react-agent-chat="" data-back={includeBack ? "1" : "0"}>
-    <AgentChatChrome includeBack={includeBack} handlers={handlers} follow={chat.agentTraceFollow} />
+    <AgentChatChrome includeBack={includeBack} handlers={handlers} follow={gliding ? headerFollow.current : chat.agentTraceFollow} />
     <SessionNotice value={standing} inPage />
     <SessionNotice value={passing} />
     <div className="agent-stream-wrap">

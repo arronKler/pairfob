@@ -60,7 +60,7 @@ import { sessionMayTakeFocus } from "../focus";
 import { agentEmptySpec, agentStreamSignature, type AgentEmptySpec } from "./model";
 import { publishAgentChatUI } from "./agent-chat-ui";
 import { captureTraceViewport, restoreTraceViewport } from "./viewport";
-import { glideToTail, glidingToTail, pinTail } from "./tail-glide";
+import { glideToTail, glidingToTail, pinTail, pinnedTail } from "./tail-glide";
 
 function fingerprint(items: readonly AgentTraceItem[]): string {
   return JSON.stringify(items);
@@ -77,7 +77,7 @@ export function composeEl(): HTMLTextAreaElement | null {
 
 /** At the latest turn, or on the way there after a send (`tail-glide`). */
 function atBottom(el: HTMLElement): boolean {
-  return glidingToTail(el) || el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+  return glidingToTail(el) || pinnedTail(el) || el.scrollHeight - el.scrollTop - el.clientHeight < 32;
 }
 
 const TRACE_PAGE = 200;

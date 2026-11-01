@@ -13,6 +13,7 @@ import { turnModels } from "./turn-models";
 import { WorkCard } from "./work-card";
 import { confirmCopyOn, layCopyFaces } from "../copy-confirm";
 import { useTurned } from "./use-turned";
+import { pinnedTail } from "./tail-glide";
 
 /** Copies `text`; resolves true once it is on the clipboard, so the pressed button can say so. */
 type CopyReply = (text: string, what?: "reply" | "code") => unknown;
@@ -391,7 +392,7 @@ export function AgentStream({ items, working, waiting = false, stale = false, ve
   return <div ref={streamRef} className="agent-stream" role="log" aria-label={t("chat.streamAria")}
     aria-busy={busy === true} tabIndex={0} data-sig={signature} onScroll={event => {
       const stream = event.currentTarget;
-      const follow = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 32;
+      const follow = pinnedTail(stream) || stream.scrollHeight - stream.scrollTop - stream.clientHeight < 32;
       onFollow?.(follow, stream);
       if (stream.scrollTop < 32) onNeedOlder?.();
     }}>
