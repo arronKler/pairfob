@@ -80,11 +80,26 @@ impl Saved {
             px(clamp_side(self.width, MIN_WIDTH)),
             px(clamp_side(self.height, MIN_HEIGHT)),
         );
-        match (self.x, self.y) {
-            (Some(x), Some(y)) if x.is_finite() && y.is_finite() => {
-                Bounds::new(point(px(x), px(y)), size)
-            }
-            _ => Bounds::centered(None, size, cx),
+        let Some((x, y)) = self
+            .x
+            .zip(self.y)
+            .filter(|(x, y)| x.is_finite() && y.is_finite())
+        else {
+            return Bounds::centered(None, size, cx);
+        };
+        let requested = Bounds::new(point(px(x), px(y)), size);
+        let visible = cx.displays().iter().any(|display| {
+            let screen = display.visible_bounds();
+            requested.origin.x < screen.origin.x + screen.size.width
+                && requested.origin.y < screen.origin.y + screen.size.height
+                && requested.origin.x + requested.size.width > screen.origin.x
+                && requested.origin.y + requested.size.height > screen.origin.y
+        });
+        // A monitor that went away must not leave the window off every screen.
+        if visible {
+            requested
+        } else {
+            Bounds::centered(None, size, cx)
         }
     }
 

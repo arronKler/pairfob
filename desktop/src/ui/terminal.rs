@@ -238,7 +238,7 @@ impl PairfobWindow {
         if self.pairing.is_some() {
             return;
         }
-        if event.modifiers.platform {
+        if event.modifiers.secondary(cx) {
             if let Some((pane, _, x, y)) = self.cell_at(event.position) {
                 let link = self.app.frame.as_ref().and_then(|frame| {
                     let pane = frame.panes.iter().find(|rect| rect.id == pane)?;
@@ -252,6 +252,20 @@ impl PairfobWindow {
             }
         }
         self.focus_canvas(window, cx);
+        if let Some((pane, bar)) = self.scrollbar_at(event.position) {
+            self.focus_pane(pane, window, cx);
+            let grab = (f32::from(event.position.y) - f32::from(bar.thumb.origin.y))
+                .clamp(0., f32::from(bar.thumb.size.height));
+            let offset = bar.offset_at(f32::from(event.position.y), grab);
+            let _ = self.handle.scroll_to(bar.pane.id.clone(), offset);
+            self.scroll_drag = Some(super::window::ScrollDrag {
+                bar,
+                grab,
+                sent: Some(offset),
+            });
+            cx.stop_propagation();
+            return;
+        }
         let Some((pane, _, x, y)) = self.cell_at(event.position) else {
             return;
         };
@@ -379,6 +393,14 @@ impl PairfobWindow {
         if event.pressed_button != Some(MouseButton::Left) {
             return;
         }
+        if let Some(drag) = self.scroll_drag.as_mut() {
+            let offset = drag.bar.offset_at(f32::from(event.position.y), drag.grab);
+            if drag.sent != Some(offset) {
+                drag.sent = Some(offset);
+                let _ = self.handle.scroll_to(drag.bar.pane.id.clone(), offset);
+            }
+            return;
+        }
         if let Some((started, width)) = self.sidebar_drag {
             let delta = f32::from(event.position.x) - started;
             self.sidebar_width = layout::sidebar_width(width + delta, false);
@@ -419,6 +441,10 @@ impl PairfobWindow {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.scroll_drag.take().is_some() {
+            cx.notify();
+            return;
+        }
         if self.sidebar_drag.take().is_some() {
             cx.notify();
             return;
@@ -441,6 +467,23 @@ impl PairfobWindow {
 
     /// The pane and cell under a window position, or `None` over the padding
     /// and outside the frame.
+    /// The scrollbar under a window position, when a pane has scrollback.
+    fn scrollbar_at(
+        &self,
+        position: gpui::Point<Pixels>,
+    ) -> Option<(PaneId, canvas_paint::ScrollBar)> {
+        let bounds = self.canvas_bounds.get()?;
+        let frame = self.app.frame.as_ref()?;
+        let bar = canvas_paint::scrollbar_at(&frame.panes, bounds, &self.cell, position)?;
+        let pane = frame
+            .panes
+            .iter()
+            .find(|held| held.id == bar.pane.id)?
+            .id
+            .clone();
+        Some((pane, bar))
+    }
+
     fn cell_at(&self, position: gpui::Point<Pixels>) -> Option<(PaneId, Rect, u16, u16)> {
         let bounds = self.canvas_bounds.get()?;
         let frame = self.app.frame.as_ref()?;

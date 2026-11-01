@@ -6,6 +6,7 @@ use std::thread;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
 
+use crate::herdr::ConnectTarget;
 use crate::process::{self, CommandOutput, Health, Tools};
 
 pub const INSTALL_COMMAND: &str = "curl -fsSL https://pairfob.com/install.sh | sh";
@@ -29,11 +30,23 @@ pub enum SetupState {
     Failed(String),
 }
 
+/// The state of the one service action the panel offers. Starting a stopped
+/// daemon and restarting a broken one are the same command to the operator.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum ServiceState {
+    #[default]
+    Idle,
+    Running,
+    Done(String),
+    Failed(String),
+}
+
 pub struct Diagnostics {
     pub report: Option<String>,
     pub error: Option<String>,
     pub doctor_running: bool,
     pub setup: SetupState,
+    pub service: ServiceState,
     /// The last copy of this report succeeded; the footer says so.
     pub copied: bool,
 }
@@ -42,11 +55,16 @@ pub enum UiTask {
     Herdr(Result<(), String>),
     Doctor(Result<Health, String>),
     Setup(Result<CommandOutput, String>),
+    Service(Result<CommandOutput, String>),
 }
 
 pub struct Boot {
     tools: Option<Tools>,
-    /// The Herdr session the window attaches to; `None` is the default one.
+    /// Where the engine attaches. This is the whole target, so an explicit
+    /// `--socket` is probed and diagnosed instead of the default session.
+    target: ConnectTarget,
+    /// The named session, for `herdr --session`. `None` covers the default
+    /// session and an explicit socket; an explicit socket is never started.
     session: Option<String>,
     pub herdr: HerdrState,
     pub diagnostics: Option<Diagnostics>,
@@ -55,10 +73,15 @@ pub struct Boot {
 }
 
 impl Boot {
-    pub fn start(session: Option<String>) -> Self {
+    pub fn start(target: ConnectTarget) -> Self {
         let (tx, tasks) = unbounded();
+        let session = match &target {
+            ConnectTarget::Session { name, .. } => Some(name.clone()),
+            _ => None,
+        };
         let mut boot = Self {
             tools: process::detect(),
+            target,
             session,
             herdr: HerdrState::Missing,
             diagnostics: None,
@@ -95,6 +118,12 @@ impl Boot {
         };
         if self.socket_present() {
             self.herdr = HerdrState::Running;
+        } else if let ConnectTarget::Socket(path) = &self.target {
+            // Nothing here may start a server for a socket the user named.
+            self.herdr = HerdrState::Failed(format!(
+                "no Herdr server is listening on {}",
+                path.display()
+            ));
         } else {
             self.start_herdr(&tools);
         }
@@ -115,8 +144,11 @@ impl Boot {
         });
     }
 
+    /// A socket file alone is not enough: a server that was killed leaves the
+    /// file behind, and treating that as running sends the window into a
+    /// reconnect loop it can never leave.
     fn socket_present(&self) -> bool {
-        process::client_socket(self.session.as_deref()).is_some_and(|path| path.exists())
+        process::socket_for(&self.target).is_some_and(|path| process::socket_alive(&path))
     }
 
     /// The engine connected, so Herdr is up whatever the detection said.
@@ -132,6 +164,13 @@ impl Boot {
     /// Points the startup checks at another session. The engine itself is
     /// replaced by the caller.
     pub fn set_session(&mut self, session: Option<String>) {
+        self.target = match &session {
+            Some(name) => ConnectTarget::Session {
+                name: name.clone(),
+                development: false,
+            },
+            None => ConnectTarget::Local,
+        };
         self.session = session;
         self.diagnostics = None;
         self.herdr = HerdrState::Missing;
@@ -168,6 +207,22 @@ impl Boot {
                     Err(error) => diagnostics.error = Some(error),
                 }
             }
+            UiTask::Service(result) => {
+                let Some(diagnostics) = self.diagnostics.as_mut() else {
+                    return;
+                };
+                diagnostics.service = match result {
+                    Ok(output) if output.ok() => ServiceState::Done(or_default(
+                        output.combined(),
+                        "The service is running.".to_owned(),
+                    )),
+                    Ok(output) => ServiceState::Failed(or_default(
+                        output.combined(),
+                        format!("pairfob service exited with {:?}.", output.status),
+                    )),
+                    Err(error) => ServiceState::Failed(error),
+                };
+            }
             UiTask::Setup(result) => {
                 let Some(diagnostics) = self.diagnostics.as_mut() else {
                     return;
@@ -193,6 +248,7 @@ impl Boot {
             error: None,
             doctor_running: self.tools.is_some(),
             setup: SetupState::Idle,
+            service: ServiceState::Idle,
             copied: false,
         });
         let Some(tools) = self.tools.clone() else {
@@ -226,7 +282,7 @@ impl Boot {
             std::env::consts::ARCH,
             herdr_label(&self.herdr),
         );
-        let socket = process::client_socket(self.session.as_deref())
+        let socket = process::socket_for(&self.target)
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "unknown".to_owned());
         text.push_str(&format!("Session socket: {socket}\n"));
@@ -286,11 +342,32 @@ impl Boot {
 
     fn spawn_doctor(&mut self, tools: Tools) {
         let tx = self.tx.clone();
-        let session = self.session.clone();
+        let target = self.target.clone();
         thread::spawn(move || {
-            let result =
-                process::doctor_for(&tools, session.as_deref()).map_err(|error| error.to_string());
+            let result = process::doctor_target(&tools, &target).map_err(|error| error.to_string());
             let _ = tx.send(UiTask::Doctor(result));
+        });
+    }
+
+    /// Start or restart the pairfob daemon. The daemon owns its own service,
+    /// so the window never runs it in the foreground.
+    pub fn run_service(&mut self, action: crate::process::ServiceAction) {
+        let Some(diagnostics) = self.diagnostics.as_ref() else {
+            return;
+        };
+        if matches!(diagnostics.service, ServiceState::Running) {
+            return;
+        }
+        let Some(tools) = self.tools.clone() else {
+            return;
+        };
+        if let Some(diagnostics) = self.diagnostics.as_mut() {
+            diagnostics.service = ServiceState::Running;
+        }
+        let tx = self.tx.clone();
+        thread::spawn(move || {
+            let result = crate::process::service(&tools, action).map_err(|error| error.to_string());
+            let _ = tx.send(UiTask::Service(result));
         });
     }
 
@@ -356,6 +433,10 @@ mod tests {
         let (tx, tasks) = unbounded();
         Boot {
             tools: None,
+            target: ConnectTarget::Session {
+                name: "pffixture".to_owned(),
+                development: false,
+            },
             session: Some("pffixture".to_owned()),
             herdr: HerdrState::Running,
             diagnostics: None,

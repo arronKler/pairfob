@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use gpui::{ClipboardEntry, Context, Image, KeyDownEvent, PathPromptOptions};
+use gpui::{Context, Image, KeyDownEvent, PathPromptOptions};
 
 use crate::chat::attach;
 
@@ -18,15 +18,6 @@ impl PairfobWindow {
         let key = event.keystroke.key.as_str();
         let modifiers = event.keystroke.modifiers;
 
-        // Cmd+V with a copied screenshot attaches it; without an image the key
-        // keeps the behavior it had before.
-        if modifiers.platform && key == "v" {
-            if let Some(image) = clipboard_image(cx) {
-                self.chat_attach_image(&image, cx);
-                return true;
-            }
-            return false;
-        }
         if modifiers.platform {
             return false;
         }
@@ -64,17 +55,17 @@ impl PairfobWindow {
     /// Files dropped or picked for the next prompt. Each one is checked on its
     /// own so one bad file does not discard the rest.
     pub(crate) fn chat_attach_files(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
-        let Some(chat) = self.chat.as_mut() else {
+        if self.chat.is_none() {
             return;
-        };
+        }
         let mut rejected = None;
         for path in paths {
             match attach::from_path(&path) {
-                Ok(attachment) => chat.attachments.push(attachment),
+                Ok(attachment) => self.attachments.push(attachment),
                 Err(error) => rejected = Some(error),
             }
         }
-        chat.attach_error = rejected;
+        self.attach_error = rejected;
         cx.notify();
     }
 
@@ -82,27 +73,24 @@ impl PairfobWindow {
     /// the same ones the clipboard carried.
     pub(crate) fn chat_attach_image(&mut self, image: &Image, cx: &mut Context<Self>) {
         let name = format!("pasted image.{}", image.format.extension());
-        let result = attach::from_encoded(name, image.bytes.clone());
-        let Some(chat) = self.chat.as_mut() else {
+        if self.chat.is_none() {
             return;
-        };
-        match result {
+        }
+        match attach::from_encoded(name, image.bytes.clone()) {
             Ok(attachment) => {
-                chat.attachments.push(attachment);
-                chat.attach_error = None;
+                self.attachments.push(attachment);
+                self.attach_error = None;
             }
-            Err(error) => chat.attach_error = Some(error),
+            Err(error) => self.attach_error = Some(error),
         }
         cx.notify();
     }
 
     pub(crate) fn chat_remove_attachment(&mut self, index: usize, cx: &mut Context<Self>) {
-        if let Some(chat) = self.chat.as_mut() {
-            if index < chat.attachments.len() {
-                chat.attachments.remove(index);
-            }
-            chat.attach_error = None;
+        if index < self.attachments.len() {
+            self.attachments.remove(index);
         }
+        self.attach_error = None;
         cx.notify();
     }
 
@@ -124,10 +112,7 @@ impl PairfobWindow {
             }
             Ok(Err(error)) => {
                 let _ = this.update(cx, |this, cx| {
-                    if let Some(chat) = this.chat.as_mut() {
-                        chat.attach_error =
-                            Some(format!("Could not open the file picker: {error}"));
-                    }
+                    this.attach_error = Some(format!("Could not open the file picker: {error}"));
                     cx.notify();
                 });
             }
@@ -139,14 +124,4 @@ impl PairfobWindow {
     fn focused_pane_id(&self) -> Option<crate::model::PaneId> {
         self.app.focused_pane()
     }
-}
-
-fn clipboard_image(cx: &gpui::App) -> Option<Image> {
-    cx.read_from_clipboard()?
-        .entries
-        .into_iter()
-        .find_map(|entry| match entry {
-            ClipboardEntry::Image(image) => Some(image),
-            _ => None,
-        })
 }

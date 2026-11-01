@@ -175,6 +175,29 @@ fn a_build_that_does_not_start_is_rolled_back() {
 }
 
 #[test]
+fn a_build_that_never_answers_version_is_timed_out_and_rolled_back() {
+    let dir = directory();
+    let old = fake_binary("v0.1.0");
+    let dest = executable(&{
+        let path = dir.path().join("pairfob-desktop");
+        fs::write(&path, &old).unwrap();
+        path
+    });
+    let hangs = b"#!/bin/sh\nexec sleep 60\n".to_vec();
+    let channel = Channel::start("v0.2.0", "darwin-arm64", hangs);
+
+    let error = install_with_current(&channel.base, &dest, "darwin-arm64", "v0.1.0").unwrap_err();
+
+    assert!(
+        error.contains("did not answer --version in time"),
+        "{error}"
+    );
+    assert!(error.contains("previous build was restored"), "{error}");
+    assert_eq!(fs::read(&dest).unwrap(), old);
+    assert!(!dir.path().join(".pairfob-desktop.update-backup").exists());
+}
+
+#[test]
 fn a_manifest_that_is_not_newer_is_refused() {
     let dir = directory();
     let old = fake_binary("v0.3.0");

@@ -197,20 +197,20 @@ fn install_update(shared: &Arc<Mutex<Shared>>, base: &str) -> Duration {
         }
     };
     match install::install(base, &destination, target) {
-        Ok(updated) => {
-            set(shared, Phase::Restarting, Some(updated.version.clone()));
-            match install::relaunch(&destination) {
-                Ok(()) => CHECK_EVERY,
-                Err(error) => {
-                    set(
-                        shared,
-                        Phase::Failed(format!("Updated to {}; {error}", updated.version)),
-                        Some(updated.version),
-                    );
-                    RETRY_EVERY
-                }
+        Ok(updated) => match install::relaunch(&destination) {
+            Ok(()) => {
+                set(shared, Phase::Restarting, Some(updated.version));
+                CHECK_EVERY
             }
-        }
+            Err(error) => {
+                set(
+                    shared,
+                    Phase::Failed(format!("Updated to {}; {error}", updated.version)),
+                    Some(updated.version),
+                );
+                RETRY_EVERY
+            }
+        },
         Err(error) => {
             set(shared, Phase::Failed(error), Some(latest));
             RETRY_EVERY

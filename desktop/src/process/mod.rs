@@ -19,6 +19,10 @@ const SERVICE_TIMEOUT: Duration = Duration::from_secs(60);
 const START_TIMEOUT: Duration = Duration::from_secs(10);
 const SOCKET_POLL: Duration = Duration::from_millis(50);
 const RUN_POLL: Duration = Duration::from_millis(10);
+/// After a child exits, its pipes may still be held by a grandchild. The
+/// output is read for this long and then abandoned instead of blocking the
+/// window that is waiting for the command to finish.
+const READER_DRAIN: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tools {
@@ -195,31 +199,38 @@ pub fn run(
     })
 }
 
-fn spawn_reader(mut pipe: impl Read + Send + 'static) -> std::thread::JoinHandle<Vec<u8>> {
+fn spawn_reader(mut pipe: impl Read + Send + 'static) -> crossbeam_channel::Receiver<Vec<u8>> {
+    let (tx, rx) = crossbeam_channel::bounded(1);
     std::thread::spawn(move || {
         let mut buffer = Vec::new();
         let _ = pipe.read_to_end(&mut buffer);
-        buffer
-    })
+        let _ = tx.send(buffer);
+    });
+    rx
 }
 
-fn collected(handle: Option<std::thread::JoinHandle<Vec<u8>>>) -> String {
-    handle
-        .and_then(|handle| handle.join().ok())
+fn collected(pipe: Option<crossbeam_channel::Receiver<Vec<u8>>>) -> String {
+    pipe.and_then(|pipe| pipe.recv_timeout(READER_DRAIN).ok())
         .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
         .unwrap_or_default()
 }
 
 pub fn doctor(tools: &Tools) -> Result<Health, ProcessError> {
-    doctor_for(tools, None)
+    doctor_target(tools, &ConnectTarget::Local)
 }
 
 /// [`doctor`] for the session the window actually attaches to: readiness is
 /// the socket of that session, not the default one.
 pub fn doctor_for(tools: &Tools, session: Option<&str>) -> Result<Health, ProcessError> {
+    doctor_target(tools, &target_for(session))
+}
+
+/// [`doctor`] for an explicit target. A `--socket` run checks that socket, not
+/// the default session's.
+pub fn doctor_target(tools: &Tools, target: &ConnectTarget) -> Result<Health, ProcessError> {
     let output = run(&tools.pairfob, &["doctor"], DOCTOR_TIMEOUT)?;
     let herdr_ready =
-        tools.herdr.is_some() && client_socket(session).is_some_and(|path| is_socket(&path));
+        tools.herdr.is_some() && socket_for(target).is_some_and(|path| socket_alive(&path));
     Ok(Health {
         ok: output.ok(),
         herdr_ready,
@@ -239,24 +250,38 @@ pub fn service(tools: &Tools, action: ServiceAction) -> Result<CommandOutput, Pr
     run(&tools.pairfob, &["service", action], SERVICE_TIMEOUT)
 }
 
-/// The client socket Herdr's own discovery would use for a session. The
-/// resolution belongs to the endpoint client; deriving it here would drift.
-pub fn client_socket(session: Option<&str>) -> Option<PathBuf> {
-    let target = match session {
+fn target_for(session: Option<&str>) -> ConnectTarget {
+    match session {
         Some(name) => ConnectTarget::Session {
             name: name.to_owned(),
             development: false,
         },
         None => ConnectTarget::Local,
-    };
+    }
+}
+
+/// The client socket Herdr's own discovery would use for a session. The
+/// resolution belongs to the endpoint client; deriving it here would drift.
+pub fn client_socket(session: Option<&str>) -> Option<PathBuf> {
+    socket_for(&target_for(session))
+}
+
+/// The same resolution for a full target, including an explicit socket path.
+pub fn socket_for(target: &ConnectTarget) -> Option<PathBuf> {
     target.socket_path().ok()
+}
+
+/// Whether a Herdr server is actually listening, not merely whether the
+/// socket file exists. A killed server leaves the file behind.
+pub fn socket_alive(path: &Path) -> bool {
+    sessions::alive(path)
 }
 
 /// Herdr creates its socket only once the server is up.
 pub fn wait_for_socket(path: &Path, timeout: Duration) -> Result<(), ProcessError> {
     let started = Instant::now();
     loop {
-        if is_socket(path) {
+        if socket_alive(path) {
             return Ok(());
         }
         let remaining = timeout.saturating_sub(started.elapsed());
@@ -289,8 +314,19 @@ pub fn start_herdr(tools: &Tools, session: Option<&str>) -> Result<(), ProcessEr
         Some(name) => ProcessError::Message(format!("invalid Herdr session name {name:?}")),
         None => ProcessError::Message("Herdr has no local socket path".to_owned()),
     })?;
-    if is_socket(&socket) {
+    if socket_alive(&socket) {
         return Ok(());
+    }
+    if is_socket(&socket) {
+        // A server that was killed leaves its socket file behind, and a new
+        // server cannot bind over it. The probe above proved nothing is
+        // listening, so the file is stale.
+        std::fs::remove_file(&socket).map_err(|error| {
+            ProcessError::Message(format!(
+                "could not clear the stale Herdr socket {}: {error}",
+                socket.display()
+            ))
+        })?;
     }
 
     let herdr = tools
@@ -347,13 +383,13 @@ fn await_server(
 ) -> Result<(), ProcessError> {
     let started = Instant::now();
     loop {
-        if is_socket(socket) {
+        if socket_alive(socket) {
             return Ok(());
         }
         match child.try_wait() {
             Ok(Some(status)) => {
                 // The server may create the socket just before it exits.
-                if is_socket(socket) {
+                if socket_alive(socket) {
                     return Ok(());
                 }
                 let text = log_tail(log_path, written);

@@ -5,11 +5,12 @@
 use std::collections::HashMap;
 use std::os::unix::net::UnixStream;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use crossbeam_channel::Sender;
 use serde_json::Value;
 
-use super::connect::{ClientEvent, RawResponse};
+use super::connect::{ClientEvent, RawResponse, SNAPSHOT_TIMEOUT};
 use super::wire::{self, ClientShellSnapshot, ServerMessage, WireError, SNAPSHOT_CODEC};
 
 /// One endpoint response may not exceed this; a larger one would mean the
@@ -23,11 +24,31 @@ pub(super) fn read_loop(
     boot_id: Arc<Mutex<String>>,
 ) {
     let mut pending: HashMap<String, Vec<u8>> = HashMap::new();
+    let deadline = Instant::now() + SNAPSHOT_TIMEOUT;
+    let mut started = false;
     loop {
+        if !started && Instant::now() >= deadline {
+            let _ = events.send(ClientEvent::Disconnected(
+                "Herdr did not send a snapshot within 10s".into(),
+            ));
+            return;
+        }
         let message = match wire::read_message::<_, ServerMessage>(&mut reader, wire::MAX_FRAME) {
             Ok(message) => message,
             Err(WireError::Closed) => {
                 let _ = events.send(ClientEvent::Disconnected("the Herdr socket closed".into()));
+                return;
+            }
+            Err(WireError::Io(error))
+                if !started
+                    && matches!(
+                        error.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    ) =>
+            {
+                let _ = events.send(ClientEvent::Disconnected(
+                    "Herdr did not send a snapshot within 10s".into(),
+                ));
                 return;
             }
             Err(error) => {
@@ -35,6 +56,13 @@ pub(super) fn read_loop(
                 return;
             }
         };
+        if matches!(
+            message,
+            ServerMessage::ClientShellSnapshot(_) | ServerMessage::PaneSurface(_)
+        ) {
+            started = true;
+            let _ = reader.set_read_timeout(None);
+        }
         match message {
             ServerMessage::ClientShellSnapshot(snapshot) => {
                 if let Ok(mut boot) = boot_id.lock() {
@@ -105,8 +133,10 @@ pub(super) fn read_loop(
                 return;
             }
             ServerMessage::ClientShellError { message } => {
-                let _ = events.send(ClientEvent::Disconnected(message));
-                return;
+                // One refused command is not a dead session. The engine shows
+                // the error and keeps the stream open, as the reference client
+                // does.
+                let _ = events.send(ClientEvent::Error(message));
             }
             ServerMessage::EndpointControl { kind, data } if kind == SNAPSHOT_CODEC => {
                 match serde_json::from_str::<ClientShellSnapshot>(&data) {

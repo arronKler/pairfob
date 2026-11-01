@@ -37,18 +37,18 @@ use std::rc::Rc;
 
 use gpui::{px, size, App, AppContext, TitlebarOptions, WindowBounds, WindowOptions};
 
-use crate::herdr::Desktop;
+use crate::herdr::{ConnectTarget, Desktop};
 
 /// Opens the window and runs until the last one closes. The error is carried
 /// out of GPUI's callback because the platform run loop does not return one.
-/// `session` is the Herdr session the engine attached to, so the startup check
-/// looks for that session's socket rather than the default one.
-pub fn run(desktop: Desktop, session: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+/// `target` is where the engine attached, so the startup check looks at that
+/// socket rather than the default session's.
+pub fn run(desktop: Desktop, target: ConnectTarget) -> Result<(), Box<dyn std::error::Error>> {
     let failure = Rc::new(RefCell::new(None::<String>));
     let slot = Rc::clone(&failure);
     #[cfg(feature = "shot")]
     let shot = std::env::var_os("PF_DESKTOP_SHOT").map(std::path::PathBuf::from);
-    gpui_platform::application().run(move |cx| match open(desktop, session, cx) {
+    gpui_platform::application().run(move |cx| match open(desktop, target, cx) {
         Ok(handle) => {
             #[cfg(feature = "shot")]
             if let Some(path) = shot {
@@ -122,7 +122,7 @@ fn shot_bounds(bounds: gpui::Bounds<gpui::Pixels>) -> gpui::Bounds<gpui::Pixels>
 
 fn open(
     desktop: Desktop,
-    session: Option<String>,
+    target: ConnectTarget,
     cx: &mut App,
 ) -> Result<gpui::AnyWindowHandle, Box<dyn std::error::Error>> {
     let saved = geometry::Saved::load();
@@ -148,7 +148,7 @@ fn open(
                 app_id: Some("com.pairfob.desktop".into()),
                 ..Default::default()
             },
-            move |window, cx| cx.new(|cx| window::PairfobWindow::new(desktop, session, window, cx)),
+            move |window, cx| cx.new(|cx| window::PairfobWindow::new(desktop, target, window, cx)),
         )
         .map_err(|error| Box::<dyn std::error::Error>::from(error.to_string()))?;
     Ok(window.into())

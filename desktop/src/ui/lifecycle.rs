@@ -8,7 +8,7 @@ use gpui::{
     div, px, AnyElement, Context, FontWeight, MouseButton, MouseDownEvent, SharedString, Window,
 };
 
-use super::boot::{HerdrState, SetupState, INSTALL_COMMAND};
+use super::boot::{HerdrState, ServiceState, SetupState, INSTALL_COMMAND};
 use super::controls::{button, dot, small_button, ButtonKind};
 use super::layout;
 use super::theme::{connection_tone, mono_font, tone, Appearance};
@@ -262,6 +262,7 @@ impl PairfobWindow {
         let report = diagnostics.report.clone();
         let error = diagnostics.error.clone();
         let setup = diagnostics.setup.clone();
+        let service = diagnostics.service.clone();
         let copied = diagnostics.copied;
         let chrome = self.chrome.clone();
 
@@ -296,6 +297,28 @@ impl PairfobWindow {
         }
 
         body = body.child(spacer());
+
+        match &service {
+            ServiceState::Idle => {}
+            ServiceState::Running => {
+                body = body.child(spacer());
+                body = body.child(line("Restarting the pairfob service…", chrome.warning));
+            }
+            ServiceState::Done(text) => {
+                body = body.child(spacer());
+                body = body.child(line("Pairfob service restarted", chrome.success));
+                for text in text.lines().take(20) {
+                    body = body.child(line(text, chrome.secondary));
+                }
+            }
+            ServiceState::Failed(text) => {
+                body = body.child(spacer());
+                body = body.child(line("Could not restart the pairfob service", chrome.danger));
+                for text in text.lines().take(20) {
+                    body = body.child(line(text, chrome.secondary));
+                }
+            }
+        }
 
         match &setup {
             SetupState::Idle => {}
@@ -355,6 +378,16 @@ impl PairfobWindow {
             ButtonKind::Primary,
             cx.listener(|this, _: &MouseDownEvent, _window, cx| this.run_setup(cx)),
         );
+        let service_button = button(
+            "diagnostics-service",
+            match service {
+                ServiceState::Running => "Restarting…",
+                _ => "Restart pairfob service",
+            },
+            &chrome,
+            ButtonKind::Quiet,
+            cx.listener(|this, _: &MouseDownEvent, _window, cx| this.restart_service(cx)),
+        );
         let appearance = appearance_row(self.appearance, &chrome, cx);
         let update = self.update_row(&chrome, cx);
 
@@ -406,6 +439,7 @@ impl PairfobWindow {
                         .border_t(px(1.))
                         .border_color(tone(chrome.line_soft))
                         .child(setup_button)
+                        .child(service_button)
                         .child(recheck)
                         .child(copy),
                 )

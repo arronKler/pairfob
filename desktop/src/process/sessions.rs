@@ -85,7 +85,7 @@ fn valid_name(name: &str) -> bool {
 
 /// A connect on a dead or missing unix socket fails at once. The timeouts
 /// bound the probe if a listener accepts but never answers a later exchange.
-fn alive(socket: &Path) -> bool {
+pub(crate) fn alive(socket: &Path) -> bool {
     match UnixStream::connect(socket) {
         Ok(stream) => {
             let _ = stream.set_read_timeout(Some(PROBE_TIMEOUT));

@@ -433,7 +433,7 @@ fn start_herdr_starts_a_named_session_and_waits_for_its_socket() {
 
     let args_file = tmp.path().join("args");
     let script = format!(
-        "echo \"$@\" > '{}'\nmkdir -p '{}'\nexec python3 -I -c 'import socket, sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' '{}'",
+        "echo \"$@\" > '{}'\nmkdir -p '{}'\nexec python3 -I -c 'import socket, sys, time; s = socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1); time.sleep(2)' '{}'",
         args_file.display(),
         socket.parent().unwrap().display(),
         socket.display()
@@ -469,6 +469,41 @@ fn start_herdr_returns_when_the_socket_is_already_there() {
     process::start_herdr(&tools, Some("work")).unwrap();
 
     drop(listener);
+}
+
+#[test]
+fn start_herdr_replaces_a_socket_left_by_a_killed_server() {
+    let tmp = short_tmp();
+    let _env = EnvGuard::new(&sandbox_env(&tmp));
+
+    let socket = process::client_socket(Some("work")).unwrap();
+    fs::create_dir_all(socket.parent().unwrap()).unwrap();
+    let stale = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    drop(stale);
+    assert!(
+        socket.exists(),
+        "the killed server left its socket file behind"
+    );
+
+    let args_file = tmp.path().join("args");
+    let script = format!(
+        "echo \"$@\" > '{}'\nmkdir -p '{}'\nexec python3 -I -c 'import socket, sys, time; s = socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1); time.sleep(2)' '{}'",
+        args_file.display(),
+        socket.parent().unwrap().display(),
+        socket.display()
+    );
+    let tools = Tools {
+        pairfob: tmp.path().join("pairfob"),
+        herdr: Some(fake(tmp.path(), "herdr", &script)),
+    };
+
+    process::start_herdr(&tools, Some("work")).unwrap();
+
+    assert_eq!(
+        fs::read_to_string(&args_file).unwrap().trim(),
+        "--session work server",
+        "the stale socket kept the new server from starting"
+    );
 }
 
 #[test]

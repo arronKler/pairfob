@@ -73,11 +73,6 @@ fn main() -> ExitCode {
         }
     }
 
-    let session = match &target {
-        ConnectTarget::Session { name, .. } => Some(name.clone()),
-        _ => None,
-    };
-
     if mode == Mode::SelfCheck {
         let mut config = Config::local();
         config.target = target;
@@ -96,7 +91,7 @@ fn main() -> ExitCode {
     }
 
     let mut config = Config::local();
-    config.target = target;
+    config.target = target.clone();
 
     #[cfg(feature = "gui")]
     {
@@ -108,7 +103,7 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         };
-        match pairfob_desktop::ui::run(desktop, session) {
+        match pairfob_desktop::ui::run(desktop, target) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("the window stopped: {error}");
@@ -120,7 +115,7 @@ fn main() -> ExitCode {
 
     #[cfg(not(feature = "gui"))]
     {
-        let _ = (config, session);
+        let _ = config;
         eprintln!("this build has no window: rebuild with the gui feature, or use --self-check");
         ExitCode::from(2)
     }
