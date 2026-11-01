@@ -59,20 +59,21 @@ version. A fix ships with a higher version code; do not try to downgrade.
   and check the result on the computer.
 - Rotate the device and try a hardware keyboard if you have one.
 - Turn on notifications in Settings, send the app to the background, and check
-  that a notice arrives for a session that finishes within the next minute or
-  so. Later notices are expected to miss; see **Current limits**.
+  that a notice arrives for a session that finishes within the next fifteen
+  minutes or so. A sleeping phone may wait longer; see **Current limits**.
 - Update over an older beta, then confirm pairing and preferences remain.
 
 ## Current limits
 
-- No vendor push channel (FCM or an OEM one). Notices are raised locally, so
-  they reach you for the first few minutes after you leave the app, not after
-  that. Android freezes a backgrounded page within minutes even though the
-  process survives; turning notifications on starts a foreground service with a
-  quiet ongoing row, which keeps the process warm but does not keep the page
-  running. Measured on an emulator: a notice arrived at 60 seconds hidden and
-  not at 5 or 7 minutes. Reliable delivery while the app is closed needs a push
-  channel and is not in this beta.
+- No vendor push channel (FCM or an OEM one). Notices come from a scheduled
+  background check that runs about every fifteen minutes. The check wakes the
+  app, loads its page offscreen, connects to your computer and raises a notice
+  when a session finishes or needs you. So a notice can lag the event by up to
+  that long, and Android defers the check while the phone sleeps, which can
+  stretch the wait to hours. Measured on an emulator: a page hidden with the
+  app kept running stopped answering within five minutes, so the check runs its
+  own page instead of reusing the app's. A notice that must arrive the second
+  it happens needs a push channel, and that is not in this beta.
 - Mainland China network availability and vendor-specific Android behavior are
   not yet broadly validated. Android 7.0 is the minimum install version, not a
   claim that every supported Android version has been tested.
