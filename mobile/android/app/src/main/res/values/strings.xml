@@ -4,4 +4,8 @@
     <string name="title_activity_main">Pairfob</string>
     <string name="package_name">com.pairfob.app</string>
     <string name="custom_url_scheme">com.pairfob.app</string>
+    <string name="notify_channel_agents">Agent notifications</string>
+    <string name="notify_channel_connection">Connection</string>
+    <string name="keepalive_title">Pairfob is connected</string>
+    <string name="keepalive_text">Open Pairfob to see your agents</string>
 </resources>

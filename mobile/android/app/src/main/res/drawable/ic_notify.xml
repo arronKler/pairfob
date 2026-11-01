@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icons are tinted by the system, so this is the mark's alpha only. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M46,48 L66,62"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="26" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M46,48 m-21,0 a21,21 0 1,0 42,0 a21,21 0 1,0 -42,0" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M66,62 m-15,0 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0" />
+</vector>
