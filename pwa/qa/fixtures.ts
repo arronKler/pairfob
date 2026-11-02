@@ -136,7 +136,7 @@ export async function createFixtureAPI(language: "zh" | "en", initialScene: stri
     return {
       scene: currentScene, mode: "react" as FixtureMode, ready, shellOnly: !!scenes.find((scene) => scene.name === currentScene)?.shellOnly,
       reactOwned: root ? [...root.children].some(isReactElement) : false, reactElements,
-      viewport: { width: innerWidth, height: innerHeight, scale: visualViewport?.scale ?? 1 },
+      viewport: { width: window.innerWidth, height: window.innerHeight, scale: window.visualViewport?.scale ?? 1 },
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: lang(),
       appClass: root?.className ?? "", bodyClass: document.body.className, rootClass: document.documentElement.className,
       phase: phase(), screen: currentScreen(),
