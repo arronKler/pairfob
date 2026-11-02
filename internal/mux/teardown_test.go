@@ -83,8 +83,8 @@ func TestResumeTimeoutUnpinsDaemon(t *testing.T) {
 	if fr, ok := dA.RecvTimeout(time.Second); !ok || fr.Typ != envelope.TypSESSION_BOUND {
 		t.Fatal("daemon bound")
 	}
-	assertErrorCode(t, cA, "unpaired")
-	assertErrorCode(t, dA, "unpaired")
+	assertErrorCode(t, cA, "timeout")
+	assertErrorCode(t, dA, "timeout")
 	if est, resume := h.BindKindCounts(daemonID); est != 0 || resume != 0 {
 		t.Fatalf("counts established=%d resume=%d", est, resume)
 	}

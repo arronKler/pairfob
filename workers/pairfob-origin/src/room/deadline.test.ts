@@ -38,7 +38,7 @@ describe("pending session deadline boundaries", () => {
         await h.core.alarm();
       }
       expect(phone.closed).toBe(true);
-      expect(phone.closeReason).toBe("unpaired");
+      expect(phone.closeReason).toBe("timeout");
       expect(h.core.countKinds().resume).toBe(0);
       expect(h.store.listBinds()).toEqual([]);
       expect(h.store.listAlarms()).toEqual([]);
@@ -52,6 +52,7 @@ describe("pending session deadline boundaries", () => {
       await onMessage(h.core, phone, ping());
       expect(phone.closed).toBe(offset >= 0);
       expect(decode(phone.sent.at(-1)!).typ).toBe(offset < 0 ? Typ.PONG : Typ.ERROR);
+      if (offset >= 0) expect(lastJSON(phone).body.code).toBe("timeout");
       expect(h.store.stats).toEqual(stats);
     });
 
