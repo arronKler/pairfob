@@ -53,7 +53,12 @@ export function installTestDOM(): void {
   // Restore the realm's own timers unbound: happy-dom resolves them through the
   // call's receiver, which a bound copy no longer carries. The frame copies stay
   // bound because the global aliases are called detached from the realm.
-  happy.setTimeout = native.windowSetTimeout;
+  //
+  // happy-dom groups zero-delay callbacks behind one timer. abort() clears that
+  // timer but leaves the group list dead, so every later zero-delay callback in
+  // the file is silently lost. Coerce 0 to 1ms so the realm never uses the group.
+  happy.setTimeout = (callback: Function, delay?: number, ...args: unknown[]) =>
+    native.windowSetTimeout.call(happy, callback, delay || 1, ...args);
   happy.clearTimeout = native.windowClearTimeout;
   happy.setInterval = native.windowSetInterval;
   happy.clearInterval = native.windowClearInterval;
