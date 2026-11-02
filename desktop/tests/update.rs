@@ -65,6 +65,10 @@ impl Drop for Channel {
 }
 
 fn serve(mut stream: TcpStream, manifest: &str, artifact_path: &str, artifact: &[u8]) {
+    // macOS accept inherits the listener's nonblocking flag. Read in blocking
+    // mode so a request line that arrives after accept is not answered with a
+    // 404 built from an empty target.
+    let _ = stream.set_nonblocking(false);
     let target = {
         let mut reader = BufReader::new(&mut stream);
         let mut line = String::new();
