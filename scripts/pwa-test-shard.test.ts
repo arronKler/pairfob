@@ -7,7 +7,7 @@ import { pwaTestFiles, shardTestFiles } from "./pwa-test-shard.ts";
 
 const PWA = fileURLToPath(new URL("../pwa", import.meta.url));
 const CLI = fileURLToPath(new URL("./pwa-test-shard.ts", import.meta.url));
-const SHARDS = 14;
+const SHARDS = 8;
 
 function weight(files: string[]): number {
   return files.reduce((total, file) => total + statSync(join(PWA, file)).size, 0);
@@ -41,7 +41,7 @@ describe("PWA test shards", () => {
   });
 
   test("a missing or out-of-range shard fails instead of printing every file", () => {
-    expect(() => execFileSync(process.execPath, [CLI, "14", String(SHARDS)], { cwd: PWA, stdio: "pipe" })).toThrow();
+    expect(() => execFileSync(process.execPath, [CLI, String(SHARDS), String(SHARDS)], { cwd: PWA, stdio: "pipe" })).toThrow();
     expect(() => shardTestFiles(PWA, -1, SHARDS)).toThrow();
     expect(() => shardTestFiles(PWA, 0, 0)).toThrow();
   });
