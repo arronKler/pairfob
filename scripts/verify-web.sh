@@ -56,9 +56,9 @@ run_tests() {
   # Bun 1.4.3 runs the files in worker processes; `--isolate` still holds when an
   # older Bun ignores `--parallel` and runs them in order. A preload's
   # setDefaultTimeout does not reach a directory run, so pass it here.
-  # The timings manifest starts the slowest files first; it only orders files
-  # inside a shard, so the size-balanced split does not depend on it. Refresh it
-  # with `bun test --timings=../scripts/pwa-test-timings.json --update-timings`.
+  # The timings manifest decides the split and starts the slowest files first.
+  # Refresh it with
+  # `bun test --timings=../scripts/pwa-test-timings.json --update-timings`.
   # Passing tests are not printed: a shard's log is thousands of lines, and the
   # job's log upload is part of its wall time. Failures and the summary stay.
   step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --only-failures --timings="$ROOT/scripts/pwa-test-timings.json" --timeout 30000 "${files[@]}"
@@ -100,13 +100,14 @@ run_build() {
 
 run_workers() {
   cd "$ROOT/workers/pairfob-origin"
-  step "Worker tests" bun test src
-  step "Worker harness" bun test e2e
+  # Pass lines only lengthen the log the job has to upload.
+  step "Worker tests" bun test --only-failures src
+  step "Worker harness" bun test --only-failures e2e
   step "Worker types" bun run typecheck
   step "Worker integration" bun run e2e:wrangler
 
   cd "$ROOT/workers/pairfob-downloads"
-  step "Download Worker tests" bun test src
+  step "Download Worker tests" bun test --only-failures src
 }
 
 case "$PART" in
