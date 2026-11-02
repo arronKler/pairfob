@@ -61,12 +61,7 @@ run_tests() {
   # `bun test --timings=../scripts/pwa-test-timings.json --update-timings`.
   # Passing tests are not printed: a shard's log is thousands of lines, and the
   # job's log upload is part of its wall time. Failures and the summary stay.
-  # Temporary timing capture: measure this shard into its own file and print it,
-  # so the manifest can be rebuilt from all six shards. Remove after one run.
-  local timings=/tmp/pwa-shard-timings.json
-  echo '{"version":1,"files":{}}' > "$timings"
-  step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --only-failures --timings="$timings" --update-timings --timeout 30000 "${files[@]}"
-  cat "$timings"
+  step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --only-failures --timings="$ROOT/scripts/pwa-test-timings.json" --timeout 30000 "${files[@]}"
 }
 
 run_check() {
