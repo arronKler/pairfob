@@ -129,8 +129,15 @@ describe("which dialogs take the desk form", () => {
     ), { popover: "menu", anchor: trigger }));
     const item = dialog().querySelector<HTMLButtonElement>("[role=menuitem]")!;
     // The click that picks the row is the same mouse the menu opened under.
-    item.dispatchEvent(new happy.PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse" }) as unknown as Event);
-    await act(async () => { item.click(); await pause(5); });
+    // Flush the pointer's input-mode update before clicking, and click the row
+    // as it stands after that update; a stale node can lose the action.
+    await act(async () => {
+      item.dispatchEvent(new happy.PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse" }) as unknown as Event);
+      await pause();
+    });
+    const picked = dialog().querySelector<HTMLButtonElement>("[role=menuitem]");
+    expect(picked).not.toBeNull();
+    await act(async () => { picked!.click(); await pause(5); });
     expect(asked).toBeDefined();
     expect(dialog().className).toBe("modal text-edit desk-form");
   });
