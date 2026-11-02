@@ -53,8 +53,8 @@ beforeEach(async () => {
   // box (the component sets both dimensions explicitly from the frame).
   originalGetBoundingClientRect = proto.getBoundingClientRect;
   proto.getBoundingClientRect = function getBoundingClientRect(): DOMRect {
-    const width = Number.parseFloat(this.style.width) || 0;
-    const height = Number.parseFloat(this.style.height) || 0;
+    const width = Number.parseFloat(this.style.width) || this.width;
+    const height = Number.parseFloat(this.style.height) || this.height;
     return { x: 0, y: 0, top: 0, left: 0, width, height, right: width, bottom: height, toJSON: () => ({}) } as DOMRect;
   };
   if (!Element.prototype.setPointerCapture) {
@@ -103,8 +103,8 @@ function pointerEvent(type: string, x: number, y: number): PointerEvent {
 
 function canvasBox(canvas: HTMLCanvasElement): { width: number; height: number } {
   return {
-    width: Number.parseFloat(canvas.style.width),
-    height: Number.parseFloat(canvas.style.height),
+    width: Number.parseFloat(canvas.style.width) || canvas.width,
+    height: Number.parseFloat(canvas.style.height) || canvas.height,
   };
 }
 

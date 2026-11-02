@@ -3,6 +3,10 @@ import "./node-inspect";
 import { isolateMediaQueryListeners } from "./media-query-listeners";
 
 const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
+// The suite's copy baseline is Chinese; a host that reports English must not
+// change what a boot-time language detection renders.
+Object.defineProperty(happy.navigator, "language", { configurable: true, value: "zh-CN" });
+Object.defineProperty(happy.navigator, "languages", { configurable: true, value: ["zh-CN", "zh"] });
 isolateMediaQueryListeners(happy);
 export function installTestDOM(): void {
   const globals = globalThis as unknown as Record<string, unknown>;
