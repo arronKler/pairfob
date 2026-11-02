@@ -16,4 +16,9 @@ export class FullTerminalOpenTracker {
   pending(): Promise<void> {
     return this.task ?? Promise.resolve();
   }
+
+  /** Abandon an in-flight open; its late result is still closed by the caller's version guard. */
+  reset(): void {
+    this.task = null;
+  }
 }

@@ -31,4 +31,16 @@ describe("complete-terminal open tracking", () => {
     await Promise.resolve();
     await expect(tracker.run(async () => undefined)).resolves.toBeUndefined();
   });
+
+  test("a reset lets a new open start while the abandoned one is still pending", async () => {
+    const tracker = new FullTerminalOpenTracker();
+    let starts = 0;
+    void tracker.run(() => {
+      starts++;
+      return new Promise<void>(() => undefined);
+    });
+    tracker.reset();
+    await tracker.run(async () => { starts++; });
+    expect(starts).toBe(2);
+  });
 });

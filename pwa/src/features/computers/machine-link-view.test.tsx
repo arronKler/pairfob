@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { lang, setLang } from "../../lib/i18n";
+import { setLang } from "../../lib/i18n";
 import type { MachineSummary } from "../../lib/protocol/machine-link";
 import type { MachineLinks, MachineLinksView } from "./machine-link";
 import { MachineLinkSection } from "./machine-link-view";
@@ -27,9 +27,7 @@ function render(view: Partial<MachineLinksView>, paired = new Map<string, string
 }
 
 describe("machine link section", () => {
-  const before = lang();
-  beforeAll(() => { setLang("en"); });
-  afterAll(() => { setLang(before); });
+  beforeEach(() => { setLang("en"); });
 
   test("renders nothing without the capability or without machines", () => {
     expect(render({ machines }, new Map(), false)).toBe("");

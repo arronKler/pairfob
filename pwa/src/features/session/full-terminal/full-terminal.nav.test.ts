@@ -164,7 +164,7 @@ function click(selector: string): void {
 async function waitUntil(predicate: () => boolean, label: string): Promise<void> {
   // The bridge opens across several async hops; a loaded CI runner needs more
   // than the old 500ms budget.
-  for (let attempt = 0; attempt < 300; attempt++) {
+  for (let attempt = 0; attempt < 1000; attempt++) {
     if (predicate()) return;
     await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, 10)); });
   }

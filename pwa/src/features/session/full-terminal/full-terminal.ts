@@ -339,7 +339,11 @@ async function mount(host: HTMLElement): Promise<void> {
     terminalStatus.fail(copy("ft.loadFail", { error: webglFailure(error) }));
     return;
   }
-  if (version !== rendererVersion || !isFullTerminal() || !host.isConnected) return;
+  if (version !== rendererVersion) return;
+  if (!isFullTerminal() || !host.isConnected) {
+    mounting = false;
+    return;
+  }
   mounting = false;
   const fileOpener = attachedFullTerminalFileOpener();
   const openFile = fileOpener ? (value: string) => { if (version === rendererVersion) fileOpener(value); } : undefined;
@@ -396,6 +400,7 @@ async function mount(host: HTMLElement): Promise<void> {
 function disposeRenderer(): void {
   terminalRecovery = undefined;
   rendererVersion++;
+  mounting = false;
   cancelMount?.();
   cancelMount = null;
   stopCommandPump();
@@ -607,6 +612,7 @@ export function disposeFullTerminal(): void {
   stopCommandPump();
   bridgeVersion++;
   opening = false;
+  openTracker.reset();
   disposeRenderer();
   clearFullTerminalAttach();
   releaseFullTerminalScreen();

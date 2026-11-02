@@ -92,7 +92,7 @@ function persist(value: Lang | null): void {
 }
 
 export function applyDocumentLang(): void {
-  if (typeof document === "undefined") return;
+  if (typeof document === "undefined" || !document.documentElement) return;
   document.documentElement.lang = locale();
   const meta = document.querySelector('meta[name="description"]');
   if (meta) meta.setAttribute("content", t("meta.description"));

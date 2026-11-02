@@ -7,18 +7,63 @@ const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 
 // change what a boot-time language detection renders.
 Object.defineProperty(happy.navigator, "language", { configurable: true, value: "zh-CN" });
 Object.defineProperty(happy.navigator, "languages", { configurable: true, value: ["zh-CN", "zh"] });
+// Page-hide telemetry must not leave a real beacon (and its aborted fetch)
+// behind when a test tears the realm down.
+Object.defineProperty(happy.navigator, "sendBeacon", { configurable: true, value: () => true });
 isolateMediaQueryListeners(happy);
+
+// A test that stubs a timer for its own body must not hand it to the next test.
+// Keep the process and realm originals so every reset restores both.
+const native = {
+  setTimeout: globalThis.setTimeout,
+  clearTimeout: globalThis.clearTimeout,
+  setInterval: globalThis.setInterval,
+  clearInterval: globalThis.clearInterval,
+  windowSetTimeout: happy.setTimeout,
+  windowClearTimeout: happy.clearTimeout,
+  windowSetInterval: happy.setInterval,
+  windowClearInterval: happy.clearInterval,
+  frame: happy.requestAnimationFrame.bind(happy),
+  cancelFrame: happy.cancelAnimationFrame.bind(happy),
+};
+
+// Every browser global a screen may touch. A file that only calls resetTestDOM
+// must not depend on an earlier file having installed them.
+const GLOBALS = [
+  "window", "document", "navigator", "location", "history", "visualViewport",
+  "HTMLElement", "HTMLAnchorElement", "HTMLButtonElement", "HTMLCanvasElement", "HTMLDialogElement",
+  "HTMLDivElement", "HTMLFormElement", "HTMLImageElement", "HTMLInputElement", "HTMLProgressElement",
+  "HTMLSelectElement", "HTMLSpanElement", "HTMLTextAreaElement",
+  "Element", "Node", "DocumentFragment",
+  "Event", "CustomEvent", "MouseEvent", "PointerEvent", "WheelEvent", "KeyboardEvent",
+  "TouchEvent", "CompositionEvent", "FocusEvent", "InputEvent", "DragEvent", "ClipboardEvent",
+  "ResizeObserver", "MutationObserver", "DOMParser",
+  "FormData", "localStorage", "sessionStorage",
+] as const;
+
 export function installTestDOM(): void {
   const globals = globalThis as unknown as Record<string, unknown>;
-  for (const key of [
-    "window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLTextAreaElement",
-    "HTMLFormElement", "HTMLButtonElement", "HTMLDialogElement", "HTMLProgressElement", "Node",
-    "DocumentFragment", "FormData", "localStorage", "sessionStorage",
-  ] as const) {
-    globals[key] = (happy as unknown as Record<string, unknown>)[key];
+  const realm = happy as unknown as Record<string, unknown>;
+  for (const key of GLOBALS) {
+    if (realm[key] !== undefined) globals[key] = realm[key];
   }
-  globals.location = happy.location;
+  // Restore the realm's own timers unbound: happy-dom resolves them through the
+  // call's receiver, which a bound copy no longer carries. The frame copies stay
+  // bound because the global aliases are called detached from the realm.
+  happy.setTimeout = native.windowSetTimeout;
+  happy.clearTimeout = native.windowClearTimeout;
+  happy.setInterval = native.windowSetInterval;
+  happy.clearInterval = native.windowClearInterval;
+  happy.requestAnimationFrame = native.frame;
+  happy.cancelAnimationFrame = native.cancelFrame;
   globals.matchMedia = happy.matchMedia.bind(happy);
+  globals.getComputedStyle = happy.getComputedStyle.bind(happy);
+  globals.requestAnimationFrame = native.frame;
+  globals.cancelAnimationFrame = native.cancelFrame;
+  globals.setTimeout = native.setTimeout;
+  globals.clearTimeout = native.clearTimeout;
+  globals.setInterval = native.setInterval;
+  globals.clearInterval = native.clearInterval;
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   Object.defineProperty(happy.document, "visibilityState", { value: "hidden", configurable: true });
 }
