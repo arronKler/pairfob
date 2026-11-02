@@ -55,10 +55,7 @@ run_tests() {
   # Bun 1.4.3 runs the files in worker processes; `--isolate` still holds when an
   # older Bun ignores `--parallel` and runs them in order. A preload's
   # setDefaultTimeout does not reach a directory run, so pass it here.
-  # The timings manifest starts the slowest files first; it only orders files
-  # inside a shard, so the size-balanced split does not depend on it. Refresh it
-  # with `bun test --timings=scripts/pwa-test-timings.json --update-timings`.
-  step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --timings="$ROOT/scripts/pwa-test-timings.json" --timeout 30000 "${files[@]}"
+  step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --timeout 30000 "${files[@]}"
 }
 
 run_check() {

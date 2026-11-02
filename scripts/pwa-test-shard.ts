@@ -21,9 +21,8 @@ export function pwaTestFiles(root: string): string[] {
 
 /**
  * The files for one shard. Largest first into the least-loaded shard, so a few
- * heavy files cannot all land together. File size decides the split; the
- * measured timings manifest only orders files inside a shard, so a stale
- * entry cannot unbalance it.
+ * heavy files cannot all land together. File size tracks test cost well enough
+ * to balance the suite without a duration manifest that would rot.
  */
 export function shardTestFiles(root: string, index: number, total: number): string[] {
   if (!Number.isInteger(total) || total < 1) throw new Error("shard total must be a positive integer");
