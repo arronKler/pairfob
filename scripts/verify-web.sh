@@ -58,12 +58,30 @@ run_tests() {
   step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --timeout 30000 "${files[@]}"
 }
 
+run_check() {
+  local label="$1" start=$SECONDS
+  shift
+  echo "verify: starting $label"
+  "$@"
+  echo "verify: $label passed in $((SECONDS - start))s"
+}
+
+# The static checks read different inputs and write no shared files. Run them
+# together so the job costs the slowest check instead of their sum.
 run_static() {
-  step "PWA QA" bun run test:qa
-  step "PWA types" bun run typecheck
-  step "PWA QA types" bun run typecheck:qa
-  step "PWA performance tooling" bun run test:performance
-  step "PWA asset retention" bun test "$ROOT/scripts/retain-pwa-assets.test.ts"
+  local pids=() labels=() status=0 i
+  run_check "PWA QA" bun run test:qa & pids+=("$!"); labels+=("PWA QA")
+  run_check "PWA types" bun run typecheck & pids+=("$!"); labels+=("PWA types")
+  run_check "PWA QA types" bun run typecheck:qa & pids+=("$!"); labels+=("PWA QA types")
+  run_check "PWA performance tooling" bun run test:performance & pids+=("$!"); labels+=("PWA performance tooling")
+  run_check "PWA asset retention" bun test "$ROOT/scripts/retain-pwa-assets.test.ts" & pids+=("$!"); labels+=("PWA asset retention")
+  for i in "${!pids[@]}"; do
+    if ! wait "${pids[$i]}"; then
+      echo "verify: ${labels[$i]} failed" >&2
+      status=1
+    fi
+  done
+  return "$status"
 }
 
 run_build() {
