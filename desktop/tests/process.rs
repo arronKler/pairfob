@@ -432,17 +432,25 @@ fn start_herdr_starts_a_named_session_and_waits_for_its_socket() {
     );
 
     let args_file = tmp.path().join("args");
-    let script = format!(
-        "echo \"$@\" > '{}'\nmkdir -p '{}'\nexec python3 -I -c 'import socket, sys, time; s = socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1); time.sleep(2)' '{}'",
-        args_file.display(),
-        socket.parent().unwrap().display(),
-        socket.display()
+    let herdr = fake(
+        tmp.path(),
+        "herdr",
+        &format!("echo \"$@\" > '{}'\nexec sleep 2", args_file.display()),
     );
-    let herdr = fake(tmp.path(), "herdr", &script);
     let tools = Tools {
         pairfob: tmp.path().join("pairfob"),
         herdr: Some(herdr),
     };
+    let socket_file = socket.clone();
+    let args_ready = args_file.clone();
+    let server = std::thread::spawn(move || {
+        while !args_ready.exists() {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        fs::create_dir_all(socket_file.parent().unwrap()).unwrap();
+        let _listener = std::os::unix::net::UnixListener::bind(&socket_file).unwrap();
+        std::thread::sleep(Duration::from_secs(2));
+    });
 
     process::start_herdr(&tools, Some("work")).unwrap();
 
@@ -451,6 +459,7 @@ fn start_herdr_starts_a_named_session_and_waits_for_its_socket() {
         "--session work server"
     );
     assert!(socket.exists(), "no socket at {}", socket.display());
+    server.join().unwrap();
 }
 
 #[test]
@@ -486,16 +495,25 @@ fn start_herdr_replaces_a_socket_left_by_a_killed_server() {
     );
 
     let args_file = tmp.path().join("args");
-    let script = format!(
-        "echo \"$@\" > '{}'\nmkdir -p '{}'\nexec python3 -I -c 'import socket, sys, time; s = socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1); time.sleep(2)' '{}'",
-        args_file.display(),
-        socket.parent().unwrap().display(),
-        socket.display()
+    let herdr = fake(
+        tmp.path(),
+        "herdr",
+        &format!("echo \"$@\" > '{}'\nexec sleep 2", args_file.display()),
     );
     let tools = Tools {
         pairfob: tmp.path().join("pairfob"),
-        herdr: Some(fake(tmp.path(), "herdr", &script)),
+        herdr: Some(herdr),
     };
+    let socket_file = socket.clone();
+    let args_ready = args_file.clone();
+    let server = std::thread::spawn(move || {
+        while !args_ready.exists() {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        fs::create_dir_all(socket_file.parent().unwrap()).unwrap();
+        let _listener = std::os::unix::net::UnixListener::bind(&socket_file).unwrap();
+        std::thread::sleep(Duration::from_secs(2));
+    });
 
     process::start_herdr(&tools, Some("work")).unwrap();
 
@@ -504,6 +522,7 @@ fn start_herdr_replaces_a_socket_left_by_a_killed_server() {
         "--session work server",
         "the stale socket kept the new server from starting"
     );
+    server.join().unwrap();
 }
 
 #[test]
