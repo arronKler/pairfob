@@ -2,7 +2,7 @@
 //! manifest validation, and replacing a fake executable.
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -65,14 +65,17 @@ impl Drop for Channel {
 }
 
 fn serve(mut stream: TcpStream, manifest: &str, artifact_path: &str, artifact: &[u8]) {
-    let mut request = [0u8; 4096];
-    let read = stream.read(&mut request).unwrap_or(0);
-    let request = String::from_utf8_lossy(&request[..read]);
-    let path = request
-        .lines()
-        .next()
-        .and_then(|line| line.split_whitespace().nth(1))
-        .unwrap_or("");
+    let target = {
+        let mut reader = BufReader::new(&mut stream);
+        let mut line = String::new();
+        let _ = reader.read_line(&mut line);
+        line.split_whitespace().nth(1).unwrap_or("").to_owned()
+    };
+    let path = target
+        .strip_prefix("http://")
+        .or_else(|| target.strip_prefix("https://"))
+        .and_then(|rest| rest.find('/').map(|index| &rest[index..]))
+        .unwrap_or(&target);
     let (status, body): (&str, &[u8]) = if path == "/desktop/release.json" {
         ("200 OK", manifest.as_bytes())
     } else if path == artifact_path {
