@@ -422,13 +422,18 @@ func (c *coreConn) watchStream(channel uint32) <-chan coreStreamItem {
 	stream.sink = sink
 	buffered, ended := c.takePending(channel), stream.ended || c.streamsClosed
 	c.streamsMu.Unlock()
+	overflowed := false
 	for _, item := range buffered {
 		if !sink.deliver(item) {
+			overflowed = true
 			break
 		}
 	}
 	if ended {
 		sink.close()
+	}
+	if overflowed {
+		c.endStream(channel)
 	}
 	return sink.items
 }

@@ -580,6 +580,38 @@ func TestCoreConnStreamOverflowClosesSink(t *testing.T) {
 	}
 }
 
+func TestCoreConnWatchStreamClosesOnBufferedOverflow(t *testing.T) {
+	client, server := net.Pipe()
+	conn := newCoreConn(client, func() { _ = client.Close() }, nil)
+	t.Cleanup(func() {
+		_ = conn.Close()
+		_ = server.Close()
+	})
+	conn.streamsMu.Lock()
+	for index := 0; index < coreStreamBuffer+8; index++ {
+		conn.pendingIn[7] = append(conn.pendingIn[7], coreStreamItem{kind: coreKindData, payload: []byte{byte(index)}})
+		conn.pendingBytes++
+	}
+	conn.streamsMu.Unlock()
+
+	items := conn.watchStream(7)
+	count := 0
+	for {
+		select {
+		case _, ok := <-items:
+			if !ok {
+				if count != coreStreamBuffer {
+					t.Fatalf("delivered %d frames before overflow, want %d", count, coreStreamBuffer)
+				}
+				return
+			}
+			count++
+		case <-time.After(2 * time.Second):
+			t.Fatalf("sink stayed open after %d frames", count)
+		}
+	}
+}
+
 func TestCoreOpenConfigured(t *testing.T) {
 	socket := filepath.Join(t.TempDir(), "herdr.sock")
 	t.Setenv("HERDR_SOCKET_PATH", socket)
