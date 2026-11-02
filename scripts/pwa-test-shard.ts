@@ -1,8 +1,20 @@
 /** Split the PWA test files into balanced shards for parallel CI jobs. */
-import { readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 const TEST_FILE = /\.test\.tsx?$/;
+
+/** The CI manifest maps each file to the milliseconds it last took to pass. */
+function measuredTimes(): Record<string, number> {
+  try {
+    const manifest = JSON.parse(readFileSync(join(import.meta.dir, "pwa-test-timings.json"), "utf8"));
+    return manifest?.version === 1 && manifest.files ? manifest.files : {};
+  } catch {
+    return {};
+  }
+}
+
+const MEASURED = measuredTimes();
 
 function walk(directory: string, out: string[]): void {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -20,10 +32,9 @@ export function pwaTestFiles(root: string): string[] {
 }
 
 /**
- * The files for one shard. Largest first into the least-loaded shard, so a few
- * heavy files cannot all land together. File size decides the split; the
- * measured timings manifest only orders files inside a shard, so a stale
- * entry cannot unbalance it.
+ * The files for one shard. Measured time first, plus a small size term, into
+ * the least-loaded shard, so the heavy files cannot all land together. A stale
+ * manifest only changes the balance, never which files run.
  */
 export function shardTestFiles(root: string, index: number, total: number): string[] {
   if (!Number.isInteger(total) || total < 1) throw new Error("shard total must be a positive integer");
@@ -32,7 +43,7 @@ export function shardTestFiles(root: string, index: number, total: number): stri
   }
   const files = pwaTestFiles(root);
   const sizes = new Map(files.map((file) => [file, statSync(join(root, file)).size]));
-  const weight = (file: string): number => sizes.get(file) ?? 0;
+  const weight = (file: string): number => (MEASURED[file] ?? 0) + (sizes.get(file) ?? 0) / 1000;
   const buckets: string[][] = Array.from({ length: total }, () => []);
   const loads = new Array<number>(total).fill(0);
   for (const file of [...files].sort((left, right) => weight(right) - weight(left) || left.localeCompare(right))) {
