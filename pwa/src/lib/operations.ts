@@ -18,6 +18,7 @@ export const OPERATION_CAPABILITY_KEYS = [
   "delete_file",
   "upload_file",
   "upload_file_v2",
+  "agent_trace_sessions",
 ] as const;
 
 export type OperationCapability = typeof OPERATION_CAPABILITY_KEYS[number];
@@ -40,6 +41,7 @@ export const NO_OPERATION_CAPABILITIES: OperationCapabilities = {
   delete_file: false,
   upload_file: false,
   upload_file_v2: false,
+  agent_trace_sessions: false,
 };
 
 export const OPERATION_INPUT_LIMITS = {
@@ -355,7 +357,7 @@ export function parseRuntimeOperationsConfig(value: unknown): RuntimeOperationsC
 	const rawCapabilities = isRecord(config.capabilities) ? config.capabilities : {};
 	const capabilities = { ...NO_OPERATION_CAPABILITIES };
 	const capabilityKeys = Object.keys(rawCapabilities);
-	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2"]);
+	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "agent_trace_sessions"]);
 	const capabilitiesValid = capabilityKeys.every((key) => (OPERATION_CAPABILITY_KEYS as readonly string[]).includes(key))
 		&& OPERATION_CAPABILITY_KEYS.every((key) => typeof rawCapabilities[key] === "boolean"
       || (optionalCapabilities.has(key) && !(key in rawCapabilities)));
@@ -466,7 +468,8 @@ function itemTraceSummary(value: unknown): AgentTraceItem | null {
 
 export function parseAgentTraceSummaryPage(value: unknown): AgentTracePage {
   const result = resultRecord(value, "AgentTraceSummary");
-  exactKeys(result, ["items", "next_cursor", "truncated"]);
+  exactKeys(result, ["items", "next_cursor", "truncated"], ["items", "next_cursor", "truncated", "has_earlier_session"]);
+  if ("has_earlier_session" in result && typeof result.has_earlier_session !== "boolean") badResult("AgentTraceSummary 响应 has_earlier_session 非法");
   if (!Array.isArray(result.items) || result.items.length > 200) badResult("AgentTraceSummary 响应 items 非法");
   const items = result.items.map((item) => itemTraceSummary(item));
   if (items.some((item) => item === null)) badResult("AgentTraceSummary 响应包含非法记录");

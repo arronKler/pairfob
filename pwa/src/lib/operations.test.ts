@@ -280,6 +280,13 @@ describe("safe read normalization", () => {
     expectBadMessage(() => parseAgentTraceDetail({ detail_ref: "other", truncated: false }, "detail-1"));
   });
 
+  test("accepts has_earlier_session on an AgentTraceSummary result only as a boolean", () => {
+    const base = { items: [], next_cursor: null, truncated: false };
+    expect(parseAgentTraceSummaryPage({ ...base, has_earlier_session: true }).items).toEqual([]);
+    expectBadMessage(() => parseAgentTraceSummaryPage({ ...base, has_earlier_session: "yes" }));
+    expectBadMessage(() => parseAgentTraceSummaryPage({ ...base, other: 1 }));
+  });
+
   test("validates the exact worktree result while keeping display fields", () => {
     expect(parseWorktrees({ worktrees: [
       {

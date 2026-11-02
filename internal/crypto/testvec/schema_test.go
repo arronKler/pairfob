@@ -207,7 +207,11 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 	}
 	for _, op := range []string{"AgentTrace", "AgentTraceSummary"} {
 		params := paramsByOp[op]
-		if got, want := sortedPropertyNames(params.Properties), []string{"cursor", "limit", "pane_id", "session"}; !slices.Equal(got, want) || !slices.Equal(params.Required, []string{"pane_id"}) {
+		want := []string{"cursor", "limit", "pane_id", "session"}
+		if op == "AgentTraceSummary" {
+			want = append(want, "session_index")
+		}
+		if got := sortedPropertyNames(params.Properties); !slices.Equal(got, want) || !slices.Equal(params.Required, []string{"pane_id"}) {
 			t.Errorf("%s params fields=%q required=%q", op, got, params.Required)
 		}
 		if params.AdditionalProperties == nil || *params.AdditionalProperties {
@@ -258,7 +262,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"create_conversation", "create_tab", "split_pane", "prompt_agent", "history",
 		"list_worktrees", "create_worktree", "open_worktree", "resize_pane", "swap_pane", "zoom_pane",
 	}
-	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2"), capabilities)
+	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "upload_file", "upload_file_v2", "agent_trace_sessions"), capabilities)
 
 	// Stage-2 V2 upload surface: the dedicated state def reports the V2 chunk
 	// bound, and the V2 write carries the larger base64 payload bound. The
@@ -313,7 +317,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		[]string{"type", "text", "name", "state", "detail_ref"},
 		[]string{"type"},
 	)
-	requireExactObject(t, schema.Defs, "agentTraceSummaryResult", []string{"items", "next_cursor", "truncated"})
+	requireExactObjectFields(t, schema.Defs, "agentTraceSummaryResult", []string{"items", "next_cursor", "truncated", "has_earlier_session"}, []string{"items", "next_cursor", "truncated"})
 	requireExactObjectFields(t, schema.Defs, "agentTraceDetailResult",
 		[]string{"detail_ref", "text", "input", "output", "truncated"},
 		[]string{"detail_ref", "truncated"},

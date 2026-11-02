@@ -216,6 +216,7 @@ type Engine struct {
 	uploads *uploadRegistry
 
 	traceWatch traceWatchState
+	chain      sessionChain
 }
 
 const PairingTTLDefault = 180 * time.Second

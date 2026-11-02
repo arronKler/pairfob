@@ -165,7 +165,8 @@
         "rename_file": { "type": "boolean" },
         "delete_file": { "type": "boolean" },
         "upload_file": { "type": "boolean" },
-        "upload_file_v2": { "type": "boolean" }
+        "upload_file_v2": { "type": "boolean" },
+        "agent_trace_sessions": { "type": "boolean" }
       },
       "additionalProperties": false
     },
@@ -331,7 +332,8 @@
           "items": { "$ref": "#/$defs/agentTraceSummaryItem" }
         },
         "next_cursor": { "type": ["string", "null"], "maxLength": 1024 },
-        "truncated": { "type": "boolean" }
+        "truncated": { "type": "boolean" },
+        "has_earlier_session": { "type": "boolean" }
       },
       "additionalProperties": false
     },
@@ -1149,7 +1151,8 @@
                   "pane_id": { "$ref": "#/$defs/paneId" },
                   "session": { "$ref": "#/$defs/session" },
                   "cursor": { "type": ["string", "null"], "maxLength": 1024 },
-                  "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+                  "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+                  "session_index": { "type": "integer", "minimum": 0, "maximum": 16 }
                 },
                 "additionalProperties": false
               }

@@ -35,22 +35,23 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 	descriptor, describeErr := e.RT.Describe(ctx, runtime.DefaultSession())
 	cancel()
 	capabilities := map[string]bool{
-		"create_conversation": descriptor.Supports(runtime.FeatureCreateConversation),
-		"create_tab":          descriptor.Supports(runtime.FeatureCreateTab),
-		"split_pane":          descriptor.Supports(runtime.FeatureSplitPane),
-		"prompt_agent":        descriptor.Supports(runtime.FeaturePromptAgent),
-		"agent_inspect":       descriptor.Supports(runtime.FeatureAgentInspect),
-		"history":             describeErr == nil && (e.Journal != nil || descriptor.Supports(runtime.FeaturePaneRead)),
-		"list_worktrees":      descriptor.Supports(runtime.FeatureWorktreeList),
-		"create_worktree":     descriptor.Supports(runtime.FeatureWorktreeCreate),
-		"open_worktree":       descriptor.Supports(runtime.FeatureWorktreeOpen),
-		"resize_pane":         descriptor.Supports(runtime.FeatureLayoutResize),
-		"swap_pane":           descriptor.Supports(runtime.FeatureLayoutSwap),
-		"zoom_pane":           descriptor.Supports(runtime.FeatureLayoutZoom),
-		"rename_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
-		"delete_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
-		"upload_file":         describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
-		"upload_file_v2":      describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		"create_conversation":  descriptor.Supports(runtime.FeatureCreateConversation),
+		"create_tab":           descriptor.Supports(runtime.FeatureCreateTab),
+		"split_pane":           descriptor.Supports(runtime.FeatureSplitPane),
+		"prompt_agent":         descriptor.Supports(runtime.FeaturePromptAgent),
+		"agent_inspect":        descriptor.Supports(runtime.FeatureAgentInspect),
+		"history":              describeErr == nil && (e.Journal != nil || descriptor.Supports(runtime.FeaturePaneRead)),
+		"list_worktrees":       descriptor.Supports(runtime.FeatureWorktreeList),
+		"create_worktree":      descriptor.Supports(runtime.FeatureWorktreeCreate),
+		"open_worktree":        descriptor.Supports(runtime.FeatureWorktreeOpen),
+		"resize_pane":          descriptor.Supports(runtime.FeatureLayoutResize),
+		"swap_pane":            descriptor.Supports(runtime.FeatureLayoutSwap),
+		"zoom_pane":            descriptor.Supports(runtime.FeatureLayoutZoom),
+		"rename_file":          describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		"delete_file":          describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		"upload_file":          describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		"upload_file_v2":       describeErr == nil && descriptor.Supports(runtime.FeatureSnapshot),
+		"agent_trace_sessions": true,
 	}
 	agentKinds := make([]string, 0, len(descriptor.AgentKinds))
 	for _, kind := range descriptor.AgentKinds {
@@ -227,16 +228,22 @@ func (e *Engine) rpcAgentTrace(s *sess, id string, params json.RawMessage) {
 
 func (e *Engine) rpcAgentTraceSummary(s *sess, id string, params json.RawMessage) {
 	var p struct {
-		Session *string `json:"session"`
-		PaneID  string  `json:"pane_id"`
-		Cursor  *string `json:"cursor"`
-		Limit   *int    `json:"limit"`
+		Session      *string `json:"session"`
+		PaneID       string  `json:"pane_id"`
+		Cursor       *string `json:"cursor"`
+		Limit        *int    `json:"limit"`
+		SessionIndex *int    `json:"session_index"`
 	}
-	if badParams(params, &p) || !validID(p.PaneID) || invalidSession(p.Session) || (p.Cursor != nil && utf8.RuneCountInString(*p.Cursor) > 1024) || (p.Limit != nil && (*p.Limit < 1 || *p.Limit > 200)) {
+	if badParams(params, &p) || !validID(p.PaneID) || invalidSession(p.Session) || (p.Cursor != nil && utf8.RuneCountInString(*p.Cursor) > 1024) || (p.Limit != nil && (*p.Limit < 1 || *p.Limit > 200)) ||
+		(p.SessionIndex != nil && (*p.SessionIndex < 0 || *p.SessionIndex > maxChainSessionIndex)) {
 		e.replyErr(s, id, "invalid_argument", "invalid agent trace summary params")
 		return
 	}
-	ref, ok := e.agentTraceRef(s, id, p.Session, p.PaneID)
+	index := 0
+	if p.SessionIndex != nil {
+		index = *p.SessionIndex
+	}
+	ref, hasEarlier, ok := e.agentTraceSummaryRef(s, id, p.Session, p.PaneID, index)
 	if !ok {
 		return
 	}
@@ -244,13 +251,52 @@ func (e *Engine) rpcAgentTraceSummary(s *sess, id string, params json.RawMessage
 	if p.Limit != nil {
 		limit = *p.Limit
 	}
-	e.watchTrace(s, p.PaneID, ref)
+	if index == 0 {
+		e.watchTrace(s, p.PaneID, ref)
+	}
 	page, err := e.Journal.ReadTraceSummary(ref, p.Cursor, limit)
 	if err != nil {
 		e.replyAgentTraceError(s, id, ref, err, "agent trace summary could not be read")
 		return
 	}
-	e.reply(s, id, map[string]any{"items": page.Items, "next_cursor": page.NextCursor, "truncated": page.Truncated})
+	result := map[string]any{"items": page.Items, "next_cursor": page.NextCursor, "truncated": page.Truncated}
+	if p.SessionIndex != nil {
+		result["has_earlier_session"] = hasEarlier
+	}
+	e.reply(s, id, result)
+}
+
+// agentTraceSummaryRef resolves the session a summary read targets: the pane's
+// current one for index 0, else the index-th past session of its terminal.
+func (e *Engine) agentTraceSummaryRef(s *sess, id string, session *string, paneID string, index int) (ref journal.Ref, hasEarlier, ok bool) {
+	if index == 0 {
+		ref, pane, ok := e.agentTraceRefPane(s, id, session, paneID)
+		if ok {
+			hasEarlier = e.hasPastSession(pane.TerminalID)
+		}
+		return ref, hasEarlier, ok
+	}
+	pane, err := e.findPane(session, paneID)
+	if err != nil {
+		e.replyRuntimeErr(s, id, err, "pane_not_found")
+		return journal.Ref{}, false, false
+	}
+	if pane == nil {
+		e.replyErr(s, id, "pane_not_found", "pane is no longer available")
+		return journal.Ref{}, false, false
+	}
+	entry, hasEarlier, found := e.chainAt(pane.TerminalID, index)
+	if !found || entry.TerminalID != pane.TerminalID {
+		e.replyErr(s, id, "invalid_argument", "no such earlier session")
+		return journal.Ref{}, false, false
+	}
+	ref = entry.ref()
+	if e.Journal == nil || !e.Journal.Supports(ref) {
+		logTranscriptUnavailable("no_binding", ref)
+		e.replyErr(s, id, "transcript_unavailable", "earlier session has no supported trusted transcript binding")
+		return journal.Ref{}, false, false
+	}
+	return ref, hasEarlier, true
 }
 
 func (e *Engine) rpcAgentTraceDetail(s *sess, id string, params json.RawMessage) {
@@ -276,22 +322,27 @@ func (e *Engine) rpcAgentTraceDetail(s *sess, id string, params json.RawMessage)
 }
 
 func (e *Engine) agentTraceRef(s *sess, id string, session *string, paneID string) (journal.Ref, bool) {
+	ref, _, ok := e.agentTraceRefPane(s, id, session, paneID)
+	return ref, ok
+}
+
+func (e *Engine) agentTraceRefPane(s *sess, id string, session *string, paneID string) (journal.Ref, *runtime.Pane, bool) {
 	pane, err := e.findPane(session, paneID)
 	if err != nil {
 		e.replyRuntimeErr(s, id, err, "pane_not_found")
-		return journal.Ref{}, false
+		return journal.Ref{}, nil, false
 	}
 	if pane == nil {
 		e.replyErr(s, id, "pane_not_found", "pane is no longer available")
-		return journal.Ref{}, false
+		return journal.Ref{}, nil, false
 	}
 	ref := journalRef(pane.AgentSession)
 	if e.Journal == nil || !e.Journal.Supports(ref) {
 		logTranscriptUnavailable("no_binding", ref)
 		e.replyErr(s, id, "transcript_unavailable", "pane has no supported trusted transcript binding")
-		return journal.Ref{}, false
+		return journal.Ref{}, nil, false
 	}
-	return ref, true
+	return ref, pane, true
 }
 
 func (e *Engine) replyAgentTraceError(s *sess, id string, ref journal.Ref, err error, message string) {

@@ -345,6 +345,9 @@ func (e *Engine) reconcileRuntimeSession(ctx context.Context, session runtime.Se
 			tabLabel: tabLabels[pane.TabID], pane: pane,
 		}
 		sameOccupant := known && (previous.instanceID == "" || pane.AgentInstanceID == "" || previous.instanceID == pane.AgentInstanceID)
+		if known {
+			e.observeSessionChange(previous.pane, pane, time.Now())
+		}
 		if !known || !sameOccupant || observedPaneChanged(previous, current) {
 			emitPoke("agent_status", pane.PaneID)
 		}
