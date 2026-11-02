@@ -154,6 +154,8 @@ function setLive(handle: LiveSession | null): void { attachLiveSession(handle); 
 
 beforeEach(async () => {
   await resetChatDOM();
+  // This file mounts the App directly; isolated files owe it the presentation.
+  await (await import("../../../app/connected-loader")).loadConnectedRuntime();
   resetTransitionState();
   clearAgentTraceCache();
   resetComposeDrafts();

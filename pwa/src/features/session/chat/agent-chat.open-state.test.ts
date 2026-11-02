@@ -61,6 +61,8 @@ function bootIdleChat(): void {
 
 beforeEach(async () => {
   await resetChatDOM();
+  // This file mounts the App directly; isolated files owe it the presentation.
+  await (await import("../../../app/connected-loader")).loadConnectedRuntime();
   resetTransitionState();
   registerSessionOwnerPreparer(registerSessionView);
   act(() => mountApp());
