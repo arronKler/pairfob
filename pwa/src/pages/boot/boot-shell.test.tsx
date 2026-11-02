@@ -1,6 +1,6 @@
 import { resetTestDOM } from "../../../test-support/boot-dom";
 import { expectSameNode, expectSameNodes } from "../../../test-support/node-identity";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { PairResult } from "../../lib/protocol/client";
@@ -13,7 +13,7 @@ import { UnreachableShell } from "./unreachable-shell";
 
 /**
  * The boot frame and the single-computer failure page, rendered on their own
- * with the real clock: the slow wait counts up and the retry counts down.
+ * on a fake clock: the slow wait counts up and the retry counts down.
  */
 
 let root: Root | null = null;
@@ -27,7 +27,13 @@ function render(node: React.ReactElement): HTMLElement {
   return host;
 }
 
-const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Advance the fake clock and flush the promises the shell resolves on. */
+async function advance(ms: number): Promise<void> {
+  await act(async () => {
+    jest.advanceTimersByTime(ms);
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  });
+}
 
 function computer(): PairResult {
   return {
@@ -44,9 +50,13 @@ beforeEach(async () => {
     setCredential(computer());
     setPhase("resuming");
   });
+  // The countdown and the slow-wait reveal are timer behavior; drive them
+  // on a fake clock instead of sleeping through real seconds.
+  jest.useFakeTimers();
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   act(() => { root?.unmount(); });
   root = null;
   host?.remove();
@@ -81,7 +91,7 @@ describe("the boot frame while connecting", () => {
     expect(line(node)).toBe(t("slow.lineComputer", { n: "9" }));
     expect([...node.querySelectorAll(".conn-node small")].map((small) => small.textContent))
       .toEqual([t("path.phoneOk"), t("path.relayOk"), t("path.waitingSeconds", { n: "9" })]);
-    await act(async () => { await pause(1_100); });
+    await advance(1_100);
     expect(line(node)).toBe(t("slow.lineComputer", { n: "10" }));
     // Still loading: the placeholder rows keep their sheen.
     expect(node.querySelector(".herd-skeleton.is-still")).toBeNull();
@@ -118,7 +128,7 @@ describe("the single-computer failure page", () => {
     expect(line(node)).toBe(t("unreach.lineComputer", { when: t("device.never") }));
     const note = () => node.querySelector(".conn-retry-note")?.textContent ?? "";
     expect(note()).toContain(t("unreach.autoRetry", { n: "15" }));
-    await act(async () => { await pause(1_100); });
+    await advance(1_100);
     expect(note()).toContain(t("unreach.autoRetry", { n: "14" }));
     // The steps are the computer-side ones, with their commands.
     expect([...node.querySelectorAll(".conn-step code")].map((code) => code.textContent))
@@ -146,7 +156,7 @@ describe("the connection path's moves", () => {
     // It stands between the header and the rows it will move down.
     expect(fold.previousElementSibling?.className).toBe("herd-head");
     expect(fold.nextElementSibling?.classList.contains("herd-skeleton")).toBeTrue();
-    await act(async () => { await pause(1_100); });
+    await advance(1_100);
     expectSameNode(node.querySelector(".boot-shell > .fold"), fold);
     expect(fold.classList.contains("is-shut")).toBeFalse();
     expect(fold.hasAttribute("inert")).toBeFalse();
@@ -161,11 +171,11 @@ describe("the connection path's moves", () => {
     const card = fold.querySelector(".conn-path-card");
     expect(card).not.toBeNull();
     records = [{ event: "connect_start", at: Date.now() }];
-    await act(async () => { await pause(1_050); });
+    await advance(1_050);
     // Shut and out of reach; by now its exit is over and the card is gone.
     expect(fold.classList.contains("is-shut")).toBeTrue();
     expect(fold.hasAttribute("inert")).toBeTrue();
-    await act(async () => { await pause(300); });
+    await advance(300);
     expect(fold.querySelector(".conn-path-card")).toBeNull();
     expect(line(node)).toBe(t("boot.connectingLine"));
   });
@@ -184,7 +194,7 @@ describe("the connection path's moves", () => {
     setConnectionRecordSource(() => [{ event: "connect_start", at: started }, { event: "ws_open", at: started + 300 }]);
     const node = render(createElement(BootShell));
     const before = { notes: smalls(node), links: links(node), badges: badges(node) };
-    await act(async () => { await pause(1_100); });
+    await advance(1_100);
     expect(smalls(node).at(-1)?.textContent).toBe(t("path.waitingSeconds", { n: "10" }));
     // The same elements, one of them saying a later second.
     expectSameNodes(smalls(node), before.notes);
@@ -203,7 +213,7 @@ describe("the connection path's moves", () => {
     expect(badges(node).map((badge) => badge?.className ?? null)).toEqual(["conn-node-badge", null, null]);
     const phone = badges(node)[0];
     records = [...records, { event: "ws_open", at: started + 9_200 }];
-    await act(async () => { await pause(1_100); });
+    await advance(1_100);
     // The links are the same elements with a new state: the stylesheet's transition has something to run on.
     expectSameNodes(links(node), [first, second]);
     expect([first.className, second.className]).toEqual(["conn-link is-ok", "conn-link is-wait"]);
@@ -219,7 +229,7 @@ describe("the connection path's moves", () => {
     expect(relayNote.classList.contains("swap-in")).toBeTrue();
     expect(computerNote.classList.contains("swap-in")).toBeTrue();
     // The next second is only a count.
-    await act(async () => { await pause(1_100); });
+    await advance(1_100);
     expectSameNodes(smalls(node), [phoneNote, relayNote, computerNote]);
     expectSameNode(badges(node)[1], relayBadge);
   });

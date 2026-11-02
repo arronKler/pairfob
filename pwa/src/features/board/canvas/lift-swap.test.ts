@@ -1,5 +1,5 @@
 import { resetBoardTestDOM } from "../../../../test-support/dom";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import type { TabLayout } from "../../../lib/layout";
 import type { LayoutDirection } from "../../../lib/operations";
 import { boardCamera, type BoardCamera } from "../model/camera";
@@ -13,9 +13,14 @@ const layout: TabLayout = { workspaceId: "w1", tabId: "t1", zoomed: false, focus
     { paneId: "p2", focused: false, rect: { x: 50, y: 0, width: 50, height: 40 } },
   ] };
 const releases: Array<() => void> = [];
-beforeEach(resetBoardTestDOM);
-afterEach(() => { releases.splice(0).forEach(release => release()); for (const node of [...document.body.children]) if (node.id !== "app") node.remove(); });
-const hold = () => new Promise(resolve => setTimeout(resolve, BOARD_LONG_PRESS_MS + 30));
+beforeEach(() => { resetBoardTestDOM(); jest.useFakeTimers(); });
+afterEach(() => { jest.useRealTimers(); releases.splice(0).forEach(release => release()); for (const node of [...document.body.children]) if (node.id !== "app") node.remove(); });
+/** Advance the fake clock and flush the microtasks a settle or a watch runs on. */
+async function advance(ms: number): Promise<void> {
+  jest.advanceTimersByTime(ms);
+  for (let i = 0; i < 8; i += 1) await Promise.resolve();
+}
+const hold = () => advance(BOARD_LONG_PRESS_MS + 30);
 
 function rect(left: number, width: number) {
   return () => ({ left, top: 0, right: left + width, bottom: 100, width, height: 100, x: left, y: 0, toJSON() {} }) as DOMRect;
@@ -180,7 +185,7 @@ test("a carried tile is put down, not dropped: its lift marks go at once and it 
   expect(rig.tiles[0].style.getPropertyValue("--board-lift-y")).toBe("");
   expect(rig.tiles[0].dataset.boardSettle).toBe("");
   expect(Object.keys(rig.tiles[1].dataset).filter(key => key.startsWith("board"))).toEqual([]);
-  await new Promise(resolve => setTimeout(resolve, 300));
+  await advance(300);
   expect(rig.tiles[0].dataset.boardSettle).toBeUndefined();
 });
 
@@ -235,13 +240,13 @@ test("a tile dropped on a neighbour is held at the finger until its box changes,
   expect(tile.dataset.boardSettle).toBe("held");
   // The new box: the offset leaves with it, and the tile only has to stay on top.
   tile.style.left = "100px";
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await advance(0);
   expect(tile.style.getPropertyValue("--board-lift-x")).toBe("");
   expect(tile.dataset.boardSettle).toBe("");
   // The request ending afterwards has nothing left to put down.
   result.putDown();
   expect(tile.dataset.boardSettle).toBe("");
-  await new Promise(resolve => setTimeout(resolve, 300));
+  await advance(300);
   expect(tile.dataset.boardSettle).toBeUndefined();
 });
 
@@ -269,6 +274,6 @@ test("the gesture puts the tile down when the swap it asked for is over", async 
   rig.pointer("pointerup", { clientX: 150, clientY: 40 });
   expect(rig.calls.swaps).toEqual([["p1", "right"]]);
   expect(rig.tiles[0].dataset.boardSettle).toBe("held");
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await advance(0);
   expect(rig.tiles[0].dataset.boardSettle).toBe("");
 });
