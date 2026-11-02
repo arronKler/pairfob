@@ -58,8 +58,10 @@ run_tests() {
   # setDefaultTimeout does not reach a directory run, so pass it here.
   # The timings manifest starts the slowest files first; it only orders files
   # inside a shard, so the size-balanced split does not depend on it. Refresh it
-  # with `bun test --timings=scripts/pwa-test-timings.json --update-timings`.
-  step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --timings="$ROOT/scripts/pwa-test-timings.json" --timeout 30000 "${files[@]}"
+  # with `bun test --timings=../scripts/pwa-test-timings.json --update-timings`.
+  # Passing tests are not printed: a shard's log is thousands of lines, and the
+  # job's log upload is part of its wall time. Failures and the summary stay.
+  step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --only-failures --timings="$ROOT/scripts/pwa-test-timings.json" --timeout 30000 "${files[@]}"
 }
 
 run_check() {
