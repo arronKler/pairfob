@@ -1,5 +1,5 @@
 import { act } from "react";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { setScreen } from "../../../app/navigation-store";
 import { setLang } from "../../../lib/i18n";
@@ -37,8 +37,6 @@ const COMMITTED_PATH = "/tmp/demo/.pairfob/attachments/abcd/notes.txt";
 function file(name: string, size: number): File {
   return new File([new Uint8Array(size)], name);
 }
-
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Minimal deferred port for meter integration: checkpoint v2, live progress,
  *  explicit resolve/reject, and a standard cancelled receipt. */
@@ -159,9 +157,13 @@ beforeEach(async () => {
   resetAttachmentQueues();
   port = meterPort();
   setAttachmentTransferPort(port);
+  // The meter's throttle and stall windows are part of what these tests
+  // assert; drive them on a fake clock instead of the wall clock.
+  jest.useFakeTimers();
 });
 
 afterEach(async () => {
+  jest.useRealTimers();
   setAttachmentTransferPort(null);
   attachLiveSession(null);
   setCredential(null);
@@ -179,6 +181,14 @@ async function startJob(name: string, size: number): Promise<string> {
   return id;
 }
 
+/** Advance the fake clock and flush the promises the meter resolves on. */
+async function advance(ms: number): Promise<void> {
+  await act(async () => {
+    jest.advanceTimersByTime(ms);
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  });
+}
+
 describe("upload meter integrated with the controller", () => {
   test("shows a measured rate only while uploading, clears it on completion and drops late callbacks", async () => {
     const id = await startJob("m.txt", 8);
@@ -187,9 +197,9 @@ describe("upload meter integrated with the controller", () => {
     expect(queueSnapshot(KEY)?.items[0]).toMatchObject({ status: "uploading", acknowledged: 4 });
     // The first acknowledged sample is the baseline: no invented rate.
     expect(queueSnapshot(KEY)?.items[0].speedBps).toBeUndefined();
-    await act(async () => wait(120));
+    await advance(120);
     act(() => port.progress()?.(6, 8));
-    await act(async () => wait(200)); // let the 150ms trailing timer flush
+    await advance(200); // let the 150ms trailing timer flush
     const uploading = queueSnapshot(KEY)?.items[0]!;
     expect(uploading.status).toBe("uploading");
     expect(Number.isFinite(uploading.speedBps)).toBe(true);
@@ -213,9 +223,9 @@ describe("upload meter integrated with the controller", () => {
   test("a failure preserves the latest acknowledged bytes and clears rate fields", async () => {
     const id = await startJob("slow.txt", 8);
     act(() => port.progress()?.(5, 8));
-    await act(async () => wait(120));
+    await advance(120);
     act(() => port.progress()?.(6, 8));
-    await act(async () => wait(200));
+    await advance(200);
     expect(queueSnapshot(KEY)?.items[0].speedBps).toBeGreaterThan(0);
     act(() => port.rejectActive(new ProtocolError("timeout", "slow")));
     await act(async () => settleTransferQueue());
@@ -231,9 +241,9 @@ describe("upload meter integrated with the controller", () => {
   test("cancel disposes meter timers so no trailing/stall update can rewrite the cancelled row", async () => {
     const id = await startJob("c.txt", 8);
     act(() => port.progress()?.(4, 8));
-    await act(async () => wait(120));
+    await advance(120);
     act(() => port.progress()?.(6, 8));
-    await act(async () => wait(200));
+    await advance(200);
     act(() => cancelUpload(SCOPE, id));
     await act(async () => settleTransferQueue());
     const cancelled = queueSnapshot(KEY)?.items[0]!;
@@ -243,7 +253,7 @@ describe("upload meter integrated with the controller", () => {
     expect(cancelled.waiting).toBe(false);
     expect(port.calls).toEqual(["upload", "cancel"]);
     // Past both the throttle and stall windows: no late timer resurrects state.
-    await act(async () => wait(3_200));
+    await advance(3_200);
     expect(queueSnapshot(KEY)?.items[0].status).toBe("cancelled");
     expect(queueSnapshot(KEY)?.items[0].waiting).toBe(false);
   });
@@ -263,9 +273,9 @@ describe("upload meter integrated with the controller", () => {
       expect(queueSnapshot(KEY)?.items[0].status).toBe("cancelling");
       expect(pending.settled()).toBe(false);
       const frozen = { status: "cancelling", acknowledged: 524_288, waiting: false };
-      await act(async () => wait(250));
+      await advance(250);
       expect(queueSnapshot(KEY)?.items[0]).toMatchObject(frozen);
-      await act(async () => wait(3_200));
+      await advance(3_200);
       expect(queueSnapshot(KEY)?.items[0]).toMatchObject(frozen);
       expect(pending.settled()).toBe(false);
     } finally {
