@@ -132,6 +132,12 @@ Choose checks by change scope and stage; the full rules are in
   relevant environment remain unchanged. Rerun checks affected by later edits;
   a new commit or status request alone does not require another full run.
 
+`.github/workflows/verify.yml` runs the same scripts for pull requests and
+pushes. A pull request runs only the jobs for the paths it touches, plus the
+always-on `scripts` job. A push to `main` runs every job. The `gate` check is
+the baseline for `./scripts/verify.sh --pwa-only`; an Android-only release
+still needs a commit whose Android gate passed.
+
 ### Herdr install and upgrade in Docker
 
 `scripts/herdr-docker/` exercises the installer against the real official Herdr
