@@ -134,9 +134,13 @@ Choose checks by change scope and stage; the full rules are in
 
 `.github/workflows/verify.yml` runs the same scripts for pull requests and
 pushes. A pull request runs only the jobs for the paths it touches, plus the
-always-on `scripts` job. A push to `main` runs every job. The `gate` check is
-the baseline for `./scripts/verify.sh --pwa-only`; an Android-only release
-still needs a commit whose Android gate passed.
+always-on `scripts` job. A push to `main` diffs the range since the last
+successful `verify` run on `main`, so a red run leaves the baseline older and
+its changes are verified again. The PWA suite is split across fourteen matrix
+jobs, the Go race suite across five, and the web static, build and Worker checks
+run in parallel. The `gate` check is the baseline for
+`./scripts/verify.sh --pwa-only`; an Android-only release still needs a commit
+whose Android gate passed.
 
 ### Herdr install and upgrade in Docker
 

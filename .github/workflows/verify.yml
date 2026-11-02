@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  # The changes job reads the last successful main run to diff the push range.
+  actions: read
 
 concurrency:
   group: verify-${{ github.ref }}
@@ -33,14 +35,52 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            bun scripts/ci-scope.ts "$PR_BASE" >> "$GITHUB_OUTPUT"
+            BASE="$PR_BASE"
           else
-            bun scripts/ci-scope.ts --all >> "$GITHUB_OUTPUT"
+            # A push verifies the range since the last green main run. A red run
+            # leaves the baseline older, so its changes run again; a run that
+            # verified nothing new leaves the range empty.
+            BASE="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/verify.yml/runs?branch=main&status=success&event=push&per_page=1" \
+              --jq '.workflow_runs[0].head_sha // empty' || true)"
+            # A baseline that is not an ancestor (rewritten main) would diff the
+            # wrong range; fall back to the full gate.
+            if [[ -n "$BASE" ]] && ! git merge-base --is-ancestor "$BASE" HEAD; then
+              BASE=""
+            fi
           fi
+          if [[ -n "$BASE" ]]; then
+            # An unreadable range must verify more, not less: fall back to the
+            # full gate instead of failing into an all-skipped run.
+            SCOPE="$(bun scripts/ci-scope.ts "$BASE")" || SCOPE=""
+          else
+            SCOPE=""
+          fi
+          if [[ -z "$SCOPE" ]]; then
+            SCOPE="$(bun scripts/ci-scope.ts --all)"
+          fi
+          printf '%s\n' "$SCOPE" >> "$GITHUB_OUTPUT"
 
-  go:
+  go-fmt-vet:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10"
+          cache: true
+      - run: bash scripts/verify-go.sh --part fmt-vet
+
+  go-test:
     needs: changes
     if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
@@ -53,13 +93,51 @@ jobs:
         with:
           go-version: "1.26.10"
           cache: true
-      - run: bash scripts/verify-go.sh
+      - run: bash scripts/verify-go.sh --part test
 
-  web:
+  go-race:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10"
+          cache: true
+      - run: bash scripts/verify-go.sh --part race --shard ${{ matrix.shard }}/5
+
+  go-vuln:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10"
+          cache: true
+      - run: bash scripts/verify-go.sh --part vuln
+
+  web-tests:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -67,12 +145,87 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
-      - name: Install lockfiles
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('pwa/bun.lock', 'workers/pairfob-origin/bun.lock', 'workers/pairfob-downloads/bun.lock', 'site/doc/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Install PWA deps
+        run: (cd pwa && bun install --frozen-lockfile)
+      - run: bash scripts/verify-web.sh --part tests --shard ${{ matrix.shard }}/14
+
+  web-static:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      # web-static owns the Bun cache save. The other web jobs only restore it,
+      # so seventeen cold jobs never race to upload the same archive.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('pwa/bun.lock', 'workers/pairfob-origin/bun.lock', 'workers/pairfob-downloads/bun.lock', 'site/doc/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Install PWA deps
+        run: (cd pwa && bun install --frozen-lockfile)
+      - run: bash scripts/verify-web.sh --part static
+
+  web-build:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('pwa/bun.lock', 'workers/pairfob-origin/bun.lock', 'workers/pairfob-downloads/bun.lock', 'site/doc/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Install build deps
         run: |
           (cd pwa && bun install --frozen-lockfile)
-          (cd workers/pairfob-origin && bun install --frozen-lockfile)
           (cd site/doc && bun install --frozen-lockfile)
-      - run: bash scripts/verify-web.sh
+      - run: bash scripts/verify-web.sh --part build
+
+  web-workers:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('pwa/bun.lock', 'workers/pairfob-origin/bun.lock', 'workers/pairfob-downloads/bun.lock', 'site/doc/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Install Worker deps
+        run: |
+          (cd workers/pairfob-origin && bun install --frozen-lockfile)
+          (cd workers/pairfob-downloads && bun install --frozen-lockfile)
+      - run: bash scripts/verify-web.sh --part workers
 
   docs:
     needs: changes
@@ -111,9 +264,12 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('desktop/Cargo.lock') }}
+            desktop/target
+          # v2 carries the compiled target. The key stays on Cargo.lock so a
+          # source change restores the dependency build instead of rebuilding it.
+          key: ${{ runner.os }}-cargo-v2-${{ hashFiles('desktop/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-v2-
       - run: bash scripts/verify-desktop.sh
 
   scripts:
@@ -135,7 +291,19 @@ jobs:
 
   gate:
     if: always()
-    needs: [changes, go, web, docs, desktop, scripts]
+    needs:
+      - changes
+      - go-fmt-vet
+      - go-test
+      - go-race
+      - go-vuln
+      - web-tests
+      - web-static
+      - web-build
+      - web-workers
+      - docs
+      - desktop
+      - scripts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
