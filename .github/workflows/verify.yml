@@ -146,76 +146,120 @@ jobs:
         run: bash scripts/verify-web.sh --part tests --shard ${{ matrix.shard }}/8
 
   web-static:
-    needs: changes
-    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The baseline diff needs the history the changes job reads.
+          fetch-depth: 0
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+      # The static checks start with the other jobs instead of waiting for
+      # changes, so the run's tail is the checks themselves.
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci-scope-baseline.sh
+      - name: Require a web scope decision
+        if: steps.scope.outputs.web != 'true' && steps.scope.outputs.web != 'false'
+        run: |
+          echo "scope: web output missing" >&2
+          exit 1
       # web-static owns the Bun cache save. The other web jobs only restore it,
       # so seventeen cold jobs never race to upload the same archive.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.scope.outputs.web == 'true'
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('pwa/bun.lock', 'workers/pairfob-origin/bun.lock', 'workers/pairfob-downloads/bun.lock', 'site/doc/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
       - name: Install PWA deps
+        if: steps.scope.outputs.web == 'true'
         run: (cd pwa && bun install --frozen-lockfile)
-      - run: bash scripts/verify-web.sh --part static
+      - if: steps.scope.outputs.web == 'true'
+        run: bash scripts/verify-web.sh --part static
 
   web-build:
-    needs: changes
-    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The baseline diff needs the history the changes job reads.
+          fetch-depth: 0
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci-scope-baseline.sh
+      - name: Require a web scope decision
+        if: steps.scope.outputs.web != 'true' && steps.scope.outputs.web != 'false'
+        run: |
+          echo "scope: web output missing" >&2
+          exit 1
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.scope.outputs.web == 'true'
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('pwa/bun.lock', 'workers/pairfob-origin/bun.lock', 'workers/pairfob-downloads/bun.lock', 'site/doc/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
       - name: Install build deps
+        if: steps.scope.outputs.web == 'true'
         run: |
           (cd pwa && bun install --frozen-lockfile)
           (cd site/doc && bun install --frozen-lockfile)
-      - run: bash scripts/verify-web.sh --part build
+      - if: steps.scope.outputs.web == 'true'
+        run: bash scripts/verify-web.sh --part build
 
   web-workers:
-    needs: changes
-    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The baseline diff needs the history the changes job reads.
+          fetch-depth: 0
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci-scope-baseline.sh
+      - name: Require a web scope decision
+        if: steps.scope.outputs.web != 'true' && steps.scope.outputs.web != 'false'
+        run: |
+          echo "scope: web output missing" >&2
+          exit 1
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.scope.outputs.web == 'true'
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('pwa/bun.lock', 'workers/pairfob-origin/bun.lock', 'workers/pairfob-downloads/bun.lock', 'site/doc/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
       - name: Install Worker deps
+        if: steps.scope.outputs.web == 'true'
         run: |
           (cd workers/pairfob-origin && bun install --frozen-lockfile)
           (cd workers/pairfob-downloads && bun install --frozen-lockfile)
-      - run: bash scripts/verify-web.sh --part workers
+      - if: steps.scope.outputs.web == 'true'
+        run: bash scripts/verify-web.sh --part workers
 
   docs:
     needs: changes
