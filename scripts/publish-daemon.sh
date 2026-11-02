@@ -34,6 +34,10 @@ trap 'rm -rf "$scratch"; rmdir "$LOCK" 2>/dev/null || true' EXIT
 PUBLIC="$DOWNLOADS/public"
 python3 "$ROOT/scripts/download-channel.py" preserve --channel android --origin "$ORIGIN" \
   --public "$PUBLIC" --receipt "$scratch/android.json"
+# The desktop channel is optional until its first release, but a live one must
+# survive this deployment; the Worker serves every channel from the same assets.
+python3 "$ROOT/scripts/download-channel.py" preserve --channel desktop --origin "$ORIGIN" \
+  --public "$PUBLIC" --receipt "$scratch/desktop.json"
 python3 "$ROOT/scripts/download-channel.py" stage-daemon --origin "$ORIGIN" --public "$PUBLIC" \
   --source "$SOURCE" --installer "$ROOT/scripts/install.sh" --receipt "$scratch/daemon.json"
 echo "staged daemon $(cat "$SOURCE/VERSION") at $ORIGIN/daemon"
@@ -86,6 +90,7 @@ if [[ "$DEPLOY" != 1 ]]; then
   exit 0
 fi
 python3 "$ROOT/scripts/download-channel.py" check --receipt "$scratch/android.json"
+python3 "$ROOT/scripts/download-channel.py" check --receipt "$scratch/desktop.json"
 python3 "$ROOT/scripts/download-channel.py" check --receipt "$scratch/daemon.json"
 (cd "$DOWNLOADS" && bunx wrangler deploy)
 python3 "$ROOT/scripts/download-channel.py" verify-daemon --origin "$ORIGIN" --public "$PUBLIC"
@@ -110,4 +115,5 @@ if [[ "$live_version" != "$staged_version" ]]; then
   exit 1
 fi
 python3 "$ROOT/scripts/download-channel.py" check --receipt "$scratch/android.json"
-echo "verified live daemon artifacts $live_version, their signature, and the unchanged Android channel on $ORIGIN"
+python3 "$ROOT/scripts/download-channel.py" check --receipt "$scratch/desktop.json"
+echo "verified live daemon artifacts $live_version, their signature, and the unchanged Android and desktop channels on $ORIGIN"
