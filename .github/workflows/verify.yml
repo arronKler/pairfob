@@ -273,6 +273,12 @@ jobs:
       - run: bash scripts/verify-desktop.sh
 
   scripts:
+    # The changes job sits on every scoped run's critical path. Let GitHub
+    # allot its runner first instead of racing the always-on scripts job for
+    # the first allocation; scripts still runs after it, even on a scope
+    # failure, and the gate rejects that failure either way.
+    needs: changes
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
