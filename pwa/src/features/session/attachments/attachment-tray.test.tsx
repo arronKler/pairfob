@@ -1,6 +1,6 @@
 import { expectSameNode } from "../../../../test-support/node-identity";
 import { act } from "react";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
@@ -122,6 +122,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  jest.useRealTimers();
   hold = null;
   closeTestDialogs();
   unmountReact();
@@ -249,14 +250,15 @@ describe("attachment tray", () => {
     renderReact(<AttachmentTray />);
     await act(async () => { acceptPastedFiles([file("a.txt")]); });
     await settle();
-    const realSetTimeout = globalThis.setTimeout;
+    jest.useFakeTimers();
     await act(async () => { appRoot().querySelector<HTMLButtonElement>(".attach-chip-x")!.click(); });
-    await act(async () => { await new Promise((resolve) => realSetTimeout(resolve, UNDO_REMOVE_MS + 50)); });
+    await act(async () => { jest.advanceTimersByTime(UNDO_REMOVE_MS + 50); });
     expect(queueSnapshot(key)!.items).toHaveLength(0);
     // The tray shuts over what it last held, and is gone when it has shut.
     expect(fold()?.classList.contains("is-shut")).toBe(true);
     expect(fold()?.hasAttribute("inert")).toBe(true);
-    await exitOver();
+    await act(async () => { jest.advanceTimersByTime(1000); });
+    jest.useRealTimers();
     expect(tray()).toBeNull();
   }, UNDO_REMOVE_MS + 5000);
 
@@ -505,9 +507,10 @@ describe("what changes in the tray is shown changing", () => {
     await act(async () => { adoptIncoming(key, scope, [file("a.txt")]); });
     // Its height is terminal rows: no opening, and at rest from the frame it is drawn.
     expect(fold()!.className).toBe("fold attach-fold is-rest is-instant");
+    jest.useFakeTimers();
     await act(async () => { appRoot().querySelector<HTMLButtonElement>(".attach-chip-x")!.click(); });
-    const realSetTimeout = globalThis.setTimeout;
-    await act(async () => { await new Promise((resolve) => realSetTimeout(resolve, UNDO_REMOVE_MS + 50)); });
+    await act(async () => { jest.advanceTimersByTime(UNDO_REMOVE_MS + 50); });
+    jest.useRealTimers();
     expect(fold()).toBeNull();
     expect(tray()).toBeNull();
   }, UNDO_REMOVE_MS + 5000);
