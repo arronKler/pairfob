@@ -341,7 +341,9 @@ jobs:
       - docs
       - desktop
       - scripts
-    runs-on: ubuntu-latest
+    # The gate only reads the needs JSON; a shared container starts sooner
+    # than a full VM and costs no verification capacity.
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: Require every job to pass or skip
