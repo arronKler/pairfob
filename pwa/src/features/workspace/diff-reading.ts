@@ -1,7 +1,10 @@
 import { useEffect, type CSSProperties, type RefObject } from "react";
 import { pointerFine } from "../../app/input-mode";
-import { isPageZoomed, touchSpread } from "../../lib/gesture-boundary";
+import { isPageZoomed, PinchSteps, touchSpread } from "../../lib/gesture-boundary";
 import { DIFF_SIZES, diffSize, setDiffSize, useDiffSize, useDiffWrap } from "./prefs";
+
+/** The shared pinch recognizer, re-exported where the diff's own tests and calls look for it. */
+export { PINCH_IN, PINCH_OUT, PinchSteps } from "../../lib/gesture-boundary";
 
 /**
  * The reading size and wrap of a diff (kept in `prefs`) on its lines: the size
@@ -95,40 +98,6 @@ export function useDiffReading(split: boolean, digits?: number): DiffReading {
   const className = `${box.className}${!split && !wraps ? " is-nowrap" : ""}`;
   if (digits === undefined) return { className, style: box.style };
   return { className, style: { ...box.style, "--diff-digits": String(digits) } as CSSProperties };
-}
-
-/** Fingers have to spread or close this much before the size takes a step. */
-export const PINCH_IN = 0.8;
-export const PINCH_OUT = 1.25;
-
-/**
- * A two-finger pinch over the lines, as a ratio of the fingers' distance to
- * where it last took a step. Each crossing takes one step and starts measuring
- * again from there, so a long spread walks through the sizes one at a time.
- */
-export class PinchSteps {
-  private base = 0;
-
-  start(distance: number): void {
-    this.base = distance > 0 ? distance : 0;
-  }
-
-  /** The step this distance asks for: 1 bigger, -1 smaller, 0 none yet. */
-  move(distance: number): 1 | -1 | 0 {
-    if (this.base <= 0 || distance <= 0) return 0;
-    const ratio = distance / this.base;
-    if (ratio >= PINCH_OUT) { this.base = distance; return 1; }
-    if (ratio <= PINCH_IN) { this.base = distance; return -1; }
-    return 0;
-  }
-
-  end(): void {
-    this.base = 0;
-  }
-
-  get active(): boolean {
-    return this.base > 0;
-  }
 }
 
 /**

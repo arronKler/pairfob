@@ -2,6 +2,7 @@ import { networkOnline } from "./connection-store";
 import { liveSession } from "../computers/catalog-store";
 import { identityPending, runtimeIdentity } from "./runtime-store";
 import type { RuntimeLiveness } from "../../lib/runtime-liveness";
+import { connectionPhaseOf } from "../../lib/connection-phase";
 import { canInterruptAgentWith, herdLivenessOf, herdStatusOf, type HerdStatus, type HerdStatusInput } from "./herd-status";
 
 /**
@@ -25,8 +26,7 @@ import { canInterruptAgentWith, herdLivenessOf, herdStatusOf, type HerdStatus, t
 export function currentHerdStatusInput(): HerdStatusInput {
   const identity = runtimeIdentity();
   return {
-    connected: liveSession()?.isConnected() === true,
-    checking: liveSession()?.isChecking?.() === true,
+    phase: connectionPhaseOf(liveSession()),
     networkOnline: networkOnline(),
     runtimeKind: identity.runtimeKind,
     herdHost: identity.herdHost,

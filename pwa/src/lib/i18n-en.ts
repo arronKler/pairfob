@@ -197,6 +197,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chrome.themeAuto": "System",
   "chrome.networkOffline": "You're offline · resumes on the network",
   "chrome.checking": "Restoring connection",
+  "chrome.verifying": "Confirming connection",
   "chrome.reconnecting": "Connection dropped, reconnecting",
   "chrome.unverifiable": "Can't confirm Herdr · retrying",
   "chrome.demo": "Demo data · not your computer",
@@ -620,8 +621,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chat.copyReply": "Copy reply",
   "chat.copyReplyAria": "Copy this agent reply",
   "chat.copiedReply": "Reply copied",
-  "chat.copyPromptAria": "Copy this message",
-  "chat.copiedPromptAria": "Message copied",
+  "chat.readingAria": "{label}, {size}px",
   "chat.showHeader": "Show session header",
 
   "ft.opening": "Opening the terminal…",

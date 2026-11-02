@@ -82,6 +82,7 @@ test("a fresh page cannot report ready until the encrypted initial probe answers
 
 test("foreground checking blocks mutations without sending or replay and shares duplicate resume events", async () => {
   const session = await connect();
+  expect(session.connectionPhase?.()).toBe("connected");
   const events: string[] = [];
   session.onEvent((event) => { if (event.type !== "latency") events.push(event.type); });
   wire.hold = true;
@@ -92,6 +93,7 @@ test("foreground checking blocks mutations without sending or replay and shares 
   await settle();
   expect(wire.pending).toHaveLength(1);
   expect(session.isChecking?.()).toBe(true);
+  expect(session.connectionPhase?.()).toBe("verifying");
   await expect(session.sendText("w1:p1", "no replay")).rejects.toMatchObject({ code: "disconnected" });
   await expect(session.terminalInput("term_" + "a".repeat(32), 1, new Uint8Array([65])))
     .rejects.toMatchObject({ code: "disconnected" });
@@ -99,6 +101,7 @@ test("foreground checking blocks mutations without sending or replay and shares 
   wire.confirm();
   await settle();
   expect(session.isConnected()).toBe(true);
+  expect(session.connectionPhase?.()).toBe("connected");
   expect(events).toEqual(["checking", "connected"]);
   expect(wire.requests.every((r) => FIRST_FLIGHT.includes(r.op))).toBe(true);
 });
@@ -154,10 +157,12 @@ test("a brief connection drop remains checking until the replacement epoch answe
   expect(wire.pending).toHaveLength(1);
   expect(session.isChecking?.()).toBe(true);
   expect(session.isConnected()).toBe(false);
+  expect(session.connectionPhase?.()).toBe("connecting");
   wire.confirm();
   await settle();
   expect(session.isChecking?.()).toBe(false);
   expect(session.isConnected()).toBe(true);
+  expect(session.connectionPhase?.()).toBe("connected");
 });
 
 

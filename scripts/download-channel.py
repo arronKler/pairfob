@@ -189,6 +189,13 @@ def preserve(base, public, channel, receipt_path, required=False):
                         raise ValueError(f"daemon artifact mismatch: {path}")
                     save(path, payload)
                 save("daemon/release.json", data)
+                # The manifest signature is a separate asset. Losing it here
+                # would leave the next daemon publish unsigned.
+                signature = read("/daemon/release.json.sig")
+                if signature is not None:
+                    if not re.fullmatch(rb"[A-Za-z0-9+/=]{1,100}\s*", signature):
+                        raise ValueError("daemon release signature is malformed")
+                    save("daemon/release.json.sig", signature)
         elif channel == "android":
             data = read("/android/beta/latest.json")
             if data is not None:

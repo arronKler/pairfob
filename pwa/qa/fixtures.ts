@@ -259,6 +259,7 @@ export async function createFixtureAPI(language: "zh" | "en", initialScene: stri
     snapshot,
     clearCalls() { calls.length = 0; },
     setConnected(value) { session.setConnected(value); setNetworkOnline(value); },
+    setConnectionPhase(value) { session.setConnectionPhase(value); },
     emit(event) { session.emit(event); },
     appendChatTurn() { session.appendChatTurn(); },
     appendChatStep() { session.appendChatStep(); },

@@ -23,6 +23,27 @@ if [[ -z "$COMMIT" ]] && command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-pa
 fi
 pairfob_require_shipable_version "$VERSION" "release.sh VERSION"
 
+# Daemons verify release.json against a key embedded at build time. Bake in
+# exactly the key publish-daemon.sh signs with.
+release_pubkey="${PAIRFOB_RELEASE_PUBKEY:-}"
+if [[ -n "$release_pubkey" && -f "$release_pubkey" ]]; then
+  release_pubkey="$(tr -d '[:space:]' <"$release_pubkey")"
+fi
+if [[ -z "$release_pubkey" && -f "$HOME/.config/pairfob/release-signing.pub" ]]; then
+  release_pubkey="$(tr -d '[:space:]' <"$HOME/.config/pairfob/release-signing.pub")"
+fi
+release_pubkey="$(printf '%s' "$release_pubkey" | tr -d '[:space:]')"
+if [[ ! "$release_pubkey" =~ ^[0-9a-fA-F]{64}$ ]]; then
+  cat >&2 <<EOF
+release.sh needs the Ed25519 public key that daemon updates trust.
+  PAIRFOB_RELEASE_PUBKEY=<64 hex characters, or a file containing them>
+  or $HOME/.config/pairfob/release-signing.pub
+Generate a key pair once with: ./scripts/release-keygen.sh
+EOF
+  exit 1
+fi
+release_pubkey="$(printf '%s' "$release_pubkey" | tr '[:upper:]' '[:lower:]')"
+
 . "$ROOT/scripts/macos-signing.sh"
 pairfob_prepare_macos_signing
 
@@ -30,7 +51,7 @@ OUT="${OUT:-$ROOT/dist/daemon}"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-ldflags="-s -w -X main.version=${VERSION}"
+ldflags="-s -w -X main.version=${VERSION} -X pairfob/internal/release.PublicKeyHex=${release_pubkey}"
 if [[ -n "$COMMIT" ]]; then
   ldflags="${ldflags} -X main.commit=${COMMIT}"
 fi

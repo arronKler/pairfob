@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { resetBoardTestDOM } from "../../../test-support/dom";
 import { setLang } from "../../lib/i18n";
 import { ProtocolError } from "../../lib/protocol/errors";
+import { connectionDiagnostics } from "../../lib/protocol/connection-diagnostics";
 import type { LiveSession } from "../../lib/protocol/client";
 import type { ActionSheetController } from "../../shared/ui/overlay/action-sheet";
 import { SHARE_MAX_BYTES } from "./download-share";
@@ -127,6 +128,7 @@ test("a relay rejection is shown as the P2P requirement", async () => {
   await act(async () => { await pause(); });
   expect(document.body.textContent).toContain("文件下载需要 P2P 直连");
   expect(document.body.textContent).toContain("重试");
+  expect(connectionDiagnostics().some((record) => record.event === "download_refused" && record.code === "p2p_required")).toBe(true);
 });
 
 test("closing the sheet releases the daemon handle", async () => {

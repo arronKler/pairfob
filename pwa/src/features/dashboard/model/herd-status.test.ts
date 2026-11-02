@@ -1,6 +1,7 @@
 import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { LiveSession } from "../../../lib/protocol/session-types";
+import type { ConnectionPhase } from "../../../lib/connection-phase";
 import { setLang, t } from "../../../lib/i18n";
 import { attachLiveSession } from "../../computers/catalog-store";
 import { setNetworkOnline } from "../../connection/connection-store";
@@ -8,12 +9,12 @@ import { applyRuntimeIdentity } from "../../connection/runtime-store";
 import { herdStatus } from "../../connection/runtime-status";
 import { herdLivenessModel, herdStatusModel } from "./herd-status";
 
-function reachability(overrides: { connected?: boolean; networkOnline?: boolean; runtimeKind?: string; herdHost?: string } = {}) {
-  const connected = overrides.connected ?? true;
+function reachability(overrides: { phase?: ConnectionPhase; networkOnline?: boolean; runtimeKind?: string; herdHost?: string } = {}) {
+  const phase = overrides.phase ?? "connected";
   const networkOnline = overrides.networkOnline ?? true;
   const runtimeKind = overrides.runtimeKind ?? "herdr";
   const herdHost = overrides.herdHost ?? "";
-  return { connected, networkOnline, runtimeKind, herdHost };
+  return { phase, networkOnline, runtimeKind, herdHost };
 }
 
 /**
@@ -23,7 +24,11 @@ function reachability(overrides: { connected?: boolean; networkOnline?: boolean;
 function legacyStatus(input: ReturnType<typeof reachability>) {
   setNetworkOnline(input.networkOnline);
   applyRuntimeIdentity({ herdHost: input.herdHost, runtimeKind: input.runtimeKind });
-  attachLiveSession((input.connected ? { isConnected: () => true } : null) as LiveSession | null);
+  attachLiveSession({
+    isConnected: () => input.phase === "connected",
+    isChecking: () => input.phase === "verifying" || input.phase === "connecting",
+    connectionPhase: () => input.phase,
+  } as LiveSession);
   return herdStatus();
 }
 
@@ -45,7 +50,9 @@ describe("herd status projection", () => {
   test("every branch agrees with the connected adapter it is the pure model for", () => {
     const cases = [
       reachability({ networkOnline: false }),
-      reachability({ connected: false }),
+      reachability({ phase: "disconnected" }),
+      reachability({ phase: "verifying" }),
+      reachability({ phase: "connecting" }),
       reachability({ runtimeKind: "" }),
       reachability({ runtimeKind: "offline" }),
       reachability({ runtimeKind: "fake" }),
@@ -53,14 +60,21 @@ describe("herd status projection", () => {
       reachability(),
     ];
     for (const input of cases) {
-      const liveness = herdLivenessModel(input);
+      const liveness = herdLivenessModel({
+        connected: input.phase === "connected",
+        networkOnline: input.networkOnline,
+        runtimeKind: input.runtimeKind,
+      });
       expect({ ...herdStatusModel({ ...input, liveness }), liveness }).toEqual({ ...legacyStatus(input), liveness });
     }
   });
 
   test("the copy follows the verdict", () => {
     expect(herdStatusModel(reachability({ networkOnline: false }))).toEqual({ tone: "warn", text: t("chrome.networkOffline") });
-    expect(herdStatusModel(reachability({ connected: false }))).toEqual({ tone: "warn", text: t("chrome.reconnecting") });
+    expect(herdStatusModel(reachability({ phase: "verifying", networkOnline: false }))).toEqual({ tone: "warn", text: t("chrome.networkOffline") });
+    expect(herdStatusModel(reachability({ phase: "verifying" }))).toEqual({ tone: "pending", text: t("chrome.verifying") });
+    expect(herdStatusModel(reachability({ phase: "connecting" }))).toEqual({ tone: "pending", text: t("chrome.checking") });
+    expect(herdStatusModel(reachability({ phase: "disconnected" }))).toEqual({ tone: "warn", text: t("chrome.reconnecting") });
     expect(herdStatusModel(reachability({ runtimeKind: "" }))).toEqual({ tone: "warn", text: t("chrome.unverifiable") });
     expect(herdStatusModel(reachability({ runtimeKind: "offline" }))).toEqual({ tone: "off", text: t("chrome.herdrOff") });
     expect(herdStatusModel(reachability({ runtimeKind: "fake" }))).toEqual({ tone: "demo", text: t("chrome.demo") });

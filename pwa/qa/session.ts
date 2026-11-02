@@ -6,6 +6,7 @@ import { boardLayoutFixture } from "./board-layout";
 import type { SplitPaneInput, ResizePaneInput, SwapPaneInput, ZoomPaneInput } from "../src/lib/operations";
 import { ProtocolError } from "../src/lib/protocol/errors";
 import { NO_OPERATION_CAPABILITIES } from "../src/lib/operations";
+import type { ConnectionPhase } from "../src/lib/connection-phase";
 import type { HerdSessionSummary, LiveSession, SessionEvent } from "../src/lib/protocol/session-types";
 import type { AgentTraceItem } from "../src/lib/operations";
 import { sessionTransport, setSessionTransport } from "../src/features/connection/connection-store";
@@ -24,6 +25,8 @@ export type FixtureSession = {
   /** Frames this session has delivered, its own screen and injected ones alike. */
   terminalFrames(): number;
   setConnected(connected: boolean): void;
+  /** Show the transport's own state, including a live path still being verified. */
+  setConnectionPhase(phase: ConnectionPhase): void;
   /** What this computer answers a quota read with, so a refresh on a scene keeps the scene's accounts. */
   setQuotas(accounts: QuotaAccount[], legacy?: boolean): void;
   setTrace(items: AgentTraceItem[]): void;
@@ -69,7 +72,7 @@ export function createSession(source: SessionSource = {}): FixtureSession {
   const preview = createPreviewFiles();
   const downloads = new Map<string, string>();
   let downloadSerial = 0;
-  let connected = true;
+  let phase: ConnectionPhase = "connected";
   let disposed = false;
   let operation = 0;
   let text = data.PANE_TEXT;
@@ -156,7 +159,9 @@ export function createSession(source: SessionSource = {}): FixtureSession {
     }),
   });
   const live = {
-    isConnected: () => connected && !disposed,
+    isConnected: () => phase === "connected" && !disposed,
+    isChecking: () => !disposed && (phase === "verifying" || phase === "connecting"),
+    connectionPhase: () => disposed ? "disconnected" : phase,
     onEvent(listener: (event: SessionEvent) => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     ping: (time: number) => request("ping", [time], () => ({ t: time })),
     getConfig: () => request("getConfig", [], () => ({
@@ -294,14 +299,15 @@ export function createSession(source: SessionSource = {}): FixtureSession {
       emit({ type: "latency", rttMs: target === "relay" ? 48 : 18, transport: target === "relay" ? "relay" : "p2p" });
     },
     reconnectNow: (reason?: string) => { record("lifecycle", "reconnectNow", [reason]); },
-    setNetworkAvailable: (available: boolean) => { record("lifecycle", "setNetworkAvailable", [available]); connected = available; },
-    close: () => { record("lifecycle", "close"); connected = false; },
+    setNetworkAvailable: (available: boolean) => { record("lifecycle", "setNetworkAvailable", [available]); phase = available ? "connected" : "disconnected"; },
+    close: () => { record("lifecycle", "close"); phase = "disconnected"; },
   } as unknown as LiveSession;
   return {
     live, emit,
     terminalFrame: sendFrame,
     terminalFrames: () => terminalFrames,
-    setConnected(value) { connected = value; },
+    setConnected(value) { phase = value ? "connected" : "disconnected"; },
+    setConnectionPhase(value) { phase = value; },
     setQuotas(accounts, legacy = false) { quotas = { accounts: structuredClone(accounts), legacy, unknown: 0 }; },
     setTrace(items) { trace = structuredClone(items); appendedTurns = 0; appendedSteps = 0; },
     appendChatTurn() {

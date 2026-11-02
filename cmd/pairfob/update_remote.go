@@ -170,12 +170,12 @@ func (u *remoteUpdater) installAndActivateLocked(target string, activate func(st
 	if strings.TrimSpace(latest) != target {
 		return errors.New("release changed; check again")
 	}
-	sums, err := fetchDownloadText(u.base+"/SHA256SUMS", 1<<16)
+	name := artifactName(runtime.GOOS, runtime.GOARCH)
+	manifest, err := fetchSignedRelease(u.base, target)
 	if err != nil {
 		return err
 	}
-	name := artifactName(runtime.GOOS, runtime.GOARCH)
-	want, err := checksumFor(sums, name)
+	want, err := manifest.Hash("daemon/" + name)
 	if err != nil {
 		return err
 	}

@@ -74,6 +74,11 @@ Pairfob <version>
 | Origin | `pairfob.com` | Not enrolled |
 
 `doctor` exits non-zero when Running or Herdr is unhealthy, so scripts can branch on it.
+`pairfob doctor --json` prints the same check as one JSON object and keeps that
+exit code. `pairfob doctor --bundle [--out PATH]` writes a local zip with the
+report, the last 300 lines of `pairfob.log` and `audit.log`, and a state
+summary. It replaces the home directory and secret-looking values in every file
+and never uploads anything.
 
 `Installed` describes this command's version; `Process` describes the daemon answering local requests. A mismatch calls for `pairfob service restart`. Very old daemons cannot report their actual version; the phone shows it as unknown instead of treating the old `0.1.0` placeholder as a release.
 

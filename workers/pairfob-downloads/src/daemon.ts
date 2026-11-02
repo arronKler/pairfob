@@ -1,6 +1,6 @@
 /** Canonical daemon downloads and the old install/update URLs share one asset set. */
 const FILES = new Set([
-  "VERSION", "SHA256SUMS", "release.json",
+  "VERSION", "SHA256SUMS", "release.json", "release.json.sig",
   "pairfob-darwin-amd64", "pairfob-darwin-arm64",
   "pairfob-linux-amd64", "pairfob-linux-arm64",
   // install.sh installs pairfob-chat beside the daemon when SHA256SUMS lists

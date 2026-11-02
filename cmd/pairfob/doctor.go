@@ -36,20 +36,37 @@ type health struct {
 	P2P              *bool
 }
 
-func doctorCommand(sock string) error {
-	h, err := gatherHealth(sock)
-	if err != nil {
-		return err
+func doctorCommand(args []string, sock string) error {
+	switch {
+	case len(args) == 0:
+		h, err := gatherHealth(sock)
+		if err != nil {
+			return err
+		}
+		renderDoctorHuman(os.Stdout, h, sock)
+		if !h.Running || !h.RuntimeOK {
+			return errDoctor
+		}
+		return nil
+	case len(args) == 1 && args[0] == "--json":
+		return doctorJSON(os.Stdout, sock)
+	case len(args) > 0 && args[0] == "--bundle":
+		return doctorBundleCommand(args[1:], sock)
+	default:
+		return doctorUsage()
 	}
-	writeDoctor(os.Stdout, h)
-	writePrivacyDoctor(os.Stdout, sock)
+}
+
+func renderDoctorHuman(w io.Writer, h health, sock string) {
+	writeDoctor(w, h)
+	writePrivacyDoctor(w, sock)
 	if h.RuntimeKind == runtime.RuntimeKindHerdr {
-		writeHerdrMaintenance(os.Stdout)
+		writeHerdrMaintenance(w)
 	}
-	if !h.Running || !h.RuntimeOK {
-		return errDoctor
-	}
-	return nil
+}
+
+func doctorUsage() error {
+	return fmt.Errorf("usage: pairfob doctor [--json | --bundle [--out PATH]]")
 }
 
 var errDoctor = fmt.Errorf("not ready")

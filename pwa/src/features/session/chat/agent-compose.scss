@@ -32,7 +32,12 @@
   box-shadow: var(--focus-ring);
 }
 
+/* The field's frame is its own vertical padding: the shared fold and the
+   controller's frame measurement both assume one, and a field padded only
+   sideways left its text against the top edge and let a third line show
+   through the folded box. */
 .agent-dock .agent-compose .compose-field {
+  --agent-compose-pad: 7px;
   grid-area: field;
   min-height: 36px;
   border: 0;
@@ -43,12 +48,27 @@
 .agent-dock .agent-compose .compose-field > textarea {
   min-height: 36px;
   height: 36px;
-  padding: 0 4px;
+  padding: var(--agent-compose-pad) 4px;
   border: 0;
   border-radius: 0;
   background: transparent;
   font-size: 15px;
-  line-height: 1.4;
+  line-height: 22px;
+}
+
+/* The dock's "N 行" hint would sit on the draft it counts: the frame already
+   says the field is folded, and the whole field is the unfold target. */
+.agent-dock .agent-compose .compose-lines { display: none; }
+
+/* Folded here means exactly the two lines inside this frame: the shared fold
+   reserves the frame's 22px of padding, while this field pads 7px (11px under
+   a finger), so it measures the field's own two lines and starts the fade one
+   line above its padded edge instead of in the middle of a third. */
+.agent-dock .agent-compose .compose-field.is-folded > textarea {
+  height: calc(2lh + var(--agent-compose-pad) * 2) !important;
+  padding-right: 4px;
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 1lh - var(--agent-compose-pad)), transparent calc(100% - var(--agent-compose-pad)));
+  mask-image: linear-gradient(#000 calc(100% - 1lh - var(--agent-compose-pad)), transparent calc(100% - var(--agent-compose-pad)));
 }
 
 .agent-dock .agent-compose .compose-field > textarea:focus {
@@ -110,13 +130,14 @@
 
   .agent-dock .dock-form.agent-compose {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 4px;
     min-height: 44px;
     padding: 0 2px;
   }
 
   .agent-dock .agent-compose .compose-field {
+    --agent-compose-pad: 11px;
     flex: 1 1 0;
     min-height: 44px;
   }
@@ -124,9 +145,10 @@
   .agent-dock .agent-compose .compose-field > textarea {
     min-height: 44px;
     height: 44px;
-    padding: 0 4px;
+    padding: var(--agent-compose-pad) 4px;
     /* The literal 16px keeps iOS from zooming a focused field. */
     font-size: 16px;
+    line-height: 22px;
   }
 
   .agent-dock .agent-compose .attach-btn {

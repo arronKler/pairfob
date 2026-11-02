@@ -45,6 +45,7 @@ import type { HerdPaint, StatusMark } from "../../lib/herd-attention";
 import { openHerdPaint } from "../../lib/herd-attention";
 import { groupAgents, holdActivation, syncGroupCollapsed, toggleCollapsedForIds, type ActivationHold, type TouchedAt } from "../../lib/ranking";
 import { isDesk } from "../../app/viewport";
+import { connectionPhaseOf } from "../../lib/connection-phase";
 import { haptic } from "../../shared/ui/dom/feedback";
 import { herdLivenessModel, herdStatusModel } from "../../features/dashboard/model/herd-status";
 import { buildHerdViewModel, herdAttentionCount, STATUS_JOIN, type HerdHostView, type HerdModelInput, type HerdStatus, type HerdViewModel } from "../../features/dashboard/model/herd-view";
@@ -266,11 +267,10 @@ function troubleBrief(status: HerdStatus, line: string, retry: boolean): readonl
  */
 function herdStatus(): HerdStatus {
   const runtime = runtimeStore.get();
-  const connected = liveSession()?.isConnected() === true;
+  const phase = connectionPhaseOf(liveSession());
   const online = networkOnline();
   return herdStatusModel({
-    checking: liveSession()?.isChecking?.() === true,
-    connected,
+    phase,
     networkOnline: online,
     runtimeKind: runtime.runtimeKind,
     herdHost: runtime.herdHost,
@@ -282,7 +282,8 @@ export function readHerdInput(painted: HerdPaint): HerdModelInput {
   const dashboard = dashboardStore.get();
   const preferences = preferencesStore.get();
   const runtime = runtimeStore.get();
-  const connected = liveSession()?.isConnected() === true;
+  const phase = connectionPhaseOf(liveSession());
+  const connected = phase === "connected";
   const online = networkOnline();
   const status = herdStatus();
   return {

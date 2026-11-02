@@ -75,6 +75,14 @@ class Publication(unittest.TestCase):
             self.assertEqual((self.public / path).read_bytes(), self.live["/" + path])
         self.assertEqual(own.read_bytes(), b"candidate")
 
+    def test_daemon_preservation_keeps_the_manifest_signature(self):
+        self.daemon()
+        signature = b"QUFB" * 16 + b"\n"
+        self.live["/daemon/release.json.sig"] = signature
+        self.preserve("daemon")
+        self.assertEqual((self.public / "daemon/release.json.sig").read_bytes(), signature)
+        channel.check_receipt(json.loads(self.receipt.read_text()))
+
     def test_daemon_publication_keeps_current_and_previous_apks_and_receipts(self):
         self.android()
         own = self.public / "daemon/VERSION"

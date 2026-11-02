@@ -1,4 +1,5 @@
 import { t } from "../../lib/i18n";
+import type { ConnectionPhase } from "../../lib/connection-phase";
 import { runtimeLiveness, type RuntimeLiveness, type RuntimeLivenessInput } from "../../lib/runtime-liveness";
 import type { StatusTone } from "../../shared/ui/primitives";
 
@@ -15,18 +16,22 @@ import type { StatusTone } from "../../shared/ui/primitives";
  * a failed GetConfig only ever mean "unverifiable".
  */
 
-export type HerdStatusInput = RuntimeLivenessInput & {
+export type HerdStatusInput = Omit<RuntimeLivenessInput, "connected"> & {
   /** Last known Herdr host label; empty means the daemon never reported one. */
   herdHost: string;
-  checking?: boolean;
+  phase: ConnectionPhase;
   /** The session's first runtime read is still in flight (see `identityPending`). */
   reading?: boolean;
 };
 
 export type HerdStatus = { tone: StatusTone; text: string };
 
-export function herdLivenessOf(input: RuntimeLivenessInput): RuntimeLiveness {
-  return runtimeLiveness(input);
+export function herdLivenessOf(input: HerdStatusInput): RuntimeLiveness {
+  return runtimeLiveness({
+    connected: input.phase === "connected",
+    networkOnline: input.networkOnline,
+    runtimeKind: input.runtimeKind,
+  });
 }
 
 /** Interrupt is a mutation: only a live, currently-working agent may show Stop. */
@@ -36,13 +41,14 @@ export function canInterruptAgentWith(agentStatus: string, liveness: RuntimeLive
 
 export function herdStatusOf(input: HerdStatusInput): HerdStatus {
   if (!input.networkOnline) return { tone: "warn", text: t("chrome.networkOffline") };
-  if (input.checking) return { tone: "pending", text: t("chrome.checking") };
+  if (input.phase === "verifying") return { tone: "pending", text: t("chrome.verifying") };
+  if (input.phase === "connecting") return { tone: "pending", text: t("chrome.checking") };
   // Not read yet is not a fault: the verdict stays "unverifiable" for gating,
   // but the words say the phone is reading.
-  if (input.reading && input.connected && !input.runtimeKind) return { tone: "pending", text: t("chrome.reading") };
+  if (input.reading && input.phase === "connected" && !input.runtimeKind) return { tone: "pending", text: t("chrome.reading") };
   const verdict = herdLivenessOf(input);
   if (verdict === "unverifiable") {
-    return { tone: "warn", text: input.connected ? t("chrome.unverifiable") : t("chrome.reconnecting") };
+    return { tone: "warn", text: input.phase === "connected" ? t("chrome.unverifiable") : t("chrome.reconnecting") };
   }
   if (verdict === "exited") return { tone: "off", text: t("chrome.herdrOff") };
   if (input.runtimeKind === "fake") return { tone: "demo", text: t("chrome.demo") };

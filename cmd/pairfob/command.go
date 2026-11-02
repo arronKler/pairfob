@@ -78,7 +78,7 @@ func runCommand(args []string, sock string) error {
 	case "setup":
 		return setupCommand(args[1:])
 	case "doctor":
-		return doctorCommand(sock)
+		return doctorCommand(args[1:], sock)
 	case "runtime":
 		return runtimeCommand(args[1:])
 	case "relay":

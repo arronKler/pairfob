@@ -73,6 +73,12 @@ html[data-kb="open"] .agent-chrome.chrome {
   background: var(--ink-thumb);
 }
 
+/* The transcript size is the reader's own while it is lit. */
+.agent-chrome .icon-reading.is-set {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
 .agent-chrome[data-collapsed="1"] .agent-peek {
   opacity: 1;
   pointer-events: auto;

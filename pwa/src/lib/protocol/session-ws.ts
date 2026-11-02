@@ -10,6 +10,7 @@ import { validDaemonId, validDeviceId } from "../identifiers.ts";
 import { fingerprint16 } from "./hello.ts";
 import { parseMachineLink, parseMachineList } from "./machine-link.ts";
 import { ProtocolError } from "./errors.ts";
+import type { ConnectionPhase } from "../connection-phase.ts";
 import {
   parseCreateConversationResult,
   parseCreateTabResult,
@@ -263,6 +264,12 @@ class ReconnectingSession implements LiveSession {
 
   isConnected = (): boolean => this.transport !== null && !this.checking;
   isChecking = (): boolean => this.checking && !this.stopped;
+  connectionPhase = (): ConnectionPhase => {
+    if (this.stopped) return "disconnected";
+    if (this.transport) return this.checking ? "verifying" : "connected";
+    if (this.reconnecting || this.connectAbort || this.reconnectTimer !== null || this.checking) return "connecting";
+    return "disconnected";
+  };
   /** A read missed its deadline: the connection verifies the path it used. */
   verifyPath = (): boolean => this.transport !== null &&
     this.direct.checkPath(this.transport, !this.stopped && this.networkAvailable, this.checking);

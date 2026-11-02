@@ -12,6 +12,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+
+	signed "pairfob/internal/release"
 )
 
 func updateCommand(args []string) error {
@@ -56,11 +58,11 @@ func updateExecutableLocked(dest, base string) error {
 	if err != nil {
 		return fmt.Errorf("VERSION: %w", err)
 	}
-	sums, err := fetchDownloadText(base+"/SHA256SUMS", 1<<16)
+	manifest, err := fetchSignedRelease(base, remoteVersion)
 	if err != nil {
-		return fmt.Errorf("SHA256SUMS: %w", err)
+		return err
 	}
-	want, err := checksumFor(sums, name)
+	want, err := manifest.Hash("daemon/" + name)
 	if err != nil {
 		return err
 	}
@@ -133,31 +135,22 @@ func allowedDownloadBase(raw string) error {
 	return errors.New("PAIRFOB_DOWNLOAD_BASE must be https (http is only allowed on loopback)")
 }
 
-func checksumFor(sums, name string) (string, error) {
-	if name == "" || strings.ContainsAny(name, "/\\") {
-		return "", errors.New("invalid artifact name")
+// fetchSignedRelease reads and verifies the signed release manifest. The
+// manifest's version must equal the VERSION already fetched, so an older
+// signed inventory cannot be paired with a newer version.
+func fetchSignedRelease(base, expectedVersion string) (signed.Manifest, error) {
+	manifestBytes, err := fetchDownloadBytes(base+"/release.json", 1<<20, downloadPolicy{timeout: updateMetadataTimeout, attempts: 1})
+	if err != nil {
+		return signed.Manifest{}, fmt.Errorf("release.json: %w", err)
 	}
-	for _, line := range strings.Split(sums, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		file := strings.TrimPrefix(fields[1], "*")
-		if file != name {
-			continue
-		}
-		sum := strings.ToLower(fields[0])
-		raw, err := hex.DecodeString(sum)
-		if err != nil || len(raw) != sha256.Size {
-			return "", fmt.Errorf("invalid SHA-256 for %s", name)
-		}
-		return sum, nil
+	signature, err := fetchDownloadText(base+"/release.json.sig", 4096)
+	if err != nil {
+		return signed.Manifest{}, fmt.Errorf("release.json.sig: %w", err)
 	}
-	return "", fmt.Errorf("SHA256SUMS has no entry for %s", name)
+	if err := signed.Verify(manifestBytes, []byte(signature)); err != nil {
+		return signed.Manifest{}, err
+	}
+	return signed.ParseManifest(manifestBytes, expectedVersion)
 }
 
 func sha256Hex(b []byte) string {

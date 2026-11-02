@@ -37,34 +37,21 @@ function growText(node: HTMLElement, from: number, to: number): Animation | null
 }
 
 /**
- * The prompt's own row: when the reader recorded it, and a way to take the
- * words back. The copy is the turn's own handler (`copyAgentReply`), the same
- * one the reply uses, so what lands on the clipboard is the same text. It reads
- * the body alone: the attachment paths are the transport, not the message.
+ * The prompt's own row: when the reader recorded it. A prompt the daemon did
+ * not stamp has no row at all, and the bubble stands alone.
  */
-function PromptMeta({ at, body, onCopy }: { at?: number; body: string; onCopy?: (text: string) => unknown }) {
-  const [copied, confirm] = useCopied();
-  const copy = (): void => {
-    if (!onCopy) return;
-    void Promise.resolve(onCopy(body)).then((done) => { if (done === true) confirm("done"); });
-  };
-  const recorded = at === undefined ? null : new Date(at);
+function PromptMeta({ at }: { at?: number }) {
+  if (at === undefined) return null;
+  const recorded = new Date(at);
   return <div className="agent-user-meta">
-    {recorded && <time dateTime={recorded.toISOString()}>
+    <time dateTime={recorded.toISOString()}>
       {new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit" }).format(recorded)}
-    </time>}
-    {body && onCopy
-      ? <Button className="agent-user-copy" aria-label={t(copied ? "chat.copiedPromptAria" : "chat.copyPromptAria")} onClick={copy}>
-        <CopyAck state={copied ? "copied" : "idle"}
-          idle={<Copy size={14} aria-hidden="true" />}
-          copied={<Check size={14} aria-hidden="true" />} />
-      </Button>
-      : null}
+    </time>
   </div>;
 }
 
-function PromptBubble({ text, at, onCopy, anchorData, arriving }: {
-  text: string; at?: number; onCopy?: (text: string) => unknown; anchorData: TraceAnchorData; arriving: boolean;
+function PromptBubble({ text, at, anchorData, arriving }: {
+  text: string; at?: number; anchorData: TraceAnchorData; arriving: boolean;
 }) {
   const { body, files } = splitAttachments(text);
   const textRef = useRef<HTMLDivElement>(null);
@@ -106,7 +93,7 @@ function PromptBubble({ text, at, onCopy, anchorData, arriving }: {
       {files.length > 0 && <ul className="agent-user-files">{files.map((name, index) =>
         <li key={index} aria-label={t("prompt.attachment", { name })}><Paperclip size={12} aria-hidden="true" /><span>{name}</span></li>)}</ul>}
     </div>
-    <PromptMeta at={at} body={body} onCopy={onCopy} />
+    <PromptMeta at={at} />
   </article>;
 }
 
@@ -114,8 +101,8 @@ function PromptBubble({ text, at, onCopy, anchorData, arriving }: {
  * What opened the turn. `arriving` is the stream's word that the reader sent it
  * just now: it rises into the transcript. Any other paint of it is still.
  */
-export function TurnHead({ item, anchorData, arriving = false, onCopy }: {
-  item: AgentTraceItem; anchorData: TraceAnchorData; arriving?: boolean; onCopy?: (text: string) => unknown;
+export function TurnHead({ item, anchorData, arriving = false }: {
+  item: AgentTraceItem; anchorData: TraceAnchorData; arriving?: boolean;
 }) {
   const text = item.text || "";
   if (item.type === "command") {
@@ -124,7 +111,7 @@ export function TurnHead({ item, anchorData, arriving = false, onCopy }: {
       <code className="agent-command-text">{text}</code>
     </article>;
   }
-  return <PromptBubble text={text} at={item.at} onCopy={onCopy} anchorData={anchorData} arriving={arriving} />;
+  return <PromptBubble text={text} at={item.at} anchorData={anchorData} arriving={arriving} />;
 }
 
 /** The reply's own actions. `arriving`: the turn ended in front of the reader, so they come in once the card has folded. */

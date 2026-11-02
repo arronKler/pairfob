@@ -69,6 +69,7 @@ import { dropQueuedKeys } from "../../features/session/guided/keys";
 import { focusCompose } from "../../features/session/guided/compose";
 import { morphingPane, nextTransition, queuedKind, shareOpening } from "../../app/transition";
 import { herdLivenessModel, herdStatusModel } from "../../features/dashboard/model/herd-status";
+import { connectionPhaseOf } from "../../lib/connection-phase";
 import { canCreateSession } from "../../features/dashboard/model/herd-view";
 import { releaseBoardScroll, schedulePanePreview, scrollBoardPane } from "./pane-scroll";
 import { refreshBoardPreviews } from "../../features/board/preview/refresh";
@@ -128,7 +129,8 @@ function publishedAgents(): DashboardAgentCard[] {
 export function readBoardInput(): BoardModelInput {
   const catalog = publishedCatalog();
   const runtime = runtimeStore.get();
-  const connected = liveSession()?.isConnected() === true;
+  const phase = connectionPhaseOf(liveSession());
+  const connected = phase === "connected";
   const online = networkOnline();
   const agents = publishedAgents();
   return {
@@ -139,8 +141,7 @@ export function readBoardInput(): BoardModelInput {
     workspaceId: catalog.workspaceId,
     tabId: catalog.tabId,
     selectedPaneId: openPaneId(),
-    status: herdStatusModel({ checking: liveSession()?.isChecking?.() === true,
-      connected,
+    status: herdStatusModel({ phase,
       networkOnline: online,
       runtimeKind: runtime.runtimeKind,
       herdHost: runtime.herdHost,

@@ -12,6 +12,7 @@ import { useLang } from "../../features/settings/language";
 import { setSettingsSection, settingsSection, subscribeSettingsSection } from "../../features/settings/settings-section";
 import { travelSettingsSection } from "./section-travel";
 import { herdStatusOf } from "../../features/connection/herd-status";
+import { connectionPhaseOf } from "../../lib/connection-phase";
 import { AppNotice } from "../../app/notice";
 import { BackBar } from "../../shared/ui/primitives";
 import { linkState } from "./computer-panel";
@@ -52,8 +53,7 @@ export function SettingsContent({ withBack }: { withBack: boolean }) {
   // the queued commit, so the row can never show offline a frame early.
   const connected = computers.live?.isConnected() === true;
   const status = herdStatusOf({
-    connected,
-    checking: computers.live?.isChecking?.() === true,
+    phase: connectionPhaseOf(computers.live),
     networkOnline: connection.networkOnline,
     runtimeKind: runtime.runtimeKind,
     herdHost: runtime.herdHost,

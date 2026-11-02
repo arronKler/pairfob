@@ -177,13 +177,46 @@ json_field() {
   printf '%s' "$1" | sed -n "s/.*\"$2\":\"\([^\"]*\)\".*/\1/p"
 }
 
+# PAIRFOB_DOWNLOAD_BASE may be plain http for a local development origin, but
+# only on this machine. Everything else must stay on https.
+dl_curl() {
+  url="$1"
+  shift
+  case "$url" in
+    https://*)
+      curl --proto '=https' --proto-redir '=https' -fsSL "$url" "$@"
+      ;;
+    http://*)
+      host="${url#http://}"
+      host="${host%%/*}"
+      case "$host" in
+        \[*\]:*) host="${host#\[}"; host="${host%%]:*}" ;;
+        \[*\]) host="${host#\[}"; host="${host%\]}" ;;
+        *) host="${host%%:*}" ;;
+      esac
+      case "$host" in
+        127.0.0.1 | localhost | ::1) ;;
+        *)
+          echo "install.sh: refusing plain http download from ${url}" >&2
+          return 1
+          ;;
+      esac
+      curl -fsSL "$url" "$@"
+      ;;
+    *)
+      echo "install.sh: unsupported download URL ${url}" >&2
+      return 1
+      ;;
+  esac
+}
+
 workdir="$(mktemp -d "${TMPDIR:-/tmp}/pairfob-install.XXXXXX")"
 cleanup() { rm -rf "$workdir"; }
 trap cleanup 0
 
 echo "downloading ${name} from ${BASE}"
-curl -fsSL "${BASE}/SHA256SUMS" -o "${workdir}/SHA256SUMS"
-curl -fsSL "${BASE}/${name}" -o "${workdir}/${name}"
+dl_curl "${BASE}/SHA256SUMS" -o "${workdir}/SHA256SUMS"
+dl_curl "${BASE}/${name}" -o "${workdir}/${name}"
 want="$(sums_hash "$name" <"${workdir}/SHA256SUMS")"
 got="$(file_sha256 "${workdir}/${name}")"
 if [ "$want" != "$got" ]; then
@@ -199,7 +232,7 @@ chat_dest="${PREFIX}/pairfob-chat"
 chat_src=""
 if chat_want="$(sums_hash "$chat_name" <"${workdir}/SHA256SUMS")"; then
   echo "downloading ${chat_name} from ${BASE}"
-  if curl -fsSL "${BASE}/${chat_name}" -o "${workdir}/${chat_name}"; then
+  if dl_curl "${BASE}/${chat_name}" -o "${workdir}/${chat_name}"; then
     if [ "$(file_sha256 "${workdir}/${chat_name}")" = "$chat_want" ]; then
       chmod 0755 "${workdir}/${chat_name}"
       chat_src="${workdir}/${chat_name}"

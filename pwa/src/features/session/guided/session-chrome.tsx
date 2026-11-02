@@ -9,7 +9,7 @@ import { useConnectionContact, useRuntime } from "../../connection/hooks";
 import { operationBusy } from "../../operations/capabilities-store";
 import { currentHerdStatusInput, herdLiveness } from "../../connection/runtime-status";
 import type { SessionHandlers } from "./view";
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { AgentAvatar, BackButton, Button, Swap } from "../../../shared/ui/primitives";
 import { useDomain } from "../../../shared/react/use-domain";
 import { isDesk, isRoomy } from "../../../app/viewport";
@@ -37,7 +37,7 @@ function useContactLost(): boolean {
   useConnectionContact();
   useRuntime();
   const input = currentHerdStatusInput();
-  return !input.networkOnline || !input.connected;
+  return !input.networkOnline || input.phase !== "connected";
 }
 
 /**
@@ -48,11 +48,15 @@ function useContactLost(): boolean {
  * Beside the list the files button opens and closes the inspector instead of
  * leaving for the files screen, so there it reads as pressed while that column
  * is open. The phone button navigates and carries no pressed state.
+ *
+ * `reading` is a screen's own reading control (the chat's size); guided and the
+ * complete terminal pass nothing, so their header keeps exactly two targets.
  */
-export function SessionActions({ onWorkspace, onMenu }: { onWorkspace: () => void; onMenu: () => void }) {
+export function SessionActions({ onWorkspace, onMenu, reading }: { onWorkspace: () => void; onMenu: () => void; reading?: ReactNode }) {
   const inspector = useDomain(inspectorStore).open;
   const pressed = isRoomy() ? inspector : undefined;
   return <div className="chrome-actions">
+    {reading}
     <Button className="icon-btn icon-workspace" aria-label={t("workspace.open")} title={t("workspace.open")}
       aria-pressed={pressed} onClick={onWorkspace}><FolderOpen size={20} aria-hidden="true" /></Button>
     <Button className="icon-btn icon-more" aria-label={t("pane.menuTitle")} aria-haspopup="dialog" disabled={operationBusy()}
@@ -95,7 +99,7 @@ function SessionBack({ onBack, waiting }: { onBack: () => void; waiting: number 
  * by the pane, so a header handed another session draws that session's status
  * as a first paint, not as a change.
  */
-export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, className = "", guided = false }: {
+export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, className = "", guided = false, reading }: {
   agent: Immutable<DashboardAgentCard> | undefined;
   fallbackTitle: string;
   includeBack: boolean;
@@ -103,6 +107,8 @@ export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, c
   className?: string;
   /** The guided header is the one `patchChromeTitle` repaints in place. */
   guided?: boolean;
+  /** A screen's own reading control, before files and the menu. */
+  reading?: ReactNode;
 }) {
   const agents = useAgents();
   const listGroup = useListGroup();
@@ -135,7 +141,7 @@ export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, c
         </span> : null}
       </span>
     </div>
-    <SessionActions onWorkspace={handlers.onWorkspace} onMenu={handlers.onMenu} />
+    <SessionActions onWorkspace={handlers.onWorkspace} onMenu={handlers.onMenu} reading={reading} />
   </header>;
 }
 

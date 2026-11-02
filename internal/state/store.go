@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net/url"
 	"os"
@@ -112,12 +113,43 @@ func Open(dir string) (*Store, error) {
 	if err := os.Chmod(dir, 0700); err != nil {
 		return nil, err
 	}
-	return &Store{Dir: dir}, nil
+	store := &Store{Dir: dir}
+	if err := store.loadOrCreateSchema(); err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
 func (s *Store) path(name string) string { return filepath.Join(s.Dir, name) }
 
-func readJSON(path string, dst any) error {
+const stateSchemaVersion = 1
+
+type stateSchema struct {
+	Schema int `json:"schema"`
+}
+
+// loadOrCreateSchema pins the directory to the schema version this build reads.
+// A newer state is refused instead of being interpreted under older rules.
+func (s *Store) loadOrCreateSchema() error {
+	var schema stateSchema
+	err := readJSONStrict(s.path("schema.json"), &schema)
+	if errors.Is(err, os.ErrNotExist) {
+		return atomicJSON(s.path("schema.json"), stateSchema{Schema: stateSchemaVersion})
+	}
+	if err != nil {
+		return err
+	}
+	if schema.Schema != stateSchemaVersion {
+		return fmt.Errorf("state schema version %d: this build cannot read the state", schema.Schema)
+	}
+	return nil
+}
+
+func readJSON(path string, dst any) error { return readJSONFile(path, dst, false) }
+
+func readJSONStrict(path string, dst any) error { return readJSONFile(path, dst, true) }
+
+func readJSONFile(path string, dst any, strict bool) error {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return err
@@ -132,8 +164,20 @@ func readJSON(path string, dst any) error {
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(b, dst); err != nil {
+	if !strict {
+		if err := json.Unmarshal(b, dst); err != nil {
+			return fmt.Errorf("decode %s: %w", filepath.Base(path), err)
+		}
+		return nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
 		return fmt.Errorf("decode %s: %w", filepath.Base(path), err)
+	}
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("decode %s: trailing data", filepath.Base(path))
 	}
 	return nil
 }

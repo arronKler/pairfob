@@ -1,3 +1,4 @@
+import type { ConnectionPhase } from "../connection-phase";
 import type { WorkspaceReference } from "./workspace-reference";
 import type { WorkspaceSearchPage } from "../workspace";
 import type { DirIndex } from "../dir-index";
@@ -190,6 +191,8 @@ export type LiveSession = {
   isConnected: () => boolean;
   /** Existing transport is being verified or undergoing its first recovery attempt. */
   isChecking?: () => boolean;
+  /** Connected, verifying a live transport, dialing, or gone. */
+  connectionPhase?: () => ConnectionPhase;
   switchTransport: (target: "auto" | "p2p" | "relay") => Promise<void>;
   /**
    * A read gave up at its deadline: verify the path now instead of waiting for

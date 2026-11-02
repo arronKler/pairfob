@@ -13,6 +13,7 @@ import (
 	"pairfob/internal/admin"
 	"pairfob/internal/audit"
 	"pairfob/internal/daemon"
+	"pairfob/internal/logfile"
 	"pairfob/internal/mux"
 	"pairfob/internal/pairingqr"
 	"pairfob/internal/runtime"
@@ -54,6 +55,9 @@ func main() {
 }
 
 func runDaemon(store *state.Store, sock string) error {
+	if logWriter, logErr := logfile.Open(filepath.Join(store.Dir, "pairfob.log"), 8<<20); logErr == nil {
+		log.SetOutput(logWriter)
+	}
 	process, err := newProcessInfo(store.Dir)
 	if err != nil {
 		return fmt.Errorf("running executable: %w", err)

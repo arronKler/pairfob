@@ -1,7 +1,7 @@
 import { PromptProgressView, usePromptProgressNote } from "./prompt-progress-view";
 import { ArrowDown } from "lucide-react";
 import { isAgentChat, openPaneId } from "../session-store";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { followTrace, setTraceFollow } from "./trace-store";
 import { glidingToTail, pinTail, subscribeTailGlide } from "./tail-glide";
 import { computersStore } from "../../computers/catalog-store";
@@ -21,6 +21,9 @@ import { sessionOwner } from "../identity";
 import { subscribeVisibleNotice, visibleNotice } from "../../../app/notices-store";
 import { AgentCompose } from "./agent-compose";
 import { AgentStream } from "./agent-stream";
+import { beforeChatReadingChange, restoreStreamAnchor, streamAnchor, useChatPinch, useDrawnChatSize,
+  type StreamAnchor } from "./chat-reading";
+import { ChatReadingButton } from "./chat-reading-tools";
 import { usePresence } from "../../../shared/react/use-presence";
 import { MOTION_MS } from "../../../shared/ui/dom/motion";
 import { Button } from "../../../shared/ui/primitives";
@@ -36,7 +39,8 @@ function AgentChatChrome({ includeBack, handlers, follow }: { includeBack: boole
   const collapsed = !follow && !peeked;
   return <div className="chrome agent-chrome" data-collapsed={collapsed ? "1" : undefined}>
     <div className="agent-chrome-inner" inert={collapsed} aria-hidden={collapsed ? "true" : undefined}>
-      <SessionIdentity agent={selected} fallbackTitle={t("mode.agent")} includeBack={includeBack} handlers={handlers} />
+      <SessionIdentity agent={selected} fallbackTitle={t("mode.agent")} includeBack={includeBack} handlers={handlers}
+        reading={<ChatReadingButton />} />
     </div>
     <Button className="agent-peek" aria-label={t("chat.showHeader")} tabIndex={collapsed ? 0 : -1}
       aria-hidden={collapsed ? undefined : "true"} inert={!collapsed} onClick={() => setPeeked(true)}>
@@ -66,6 +70,24 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   if (!gliding) headerFollow.current = chat.agentTraceFollow;
   const reading = useRef({ follow: chat.agentTraceFollow, unread: chat.agentTraceUnread });
   reading.current = { follow: chat.agentTraceFollow, unread: chat.agentTraceUnread };
+  // The transcript's size belongs to this device: a mouse reads at 14, a
+  // finger at 16, and two fingers on the transcript walk the steps.
+  const readingSize = useDrawnChatSize();
+  const heldPlace = useRef<StreamAnchor | null>(null);
+  useEffect(() => beforeChatReadingChange(() => {
+    heldPlace.current = stream.current ? streamAnchor(stream.current) : null;
+  }), []);
+  useChatPinch(stream);
+  // A size change redraws every line: the turn being read keeps its place, and
+  // at the tail the newest turn stays against the dock.
+  useLayoutEffect(() => {
+    const element = stream.current;
+    const held = heldPlace.current;
+    heldPlace.current = null;
+    if (!element) return;
+    if (reading.current.follow) element.scrollTop = element.scrollHeight;
+    else if (held) restoreStreamAnchor(element, held);
+  }, [readingSize]);
   const agent = useAgentCard(paneId);
   const status = agent?.status;
   // A blocked agent is still inside its turn: the card stays live and says it waits on you.
@@ -125,7 +147,8 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
     });
     return () => { retired = true; };
   }, [paneId, chat.agentTraceLoadState]);
-  return <div className="pane-root agent-chat-root" data-react-agent-chat="" data-back={includeBack ? "1" : "0"}>
+  return <div className="pane-root agent-chat-root" data-react-agent-chat="" data-back={includeBack ? "1" : "0"}
+    style={{ "--chat-fs": `${readingSize}px` } as CSSProperties}>
     <AgentChatChrome includeBack={includeBack} handlers={handlers} follow={gliding ? headerFollow.current : chat.agentTraceFollow} />
     <SessionNotice value={standing} inPage />
     <SessionNotice value={passing} />

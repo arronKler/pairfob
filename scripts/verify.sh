@@ -23,7 +23,9 @@ if [[ -n "$unformatted" ]]; then
 fi
 
 bash -n "$ROOT/scripts/install.sh"
+bash -n "$ROOT/scripts/check-source-size.sh"
 bash -n "$ROOT/scripts/release.sh"
+bash -n "$ROOT/scripts/release-keygen.sh"
 bash -n "$ROOT/scripts/release-desktop.sh"
 bash -n "$ROOT/scripts/macos-signing.sh"
 bash -n "$ROOT/scripts/build-android-release.sh"
@@ -43,7 +45,21 @@ bash -n "$ROOT/scripts/dev-down.sh"
 bash -n "$ROOT/plugin/herdr/open-pane.sh"
 bash -n "$ROOT/plugin/herdr/pairfob.sh"
 
+bash "$ROOT/scripts/check-source-size.sh"
+
 jq empty proto/pairfob-vectors.json proto/pgp-words.json proto/rpc.schema.json
+
+vectors_dir="$(mktemp -d)"
+trap 'rm -rf "$vectors_dir"' EXIT
+go run ./cmd/genvectors "$vectors_dir"
+if ! cmp -s "$vectors_dir/pairfob-vectors.json" proto/pairfob-vectors.json; then
+  echo "proto/pairfob-vectors.json is stale; regenerate with go run ./cmd/genvectors" >&2
+  diff -u proto/pairfob-vectors.json "$vectors_dir/pairfob-vectors.json" >&2 || true
+  exit 1
+fi
+rm -rf "$vectors_dir"
+trap - EXIT
+
 go vet ./...
 # These packages include many Argon2 handshakes and encrypted media transfers.
 # Give the whole package the same budget with and without the race detector;

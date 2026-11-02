@@ -38,7 +38,7 @@ describe("runtime status adapter", () => {
       const input = currentHerdStatusInput();
       expect(input.herdHost).toBe("Studio");
       expect(input.runtimeKind).toBe("offline");
-      expect(input.connected).toBeTrue();
+      expect(input.phase).toBe("connected");
       expect(input.networkOnline).toBeTrue();
     } finally {
       runtimeStore.get = originalGet;

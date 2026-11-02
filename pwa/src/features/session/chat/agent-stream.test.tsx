@@ -305,31 +305,24 @@ test("the prompt is a bubble with its words, a time row under it, and its anchor
   expect(time.getAttribute("datetime")).toBe(new Date(at).toISOString());
   expect(time.textContent).toBe(new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit" }).format(new Date(at)));
   act(unmountReact);
-  // An old daemon stamps no time: the row stays, the clock does not.
+  // An old daemon stamps no time: the prompt has no row at all.
   act(() => renderReact(<AgentStream items={[{ type: "user", text: "No clock" }]} working={false} empty={empty} />));
-  expect(appRoot().querySelector(".agent-user-meta")).not.toBeNull();
-  expect(appRoot().querySelector(".agent-user-meta time")).toBeNull();
+  expect(appRoot().querySelector(".agent-user-meta")).toBeNull();
 });
 
-test("copying a prompt copies its words, not the attachment paths, and confirms on the button", async () => {
-  const copied: string[] = [];
-  act(() => renderReact(<TurnHead item={{ type: "user", text: "Look at this\n\n/Users/me/repo/.pairfob/attachments/0f1e/shot.png" }}
-    anchorData={promptAnchor} onCopy={async (text) => { copied.push(text); return true; }} />));
-  const button = appRoot().querySelector<HTMLButtonElement>(".agent-user-copy")!;
-  expect(button.getAttribute("aria-label")).toBe(t("chat.copyPromptAria"));
-  await act(async () => { button.click(); await Promise.resolve(); await Promise.resolve(); });
-  expect(copied).toEqual(["Look at this"]);
-  expect(button.querySelector(".copy-ack")?.getAttribute("data-state")).toBe("copied");
-  expect(button.getAttribute("aria-label")).toBe(t("chat.copiedPromptAria"));
+test("a prompt carries no copy control", () => {
+  act(() => renderReact(<TurnHead item={{ type: "user", text: "Look at this" }} anchorData={promptAnchor} />));
+  expect(appRoot().querySelector(".agent-user-copy")).toBeNull();
+  expect(appRoot().querySelector(".agent-user-bubble .agent-user-text")?.textContent).toBe("Look at this");
 });
 
-test("a prompt with no words offers no copy, and a slash command has no prompt row", () => {
+test("a prompt with no words keeps its attachment chip and no copy", () => {
   act(() => renderReact(<TurnHead item={{ type: "user", text: "/Users/me/repo/.pairfob/attachments/0f1e/shot.png" }}
-    anchorData={promptAnchor} onCopy={() => true} />));
+    anchorData={promptAnchor} />));
   expect(appRoot().querySelector(".agent-user-copy")).toBeNull();
   expect(appRoot().querySelector(".agent-user-files li")?.textContent).toBe("shot.png");
   act(unmountReact);
-  act(() => renderReact(<TurnHead item={{ type: "command", text: "/clear" }} anchorData={promptAnchor} onCopy={() => true} />));
+  act(() => renderReact(<TurnHead item={{ type: "command", text: "/clear" }} anchorData={promptAnchor} />));
   expect(appRoot().querySelector(".agent-command-text")?.textContent).toBe("/clear");
   expect(appRoot().querySelector(".agent-user-meta")).toBeNull();
 });

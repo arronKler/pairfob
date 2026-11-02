@@ -46,6 +46,7 @@ ui-review/
 *.srl
 
 # test / tool junk
+pairfob-doctor-*.zip
 *.log
 coverage/
 coverage.out

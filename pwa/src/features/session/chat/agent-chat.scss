@@ -1,4 +1,6 @@
 .agent-chat-root {
+  /* The reader's transcript size, set inline by `AgentChatView` (chat-reading). */
+  --chat-fs: 14px;
   background: var(--bg);
   color: var(--ink);
 }
@@ -24,11 +26,16 @@
   overflow-x: hidden;
   overflow-y: scroll;
   padding: 26px 16px 20px;
-  touch-action: pan-y pinch-zoom;
+  /* Two fingers change the transcript's size (chat-reading); one still scrolls. */
+  touch-action: pan-y;
   overscroll-behavior: contain;
   overflow-anchor: none;
   -webkit-overflow-scrolling: touch;
 }
+
+/* A page the reader zoomed keeps the browser's pinch over the transcript, so it
+   can always be zoomed back out (the same hand-back the diff makes). */
+html.page-zoomed .agent-stream { touch-action: pan-y pinch-zoom; }
 
 /* Drawn inside the box: this is the scroll container, so a ring with an offset
    would be clipped by its own overflow. */
@@ -162,7 +169,10 @@
   padding: 5px 8px;
   border-radius: var(--r-md);
   background: var(--ink-08);
-  font: 400 0.8125rem/1.428 var(--font);
+  font-family: var(--font);
+  font-size: calc(var(--chat-fs) - 1px);
+  font-weight: 400;
+  line-height: 1.42;
   color: var(--ink);
 }
 
@@ -181,40 +191,6 @@
 
 .agent-user-meta time {
   font-variant-numeric: tabular-nums;
-}
-
-.agent-user-copy {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 30px;
-  min-height: 26px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  border-radius: var(--r-sm);
-}
-
-.agent-user-copy:focus-visible,
-.agent-user-copy:active {
-  color: var(--ink);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .agent-user-copy:hover { color: var(--ink); }
-}
-
-/* A finger needs the row to be a real target, not a 26px sliver. */
-@media (any-pointer: coarse) {
-  .agent-user-meta {
-    min-height: 44px;
-  }
-
-  .agent-user-copy {
-    min-width: 44px;
-    min-height: 44px;
-  }
 }
 
 .agent-user-text {
@@ -284,7 +260,10 @@
 }
 
 .agent-command-text {
-  font: 400 0.8rem/1.4 var(--mono);
+  font-family: var(--mono);
+  font-size: calc(var(--chat-fs) - 2px);
+  font-weight: 400;
+  line-height: 1.4;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -354,7 +333,10 @@
 }
 
 .agent-md {
-  font: 400 0.875rem/1.62 var(--font);
+  font-family: var(--font);
+  font-size: var(--chat-fs);
+  font-weight: 400;
+  line-height: 1.62;
   color: var(--ink);
   overflow-wrap: anywhere;
   // A note under a running card becomes the reply when the turn ends: its ink arrives, it is not swapped.
@@ -375,10 +357,12 @@
   margin: 1.05em 0 0.4em;
 }
 
-.agent-md h1 { font-size: 1.15rem; }
-.agent-md h2 { font-size: var(--text-title); }
+/* Headings hold their relation to the reply rather than a fixed rem, so a
+   larger reading size carries the whole page of prose with it. */
+.agent-md h1 { font-size: 1.31em; }
+.agent-md h2 { font-size: 1.2em; }
 .agent-md h3,
-.agent-md h4 { font-size: var(--text-subhead); }
+.agent-md h4 { font-size: 1.09em; }
 
 .agent-md p,
 .agent-md ul,
@@ -451,7 +435,8 @@
 .agent-md pre code {
   background: none;
   padding: 0;
-  font-size: var(--text-secondary);
+  /* Relative to the reply: a code block reads with the prose around it. */
+  font-size: 0.9em;
   line-height: 1.45;
   white-space: pre;
 }

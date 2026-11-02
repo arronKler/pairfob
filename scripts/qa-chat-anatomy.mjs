@@ -60,6 +60,7 @@ function read() {
       replyCss: css(".agent-assistant .agent-md", ["font-size", "padding", "border-width", "background-color"]),
       workCard: css(".work-card", ["background-color", "border-width"]),
       workHead: box(".work-head"),
+      reading: !!q(".agent-chrome .icon-reading"),
       dock: box(".agent-dock"),
       form: box(".agent-compose"),
       formCss: css(".agent-compose", ["display", "border-radius", "background-color"]),
@@ -102,12 +103,14 @@ for (const surface of [
   assert(view.coarse === surface.touch, `${surface.label}: pointer is not the surface's`);
   assert(view.streamPad["padding-left"] === "16px" && view.streamPad["padding-right"] === "16px",
     `${surface.label}: the transcript gutter is not 16px`);
-  near(Number.parseFloat(view.bubbleCss["font-size"]), 13, 0.01, `${surface.label}: prompt font`);
+  near(Number.parseFloat(view.bubbleCss["font-size"]), surface.touch ? 15 : 13, 0.01, `${surface.label}: prompt font`);
   near(Number.parseFloat(view.bubbleCss["border-radius"]), 12, 0.01, `${surface.label}: prompt radius`);
   assert(view.bubbleCss["background-color"] !== "rgba(0, 0, 0, 0)", `${surface.label}: the prompt has no bubble ground`);
   assert(view.replyCss.padding === "0px" && view.replyCss["border-width"] === "0px"
     && view.replyCss["background-color"] === "rgba(0, 0, 0, 0)", `${surface.label}: the reply is still a card`);
-  assert(view.replyCss["font-size"] === "14px", `${surface.label}: reply font`);
+  assert(view.replyCss["font-size"] === (surface.touch ? "16px" : "14px"), `${surface.label}: reply font`);
+  assert(view.copy === null, `${surface.label}: the prompt still draws a copy button`);
+  assert(view.reading, `${surface.label}: the header has no reading control`);
   assert(view.workCard["background-color"] === "rgba(0, 0, 0, 0)" && view.workCard["border-width"] === "0px",
     `${surface.label}: the work summary still draws a card`);
   if (surface.touch) {
@@ -115,14 +118,12 @@ for (const surface of [
     near(view.attach.w, 44, 0, `${surface.label}: attach target`);
     near(view.send.w, 44, 0, `${surface.label}: send target`);
     near(Number.parseFloat(view.textareaCss["font-size"]), 16, 0, `${surface.label}: iOS-zoom-safe field`);
-    near(view.meta.h, 44, 0, `${surface.label}: prompt meta target`);
-    near(view.copy.w, 44, 0, `${surface.label}: prompt copy target`);
     near(view.workHead.h, 44, 0, `${surface.label}: work row target`);
     assert(view.form && view.form.w <= 768, `${surface.label}: the dock passes its column`);
   } else {
     assert(view.formCss.display === "grid", `${surface.label}: the mouse's dock is not two rows`);
     near(view.field.w, 722, 2, `${surface.label}: field width inside the frame`);
-    near(view.meta.h, 26, 0, `${surface.label}: prompt meta row`);
+    near(view.meta.h, 24, 0, `${surface.label}: prompt meta row`);
     near(view.attach.w, 32, 0, `${surface.label}: attach target`);
     near(view.send.w, 32, 0, `${surface.label}: send target`);
     near(view.thread.w, 768, 0, `${surface.label}: desk reading column`);
@@ -194,5 +195,44 @@ assert(sent.draft === "" && sent.last === "检查桌面端的发送", "desktop: 
 view = await read();
 near(view.gap, 0, 1, "desktop: the sent prompt did not land at the tail");
 assert(view.collapsed === null, "desktop: the header did not return at the tail");
+
+// The reading size: the header control walks every line up and back down, and
+// wider code keeps its copy button out of the words.
+await scene("chat-complete", 390, 844, true);
+await tap(".icon-reading");
+await page.waitForTimeout(400);
+for (let i = 0; i < 4; i++) {
+  await tap('[aria-label="文字加大"]');
+  await page.waitForTimeout(250);
+}
+await tap(".chat-reading-sheet .sheet-close");
+await page.waitForTimeout(500);
+view = await read();
+assert(view.replyCss["font-size"] === "22px", "phone: the reading control did not reach its largest step");
+const blocks = await page.evaluate(() => [...document.querySelectorAll(".md-code")].map((frame) => {
+  const pre = frame.querySelector("pre");
+  const button = frame.querySelector(".md-copy");
+  return {
+    inline: frame.classList.contains("is-inline"),
+    textEnd: pre.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(pre).paddingRight),
+    buttonLeft: button.getBoundingClientRect().left,
+  };
+}));
+assert(blocks.length > 0, "phone: the scene draws no code block");
+for (const block of blocks) assert(!block.inline || block.textEnd <= block.buttonLeft,
+  "phone: the code copy button covers the code at the largest size");
+await page.screenshot({ path: `${out}/phone-size-largest.png` });
+await tap(".icon-reading");
+await page.waitForTimeout(400);
+for (let i = 0; i < 4; i++) {
+  await tap('[aria-label="文字减小"]');
+  await page.waitForTimeout(250);
+}
+await tap(".chat-reading-sheet .sheet-close");
+await page.waitForTimeout(500);
+view = await read();
+assert(view.replyCss["font-size"] === "16px", "phone: stepping back did not return to the finger's automatic size");
+const kept = await page.evaluate(() => localStorage.getItem("pairfob.chat.fontSize"));
+assert(kept === null, "phone: the automatic size was left as a choice");
 
 console.log(JSON.stringify({ ok: true, shots: out }));

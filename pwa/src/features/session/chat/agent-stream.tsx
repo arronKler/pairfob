@@ -12,6 +12,7 @@ import { NeedsYouCard } from "./needs-you";
 import { turnModels } from "./turn-models";
 import { WorkCard } from "./work-card";
 import { confirmCopyOn, layCopyFaces } from "../copy-confirm";
+import { useDrawnChatSize } from "./chat-reading";
 import { useTurned } from "./use-turned";
 import { pinnedTail } from "./tail-glide";
 
@@ -57,6 +58,7 @@ function layCodeBlocks(node: HTMLElement): void {
  */
 function useCodeCopy(html: string, onCopy?: CopyReply) {
   const root = useRef<HTMLDivElement>(null);
+  const size = useDrawnChatSize();
   const markup = useMemo(() => ({ __html: html }), [html]);
   useLayoutEffect(() => {
     const node = root.current;
@@ -84,7 +86,9 @@ function useCodeCopy(html: string, onCopy?: CopyReply) {
     });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [markup, onCopy]);
+    // A reading-size step redraws the words without moving the reply's edge, so
+    // the width observer never fires: the one-row decision has to be remeasured here.
+  }, [markup, onCopy, size]);
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
     const button = (event.target as Element).closest?.<HTMLElement>(".md-copy");
     const code = button?.parentElement?.querySelector("pre");
@@ -318,7 +322,7 @@ const TraceTurn = memo(function TraceTurn({ turn, state, anchor, kept, onCopy, o
   // The agent stopped to ask while this turn was on screen: its card is raised, not just drawn.
   const asked = useTurned(live && waiting);
   return <>
-    {turn.user && <TurnHead item={turn.user} anchorData={anchorData(anchor, "user")} arriving={state.sent} onCopy={onCopy} />}
+    {turn.user && <TurnHead item={turn.user} anchorData={anchorData(anchor, "user")} arriving={state.sent} />}
     {state.pending && !turn.items.length && <PendingCard {...state.pending} arriving={state.sent} />}
     {preamble.map((item, index) => <FindingBubble key={`${anchor.key}:pre:${index}`} item={item}
       anchor={anchor} part={`pre-${index}`} onOpen={(step) => onOpenStep(step, steps, { key: anchor.key, ordinal: anchor.ordinal })} />)}

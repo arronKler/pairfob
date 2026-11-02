@@ -1,5 +1,5 @@
 import { expect, test, spyOn } from "bun:test";
-import { connectionDiagnostics, diagnosticCounts, recordConnectionDiagnostic } from "./connection-diagnostics";
+import { connectionDiagnostics, diagnosticCounts, recordConnectionDiagnostic, sanitizeConnectionDiagnostic } from "./connection-diagnostics";
 
 test("diagnostics stay bounded and omit unclassified strings and payloads even with storage blocked", () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
@@ -81,6 +81,17 @@ test("a day keeps its counts after the detail ring rolls over", () => {
   expect(connectionDiagnostics().filter((record) => record.code === "daemon_offline").length).toBeLessThan(700);
   expect(tally()).toBe(before + 700);
   for (const row of diagnosticCounts()) expect(row.hour % 3_600_000).toBe(0);
+});
+
+test("a relay-only download refusal keeps its event and code", () => {
+  const now = Date.now();
+  expect(sanitizeConnectionDiagnostic({ at: now, event: "download_refused", code: "p2p_required" }, now))
+    .toEqual({ at: now, event: "download_refused", code: "p2p_required" });
+  recordConnectionDiagnostic({ event: "download_refused", code: "p2p_required" });
+  expect(connectionDiagnostics().at(-1)).toMatchObject({ event: "download_refused", code: "p2p_required" });
+  expect(diagnosticCounts()).toEqual(expect.arrayContaining([
+    expect.objectContaining({ event: "download_refused", code: "p2p_required" }),
+  ]));
 });
 
 test("catalog and boot evidence survives the sanitizer without accepting arbitrary fields", () => {

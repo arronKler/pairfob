@@ -200,6 +200,7 @@ export const zh = {
   "chrome.themeAuto": "跟随系统",
   "chrome.networkOffline": "当前没有网络 · 联网后自动恢复",
   "chrome.checking": "正在恢复连接",
+  "chrome.verifying": "正在确认连接",
   "chrome.reconnecting": "连接中断，正在自动重连",
   "chrome.unverifiable": "无法确认 Herdr · 正在重试",
   "chrome.demo": "演示数据 · 不是你的电脑",
@@ -623,8 +624,7 @@ export const zh = {
   "chat.copyReply": "复制回答",
   "chat.copyReplyAria": "复制这条 Agent 回答",
   "chat.copiedReply": "已复制回答",
-  "chat.copyPromptAria": "复制这条消息",
-  "chat.copiedPromptAria": "已复制这条消息",
+  "chat.readingAria": "{label}，{size}px",
   "chat.showHeader": "显示会话标题",
 
   "ft.opening": "正在打开终端…",

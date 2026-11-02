@@ -7,6 +7,7 @@
  * a connected session that reports `runtime=offline` is exited.
  */
 import { t } from "../../../lib/i18n";
+import type { ConnectionPhase } from "../../../lib/connection-phase";
 import { runtimeLiveness, type RuntimeLiveness, type RuntimeLivenessInput } from "../../../lib/runtime-liveness";
 import type { HerdStatus } from "./herd-view";
 
@@ -14,14 +15,26 @@ export function herdLivenessModel(input: RuntimeLivenessInput): RuntimeLiveness 
   return runtimeLiveness(input);
 }
 
-export function herdStatusModel(input: RuntimeLivenessInput & { herdHost: string; checking?: boolean; reading?: boolean; liveness?: RuntimeLiveness }): HerdStatus {
-  const liveness = input.liveness ?? runtimeLiveness(input);
+type HerdStatusModelInput = Omit<RuntimeLivenessInput, "connected"> & {
+  phase: ConnectionPhase;
+  herdHost: string;
+  reading?: boolean;
+  liveness?: RuntimeLiveness;
+};
+
+export function herdStatusModel(input: HerdStatusModelInput): HerdStatus {
+  const liveness = input.liveness ?? runtimeLiveness({
+    connected: input.phase === "connected",
+    networkOnline: input.networkOnline,
+    runtimeKind: input.runtimeKind,
+  });
   if (!input.networkOnline) return { tone: "warn", text: t("chrome.networkOffline") };
-  if (input.checking) return { tone: "pending", text: t("chrome.checking") };
+  if (input.phase === "verifying") return { tone: "pending", text: t("chrome.verifying") };
+  if (input.phase === "connecting") return { tone: "pending", text: t("chrome.checking") };
   // The first runtime read is still in flight: reading, not a fault.
-  if (input.reading && input.connected && !input.runtimeKind) return { tone: "pending", text: t("chrome.reading") };
+  if (input.reading && input.phase === "connected" && !input.runtimeKind) return { tone: "pending", text: t("chrome.reading") };
   if (liveness === "unverifiable") {
-    return { tone: "warn", text: input.connected ? t("chrome.unverifiable") : t("chrome.reconnecting") };
+    return { tone: "warn", text: input.phase === "connected" ? t("chrome.unverifiable") : t("chrome.reconnecting") };
   }
   if (liveness === "exited") return { tone: "off", text: t("chrome.herdrOff") };
   if (input.runtimeKind === "fake") return { tone: "demo", text: t("chrome.demo") };

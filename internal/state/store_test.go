@@ -3,6 +3,7 @@ package state
 import (
 	"crypto/elliptic"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,6 +126,86 @@ func TestRelayProtocolRoundTrip(t *testing.T) {
 	}
 	if _, err := store.LoadRelay(); err == nil {
 		t.Fatal("invalid protocol accepted")
+	}
+}
+
+func TestOpenCreatesSchemaForFreshDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "schema.json")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("schema.json mode=%o want 600", info.Mode().Perm())
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema stateSchema
+	if err := json.Unmarshal(b, &schema); err != nil || schema.Schema != stateSchemaVersion {
+		t.Fatalf("schema=%+v err=%v", schema, err)
+	}
+	if _, err := Open(dir); err != nil {
+		t.Fatalf("reopen existing schema: %v", err)
+	}
+}
+
+func TestOpenAddsSchemaToExistingDocuments(t *testing.T) {
+	dir := t.TempDir()
+	documents := map[string]string{
+		"daemon.json": `{"ed25519_sk":"sk","ed25519_pk":"pk","created_at":1,"hostname":"host"}`,
+		"relay.json":  `{"url":"wss://pairfob.com/v2/ws","protocol":2}`,
+	}
+	for name, body := range documents {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "schema.json")); err != nil {
+		t.Fatalf("schema.json not created: %v", err)
+	}
+	for name, body := range documents {
+		got, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil || string(got) != body {
+			t.Fatalf("%s changed: %q err=%v", name, got, err)
+		}
+	}
+}
+
+func TestOpenRejectsUnknownSchemaVersion(t *testing.T) {
+	for _, version := range []int{2, 9} {
+		dir := t.TempDir()
+		body := fmt.Sprintf(`{"schema":%d}`+"\n", version)
+		if err := os.WriteFile(filepath.Join(dir, "schema.json"), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := Open(dir)
+		if err == nil {
+			t.Fatalf("schema version %d accepted", version)
+		}
+		if !strings.Contains(err.Error(), fmt.Sprintf("%d", version)) || !strings.Contains(err.Error(), "cannot read the state") {
+			t.Fatalf("error does not name version %d and explain the refusal: %v", version, err)
+		}
+	}
+}
+
+func TestOpenRejectsMalformedSchema(t *testing.T) {
+	for _, body := range []string{"", "{", `{"schema":`, `not json`, `{"schema":1,"extra":true}`, `{"schema":1}{"schema":1}`} {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "schema.json"), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Open(dir); err == nil {
+			t.Fatalf("malformed schema %q accepted", body)
+		}
 	}
 }
 

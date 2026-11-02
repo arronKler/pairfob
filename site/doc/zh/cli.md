@@ -72,6 +72,10 @@ Pairfob <version>
 | Origin | `pairfob.com` | 还没登记 |
 
 `doctor` 在 Running 或 Herdr 不正常时会以失败退出，方便脚本检测。
+`pairfob doctor --json` 把同一份检查输出成一个 JSON 对象，退出码保持一致。
+`pairfob doctor --bundle [--out PATH]` 在本机写一个 zip，包含检查报告、
+`pairfob.log` 和 `audit.log` 最后 300 行，以及状态摘要。它会把用户主目录和
+疑似密钥的值替换掉，只保存在本机，不会上传。
 
 `Installed` 是当前命令的版本，`Process` 是实际响应本机请求的后台进程版本。两者不一致时执行 `pairfob service restart`。很旧的 daemon 无法报告真实版本，手机会显示版本未知，不再把旧接口固定返回的 `0.1.0` 当成发行版本。
 

@@ -219,6 +219,36 @@ from a clean tree with `VERSION=vX.Y.Z ./scripts/release.sh`. Run the full
 use `scripts/publish-daemon.sh`; they do not pack or deploy the relay. Preserve the verified source and
 artifact snapshot; subsequent edits require the affected checks again.
 
+#### Release manifest signing
+
+The daemon trusts `release.json` at `https://dl.pairfob.com/daemon/release.json`
+only when `release.json.sig` is a valid Ed25519 signature from a key baked into
+the binary. One key pair signs every daemon release; generate it once:
+
+```sh
+./scripts/release-keygen.sh
+```
+
+This writes `release-signing.key` (private) and `release-signing.pub` (public)
+to `~/.config/pairfob`, or `PAIRFOB_RELEASE_KEY_DIR`. Back the private key up
+offline now: anyone holding it can sign daemon updates, and losing it means a
+new key cannot be trusted by already installed daemons.
+
+`release.sh` embeds the public key with
+`-X pairfob/internal/release.PublicKeyHex=<hex>` and fails when it cannot find
+`PAIRFOB_RELEASE_PUBKEY` or `~/.config/pairfob/release-signing.pub`.
+`publish-daemon.sh` signs the staged manifest with
+`~/.config/pairfob/release-signing.key` or `PAIRFOB_RELEASE_KEY`, verifies its
+own signature before deploying, and fetches and verifies the live manifest and
+signature afterwards. `release.json.sig` is a separate published asset; the
+channel preservation code carries it over when the Android or desktop channel
+is republished.
+
+To rotate the key, replace the pair with `./scripts/release-keygen.sh --force`.
+Daemons built before the rotation keep trusting the old public key and will
+reject new signed manifests, so a rotation only works together with a release
+signed by the old key that embeds the new one, or a manual reinstall.
+
 #### macOS signing and privacy permissions
 
 Build and publish daemon releases on macOS with the release team's **Developer

@@ -1,4 +1,5 @@
 import type { SessionEvent } from "../src/lib/protocol/session-types";
+import type { ConnectionPhase } from "../src/lib/connection-phase";
 import type { Phase } from "../src/features/connection/connection-store";
 import type { Screen } from "../src/app/navigation-store";
 import type { CompletionObservation } from "./completion-scenes";
@@ -55,6 +56,8 @@ export type FixtureAPI = {
   calls: FixtureCall[];
   clearCalls(): void;
   setConnected(connected: boolean): void;
+  /** The session's own transport state, including a live path still being verified. */
+  setConnectionPhase(phase: ConnectionPhase): void;
   emit(event: SessionEvent): void;
   appendChatTurn(): void;
   appendChatStep(): void;

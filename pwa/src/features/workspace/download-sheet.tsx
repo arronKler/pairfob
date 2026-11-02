@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "../../lib/i18n";
 import { ProtocolError } from "../../lib/protocol/errors";
 import type { LiveSession } from "../../lib/protocol/client";
+import { recordConnectionDiagnostic } from "../../lib/protocol/connection-diagnostics";
 import { DOWNLOAD_CHUNK_BYTES, DOWNLOAD_MAX_BYTES, type WorkspaceDownloadOpen } from "../../lib/protocol/workspace-download";
 import type { ActionSheetController } from "../../shared/ui/overlay/action-sheet";
 import { Button } from "../../shared/ui/primitives";
@@ -111,6 +112,9 @@ export function DownloadPanel({ session, paneId, path, root, fallbackSize, modal
         setInfo(opened);
         setPhase("ready");
       } catch (caught) {
+        if (caught instanceof ProtocolError && caught.code === "p2p_required") {
+          recordConnectionDiagnostic({ event: "download_refused", code: "p2p_required" });
+        }
         if (aliveRef.current) {
           setError(downloadMessage(caught, fallbackSize));
           setPhase("error");

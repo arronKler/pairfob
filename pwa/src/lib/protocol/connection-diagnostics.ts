@@ -41,14 +41,14 @@ const TOKENS = new Set((
   "notify_sw_focus notify_sw_navigate notify_sw_client_error notify_sw_open notify_sw_error captured sent missing " +
   "notify_local_post notify_received notify_deferred notify_dispatch notify_resolve notify_open_result notify_error notify_settled " +
   "worker_message hashchange native_message invalid_target refresh switch_computer switch_default computer_missing pane_missing opened superseded pending consumed hidden " +
-  "catalog_read catalog_failed catalog_hint_failed credential_deleted credential_delete_failed phase_changed boot_decision network_lifecycle online " +
+  "catalog_read catalog_failed catalog_hint_failed credential_deleted credential_delete_failed download_refused phase_changed boot_decision network_lifecycle online " +
   "boot connect pairing resuming live pick resume storage_unavailable bad_relay ok storage_error storage_timeout storage_security storage_unknown storage_empty online_hint_stale " +
   "unpaired invalid_credential bad_proof bad_signature fp_mismatch " +
   "recovery_start recovery_ready recovery_cancelled ice_terminal foreground_transport_failed terminal_open_start terminal_open_ready terminal_first_frame " +
   "connect_start warmup_start ws_open hello_sent route_bound hello_verified session_established session_ready connect_failed warmup_cancelled view_committed recovery_budget_exhausted " +
   "standby_ready unbound rate_limited " +
   "ice_gathered complete reflexive local partial ice_timeout " +
-  "direct_failed p2p_unavailable unsupported unavailable offer signal answer channel_timeout channel_failed handshake commit probe unknown " +
+  "direct_failed p2p_unavailable p2p_required unsupported unavailable offer signal answer channel_timeout channel_failed handshake commit probe unknown " +
   "transport_closed session_open session_close disconnect page_hidden page_visible probe_start probe_success probe_failed " +
   "local_close transport_upgrade foreground probe path read foreground_probe_failed path_probe_failed read_probe_failed " +
   "data_channel_closed data_channel_error send_queue_full send_failed send_not_open ice_failed ice_grace_expired " +

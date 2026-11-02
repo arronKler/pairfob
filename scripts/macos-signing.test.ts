@@ -38,6 +38,8 @@ case "$1" in
 esac`);
   const env = {
     ...process.env,
+    HOME: root,
+    PAIRFOB_RELEASE_PUBKEY: "4a".repeat(32),
     PATH: `${bin}:${process.env.PATH}`,
     SIGN_CALLS: join(root, "calls"),
     BUILD_CALLS: join(root, "builds"),
