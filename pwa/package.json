@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "test": "bun test src --timeout 30000",
+    "test": "bun test src --isolate --timeout 30000",
     "test:qa": "bun test test-support/qa-app-smoke.test.ts test-support/qa-fixture-api.test.ts test-support/phase2-chat-qa.test.ts --timeout 90000",
     "typecheck": "tsc --noEmit",
     "typecheck:qa": "tsc --noEmit -p tsconfig.qa.json",

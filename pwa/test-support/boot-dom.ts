@@ -35,7 +35,10 @@ const GLOBALS = [
   "HTMLDivElement", "HTMLFormElement", "HTMLImageElement", "HTMLInputElement", "HTMLProgressElement",
   "HTMLSelectElement", "HTMLSpanElement", "HTMLTextAreaElement",
   "Element", "Node", "DocumentFragment",
-  "Event", "CustomEvent", "MouseEvent", "PointerEvent", "WheelEvent", "KeyboardEvent",
+  // Event and EventTarget stay native together: a fixture that extends the
+  // global EventTarget must keep accepting the global Event. Happy DOM tests
+  // that dispatch to DOM nodes name happy.Event explicitly.
+  "MouseEvent", "PointerEvent", "WheelEvent", "KeyboardEvent",
   "TouchEvent", "CompositionEvent", "FocusEvent", "InputEvent", "DragEvent", "ClipboardEvent",
   "ResizeObserver", "MutationObserver", "DOMParser",
   "FormData", "localStorage", "sessionStorage",

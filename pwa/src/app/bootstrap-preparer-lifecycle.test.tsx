@@ -11,6 +11,9 @@ const { startApplication, stopApplication, applicationIsRunning } = await import
 const { subscribeAppFrame, getAppFrame, sessionOwnerPreparer, registerSessionOwnerPreparer } = await import("./frame");
 const { registerSessionView } = await import("../features/session/register");
 const { appHost } = await import("./host");
+// Isolated files start without the runtime an earlier file had loaded, and a
+// cached runtime lets startup register its session owner synchronously.
+await (await import("./connected-loader")).loadConnectedRuntime();
 
 afterEach(async () => {
   registerSessionOwnerPreparer(null);

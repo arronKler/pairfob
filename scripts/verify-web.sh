@@ -13,9 +13,10 @@ step() {
 
 cd "$ROOT/pwa"
 # Bun's 5 s default sits at the cost of the heaviest architecture and DOM tests
-# on a loaded machine, and one test cut off mid-jsdom poisons every later file.
-# A preload's setDefaultTimeout does not reach a directory run, so pass it here.
-step "PWA tests" bun test src --timeout 30000
+# on a loaded machine. A leak from one file, or a test cut off mid-jsdom, must
+# not reach the next: isolate each file's globals and module registry. A
+# preload's setDefaultTimeout does not reach a directory run, so pass it here.
+step "PWA tests" bun test src --isolate --timeout 30000
 step "PWA QA" bun run test:qa
 step "PWA types" bun run typecheck
 step "PWA QA types" bun run typecheck:qa

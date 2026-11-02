@@ -38,6 +38,8 @@ const projectionRestorer = new WorkspaceSnapshotRestorer();
 
 beforeEach(async () => {
   await resetChatDOM();
+  // This file mounts the App directly; isolated files owe it the presentation.
+  await (await import("../../app/connected-loader")).loadConnectedRuntime();
   projectionRestorer.capture();
   connected = true; failure = false; calls = []; splitWait = undefined;
   resetGenerationsForTests(); resetComposeDrafts(); setOperationBusy(false); clearBoardInteraction();

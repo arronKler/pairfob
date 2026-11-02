@@ -4,7 +4,14 @@ import { appRoot } from "../src/app/dom-root";
 import { commitView } from "../src/app/host";
 import { isAppMounted, mountApp, unmountApp } from "../src/app/mount";
 import { registerSessionOwnerPreparer, sessionOwnerPreparer } from "../src/app/frame";
+import { presentation } from "../src/app/connected-runtime";
+import { installConnectedPresentation } from "../src/app/presentation";
 import { registerSessionView } from "../src/features/session/register";
+
+// The browser bootstrap loads the connected runtime before it mounts the App.
+// A test file that mounts the App directly installs the same presentation, so
+// an isolated file does not depend on an earlier one having loaded it.
+installConnectedPresentation(presentation);
 
 /**
  * Generic React test harness. Two explicit fixture boundaries:

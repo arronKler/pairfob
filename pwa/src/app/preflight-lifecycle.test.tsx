@@ -96,6 +96,8 @@ async function confirm() {
 
 beforeEach(async () => {
   await resetBoardTestDOM();
+  // Isolated files start without the presentation an earlier file installed.
+  await (await import("./connected-loader")).loadConnectedRuntime();
   setLang("zh");
   resetComposeDrafts();
   setNetworkOnline(true);

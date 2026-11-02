@@ -111,6 +111,8 @@ function restoreForeignExtras(): void {
 
 beforeEach(async () => {
   await resetBoardTestDOM();
+  // Isolated files start without the presentation an earlier file installed.
+  await (await import("./connected-loader")).loadConnectedRuntime();
   resetComposeDrafts();
   resetHerdAttention();
   foreign.capture();

@@ -21,8 +21,8 @@ step "download channel" python3 "$ROOT/scripts/download-channel.test.py"
 
 cd "$ROOT/pwa"
 # Bun's 5 s default sits at the cost of the heaviest architecture and DOM tests
-# on a loaded machine, and one test cut off mid-jsdom poisons every later file.
-step "PWA tests" bun test src --timeout 30000
+# on a loaded machine. Isolate each file so no leak reaches the next.
+step "PWA tests" bun test src --isolate --timeout 30000
 step "PWA QA" bun run test:qa
 step "PWA types" bun run typecheck
 step "PWA QA types" bun run typecheck:qa

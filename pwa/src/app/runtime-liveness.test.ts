@@ -40,6 +40,8 @@ function renderHome(): void {
 
 beforeEach(async () => {
   await resetBoardTestDOM();
+  // Isolated files start without the presentation an earlier file installed.
+  await (await import("./connected-loader")).loadConnectedRuntime();
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
   setLang("zh");
   setPhase("live");
