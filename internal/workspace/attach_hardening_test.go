@@ -19,20 +19,12 @@ import (
 
 func attachStagePath(t *testing.T, root, serverID string) string {
 	t.Helper()
-	canon, err := canonicalRoot(root)
-	if err != nil {
-		t.Fatalf("canonical root: %v", err)
-	}
-	return filepath.Join(canon, filepath.FromSlash(attachStageRel), serverID)
+	return filepath.Join(testBase(t, root), attachStageRel, serverID)
 }
 
 func committedPathFor(t *testing.T, root, serverID, dataName string) string {
 	t.Helper()
-	canon, err := canonicalRoot(root)
-	if err != nil {
-		t.Fatalf("canonical root: %v", err)
-	}
-	return filepath.Join(canon, filepath.FromSlash(attachBaseRel), serverID, dataName)
+	return filepath.Join(testBase(t, root), serverID, dataName)
 }
 
 // TestAttachmentCommitRejectsStagedDataReplacement: after hashing, replacing
@@ -253,7 +245,7 @@ func TestAttachmentPostRenameFailureNeverRepublishes(t *testing.T) {
 // silently small total.
 func TestAttachmentQuotaScanFailsClosedOnErrors(t *testing.T) {
 	root := t.TempDir()
-	base := filepath.Join(root, filepath.FromSlash(attachBaseRel))
+	base := testBase(t, root)
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		t.Fatalf("base: %v", err)
 	}
@@ -281,12 +273,9 @@ func TestAttachmentQuotaScanFailsClosedOnErrors(t *testing.T) {
 // too-deep tree fails closed with ErrTooLarge rather than undercounting.
 func TestAttachmentQuotaCountsEntriesAndSkipsStaging(t *testing.T) {
 	root := t.TempDir()
-	base := filepath.Join(root, filepath.FromSlash(attachBaseRel))
+	base := testBase(t, root)
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		t.Fatalf("base: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(base, ".gitignore"), []byte("*\n"), 0o600); err != nil {
-		t.Fatalf("gitignore: %v", err)
 	}
 	one := filepath.Join(base, "22222222-3333-4444-8555-666666666666")
 	if err := os.MkdirAll(one, 0o700); err != nil {
@@ -311,9 +300,9 @@ func TestAttachmentQuotaCountsEntriesAndSkipsStaging(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scan: %v", err)
 	}
-	// .gitignore (2) + attachment.txt (5) = 7.
-	if got != 7 {
-		t.Fatalf("completed bytes = %d, want 7", got)
+	// attachment.txt (5) only.
+	if got != 5 {
+		t.Fatalf("completed bytes = %d, want 5", got)
 	}
 
 	// Entry-cap enforcement: lowering the cap below the real entry count
@@ -363,8 +352,8 @@ func TestAttachmentQuotaRejectsCommitOverLimit(t *testing.T) {
 	if err := commit("12345678-1234-4123-8123-123456789abc", "1234567"); err != nil {
 		t.Fatalf("first small commit: %v", err)
 	}
-	// 7 used; the control .gitignore (2) counts too, so 9 of 10 in use.
-	if err := commit("12345678-1234-4123-8123-123456789abd", "abc"); err != ErrTooLarge {
+	// 7 of 10 in use; 4 more would exceed it.
+	if err := commit("12345678-1234-4123-8123-123456789abd", "abcd"); err != ErrTooLarge {
 		t.Fatalf("over-quota commit = %v, want ErrTooLarge", err)
 	}
 	if _, err := os.Stat(committedPathFor(t, root, "12345678-1234-4123-8123-123456789abd", "attachment.txt")); !os.IsNotExist(err) {
@@ -381,7 +370,7 @@ func TestAttachmentQuotaRejectsCommitOverLimit(t *testing.T) {
 // serialized, so exactly one wins and the other fails ErrTooLarge.
 func TestAttachmentQuotaSerializedConcurrentCommits(t *testing.T) {
 	root := t.TempDir()
-	restore := setAttachCompletedLimit(8)
+	restore := setAttachCompletedLimit(7)
 	defer restore()
 
 	commit := func(id string, body []byte) error {
@@ -397,7 +386,7 @@ func TestAttachmentQuotaSerializedConcurrentCommits(t *testing.T) {
 		return err
 	}
 	bodyA := []byte("12345") // 5 bytes
-	bodyB := []byte("678")   // 3 bytes; together 8 > 8-2(gitignore)=6 available
+	bodyB := []byte("678")   // 3 bytes; together 8 > 7 available
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
 	for i, spec := range []struct {
@@ -428,8 +417,8 @@ func TestAttachmentQuotaSerializedConcurrentCommits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scan: %v", err)
 	}
-	if used > 8 {
-		t.Fatalf("quota exceeded: used %d > 8", used)
+	if used > 7 {
+		t.Fatalf("quota exceeded: used %d > 7", used)
 	}
 }
 
@@ -439,7 +428,7 @@ func TestAttachmentQuotaSerializedConcurrentCommits(t *testing.T) {
 // touched, and unrelated files inside a valid staging dir block its removal.
 func TestAttachmentCleanupValidatesMarker(t *testing.T) {
 	root := t.TempDir()
-	base := filepath.Join(root, filepath.FromSlash(attachStageRel))
+	base := filepath.Join(testBase(t, root), attachStageRel)
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		t.Fatalf("staging base: %v", err)
 	}
@@ -624,72 +613,11 @@ func TestAttachmentCleanupNeverTouchesCommitted(t *testing.T) {
 	}
 }
 
-// TestAttachmentGitignoreCreateOnly: BeginAttachment creates the
-// attachment-local .gitignore with exactly "*\n" once; an existing regular
-// file is preserved byte-for-byte; a symlink at that name fails Begin
-// closed; the project's own .gitignore is never created or modified.
-func TestAttachmentGitignoreCreateOnly(t *testing.T) {
-	root := t.TempDir()
-	serverID := "9abcdefa-9abd-49ab-89ab-9abcdefaabcd"
-	if _, err := BeginAttachment(root, serverID, "text/plain", 4); err != nil {
-		t.Fatalf("begin: %v", err)
-	}
-	local := filepath.Join(root, filepath.FromSlash(attachBaseRel), ".gitignore")
-	got, err := os.ReadFile(local)
-	if err != nil {
-		t.Fatalf("attachment .gitignore missing: %v", err)
-	}
-	if string(got) != "*\n" {
-		t.Fatalf("attachment .gitignore = %q, want %q", got, "*\n")
-	}
-	// Idempotent: second Begin keeps the existing content untouched.
-	serverID2 := "9abcdefa-9abd-49ab-89ab-9abcdefabcde"
-	stage2, err := BeginAttachment(root, serverID2, "text/plain", 4)
-	if err != nil {
-		t.Fatalf("second begin: %v", err)
-	}
-	_ = stage2.Close()
-	if got, _ := os.ReadFile(local); string(got) != "*\n" {
-		t.Fatalf("attachment .gitignore rewritten: %q", got)
-	}
-	// User-provided content is preserved, never overwritten.
-	if err := os.WriteFile(local, []byte("# user rules\n/keep\n"), 0o600); err != nil {
-		t.Fatalf("write user gitignore: %v", err)
-	}
-	serverID3 := "9abcdefa-9abd-49ab-89ab-9abcdefabcdf"
-	if _, err := BeginAttachment(root, serverID3, "text/plain", 4); err != nil {
-		t.Fatalf("third begin: %v", err)
-	}
-	if got, _ := os.ReadFile(local); string(got) != "# user rules\n/keep\n" {
-		t.Fatalf("user .gitignore overwritten: %q", got)
-	}
-	// A symlink at the control path fails Begin closed.
-	root2 := t.TempDir()
-	base2 := filepath.Join(root2, filepath.FromSlash(attachBaseRel))
-	if err := os.MkdirAll(base2, 0o700); err != nil {
-		t.Fatalf("base2: %v", err)
-	}
-	outside := filepath.Join(t.TempDir(), "evil")
-	if err := os.WriteFile(outside, []byte("evil"), 0o600); err != nil {
-		t.Fatalf("outside: %v", err)
-	}
-	if err := os.Symlink(outside, filepath.Join(base2, ".gitignore")); err != nil {
-		t.Fatalf("symlink: %v", err)
-	}
-	if _, err := BeginAttachment(root2, "9abcdefa-9abd-49ab-89ab-9abcdefabcd", "text/plain", 4); err == nil {
-		t.Fatalf("begin accepted symlinked .gitignore control path")
-	}
-	// The project root's own .gitignore must not be created by attachments.
-	if _, err := os.Stat(filepath.Join(root, ".gitignore")); !os.IsNotExist(err) {
-		t.Fatalf("project .gitignore created (err %v)", err)
-	}
-}
-
 // TestAttachmentMarkerFormatBounds: the owned marker is bounded — oversized,
 // missing, directory-typed or garbage markers all invalidate ownership.
 func TestAttachmentMarkerFormatBounds(t *testing.T) {
 	root := t.TempDir()
-	base := filepath.Join(root, filepath.FromSlash(attachStageRel))
+	base := filepath.Join(testBase(t, root), attachStageRel)
 	cases := []struct {
 		name   string
 		marker []byte

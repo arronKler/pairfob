@@ -15,8 +15,7 @@ import (
 // AttachCompletedBytes returns the total size, in bytes, of all regular files
 // in the controlled attachment tree under root, following no symlinks. It is
 // used to enforce the per-root completed-storage quota and counts only the
-// final tree (`.pairfob/attachments/`, including its .gitignore control
-// file), never staging. The scan fails closed: any unreadable directory,
+// final tree (the temp-directory base of the root), never staging. The scan fails closed: any unreadable directory,
 // stat error or over-limit entry count aborts with an error rather than
 // undercounting. Directory reads are paginated and depth-bounded.
 func AttachCompletedBytes(root string) (int64, error) {
@@ -24,12 +23,7 @@ func AttachCompletedBytes(root string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	rootFD, err := openRootFD(canon)
-	if err != nil {
-		return 0, mapEnoent(err)
-	}
-	defer unix.Close(rootFD)
-	baseFD, err := openDirChainNoCreate(rootFD, splitRel(attachBaseRel))
+	baseFD, err := openAttachBase(canon, false)
 	if err != nil {
 		if errors.Is(err, unix.ENOENT) {
 			return 0, nil
@@ -127,9 +121,12 @@ func AttachCleanupExpired(root string, olderAgo int64, activeIDs []string) (int,
 	if err != nil {
 		return 0, err
 	}
-	rootFD, err := openRootFD(canon)
+	rootFD, err := openAttachBase(canon, false)
 	if err != nil {
-		return 0, mapEnoent(err)
+		if errors.Is(err, unix.ENOENT) {
+			return 0, nil
+		}
+		return 0, err
 	}
 	defer unix.Close(rootFD)
 	stageFD, err := openDirChainNoCreate(rootFD, splitRel(attachStageRel))

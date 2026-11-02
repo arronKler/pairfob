@@ -1,11 +1,13 @@
-// Attachment (upload) storage for a live workspace root. Uploaded files are
-// staged inside the workspace under `.pairfob/attachments/.staging/<uuid>/`,
-// hash/size verified, then atomically published at commit into
-// `.pairfob/attachments/<uuid>/`. The controlled data basename is derived from
+// Attachment (upload) storage for a live workspace root. Uploaded files live in
+// the temp directory, never inside the workspace: they are staged under
+// `<AttachBase>/.staging/<uuid>/`, hash/size verified, then atomically
+// published at commit into `<AttachBase>/<uuid>/`, where AttachBase is
+// `os.TempDir()/pairfob-attachments/<16 hex of sha256(canonical root)>`. The controlled data basename is derived from
 // a small MIME allowlist; the client-supplied original file name is display
 // data only and never becomes a path component.
 //
-// Security posture: the workspace root, the attachment/staging directories and
+// Security posture: the base directory (created 0700, refused when it is a
+// symlink, owned by someone else or open to group/other), the attachment/staging directories and
 // the staged data file are pinned by inode at Begin and re-verified at
 // publish, so replacement or symlink swaps of any of them fail closed instead
 // of publishing unverified bytes. The completed-storage quota scan is bounded
@@ -17,8 +19,11 @@
 package workspace
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -36,16 +41,35 @@ const (
 )
 
 const (
-	attachBaseRel    = ".pairfob/attachments"
-	attachStageRel   = ".pairfob/attachments/.staging"
-	attachOwnedMark  = ".owned"
-	attachIgnoreName = ".gitignore"
+	attachTempDirName = "pairfob-attachments"
+	attachStageRel    = ".staging" // relative to the base directory
+	attachOwnedMark   = ".owned"
 	// attachOwnedMagic prefixes the bounded staging ownership marker; the
 	// marker's second line names the single controlled data file the
 	// staging directory owns. Lazy crash cleanup validates both before
 	// removing anything.
 	attachOwnedMagic = "pairfob-attachment-stage.v1"
 )
+
+// ErrAttachBaseUnsafe is returned when the attachment base directory fails the
+// owner/mode/symlink check. There is no fallback location.
+var ErrAttachBaseUnsafe = errors.New("attachment base directory failed the safety check (must be a real directory owned by the daemon user with mode 0700)")
+
+// AttachBase returns the absolute attachment base directory for a pane root:
+// os.TempDir()/pairfob-attachments/<first 16 hex of sha256(canonical root)>.
+// Panes sharing one canonical root share one base. Pure path computation.
+func AttachBase(root string) (string, error) {
+	canon, err := canonicalRoot(root)
+	if err != nil {
+		return "", err
+	}
+	return attachBasePath(canon), nil
+}
+
+func attachBasePath(canon string) string {
+	sum := sha256.Sum256([]byte(canon))
+	return filepath.Join(os.TempDir(), attachTempDirName, hex.EncodeToString(sum[:])[:16])
+}
 
 // ErrNotSupported is returned on platforms without a secure no-follow
 // implementation (non-unix). It is never a wire error.

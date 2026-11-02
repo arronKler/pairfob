@@ -145,11 +145,28 @@ func (e *Engine) bindPhase(s *sess, id string, p workspacePaneParams, entry *upl
 	return true
 }
 
+// uploadFinalPath joins a committed rel path onto the attachment base of the
+// canonical root and reports false unless the result stays under that base.
+func uploadFinalPath(root, rel string) (string, bool) {
+	base, err := workspace.AttachBase(root)
+	if err != nil {
+		return "", false
+	}
+	full := filepath.Join(base, filepath.FromSlash(rel))
+	r, err := filepath.Rel(base, full)
+	if err != nil || r == "." || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return full, true
+}
+
 // replyUploadErr maps store/validation errors to the frozen wire vocabulary.
 func (e *Engine) replyUploadErr(s *sess, id string, err error) {
 	switch {
+	case errors.Is(err, workspace.ErrAttachBaseUnsafe):
+		e.replyErr(s, id, "forbidden", "attachment base directory failed the owner/mode/symlink check")
 	case errors.Is(err, workspace.ErrInvalidPath):
-		e.replyErr(s, id, "forbidden", "attachment path is outside the live pane root")
+		e.replyErr(s, id, "forbidden", "attachment path is outside the attachment base directory")
 	case errors.Is(err, workspace.ErrNotFound), errors.Is(err, workspace.ErrNotDirectory):
 		e.replyErr(s, id, "workspace_not_found", "workspace upload is no longer available")
 	case errors.Is(err, workspace.ErrTooLarge):
@@ -382,10 +399,14 @@ func (e *Engine) reconcileCommittedLocked(entry *uploadEntry) (string, map[strin
 		return "conflict", nil
 	}
 	res, rerr := stage.ReconcileCommitted()
+	finalPath, pathOK := uploadFinalPath(entry.root, res.Rel)
+	if rerr == nil && !pathOK {
+		return "unknown", nil
+	}
 	if rerr == nil {
 		entry.state = uploadStateCommitted
 		entry.finalRel = res.Rel
-		entry.finalPath = filepath.Join(entry.root, filepath.FromSlash(res.Rel))
+		entry.finalPath = finalPath
 		entry.offset = entry.size
 		_ = stage.Close()
 		e.uploads.settle(entry)
@@ -548,10 +569,14 @@ func (e *Engine) rpcUploadCommit(s *sess, id string, params json.RawMessage, v2 
 	}
 	res, cerr := entry.stage.Commit(entry.size, entry.sha256)
 	cerr = commitFault(entry, cerr)
+	finalPath, pathOK := uploadFinalPath(entry.root, res.Rel)
+	if cerr == nil && !pathOK {
+		cerr = workspace.ErrMutationUnknown
+	}
 	if cerr == nil {
 		entry.state = uploadStateCommitted
 		entry.finalRel = res.Rel
-		entry.finalPath = filepath.Join(entry.root, filepath.FromSlash(res.Rel))
+		entry.finalPath = finalPath
 		entry.offset = entry.size
 		// Release the data-file descriptor; the published file is preserved.
 		_ = entry.stage.Close()

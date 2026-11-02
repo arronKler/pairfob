@@ -29,7 +29,7 @@ func (st *AttachStage) commitPins() (rootFD, stagingFD int, err error) {
 	if canon != st.root {
 		return -1, -1, ErrChanged
 	}
-	rootFD, err = openRootFD(canon)
+	rootFD, err = openAttachBase(canon, false)
 	if err != nil {
 		return -1, -1, mapEnoent(err)
 	}
@@ -151,7 +151,7 @@ func (st *AttachStage) Commit(declaredSize int64, sha256hex string) (AttachCommi
 	if used+declaredSize > attachCompletedLimit {
 		return AttachCommitResult{Rel: rel}, ErrTooLarge
 	}
-	finalFD, err := ensureDirChain(rootFD, append(splitRel(attachBaseRel), st.serverID))
+	finalFD, err := ensureDirChain(rootFD, []string{st.serverID})
 	if err != nil {
 		return AttachCommitResult{Rel: rel}, mapEnoent(err)
 	}
@@ -286,35 +286,12 @@ func (st *AttachStage) cleanupAfterPublish(rootFD int) {
 }
 
 // fsyncPublishChain makes a just-published final path durable: fsync the
-// final directory (the rename entry), its parent attachments directory, the
-// .pairfob directory, and finally the ROOT itself, so the full fresh-created
-// chain root→.pairfob→attachments→<uuid>→file survives a crash (every new
-// directory entry needs its parent's fsync; the newly-created .pairfob entry
-// lives in the root). Any error, including the root fsync, is returned so the
-// caller reports the publish as uncertain (ErrMutationUnknown) and lets
-// reconciliation retry the same chain. Called with rootFD open on the pinned
-// root.
+// final directory (the rename entry) and the base directory that holds the
+// new <uuid> entry. Any error is returned so the caller reports the publish as
+// uncertain (ErrMutationUnknown) and lets reconciliation retry the same
+// fsyncs. Called with rootFD open on the pinned base directory.
 func fsyncPublishChain(rootFD, finalFD int) error {
 	if err := unix.Fsync(finalFD); err != nil {
-		return err
-	}
-	baseFD, err := openDirChainNoCreate(rootFD, splitRel(attachBaseRel))
-	if err != nil {
-		return err
-	}
-	defer unix.Close(baseFD)
-	if err := unix.Fsync(baseFD); err != nil {
-		return err
-	}
-	// The .pairfob parent dir entry (attachments) is fsynced above via the
-	// base dir's own fsync only for the uuid entry; fsync .pairfob too so a
-	// freshly created attachments dir survives.
-	pairfobFD, err := openDirChainNoCreate(rootFD, []string{".pairfob"})
-	if err != nil {
-		return err
-	}
-	defer unix.Close(pairfobFD)
-	if err := unix.Fsync(pairfobFD); err != nil {
 		return err
 	}
 	// Test seam: inject a failure at the final root fsync (F1.1) so the error
@@ -324,7 +301,7 @@ func fsyncPublishChain(rootFD, finalFD int) error {
 			return err
 		}
 	}
-	// Newly-created .pairfob entry lives in root: fsync the root so the fresh
+	// The uuid entry lives in the base directory: fsync it so the fresh
 	// chain is durable. Propagated as published-unknown on failure.
 	return unix.Fsync(rootFD)
 }
@@ -446,7 +423,7 @@ func (st *AttachStage) ReconcileCommitted() (AttachCommitResult, error) {
 	if cannon != st.root {
 		return AttachCommitResult{Rel: rel, Published: false}, ErrMutationUnknown
 	}
-	rootFD, err := openRootFD(st.root)
+	rootFD, err := openAttachBase(st.root, false)
 	if err != nil {
 		return AttachCommitResult{Rel: rel, Published: st.published}, mapEnoent(err)
 	}
@@ -454,7 +431,7 @@ func (st *AttachStage) ReconcileCommitted() (AttachCommitResult, error) {
 	if !sameInode(rootFD, st.rootDev, st.rootIno) {
 		return AttachCommitResult{Rel: rel, Published: false}, ErrMutationUnknown
 	}
-	finalFD, err := openDirChainNoCreate(rootFD, append(splitRel(attachBaseRel), st.serverID))
+	finalFD, err := openDirChainNoCreate(rootFD, []string{st.serverID})
 	if err != nil {
 		// Final dir missing: the publish did not durably land (or was moved).
 		return AttachCommitResult{Rel: rel, Published: false}, ErrMutationUnknown

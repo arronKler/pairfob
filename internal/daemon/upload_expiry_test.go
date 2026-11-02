@@ -118,7 +118,7 @@ func TestUploadExpiredPublishedUnknownPreservesFile(t *testing.T) {
 	entry.mu.Lock()
 	rel := entry.stage.FinalRel()
 	entry.mu.Unlock()
-	finalPath := filepath.Join(entry.root, filepath.FromSlash(rel))
+	finalPath := filepath.Join(uploadBaseOf(t, entry.root), filepath.FromSlash(rel))
 	if _, err := os.Stat(finalPath); err != nil {
 		t.Fatalf("published unknown file missing before expiry: %v", err)
 	}
@@ -201,11 +201,11 @@ func TestUploadReconcileCompactsReceipts(t *testing.T) {
 // drains a second aborted-init entry.
 func TestUploadAbortInitSetsTerminalExpiry(t *testing.T) {
 	root, _, engine, client := uploadFixture(t)
-	// Make staging fail AFTER reservation: .pairfob/attachments exists as a
-	// dir and .pairfob/attachments/.staging is a regular file, so the quota
-	// scan (which opens .pairfob/attachments and skips .staging) passes, but
-	// BeginAttachment's chain creation fails -> the abortInit path.
-	attachments := filepath.Join(root, ".pairfob", "attachments")
+	// Make staging fail AFTER reservation: the base exists as a dir and
+	// <base>/.staging is a regular file, so the quota scan (which opens the
+	// base and skips .staging) passes, but BeginAttachment's chain creation
+	// fails -> the abortInit path.
+	attachments := uploadBaseOf(t, root)
 	if err := os.MkdirAll(attachments, 0o700); err != nil {
 		t.Fatal(err)
 	}

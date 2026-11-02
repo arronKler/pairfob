@@ -6,6 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"pairfob/internal/mux"
 	"pairfob/internal/phone"
 	"pairfob/internal/runtime"
+	"pairfob/internal/workspace"
 )
 
 const testUploadTimeout = 15 * time.Second
@@ -112,6 +116,40 @@ func TestUploadBeginWriteStatusCommitLifecycle(t *testing.T) {
 	}
 	if committed["relative_path"] == "" || committed["path"] == "" {
 		t.Fatalf("committed missing final path: %v", committed)
+	}
+}
+
+// uploadBaseOf returns the attachment base of a pane root.
+func uploadBaseOf(t *testing.T, root string) string {
+	t.Helper()
+	base, err := workspace.AttachBase(root)
+	if err != nil {
+		t.Fatalf("attach base: %v", err)
+	}
+	return base
+}
+
+func TestUploadCommitReturnsAbsolutePathUnderBase(t *testing.T) {
+	root, _, _, client := uploadFixture(t)
+	data := []byte("\x89PNG fake")
+	uuid := testUUID(3)
+	setUpFS(t, client, uuid, "op_begin000000000003", "shot.png", data, "image/png", "w0:p1")
+	if _, err := uploadWrite(t, client, uuid, "op_write000000000003", 0, data, "w0:p1"); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := client.RPCTimeout("WorkspaceUploadCommit", map[string]any{
+		"pane_id": "w0:p1", "upload_id": uuid, "operation_id": "op_commit000000000003",
+	}, testUploadTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := decodeResult(t, raw)["path"].(string)
+	base := uploadBaseOf(t, root)
+	if !filepath.IsAbs(path) || !strings.HasPrefix(path, base+string(filepath.Separator)) {
+		t.Fatalf("path %q is not absolute under base %q", path, base)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != string(data) {
+		t.Fatalf("file at returned path: %q %v", got, err)
 	}
 }
 

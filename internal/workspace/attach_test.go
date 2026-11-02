@@ -21,13 +21,19 @@ func sha256Of(t *testing.T, data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// testBase returns the attachment base of a pane root.
+func testBase(t *testing.T, root string) string {
+	t.Helper()
+	base, err := AttachBase(root)
+	if err != nil {
+		t.Fatalf("attach base: %v", err)
+	}
+	return base
+}
+
 func finalPathFor(t *testing.T, root, rel string) string {
 	t.Helper()
-	canon, err := canonicalRoot(root)
-	if err != nil {
-		t.Fatalf("canonical root: %v", err)
-	}
-	return filepath.Join(canon, filepath.FromSlash(rel))
+	return filepath.Join(testBase(t, root), filepath.FromSlash(rel))
 }
 
 // TestAttachmentTextBeginWriteCommit covers the measured EBADF regression:
@@ -56,11 +62,7 @@ func TestAttachmentTextBeginWriteCommit(t *testing.T) {
 	}
 
 	// Acknowledged bytes are already on disk in staging before commit.
-	canon, err := canonicalRoot(root)
-	if err != nil {
-		t.Fatalf("canonical root: %v", err)
-	}
-	staged := filepath.Join(canon, ".pairfob", "attachments", ".staging", serverID, "attachment.txt")
+	staged := filepath.Join(testBase(t, root), ".staging", serverID, "attachment.txt")
 	if got, err := os.ReadFile(staged); err != nil || !bytes.Equal(got, data) {
 		t.Fatalf("staged bytes before commit: got %q err %v, want %q", got, err, data)
 	}
@@ -69,7 +71,7 @@ func TestAttachmentTextBeginWriteCommit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	wantRel := ".pairfob/attachments/" + serverID + "/attachment.txt"
+	wantRel := serverID + "/attachment.txt"
 	if res.Rel != wantRel || !res.Published {
 		t.Fatalf("committed rel = %q published=%v, want %q published=true", res.Rel, res.Published, wantRel)
 	}
@@ -213,11 +215,10 @@ func TestAttachmentAbortRemovesStagingOnly(t *testing.T) {
 	if err := stage.Abort(); err != nil {
 		t.Fatalf("abort: %v", err)
 	}
-	canon, _ := canonicalRoot(root)
-	if _, err := os.Stat(filepath.Join(canon, ".pairfob", "attachments", ".staging", serverID)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(testBase(t, root), ".staging", serverID)); !os.IsNotExist(err) {
 		t.Fatalf("staging dir still present after abort (err %v)", err)
 	}
-	if _, err := os.Stat(filepath.Join(canon, ".pairfob", "attachments", serverID)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(testBase(t, root), serverID)); !os.IsNotExist(err) {
 		t.Fatalf("final dir exists after abort (err %v)", err)
 	}
 }
@@ -240,8 +241,7 @@ func TestAttachmentCommitFailsClosedOnDigestMismatch(t *testing.T) {
 	if _, err := stage.Commit(int64(len(data)), sha256Of(t, []byte("different"))); err != ErrChanged {
 		t.Fatalf("commit with wrong digest = %v, want ErrChanged", err)
 	}
-	canon, _ := canonicalRoot(root)
-	if _, err := os.Stat(filepath.Join(canon, ".pairfob", "attachments", serverID, "attachment.txt")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(testBase(t, root), serverID, "attachment.txt")); !os.IsNotExist(err) {
 		t.Fatalf("file published despite digest mismatch (err %v)", err)
 	}
 	// The stage remains usable for a correct retry rather than guessing.

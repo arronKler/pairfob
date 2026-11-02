@@ -165,7 +165,7 @@ func TestUploadStatusAndCancelReconcilePublishedStage(t *testing.T) {
 	if err != nil || cancel["state"] != "committed" {
 		t.Fatalf("cancel after published stage=%v err=%v", cancel, err)
 	}
-	if _, err := os.Stat(filepath.Join(entry2.root, filepath.FromSlash(res2.Rel))); err != nil {
+	if _, err := os.Stat(filepath.Join(uploadBaseOf(t, entry2.root), filepath.FromSlash(res2.Rel))); err != nil {
 		t.Fatalf("cancel removed a published file: %v", err)
 	}
 }
@@ -183,14 +183,14 @@ func TestUploadLazyStagingCleanupPreservesActiveRemovesStale(t *testing.T) {
 	entry.mu.Lock()
 	activeID := entry.serverID
 	entry.mu.Unlock()
-	activeDir := filepath.Join(root, ".pairfob", "attachments", ".staging", activeID)
+	activeDir := filepath.Join(uploadBaseOf(t, root), ".staging", activeID)
 	if _, err := os.Stat(activeDir); err != nil {
 		t.Fatalf("active stage dir missing before cleanup: %v", err)
 	}
 
 	// Abandoned stale staging dir (valid owned marker, >24h old).
 	staleUUID := testUUID(840)
-	stagingBase := filepath.Join(root, ".pairfob", "attachments", ".staging")
+	stagingBase := filepath.Join(uploadBaseOf(t, root), ".staging")
 	staleDir := filepath.Join(stagingBase, staleUUID)
 	if err := os.MkdirAll(staleDir, 0o700); err != nil {
 		t.Fatal(err)

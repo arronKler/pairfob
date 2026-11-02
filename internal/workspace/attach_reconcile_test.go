@@ -94,7 +94,7 @@ func TestAttachmentReconcileAfterFsyncFailure(t *testing.T) {
 	if !resR.Published {
 		t.Fatalf("reconcile published=false, want true")
 	}
-	if resR.Rel != ".pairfob/attachments/"+serverID+"/attachment.txt" {
+	if resR.Rel != serverID+"/attachment.txt" {
 		t.Fatalf("reconcile rel = %q", resR.Rel)
 	}
 	// Idempotent: a second reconciliation returns the same durable result.
@@ -350,8 +350,7 @@ func TestAttachmentSuccessfulCommitNoStagingLeftover(t *testing.T) {
 		t.Fatalf("not published")
 	}
 	_ = stage
-	canon, _ := canonicalRoot(root)
-	attachments := filepath.Join(canon, ".pairfob", "attachments")
+	attachments := testBase(t, root)
 	entries, rerr := os.ReadDir(attachments)
 	if rerr != nil {
 		t.Fatalf("read attachments: %v", rerr)
@@ -363,21 +362,19 @@ func TestAttachmentSuccessfulCommitNoStagingLeftover(t *testing.T) {
 	// The final UUID dir and the control .gitignore must be present; the
 	// shared .staging base may remain (even empty) and must be preserved, and
 	// no unrelated leftover may appear.
-	hasFinal, hasIgnore, hasStage := false, false, false
+	hasFinal, hasStage := false, false
 	for _, n := range names {
 		switch n {
 		case serverID:
 			hasFinal = true
-		case ".gitignore":
-			hasIgnore = true
 		case ".staging":
 			hasStage = true
 		default:
 			t.Fatalf("unexpected leftover entry %q in attachments", n)
 		}
 	}
-	if !hasFinal || !hasIgnore {
-		t.Fatalf("attachments entries = %v, want .gitignore + final UUID %s present (shared .staging may remain)", names, serverID)
+	if !hasFinal {
+		t.Fatalf("attachments entries = %v, want final UUID %s present (shared .staging may remain)", names, serverID)
 	}
 	// This stage's own per-UUID staging dir must be gone, regardless of the
 	// shared .staging base being present or empty.
@@ -445,7 +442,7 @@ func TestAttachmentConcurrentReconcileSafety(t *testing.T) {
 		if errs[i] != nil {
 			t.Fatalf("concurrent reconcile %d: %v", i, errs[i])
 		}
-		if !results[i].Published || results[i].Rel != ".pairfob/attachments/"+serverID+"/attachment.txt" {
+		if !results[i].Published || results[i].Rel != serverID+"/attachment.txt" {
 			t.Fatalf("concurrent reconcile %d = %+v, want published", i, results[i])
 		}
 	}

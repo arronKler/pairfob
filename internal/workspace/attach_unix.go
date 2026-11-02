@@ -5,6 +5,7 @@ package workspace
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -57,8 +58,44 @@ func splitRel(rel string) []string {
 	return strings.Split(rel, "/")
 }
 
-func openRootFD(canon string) (int, error) {
-	return unix.Open(canon, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+// openAttachBase opens the attachment base directory of a canonical root,
+// creating it (and its parent) with mode 0700 when create is set. Every
+// directory is opened O_DIRECTORY|O_NOFOLLOW and fstat-checked: owner must be
+// the effective user and no group/other bits may be set, else
+// ErrAttachBaseUnsafe. A missing base without create reports ENOENT.
+func openAttachBase(canon string, create bool) (int, error) {
+	base := attachBasePath(canon)
+	parentFD, err := openCheckedDir(filepath.Dir(base), create)
+	if err != nil {
+		return -1, err
+	}
+	unix.Close(parentFD)
+	return openCheckedDir(base, create)
+}
+
+func openCheckedDir(path string, create bool) (int, error) {
+	if create {
+		if err := unix.Mkdir(path, attachDirMode); err != nil && !errors.Is(err, unix.EEXIST) {
+			return -1, err
+		}
+	}
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		if errors.Is(err, unix.ELOOP) || errors.Is(err, unix.ENOTDIR) {
+			return -1, ErrAttachBaseUnsafe
+		}
+		return -1, err
+	}
+	var st unix.Stat_t
+	if unix.Fstat(fd, &st) != nil {
+		unix.Close(fd)
+		return -1, ErrAttachBaseUnsafe
+	}
+	if int(st.Uid) != os.Geteuid() || st.Mode&0o077 != 0 {
+		unix.Close(fd)
+		return -1, ErrAttachBaseUnsafe
+	}
+	return fd, nil
 }
 
 // ensureDirChain walks/creates the directory components under baseFD, opening
@@ -200,7 +237,7 @@ func BeginAttachment(root, serverID, mime string, size int64) (*AttachStage, err
 	if dataName == "attachment" || !validSafeLeaf(dataName) {
 		return nil, ErrInvalidPath
 	}
-	rootFD, err := openRootFD(canon)
+	rootFD, err := openAttachBase(canon, true)
 	if err != nil {
 		return nil, mapEnoent(err)
 	}
@@ -208,13 +245,6 @@ func BeginAttachment(root, serverID, mime string, size int64) (*AttachStage, err
 	var rootSt unix.Stat_t
 	if unix.Fstat(rootFD, &rootSt) != nil {
 		return nil, ErrInvalidPath
-	}
-	// Best-effort attachment-local .gitignore: contents "*\n", create-only
-	// with no-follow, preserve an existing regular file, fail closed on a
-	// symlink in the control path (D15). Never touches the project's own
-	// .gitignore or .git internals.
-	if err := ensureAttachIgnore(rootFD); err != nil {
-		return nil, err
 	}
 	components := append(splitRel(attachStageRel), serverID)
 	if attachHook != nil {
@@ -251,7 +281,7 @@ func BeginAttachment(root, serverID, mime string, size int64) (*AttachStage, err
 	file := os.NewFile(uintptr(dataFD), dataName)
 	return &AttachStage{
 		root: canon, serverID: serverID, dataName: dataName,
-		finalRel: attachBaseRel + "/" + serverID,
+		finalRel: serverID,
 		size:     size, owned: true, file: file,
 		rootDev: uint64(rootSt.Dev), rootIno: uint64(rootSt.Ino),
 		stageDev: uint64(stageSt.Dev), stageIno: uint64(stageSt.Ino),
@@ -306,41 +336,6 @@ func readOwnedMarker(sub int) (dataName string, ok bool) {
 		return "", false
 	}
 	return lines[1], true
-}
-
-// ensureAttachIgnore creates `.pairfob/attachments/.gitignore` with contents
-// "*\n" once, exclusively and no-follow. An existing regular file is left
-// untouched; a symlink (or any non-regular entry) at that name fails closed.
-// It also creates the parent chain no-follow.
-func ensureAttachIgnore(rootFD int) error {
-	baseFD, err := ensureDirChain(rootFD, splitRel(attachBaseRel))
-	if err != nil {
-		return mapEnoent(err)
-	}
-	defer unix.Close(baseFD)
-	var st unix.Stat_t
-	if unix.Fstatat(baseFD, attachIgnoreName, &st, unix.AT_SYMLINK_NOFOLLOW) == nil {
-		if st.Mode&unix.S_IFMT == unix.S_IFREG {
-			return nil // existing regular file: never overwrite user content
-		}
-		return ErrInvalidPath // symlink / device node: fail closed
-	}
-	fd, err := unix.Openat(baseFD, attachIgnoreName, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, attachFileMode)
-	if err != nil {
-		if errors.Is(err, unix.EEXIST) {
-			// Lost a race with an identical create: tolerate only a regular file.
-			if unix.Fstatat(baseFD, attachIgnoreName, &st, unix.AT_SYMLINK_NOFOLLOW) == nil && st.Mode&unix.S_IFMT == unix.S_IFREG {
-				return nil
-			}
-			return ErrInvalidPath
-		}
-		return mapEnoent(err)
-	}
-	defer unix.Close(fd)
-	if _, err := unix.Write(fd, []byte("*\n")); err != nil {
-		return err
-	}
-	return unix.Fsync(fd)
 }
 
 func validSafeLeaf(name string) bool {

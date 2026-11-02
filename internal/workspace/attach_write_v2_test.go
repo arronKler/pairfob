@@ -35,11 +35,7 @@ func stagedPathV2(t *testing.T, root, serverID string) string {
 // from the stage's MIME type (application/octet-stream stages attachment.bin).
 func stagedPathV2Name(t *testing.T, root, serverID, dataName string) string {
 	t.Helper()
-	canon, err := canonicalRoot(root)
-	if err != nil {
-		t.Fatalf("canonical root: %v", err)
-	}
-	return filepath.Join(canon, ".pairfob", "attachments", ".staging", serverID, dataName)
+	return filepath.Join(testBase(t, root), ".staging", serverID, dataName)
 }
 
 // TestAttachWriteV2LegacyBoundUnchanged: the old WriteAt still caps a chunk
@@ -239,7 +235,7 @@ func TestAttachWriteV2CommitFullChunkSHA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("commit full V2 chunk: %v", err)
 	}
-	wantRel := ".pairfob/attachments/" + serverID + "/attachment.txt"
+	wantRel := serverID + "/attachment.txt"
 	if res.Rel != wantRel || !res.Published {
 		t.Fatalf("commit result = %+v, want %q published=true", res, wantRel)
 	}
