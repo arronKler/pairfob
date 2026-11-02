@@ -88,6 +88,27 @@ done
 	waitForFileText(t, logPath, "terminal.release")
 }
 
+func TestHerdrTerminalCloseAfterTheChildExits(t *testing.T) {
+	binary := writeTerminalFixture(t, `
+printf '%s\n' '{"type":"terminal.frame","seq":1,"encoding":"ansi","width":80,"height":24,"full":true,"bytes":"b2s="}'
+`)
+	herdr := NewHerdr("/unused.sock")
+	herdr.TerminalBinary = binary
+	controller, err := herdr.OpenTerminal(context.Background(), TerminalOpen{
+		Session: NamedSession("alpha"), PaneID: "w0:p1", Cols: 80, Rows: 24, Takeover: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The pipe ends when the child exits and the bridge reaps it. Closing the
+	// terminal then must still be clean, not a second close of the pipe.
+	for range controller.Events() {
+	}
+	if err := controller.Close(); err != nil {
+		t.Fatalf("close after the child exited: %v", err)
+	}
+}
+
 func TestResolveHerdrBinaryFallsBackToHomeLocal(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

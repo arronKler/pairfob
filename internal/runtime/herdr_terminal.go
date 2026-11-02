@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -170,6 +171,13 @@ func (t *herdrTerminal) command(operation string, value any) error {
 
 func (t *herdrTerminal) Close() error {
 	var closeErr error
+	closeStdin := func() {
+		// exec closes the pipe once it has reaped the child, so a release the
+		// child has already answered leaves the pipe closed, not broken.
+		if err := t.stdin.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			closeErr = err
+		}
+	}
 	t.closeOnce.Do(func() {
 		close(t.stop)
 		released := make(chan struct{})
@@ -181,13 +189,13 @@ func (t *herdrTerminal) Close() error {
 		defer timer.Stop()
 		select {
 		case <-released:
-			closeErr = t.stdin.Close()
+			closeStdin()
 			select {
 			case <-t.done:
 			case <-timer.C:
 			}
 		case <-timer.C:
-			closeErr = t.stdin.Close()
+			closeStdin()
 		}
 		if t.cmd.Process != nil {
 			_ = t.cmd.Process.Kill()
