@@ -115,13 +115,13 @@ func (e *Engine) handleSessFWD(f envelope.Frame, s *sess) {
 	s.sendMu.Lock()
 	if s.c2s == nil {
 		s.sendMu.Unlock()
-		e.closeSession(s.routeID, "unpaired", true)
+		e.closeSession(s.routeID, "bad_frame", true)
 		return
 	}
 	pt, err := aead.Open(s.c2s, s.routeID, f.Payload)
 	s.sendMu.Unlock()
 	if err != nil {
-		e.closeSession(s.routeID, "unpaired", true)
+		e.closeSession(s.routeID, "bad_frame", true)
 		return
 	}
 	e.mu.Lock()

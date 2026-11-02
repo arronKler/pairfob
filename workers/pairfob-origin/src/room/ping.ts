@@ -17,8 +17,8 @@ export function handlePing(room: RoomCore, ws: RoomSocket, frame: Frame): void {
     }
     if (att.kind === "resumehello" && now - att.created_ms >= RESUME_MS) {
       const rid = att.route_id ? hexToBytes(att.route_id) : undefined;
-      sendErr(ws, "unpaired", "15s DeviceHello timeout", rid ? { routeId: rid } : undefined);
-      ws.close(1000, "unpaired");
+      sendErr(ws, "timeout", "15s DeviceHello timeout", rid ? { routeId: rid } : undefined);
+      ws.close(1000, "timeout");
       return;
     }
   }
