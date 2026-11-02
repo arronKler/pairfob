@@ -307,9 +307,9 @@ jobs:
       - run: bash scripts/verify-desktop.sh
 
   scripts:
-    # Wait for the scope decision like the other non-shard jobs, so the six
-    # test shards get the runners first.
-    needs: changes
+    # Start with the web jobs: these checks read the repository, not the scope
+    # decision, and the gate still waits for both. Waiting for changes put the
+    # whole scripts run behind the longest scope diff.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
