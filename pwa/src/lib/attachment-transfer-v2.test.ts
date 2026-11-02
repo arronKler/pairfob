@@ -54,6 +54,9 @@ type MockOptions = {
    *  "incomplete": cap advertised but one V2 method missing. "lost": cap off. */
   mode: "v2" | "legacy" | "incomplete" | "lost";
   delayMs?: number;
+  /** Hold a wave's writes until this many are in flight, so a concurrency
+   *  assertion does not depend on how fast the encoder schedules them. */
+  barrier?: number;
   statusOffset?: number;
   onBeginV2?: (input: Record<string, unknown>) => UploadState;
   onWriteV2?: WriteHook;
@@ -83,6 +86,12 @@ function mockSession(options: MockOptions, initialSize = 0, initialSha = SHA): {
   const rec: Recorder = { calls: [], inFlight: 0, maxActive: 0, waves: [] };
   const active = { uploadId: UPLOAD_ID, size: initialSize, sha: initialSha };
   const mode = options.mode;
+  let barrierWaiters = 0;
+  let barrierOpen = options.barrier === undefined;
+  let openBarrier: (() => void) | undefined;
+  const barrier = new Promise<void>((resolve) => {
+    openBarrier = resolve;
+  });
 
   const recordWrite = async (input: UploadWriteInput, family: "v2" | "legacy"): Promise<UploadState> => {
     const chunk = family === "v2" ? V2_CHUNK : LEGACY_CHUNK;
@@ -91,6 +100,14 @@ function mockSession(options: MockOptions, initialSize = 0, initialSha = SHA): {
       if (rec.inFlight === 0) rec.waves.push(0);
       rec.inFlight += 1;
       rec.maxActive = Math.max(rec.maxActive, rec.inFlight);
+      if (!barrierOpen) {
+        barrierWaiters += 1;
+        if (barrierWaiters < options.barrier!) await barrier;
+        else {
+          barrierOpen = true;
+          openBarrier?.();
+        }
+      }
       await delay(options.delayMs);
       rec.inFlight -= 1;
       rec.waves[rec.waves.length - 1] += 1;
@@ -385,7 +402,7 @@ describe("V2 abort and windowing", () => {
 
   test.each([50, 100])("%ims delayed writes: V2 holds four simultaneous in one round, legacy is 16 serial rounds", async (delayMs) => {
     const size = V2_CHUNK * 4; // 512 KiB = 4 V2 chunks = 16 legacy chunks
-    const v2 = mockSession({ mode: "v2", delayMs });
+    const v2 = mockSession({ mode: "v2", delayMs, barrier: 4 });
     await uploadAttachment(v2.session, PANE, makeFile(size));
     expect(v2.rec.maxActive).toBe(4);
     expect(v2.rec.waves).toEqual([4]);
