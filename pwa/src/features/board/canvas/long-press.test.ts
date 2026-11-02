@@ -1,5 +1,5 @@
 import { resetBoardTestDOM } from "../../../../test-support/dom";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import { bindBoardCanvasGestures, BOARD_LONG_PRESS_MS } from "./gesture-adapter";
 import { boardCamera } from "../model/camera";
 import type { TabLayout } from "../../../lib/layout";
@@ -7,9 +7,13 @@ import type { TabLayout } from "../../../lib/layout";
 const layout: TabLayout = { workspaceId: "w1", tabId: "t1", zoomed: false, focusedPaneId: "p1",
   area: { x: 0, y: 0, width: 80, height: 24 }, panes: [{ paneId: "p1", focused: true, rect: { x: 0, y: 0, width: 80, height: 24 } }] };
 const releases: Array<() => void> = [];
-beforeEach(resetBoardTestDOM);
-afterEach(() => { releases.splice(0).forEach(release => release()); for (const node of [...document.body.children]) if (node.id !== "app") node.remove(); });
-const wait = () => new Promise(resolve => setTimeout(resolve, BOARD_LONG_PRESS_MS + 30));
+beforeEach(() => { resetBoardTestDOM(); jest.useFakeTimers(); });
+afterEach(() => { jest.useRealTimers(); releases.splice(0).forEach(release => release()); for (const node of [...document.body.children]) if (node.id !== "app") node.remove(); });
+/** Advance the fake clock and flush the microtasks a hold resolves on. */
+async function wait(): Promise<void> {
+  jest.advanceTimersByTime(BOARD_LONG_PRESS_MS + 30);
+  for (let i = 0; i < 8; i += 1) await Promise.resolve();
+}
 
 function setup() {
   const viewport = document.createElement("div");
