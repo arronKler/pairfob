@@ -19,6 +19,8 @@ import { sessionOwner } from "../identity";
 import { subscribeVisibleNotice, visibleNotice } from "../../../app/notices-store";
 import { AgentCompose } from "./agent-compose";
 import { AgentStream } from "./agent-stream";
+import { olderRequestOf } from "./model";
+import { capabilityEnabled } from "../../operations/capabilities-store";
 import { Button, Feedback } from "../../../shared/ui/primitives";
 import { SessionIdentity } from "../guided/session-chrome";
 
@@ -45,6 +47,8 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
   const paneId = sessionSnap.paneId;
   const working = agentFromDashboardSnapshot(useDashboard(), paneId)?.status === "working";
   const items = visibleItems();
+  const hasOlder = olderRequestOf(chat, capabilityEnabled("agent_trace_sessions")) !== null;
+  const earlier = [...chat.agentTraceOlder].reverse();
   const notice = chatDockNotice();
   const needDetail = useCallback((detailRef: string) => {
     if (!paneId) return;
@@ -73,12 +77,12 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
     <AgentChatChrome includeBack={includeBack} handlers={handlers} />
     {notice && <Feedback value={notice} appNotice />}
     <div className="agent-stream-wrap">
-      <AgentStream streamRef={stream} items={items} working={working} empty={emptySpec(working)}
+      <AgentStream streamRef={stream} items={items} earlier={earlier} working={working} empty={emptySpec(working)}
         busy={chat.agentTraceBusy || (!chat.agentTraceItems.length && chat.agentTraceLoadState === "cold")}
         signature={streamSig(items, working)} truncated={chat.agentTraceTruncated}
         onTerminal={() => { if (openPaneId() === paneId) leaveAgentChat(); }}
         onRetry={() => { if (!chat.agentTraceBusy) void refreshAgentTrace(); }}
-        onNeedOlder={() => { if (chat.agentTraceNext && !chat.agentTraceBusy) void refreshAgentTrace(true); }}
+        onNeedOlder={() => { if (hasOlder && !chat.agentTraceBusy) void refreshAgentTrace(true); }}
         onFollow={(follow, element) => {
           if (follow) followTrace();
           else setTraceFollow(false);
@@ -86,10 +90,10 @@ function AgentChatView({ includeBack, handlers }: AgentChatProps) {
           rememberAgentViewport(element, paneId);
         }}
         onCopyReply={copyAgentReply} toolDetail={item => paneId && item.detailRef ? toolDetailView(paneId, item.detailRef) : { status: "ready" }}
-        onNeedToolDetail={needDetail} older={<Button className="btn btn-small agent-older" hidden={!chat.agentTraceNext}
-          disabled={!chat.agentTraceNext || chat.agentTraceBusy} onClick={() => {
-            if (chat.agentTraceNext && !chat.agentTraceBusy) void refreshAgentTrace(true);
-          }}>{chat.agentTraceBusy && chat.agentTraceNext ? t("chat.readingOlder") : t("hist.loadEarlier")}</Button>} />
+        onNeedToolDetail={needDetail} older={<Button className="btn btn-small agent-older" hidden={!hasOlder}
+          disabled={!hasOlder || chat.agentTraceBusy} onClick={() => {
+            if (hasOlder && !chat.agentTraceBusy) void refreshAgentTrace(true);
+          }}>{chat.agentTraceBusy && hasOlder ? t("chat.readingOlder") : t("hist.loadEarlier")}</Button>} />
       <Button className="agent-jump" hidden={chat.agentTraceFollow || !chat.agentTraceUnread} onClick={jumpToLatest}><ArrowDown size={16} aria-hidden="true" />{t("chat.newReply")}</Button>
     </div>
     <PromptProgressView />

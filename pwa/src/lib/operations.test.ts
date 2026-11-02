@@ -266,6 +266,7 @@ describe("safe read normalization", () => {
       ],
       nextCursor: "older",
       truncated: false,
+      hasEarlierSession: false,
     });
     expect(parseAgentTraceDetail({
       detail_ref: "detail-1", input: '{"path":"a.ts"}', output: "ok", truncated: true,

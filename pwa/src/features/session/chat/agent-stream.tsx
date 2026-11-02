@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { Fragment, memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import { groupAgentTurns, groupAgentTurnBlocks, processTitle, replyText, turnKey,
   type AgentTurn } from "../../../lib/agent-trace-view";
@@ -34,10 +34,10 @@ function AssistantReply({ items, final, live, anchor, part, onCopy }: {
   </article>;
 }
 
-function ProcessCard({ turn, items, blockIndex, live, anchor, kept, hooks }: {
-  turn: AgentTurn; items: AgentTraceItem[]; blockIndex: number; live: boolean; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks;
+function ProcessCard({ turn, session, items, blockIndex, live, anchor, kept, hooks }: {
+  turn: AgentTurn; session: number; items: AgentTraceItem[]; blockIndex: number; live: boolean; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks;
 }) {
-  const scope = `${turnKey(turn)}:${blockIndex}`;
+  const scope = `${turnKey(turn, session)}:${blockIndex}`;
   return <AgentDetails traceKey={`p:${scope}`} className="agent-process" auto={live} kept={kept}
     dataTraceAnchor={`${anchor.key}:process:${blockIndex}`} dataTraceOrdinal={anchor.ordinal} dataTraceOrdinalEnd={anchor.ordinalFromEnd}>
     <summary className="agent-process-summary">{processTitle(items, live)}</summary>
@@ -48,7 +48,7 @@ function ProcessCard({ turn, items, blockIndex, live, anchor, kept, hooks }: {
 }
 
 type TraceTurnProps = {
-  turn: AgentTurn; live: boolean; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks; onCopy?: CopyReply;
+  turn: AgentTurn; session: number; live: boolean; anchor: TraceAnchor; kept?: DetailsState; hooks: ToolDetailHooks; onCopy?: CopyReply;
   /** Language revision: a finished turn shows t() copy, so it must re-render when the language changes. */
   lang: number;
   /** Detail state of each item with a detailRef, in order: a change re-renders only the turn that owns it. */
@@ -81,7 +81,7 @@ function sameTurn(prev: TraceTurnProps, next: TraceTurnProps): boolean {
   return sameDetails(prev.details, next.details);
 }
 
-const TraceTurn = memo(function TraceTurn({ turn, live, anchor, kept, hooks, onCopy }: TraceTurnProps) {
+const TraceTurn = memo(function TraceTurn({ turn, session, live, anchor, kept, hooks, onCopy }: TraceTurnProps) {
   const blocks = groupAgentTurnBlocks(turn.items);
   const finalReply = !live && blocks.at(-1)?.type === "reply" ? blocks.length - 1 : -1;
   let lastProcess = -1;
@@ -89,7 +89,7 @@ const TraceTurn = memo(function TraceTurn({ turn, live, anchor, kept, hooks, onC
   return <>
     {turn.user && <article className="agent-user" {...anchorData(anchor, "user")}><div className="agent-user-text">{turn.user.text || ""}</div></article>}
     {blocks.map((block, index) => block.type === "process"
-      ? <ProcessCard key={`process:${index}`} turn={turn} items={block.items} blockIndex={index}
+      ? <ProcessCard key={`process:${index}`} turn={turn} session={session} items={block.items} blockIndex={index}
         live={live && index === lastProcess} anchor={anchor} kept={kept} hooks={hooks} />
       : <AssistantReply key={`reply:${index}`} items={block.items} final={index === finalReply} live={live}
         anchor={anchor} part={`reply:${index}`} onCopy={onCopy} />)}
@@ -109,8 +109,12 @@ function EmptyPanel({ spec, onRetry, onTerminal }: { spec: AgentEmptySpec; onRet
   </div>;
 }
 
-function turnAnchors(turns: readonly AgentTurn[]): TraceAnchor[] {
-  const keys = turns.map(turnKey);
+/** A turn with the session index of the segment it belongs to (0 = the current session). */
+type PlacedTurn = { turn: AgentTurn; session: number };
+
+/** One session's anchors never collide with another's: older keys carry their session index. */
+function turnAnchors(turns: readonly PlacedTurn[]): TraceAnchor[] {
+  const keys = turns.map(({ turn, session }) => turnKey(turn, session));
   const total = new Map<string, number>();
   for (const key of keys) total.set(key, (total.get(key) ?? 0) + 1);
   const seen = new Map<string, number>();
@@ -121,14 +125,18 @@ function turnAnchors(turns: readonly AgentTurn[]): TraceAnchor[] {
   });
 }
 
-export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerminal, onNeedOlder, onFollow, onCopyReply,
+export function AgentStream({ items, earlier, working, empty, busy, kept, onRetry, onTerminal, onNeedOlder, onFollow, onCopyReply,
   toolDetail, onNeedToolDetail, truncated, older, streamRef, signature }: {
-  items: AgentTraceItem[]; working: boolean; empty: AgentEmptySpec; busy?: boolean; kept?: DetailsState;
+  items: AgentTraceItem[]; earlier?: readonly { index: number; items: readonly AgentTraceItem[] }[];
+  working: boolean; empty: AgentEmptySpec; busy?: boolean; kept?: DetailsState;
   onRetry?: () => void; onTerminal?: () => void; onNeedOlder?: () => void; onFollow?: (follow: boolean, stream: HTMLElement) => void; onCopyReply?: CopyReply;
   toolDetail?: ToolDetailHooks["view"]; onNeedToolDetail?: ToolDetailHooks["need"]; truncated?: boolean;
   older?: ReactNode; streamRef?: Ref<HTMLDivElement>; signature?: string;
 }) {
-  const turns = groupAgentTurns(items);
+  const turns: PlacedTurn[] = [
+    ...(earlier ?? []).flatMap(segment => groupAgentTurns(segment.items).map(turn => ({ turn, session: segment.index }))),
+    ...groupAgentTurns(items).map(turn => ({ turn, session: 0 })),
+  ];
   const anchors = turnAnchors(turns);
   const lang = langRevision();
   const latest = useRef({ view: toolDetail, need: onNeedToolDetail });
@@ -168,16 +176,20 @@ export function AgentStream({ items, working, empty, busy, kept, onRetry, onTerm
     }}>
     <div className="agent-stream-inner">
       {older}
-      {(!items.length || empty.kind === "unavailable") && <EmptyPanel spec={empty} onRetry={onRetry} onTerminal={onTerminal} />}
+      {(!turns.length || empty.kind === "unavailable") && <EmptyPanel spec={empty} onRetry={onRetry} onTerminal={onTerminal} />}
       {truncated && items.length > 0 && <p className="agent-trace-limit">{t("chat.truncated")}</p>}
       {first > 0 && <Button className="btn btn-small agent-show-earlier" onClick={showMore}>{t("chat.showEarlierTurns")}</Button>}
-      {turns.slice(first).map((turn, offset) => {
+      {turns.slice(first).map(({ turn, session }, offset) => {
         const index = first + offset;
         const anchor = anchors[index];
-        return <TraceTurn key={`${anchor.key}:${anchor.ordinal}`} turn={turn} anchor={anchor}
-          live={working && empty.kind !== "unavailable" && index === turns.length - 1}
-          kept={kept} hooks={hooks} onCopy={onCopyReply} lang={lang}
-          details={toolDetail ? turn.items.filter(item => item.detailRef).map(item => toolDetail(item)) : NO_DETAILS} />;
+        const boundary = index > 0 && turns[index - 1].session !== session;
+        return <Fragment key={`${anchor.key}:${anchor.ordinal}`}>
+          {boundary && <p className="agent-trace-limit agent-session-divider" role="separator">{t("chat.earlierSession")}</p>}
+          <TraceTurn turn={turn} session={session} anchor={anchor}
+            live={working && empty.kind !== "unavailable" && index === turns.length - 1 && session === 0}
+            kept={kept} hooks={hooks} onCopy={onCopyReply} lang={lang}
+            details={toolDetail ? turn.items.filter(item => item.detailRef).map(item => toolDetail(item)) : NO_DETAILS} />
+        </Fragment>;
       })}
     </div>
   </div>;

@@ -51,3 +51,29 @@ export function agentStreamSignature(
 ): string {
   return `${JSON.stringify(items)}|${working ? 1 : 0}|${loadState}|${truncated ? 1 : 0}|${detailRevision}`;
 }
+
+export type OlderRequest = {
+  /** Session to read; 0 is the current session. */
+  sessionIndex: number;
+  cursor: string | null;
+};
+
+type OlderState = {
+  agentTraceNext: string | null;
+  agentTraceHasEarlier: boolean;
+  agentTraceOlder: readonly { index: number; next: string | null; hasEarlier: boolean }[];
+};
+
+/**
+ * The next older read: the cursor of the oldest loaded session, or, at its top,
+ * the next session of the chain with no cursor. Null when nothing is older.
+ */
+export function olderRequestOf(state: OlderState, sessionsEnabled: boolean): OlderRequest | null {
+  const oldest = state.agentTraceOlder.at(-1);
+  const index = oldest?.index ?? 0;
+  const next = oldest ? oldest.next : state.agentTraceNext;
+  const hasEarlier = oldest ? oldest.hasEarlier : state.agentTraceHasEarlier;
+  if (next) return { sessionIndex: index, cursor: next };
+  if (sessionsEnabled && hasEarlier) return { sessionIndex: index + 1, cursor: null };
+  return null;
+}

@@ -44,4 +44,19 @@ describe("AgentTrace rolling RPC", () => {
     expect(await reader.detail("p1", "d1")).toEqual({ detailRef: "d1", input: "secret", output: "private", truncated: false });
     expect(calls).toEqual(["AgentTraceSummary", "AgentTraceDetail"]);
   });
+
+  test("sends session_index only when asked, and never to the legacy op", async () => {
+    const seen: Record<string, unknown>[] = [];
+    const page = { items: [], next_cursor: null, truncated: false, has_earlier_session: true };
+    const reader = new AgentTraceRPC(async (_op, params) => { seen.push(params); return page; });
+    expect((await reader.read("p1")).hasEarlierSession).toBe(true);
+    await reader.read("p1", null, 50, 2);
+    expect(seen[0]).toEqual({ pane_id: "p1", cursor: null, limit: 50 });
+    expect(seen[1]).toEqual({ pane_id: "p1", cursor: null, limit: 50, session_index: 2 });
+    const legacy = new AgentTraceRPC(async (op) => {
+      if (op === "AgentTraceSummary") throw new ProtocolError("unknown_op", op);
+      return legacyPage;
+    });
+    await expect(legacy.read("p1", null, 50, 1)).rejects.toMatchObject({ code: "unknown_op" });
+  });
 });

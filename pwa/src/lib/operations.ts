@@ -170,6 +170,8 @@ export type AgentTracePage = {
   items: AgentTraceItem[];
   nextCursor: string | null;
   truncated: boolean;
+  /** The pane's session chain holds a session before this one (summary pages only). */
+  hasEarlierSession?: boolean;
 };
 export type AgentTraceDetail = {
   detailRef: string;
@@ -476,7 +478,12 @@ export function parseAgentTraceSummaryPage(value: unknown): AgentTracePage {
   const cursor = result.next_cursor;
   if (cursor !== null && (typeof cursor !== "string" || cursor.length > 1024)) badResult("AgentTraceSummary 响应 next_cursor 非法");
   if (typeof result.truncated !== "boolean") badResult("AgentTraceSummary 响应 truncated 非法");
-  return { items: items as AgentTraceItem[], nextCursor: cursor, truncated: result.truncated };
+  return {
+    items: items as AgentTraceItem[],
+    nextCursor: cursor,
+    truncated: result.truncated,
+    hasEarlierSession: result.has_earlier_session === true,
+  };
 }
 
 export function parseAgentTraceDetail(value: unknown, expectedRef?: string): AgentTraceDetail {

@@ -13,6 +13,7 @@ import {
   setTraceLoadState,
   setTraceUnread,
   type ChatRecord,
+  type OlderSegment,
 } from "./trace-store";
 import {
   COMPOSE_MAX_PX, COMPOSE_MIN_PX, composeDraft, composeFocused, composeIME, setComposeDraft,
@@ -53,7 +54,7 @@ import {
   switchComposeView,
 } from "../drafts/compose-drafts";
 import { leaveFullTerminal } from "../full-terminal/full-terminal";
-import { agentEmptySpec, agentStreamSignature, type AgentEmptySpec } from "./model";
+import { agentEmptySpec, agentStreamSignature, olderRequestOf, type AgentEmptySpec, type OlderRequest } from "./model";
 import { publishAgentChatUI } from "./agent-chat-ui";
 import { captureTraceViewport, restoreTraceViewport } from "./viewport";
 
@@ -103,11 +104,35 @@ export function streamSig(items: AgentTraceItem[], working: boolean): string {
   );
 }
 
-function applyTracePage(page: AgentTracePage, older: boolean): boolean {
+/** The next older read, or null: the gate of every older load. */
+export function nextOlderRequest(): OlderRequest | null {
+  return olderRequestOf(chatSnapshot(), capabilityEnabled("agent_trace_sessions"));
+}
+
+/** An older session is its own segment: its pages merge with each other, never with another session. */
+function applyOlderSessionPage(page: AgentTracePage, sessionIndex: number): boolean {
+  const segments = chatSnapshot().agentTraceOlder;
+  const at = segments.findIndex((segment) => segment.index === sessionIndex);
+  const hasEarlier = page.hasEarlierSession === true;
+  const loaded = at >= 0 ? segments[at] : null;
+  const merged = loaded ? mergeAgentTraceSegments(page.items, loaded.items).items : [...page.items];
+  const segment = { index: sessionIndex, items: merged, next: page.nextCursor, hasEarlier };
+  const changed = !loaded || loaded.next !== segment.next || loaded.hasEarlier !== hasEarlier || merged.length !== loaded.items.length;
+  if (!changed) return false;
+  const list: OlderSegment[] = segments.map((item) => ({ ...item, items: [...item.items] }));
+  if (at >= 0) list[at] = segment;
+  else list.push(segment);
+  applyTrace({ agentTraceOlder: list });
+  return true;
+}
+
+function applyTracePage(page: AgentTracePage, older: OlderRequest | null): boolean {
+  const hasEarlier = page.hasEarlierSession === true;
+  if (older && older.sessionIndex > 0) return applyOlderSessionPage(page, older.sessionIndex);
   if (older) {
     if (!page.items.length) {
-      const changed = chatSnapshot().agentTraceNext !== page.nextCursor;
-      if (changed) applyTrace({ agentTraceNext: page.nextCursor });
+      const changed = chatSnapshot().agentTraceNext !== page.nextCursor || chatSnapshot().agentTraceHasEarlier !== hasEarlier;
+      if (changed) applyTrace({ agentTraceNext: page.nextCursor, agentTraceHasEarlier: hasEarlier });
       return changed;
     }
     const tailWasWholeView = chatSnapshot().agentTraceItems.length === chatSnapshot().agentTraceTail;
@@ -115,6 +140,7 @@ function applyTracePage(page: AgentTracePage, older: boolean): boolean {
     const patch: Partial<ChatRecord> = {
       agentTraceItems: merged.items,
       agentTraceNext: page.nextCursor,
+      agentTraceHasEarlier: hasEarlier,
     };
     if (tailWasWholeView) patch.agentTraceTail = Math.max(0, chatSnapshot().agentTraceTail - merged.overlap);
     applyTrace(patch);
@@ -132,6 +158,7 @@ function applyTracePage(page: AgentTracePage, older: boolean): boolean {
       agentTraceTail: page.items.length,
       agentTraceSig: sig,
       agentTraceNext: null,
+      agentTraceHasEarlier: hasEarlier,
     });
     absorbPending(page.items);
     return changed;
@@ -139,6 +166,7 @@ function applyTracePage(page: AgentTracePage, older: boolean): boolean {
   if (sig === current.agentTraceSig) {
     const changed = current.agentTraceItems.length === current.agentTraceTail && current.agentTraceNext !== page.nextCursor;
     if (current.agentTraceItems.length === current.agentTraceTail) applyTrace({ agentTraceNext: page.nextCursor });
+    if (current.agentTraceHasEarlier !== hasEarlier) applyTrace({ agentTraceHasEarlier: hasEarlier });
     absorbPending(page.items);
     return changed;
   }
@@ -151,6 +179,7 @@ function applyTracePage(page: AgentTracePage, older: boolean): boolean {
     agentTraceItems: merged.items,
     agentTraceTail: page.items.length - merged.overlap,
     agentTraceSig: sig,
+    agentTraceHasEarlier: hasEarlier,
   };
   if (prefix.length === 0) patch.agentTraceNext = page.nextCursor;
   applyTrace(patch);
@@ -410,12 +439,21 @@ export async function refreshAgentTrace(older = false): Promise<boolean> {
   return lane.promise;
 }
 
+/**
+ * With the chain capability every read names its session (0 = current), because
+ * the daemon reports `has_earlier_session` only when `session_index` is sent.
+ */
+function sessionIndexArg(target: OlderRequest): [number] | [] {
+  return capabilityEnabled("agent_trace_sessions") ? [target.sessionIndex] : [];
+}
+
 async function performAgentTraceRefresh(older = false): Promise<boolean> {
   const session = liveSession();
   const paneId = openPaneId();
   if (!session || !paneId || !isAgentChat() || !session.isConnected()) return false;
   if (chatSnapshot().agentTraceBusy) return false;
-  if (older && !chatSnapshot().agentTraceNext) return false;
+  const olderRequest = older ? nextOlderRequest() : null;
+  if (older && !olderRequest) return false;
   const request = ++traceRequest;
   const ownerVersion = currentTraceOwnerVersion();
   const measureColdLoad = !older && chatSnapshot().agentTraceLoadState === "cold" && !chatSnapshot().agentTraceItems.length;
@@ -431,11 +469,12 @@ async function performAgentTraceRefresh(older = false): Promise<boolean> {
   if (retiredTrace(request, ownerVersion, session, paneId)) return false;
   let changed = false;
   try {
-    let cursor: string | null = older ? chatSnapshot().agentTraceNext : null;
+    let target: OlderRequest = olderRequest ?? { sessionIndex: 0, cursor: null };
     let pulls = 0;
     const filling = !older;
     while (pulls < (filling ? OLDER_FILL_MAX : 1)) {
-      const page = await session.agentTrace(paneId, cursor, TRACE_PAGE);
+      const isOlder = target.cursor !== null || target.sessionIndex > 0;
+      const page = await session.agentTrace(paneId, target.cursor, TRACE_PAGE, ...sessionIndexArg(target));
       if (retiredTrace(request, ownerVersion, session, paneId)) return false;
       if (measureColdLoad && !measured) {
         track("pwa_agent_trace", {
@@ -450,11 +489,11 @@ async function performAgentTraceRefresh(older = false): Promise<boolean> {
       // while this RPC was in flight.
       const pageFollow = !older && (!beforeStream || atBottom(beforeStream));
       const viewport = beforeStream
-        ? captureTraceViewport(beforeStream, pageFollow, beforeSnapshot.agentTraceUnread, cursor === null ? "start" : "end")
+        ? captureTraceViewport(beforeStream, pageFollow, beforeSnapshot.agentTraceUnread, isOlder ? "end" : "start")
         : undefined;
       let applied = false;
       batch(() => {
-        applied = applyTracePage(page, cursor !== null);
+        applied = applyTracePage(page, isOlder ? target : null);
         applyTrace({
           agentTraceLoadState: "ready",
           ...(page.truncated ? { agentTraceTruncated: true } : {}),
@@ -468,16 +507,16 @@ async function performAgentTraceRefresh(older = false): Promise<boolean> {
         const current = streamEl();
         if (!patchAgentChat({
           follow: pageFollow,
-          older: cursor !== null,
+          older: isOlder,
           top: current?.scrollTop ?? 0,
           height: current?.scrollHeight ?? 0,
           viewport,
         })) commitView();
         if (retiredTrace(request, ownerVersion, session, paneId)) return false;
       }
-      if (cursor !== null && !applied) break;
+      if (isOlder && !applied) break;
       if (!filling || !firstTurnNeedsUser(chatSnapshot().agentTraceItems, chatSnapshot().agentTraceNext) || !chatSnapshot().agentTraceNext) break;
-      cursor = chatSnapshot().agentTraceNext;
+      target = { sessionIndex: 0, cursor: chatSnapshot().agentTraceNext };
     }
     setTraceLoadState("ready");
     if (retiredTrace(request, ownerVersion, session, paneId)) return false;
@@ -502,6 +541,8 @@ async function performAgentTraceRefresh(older = false): Promise<boolean> {
         agentTraceLoadState: "error",
         agentTraceItems: [],
         agentTraceNext: null,
+        agentTraceHasEarlier: false,
+        agentTraceOlder: [],
         agentTraceSig: "",
         agentTraceTail: 0,
         agentTraceTruncated: false,

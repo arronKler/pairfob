@@ -20,10 +20,22 @@ export type PromptProgress = {
   baselineStatus: AgentStatus;
   baselineSeq?: number;
 };
+/** One earlier session of the pane's chain; never merged with another session or cached. */
+export type OlderSegment = {
+  /** `session_index` of the segment (1 = the session before the current one). */
+  index: number;
+  items: AgentTraceItem[];
+  next: string | null;
+  hasEarlier: boolean;
+};
 export type ChatRecord = {
   promptProgress: PromptProgress | null;
   agentTraceItems: AgentTraceItem[];
   agentTraceNext: string | null;
+  /** The last current-session page said the pane has an earlier session. */
+  agentTraceHasEarlier: boolean;
+  /** Loaded earlier sessions, nearest first (ascending `index`). */
+  agentTraceOlder: OlderSegment[];
   agentTraceBusy: boolean;
   agentTraceNote: string;
   /** Some visible trace payload was clipped to fit the bounded response. */
@@ -65,6 +77,8 @@ const chatDomain = createDomain<ChatRecord>("chat", {
   promptProgress: null,
   agentTraceItems: [],
   agentTraceNext: null,
+  agentTraceHasEarlier: false,
+  agentTraceOlder: [],
   agentTraceBusy: false,
   agentTraceNote: "",
   agentTraceTruncated: false,
@@ -126,6 +140,8 @@ export function applyTracePage(entry: TracePageEntry): void {
   write((record) => {
     record.agentTraceItems = detach(entry.items);
     record.agentTraceNext = entry.nextCursor;
+    record.agentTraceHasEarlier = false;
+    record.agentTraceOlder = [];
     record.agentTraceNote = entry.note;
     record.agentTraceTruncated = entry.truncated;
     record.agentTraceSig = entry.signature;
@@ -197,6 +213,8 @@ function clearTraceRecord(record: ChatRecord): void {
   record.promptProgress = null;
   record.agentTraceItems = [];
   record.agentTraceNext = null;
+  record.agentTraceHasEarlier = false;
+  record.agentTraceOlder = [];
   record.agentTraceBusy = false;
   record.agentTraceNote = "";
   record.agentTraceTruncated = false;

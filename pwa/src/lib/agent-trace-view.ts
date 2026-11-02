@@ -85,7 +85,13 @@ export function firstTurnNeedsUser(items: readonly AgentTraceItem[], nextCursor:
   return !groupAgentTurns(items)[0]?.user;
 }
 
-export function turnKey(turn: AgentTurn): string {
+/** `session` is the session index of an older segment; the current session (0) keeps its bare key. */
+export function turnKey(turn: AgentTurn, session = 0): string {
+  const prefix = session > 0 ? `s${session}|` : "";
+  return prefix + bareTurnKey(turn);
+}
+
+function bareTurnKey(turn: AgentTurn): string {
   const user = turn.user?.text || "";
   const userPart = turn.user ? `u:${user.length}:${user.slice(0, 48)}` : "u:none";
   const first = turn.items[0];

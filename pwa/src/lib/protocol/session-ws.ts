@@ -349,8 +349,8 @@ class ReconnectingSession implements LiveSession {
   };
   history = (paneId: string, cursor: string | null = null, limit = 50) =>
     this.readRPC("History", { pane_id: paneId, cursor, limit });
-  agentTrace = async (paneId: string, cursor: string | null = null, limit = 50): Promise<AgentTracePage> =>
-    this.agentTraceRPC.read(paneId, cursor, limit);
+  agentTrace = async (paneId: string, cursor: string | null = null, limit = 50, sessionIndex?: number): Promise<AgentTracePage> =>
+    this.agentTraceRPC.read(paneId, cursor, limit, sessionIndex);
   agentTraceDetail = async (paneId: string, detailRef: string): Promise<AgentTraceDetail> =>
     this.agentTraceRPC.detail(paneId, detailRef);
   listWorktrees = (params: ListWorktreesInput) => this.readRPC("ListWorktrees", params);

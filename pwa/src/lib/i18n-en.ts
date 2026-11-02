@@ -510,6 +510,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "menu.composeLive": "Live",
 
   "chat.showEarlierTurns": "Show earlier turns",
+  "chat.earlierSession": "Earlier session",
   "hist.loadEarlier": "Load earlier",
 
   "trace.running": "Running",
