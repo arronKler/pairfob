@@ -1,5 +1,5 @@
 import { act } from "react";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { expectSameNode } from "../../../test-support/node-identity";
@@ -45,7 +45,11 @@ const live = {
 };
 
 const column = () => appRoot().querySelector<HTMLElement>("aside.inspector");
-const settle = (ms = 0) => act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, ms)); });
+/** Advance the fake clock and flush the promises the entrance resolves on. */
+const settle = (ms = 0) => act(async () => {
+  jest.advanceTimersByTime(ms);
+  for (let i = 0; i < 8; i += 1) await Promise.resolve();
+});
 
 async function resize(width: number): Promise<void> {
   await act(async () => {
@@ -82,9 +86,13 @@ beforeEach(async () => {
     mountTestApp();
     commitTest();
   });
+  // The entrance class lives for one motion window. Advance that window
+  // explicitly so a starved event loop cannot end it before the assertion.
+  jest.useFakeTimers();
 });
 
 afterEach(async () => {
+  jest.useRealTimers();
   unmountTestApp();
   await act(async () => {
     closeWorkspaceInspector();
