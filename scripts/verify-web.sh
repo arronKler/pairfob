@@ -2,8 +2,9 @@
 # Shared web gate. Production callers may set PAIRFOB_PACK_DL=1 to pack once.
 #
 # One entry point for local and CI: no arguments runs every part in order.
-# CI runs one part per job, and the tests part can take a shard of the PWA
-# suite, so a slow test file no longer serializes the whole gate.
+# CI runs one part per job, and each job decides its own scope at dispatch, so
+# the checks start together instead of waiting for the changes job. The tests
+# part takes a shard of the PWA suite, so one slow test file costs its shard.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PART=all
