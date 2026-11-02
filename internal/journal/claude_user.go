@@ -2,6 +2,7 @@ package journal
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -56,7 +57,11 @@ func claudeQueuedPrompt(a claudeAttachment) (string, time.Time, bool) {
 	if a.Type != "queued_command" || a.Origin.Kind != "human" || !a.HumanTurn || a.Prompt == "" {
 		return "", time.Time{}, false
 	}
-	return a.Prompt, parseClaudeTime(a.Timestamp), true
+	prompt := stripPastedContentTags(a.Prompt)
+	if prompt == "" {
+		return "", time.Time{}, false
+	}
+	return prompt, parseClaudeTime(a.Timestamp), true
 }
 
 func parseClaudeTime(text string) time.Time {
@@ -117,4 +122,18 @@ func (d *claudeDedup) pair(other, own map[string]time.Time, text string, at time
 	}
 	own[text] = at
 	return false
+}
+
+// pastedContentTag matches a line holding only the opening or closing tag of a
+// pasted_content block, with its line break.
+var pastedContentTag = regexp.MustCompile(`(?m)^[ \t]*</?pasted_content\b[^>\n]*>[ \t]*(?:\r?\n|$)`)
+
+// stripPastedContentTags removes the tag lines Claude wraps around pasted
+// text, keeping the text between and around them. It is for the owner's text
+// only.
+func stripPastedContentTags(text string) string {
+	if !strings.Contains(text, "pasted_content") {
+		return text
+	}
+	return strings.TrimSuffix(pastedContentTag.ReplaceAllString(text, ""), "\n")
 }

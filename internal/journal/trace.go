@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"strings"
+	"time"
 )
 
 // Event is one step on the agent execution timeline.
@@ -55,7 +56,19 @@ type parsedEvent struct {
 	lineStart     int
 	sourceOrdinal int
 	outputOnly    bool
+	// pairKind and at let the page drop the repeat of a Claude queued prompt;
+	// they never reach the wire and never move an event's address.
+	pairKind pairKind
+	at       time.Time
 }
+
+type pairKind int
+
+const (
+	pairNone pairKind = iota
+	pairQueued
+	pairUser
+)
 
 const (
 	// Trace fields often contain shell output with many JSON escapes. Budget the
@@ -360,6 +373,7 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 		CompactSummary bool             `json:"isCompactSummary"`
 		TranscriptOnly bool             `json:"isVisibleInTranscriptOnly"`
 		Origin         claudeOrigin     `json:"origin"`
+		Timestamp      string           `json:"timestamp"`
 		Attachment     claudeAttachment `json:"attachment"`
 		Message        struct {
 			Role    string          `json:"role"`
@@ -370,13 +384,15 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 		return nil
 	}
 	// Trace events are addressed by line and ordinal, so this parser keeps no
-	// state and cannot pair a queued prompt with a repeating user entry.
+	// state and drops nothing: it marks the queued prompt and the user entry
+	// with their time, and the page hides the repeat (see pairClaudeRepeats).
 	if item.Type == "attachment" {
-		if text, _, ok := claudeQueuedPrompt(item.Attachment); ok {
-			return []parsedEvent{{Event: Event{Type: "user", Text: text}}}
+		if text, at, ok := claudeQueuedPrompt(item.Attachment); ok {
+			return []parsedEvent{{Event: Event{Type: "user", Text: text}, pairKind: pairQueued, at: at}}
 		}
 		return nil
 	}
+	userAt := parseClaudeTime(item.Timestamp)
 	if (item.Type != "user" && item.Type != "assistant") || item.Message.Role != item.Type {
 		return nil
 	}
@@ -385,10 +401,13 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 	}
 	var text string
 	if json.Unmarshal(item.Message.Content, &text) == nil {
+		if item.Type == "user" {
+			text = stripPastedContentTags(text)
+		}
 		if text == "" || (item.Type == "user" && claudeInjectedText(text)) {
 			return nil
 		}
-		return []parsedEvent{{Event: Event{Type: item.Type, Text: text}}}
+		return []parsedEvent{claudeTraceText(item.Type, text, userAt)}
 	}
 	var blocks []struct {
 		Type      string          `json:"type"`
@@ -409,10 +428,13 @@ func parseClaudeTrace(line []byte) []parsedEvent {
 		case block.Type == "thinking" && block.Thinking != "":
 			out = append(out, parsedEvent{Event: Event{Type: "thinking", Text: block.Thinking}})
 		case block.Type == "text" && block.Text != "":
-			if item.Type == "user" && claudeInjectedText(block.Text) {
-				continue
+			blockText := block.Text
+			if item.Type == "user" {
+				if blockText = stripPastedContentTags(blockText); blockText == "" || claudeInjectedText(blockText) {
+					continue
+				}
 			}
-			out = append(out, parsedEvent{Event: Event{Type: item.Type, Text: block.Text}})
+			out = append(out, claudeTraceText(item.Type, blockText, userAt))
 		case item.Type == "assistant" && block.Type == "tool_use" && toolName.MatchString(block.Name):
 			out = append(out, parsedEvent{
 				Event: Event{Type: "tool", Name: block.Name, Input: compactJSON(block.Input)},
@@ -534,4 +556,35 @@ func grokMetaName(raw json.RawMessage) string {
 		return ""
 	}
 	return meta.Tool.Name
+}
+
+func claudeTraceText(role, text string, at time.Time) parsedEvent {
+	event := parsedEvent{Event: Event{Type: role, Text: text}}
+	if role == "user" {
+		event.pairKind, event.at = pairUser, at
+	}
+	return event
+}
+
+// pairClaudeRepeats drops, from the events of one page, the user entry that
+// repeats a queued prompt (or the queued prompt that repeats a user entry) of
+// the same text within claudeDuplicateWindow. A reply between them stays. Its
+// memory is one page: a pair split by a page boundary is shown twice.
+func pairClaudeRepeats(events []parsedEvent) []parsedEvent {
+	dedup := newClaudeDedup()
+	out := events[:0:0]
+	for _, event := range events {
+		switch event.pairKind {
+		case pairQueued:
+			if dedup.seenQueued(event.Text, event.at) {
+				continue
+			}
+		case pairUser:
+			if dedup.seenUser(event.Text, event.at) {
+				continue
+			}
+		}
+		out = append(out, event)
+	}
+	return out
 }

@@ -194,3 +194,101 @@ func anyEntries(entries []map[string]any) []any {
 	}
 	return out
 }
+
+const pastedBlock = "<pasted_content id=\"34e0\">\na\nb\n</pasted_content id=\"34e0\">"
+
+func TestClaudeHistoryPairsQueuedPromptWithPastedContentEntry(t *testing.T) {
+	got := readClaudeTexts(t,
+		queuedEntry("a\nb", "human", true, "2026-01-01T00:00:00Z"),
+		userEntry(pastedBlock, map[string]any{"timestamp": "2026-01-01T00:00:20Z"}),
+	)
+	if len(got) != 1 || got[0] != (Message{Role: "user", Text: "a\nb"}) {
+		t.Fatalf("messages=%+v", got)
+	}
+}
+
+func TestClaudeUserTextKeepsWordsAroundPastedContent(t *testing.T) {
+	text := "before\n" + pastedBlock + "\nafter"
+	got := readClaudeTexts(t, userEntry(text, nil))
+	if len(got) != 1 || got[0].Text != "before\na\nb\nafter" {
+		t.Fatalf("history=%+v", got)
+	}
+	root := t.TempDir()
+	writeLines(t, claudeTestPath(root), userEntry([]map[string]any{{"type": "text", "text": text}}, nil))
+	page, err := (&Reader{ClaudeRoot: root}).ReadTrace(claudeTestRef(), nil, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].Text != "before\na\nb\nafter" {
+		t.Fatalf("trace=%+v", page.Items)
+	}
+}
+
+func TestClaudeAssistantTextKeepsPastedContentTag(t *testing.T) {
+	const text = "see <pasted_content id=\"1\"> here"
+	got := readClaudeTexts(t, assistantEntry(text))
+	if len(got) != 1 || got[0].Text != text {
+		t.Fatalf("messages=%+v", got)
+	}
+}
+
+func traceUsers(t *testing.T, entries ...map[string]any) []Event {
+	t.Helper()
+	root := t.TempDir()
+	writeLines(t, claudeTestPath(root), anyEntries(entries)...)
+	page, err := (&Reader{ClaudeRoot: root}).ReadTrace(claudeTestRef(), nil, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return page.Items
+}
+
+func TestClaudeTracePairsQueuedPromptWithPastedContentEntry(t *testing.T) {
+	items := traceUsers(t,
+		queuedEntry("a\nb", "human", true, "2026-01-01T00:00:00Z"),
+		userEntry(pastedBlock, map[string]any{"timestamp": "2026-01-01T00:00:20Z"}),
+	)
+	if len(items) != 1 || items[0].Type != "user" || items[0].Text != "a\nb" {
+		t.Fatalf("items=%+v", items)
+	}
+}
+
+func TestClaudeTraceKeepsReplyBetweenPairedPrompts(t *testing.T) {
+	items := traceUsers(t,
+		queuedEntry("a\nb", "human", true, "2026-01-01T00:00:00Z"),
+		assistantEntry("reply"),
+		userEntry(pastedBlock, map[string]any{"timestamp": "2026-01-01T00:00:20Z"}),
+	)
+	if len(items) != 2 || items[0].Type != "user" || items[1].Text != "reply" {
+		t.Fatalf("items=%+v", items)
+	}
+}
+
+func TestClaudeTraceKeepsTextsMoreThanAMinuteApart(t *testing.T) {
+	items := traceUsers(t,
+		queuedEntry("a\nb", "human", true, "2026-01-01T00:00:00Z"),
+		userEntry(pastedBlock, map[string]any{"timestamp": "2026-01-01T00:02:00Z"}),
+	)
+	if len(items) != 2 {
+		t.Fatalf("items=%+v", items)
+	}
+}
+
+func TestClaudeTraceSummaryPairsAcrossLaterRead(t *testing.T) {
+	root := t.TempDir()
+	path := claudeTestPath(root)
+	reader := &Reader{ClaudeRoot: root}
+	writeLines(t, path, queuedEntry("a\nb", "human", true, "2026-01-01T00:00:00Z"))
+	first, err := reader.ReadTraceSummary(claudeTestRef(), nil, 20)
+	if err != nil || len(first.Items) != 1 {
+		t.Fatalf("first=%+v err=%v", first, err)
+	}
+	writeLines(t, path,
+		queuedEntry("a\nb", "human", true, "2026-01-01T00:00:00Z"),
+		userEntry(pastedBlock, map[string]any{"timestamp": "2026-01-01T00:00:20Z"}),
+	)
+	second, err := reader.ReadTraceSummary(claudeTestRef(), nil, 20)
+	if err != nil || len(second.Items) != 1 || second.Items[0].Text != "a\nb" {
+		t.Fatalf("second=%+v err=%v", second, err)
+	}
+}

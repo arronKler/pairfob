@@ -305,7 +305,12 @@ func (window *traceWindow) page(ref Ref, scanStart int, limited bool) TracePage 
 		page.Items = append(page.Items, window.orphan.Event)
 		page.SummaryTruncated = page.SummaryTruncated || window.orphan.SummaryTruncated
 	}
-	for _, event := range window.items {
+	shown := window.items
+	if len(page.Items) > 0 {
+		shown = append([]parsedEvent{*window.orphan}, shown...)
+		page.Items = page.Items[:0]
+	}
+	for _, event := range pairClaudeRepeats(shown) {
 		item := event.Event
 		if item.Type == "tool" {
 			item.DetailRef = encodeTraceDetailRef(ref, event)

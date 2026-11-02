@@ -511,6 +511,9 @@ func parseClaudeWith(line []byte, dedup *claudeDedup) (Message, bool) {
 	}
 	var text string
 	if json.Unmarshal(item.Message.Content, &text) == nil {
+		if item.Type == "user" {
+			text = stripPastedContentTags(text)
+		}
 		if text == "" || (item.Type == "user" && claudeInjectedText(text)) {
 			return Message{}, false
 		}
@@ -528,10 +531,13 @@ func parseClaudeWith(line []byte, dedup *claudeDedup) (Message, bool) {
 	for _, block := range blocks {
 		switch {
 		case block.Type == "text" && block.Text != "":
-			if item.Type == "user" && claudeInjectedText(block.Text) {
-				continue
+			blockText := block.Text
+			if item.Type == "user" {
+				if blockText = stripPastedContentTags(blockText); blockText == "" || claudeInjectedText(blockText) {
+					continue
+				}
 			}
-			parts = append(parts, block.Text)
+			parts = append(parts, blockText)
 		case item.Type == "assistant" && block.Type == "tool_use" && toolName.MatchString(block.Name):
 			parts = append(parts, "工具 · "+block.Name)
 		}
