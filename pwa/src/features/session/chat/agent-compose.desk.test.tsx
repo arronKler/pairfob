@@ -159,17 +159,21 @@ describe("the idle send is a round arrow", () => {
     expect(button.textContent).toBe("");
   });
 
-  test("a labelled kind keeps its word even when compact", () => {
-    act(() => {
-      renderReact(createElement(SendButton, {
-        kind: "stop", percent: 0, className: "send-btn", compact: true,
-        onSend: () => undefined, stopTarget: null, longPressStops: false,
-      }));
-    });
-    const button = appRoot().querySelector<HTMLButtonElement>(".send-btn")!;
-    expect(button.textContent).toBe(t("compose2.stop"));
-    expect(button.querySelector("svg")).not.toBeNull(); // the square mark, not an arrow face
-    expect(button.getAttribute("aria-label")).toBe(t("compose2.stopAria"));
+  test("every compact kind wears its circle with no word on it", () => {
+    for (const [kind, aria] of [["stop", t("compose2.stopAria")], ["stopping", t("compose2.stoppingAria")], ["force", t("compose2.forceAria")]] as const) {
+      act(() => {
+        renderReact(createElement(SendButton, {
+          kind, percent: 0, className: "send-btn", compact: true,
+          onSend: () => undefined, stopTarget: null, longPressStops: false,
+        }));
+      });
+      const button = appRoot().querySelector<HTMLButtonElement>(".send-btn")!;
+      // The face is a mark in the send's circle, named by its aria label.
+      expect(button.textContent).toBe("");
+      expect(button.querySelector("svg, .spinner")).not.toBeNull();
+      expect(button.getAttribute("aria-label")).toBe(aria);
+      act(unmountReact);
+    }
   });
 
   test("a caller that does not ask for compact keeps its word", () => {
