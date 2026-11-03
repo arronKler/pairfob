@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"runtime"
 	"slices"
+	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -15,9 +18,25 @@ const (
 	// traceCacheAnchorBytes is how much of the parsed prefix a resumed read checks
 	// still matches before it trusts the cached window as append-only.
 	traceCacheAnchorBytes = 256
+	// A window large enough to be worth splitting is parsed on several cores.
+	// Small reads keep the plain path: a goroutine costs more than it saves.
+	traceParallelMinBytes = 256 << 10
+	traceParallelWorkers  = 8
 )
 
 type traceParser func([]byte) []parsedEvent
+
+// traceDataPool reuses the buffer a growing tail window is read into. A cold
+// read doubles its window a few times; keeping that memory lets the next cold
+// session start without allocating it again.
+var traceDataPool sync.Pool
+
+func traceDataBuffer(size int) []byte {
+	if buffer, ok := traceDataPool.Get().([]byte); ok && cap(buffer) >= size {
+		return buffer[:size]
+	}
+	return make([]byte, size)
+}
 
 type traceCacheKey struct {
 	path    string
@@ -271,10 +290,26 @@ func readTrace(source *transcript, ref Ref, end, limit int, parse traceParser, o
 	start := end
 	chunkSize := traceInitialReadBytes
 	var data []byte
+	defer func() {
+		if data != nil {
+			traceDataPool.Put(data[:0])
+		}
+	}()
 	var window traceWindow
 	alignedStart := end
 	scanned := 0
 	limited := false
+	// A model-aware parser carries context from one record to the next, so it
+	// must see the whole window in order. The plain parsers are line-local:
+	// what they already parsed is kept when the window grows, and only the
+	// bytes that were not parsed before are read again.
+	var stateful traceParser
+	if options.Models {
+		stateful = traceParserWithModels(ref.Agent, parse)
+	}
+	parsedFrom := end
+	parsed := false
+	skipped := false
 
 	for {
 		remainingBudget := maxScanBytes - scanned
@@ -284,15 +319,29 @@ func readTrace(source *transcript, ref Ref, end, limit int, parse traceParser, o
 		}
 		readBytes := min(chunkSize, start, remainingBudget)
 		nextStart := start - readBytes
-		chunk := make([]byte, readBytes)
-		read, err := source.reader.ReadAt(chunk, int64(nextStart))
+		// Grow the window at the front in one movable buffer: shift what was
+		// already read to the right, then read the older bytes into the space.
+		// Reusing the buffer keeps a growing window from allocating a new copy
+		// on every doubling.
+		oldLen := len(data)
+		if cap(data) < oldLen+readBytes {
+			grown := traceDataBuffer(oldLen + readBytes)
+			copy(grown[readBytes:], data)
+			if data != nil {
+				traceDataPool.Put(data[:0])
+			}
+			data = grown
+		} else {
+			data = data[:oldLen+readBytes]
+			copy(data[readBytes:], data[:oldLen])
+		}
+		read, err := source.reader.ReadAt(data[:readBytes], int64(nextStart))
 		if err != nil && err != io.EOF {
 			return traceRead{}, err
 		}
 		if read != readBytes {
 			return traceRead{}, io.ErrUnexpectedEOF
 		}
-		data = append(chunk, data...)
 		scanned += readBytes
 		start = nextStart
 
@@ -307,11 +356,24 @@ func readTrace(source *transcript, ref Ref, end, limit int, parse traceParser, o
 			view = view[newline+1:]
 			alignedStart += newline + 1
 		}
-		windowParser := parse
-		if options.Models {
-			windowParser = traceParserWithModels(ref.Agent, parse)
+		if stateful != nil {
+			window, err = parseTraceWindow(view, alignedStart, limit, stateful, options)
+		} else {
+			var fresh []parsedEvent
+			freshSkipped := false
+			if parsedFrom > alignedStart {
+				end := min(parsedFrom-alignedStart, len(view))
+				fresh, freshSkipped = parseRegion(view[:end], alignedStart, parse)
+				parsedFrom = alignedStart
+				skipped = skipped || freshSkipped
+			}
+			if !parsed {
+				window = buildTraceWindow(fresh, skipped, limit, options)
+				parsed = true
+			} else {
+				window = prependTraceWindow(fresh, freshSkipped, window, options)
+			}
 		}
-		window, err = parseTraceWindow(view, alignedStart, limit, windowParser, options)
 		if err != nil {
 			return traceRead{}, err
 		}
@@ -360,22 +422,8 @@ func extendTraceWindow(window traceWindow, data []byte, base, limit int, parse t
 
 func parseTraceWindowInto(window traceWindow, data []byte, base, limit int, parse traceParser, options TraceOptions) (traceWindow, error) {
 	window.limit = limit
-	dropFront := func() {
-		if len(window.items) == 0 {
-			return
-		}
-		window.older = true
-		if turnHead(window.items[0].Type) {
-			copy := window.items[0]
-			window.orphan = &copy
-		}
-		window.pageBytes -= eventSize(window.items[0].Event)
-		window.items = window.items[1:]
-		window.starts = window.starts[1:]
-	}
-
 	position := base
-	err := forEachLine(bytes.NewReader(data), maxTraceLine, func(line []byte, lineSize int, oversized bool) bool {
+	forEachLineBytes(data, maxTraceLine, func(line []byte, lineSize int, oversized bool) bool {
 		lineStart := position
 		position += lineSize
 		if oversized {
@@ -386,66 +434,227 @@ func parseTraceWindowInto(window traceWindow, data []byte, base, limit int, pars
 			return true
 		}
 		for ordinal, event := range parse(line) {
-			if event.settles {
-				window.settleBefore(lineStart)
-				if event.Type == "" {
-					continue
-				}
-			}
-			event, keep := options.adapt(event)
-			if !keep {
-				continue
-			}
 			event.lineStart = lineStart
 			event.sourceOrdinal = ordinal
-			if event.outputOnly {
-				if item, attached := outputTarget(window.items, event.call, event.Output); attached {
-					if item != nil {
-						window.pageBytes -= eventSize(item.Event)
-						attachOutput(item, event)
-						item.Event, item.DetailTruncated = clipEvent(item.Event, item.DetailTruncated)
-						item.Event, item.DetailTruncated = clipEventToLimit(item.Event, maxTraceItemsBytes-window.pageBytes, item.DetailTruncated)
-						window.truncated = window.truncated || item.DetailTruncated
-						window.pageBytes += eventSize(item.Event)
-					}
-					continue
-				}
-				if event.Name == "" {
-					continue
-				}
-			}
-			if canMerge(window.items, event) {
-				last := &window.items[len(window.items)-1]
-				window.pageBytes -= eventSize(last.Event)
-				last.Text += event.Text
-				last.Models = mergeTraceModels(last.Models, event.Models)
-				var clipped bool
-				last.Event, clipped = clipEvent(last.Event, false)
-				last.Event, clipped = clipEventToLimit(last.Event, maxTraceItemsBytes-window.pageBytes, clipped)
-				last.SummaryTruncated = last.SummaryTruncated || clipped
-				window.truncated = window.truncated || clipped
-				window.pageBytes += eventSize(last.Event)
-				continue
-			}
-			var clipped bool
-			event.Event, clipped = clipEvent(event.Event, false)
-			if event.Type == "tool" {
-				event.DetailTruncated = clipped
-			} else {
-				event.SummaryTruncated = clipped
-			}
-			window.truncated = window.truncated || clipped
-			size := eventSize(event.Event)
-			for len(window.items) >= limit || (len(window.items) > 0 && window.pageBytes+size > maxTraceItemsBytes) {
-				dropFront()
-			}
-			window.items = append(window.items, event)
-			window.starts = append(window.starts, lineStart)
-			window.pageBytes += size
+			window.addEvent(event, options)
 		}
 		return true
 	})
-	return window, err
+	return window, nil
+}
+
+// buildTraceWindow folds records that were parsed earlier into one page. An
+// enlarged tail window replays the records it already has instead of reading
+// them from disk again; folding is cheap next to JSON decoding them.
+func buildTraceWindow(events []parsedEvent, skipped bool, limit int, options TraceOptions) traceWindow {
+	window := traceWindow{
+		items: make([]parsedEvent, 0, limit), starts: make([]int, 0, limit), limit: limit,
+		skipped: skipped,
+	}
+	for _, event := range events {
+		window.addEvent(event, options)
+	}
+	return window
+}
+
+// prependTraceWindow folds records older than the window in front of it. The
+// retained items were already adapted and clipped; folding them again keeps
+// the byte budget, message merges and tool-output attachments continuous
+// across the boundary without re-reading the records behind them.
+//
+// The window may already have dropped older items. Those are newer than every
+// record being prepended, so their turn head stays the boundary head: a fresh
+// record can only take it over when the previous window had none.
+func prependTraceWindow(events []parsedEvent, skipped bool, tail traceWindow, options TraceOptions) traceWindow {
+	window := traceWindow{
+		items: make([]parsedEvent, 0, tail.limit), starts: make([]int, 0, tail.limit),
+		limit: tail.limit, skipped: tail.skipped || skipped, truncated: tail.truncated,
+		older: tail.older, orphan: tail.orphan,
+	}
+	for _, event := range events {
+		window.addEvent(event, options)
+	}
+	for _, item := range tail.items {
+		window.addEvent(item, options)
+	}
+	return window
+}
+
+// addEvent places one parsed record in the window: attach a tool result to its
+// call, merge a continuation of the previous message, or append a new item.
+func (window *traceWindow) addEvent(event parsedEvent, options TraceOptions) {
+	if event.settles {
+		window.settleBefore(event.lineStart)
+		if event.Type == "" {
+			return
+		}
+	}
+	if !event.adapted {
+		var keep bool
+		event, keep = options.adapt(event)
+		if !keep {
+			return
+		}
+		event.adapted = true
+	}
+	if event.outputOnly {
+		if item, attached := outputTarget(window.items, event.call, event.Output); attached {
+			if item != nil {
+				window.pageBytes -= item.size
+				attachOutput(item, event)
+				item.Event, _, item.DetailTruncated = clipEventSize(item.Event, item.DetailTruncated)
+				item.Event, item.size, item.DetailTruncated = clipEventToLimitSize(item.Event, maxTraceItemsBytes-window.pageBytes, item.DetailTruncated)
+				window.truncated = window.truncated || item.DetailTruncated
+				window.pageBytes += item.size
+			}
+			return
+		}
+		if event.Name == "" {
+			return
+		}
+	}
+	if canMerge(window.items, event) {
+		last := &window.items[len(window.items)-1]
+		window.pageBytes -= last.size
+		last.Text += event.Text
+		last.Models = mergeTraceModels(last.Models, event.Models)
+		var clipped bool
+		last.Event, _, clipped = clipEventSize(last.Event, false)
+		last.Event, last.size, clipped = clipEventToLimitSize(last.Event, maxTraceItemsBytes-window.pageBytes, clipped)
+		last.SummaryTruncated = last.SummaryTruncated || clipped
+		window.truncated = window.truncated || clipped
+		window.pageBytes += last.size
+		return
+	}
+	var clipped bool
+	event.Event, event.size, clipped = clipEventSize(event.Event, false)
+	if event.Type == "tool" {
+		event.DetailTruncated = event.DetailTruncated || clipped
+	} else {
+		event.SummaryTruncated = event.SummaryTruncated || clipped
+	}
+	window.truncated = window.truncated || clipped
+	for len(window.items) >= window.limit || (len(window.items) > 0 && window.pageBytes+event.size > maxTraceItemsBytes) {
+		window.dropFront()
+	}
+	window.items = append(window.items, event)
+	window.starts = append(window.starts, event.lineStart)
+	window.pageBytes += event.size
+}
+
+// dropFront forgets the oldest item. The boundary turn head is the newest one
+// dropped; a prepended window may still drop records that are older than a head
+// its own window already lost, so the offsets have to decide.
+func (window *traceWindow) dropFront() {
+	if len(window.items) == 0 {
+		return
+	}
+	window.older = true
+	if turnHead(window.items[0].Type) && (window.orphan == nil || window.items[0].lineStart >= window.orphan.lineStart) {
+		copy := window.items[0]
+		window.orphan = &copy
+	}
+	window.pageBytes -= window.items[0].size
+	window.items = window.items[1:]
+	window.starts = window.starts[1:]
+}
+
+// traceParseChunk is the unit workers claim. Records differ enormously in
+// cost (a screenshot is scanned, a text result is decoded), so fixed byte
+// ranges balance poorly; small chunks let an idle core take the next one.
+const traceParseChunk = 128 << 10
+
+// parseRegion parses every record of data, which begins at absolute offset
+// base. Records are line-local, so a large region is split at line boundaries
+// and parsed on several cores; the result keeps the records in file order.
+func parseRegion(data []byte, base int, parse traceParser) ([]parsedEvent, bool) {
+	if len(data) < traceParallelMinBytes {
+		return parseRegionSpan(data, base, parse)
+	}
+	workers := min(runtime.GOMAXPROCS(0), traceParallelWorkers)
+	bounds := chunkBounds(data, workers)
+	if len(bounds) <= 2 {
+		return parseRegionSpan(data, base, parse)
+	}
+	parts := make([][]parsedEvent, len(bounds)-1)
+	skips := make([]bool, len(parts))
+	var next atomic.Int64
+	var wait sync.WaitGroup
+	for range min(workers, len(parts)) {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= len(parts) {
+					return
+				}
+				parts[i], skips[i] = parseRegionSpan(data[bounds[i]:bounds[i+1]], base+bounds[i], parse)
+			}
+		}()
+	}
+	wait.Wait()
+	total, skipped := 0, false
+	for i, part := range parts {
+		total += len(part)
+		skipped = skipped || skips[i]
+	}
+	events := make([]parsedEvent, 0, total)
+	for _, part := range parts {
+		events = append(events, part...)
+	}
+	return events, skipped
+}
+
+// chunkBounds divides data into line-aligned ranges of about traceParseChunk
+// bytes. A line counts whole, so one enormous record still gets a boundary
+// after it and the records behind it can be parsed alongside it.
+func chunkBounds(data []byte, workers int) []int {
+	chunks := len(data) / traceParseChunk
+	if chunks < workers {
+		chunks = workers
+	}
+	if chunks > 256 {
+		chunks = 256
+	}
+	bounds := make([]int, 0, chunks+1)
+	bounds = append(bounds, 0)
+	target := len(data) / chunks
+	pos := 0
+	for len(bounds) <= chunks && pos < len(data) {
+		newline := bytes.IndexByte(data[pos:], '\n')
+		if newline < 0 {
+			break
+		}
+		pos += newline + 1
+		if pos >= len(data) {
+			break
+		}
+		if pos >= target*len(bounds) {
+			bounds = append(bounds, pos)
+		}
+	}
+	return append(bounds, len(data))
+}
+
+func parseRegionSpan(data []byte, base int, parse traceParser) ([]parsedEvent, bool) {
+	var events []parsedEvent
+	skipped := false
+	forEachLineBytes(data, maxTraceLine, func(line []byte, lineSize int, oversized bool) bool {
+		lineStart := base
+		base += lineSize
+		if oversized {
+			skipped = true
+			return true
+		}
+		for ordinal, event := range parse(line) {
+			event.lineStart = lineStart
+			event.sourceOrdinal = ordinal
+			events = append(events, event)
+		}
+		return true
+	})
+	return events, skipped
 }
 
 // settleBefore marks unresulted tools recorded before lineStart as done: a
@@ -475,8 +684,8 @@ func traceWindowComplete(window traceWindow, atStart bool) bool {
 
 func (window *traceWindow) page(ref Ref, scanStart int, limited bool) TracePage {
 	if window.orphan != nil {
-		for len(window.items) > 1 && window.pageBytes+eventSize(window.orphan.Event) > maxTraceItemsBytes {
-			window.pageBytes -= eventSize(window.items[0].Event)
+		for len(window.items) > 1 && window.pageBytes+window.orphan.size > maxTraceItemsBytes {
+			window.pageBytes -= window.items[0].size
 			window.items = window.items[1:]
 			window.starts = window.starts[1:]
 		}
@@ -485,7 +694,7 @@ func (window *traceWindow) page(ref Ref, scanStart int, limited bool) TracePage 
 		Items: make([]Event, 0, len(window.items)+1), Truncated: window.truncated || window.skipped || limited,
 		SummaryTruncated: window.skipped || limited,
 	}
-	if window.orphan != nil && len(window.items) < window.limit && (len(window.items) == 0 || !turnHead(window.items[0].Type)) && window.pageBytes+eventSize(window.orphan.Event) <= maxTraceItemsBytes {
+	if window.orphan != nil && len(window.items) < window.limit && (len(window.items) == 0 || !turnHead(window.items[0].Type)) && window.pageBytes+window.orphan.size <= maxTraceItemsBytes {
 		page.Items = append(page.Items, window.orphan.Event)
 		page.SummaryTruncated = page.SummaryTruncated || window.orphan.SummaryTruncated
 	}

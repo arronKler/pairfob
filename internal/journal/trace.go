@@ -64,6 +64,14 @@ type parsedEvent struct {
 	lineStart     int
 	sourceOrdinal int
 	outputOnly    bool
+	// adapted marks an event already mapped to the caller's vocabulary, so a
+	// window that grows from the front does not derive labels and writes again
+	// from input that was clipped since.
+	adapted bool
+	// size is the event's encoded size for the page budget, measured after the
+	// last change to its fields. Encoding large outputs is not free, and every
+	// add, merge and drop asks for the same number.
+	size int
 	// unresulted marks a tool whose agent records no result for it; settles
 	// marks a record that proves every earlier such tool has finished. An
 	// event that only settles has no Type and never enters a page.
@@ -88,31 +96,46 @@ func eventSize(ev Event) int {
 }
 
 func clipEvent(ev Event, truncated bool) (Event, bool) {
-	return clipEventToLimit(ev, maxTraceEventBytes, truncated)
+	ev, _, truncated = clipEventSize(ev, truncated)
+	return ev, truncated
+}
+
+// clipEventSize clips an event and returns the encoded size it measured, so
+// the page budget does not have to encode the same event again.
+func clipEventSize(ev Event, truncated bool) (Event, int, bool) {
+	return clipEventToLimitSize(ev, maxTraceEventBytes, truncated)
 }
 
 func clipEventToLimit(ev Event, limit int, truncated bool) (Event, bool) {
+	ev, _, truncated = clipEventToLimitSize(ev, limit, truncated)
+	return ev, truncated
+}
+
+func clipEventToLimitSize(ev Event, limit int, truncated bool) (Event, int, bool) {
 	ev.Text, truncated = clip(ev.Text, maxMessageBytes, truncated)
 	ev.Input, truncated = clip(ev.Input, maxMessageBytes, truncated)
 	ev.Output, truncated = clipHeadTail(ev.Output, maxMessageBytes, truncated)
-	for eventSize(ev) > limit {
+	size := eventSize(ev)
+	for size > limit {
 		field := largestEventField(&ev)
 		if field == nil {
 			break
 		}
-		before := eventSize(ev)
+		before := size
 		if field == &ev.Output {
 			*field = shrinkHeadTail(*field)
 		} else {
 			*field = shrinkEventField(*field)
 		}
 		// Keep the loop strictly decreasing even if JSON escaping rules change.
-		if eventSize(ev) >= before {
+		size = eventSize(ev)
+		if size >= before {
 			*field = ""
+			size = eventSize(ev)
 		}
 		truncated = true
 	}
-	return ev, truncated
+	return ev, size, truncated
 }
 
 func shrinkEventField(value string) string {
@@ -184,13 +207,41 @@ func largestEventField(ev *Event) *string {
 	return largest
 }
 
-func compactJSON(raw json.RawMessage) string {
-	if len(raw) == 0 {
+// rawValue is a json.RawMessage that borrows the decoder's input instead of
+// copying it. A transcript record only needs its raw fields while its own line
+// is being parsed, so a large content array is never duplicated.
+type rawValue []byte
+
+func (r *rawValue) UnmarshalJSON(data []byte) error {
+	*r = data
+	return nil
+}
+
+// claudeTraceRecord is the part of a Claude Code record the trace reads. The
+// decoder can fill it from the whole line, or a structural scan can fill it
+// from those fields alone.
+type claudeTraceRecord struct {
+	claudeRecordFlags
+	Type      string          `json:"type"`
+	Subtype   string          `json:"subtype"`
+	Timestamp json.RawMessage `json:"timestamp"`
+	Message   struct {
+		Role    string   `json:"role"`
+		Model   string   `json:"model"`
+		Content rawValue `json:"content"`
+	} `json:"message"`
+}
+
+func compactJSON(raw []byte) string {
+	switch firstJSONByte(raw) {
+	case 0, 'n':
 		return ""
-	}
-	var asString string
-	if json.Unmarshal(raw, &asString) == nil {
-		return asString
+	case '"':
+		var asString string
+		if json.Unmarshal(raw, &asString) == nil {
+			return asString
+		}
+		return strings.TrimSpace(string(raw))
 	}
 	var buf bytes.Buffer
 	if err := json.Compact(&buf, raw); err == nil {
@@ -199,26 +250,36 @@ func compactJSON(raw json.RawMessage) string {
 	return strings.TrimSpace(string(raw))
 }
 
-func flattenToolContent(raw json.RawMessage) string {
+func flattenToolContent(raw []byte) string {
 	return flattenToolContentAt(raw, true)
 }
 
-func flattenToolContentAt(raw json.RawMessage, fallback bool) string {
-	if len(raw) == 0 || string(raw) == "null" {
+func flattenToolContentAt(raw []byte, fallback bool) string {
+	switch firstJSONByte(raw) {
+	case 0, 'n':
+		// Empty, or the literal null: there is no text to show.
 		return ""
-	}
-	var asString string
-	if json.Unmarshal(raw, &asString) == nil {
-		return asString
-	}
-	var blocks []struct {
-		Type    string          `json:"type"`
-		Text    string          `json:"text"`
-		Content json.RawMessage `json:"content"`
-	}
-	if json.Unmarshal(raw, &blocks) == nil {
+	case '"':
+		var asString string
+		if json.Unmarshal(raw, &asString) == nil {
+			return asString
+		}
+		return ""
+	case '[':
+		var blocks []struct {
+			Type    string   `json:"type"`
+			Text    string   `json:"text"`
+			Content rawValue `json:"content"`
+		}
+		if json.Unmarshal(raw, &blocks) != nil {
+			break
+		}
 		parts := make([]string, 0, len(blocks))
+		imageOnly := len(blocks) > 0
 		for _, block := range blocks {
+			if block.Type != "image" && block.Type != "input_image" {
+				imageOnly = false
+			}
 			if block.Text != "" && (block.Type == "text" || block.Type == "input_text" || block.Type == "" || block.Type == "content") {
 				parts = append(parts, block.Text)
 			}
@@ -229,18 +290,36 @@ func flattenToolContentAt(raw json.RawMessage, fallback bool) string {
 		if len(parts) > 0 {
 			return strings.Join(parts, "\n")
 		}
-	}
-	var obj struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	if json.Unmarshal(raw, &obj) == nil && obj.Text != "" {
-		return obj.Text
+		if imageOnly {
+			// A screenshot has no text form. Its base64 payload is not output.
+			return ""
+		}
+	case '{':
+		var obj struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(raw, &obj) == nil && obj.Text != "" {
+			return obj.Text
+		}
 	}
 	if !fallback {
 		return ""
 	}
 	return compactJSON(raw)
+}
+
+// firstJSONByte is the first byte of a JSON value that is not whitespace, or 0.
+// Tool content arrives as raw JSON, so its shape is known without decoding it.
+func firstJSONByte(raw []byte) byte {
+	for _, char := range raw {
+		switch char {
+		case ' ', '\t', '\r', '\n':
+			continue
+		}
+		return char
+	}
+	return 0
 }
 
 func grokToolName(title, metaName, kind string) string {
@@ -290,6 +369,11 @@ func outputTarget(window []parsedEvent, call, output string) (*parsedEvent, bool
 // The parsers name their result so one deferred stampEvents dates every
 // return path with the record's own timestamp.
 func parseCodexTrace(line []byte) (events []parsedEvent) {
+	// Session metadata and turn bookkeeping share the file with the records
+	// the chat reads; their type alone rules them out.
+	if kind, ok := topLevelJSONType(line); ok && kind != "compacted" && kind != "event_msg" && kind != "response_item" {
+		return nil
+	}
 	var item struct {
 		Type      string          `json:"type"`
 		Timestamp json.RawMessage `json:"timestamp"`
@@ -425,20 +509,36 @@ func parseCodexTrace(line []byte) (events []parsedEvent) {
 }
 
 func parseClaudeTrace(line []byte) (events []parsedEvent) {
-	var item struct {
-		claudeRecordFlags
-		Type      string          `json:"type"`
-		Subtype   string          `json:"subtype"`
-		Timestamp json.RawMessage `json:"timestamp"`
-		Message   struct {
-			Role    string          `json:"role"`
-			Model   string          `json:"model"`
-			Content json.RawMessage `json:"content"`
-		} `json:"message"`
-	}
-	if json.Unmarshal(line, &item) != nil {
+	// Claude Code writes session bookkeeping (attachments, request blobs,
+	// titles) beside the conversation. The chat never shows those records, so
+	// a record whose own type is none of the three the parser reads is dropped
+	// without decoding it.
+	if kind, ok := topLevelJSONType(line); ok && kind != "user" && kind != "assistant" && kind != "system" {
 		return nil
 	}
+	// A screenshot tool result is mostly base64 and has no chat text. From the
+	// size where decoding it would cost more than proving its shape, skip it
+	// before the JSON decoder copies the payload.
+	if len(line) >= claudeImagePrefilterMin && bytes.Contains(line[:claudeImagePrefilterHint], []byte(`"tool_result"`)) && claudeImageOnlyUserRecord(line) {
+		return nil
+	}
+	// Decode only the fields the trace reads. Claude Code writes the same tool
+	// result twice (message.content and the top-level toolUseResult), and the
+	// decoder would scan both.
+	item, ok := scanClaudeTraceRecord(line)
+	if !ok {
+		item = claudeTraceRecord{}
+		if json.Unmarshal(line, &item) != nil {
+			return nil
+		}
+	}
+	return parseClaudeRecord(item)
+}
+
+// parseClaudeRecord turns one decoded record into trace events. The record may
+// come from the structural scan or from decoding the whole line; both must
+// produce the same events.
+func parseClaudeRecord(item claudeTraceRecord) (events []parsedEvent) {
 	defer func() { stampEvents(events, item.Timestamp) }()
 	if item.Type == "system" && item.Subtype == "compact_boundary" && !item.IsSidechain {
 		return []parsedEvent{{Event: Event{Type: EventCompaction}}}
@@ -450,7 +550,11 @@ func parseClaudeTrace(line []byte) (events []parsedEvent) {
 		return nil
 	}
 	var text string
-	if json.Unmarshal(item.Message.Content, &text) == nil {
+	content := firstJSONByte(item.Message.Content)
+	if content == '"' {
+		if json.Unmarshal(item.Message.Content, &text) != nil {
+			return nil
+		}
 		if item.Type == "user" {
 			if events, ok := claudeShellEvents(text); ok {
 				return events
@@ -465,16 +569,19 @@ func parseClaudeTrace(line []byte) (events []parsedEvent) {
 		}
 		return []parsedEvent{{Event: Event{Type: item.Type, Text: text}}}
 	}
+	if content != '[' {
+		return nil
+	}
 	var blocks []struct {
-		Type      string          `json:"type"`
-		Text      string          `json:"text"`
-		Thinking  string          `json:"thinking"`
-		Name      string          `json:"name"`
-		ID        string          `json:"id"`
-		ToolUseID string          `json:"tool_use_id"`
-		IsError   bool            `json:"is_error"`
-		Input     json.RawMessage `json:"input"`
-		Content   json.RawMessage `json:"content"`
+		Type      string   `json:"type"`
+		Text      string   `json:"text"`
+		Thinking  string   `json:"thinking"`
+		Name      string   `json:"name"`
+		ID        string   `json:"id"`
+		ToolUseID string   `json:"tool_use_id"`
+		IsError   bool     `json:"is_error"`
+		Input     rawValue `json:"input"`
+		Content   rawValue `json:"content"`
 	}
 	if json.Unmarshal(item.Message.Content, &blocks) != nil {
 		return nil

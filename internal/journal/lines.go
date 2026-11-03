@@ -12,6 +12,36 @@ import (
 // page marked truncated instead of failing every older page.
 const maxTraceLine = 8 << 20
 
+// forEachLineBytes calls fn for each line of data without copying it, including
+// a final unterminated one. size is the number of bytes the line occupied,
+// newline included. Lines longer than limit are reported with oversized=true
+// and an empty body. fn returns false to stop early.
+func forEachLineBytes(data []byte, limit int, fn func(line []byte, size int, oversized bool) bool) {
+	for pos := 0; pos < len(data); {
+		size := len(data) - pos
+		if newline := bytes.IndexByte(data[pos:], '\n'); newline >= 0 {
+			size = newline + 1
+		}
+		segment := data[pos : pos+size]
+		body := segment
+		if end := len(body); end > 0 && body[end-1] == '\n' {
+			body = body[:end-1]
+		}
+		// The limit is measured before the carriage return is trimmed, as the
+		// reader above does, so both readers classify a line the same way.
+		oversized := len(body) > limit
+		if oversized {
+			body = body[:0]
+		} else if end := len(body); end > 0 && body[end-1] == '\r' {
+			body = body[:end-1]
+		}
+		if !fn(body, size, oversized) {
+			return
+		}
+		pos += size
+	}
+}
+
 // forEachLine calls fn for each line of r, including a final unterminated one.
 // size is the number of bytes the line occupied, newline included. Lines longer
 // than limit are reported with oversized=true and an empty body. fn returns
