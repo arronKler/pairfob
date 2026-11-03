@@ -37,6 +37,8 @@ export type FullTerminalControlsOptions = {
   setLive?: (live: boolean) => void;
   /** Copy what is selected in the terminal; false when nothing is (see full-terminal-copy). */
   copySelection?: () => boolean;
+  /** Re-fit the host after the floating panel opened, closed or changed height. */
+  refit?: () => void;
 };
 
 export type ComposeEnterPolicyState = Readonly<{

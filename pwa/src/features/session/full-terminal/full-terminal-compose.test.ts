@@ -98,7 +98,7 @@ describe("complete-terminal compose input", () => {
     const input = root.querySelector("textarea")!;
     act(() => { input.focus(); });
     input.setSelectionRange(1, 3);
-    const more = root.querySelector<HTMLButtonElement>(".key-more")!;
+    const more = root.querySelector<HTMLButtonElement>(".dock-keys-btn")!;
     const down = new PointerEvent("pointerdown", { button: 0, cancelable: true });
     more.dispatchEvent(down);
     expect(down.defaultPrevented).toBe(true);
@@ -256,7 +256,6 @@ describe("complete-terminal compose input", () => {
   });
 
   test("expanded pad Enter completes an IME even when blur emits no compositionend", async () => {
-    setKeysExpanded(true);
     const sent: Array<[string, boolean]> = [];
     const root = render((text, enter) => {
       sent.push([text, enter]);
@@ -264,6 +263,9 @@ describe("complete-terminal compose input", () => {
     });
     const input = root.querySelector("textarea") as HTMLTextAreaElement;
     act(() => { input.focus(); });
+    // The panel opens beside the field already focused, so the composition
+    // starts with both on screen, as it does when a mouse calls the keys up.
+    act(() => { (root.querySelector(".dock-keys-btn") as HTMLButtonElement).click(); });
     fire(input, "compositionstart");
     input.value = "屏幕回车";
     fire(input, "input");
@@ -300,7 +302,7 @@ describe("complete-terminal compose input", () => {
     };
     renderReact(createElement(FullTerminalPad, { options }));
     const root = appRoot();
-    act(() => { (root.querySelector('[aria-label="更多按键"]') as HTMLButtonElement).click(); });
+    act(() => { (root.querySelector(".dock-keys-btn") as HTMLButtonElement).click(); });
     expect(root.querySelector(".full-terminal-compose-input") !== null).toBeTrue();
     const commandMode = [...root.querySelectorAll<HTMLButtonElement>(".pad-kind-option")].find((el) => el.textContent === "命令");
     act(() => { commandMode?.click(); });
@@ -313,6 +315,11 @@ describe("complete-terminal compose input", () => {
 
     act(() => { setComposeLive(true); });
     renderReact(createElement(FullTerminalPad, { options }));
+    // 实时 hands the keyboard to xterm and the pad never shares the screen
+    // with it; choosing a command already filled the field and put the panel
+    // away, so close the keyboard and ask for the keys again.
+    act(() => { notifyFullTerminalKeyboard(false); });
+    act(() => { (root.querySelector(".dock-keys-btn") as HTMLButtonElement).click(); });
     act(() => { (root.querySelector('[aria-label="插入 /clear"]') as HTMLButtonElement).click(); });
     expect(sent).toEqual([["/clear", false]]);
   });

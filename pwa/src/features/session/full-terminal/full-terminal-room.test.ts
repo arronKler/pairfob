@@ -8,7 +8,7 @@ g.document = happy.document;
 g.HTMLElement = happy.HTMLElement;
 happy.document.body.innerHTML = '<main id="app"></main>';
 
-const { terminalRoom } = await import("./full-terminal-room.ts");
+const { floatingPadCover, terminalRoom } = await import("./full-terminal-room.ts");
 
 const app = () => document.getElementById("app")!;
 
@@ -30,20 +30,12 @@ function inspector(width: number): void {
   app().append(aside);
 }
 
-/** The pad's box: its border, what it shows and what it holds. */
-function padBox(pad: HTMLElement, box: { outer: number; inner: number; content: number }): void {
-  Object.defineProperties(pad, {
-    offsetHeight: { value: box.outer, configurable: true },
-    clientHeight: { value: box.inner, configurable: true },
-    scrollHeight: { value: box.content, configurable: true },
+/** A point without a layout engine: the box each element reports. */
+function box(el: HTMLElement, top: number, height: number): void {
+  Object.defineProperty(el, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({ top, bottom: top + height, left: 0, right: 0, width: 0, height }),
   });
-}
-
-function keys(pad: HTMLElement, height: number, momentary = true): void {
-  const controls = document.createElement("div");
-  controls.className = momentary ? "full-terminal-pad-controls is-momentary" : "full-terminal-pad-controls";
-  Object.defineProperty(controls, "offsetHeight", { value: height });
-  pad.append(controls);
 }
 
 /** The compose field at `height`; one line is 46px. */
@@ -89,35 +81,36 @@ describe("the room the computer's terminal is sized against", () => {
     expect(terminalRoom(phone.host, { width: 382, height: 500 }).width).toBe(382);
   });
 
-  test("the pad a mouse calls up gives its height back", () => {
+  test("the floating panel takes no room, so opening it never resizes the computer's terminal", () => {
     const { host, pad } = shell("desk");
-    keys(pad, 178);
-    padBox(pad, { outer: 259, inner: 258, content: 258 });
-    expect(terminalRoom(host, { width: 1122, height: 544 })).toEqual({ width: 1122, height: 722 });
+    const panel = document.createElement("div");
+    panel.className = "pad-panel";
+    Object.defineProperty(panel, "offsetHeight", { value: 198 });
+    pad.append(panel);
+    box(host, 100, 600);
+    box(panel, 318, 198);
+    expect(terminalRoom(host, { width: 1122, height: 544 })).toEqual({ width: 1122, height: 544 });
   });
 
-  test("a pad at its ceiling scrolls its keys, so they cost only what the pad grew by", () => {
+  test("the covered part of the host is what the cursor's row must clear", () => {
     const { host, pad } = shell("desk");
-    keys(pad, 178);
-    // 300px of content in a pad capped at 201px: without the keys it would be 123px tall.
-    padBox(pad, { outer: 201, inner: 200, content: 300 });
-    expect(terminalRoom(host, { width: 1122, height: 300 }).height).toBe(300 + (201 - 123));
-    // Still scrolling without the keys: they cost the terminal nothing.
-    padBox(pad, { outer: 201, inner: 200, content: 500 });
-    expect(terminalRoom(host, { width: 1122, height: 300 }).height).toBe(300);
-  });
-
-  test("a finger's key row is part of the layout and does resize the terminal", () => {
-    const { host, pad } = shell("desk");
-    keys(pad, 178, false);
-    padBox(pad, { outer: 259, inner: 258, content: 258 });
-    expect(terminalRoom(host, { width: 1122, height: 544 }).height).toBe(544);
+    const panel = document.createElement("div");
+    panel.className = "pad-panel";
+    pad.append(panel);
+    box(host, 100, 600);
+    box(panel, 318, 198);
+    expect(floatingPadCover(host)).toBe(382);
+    // Taller than the host: the whole bottom is hidden, never more than its height.
+    box(panel, 40, 400);
+    expect(floatingPadCover(host)).toBe(600);
+    // Gone: nothing covers anything.
+    panel.remove();
+    expect(floatingPadCover(host)).toBe(0);
   });
 
   test("a one-line draft takes nothing: the terminal is sized under it", () => {
     const { host, pad } = shell("session");
     draft(pad, 46);
-    padBox(pad, { outer: 119, inner: 118, content: 118 });
     expect(terminalRoom(host, { width: 382, height: 664 }).height).toBe(664);
   });
 
@@ -126,24 +119,17 @@ describe("the room the computer's terminal is sized against", () => {
       const { host, pad } = shell(classes);
       // Five lines: 46 + 78.
       draft(pad, 124);
-      padBox(pad, { outer: 197, inner: 196, content: 196 });
       expect(terminalRoom(host, { width: 382, height: 586 }).height).toBe(664);
     }
   });
 
-  test("a long draft and the pad a mouse calls up are given back together", () => {
+  test("a long draft alone is given back; the floating panel adds nothing", () => {
     const { host, pad } = shell("desk");
-    keys(pad, 178);
     draft(pad, 82);
-    padBox(pad, { outer: 295, inner: 294, content: 294 });
-    expect(terminalRoom(host, { width: 1122, height: 508 }).height).toBe(508 + 178 + 36);
-  });
-
-  test("a draft growing in a pad at its ceiling costs only what the pad grew by", () => {
-    const { host, pad } = shell("session");
-    draft(pad, 124);
-    // 260px of content in a pad capped at 201px: with one line it would be 182px tall.
-    padBox(pad, { outer: 201, inner: 200, content: 259 });
-    expect(terminalRoom(host, { width: 382, height: 300 }).height).toBe(300 + (201 - 182));
+    const panel = document.createElement("div");
+    panel.className = "pad-panel";
+    Object.defineProperty(panel, "offsetHeight", { value: 198 });
+    pad.append(panel);
+    expect(terminalRoom(host, { width: 1122, height: 508 }).height).toBe(508 + 36);
   });
 });

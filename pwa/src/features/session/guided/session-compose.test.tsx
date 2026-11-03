@@ -60,7 +60,7 @@ describe("React session compose", () => {
     expectSameNode(document.activeElement, input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([1, 4]);
     expect(input.value).toBe("正在编辑的文字");
-    const more = appRoot().querySelector<HTMLButtonElement>(".key-more")!;
+    const more = appRoot().querySelector<HTMLButtonElement>(".dock-keys-btn")!;
     const down = new view.PointerEvent("pointerdown", { button: 0, cancelable: true });
     act(() => { more.dispatchEvent(down); });
     expect(down.defaultPrevented).toBe(true);

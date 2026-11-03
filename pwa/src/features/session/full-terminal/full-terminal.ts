@@ -629,6 +629,7 @@ export function fullTerminalControlOptions(): FullTerminalControlsOptions {
     sendCompose: sendComposedInput,
     hardwareKeyboard: hardwareKeyboard(),
     setLive: setFullTerminalComposeLive,
+    refit: () => { fit(); },
     copySelection: () => copyTerminalSelection(terminal),
     keyboard: {
       toggle: () => {

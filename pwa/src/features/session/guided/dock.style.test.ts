@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const dock = await Bun.file(new URL("./dock.scss", import.meta.url)).text();
+const panel = await Bun.file(new URL("../keypad/pad-panel.scss", import.meta.url)).text();
 const compose = await Bun.file(new URL("./compose.scss", import.meta.url)).text();
 const rowActions = await Bun.file(new URL("./row-actions.scss", import.meta.url)).text();
 const dense = await Bun.file(new URL("./dock-dense.scss", import.meta.url)).text();
@@ -25,35 +26,37 @@ const px = (declarations: string, property: string): number => {
  * sum that went wrong once on a real screen.
  */
 describe("the guided pad fits its scroller", () => {
-  /** `inset: <top> <sides> calc(<bottom> - var(--pad-band-below))` of a control's hit area. */
+  /** `inset: <top> <sides> <bottom>` of a control's hit area in the floating panel. */
   const hit = (selector: string) => {
-    const match = new RegExp(`\\${selector}::before \\{ inset: (-?\\d+)px (-?\\d+)(?:px)? calc\\((-?\\d+)px - var\\(--pad-band-below\\)\\); \\}`).exec(dock);
+    const match = new RegExp(`\\${selector}::before \\{ inset: (-?\\d+)px (-?\\d+)(?:px)? (-?\\d+)px; \\}`).exec(panel);
     if (!match) throw new Error(`missing ${selector}`);
     return { top: Number(match[1]), sides: Number(match[2]), bottom: Number(match[3]) };
   };
 
-  test("a pagination control is pressed anywhere between the keys and the compose row, and nowhere else", () => {
-    const row = px(rule(dock, ".pad-pagination"), "min-height");
-    const above = px(rule(dock, ".pad-pagination"), "margin-top");
+  test("a pagination control is pressed across its row and 4px into the gap under it", () => {
+    const row = px(rule(panel, ".pad-pagination"), "min-height");
+    // The row sits directly under the expanded pages, with nothing above it.
+    expect(rule(panel, ".pad-pagination")).toContain("margin-top: 0;");
+    const above = 0;
     // The switch is its option inside 2px of padding and a 1px border.
     const boxes = {
-      ".pad-kind-option": px(rule(dock, ".pad-kind-option"), "min-height") + 6,
-      ".pad-page-dot": px(rule(dock, ".pad-page-dot"), "height"),
-      ".pad-text-btn": px(rule(dock, ".pad-text-btn"), "min-height"),
+      ".pad-kind-option": px(rule(panel, ".pad-kind-option"), "min-height") + 6,
+      ".pad-page-dot": px(rule(panel, ".pad-page-dot"), "height"),
+      ".pad-text-btn": px(rule(panel, ".pad-text-btn"), "min-height"),
     };
     for (const [selector, box] of Object.entries(boxes)) {
       const inside = (row - box) / 2 + (selector === ".pad-kind-option" ? 3 : 0);
       const area = hit(selector);
-      // Up to the keys' edge and not a pixel into a key.
+      // Up to the row's top edge and not a pixel into the page above.
       expect(area.top + inside + above, selector).toBe(0);
-      // Down to the row's own edge, plus the gap below it that the pad owns.
-      expect(area.bottom + inside, selector).toBe(0);
+      // Down through the row and 4px more: the band the panel owns before the
+      // primary row, never a key's own box.
+      expect(row - inside - area.bottom, selector).toBe(row + 4);
     }
-    // That gap is 8px down to the compose row, in the guided dock and in the
-    // complete terminal, whose 组字 and 实时 rows are the same form.
-    expect(dock).toContain(".pad-pages { --pad-band-below: 8px; }");
-    // 2 + 28 + 8: all the height a mouse's compact row has between a key and the field.
-    expect(above + row + 8).toBe(38);
+    // 36 is the row; 2px under the pages and 2px under the primary row close the gap.
+    expect(panel).toContain(".pad-panel .pad-pages { margin-top: 0; padding: 0 0 2px; }");
+    expect(panel).toContain(".pad-panel .keys { padding: 0 0 2px; }");
+    expect(above + row).toBe(36);
   });
 
   /** The body of the coarse-pointer block that follows the hit-area rules. */
@@ -62,31 +65,6 @@ describe("the guided pad fits its scroller", () => {
     if (start < 0) throw new Error("missing coarse block");
     return source.slice(start, source.indexOf("\n}\n", start));
   };
-
-  test("under a finger the band is 44px high, taken from between the key rows and not from the terminal", () => {
-    const touch = coarse(dock);
-    const first = (pattern: RegExp): number => Number(pattern.exec(touch)?.[1]);
-    const row = px(rule(dock, ".pad-pagination"), "min-height");
-    const above = first(/\.pad-pages:not\(\.is-one-row\) > \.pad-pagination \{ margin-top: (\d+)px; \}/);
-    // 8 + 28 + 8: the row in the middle of a band a finger can press.
-    expect(above + row + 8).toBe(44);
-    // The hit areas reach the keys' edge across the larger margin.
-    for (const [selector, box] of [[".pad-kind-option", 22 + 6], [".pad-page-dot", 24], [".pad-text-btn", 28]] as const) {
-      const top = first(new RegExp(`\\.pad-pages:not\\(\\.is-one-row\\) \\${selector}::before \\{ top: -(\\d+)px; \\}`));
-      expect(top, selector).toBe((row - box) / 2 + (selector === ".pad-kind-option" ? 3 : 0) + above);
-    }
-    // What the dock spends above the row, before and after: nothing is added to its height.
-    const keysPad = 2;
-    const before = keysPad + 44 + keysPad + px(rule(dock, ".pad-pages"), "margin-top") + 44 + 6 + 44 + px(rule(dock, ".pad-pagination"), "margin-top");
-    expect(touch).toContain(".keys:has(+ .pad-pages:not(.is-one-row)) { padding-top: 0; }");
-    const gap = first(/\.keys \+ \.pad-pages:not\(\.is-one-row\) \{ margin-top: (\d+)px; \}/);
-    const rows = first(/\.pad-pages:not\(\.is-one-row\) > \.pad-page \{ row-gap: (\d+)px; \}/);
-    expect(44 + keysPad + gap + 44 + rows + 44 + above).toBe(before);
-    // The key rows stand the same 5px apart.
-    expect(keysPad + gap).toBe(rows);
-    // One row to a page (a phone on its side) has the row's whole height already and keeps its own rules.
-    expect(touch).not.toMatch(/\n  \.pad-pages \{/);
-  });
 
   test("under a finger the tray's buttons and a thumbnail's × are 44px targets, and the tray is no taller", () => {
     const touch = coarse(attachments);
@@ -139,30 +117,18 @@ describe("the guided pad fits its scroller", () => {
     expect(rule(attachments, ".attach-strip")).not.toContain("mask");
   });
 
-  test("the band below the row is inside the guided scroller, so pressing room adds no scroll", () => {
-    // The row is the last thing in `.keys-wrap` (overflow-y: auto). A hit area
-    // below the scroller's box made the pad scroll by the difference and show a
-    // scrollbar. The scroller's padding holds the band; its margin takes it back.
-    expect(rule(dock, ".keys-wrap")).toContain("overflow-y: auto");
-    expect(dock).toContain("\n.keys-wrap { padding-bottom: 8px; margin-bottom: -8px; }");
-    expect(rule(dock, ".dock-form")).toContain("margin-top: var(--space-2)");
-    // A phone on its side stands the form 6px off, and the scroller follows.
-    expect(dense).toContain(".is-dense .keys-wrap { padding-bottom: 6px; margin-bottom: -6px; }");
-    expect(dense).toMatch(/\.is-dense \.dock-form,\n\.is-dense \.full-terminal-compose-form \{ margin-top: 6px; \}/);
-  });
-
   test("the switch and the end dots are 44px wide to press; a dot between two others keeps its 32", () => {
     expect(hit(".pad-kind-option").sides).toBe(0);
-    expect(dock).toContain(".pad-kind-option:first-child::before { left: -3px; }");
-    expect(dock).toContain(".pad-kind-option:last-child::before { right: -3px; }");
+    expect(panel).toContain(".pad-kind-option:first-child::before { left: -3px; }");
+    expect(panel).toContain(".pad-kind-option:last-child::before { right: -3px; }");
     // "按键" and "命令" are 42px of label each.
     expect(42 + 3).toBeGreaterThanOrEqual(44);
-    const dot = px(rule(dock, ".pad-page-dot"), "width");
-    expect(dock).toContain(".pad-page-dot:first-child::before { left: -12px; }");
-    expect(dock).toContain(".pad-page-dot:last-child::before { right: -12px; }");
+    const dot = px(rule(panel, ".pad-page-dot"), "width");
+    expect(panel).toContain(".pad-page-dot:first-child::before { left: -12px; }");
+    expect(panel).toContain(".pad-page-dot:last-child::before { right: -12px; }");
     expect(dot + 12).toBeGreaterThanOrEqual(44);
     // Where a full row leaves the dots no room, the switch is the one on top.
-    expect(dock).toContain(".pad-pagination-end { position: relative; z-index: 1; }");
+    expect(panel).toContain(".pad-pagination-end { position: relative; z-index: 1; }");
   });
 
   test("beside a single row of keys the controls are pressed over the row's whole height", () => {
@@ -197,9 +163,9 @@ describe("the guided pad fits its scroller", () => {
     // `.pad-pages` clips sideways until `.is-editing` lifts the clip for the ×
     // badges. From then on the 8px a text button's hit area reaches past the
     // row's end was scrollable width: 936 in a 928px pad.
-    expect(rule(dock, ".pad-pages:has(> .pad-page.is-editing)")).toContain("overflow-x: visible");
-    expect(dock).toContain(".keys-wrap .pad-pagination-start > .pad-text-btn:first-child::before { left: 0; }");
-    expect(dock).toContain(".keys-wrap .pad-pagination-end > .pad-text-btn:last-child::before { right: 0; }");
+    expect(rule(panel, ".pad-pages:has(> .pad-page.is-editing)")).toContain("overflow-x: visible");
+    expect(panel).toContain(".pad-pagination-start > .pad-text-btn:first-child::before { left: 0; right: -14px; }");
+    expect(panel).toContain(".pad-pagination-end > .pad-text-btn:last-child::before { left: -14px; right: 0; }");
   });
 });
 
@@ -268,22 +234,20 @@ describe("a line that says what a dock field is for", () => {
 
 describe("the keyboard's ring on the pad's small controls", () => {
   test("is drawn round what is pressed, rounded, and not on the small label's own box", () => {
-    expect(dock).toContain(".pad-text-btn:focus-visible, .pad-page-dot:focus-visible { outline: none; }");
-    const ring = rule(dock, ".pad-text-btn:focus-visible::after, .pad-page-dot:focus-visible::after");
+    expect(panel).toContain(".pad-text-btn:focus-visible, .pad-page-dot:focus-visible { outline: none; }");
+    const ring = rule(panel, ".pad-text-btn:focus-visible::after, .pad-page-dot:focus-visible::after");
     expect(ring).toMatch(/border-radius:\s*var\(--r-sm\);/);
     expect(ring).toMatch(/outline:\s*2px solid var\(--accent\);/);
     expect(ring).toMatch(/pointer-events:\s*none;/);
     // 8px past the label each side: with a 28px label that is the 44px a press has.
-    expect(ring).toMatch(/inset:\s*-2px -8px;/);
-    expect(px(rule(dock, ".pad-text-btn"), "min-height") + 2 * 8).toBe(44);
+    expect(ring).toMatch(/inset:\s*-4px -8px;/);
+    expect(px(rule(panel, ".pad-text-btn"), "min-height") + 2 * 8).toBe(44);
     // At the pad's side it reaches inward by what it cannot have outward, as the hit area does.
-    expect(dock).toContain(".pad-pagination-start > .pad-text-btn:first-child:focus-visible::after { left: 0; right: -14px; }");
-    expect(dock).toContain(".pad-pagination-end > .pad-text-btn:last-child:focus-visible::after { left: -14px; right: 0; }");
-    // Under a finger the band is 44px (8 above and below the 28px row): the ring stands 2px inside it.
-    expect(dock).toContain(".pad-pages:not(.is-one-row) .pad-text-btn:focus-visible::after { top: -6px; bottom: -6px; }");
+    expect(panel).toContain(".pad-pagination-start > .pad-text-btn:first-child:focus-visible::after { left: 0; right: -14px; }");
+    expect(panel).toContain(".pad-pagination-end > .pad-text-btn:last-child:focus-visible::after { left: -14px; right: 0; }");
     // The switch's options keep a ring on their own rounded box.
-    expect(rule(dock, ".pad-kind-option:focus-visible")).toMatch(/outline-offset:\s*-2px/);
-    expect(rule(dock, ".pad-kind-option")).toMatch(/border-radius:\s*6px;/);
+    expect(rule(panel, ".pad-kind-option:focus-visible")).toMatch(/outline-offset:\s*-2px/);
+    expect(rule(panel, ".pad-kind-option")).toMatch(/border-radius:\s*6px;/);
   });
 });
 
@@ -308,39 +272,31 @@ describe("the echo of live input in the buffer", () => {
   });
 });
 
-describe("the dense pad's 36px keys", () => {
-  test("are pressed over 44: the two rows tile the pad from its top edge to the compose row", () => {
-    // What 320px leaves: 53 of header, 48 of scroll row and the terminal's rows, 69 of dock around two rows of keys.
+describe("the dense one-row dock", () => {
+  test("spends 53px, with the pad's chrome beside one 44px row of keys instead of under it", () => {
     const pad = /\.dock\.is-dense,\n\.full-terminal-pad\.is-dense \{[\s\S]*?\n\}/.exec(dense)![0];
-    expect(pad).toMatch(/clamp\(\s*36px,/);
-    expect(pad).toMatch(/- 53px - var\(--full-terminal-min-host-height, 113px\) - 48px - 69px\) \/ 2\)/);
-    // At 44 the two rows are 16px more, and the terminal has three 18–21px rows over an open pad: one would go.
-    expect(320 - 53 - 69 - 2 * 36).toBe(126);
-    expect(320 - 53 - 69 - 2 * 44).toBe(110);
-    expect(Math.floor((126 - 48) / 21)).toBe(3);
-    expect(Math.floor((110 - 48) / 21)).toBe(2);
-    // The dock's own spacing is what the hit areas take.
-    expect(px(pad, "padding-top")).toBe(6);
-    expect(dense).toContain(".is-dense .pad-pages { margin-top: 4px; }");
-    expect(dense).toMatch(/\.is-dense \.dock-form,\n\.is-dense \.full-terminal-compose-form \{ margin-top: 6px; \}/);
-    // Measured from inside the key's 1px border: 6 above the first row, the 4 between the rows, 6 under the last.
-    expect(dense).toContain('.is-dense .key::before { content: ""; position: absolute; inset: -3px; }');
-    expect(dense).toContain(".is-dense .keys > .key::before { top: -7px; }");
-    expect(dense).toContain(".is-dense .keys:has(+ .pad-pages) > .key::before { bottom: -5px; }");
-    expect(dense).toContain(".is-dense .pad-page > .key::before,\n.is-dense .keys:not(:has(+ .pad-pages)) > .key::before { bottom: -7px; }");
-    expect(6 + 36 + 2).toBe(44);
-    expect(2 + 36 + 6).toBe(44);
-    // Alone, the first row has the dock's padding above and the form's margin below.
-    expect(6 + 36 + 6).toBeGreaterThanOrEqual(44);
-    // Beside a key, half the 4px gap each: no press between two keys is lost.
-    expect(rule(dock, ".keys")).toMatch(/gap:\s*4px;/);
-    // Nothing reaches past the pad's sides, where the guided scroller would count it as content.
-    expect(dense).toContain(".is-dense .keys > .key:first-child::before { left: -1px; }");
-    expect(dense).toContain(".is-dense .keys > .key:last-child::before { right: -1px; }");
-    // The guided scroller holds the band above the first row, and the page's own box the band under it.
-    expect(dense).toContain(".is-dense .keys-wrap { padding-top: 6px; margin-top: -6px; }");
-    expect(dense).toContain(".is-dense .keys-wrap:has(> .pad-pages) { padding-bottom: 0; }");
-    expect(dense).toContain(".is-dense .keys-wrap > .pad-pages { padding-bottom: 6px; }");
+    expect(pad).toContain("--pad-key-h: 44px");
+    expect(px(pad, "padding-top")).toBe(4);
+    expect(pad).toContain("padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));");
+    // 4 + 44 + 4 and its 1px top border: the row the buffer keeps under it.
+    expect(4 + 44 + 4 + 1).toBe(53);
+    expect(dense).toContain(".is-dense .dock-form textarea,\n.is-dense .full-terminal-compose-input { min-height: 44px; height: 44px; }");
+    // One row to a page; the name/Edit, dots and switch stand beside it.
+    expect(dense).toContain(".pad-pages.is-one-row > .pad-pagination { display: contents; }");
+    expect(dense).toContain("grid-template-rows: auto var(--pad-key-h, 44px);");
+    expect(dense).toContain(".pad-pages.is-one-row .pad-pagination-start { grid-area: 2 / 1; }");
+    expect(dense).toContain(".pad-pages.is-one-row .pad-dots { grid-area: 2 / 3; }");
+    expect(dense).toContain(".pad-pages.is-one-row .pad-pagination-end { grid-area: 2 / 4; }");
+    // Beside the keys the chrome is pressed over the row's whole height.
+    const start = dense.indexOf(".pad-pages.is-one-row :is(.pad-kind-option, .pad-page-dot, .pad-page-count, .pad-text-btn)::before {");
+    expect(start).toBeGreaterThan(0);
+    const area = dense.slice(start, dense.indexOf("}", start));
+    expect(area).toContain("top: 50%");
+    expect(area).toContain("bottom: auto");
+    expect(area).toContain("height: var(--pad-key-h, 44px)");
+    expect(area).toContain("translate: 0 -50%");
+    // Nothing of the panel takes layout height from the terminal above it.
+    expect(dense).not.toMatch(/--full-terminal-min-host-height/);
   });
 });
 

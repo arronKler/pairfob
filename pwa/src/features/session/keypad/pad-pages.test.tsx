@@ -12,6 +12,7 @@ import { PadPages } from "./pad-pages";
 import { EXPANDED_KEYS, clearModifiers, modifierIsActive } from "./keypad";
 import { keysExpanded } from "../../settings/preferences-store";
 import { setComposeDraft, composeDraft, setComposeLive } from "../compose-store";
+import { focusRestoringCompose } from "../compose-focus";
 
 
 beforeEach(async () => {
@@ -81,7 +82,7 @@ test("cancelled or vertical gestures never send a key or navigate", () => {
 test("page dots and mode toggle retain each mode's position and the compose field", () => {
   paint();
   const input = appRoot().querySelector("textarea")!;
-  act(() => { input.focus(); appRoot().querySelector<HTMLButtonElement>('[aria-label="第 2 页，共 2 页"]')!.click(); });
+  act(() => { appRoot().querySelector<HTMLButtonElement>('[aria-label="第 2 页，共 2 页"]')!.click(); });
   expect(button("Ctrl+A")).toBeTruthy();
   expect(appRoot().querySelector(".pad-page-name")?.textContent).toBe("选择与编辑");
   act(() => { kind("命令").click(); });
@@ -90,10 +91,39 @@ test("page dots and mode toggle retain each mode's position and the compose fiel
   act(() => { kind("按键").click(); });
   expect(button("Ctrl+A")).toBeTruthy();
   expectSameNode(appRoot().querySelector("textarea"), input);
-  expectSameNode(document.activeElement, input);
   act(() => { appRoot().querySelector<HTMLButtonElement>(".key-more")!.click(); });
-  expect(appRoot().querySelector(".pad-pages")).toBeNull();
-  expect(appRoot().querySelector(".pad-kind")).toBeNull();
+  expect(appRoot().querySelector<HTMLElement>(".pad-panel")?.dataset.panel).toBe("rail");
+  expect(appRoot().querySelector(".pad-pages")).not.toBeNull();
+  // Touching the field is the way back to typing: the panel gets out of its way.
+  act(() => { input.focus(); });
+  expect(appRoot().querySelector(".pad-panel")).toBeNull();
+  expectSameNode(appRoot().querySelector("textarea"), input);
+  expectSameNode(document.activeElement, input);
+});
+
+test("a tap on the field folds the panel even when the field already holds the caret", () => {
+  paint();
+  const input = appRoot().querySelector("textarea")!;
+  act(() => { input.focus(); });
+  // The keys button keeps the caret where it was, so reopening the panel fires
+  // no focus report the panel could read as the reader coming back to type.
+  act(() => { appRoot().querySelector<HTMLButtonElement>(".dock-keys-btn")!.click(); });
+  expect(appRoot().querySelector(".pad-panel")).toBeTruthy();
+  pointer(input, "pointerdown", 10);
+  expect(appRoot().querySelector(".pad-panel")).toBeNull();
+  expectSameNode(document.activeElement, input);
+});
+
+test("the app restoring focus after a repaint leaves the panel open; the reader's own focus folds it", () => {
+  paint();
+  const input = appRoot().querySelector("textarea")!;
+  // finishSessionPaint hands the caret back on every repaint; that is not the
+  // reader moving to the field.
+  act(() => { focusRestoringCompose(input); });
+  expect(appRoot().querySelector(".pad-panel")).toBeTruthy();
+  expectSameNode(document.activeElement, input);
+  act(() => { input.blur(); input.focus(); });
+  expect(appRoot().querySelector(".pad-panel")).toBeNull();
 });
 
 test("swiping a command suppresses its generated click, but the next deliberate click works", () => {
@@ -173,19 +203,25 @@ test("the newline key is gone: Return in the field is the newline now", () => {
   expect(appRoot().querySelector('[aria-label="在输入框里插入换行"]')).toBeNull();
 });
 
-test("the soft keyboard and the pad are never shown together", async () => {
+test("the soft keyboard and the panel are never shown together", async () => {
   paint();
   const root = document.documentElement;
   const input = appRoot().querySelector("textarea")!;
   // Mutation observers deliver on a microtask; the async act flushes the re-render.
   await act(async () => { input.focus(); root.dataset.kb = "open"; await Promise.resolve(); });
-  expect(appRoot().querySelector(".pad-pages")).toBeNull();
+  // Touching the field put the panel away; the glass keyboard has the screen.
+  expect(appRoot().querySelector(".pad-panel")).toBeNull();
+  expect(keysExpanded()).toBe(false);
+
+  // Asking for keys puts the keyboard away first. Until it settles closed the
+  // panel stays hidden, and the button already reads as closed.
+  act(() => { appRoot().querySelector<HTMLButtonElement>(".dock-keys-btn")!.click(); });
   expect(keysExpanded()).toBe(true);
-  const more = appRoot().querySelector<HTMLButtonElement>(".key-more")!;
-  expect(more.getAttribute("aria-expanded")).toBe("false");
-  act(() => { more.click(); });
+  expect(appRoot().querySelector(".pad-panel")).toBeNull();
+  expect(appRoot().querySelector(".dock-keys-btn")?.getAttribute("aria-expanded")).toBe("false");
   expectDifferentNode(document.activeElement, input);
-  expect(keysExpanded()).toBe(true);
+
   await act(async () => { root.dataset.kb = "closed"; await Promise.resolve(); });
-  expect(appRoot().querySelector(".pad-pages")).toBeTruthy();
+  expect(appRoot().querySelector(".pad-panel")).toBeTruthy();
+  expect(appRoot().querySelector(".dock-keys-btn")?.getAttribute("aria-expanded")).toBe("true");
 });

@@ -37,13 +37,13 @@ const kindOption = (label: string) =>
   [...appRoot().querySelectorAll<HTMLButtonElement>(".pad-kind-option")].find((el) => el.textContent === label)!;
 
 describe("React session dock", () => {
-  test("collapsed pad keeps only the TUI survival row", async () => {
+  test("collapsed pad takes no layout row: only the field and its keys button", async () => {
     setKeysExpanded(false);
     await act(() => { paint(); });
-    expect(appRoot().querySelector(".pad-kind")).toBeNull();
-    expect(appRoot().querySelector(".slash-pad")).toBeNull();
-    expect(appRoot().querySelector('[aria-label="终端快捷键"]')).toBeTruthy();
+    expect(appRoot().querySelector(".pad-panel")).toBeNull();
+    expect(appRoot().querySelector('[aria-label="终端快捷键"]')).toBeNull();
     expect(appRoot().querySelector(".dock-form textarea")).toBeTruthy();
+    expect(appRoot().querySelector(".dock-keys-btn")).toBeTruthy();
   });
 
   test("expanded keys still expose Tab, Enter and modifiers", async () => {
@@ -65,7 +65,7 @@ describe("React session dock", () => {
     await act(() => { paint(); });
     const chips = [...appRoot().querySelectorAll(".slash-cmd")].map((el) => el.textContent);
     expect(chips).toEqual(SLASH_COMMANDS.map((command) => command.label));
-    expect(appRoot().querySelector(".keys-wrap")?.textContent).not.toContain("Tab");
+    expect(appRoot().querySelector(".pad-panel .keys")?.textContent).not.toContain("Tab");
     expect(kindOption("命令").getAttribute("aria-pressed")).toBe("true");
   });
 
@@ -90,13 +90,17 @@ describe("React session dock", () => {
       expect(input.value).toBe("正在编辑的文字");
       expect(composeIME()).toBe(true);
     };
-    await tap(appRoot().querySelector(".key-more")!);
+    await tap(appRoot().querySelector(".dock-keys-btn")!);
     expect(keysExpanded()).toBe(true);
+    expect(appRoot().querySelector(".pad-panel")?.getAttribute("data-panel")).toBe("pages");
     await tap(kindOption("命令"));
     expect(appRoot().querySelector(".slash-pad")).toBeTruthy();
     await tap(kindOption("按键"));
     expect(appRoot().querySelector(".key-mod")).toBeTruthy();
     await tap(appRoot().querySelector(".key-more")!);
+    expect(appRoot().querySelector(".pad-panel")?.getAttribute("data-panel")).toBe("rail");
+    expect(keysExpanded()).toBe(true);
+    await tap(appRoot().querySelector(".pad-panel-handle")!);
     expect(keysExpanded()).toBe(false);
   });
 

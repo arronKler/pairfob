@@ -1,11 +1,11 @@
 import { flushSync } from "react-dom";
 import { ChevronDown, Ellipsis } from "lucide-react";
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { composeFocused, composeIME, composeLive } from "../compose-store";
 import { sessionMayTakeFocus } from "../focus";
 import { useComposeLive, usePaneId } from "../hooks";
 import { useKeysExpanded } from "../../settings/hooks";
-import { keysExpanded, setKeysExpanded } from "../../settings/preferences-store";
+import { setKeysExpanded } from "../../settings/preferences-store";
 import { t } from "../../../lib/i18n";
 import {
   type FullTerminalControlsOptions,
@@ -33,8 +33,9 @@ import {
   type KeySpec,
 } from "../keypad/keypad";
 import { PadKey } from "../keypad/pad-key";
+import { PadPanel, type PadPanelState } from "../keypad/pad-panel";
 import { useShortLandscape } from "../keypad/short-landscape";
-import { dismissSoftKeyboard, useSoftKeyboardOpen } from "../keypad/soft-keyboard";
+import { useSoftKeyboardOpen } from "../keypad/soft-keyboard";
 import { FullTerminalCompose } from "./full-terminal-compose-field";
 import { bindFullTerminalDeskKeys } from "./full-terminal-desk-keys";
 import { useFullTerminalStopTarget } from "./full-terminal-stop";
@@ -42,7 +43,7 @@ import { AttachButton } from "../attachments/attach-button";
 import { AttachmentTray } from "../attachments/attachment-tray";
 import {
   DockKeysButton,
-  InputModeSwitch,
+  FieldModeSwitch,
   SendButton,
   SendIssuePopover,
   useSendKind,
@@ -70,14 +71,16 @@ function FullTerminalKeyButton({ spec, onKey }: { spec: KeySpec; onKey: (key: st
  * tap's own default focus handling and iOS keyboard updates. `PadChromeButton`
  * keeps the press from moving focus before that click arrives.
  */
-function FullTerminalLiveField({ onToggle, toggleable, label }: {
+function FullTerminalLiveField({ onToggle, toggleable, label, modeSwitch }: {
   onToggle: () => void;
   /** No mouse: the press is a keyboard toggle, not only a hand-off. */
   toggleable: boolean;
   label: string;
+  /** 组字 / 实时 folded into the field's right end on a pointer surface. */
+  modeSwitch?: ReactNode;
 }) {
   const open = useSyncExternalStore(subscribeFullTerminalKeyboard, fullTerminalKeyboardOpen, fullTerminalKeyboardOpen);
-  return <div className="compose-field is-live full-terminal-live-field">
+  return <div className={`compose-field is-live full-terminal-live-field${modeSwitch ? " has-mode" : ""}`}>
     <span className="compose-live-tag" aria-hidden="true">{t("compose2.liveTag")}</span>
     <PadChromeButton
       type="button"
@@ -86,6 +89,7 @@ function FullTerminalLiveField({ onToggle, toggleable, label }: {
       aria-pressed={toggleable ? (open ? "true" : "false") : undefined}
       onClick={onToggle}
     ><span className="full-terminal-live-label">{label}</span></PadChromeButton>
+    {modeSwitch}
   </div>;
 }
 
@@ -95,9 +99,10 @@ function FullTerminalLiveField({ onToggle, toggleable, label }: {
  * action. That action is the guided button too: Enter, send attachments, or
  * stop while the agent works under a mouse.
  */
-function FullTerminalLiveRow({ optionsRef, pointer }: {
+function FullTerminalLiveRow({ optionsRef, pointer, setLive }: {
   optionsRef: { current: FullTerminalControlsOptions };
   pointer: boolean;
+  setLive: (live: boolean) => void;
 }) {
   const paneId = usePaneId();
   const keysInPlace = useKeyboardHintsInPlace();
@@ -118,6 +123,7 @@ function FullTerminalLiveRow({ optionsRef, pointer }: {
     <FullTerminalLiveField
       toggleable={toggleable}
       label={keysInPlace ? t("deskDock.liveKeysPh") : t("compose.livePh")}
+      modeSwitch={pointer ? <FieldModeSwitch live onChange={setLive} /> : undefined}
       onToggle={() => {
         const keyboard = optionsRef.current.keyboard;
         if (toggleable && keyboard.isOpen()) keyboard.close();
@@ -127,7 +133,12 @@ function FullTerminalLiveRow({ optionsRef, pointer }: {
         notifyFullTerminalKeyboard(keyboard.isOpen());
       }}
     />
-    {pointer && <DockKeysButton />}
+    <DockKeysButton beforeOpen={() => {
+      const keyboard = optionsRef.current.keyboard;
+      if (!keyboard.isOpen()) return;
+      keyboard.close();
+      notifyFullTerminalKeyboard(false);
+    }} />
     <div className="send-slot">
       <SendIssuePopover attachments={sendState.attachments} />
       <SendButton
@@ -149,14 +160,14 @@ function FullTerminalLiveRow({ optionsRef, pointer }: {
 function FullTerminalPadControls({
   optionsRef,
   padRef,
-  collapsible,
+  paging,
   dense,
   onPage,
 }: {
   optionsRef: { current: FullTerminalControlsOptions };
   padRef: { current: HTMLDivElement | null };
-  /** The mouse-driven pad: shown only while expanded, with paging in its first row. */
-  collapsible: boolean;
+  /** The mouse-driven pad: PgUp/PgDn join its primary row, as they do in guided. */
+  paging: boolean;
   /** A phone on its side: one row of keys to a page. */
   dense: boolean;
   onPage?: (direction: "up" | "down") => void;
@@ -173,6 +184,23 @@ function FullTerminalPadControls({
     restoreCompose();
   };
   const expanded = useKeysExpanded();
+  const keyboard = useSoftKeyboardOpen();
+  const shown = expanded && !keyboard;
+  const [panel, setPanel] = useState<PadPanelState>("pages");
+  const panelRef = useRef<HTMLDivElement>(null);
+  const wasShown = useRef(false);
+
+  useLayoutEffect(() => {
+    if (shown && !wasShown.current) setPanel("pages");
+    wasShown.current = shown;
+  }, [shown]);
+
+  // The panel floats over the host: its top decides how much of the terminal
+  // the cursor's row must clear. Refit on open, close and rail/pages.
+  useLayoutEffect(() => {
+    optionsRef.current.refit?.();
+    return () => optionsRef.current.refit?.();
+  }, [shown, panel, optionsRef]);
 
   const onKey = (key: string, _el: HTMLElement): void => {
     if (!composeLive() && key === "enter") {
@@ -189,41 +217,15 @@ function FullTerminalPadControls({
   };
 
   // Same exclusivity as the guided pad: the soft keyboard (or the live
-  // terminal's own keyboard) and the expanded pad are never on screen together.
-  const keyboard = useSoftKeyboardOpen();
-  const shown = expanded && !keyboard;
-  if (collapsible && !shown) return null;
-
-  // The pad a mouse calls up is momentary: the terminal keeps its rows under it (see `terminalRoom`).
-  return <div className={collapsible ? "full-terminal-pad-controls is-momentary" : "full-terminal-pad-controls"}>
-    <div className={collapsible ? "keys keys-paged" : "keys"} role="group" aria-label={t("keys.primary")}>
-      {PRIMARY_KEYS.map((spec) => <FullTerminalKeyButton key={spec.key} spec={spec} onKey={onKey} />)}
-      {collapsible && onPage && PAGE_KEYS.map((spec) => <PadKey key={spec.key} spec={spec}
-        onPress={() => onPage(spec.key === "pageup" ? "up" : "down")} />)}
-      <PadChromeButton
-        type="button"
-        className="key key-more"
-        aria-label={t("keys.morePad")}
-        aria-expanded={shown ? "true" : "false"}
-        onClick={() => {
-          clearModifiers();
-          if (keyboard) {
-            const control = optionsRef.current.keyboard;
-            if (control.isOpen()) {
-              control.close();
-              notifyFullTerminalKeyboard(false);
-            }
-            // No repaint here: it would put focus straight back in the field.
-            dismissSoftKeyboard();
-            setKeysExpanded(true);
-            return;
-          }
-          setKeysExpanded(!keysExpanded());
-          repaint();
-        }}
-      >{shown ? <ChevronDown size={20} aria-hidden="true" /> : <Ellipsis size={20} aria-hidden="true" />}</PadChromeButton>
-    </div>
-    {shown && <SessionSlashPad rows={dense ? 1 : 2} onSelect={selectCommand} onCustomSelect={(text) => {
+  // terminal's own keyboard) and the floating panel are never on screen together.
+  if (!shown) return null;
+  const close = (): void => {
+    clearModifiers();
+    setKeysExpanded(false);
+    repaint();
+  };
+  return <PadPanel panel={panel} onClose={close} panelRef={panelRef}>
+    <SessionSlashPad rows={dense ? 1 : 2} onSelect={selectCommand} onCustomSelect={(text) => {
       // A saved command can span lines, so it lands in the batch field (at the
       // caret) rather than being typed live, where each newline would be Enter.
       flushSync(() => {
@@ -231,8 +233,20 @@ function FullTerminalPadControls({
       });
       if (padRef.current) insertFullTerminalQuickCommand(padRef.current, text);
     }} keyItems={[...EXPANDED_KEYS, ...EXTRA_KEYS]
-      .map((spec) => <FullTerminalKeyButton key={spec.key} spec={spec} onKey={onKey} />)} />}
-  </div>;
+      .map((spec) => <FullTerminalKeyButton key={spec.key} spec={spec} onKey={onKey} />)} />
+    <div className={paging ? "keys keys-paged" : "keys"} role="group" aria-label={t("keys.primary")}>
+      {PRIMARY_KEYS.map((spec) => <FullTerminalKeyButton key={spec.key} spec={spec} onKey={onKey} />)}
+      {paging && onPage && PAGE_KEYS.map((spec) => <PadKey key={spec.key} spec={spec}
+        onPress={() => onPage(spec.key === "pageup" ? "up" : "down")} />)}
+      <PadChromeButton
+        type="button"
+        className="key key-more"
+        aria-label={t(panel === "pages" ? "pad.collapseAria" : "pad.expandAria")}
+        aria-expanded={panel === "pages" ? "true" : "false"}
+        onClick={() => setPanel(panel === "pages" ? "rail" : "pages")}
+      >{panel === "pages" ? <ChevronDown size={20} aria-hidden="true" /> : <Ellipsis size={20} aria-hidden="true" />}</PadChromeButton>
+    </div>
+  </PadPanel>;
 }
 
 export type FullTerminalPadProps = {
@@ -252,9 +266,9 @@ export type FullTerminalPadProps = {
  * puts it away again under a finger), and that action is Enter, send
  * attachments, or stop while the agent works under a mouse.
  *
- * Driven by a mouse beside the list, the keys wait behind "按键" and the
- * 组字 / 实时 switch sits under the field. On a phone turned on its side the
- * finger's pad is dense (`is-dense`): one row of keys to a page.
+ * Driven by a mouse beside the list, the key button opens the floating panel
+ * and 组字 / 实时 folds into the field's right end. On a phone turned on its
+ * side the finger's panel is dense (`is-dense`): one row of keys to a page.
  */
 export function FullTerminalPad({ options, onPage }: FullTerminalPadProps) {
   const optionsRef = useRef(options);
@@ -310,11 +324,10 @@ export function FullTerminalPad({ options, onPage }: FullTerminalPadProps) {
   >
     {/* Its height is terminal rows here: it never folds open or shut. */}
     <AttachmentTray compact={keyboardOpen} instant />
-    <FullTerminalPadControls optionsRef={optionsRef} padRef={padRef} collapsible={pointer} dense={dense} onPage={onPage} />
+    <FullTerminalPadControls optionsRef={optionsRef} padRef={padRef} paging={pointer} dense={dense} onPage={onPage} />
     {live
-      ? <FullTerminalLiveRow optionsRef={optionsRef} pointer={pointer} />
-      : <FullTerminalCompose send={(text, enter) => optionsRef.current.sendCompose(text, enter)} keysButton={pointer} />}
-    {pointer && <InputModeSwitch live={live} onChange={setLive}
-      hints={live ? [t("deskDock.hintLive"), t("deskDock.hintBatch")] : [t("deskDock.hintBatch"), t("deskDock.hintLive")]} />}
+      ? <FullTerminalLiveRow optionsRef={optionsRef} pointer={pointer} setLive={setLive} />
+      : <FullTerminalCompose send={(text, enter) => optionsRef.current.sendCompose(text, enter)}
+        modeSwitch={pointer ? <FieldModeSwitch live={false} onChange={setLive} /> : undefined} />}
   </div>;
 }

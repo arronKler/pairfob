@@ -63,6 +63,7 @@ describe("React full-terminal pad", () => {
     expect(padSource).toContain("withModifiers");
     expect(padSource).toContain("optionsRef.current.sendKey");
     const sent: string[] = [];
+    setKeysExpanded(true);
     await act(() => { paint((key) => sent.push(key)); });
     const up = appRoot().querySelector('[aria-label="上箭头"]') as HTMLButtonElement;
     const view = appRoot().ownerDocument.defaultView!;
@@ -70,7 +71,7 @@ describe("React full-terminal pad", () => {
     expect(sent).toEqual(["up"]);
   });
 
-  test("shows esc and arrows, then more keys after expand, without remounting compose", async () => {
+  test("the keys button opens every page, without remounting compose", async () => {
     setKeysExpanded(false);
     setComposeDraft("draft");
     await act(() => { paint(); });
@@ -79,18 +80,22 @@ describe("React full-terminal pad", () => {
       input.focus();
       input.setSelectionRange(1, 3);
     });
+    const keysButton = appRoot().querySelector<HTMLButtonElement>(".dock-keys-btn")!;
+    expect(keysButton.getAttribute("aria-expanded")).toBe("false");
     const labels = [...appRoot().querySelectorAll("button")].map((el) => el.getAttribute("aria-label") || el.textContent);
-    expect(labels.slice(0, 6)).toEqual(["Esc", "上箭头", "下箭头", "左箭头", "右箭头", "退格"]);
-    const more = appRoot().querySelector<HTMLButtonElement>(".key-more")!;
+    expect(labels).not.toContain("Esc");
     const view = appRoot().ownerDocument.defaultView!;
     const down = new view.PointerEvent("pointerdown", { button: 0, cancelable: true });
-    await act(() => { more.dispatchEvent(down); });
+    await act(() => { keysButton.dispatchEvent(down); });
     expect(down.defaultPrevented).toBe(true);
-    await act(() => { more.click(); });
+    await act(() => { keysButton.click(); });
     expect(keysExpanded()).toBe(true);
+    expect(appRoot().querySelector<HTMLElement>(".pad-panel")?.dataset.panel).toBe("pages");
     expectSameNode(appRoot().querySelector("textarea"), input);
     expectSameNode(document.activeElement, input);
     expect([input.selectionStart, input.selectionEnd]).toEqual([1, 3]);
+    const opened = [...appRoot().querySelectorAll(".keys .key")].map((el) => el.getAttribute("aria-label") || el.textContent);
+    expect(opened.slice(0, 6)).toEqual(["Esc", "上箭头", "下箭头", "左箭头", "右箭头", "退格"]);
     expect(appRoot().querySelector('[aria-label="Ctrl+C"]')).toBeTruthy();
     expect(appRoot().querySelector('[aria-label="Alt / Option"]')?.textContent).toBe("Alt");
     expect(appRoot().textContent).not.toContain("Opt");
@@ -116,6 +121,12 @@ describe("React full-terminal pad", () => {
 
     act(() => { setComposeLive(true); });
     renderReact(createElement(FullTerminalPad, { options }));
+    // 实时 hands the keyboard to xterm; the pad and the glass keyboard are
+    // never on screen together, so closing it brings the panel back.
+    act(() => { notifyFullTerminalKeyboard(false); });
+    // Choosing a command filled and focused the field, which put the panel
+    // away; ask for the keys again before choosing another.
+    await act(() => { appRoot().querySelector<HTMLButtonElement>(".dock-keys-btn")!.click(); });
     await act(() => { (appRoot().querySelector('[aria-label="插入 /clear"]') as HTMLButtonElement).click(); });
     expect(sent).toEqual([["/clear", false]]);
   });
@@ -196,6 +207,7 @@ describe("React full-terminal pad", () => {
   });
 
   test("unmount destroys pad press so a detached key cannot stay pressed", async () => {
+    setKeysExpanded(true);
     await act(() => { paint(); });
     const esc = [...appRoot().querySelectorAll("button")].find((el) => el.textContent === "Esc") as HTMLButtonElement;
     const view = appRoot().ownerDocument.defaultView!;
@@ -208,6 +220,7 @@ describe("React full-terminal pad", () => {
 
 test("Alt then arrow reaches the full terminal as one complete chord", async () => {
   const sent: string[] = [];
+  setKeysExpanded(true);
   paint(key => sent.push(key));
   await act(async () => {
     pressModifier("alt"); releaseModifier("alt");
@@ -246,6 +259,9 @@ test("custom prompts fill and focus a draft in both input modes without transmit
     expect(field.value).toBe("Review this change");
     expectSameNode(document.activeElement, field);
     await act(() => { setQuickCommands([{ id: "custom", label: "Custom", text: "Next draft", pinned: true }]); });
+    // Filling the field put the pad away, as a tap on the field itself would:
+    // ask for the keys again before choosing another command.
+    await act(() => { appRoot().querySelector<HTMLButtonElement>(".dock-keys-btn")!.click(); });
     await act(() => { appRoot().querySelector<HTMLButtonElement>(".quick-cmd")!.click(); });
     // A saved command goes in at the caret; it never replaces the draft.
     expect(field.value).toBe("Review this change Next draft");

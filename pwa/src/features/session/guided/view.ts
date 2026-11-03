@@ -12,6 +12,7 @@ import { hardwareKeyboard } from "../../../app/input-mode";
 import { isDesk } from "../../../app/viewport";
 import { keyboardHeldBeside, sessionMayTakeFocus } from "../focus";
 import { sessionControlHasFocus } from "../key-target";
+import { focusRestoringCompose } from "../compose-focus";
 import { composeField, sizeCompose, syncSendButton } from "./compose";
 import { settleEcho } from "./echo";
 import { paneModel } from "./pane-model";
@@ -102,7 +103,7 @@ export function finishSessionPaint(scroll: { top: number; left: number; bottom: 
     // button, when the column it opened is what changed this header.
     const pressed = sessionControlHasFocus(document.activeElement);
     if ((composeFocused() && !keyboardHeldBeside()) || (isDesk() && hardwareKeyboard() && !pressed && sessionMayTakeFocus())) {
-      field.focus({ preventScroll: true });
+      focusRestoringCompose(field);
       const caret = field.value.length;
       field.setSelectionRange(caret, caret);
     }

@@ -38,7 +38,7 @@ import {
 import { deferHostMinimumHeight } from "./full-terminal-lifecycle";
 import { followCursor, liftPanCanvas } from "./full-terminal-lift";
 import { syncPanBar } from "./full-terminal-pan-bar";
-import { terminalRoom } from "./full-terminal-room";
+import { floatingPadCover, terminalRoom } from "./full-terminal-room";
 
 export type FullTerminalFittedSize = {
   cols: number;
@@ -79,7 +79,7 @@ export type FullTerminalFitResult = {
 /**
  * Fit xterm to its pan row; sibling chrome must never count as terminal space.
  * The grid is measured against the terminal's room and may be larger than the
- * row shows: extra columns pan sideways, and under the momentary key pad or a
+ * row shows: extra columns pan sideways, and under the floating key panel or a
  * draft of several lines the rows slide up only as far as the cursor's row
  * needs to stay in view.
  */
@@ -105,6 +105,9 @@ export function fitFullTerminal(args: {
   const leastRows = (cell: { height: number } | null | undefined): number => Math.ceil(TERMINAL_MIN_ROWS * (cell?.height ?? 0));
   const visibleRoom = terminalRoom(host, inner);
   const room = { width: visibleRoom.width, height: Math.max(visibleRoom.height, leastRows(drawn)) };
+  // The panel floats over the host without shoving the dock: the part it covers
+  // is invisible to the cursor's row, exactly like a shorter pan row.
+  const visibleHeight = Math.max(0, inner.height - floatingPadCover(host));
   const canvas = panCanvas(host);
   const mode = termFit();
   const pan = mode === "pan";
@@ -120,7 +123,7 @@ export function fitFullTerminal(args: {
   // hold. Nothing repaints it when the computer is not asked to resize, so the
   // box is never narrower than the grid already drawn, nor shorter than the room.
   probePanCanvas(canvas, Math.max(room.width, drawn ? terminal.cols * drawn.width : 0));
-  liftPanCanvas(canvas, room.height, inner.height);
+  liftPanCanvas(canvas, room.height, visibleHeight);
   const measureCellWidth = (fontSize: number): number => {
     if (terminal.options.fontSize !== fontSize) terminal.options.fontSize = fontSize;
     return cssCellOf(terminal)?.width || fontSize * 0.6;
@@ -201,7 +204,7 @@ export function fitFullTerminal(args: {
   };
   sizePanCanvas(canvas, wide, display.cols, measured?.width || size.cellWidth, inner.width);
   // A first fit, or a larger type, learns the cell only now.
-  if (leastRows(measured) > room.height) liftPanCanvas(canvas, leastRows(measured), inner.height);
+  if (leastRows(measured) > room.height) liftPanCanvas(canvas, leastRows(measured), visibleHeight);
   followCursor(canvas, terminal);
   syncPanBar(host);
   integerizeDomRows(host, size.cellHeight);

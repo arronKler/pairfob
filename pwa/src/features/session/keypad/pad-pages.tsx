@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { t } from "../../../lib/i18n";
 import { PadChromeButton } from "../compose-focus";
-import { clearModifiers } from "./keypad";
 import { PAD_HOLD_EVENT } from "./key-press";
 import { fitOneRow, type RowFit } from "./pad-fit";
 
@@ -85,7 +84,7 @@ export function PadPages({ items, kind, label, columns = 4, rows = 2, className 
   selectRef.current = (next) => {
     const target = Math.max(0, Math.min(count - 1, next));
     if (target === page) return;
-    clearModifiers();
+    // A modifier armed on one page stays armed on the next: paging is not a new scope.
     setPositions((old) => ({ ...old, [kind]: target * pageSize }));
   };
   useLayoutEffect(() => {

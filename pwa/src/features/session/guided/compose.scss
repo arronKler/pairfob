@@ -1,5 +1,3 @@
-@use "./dock-switch";
-
 /* --- Compose field, send / stop button (session page v2) --------------------------
    Owned by the compose workstream. Loaded right after dock.scss so rules here win
    over the older .dock-form rules without editing that file. The same frame and
@@ -335,17 +333,21 @@
   .compose-field > textarea { transition: none; }
 }
 
-/* --- Mouse-driven dock: "按键" and the input-mode switch -------------------------------
-   Rendered only for a mouse beside the list (see desk-pointer.ts), so these are
-   pointer-sized; a finger never meets them and keeps the key row and the panel. */
+/* --- Keys button and the folded input-mode switch ------------------------------------
+   Every dock carries the button, one row with the field: a finger gets the
+   keyboard mark alone (44px), a mouse gets the word beside it. The 组字 / 实时
+   switch lives inside the field on a pointer surface, which keeps the dock at
+   one row instead of adding a mode line under it. */
 
 .dock-keys-btn {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  width: 44px;
   min-height: 46px;
-  padding: 0 12px;
+  padding: 0;
   border: 1px solid var(--line-strong);
   border-radius: 13px;
   background: transparent;
@@ -356,11 +358,82 @@
   transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
 }
 
+/* A mouse's button carries its word, so it takes the width the word needs. */
+.dock-keys-btn:has(> .keys-word) { width: auto; padding: 0 12px; }
+.dock-keys-btn .keys-word { font-size: var(--text-secondary); }
+
 .dock-keys-btn:hover,
 .dock-keys-btn[aria-expanded="true"] {
   background: var(--surface-2);
   color: var(--ink);
 }
+
+/* The field becomes the box; the textarea and the switch sit inside its edge. */
+.compose-field.has-mode {
+  align-items: stretch;
+  height: 46px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+  background: var(--sink);
+}
+
+.compose-field.has-mode:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.compose-field.has-mode.is-live,
+.dock-form.live .compose-field.has-mode {
+  border-color: rgba(70, 214, 140, 0.6);
+  box-shadow: 0 0 0 3px rgba(70, 214, 140, 0.08);
+}
+
+.compose-field.has-mode > textarea {
+  height: 100% !important;
+  min-height: 0;
+  max-height: none !important;
+  padding: 10px 6px 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none !important;
+}
+
+.compose-field.has-mode.is-folded > textarea {
+  height: 100% !important;
+  padding-right: 6px;
+}
+
+/* The switch stays above the unfold cover, so changing mode never needs a first
+   tap to unfold the draft. */
+.frame-mode {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 7px 0 2px;
+}
+
+.frame-mode-option {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 11.5px/1 var(--font);
+  cursor: pointer;
+}
+
+.frame-mode-option[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
+
+/* Live is the mode that types into the session; it wears the field's live colour. */
+.frame-mode-option.is-live[aria-pressed="true"] { color: var(--ok); }
+
+.frame-mode-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .dock-mode {
   display: flex;
@@ -369,33 +442,6 @@
   min-width: 0;
   margin-top: var(--space-2);
 }
-
-.dock-mode-switch {
-  flex: none;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  @include dock-switch.track(".dock-mode-option", 2px, 6px);
-}
-
-.dock-mode-option {
-  min-height: 24px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--muted);
-  font: 500 var(--text-caption) var(--font);
-  cursor: pointer;
-  @include dock-switch.option;
-}
-
-.dock-mode-option[aria-pressed="true"] { color: var(--ink); }
-
-/* Live is the mode that types into the session; it wears the field's live colour. */
-.dock-mode-option:last-child[aria-pressed="true"] { color: var(--ok); }
-
-.dock-mode-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* One line of whole phrases. A phrase that does not fit beside the one before
    it wraps onto a second line, and the line box is one line tall, so it is left
@@ -451,6 +497,16 @@
 }
 
 .full-terminal-live-focus:focus-visible { outline: 2px solid var(--ok); outline-offset: -2px; }
+
+/* Folded into the field's box, the live stand-in drops its own frame. */
+.compose-field.has-mode > .full-terminal-live-focus {
+  min-height: 0;
+  padding: 10px 6px 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .dock-keys-btn { transition: none; }

@@ -4,7 +4,9 @@ import { OPERATION_INPUT_LIMITS } from "../../../lib/operations";
 import {
   bindTermField,
   composeViewSnapshot,
+  focusCompose,
   liveInputPreview,
+  setComposeLive,
   sizeCompose,
   submitTyped,
   subscribeComposeView,
@@ -12,10 +14,17 @@ import {
 import { AttachButton } from "../attachments/attach-button";
 import { phoneEnterKeyHint } from "../compose-keys";
 import { useDeskPointer, useKeyboardHintsInPlace } from "../desk-pointer";
-import { useComposeDraft, useComposeFocused, usePaneId } from "../hooks";
+import { useComposeDraft, useComposeFocused, useComposeLive, usePaneId } from "../hooks";
 import { usePreferenceField } from "../../settings/hooks";
 import { queueKey } from "./keys";
-import { ComposeFrame, DockKeysButton, SendButton, SendIssuePopover, useSendKind } from "./compose-controls";
+import {
+  ComposeFrame,
+  DockKeysButton,
+  FieldModeSwitch,
+  SendButton,
+  SendIssuePopover,
+  useSendKind,
+} from "./compose-controls";
 import { cancelStop, type StopTarget } from "./session-stop";
 import { resetSendGate } from "./send-gate";
 
@@ -29,13 +38,12 @@ export type SessionComposeProps = {
    * beside a mouse.
    */
   phone?: boolean;
-  /** A mouse-driven dock keeps its key pad behind a "按键" button beside the field. */
-  keysButton?: boolean;
 };
 
 /** Guided compose field. The textarea is controller-owned after mount; React only owns chrome. */
-export function SessionCompose({ includeBack, phone = includeBack, keysButton = false }: SessionComposeProps) {
+export function SessionCompose({ includeBack, phone = includeBack }: SessionComposeProps) {
   const snap = useSyncExternalStore(subscribeComposeView, composeViewSnapshot, composeViewSnapshot);
+  const live = useComposeLive();
   const paneId = usePaneId();
   const focused = useComposeFocused();
   // The button's face and the line count follow the text; a controller-owned
@@ -50,22 +58,22 @@ export function SessionCompose({ includeBack, phone = includeBack, keysButton = 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const inputID = phone ? "compose-text-mobile" : "compose-text-desktop";
   const statusID = `${inputID}-live-status`;
-  const pending = snap.live && Boolean(snap.pendingText);
-  const aria = snap.live ? t("compose.liveAria") : t("compose.batchAria");
+  const pending = live && Boolean(snap.pendingText);
+  const aria = live ? t("compose.liveAria") : t("compose.batchAria");
   const placeholder = pending
     ? t("compose.pendingPh", { text: liveInputPreview(snap.pendingText) })
     // "Tap Send" is for a field whose Return adds a line. Where Enter sends,
     // the neutral one reads true: the same fact decides both.
-    : snap.live ? (keysInPlace ? t("deskDock.liveKeysPh") : t("compose.livePh"))
+    : live ? (keysInPlace ? t("deskDock.liveKeysPh") : t("compose.livePh"))
       : phone ? t("compose.batchPh") : keysInPlace ? t("deskDock.batchKeysPh") : t("deskDock.batchPh");
   const send = useSendKind({
     paneId,
-    hasText: !snap.live && Boolean(snap.draft.trim()),
+    hasText: !live && Boolean(snap.draft.trim()),
     // In live input the button is the Enter key glass does not have. A mouse
     // comes with a keyboard that has one, so there it stays free to stop the
     // agent while it works, as it does in 组字.
-    live: snap.live && !pointer,
-    submitting: snap.submitBusy && !snap.live,
+    live: live && !pointer,
+    submitting: snap.submitBusy && !live,
   });
   const stopTarget = useMemo<StopTarget | null>(
     () => paneId ? { paneId, sendKey: (key) => queueKey(key) } : null,
@@ -84,14 +92,14 @@ export function SessionCompose({ includeBack, phone = includeBack, keysButton = 
   // The echo a live field waits for wraps where a hint would not: the field
   // grows by its lines and returns to one when the terminal has caught up.
   useLayoutEffect(() => {
-    if (snap.live && inputRef.current) sizeCompose(inputRef.current);
-  }, [snap.live, placeholder]);
+    if (live && inputRef.current) sizeCompose(inputRef.current);
+  }, [live, placeholder]);
 
   // A pending send or stop belongs to this pane's dock; neither may fire after it leaves.
   useLayoutEffect(() => () => { resetSendGate(); cancelStop(); }, [paneId]);
 
   return <form
-    className={`dock-form${snap.live ? " live" : ""}${pending ? " live-pending" : ""}`}
+    className={`dock-form${live ? " live" : ""}${pending ? " live-pending" : ""}`}
     onSubmit={(event) => {
       event.preventDefault();
       void submitTyped(true);
@@ -102,8 +110,13 @@ export function SessionCompose({ includeBack, phone = includeBack, keysButton = 
       {pending ? t("compose.pendingStatus", { n: Array.from(snap.pendingText).length }) : ""}
     </span>
     <AttachButton />
-    <ComposeFrame field={inputRef} draft={snap.live ? "" : snap.draft} live={snap.live} focused={focused}
-      foldable={phone} onResize={() => { if (inputRef.current) sizeCompose(inputRef.current); }}>
+    <ComposeFrame field={inputRef} draft={live ? "" : snap.draft} live={live} focused={focused}
+      foldable={phone}
+      modeSwitch={pointer ? <FieldModeSwitch live={live} onChange={(next) => {
+        void setComposeLive(next);
+        focusCompose();
+      }} /> : undefined}
+      onResize={() => { if (inputRef.current) sizeCompose(inputRef.current); }}>
       <textarea
         ref={inputRef}
         id={inputID}
@@ -118,11 +131,11 @@ export function SessionCompose({ includeBack, phone = includeBack, keysButton = 
         aria-label={aria}
         aria-describedby={statusID}
         placeholder={placeholder}
-        enterKeyHint={phone && !snap.live ? phoneEnterKeyHint() : "enter"}
+        enterKeyHint={phone && !live ? phoneEnterKeyHint() : "enter"}
         maxLength={OPERATION_INPUT_LIMITS.prompt}
       />
     </ComposeFrame>
-    {keysButton && <DockKeysButton />}
+    <DockKeysButton />
     <div className="send-slot">
       <SendIssuePopover attachments={send.attachments} />
       <SendButton
@@ -132,7 +145,7 @@ export function SessionCompose({ includeBack, phone = includeBack, keysButton = 
         submitsForm
         onSend={() => void submitTyped(true)}
         stopTarget={stopTarget}
-        longPressStops={send.working && !snap.live}
+        longPressStops={send.working && !live}
       />
     </div>
   </form>;

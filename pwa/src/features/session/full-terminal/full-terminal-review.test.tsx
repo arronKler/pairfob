@@ -224,7 +224,9 @@ describe("independent complete-terminal React review", () => {
       syncFullTerminalChrome();
       commitView();
     });
-    const more = app.querySelector<HTMLButtonElement>(".key-more")!;
+    const more = app.querySelector<HTMLButtonElement>(".dock-keys-btn")!;
+    // The one-row dock asks for the keys; the panel opens beside the composing
+    // field rather than above an always-open row.
     await act(() => { pointer(more); more.click(); });
     expectSameNode(app.querySelector(".full-terminal-host"), host);
     expectSameNode(app.querySelector(".xterm-helper-textarea"), helper);

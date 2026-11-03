@@ -207,6 +207,8 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(app.querySelector(".full-terminal-root")).toBeTruthy();
     expect((app.querySelector(".dock")) === null).toBeTrue();
     expect(app.querySelector(".full-terminal-pad")).toBeTruthy();
+    expect(app.querySelector(".full-terminal-pad .dock-keys-btn")).toBeTruthy();
+    click(".full-terminal-pad .dock-keys-btn");
     expect(app.querySelector('.full-terminal-pad [aria-label="上箭头"]')).toBeTruthy();
     click(".full-terminal-chrome .back");
     await act(async () => { await leaveFullTerminal({ rememberGuided: false, paint: false }); });
@@ -368,19 +370,19 @@ describe("complete-terminal remembers its mode per pane", () => {
     expect(pad.contains(rail)).toBeFalse();
     expect(rail.querySelectorAll(".full-terminal-scroll-btn")).toHaveLength(4);
 
-    click('.full-terminal-pad [aria-label="更多按键"]');
+    click(".full-terminal-pad .dock-keys-btn");
     const expandedPad = root.querySelector<HTMLElement>(".full-terminal-pad")!;
     expect(keysExpanded()).toBeTrue();
     expectSameNodes(root.children, [chrome, host, expandedPad]);
     expect(host.contains(rail)).toBeTrue();
-    expect(expandedPad.querySelectorAll(".keys")).toHaveLength(1);
+    expect(expandedPad.querySelectorAll(".pad-panel .keys")).toHaveLength(1);
     expect(expandedPad.querySelectorAll(".pad-page .key")).toHaveLength(14);
 
-    click('.full-terminal-pad [aria-label="更多按键"]');
+    click(".full-terminal-pad .pad-panel-handle");
     const collapsedPad = root.querySelector<HTMLElement>(".full-terminal-pad")!;
     expect(keysExpanded()).toBeFalse();
     expectSameNodes(root.children, [chrome, host, collapsedPad]);
-    expect(collapsedPad.querySelectorAll(".keys")).toHaveLength(1);
+    expect(collapsedPad.querySelectorAll(".pad-panel")).toHaveLength(0);
   });
 
   test("compose and live input switch in place without losing an unsent draft", () => {

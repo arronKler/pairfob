@@ -28,6 +28,20 @@ export function modifierIsActive(mod: Modifier): boolean {
   return active(mod);
 }
 
+export type ActiveModifier = { mod: Modifier; label: string; locked: boolean };
+
+const MODIFIER_ORDER: Modifier[] = ["ctrl", "alt", "shift", "cmd"];
+const MODIFIER_LABELS: Record<Modifier, string> = { ctrl: "Ctrl", alt: "Alt", shift: "Shift", cmd: "Cmd" };
+
+/** The latched or locked modifiers, in the order the pad draws them. */
+export function activeModifiers(): ActiveModifier[] {
+  return MODIFIER_ORDER.filter(active).map(mod => ({
+    mod,
+    label: MODIFIER_LABELS[mod],
+    locked: locked.has(mod),
+  }));
+}
+
 export function subscribeModifiers(onStoreChange: () => void): () => void {
   modifierListeners.add(onStoreChange);
   return () => { modifierListeners.delete(onStoreChange); };

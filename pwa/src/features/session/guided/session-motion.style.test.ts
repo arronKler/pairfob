@@ -40,8 +40,10 @@ describe("the send button changing kind", () => {
   });
 });
 
-describe("the dock's two-way switches", () => {
-  test.each([[".pad-kind", ".pad-kind-option"], [".dock-mode-switch", ".dock-mode-option"]])("%s slides one thumb to the pressed side", (track, option) => {
+describe("the dock's two-way switch", () => {
+  test(".pad-kind slides one thumb to the pressed side", () => {
+    const track = ".pad-kind";
+    const option = ".pad-kind-option";
     expect(rule(track)).toMatch(/grid-auto-columns:\s*1fr/);
     const thumb = rule(`${track}::before`);
     expect(thumb).toMatch(/width:\s*calc\(\(100% - 2 \* 2px\) \/ 2\)/);

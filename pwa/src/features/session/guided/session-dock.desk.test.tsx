@@ -33,7 +33,7 @@ const root = () => appRoot();
 const keysButton = () => root().querySelector<HTMLButtonElement>(".dock-keys-btn");
 const placeholder = () => root().querySelector<HTMLTextAreaElement>(".dock-form textarea")?.placeholder;
 const modeOption = (label: string) =>
-  [...root().querySelectorAll<HTMLButtonElement>(".dock-mode-option")].find((el) => el.textContent === label);
+  [...root().querySelectorAll<HTMLButtonElement>(".frame-mode-option")].find((el) => el.textContent === label);
 const keyLabels = () =>
   [...root().querySelectorAll<HTMLButtonElement>(".keys .key")].map((el) => el.getAttribute("aria-label") ?? el.textContent);
 
@@ -102,7 +102,7 @@ describe("guided dock driven by a mouse beside the list", () => {
     // One state, the one the touch row's ⋯ toggles.
     expect(keysExpanded()).toBeTrue();
     expect(keysButton()?.getAttribute("aria-expanded")).toBe("true");
-    expect(keyLabels()).toEqual(["Esc", "上箭头", "下箭头", "左箭头", "右箭头", "退格", "上一页", "下一页", "更多按键"]);
+    expect(keyLabels()).toEqual(["Esc", "上箭头", "下箭头", "左箭头", "右箭头", "退格", "上一页", "下一页", "收起到主键"]);
     expect(root().querySelector(".keys.keys-paged")).not.toBeNull();
     expect(root().querySelector(".pad-pages")).not.toBeNull();
 
@@ -111,12 +111,19 @@ describe("guided dock driven by a mouse beside the list", () => {
     expect(root().querySelector(".keys")).toBeNull();
   });
 
-  test("the pad's own ⌄ puts it away again", () => {
+  test("⋯ folds the panel to its primary row, and its handle puts it away", () => {
     setKeysExpanded(true);
     paint(DESK);
+    const panel = root().querySelector<HTMLElement>(".pad-panel")!;
+    expect(panel.dataset.panel).toBe("pages");
     act(() => root().querySelector<HTMLButtonElement>(".key-more")!.click());
+    expect(panel.dataset.panel).toBe("rail");
+    expect(root().querySelector(".pad-pages")).not.toBeNull();
+    expect(keysExpanded()).toBeTrue();
+    expect(keysButton()?.getAttribute("aria-expanded")).toBe("true");
+    act(() => root().querySelector<HTMLButtonElement>(".pad-panel-handle")!.click());
     expect(keysExpanded()).toBeFalse();
-    expect(root().querySelector(".keys")).toBeNull();
+    expect(root().querySelector(".pad-panel")).toBeNull();
     expect(keysButton()?.getAttribute("aria-expanded")).toBe("false");
   });
 
@@ -129,28 +136,29 @@ describe("guided dock driven by a mouse beside the list", () => {
     expect(sent).toEqual([["p1", "\u001b[5~"], ["p1", "\u001b[6~"]]);
   });
 
-  test("组字 / 实时 sits under the field and drives the pane's own input mode", async () => {
+  test("组字 / 实时 folds into the field and drives the pane's own input mode", async () => {
     paint(DESK);
-    const hint = root().querySelector(".dock-mode-hint");
-    expect(hint?.textContent).toContain("组字：写完再发，Enter 发送");
-    expect(hint?.textContent).toContain("实时：每个键都发到会话，F6 移出");
+    const dock = root().querySelector(".dock")!;
+    expect(dock.querySelector(".dock-mode-hint")).toBeNull();
+    const frame = root().querySelector(".compose-field");
+    expect(frame?.querySelector(".frame-mode")).not.toBeNull();
     expect(modeOption("组字")?.getAttribute("aria-pressed")).toBe("true");
     expect(modeOption("实时")?.getAttribute("aria-pressed")).toBe("false");
 
-    // The switch is one node through the change, so its thumb slides to the pressed side.
-    const track = root().querySelector(".dock-mode-switch");
+    // The switch is one node through the change and stays inside the field.
+    const track = root().querySelector(".frame-mode");
     await act(async () => { modeOption("实时")!.click(); await Promise.resolve(); await Promise.resolve(); });
     expect(composeLive()).toBeTrue();
-    expectSameNode(root().querySelector(".dock-mode-switch"), track);
-    // The current mode's line leads; a narrow column drops the other one whole.
-    expect([...root().querySelectorAll(".dock-mode-hint span")].map((el) => el.textContent))
-      .toEqual(["实时：每个键都发到会话，F6 移出", "组字：写完再发，Enter 发送"]);
+    expectSameNode(root().querySelector(".frame-mode"), track);
+    expect([...root().querySelectorAll(".frame-mode-option")].map((el) => el.textContent))
+      .toEqual(["组字", "实时"]);
     // The same per-pane choice the ··· panel's 输入 control writes.
     expect(paneComposeLive("p1")).toBeTrue();
     expect(modeOption("实时")?.getAttribute("aria-pressed")).toBe("true");
     // Live stays marked on the field itself.
     expect(root().querySelector(".dock-form")?.classList.contains("live")).toBeTrue();
     expect(root().querySelector(".compose-field")?.classList.contains("is-live")).toBeTrue();
+    expect(root().querySelector(".compose-field")?.classList.contains("has-mode")).toBeTrue();
 
     await act(async () => { modeOption("组字")!.click(); await Promise.resolve(); await Promise.resolve(); });
     expect(composeLive()).toBeFalse();
@@ -175,19 +183,24 @@ describe("guided dock driven by a mouse beside the list", () => {
   test("with the list hidden behind the inspector the back button does not make it a phone field", () => {
     paint(DESK, true);
     expect(keysButton()).not.toBeNull();
-    expect(root().querySelector(".dock-mode")).not.toBeNull();
+    expect(root().querySelector(".frame-mode")).not.toBeNull();
   });
 });
 
 describe("guided dock on a touch tablet", () => {
-  test("the wide layout keeps the key row and leaves the input mode in the panel", () => {
+  test("the wide layout leaves the keys behind their button and the input mode in the panel", () => {
     restorePointer = emulateTouchDevice();
     paint(DESK, false, true);
-    expect(keysButton()).toBeNull();
-    expect(root().querySelector(".dock-mode")).toBeNull();
-    expect(keyLabels()).toEqual(["Esc", "上箭头", "下箭头", "左箭头", "右箭头", "退格", "更多按键"]);
+    expect(keysButton()).not.toBeNull();
+    expect(keysButton()?.querySelector(".keys-word")).toBeNull();
+    expect(root().querySelector(".frame-mode")).toBeNull();
+    expect(keyLabels()).toEqual([]);
     expect(root().querySelector(".keys.keys-paged")).toBeNull();
     expect(placeholder()).toBe("组字 · 写完点发送");
+
+    act(() => keysButton()!.click());
+    expect(root().querySelector(".keys")).not.toBeNull();
+    expect(root().querySelector(".pad-pages")).not.toBeNull();
   });
 
   test("once its keyboard has sent a key, the field stops telling a finger to tap", () => {
@@ -195,7 +208,7 @@ describe("guided dock on a touch tablet", () => {
     // placeholder follows that fact rather than the pointer: still no mouse.
     restorePointer = emulateTouchDevice();
     paint(DESK, false, false);
-    expect(keysButton()).toBeNull();
+    expect(keysButton()).not.toBeNull();
     expect(placeholder()).toBe("组字 · 写完再发送");
   });
 });
@@ -213,7 +226,7 @@ describe("a touch tablet whose keyboard has proved itself", () => {
     // The same field and the same rows: the dock keeps its height, and the terminal above it its size.
     expectSameNode(field(), before);
     expect(rows()).toEqual(shape);
-    expect(root().querySelector(".dock-mode")).toBeNull();
+    expect(root().querySelector(".dock-mode-hint")).toBeNull();
     expect(placeholder()).toBe("组字 · Enter 发送");
     // Live input keeps every key, so the way out leads the line.
     act(() => setComposeLive(true));
@@ -224,11 +237,12 @@ describe("a touch tablet whose keyboard has proved itself", () => {
     expect(placeholder()).toBe("Live · F6 leaves; every other key is sent");
   });
 
-  test("under a mouse the hint line carries it and the field keeps its own words", () => {
+  test("under a mouse the switch is in the field and the field keeps its own words", () => {
     paint(DESK);
     act(() => setComposeLive(true));
     expect(placeholder()).toBe("实时 · 边打边进终端");
-    expect(root().querySelector(".dock-mode-hint")?.textContent).toContain("F6 移出");
+    expect(root().querySelector(".dock-mode-hint")).toBeNull();
+    expect(root().querySelector(".frame-mode")).not.toBeNull();
   });
 
   test("a phone that reported a key says nothing new", () => {
@@ -274,18 +288,20 @@ describe("handing the keyboard to the field without a tap (a session opened from
 });
 
 describe("guided dock on the phone", () => {
-  test("nothing is added, whatever points at it", () => {
+  test("one row, with the keys behind their icon and no mode line", () => {
     paint(PHONE, true);
-    const withMouse = root().innerHTML;
-    expect(keysButton()).toBeNull();
-    expect(root().querySelector(".dock-mode")).toBeNull();
-    expect(keyLabels()).toEqual(["Esc", "上箭头", "下箭头", "左箭头", "右箭头", "退格", "更多按键"]);
+    expect(keysButton()).not.toBeNull();
+    expect(keysButton()?.getAttribute("aria-expanded")).toBe("false");
+    expect(root().querySelector(".frame-mode")).toBeNull();
+    expect(keyLabels()).toEqual([]);
     expect(root().querySelector(".dock-form textarea")?.id).toBe("compose-text-mobile");
     expect(placeholder()).toBe("组字 · 写完点发送");
 
     unmountReact();
     restorePointer = emulateTouchDevice();
     paint(PHONE, true);
-    expect(root().innerHTML).toBe(withMouse);
+    expect(keysButton()?.querySelector(".keys-word")).toBeNull();
+    expect(keyLabels()).toEqual([]);
+    expect(root().querySelector(".frame-mode")).toBeNull();
   });
 });

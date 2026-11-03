@@ -10,6 +10,29 @@ export function preventComposeBlurUnlessIME(event: Event): void {
   if (!composeIME()) event.preventDefault();
 }
 
+/**
+ * Focus the field because the app is restoring it after a repaint, not because
+ * the reader moved there. The floating key pad stays open across that report;
+ * a tap or a keystroke is still what folds it.
+ */
+let restoringField: Element | null = null;
+
+export function focusRestoringCompose(field: HTMLElement): void {
+  restoringField = field;
+  try {
+    field.focus({ preventScroll: true });
+  } finally {
+    restoringField = null;
+  }
+}
+
+/** Whether this focus report came from `focusRestoringCompose`; consumed once. */
+export function focusRestoresPanel(target: EventTarget | null): boolean {
+  const field = restoringField;
+  restoringField = null;
+  return field !== null && field === target;
+}
+
 /** Pad chrome that must not steal compose focus; native so non-bubbling presses count. */
 export function PadChromeButton(props: ButtonHTMLAttributes<HTMLButtonElement>) {
   const ref = useRef<HTMLButtonElement>(null);

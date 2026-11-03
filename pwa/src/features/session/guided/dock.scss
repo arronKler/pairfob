@@ -1,11 +1,11 @@
 @use "./dock-switch";
 
-/* --- Dock: key rows + composer ------------------------------------------------------ */
+/* --- Dock: one compose row ---------------------------------------------------------- */
 
 .dock {
   position: relative;
   flex: 0 0 auto;
-  padding: var(--space-2) 10px calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
   background: var(--dock-bg);
   border-top: 1px solid var(--line);
 }
@@ -23,296 +23,25 @@ html[data-kb="open"] .dock { animation: dock-settle var(--dur-3) var(--ease-spri
   to { transform: none; }
 }
 
-/* A visual grab bar: this strip is the collapsible input area, not chrome. */
+/* A quiet grip: this strip is the composer, not chrome. The pad is a button now,
+   never a second row, so the dock keeps this one line whatever is open. */
 .dock:not(.agent-dock)::before {
   content: "";
   position: absolute;
-  top: 3px;
+  top: 1px;
   left: 50%;
-  width: 36px;
+  width: 28px;
   height: 2px;
-  margin-left: -18px;
+  margin-left: -14px;
   border-radius: 1px;
   background: var(--line-strong);
+  opacity: .7;
 }
 
-/* Keep some output visible in short viewports; the expanded keys scroll
-   independently so a multiline composer can remain at the bottom. */
 .dock:not(.agent-dock) {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: calc(100% - 53px - env(safe-area-inset-top, 0px) - min(96px, 20%));
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-}
-
-.keys-wrap {
-  position: relative;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-}
-
-/*
-  More swaps the pad body outright, so there is no height to transition. The rows
-  it adds arrive on the same curve as the dock settle instead, which is what the
-  eye reads as the pad opening.
-*/
-.keys-wrap .pad-pages {
-  animation: pad-open var(--dur-3) var(--ease);
-}
-
-@keyframes pad-open {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: none; }
-}
-
-/*
-  A grid, not a scroll strip: on a 390px phone the strip pushed Backspace and
-  Ctrl+C off the right edge, so the keys that stop a runaway agent needed a
-  horizontal drag first. Everything beyond the primary row is one tap away.
-  Seven equal cells in every state, the same columns as the key pages below,
-  so expanding never moves a key the thumb already knows.
-*/
-.keys {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
-  padding: 2px 0;
-}
-
-.keys + .keys { margin-top: 6px; }
-
-.key {
-  min-width: 0;
-  min-height: 44px;
-  padding: 0 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  color: var(--ink);
-  font: 560 var(--text-secondary) var(--mono);
-  user-select: none;
-  -webkit-user-select: none;
-  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
-}
-
-.key:active,
-.key.is-pressed {
-  transform: scale(0.94);
-  background: #232c38;
-  border-color: var(--line-strong);
-}
-
-.key-more { color: var(--muted); }
-
-/*
-  Keycaps come in three spellings on one baseline: a glyph, a word, and a
-  chord whose modifier sits small above the key, so a row of chords is read
-  along its lower line only. No ⌃ ⌥ symbols; the spoken label keeps "Ctrl+C".
-*/
-.keycap-glyph { font: 500 17px/1 var(--mono); }
-.keycap-word { font: 600 12.5px/1 var(--font); letter-spacing: .01em; }
-.keycap-chord {
-  display: grid;
-  justify-items: center;
-  gap: 3px;
-  line-height: 1;
-
-  small { font: 600 8.5px/1 var(--font); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-  b { font: 500 15px/1 var(--mono); }
-  b.is-word { font: 600 11.5px/1 var(--font); }
-}
-
-/* Modifiers sit on a darker cap; latched is an accent tint and locked is solid. */
-.key-mod { background: var(--surface); }
-.key-mod .keycap-word { color: var(--muted); }
-
-.key-mod[aria-pressed="true"],
-.key-mod.on {
-  background: var(--accent-16);
-  border-color: var(--accent-50);
-  color: var(--accent);
-  transform: none;
-
-  .keycap-word { color: var(--accent); }
-}
-
-.pad-pages { margin-top: 6px; overflow-x: clip; }
-.pad-page {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: repeat(2, 44px);
-  gap: 6px;
-  touch-action: pan-y;
-}
-.pad-page .key { touch-action: pan-y; }
-.pad-page[data-columns="7"] {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  column-gap: 4px;
-}
-.pad-page[data-columns="7"] .key { padding-inline: 0; }
-
-/* Page name or Edit on the left, page dots centred, kind switch on the right. */
-.pad-pagination {
-  display: grid;
-  grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
-  align-items: center;
-  min-height: 28px;
-  margin-top: 2px;
-}
-.pad-pagination-start { justify-self: start; min-width: 0; }
-.pad-pagination-end { justify-self: end; min-width: 0; }
-.pad-dots { display: flex; align-items: center; }
-.pad-page-dot {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-.pad-page-dot span {
-  width: 5px;
-  height: 5px;
-  border-radius: 99px;
-  background: var(--muted);
-  transition: width var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
-}
-.pad-page-dot[aria-current="page"] span { width: 14px; background: var(--accent); }
-
-.pad-kind {
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  @include dock-switch.track(".pad-kind-option", 2px, 6px);
-}
-.pad-kind-option {
-  min-height: 22px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--muted);
-  font: 500 11px var(--font);
-  cursor: pointer;
-  @include dock-switch.option;
-}
-.pad-kind-option[aria-pressed="true"] { color: var(--ink); }
-.pad-page-name { color: var(--muted); font: 500 10.5px var(--font); opacity: .8; }
-.pad-text-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  min-height: 28px;
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font: 500 11.5px var(--font);
-  cursor: pointer;
-
-  &.is-strong { font-weight: 640; }
-  &:disabled { color: var(--muted); opacity: .5; cursor: default; }
-}
-.pad-kind-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-
-/* The pagination row is drawn compact, 28px between the keys and the compose
-   row. Each control's hit area is the whole band a thumb can use there: up to
-   the keys' edge (the row's 2px margin) and down to the compose row, and at
-   least 44px wide. It can be no taller without taking a strip off a key or off
-   the field, so the height is what the layout has, not 44. */
-/* The gap down to the compose row. It is the same row in guided and in the
-   complete terminal, in both input modes (full-terminal-pad.tsx). */
-.pad-pages { --pad-band-below: 8px; }
-
-.pad-kind-option, .pad-text-btn, .pad-page-dot { position: relative; }
-.pad-kind-option::before, .pad-text-btn::before, .pad-page-dot::before {
-  content: "";
-  position: absolute;
-}
-/* The option sits 3px inside the switch (its border and padding), top, bottom
-   and at the pad's side; the two options share an edge, so each reaches outward. */
-.pad-kind-option::before { inset: -5px 0 calc(-3px - var(--pad-band-below)); }
-.pad-kind-option:first-child::before { left: -3px; }
-.pad-kind-option:last-child::before { right: -3px; }
-/* Dots stand 32px apart: the end ones reach outward to 44, the ones between keep
-   their 32. The switch stays on top where a full row leaves the dots no room. */
-.pad-page-dot::before { inset: -4px 0 calc(-2px - var(--pad-band-below)); }
-.pad-page-dot:first-child::before { left: -12px; }
-.pad-page-dot:last-child::before { right: -12px; }
-.pad-pagination-end { position: relative; z-index: 1; }
-.pad-text-btn::before { inset: -2px -8px calc(0px - var(--pad-band-below)); }
-/* The keyboard's ring goes round what is pressed. A text action and a dot are
-   drawn far smaller than their hit area (a 31px word, a 5px dot), and a ring
-   on that box hugged the label, square. The ring is the hit area's width and
-   the band's height less 2px of air from the keys and the field, rounded like
-   every other control, and centred on the label: under a mouse the band reaches
-   further down than up, so it is drawn on its own element, not on the hit area. */
-.pad-text-btn:focus-visible, .pad-page-dot:focus-visible { outline: none; }
-.pad-text-btn:focus-visible::after, .pad-page-dot:focus-visible::after {
-  content: "";
-  position: absolute;
-  inset: -2px -8px;
-  border-radius: var(--r-sm);
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  pointer-events: none;
-}
-.pad-page-dot:focus-visible::after { inset: -4px 0; }
-/* An action at the pad's side has no room outward: like its hit area, the ring reaches inward. */
-.pad-pagination-start > .pad-text-btn:first-child:focus-visible::after { left: 0; right: -14px; }
-.pad-pagination-end > .pad-text-btn:last-child:focus-visible::after { left: -14px; right: 0; }
-/* In the guided pad this row is the last thing in a scroller. A hit area
-   reaching below the scroller's own box is clipped there and still counts as
-   content: the pad scrolled by the difference and grew a scrollbar under a
-   mouse. So the scroller owns the gap under the row (its padding, taken back
-   by the margin, moves nothing) and the hit areas stop inside it. */
-.keys-wrap { padding-bottom: 8px; margin-bottom: -8px; }
-/* The same at the row's two ends. The page clips sideways until its commands
-   are being edited (the × badges overhang it); from then on a hit area past the
-   pad's side was content too, and the pad scrolled sideways by those 8px. */
-.keys-wrap .pad-pagination-start > .pad-text-btn:first-child::before { left: 0; }
-.keys-wrap .pad-pagination-end > .pad-text-btn:last-child::before { right: 0; }
-/* Short edge actions reach inward to keep a 45px hit area. */
-.keys-wrap .pad-pagination-start > .pad-text-btn:first-child::before { right: -14px; }
-.keys-wrap .pad-pagination-end > .pad-text-btn:last-child::before { left: -14px; }
-
-/* Under a finger that band has to be 44px high, six more than the 38 above.
-   They are found between the key rows, not taken from the terminal: while a
-   two-row page is open the rows stand 5px apart (they stood 8 and 6), so the
-   dock is exactly as tall as it was and the buffer keeps every row it had. The
-   row itself is drawn where it was in the band's middle: 8px under the keys
-   and 8px over the compose row. A mouse keeps the compact row. */
-@media (any-pointer: coarse) {
-  .keys:has(+ .pad-pages:not(.is-one-row)) { padding-top: 0; }
-  .keys + .pad-pages:not(.is-one-row) { margin-top: 3px; }
-  .pad-pages:not(.is-one-row) > .pad-page { row-gap: 5px; }
-  .pad-pages:not(.is-one-row) > .pad-pagination { margin-top: 8px; }
-  .pad-pages:not(.is-one-row) .pad-kind-option::before { top: -11px; }
-  .pad-pages:not(.is-one-row) .pad-page-dot::before { top: -10px; }
-  .pad-pages:not(.is-one-row) .pad-text-btn::before { top: -8px; }
-  /* The ring follows the taller band, 2px inside it. */
-  .pad-pages:not(.is-one-row) .pad-text-btn:focus-visible::after { top: -6px; bottom: -6px; }
-  .pad-pages:not(.is-one-row) .pad-page-dot:focus-visible::after { top: -8px; bottom: -8px; }
-  /* Edge actions reach inward for the width they cannot have outward, in the complete terminal too. */
-  .pad-pages:not(.is-one-row) .pad-pagination-start > .pad-text-btn:first-child::before { right: -14px; }
-  .pad-pages:not(.is-one-row) .pad-pagination-end > .pad-text-btn:last-child::before { left: -14px; }
-
-}
-
-.slash-cmd {
-  min-height: 44px;
-  padding: 0 var(--space-1);
-  font: 500 12px/1.2 var(--mono);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .dock-form {
@@ -320,7 +49,6 @@ html[data-kb="open"] .dock { animation: dock-settle var(--dur-3) var(--ease-spri
   display: flex;
   gap: var(--space-2);
   align-items: flex-end;
-  margin-top: var(--space-2);
 }
 
 .dock-form textarea {
@@ -392,143 +120,13 @@ html[data-kb="open"] .dock { animation: dock-settle var(--dur-3) var(--ease-spri
    not a motion. */
 @media (prefers-reduced-motion: reduce) {
   html[data-kb="open"] .dock { animation: none; }
-
-  .keys-wrap .pad-pages { animation: none; }
-}
-
-
-.key-mod { position: relative; touch-action: none; -webkit-touch-callout: none; }
-.key-mod.is-locked {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--surface-2);
-  box-shadow: inset 0 0 0 2px var(--surface-2);
-
-  /* A locked key is also latched; its accent label would vanish into the solid cap. */
-  .keycap-word { color: inherit; }
-}
-.key-lock {
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  top: 2px;
-  right: 2px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-}
-
-/* --- Command pad: your commands and in-place editing ------------------------------ */
-
-.quick-cmd {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: var(--surface);
-  border-color: var(--line-strong);
-  font: 500 12px/1.2 var(--font);
-}
-
-.quick-add-first {
-  gap: 4px;
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: transparent;
-  color: var(--accent);
-  font: 500 12px/1.2 var(--font);
-}
-
-.quick-example {
-  gap: 3px;
-  border-style: dashed;
-  background: transparent;
-  color: var(--muted);
-  font: 500 12px/1.2 var(--font);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.pad-edit-hint {
-  margin: 0 0 6px;
-  min-height: 18px;
-  color: var(--muted);
-  font: 400 11px/1.5 var(--font);
-  text-align: center;
-}
-.pad-undo {
-  margin-left: 6px;
-  min-height: 24px;
-  padding: 0 6px;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font: 600 11px var(--font);
-  cursor: pointer;
-}
-
-/* The × badges overhang the first column and row; the page-turn clip would cut them. */
-.pad-pages:has(> .pad-page.is-editing) { overflow-x: visible; }
-
-.pad-cell { position: relative; display: grid; min-width: 0; }
-.pad-cell > .key { min-width: 0; }
-
-/* Edit mode wobbles your commands the way a home screen does; slash commands are the agent's and stay put. */
-.quick-cmd.is-editing {
-  border-color: var(--accent-45);
-  touch-action: none;
-  -webkit-touch-callout: none;
-  animation: pad-jiggle .5s ease-in-out infinite alternate;
-}
-.pad-cell:nth-child(2n) .quick-cmd.is-editing { animation-delay: .12s; }
-.quick-cmd.is-drag-source { opacity: .3; animation: none; }
-.slash-cmd.is-locked { opacity: .4; cursor: default; }
-.pad-page [data-pad-index].is-drop-target > .key,
-.pad-page .key.is-drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
-
-@keyframes pad-jiggle {
-  from { transform: rotate(-1.2deg); }
-  to { transform: rotate(1.2deg); }
-}
-
-.pad-cell-remove {
-  position: absolute;
-  top: -7px;
-  left: -7px;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 2px solid var(--dock-bg);
-  border-radius: 50%;
-  background: #3b4454;
-  color: var(--ink);
-  cursor: pointer;
-}
-/* A larger invisible target around the small badge. */
-.pad-cell-remove::after { content: ""; position: absolute; inset: -10px; }
-
-.pad-drag-ghost {
-  position: fixed;
-  z-index: 60;
-  margin: 0;
-  pointer-events: none;
-  animation: none;
-  box-shadow: var(--shadow-3);
-  scale: 1.06;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .quick-cmd.is-editing { animation: none; outline: 1px solid var(--accent); outline-offset: -1px; }
 }
 
 /* --- Wide layout: the buffer and the dock share one centered column ------------------ */
 
 /*
   Beside the list a guided session reads as one column, the framed buffer and
-  the dock under it at the same width, instead of a field and seven keys pulled
+  the dock under it at the same width, instead of a field and seven keys drawn
   across the whole main column. Agent chat keeps its own narrower reading column.
 */
 #app.desk [data-react-guided-pane] {
@@ -567,7 +165,7 @@ html[data-kb="open"] .dock { animation: dock-settle var(--dur-3) var(--ease-spri
     border-top: 0;
   }
 
-  /* The grab bar marks a strip that spans the screen; this dock is a column. */
+  /* The grip marks a strip that spans the screen; this dock is a column. */
   .dock::before { content: none; }
 }
 
@@ -578,6 +176,3 @@ html[data-kb="open"] .dock { animation: dock-settle var(--dur-3) var(--ease-spri
     max-width: calc(100% - 20px);
   }
 }
-
-/* The pad a mouse opens from "按键": the six keys, paging, and the way back down. */
-#app.desk .keys.keys-paged { grid-template-columns: repeat(9, minmax(0, 1fr)); }

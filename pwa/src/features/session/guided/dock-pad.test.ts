@@ -131,14 +131,18 @@ describe("session pad morphs", () => {
         expect(input.value).toBe("正在编辑的文字");
         expect(composeIME()).toBe(true);
       };
-      await tap(appRoot().querySelector(".key-more")!);
+      // The one row's keys button calls the panel up beside the composing
+      // field; its local pages keep the IME and the selection untouched.
+      await tap(appRoot().querySelector(".dock-keys-btn")!);
       expect(keysExpanded()).toBe(true);
+      expect(appRoot().querySelector(".pad-panel")).toBeTruthy();
       await tap(kindOption("命令"));
       expect(appRoot().querySelector(".slash-pad")).toBeTruthy();
       await tap(kindOption("按键"));
       expect(appRoot().querySelector(".key-mod")).toBeTruthy();
-      await tap(appRoot().querySelector(".key-more")!);
+      await tap(appRoot().querySelector(".pad-panel-handle")!);
       expect(keysExpanded()).toBe(false);
+      expect(appRoot().querySelector(".pad-panel")).toBeNull();
       expect(commits).toBe(0);
       expect(requests).toBe(0);
       expect(appHost() === host).toBeTrue();
@@ -157,10 +161,15 @@ describe("session pad morphs", () => {
     }
   });
 
-  test("collapsed pad keeps only the TUI survival row", async () => {
+  test("a closed pad draws nothing; opened, its primary row is the TUI survival row", async () => {
     setKeysExpanded(false);
     await act(() => { paintPad(); });
-    expect(appRoot().querySelector(".pad-kind")).toBeNull();
+    expect(appRoot().querySelector(".pad-panel")).toBeNull();
+    expect(appRoot().querySelector('[aria-label="终端快捷键"]')).toBeNull();
+
+    act(() => { setKeysExpanded(true); });
+    expect(appRoot().querySelector(".pad-panel")).toBeTruthy();
+    expect(appRoot().querySelector(".pad-kind")).not.toBeNull();
     expect(appRoot().querySelector(".slash-pad")).toBeNull();
     expect(appRoot().querySelector('[aria-label="终端快捷键"]')).toBeTruthy();
     expect(appRoot().querySelectorAll('[aria-label="终端快捷键"] > .key')).toHaveLength(7);
@@ -196,24 +205,29 @@ describe("session pad morphs", () => {
     expect(appRoot().querySelector(".pad-pagination-start")?.textContent).toBe("编辑");
   });
 });
-test("while the soft keyboard is up only the primary row renders; ⋯ puts the keyboard away first", async () => {
+test("while the soft keyboard is up the panel waits; 按键 puts the keyboard away first", async () => {
   setKeysExpanded(true);
   setPadKind("keys");
   const field = document.createElement("textarea");
   appRoot().after(field);
   const root = document.documentElement;
   try {
-    await act(() => { paintPad(); });
-    expect(appRoot().querySelector(".pad-pages")).toBeTruthy();
+    await act(() => { paintDock(); });
+    expect(appRoot().querySelector(".pad-panel")).toBeTruthy();
+    // Touching a field closes the panel, and the glass keyboard keeps it away.
     await act(async () => { field.focus(); root.dataset.kb = "open"; await Promise.resolve(); });
-    expect(appRoot().querySelector(".pad-pages")).toBeNull();
-    expect(appRoot().querySelectorAll('[aria-label="终端快捷键"] > .key')).toHaveLength(7);
-    expect(keysExpanded()).toBe(true);
-    await act(() => { appRoot().querySelector<HTMLButtonElement>(".key-more")!.click(); });
+    expect(appRoot().querySelector(".pad-panel")).toBeNull();
+    expect(keysExpanded()).toBe(false);
+
+    // Asking for the keys puts the keyboard away first. Until it settles
+    // closed the panel stays hidden, and the button already reads as closed.
+    await act(() => { appRoot().querySelector<HTMLButtonElement>(".dock-keys-btn")!.click(); });
     expectDifferentNode(document.activeElement, field);
     expect(keysExpanded()).toBe(true);
+    expect(appRoot().querySelector(".pad-panel")).toBeNull();
+
     await act(async () => { root.dataset.kb = "closed"; await Promise.resolve(); });
-    expect(appRoot().querySelector(".pad-pages")).toBeTruthy();
+    expect(appRoot().querySelector(".pad-panel")).toBeTruthy();
   } finally {
     delete root.dataset.kb;
     field.remove();

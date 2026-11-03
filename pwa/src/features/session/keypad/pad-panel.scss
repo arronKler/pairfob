@@ -1,0 +1,518 @@
+@use "../guided/dock-switch";
+
+/* --- Floating key panel ----------------------------------------------------------------
+   Shared by the guided dock and the complete terminal. It hangs above the one
+   compose row, covers old output instead of taking a layout row, and keeps the
+   complete pad's three rows. The glass is deliberately see-through: the
+   terminal behind it still reads, and the field before it is never covered. */
+
+.pad-panel {
+  --pad-panel-bg: rgba(28, 36, 46, 0.24);
+  --pad-panel-key: rgba(26, 32, 41, 0.1);
+  --pad-panel-kind: rgba(18, 22, 29, 0.1);
+  --pad-panel-line: rgba(233, 237, 243, 0.16);
+  --pad-panel-ink: #e9edf3;
+  --pad-panel-muted: #9aa5b4;
+  --pad-panel-press: #232c38;
+  --pad-panel-lock: #cfe1ff;
+  --pad-panel-text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  position: absolute;
+  right: 10px;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  width: min(560px, calc(100% - 20px));
+  padding: 0 10px 6px;
+  border: 1px solid var(--pad-panel-line);
+  border-radius: 16px;
+  background: var(--pad-panel-bg);
+  -webkit-backdrop-filter: blur(4px) saturate(1.15);
+  backdrop-filter: blur(4px) saturate(1.15);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.52), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  color: var(--pad-panel-ink);
+  text-shadow: var(--pad-panel-text-shadow);
+  animation: pad-panel-in 0.18s ease-out;
+}
+
+@keyframes pad-panel-in {
+  from { opacity: 0; translate: 0 8px; }
+}
+
+/* A page turned, or the panel folded to its primary row, changes no box but the
+   one the reader asked to change: nothing inside repeats this entrance. */
+.pad-panel[data-panel="rail"] .pad-pages { display: none; }
+
+/* The handle is the way out. Its hit strip reaches a thumb's height around the
+   14px grip without adding a row to the panel. */
+.pad-panel-handle {
+  position: relative;
+  width: 100%;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: inherit;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pad-panel-handle::before {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+
+.pad-panel-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+
+.pad-panel-handle i {
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--pad-panel-line);
+  transition: opacity var(--dur-1);
+}
+
+.pad-panel-handle.has-status i { opacity: 0; }
+
+/* A locked or latched modifier stays visible while the panel is folded to the
+   primary row, where its key may not be on screen. */
+.pad-handle-lock {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  white-space: nowrap;
+  color: var(--pad-panel-lock);
+  font: 600 9.5px/1 var(--font);
+  letter-spacing: 0.02em;
+}
+
+/* The keys wear the glass, not a plate: a translucent cap over a translucent
+   panel still lets the line behind it show. */
+.pad-panel .key {
+  border-color: var(--pad-panel-line);
+  background: var(--pad-panel-key);
+  color: var(--pad-panel-ink);
+}
+
+.pad-panel .key:active,
+.pad-panel .key.is-pressed {
+  background: var(--pad-panel-press);
+}
+
+.pad-panel .key-mod { background: var(--pad-panel-key); }
+/* The shared modifier caps dim their word to --muted, which is too faint over
+   the line the glass shows behind it. The panel's own muted keeps them legible. */
+.pad-panel .key-mod .keycap-word { color: var(--pad-panel-muted); }
+.pad-panel .keycap-chord small { color: var(--pad-panel-muted); }
+.pad-panel .key-mod[aria-pressed="true"],
+.pad-panel .key-mod.on {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent-50);
+  color: var(--accent);
+  text-shadow: none;
+}
+
+.pad-panel .pad-kind { background: var(--pad-panel-kind); border-color: var(--pad-panel-line); }
+.pad-panel .pad-kind-option { color: var(--pad-panel-muted); }
+.pad-panel .pad-kind-option[aria-pressed="true"] { color: var(--pad-panel-ink); }
+.pad-panel .pad-page-name { color: var(--pad-panel-muted); }
+.pad-panel .pad-page-dot span { background: var(--pad-panel-muted); }
+.pad-panel .pad-page-dot[aria-current="page"] span { background: var(--accent); }
+.pad-panel .pad-text-btn { color: var(--accent); }
+.pad-panel .slash-cmd,
+.pad-panel .quick-cmd { color: var(--pad-panel-ink); }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .pad-panel { background: rgba(28, 36, 46, 0.38); }
+  .pad-panel .key,
+  .pad-panel .key-mod,
+  .pad-panel .pad-kind { background: rgba(26, 32, 41, 0.34); }
+}
+
+/* Paper keeps the same glass idea with dark ink: over the light terminal, a
+   white veil plus a hairline reads as a sheet, not as a hole in the page. */
+:root[data-theme="light"] .pad-panel {
+  --pad-panel-bg: rgba(255, 255, 255, 0.62);
+  --pad-panel-key: rgba(18, 22, 29, 0.06);
+  --pad-panel-kind: rgba(18, 22, 29, 0.06);
+  --pad-panel-line: rgba(18, 22, 29, 0.14);
+  --pad-panel-ink: #12161d;
+  --pad-panel-muted: #5d6675;
+  --pad-panel-press: rgba(18, 22, 29, 0.12);
+  --pad-panel-lock: var(--accent);
+  --pad-panel-text-shadow: none;
+  box-shadow: 0 20px 44px rgba(18, 22, 29, 0.18), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pad-panel {
+    --pad-panel-bg: rgba(255, 255, 255, 0.62);
+    --pad-panel-key: rgba(18, 22, 29, 0.06);
+    --pad-panel-kind: rgba(18, 22, 29, 0.06);
+    --pad-panel-line: rgba(18, 22, 29, 0.14);
+    --pad-panel-ink: #12161d;
+    --pad-panel-muted: #5d6675;
+    --pad-panel-press: rgba(18, 22, 29, 0.12);
+    --pad-panel-lock: var(--accent);
+    --pad-panel-text-shadow: none;
+    box-shadow: 0 20px 44px rgba(18, 22, 29, 0.18), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  }
+}
+
+/* The complete terminal is a dark plate in every theme, and its panel stays dark.
+   The theme rules above outrank a plain class chain, so the root is named too. */
+:root .full-terminal-root .pad-panel {
+  --pad-panel-bg: rgba(28, 36, 46, 0.24);
+  --pad-panel-key: rgba(26, 32, 41, 0.1);
+  --pad-panel-kind: rgba(18, 22, 29, 0.1);
+  --pad-panel-line: rgba(233, 237, 243, 0.16);
+  --pad-panel-ink: #e9edf3;
+  --pad-panel-muted: #9aa5b4;
+  --pad-panel-press: #232c38;
+  --pad-panel-lock: #cfe1ff;
+  --pad-panel-text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.52), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+/* --- Pad body -------------------------------------------------------------------------- */
+
+.keys {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.keys + .keys { margin-top: 6px; }
+
+.key {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--ink);
+  font: 560 var(--text-secondary) var(--mono);
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+
+.key:active,
+.key.is-pressed {
+  transform: scale(0.94);
+  background: #232c38;
+  border-color: var(--line-strong);
+}
+
+.key-more { color: var(--muted); }
+
+/*
+  Keycaps come in three spellings on one baseline: a glyph, a word, and a
+  chord whose modifier sits small above the key, so a row of chords is read
+  along its lower line only. No ⌃ ⌥ symbols; the spoken label keeps "Ctrl+C".
+*/
+.keycap-glyph { font: 500 17px/1 var(--mono); }
+.keycap-word { font: 600 12.5px/1 var(--font); letter-spacing: .01em; }
+.keycap-chord {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  line-height: 1;
+
+  small { font: 600 8.5px/1 var(--font); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  b { font: 500 15px/1 var(--mono); }
+  b.is-word { font: 600 11.5px/1 var(--font); }
+}
+
+/* Modifiers sit on a darker cap; latched is an accent tint and locked is solid. */
+.key-mod { background: var(--surface); }
+.key-mod .keycap-word { color: var(--muted); }
+
+.key-mod[aria-pressed="true"],
+.key-mod.on {
+  background: var(--accent-16);
+  border-color: var(--accent-50);
+  color: var(--accent);
+  transform: none;
+
+  .keycap-word { color: var(--accent); }
+}
+
+.pad-pages { margin-top: 6px; overflow-x: clip; }
+.pad-page {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(2, 44px);
+  gap: 6px;
+  touch-action: pan-y;
+}
+.pad-page .key { touch-action: pan-y; }
+.pad-page[data-columns="7"] {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  column-gap: 4px;
+}
+.pad-page[data-columns="7"] .key { padding-inline: 0; }
+
+/* Page name or Edit on the left, page dots centred, kind switch on the right.
+   In the panel the primary row sits directly under this one, so the row is
+   36px tall and each control's hit area reaches 4px into the gap between them,
+   ending where the primary row begins. Nothing is taken from a key. */
+.pad-pagination {
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
+  align-items: center;
+  min-height: 36px;
+  margin-top: 0;
+}
+.pad-pagination-start { justify-self: start; min-width: 0; }
+.pad-pagination-end { justify-self: end; min-width: 0; }
+.pad-dots { display: flex; align-items: center; }
+.pad-page-dot {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.pad-page-dot span {
+  width: 5px;
+  height: 5px;
+  border-radius: 99px;
+  background: var(--muted);
+  transition: width var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
+}
+.pad-page-dot[aria-current="page"] span { width: 14px; background: var(--accent); }
+
+.pad-kind {
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  @include dock-switch.track(".pad-kind-option", 2px, 6px);
+}
+.pad-kind-option {
+  min-height: 22px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  font: 500 11px var(--font);
+  cursor: pointer;
+  @include dock-switch.option;
+}
+.pad-kind-option[aria-pressed="true"] { color: var(--ink); }
+.pad-page-name { color: var(--muted); font: 500 10.5px var(--font); opacity: .8; }
+.pad-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 28px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: 500 11.5px var(--font);
+  cursor: pointer;
+
+  &.is-strong { font-weight: 640; }
+  &:disabled { color: var(--muted); opacity: .5; cursor: default; }
+}
+.pad-kind-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* The panel's own pagination row: the primary row is the band below it. */
+.pad-panel .keys { padding: 0 0 2px; }
+.pad-panel .pad-pages { margin-top: 0; padding: 0 0 2px; }
+
+.pad-kind-option, .pad-text-btn, .pad-page-dot { position: relative; }
+.pad-kind-option::before, .pad-text-btn::before, .pad-page-dot::before {
+  content: "";
+  position: absolute;
+}
+/* The option sits 3px inside the switch; the two share an edge. */
+.pad-kind-option::before { inset: -7px 0 -11px; }
+.pad-kind-option:first-child::before { left: -3px; }
+.pad-kind-option:last-child::before { right: -3px; }
+/* Dots stand 32px apart: the end ones reach outward to 44, the ones between keep
+   their 32. The switch stays on top where a full row leaves the dots no room. */
+.pad-page-dot::before { inset: -6px 0 -10px; }
+.pad-page-dot:first-child::before { left: -12px; }
+.pad-page-dot:last-child::before { right: -12px; }
+.pad-pagination-end { position: relative; z-index: 1; }
+.pad-text-btn::before { inset: -4px -8px -8px; }
+
+/* The keyboard's ring goes round what is pressed; a text action and a dot are
+   drawn far smaller than their hit area. */
+.pad-text-btn:focus-visible, .pad-page-dot:focus-visible { outline: none; }
+.pad-text-btn:focus-visible::after, .pad-page-dot:focus-visible::after {
+  content: "";
+  position: absolute;
+  inset: -4px -8px;
+  border-radius: var(--r-sm);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  pointer-events: none;
+}
+.pad-page-dot:focus-visible::after { inset: -6px 0; }
+/* An action at the pad's side has no room outward: like its hit area, the ring reaches inward. */
+.pad-pagination-start > .pad-text-btn:first-child:focus-visible::after { left: 0; right: -14px; }
+.pad-pagination-end > .pad-text-btn:last-child:focus-visible::after { left: -14px; right: 0; }
+/* Short edge actions reach inward to keep a 44px hit area. */
+.pad-pagination-start > .pad-text-btn:first-child::before { left: 0; right: -14px; }
+.pad-pagination-end > .pad-text-btn:last-child::before { left: -14px; right: 0; }
+
+.slash-cmd {
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  font: 500 12px/1.2 var(--mono);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.key-mod { position: relative; touch-action: none; -webkit-touch-callout: none; }
+.key-mod.is-locked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface-2);
+  box-shadow: inset 0 0 0 2px var(--surface-2);
+
+  /* A locked key is also latched; its accent label would vanish into the solid cap. */
+  .keycap-word { color: inherit; }
+}
+.key-lock {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  top: 2px;
+  right: 2px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+/* --- Command pad: your commands and in-place editing ------------------------------ */
+
+.quick-cmd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--surface);
+  border-color: var(--line-strong);
+  font: 500 12px/1.2 var(--font);
+}
+
+.quick-add-first {
+  gap: 4px;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: transparent;
+  color: var(--accent);
+  font: 500 12px/1.2 var(--font);
+}
+
+.quick-example {
+  gap: 3px;
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+  font: 500 12px/1.2 var(--font);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pad-edit-hint {
+  margin: 0 0 6px;
+  min-height: 18px;
+  color: var(--muted);
+  font: 400 11px/1.5 var(--font);
+  text-align: center;
+}
+.pad-undo {
+  margin-left: 6px;
+  min-height: 24px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: 600 11px var(--font);
+  cursor: pointer;
+}
+
+/* The × badges overhang the first column and row; the page-turn clip would cut them. */
+.pad-pages:has(> .pad-page.is-editing) { overflow-x: visible; }
+
+.pad-cell { position: relative; display: grid; min-width: 0; }
+.pad-cell > .key { min-width: 0; }
+
+/* Edit mode wobbles your commands the way a home screen does; slash commands are the agent's and stay put. */
+.quick-cmd.is-editing {
+  border-color: var(--accent-45);
+  touch-action: none;
+  -webkit-touch-callout: none;
+  animation: pad-jiggle .5s ease-in-out infinite alternate;
+}
+.pad-cell:nth-child(2n) .quick-cmd.is-editing { animation-delay: .12s; }
+.quick-cmd.is-drag-source { opacity: .3; animation: none; }
+.slash-cmd.is-locked { opacity: .4; cursor: default; }
+.pad-page [data-pad-index].is-drop-target > .key,
+.pad-page .key.is-drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
+
+@keyframes pad-jiggle {
+  from { transform: rotate(-1.2deg); }
+  to { transform: rotate(1.2deg); }
+}
+
+.pad-cell-remove {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--dock-bg);
+  border-radius: 50%;
+  background: #3b4454;
+  color: var(--ink);
+  cursor: pointer;
+}
+/* A larger invisible target around the small badge. */
+.pad-cell-remove::after { content: ""; position: absolute; inset: -10px; }
+
+.pad-drag-ghost {
+  position: fixed;
+  z-index: 60;
+  margin: 0;
+  pointer-events: none;
+  animation: none;
+  box-shadow: var(--shadow-3);
+  scale: 1.06;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pad-panel { animation: none; }
+  .quick-cmd.is-editing { animation: none; outline: 1px solid var(--accent); outline-offset: -1px; }
+}
+
+/* A mouse beside the list gets paging in the primary row, where the hidden
+   scroll rail would have offered it. */
+#app.desk .keys.keys-paged { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+
+/* A phone on its side has width to spare: the panel may spread further than a
+   portrait phone's column, still one row per page in dense mode. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .pad-panel { width: min(680px, calc(100% - 20px)); }
+}

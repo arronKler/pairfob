@@ -1,18 +1,18 @@
-import { COMPOSE_MIN_PX } from "../compose-store";
+import { composeMinPx } from "../compose-size";
 import { terminalViewportSize, usedWidth, type HostInner } from "./full-terminal-fit";
 
 /**
  * The room the computer's terminal is sized against.
  *
- * Usually that is the box the renderer shows. Three things take part of that
+ * Usually that is the box the renderer shows. Two things take part of that
  * box without being a reason to resize the computer's terminal: beside the
  * list, the inspector, which covers some of the column's width for as long as
- * it is open, and the key pad a mouse calls up for a moment, which takes some
- * of its height; and everywhere, a draft longer than one line, which takes a
- * row for every line until it is sent. All are measured back in here, so the
+ * it is open; and everywhere, a draft longer than one line, which takes a row
+ * for every line until it is sent. Both are measured back in here, so the
  * request is what it would be without them and only the window resizing (or a
- * keyboard on the glass) changes it. The renderer keeps the requested grid and
- * shows the part that fits (see the fit controller).
+ * keyboard on the glass) changes it. The floating key panel takes no layout
+ * height at all; it covers the host and the cursor's row is lifted past it
+ * (see `floatingPadCover` and the fit controller).
  */
 export function terminalRoom(host: HTMLElement, visible: HostInner): HostInner {
   return {
@@ -51,26 +51,26 @@ function hiddenListWidth(host: HTMLElement): number {
 }
 
 /**
- * How much shorter the pad's passing parts made the terminal: the momentary key
- * pad, and the lines a draft has grown past its first. A pad already at its
- * ceiling scrolls instead of growing, so they can cost less than their own
- * height.
+ * How much shorter the pad's passing parts made the terminal: the lines a draft
+ * has grown past its first. The key panel floats over the host instead, so it
+ * costs the computer's terminal nothing.
  */
 function coveredHeight(host: HTMLElement): number {
   const pad = host.parentElement?.querySelector<HTMLElement>(".full-terminal-pad");
-  if (!pad) return 0;
-  const taken = momentaryKeysHeight(pad) + draftGrowth(pad);
-  if (!(taken > 0)) return 0;
-  const frame = pad.offsetHeight - pad.clientHeight;
-  const without = Math.min(pad.offsetHeight, pad.scrollHeight + frame - taken);
-  return Math.max(0, pad.offsetHeight - without);
+  return pad ? draftGrowth(pad) : 0;
 }
 
-function momentaryKeysHeight(pad: HTMLElement): number {
-  const keys = pad.querySelector<HTMLElement>(".full-terminal-pad-controls.is-momentary");
-  if (!keys) return 0;
-  const style = window.getComputedStyle(keys);
-  return keys.offsetHeight + (Number.parseFloat(style.marginTop) || 0) + (Number.parseFloat(style.marginBottom) || 0);
+/**
+ * How much of the host's bottom the floating key panel covers. The panel hangs
+ * above the dock, so its top marks the point where terminal output is no
+ * longer visible; the fit controller lifts the cursor's row clear of it.
+ */
+export function floatingPadCover(host: HTMLElement): number {
+  const panel = host.parentElement?.querySelector<HTMLElement>(".pad-panel");
+  if (!panel) return 0;
+  const box = host.getBoundingClientRect();
+  const top = panel.getBoundingClientRect().top;
+  return Math.max(0, Math.min(box.height, box.bottom - top));
 }
 
 /**
@@ -79,5 +79,5 @@ function momentaryKeysHeight(pad: HTMLElement): number {
  */
 function draftGrowth(pad: HTMLElement): number {
   const field = pad.querySelector<HTMLElement>(".full-terminal-compose-input");
-  return field ? Math.max(0, field.offsetHeight - COMPOSE_MIN_PX) : 0;
+  return field ? Math.max(0, field.offsetHeight - composeMinPx(field)) : 0;
 }

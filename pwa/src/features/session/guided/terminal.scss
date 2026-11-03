@@ -53,6 +53,19 @@
   width: max-content;
   min-width: 100%;
   min-height: 100%;
+  transition: transform var(--dur-2) var(--ease);
+}
+
+/* The floating key panel covers the buffer's bottom without taking a layer
+   row. The content slides just far enough for the last line to clear it
+   (guided/pad-lift.ts); the term stays the scroller, and the top clips on the
+   read edge. */
+.term.is-pad-lifted .term-inner {
+  transform: translateY(calc(-1 * var(--pad-lift, 0px)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-inner { transition: none; }
 }
 
 /*

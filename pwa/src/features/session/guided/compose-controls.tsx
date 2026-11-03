@@ -1,4 +1,4 @@
-import { ArrowUp, CornerDownLeft, Keyboard, Square } from "lucide-react";
+import { ArrowUp, CornerDownLeft, Keyboard, Square, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { t } from "../../../lib/i18n";
 import { MOTION_MS } from "../../../shared/ui/dom/motion";
@@ -18,11 +18,12 @@ import {
 import { PadChromeButton, preventComposeBlurUnlessIME } from "../compose-focus";
 import { draftLineCount } from "../compose-size";
 import { playMove } from "../measured-move";
+import { usePointerFine } from "../../../app/input-mode";
 import { clearModifiers } from "../keypad/keypad";
 import { useShortLandscape } from "../keypad/short-landscape";
-import { useSoftKeyboardOpen } from "../keypad/soft-keyboard";
+import { dismissSoftKeyboard, useSoftKeyboardOpen } from "../keypad/soft-keyboard";
 import { useKeysExpanded } from "../../settings/hooks";
-import { keysExpanded, setKeysExpanded } from "../../settings/preferences-store";
+import { setKeysExpanded } from "../../settings/preferences-store";
 import {
   cancelSendWait,
   connectSendAttachments,
@@ -307,12 +308,21 @@ function sendContent(kind: SendKind, percent: number, compact: boolean): { label
       return { label: t("compose.sending"), aria: t("compose.sendingAria") };
     case "wait":
       return { label: <><Spinner />{t("compose2.waitUpload", { n: percent })}</>, aria: t("compose2.waitUploadAria") };
+    // A compact button wears every face in the same circle as its arrow, so the
+    // field beside it never gives way: the square says stop, the spinner says
+    // the stop is under way, and the × says the stop did not land (force).
     case "stop":
-      return { label: <><Square size={13} fill="currentColor" aria-hidden="true" />{t("compose2.stop")}</>, aria: t("compose2.stopAria") };
+      return compact
+        ? { label: <Square size={13} fill="currentColor" aria-hidden="true" />, aria: t("compose2.stopAria") }
+        : { label: <><Square size={13} fill="currentColor" aria-hidden="true" />{t("compose2.stop")}</>, aria: t("compose2.stopAria") };
     case "stopping":
-      return { label: <><Spinner />{t("compose2.stopping")}</>, aria: t("compose2.stoppingAria") };
+      return compact
+        ? { label: <Spinner />, aria: t("compose2.stoppingAria") }
+        : { label: <><Spinner />{t("compose2.stopping")}</>, aria: t("compose2.stoppingAria") };
     case "force":
-      return { label: <><Square size={13} fill="currentColor" aria-hidden="true" />{t("compose2.force")}</>, aria: t("compose2.forceAria") };
+      return compact
+        ? { label: <X size={16} aria-hidden="true" />, aria: t("compose2.forceAria") }
+        : { label: <><Square size={13} fill="currentColor" aria-hidden="true" />{t("compose2.force")}</>, aria: t("compose2.forceAria") };
   }
 }
 
@@ -332,8 +342,9 @@ export function SendButton({ kind, percent, className, onSend, submitsForm = fal
   // Once a stop is under way the button already has the width of its widest
   // step, 强制停止: it does not grow under the finger when that step is offered.
   // One wrapper in every kind, so the label is the same node's child throughout
-  // and knows a change of kind from a first paint.
-  const reserve = kind === "stopping" || kind === "force";
+  // and knows a change of kind from a first paint. A compact button keeps its
+  // circle through every kind, so there is no second width to reserve.
+  const reserve = !compact && (kind === "stopping" || kind === "force");
   const content = <span className={reserve ? "send-face send-reserve" : "send-face"} data-widest={reserve ? t("compose2.force") : undefined}>
     <Swap on={kind} className="send-label">{label}</Swap>
   </span>;
@@ -386,6 +397,8 @@ export type ComposeFrameProps = {
   focused: boolean;
   /** Phone layouts give a multi-line draft's space back to the terminal on blur. */
   foldable: boolean;
+  /** 组字 / 实时 folded into the field's right end, so the dock keeps one row. */
+  modeSwitch?: ReactNode;
   /** Re-measure after the fold changes the field's height. */
   onResize?: () => void;
   children: ReactNode;
@@ -397,9 +410,10 @@ export type ComposeFrameProps = {
  * is covered by a button so the tap that expands it restores the caret where
  * the reader left it, instead of wherever the finger landed.
  */
-export function ComposeFrame({ field, draft, live, focused, foldable, onResize, children }: ComposeFrameProps) {
+export function ComposeFrame({ field, draft, live, focused, foldable, modeSwitch, onResize, children }: ComposeFrameProps) {
   const lines = draftLineCount(draft);
   const folded = foldable && !focused && !live && lines > 1;
+  const hasMode = Boolean(modeSwitch);
   const caret = useRef<[number, number] | null>(null);
   const resize = useRef(onResize);
   resize.current = onResize;
@@ -411,13 +425,11 @@ export function ComposeFrame({ field, draft, live, focused, foldable, onResize, 
     el.addEventListener("blur", save);
     return () => el.removeEventListener("blur", save);
   }, [field]);
-  // Folding, and the keyboard changing the room the field may take, both re-measure.
-  // So do the pad opening over a phone on its side, where its rows come out of
-  // the lines the field may show, and the phone being turned.
+  // Folding, the keyboard changing the room the field may take, the mode switch
+  // taking its right end, and the phone being turned all re-measure.
   const keyboardOpen = useKeyboardOpen();
-  const padOpen = useKeysExpanded();
   const landscape = useShortLandscape();
-  useLayoutEffect(() => { resize.current?.(); }, [folded, keyboardOpen, padOpen, landscape]);
+  useLayoutEffect(() => { resize.current?.(); }, [folded, keyboardOpen, hasMode, landscape]);
   const showLines = !live && (lines > 3 || folded);
   const unfold = () => {
     const el = field.current;
@@ -426,46 +438,64 @@ export function ComposeFrame({ field, draft, live, focused, foldable, onResize, 
     const [start, end] = caret.current ?? [el.value.length, el.value.length];
     el.setSelectionRange(start, end);
   };
-  return <div className={`compose-field${live ? " is-live" : ""}${folded ? " is-folded" : ""}`}>
+  return <div className={`compose-field${live ? " is-live" : ""}${folded ? " is-folded" : ""}${hasMode ? " has-mode" : ""}`}>
     {live && <span className="compose-live-tag" aria-hidden="true">{t("compose2.liveTag")}</span>}
     {children}
+    {modeSwitch}
     {showLines && <span className="compose-lines" aria-hidden="true">{t("compose2.lines", { n: lines })}</span>}
     {folded && <Button className="compose-unfold" aria-label={t("compose2.unfoldAria", { n: lines })} onClick={unfold} />}
   </div>;
 }
 
 /**
- * "按键" in the dock of a mouse-driven session. A hardware keyboard has every
- * key the pad offers, so the pad is put away until asked for; this shows and
- * hides the same expanded pad the touch row's ⋯ opens.
+ * The dock's key button, one row with the field on every surface. A finger gets
+ * the keyboard mark alone (44px); a mouse gets the word 按键 beside it, because
+ * a hardware keyboard makes the pad optional. It opens the floating panel,
+ * never a layout row, so no key press resizes the program on the computer.
+ * Asking for keys puts the soft keyboard away first; the two never share the
+ * screen. Closing clears any latched or locked modifier with the panel.
  */
-export function DockKeysButton() {
+export function DockKeysButton({ beforeOpen }: { beforeOpen?: () => void } = {}) {
   const expanded = useKeysExpanded();
-  return <PadChromeButton type="button" className="dock-keys-btn" aria-expanded={expanded ? "true" : "false"}
-    title={t(expanded ? "deskDock.keysHide" : "deskDock.keysShow")}
+  const keyboard = useSoftKeyboardOpen();
+  const pointer = usePointerFine();
+  const shown = expanded && !keyboard;
+  return <PadChromeButton type="button" className="dock-keys-btn"
+    aria-label={t(shown ? "deskDock.keysHide" : "deskDock.keysShow")}
+    aria-expanded={shown ? "true" : "false"}
+    title={t(shown ? "deskDock.keysHide" : "deskDock.keysShow")}
     onClick={() => {
-      clearModifiers();
-      setKeysExpanded(!keysExpanded());
+      if (shown) {
+        clearModifiers();
+        setKeysExpanded(false);
+        return;
+      }
+      beforeOpen?.();
+      // A hardware keyboard's field keeps its focus (and an IME its composition);
+      // only the glass keyboard has to go before the panel can take its place.
+      if (keyboard) dismissSoftKeyboard();
+      setKeysExpanded(true);
     }}>
-    <Keyboard size={16} aria-hidden="true" /><span>{t("deskDock.keys")}</span>
+    <Keyboard size={pointer ? 16 : 20} aria-hidden="true" />
+    {pointer && <span className="keys-word">{t("deskDock.keys")}</span>}
   </PadChromeButton>;
 }
 
 /**
- * 组字 / 实时 under the field of a mouse-driven session: the per-pane input mode
- * the `···` panel also sets, with a line saying where the keys go. The field
- * itself still carries the live marking; this only makes the choice reachable.
+ * 组字 / 实时 folded into the field's right end, so a pointer's dock keeps one
+ * row. The field's placeholder already says where keys go, which is why the
+ * switch needs no line under it. The live option wears the field's live colour.
  */
-export function InputModeSwitch({ live, onChange, hints }: {
-  live: boolean; onChange: (live: boolean) => void; hints: readonly string[];
+export function FieldModeSwitch({ live, onChange }: {
+  live: boolean; onChange: (live: boolean) => void;
 }) {
-  return <div className="dock-mode">
-    <div className="dock-mode-switch" role="group" aria-label={t("pane.inputAria")}>
-      {[false, true].map(option => <PadChromeButton key={String(option)} type="button" className="dock-mode-option"
-        aria-pressed={live === option ? "true" : "false"} title={t(option ? "pane.liveAria" : "pane.composeAria")}
-        onClick={() => { if (live !== option) onChange(option); }}>
-        {t(option ? "compose.live" : "compose.batch")}</PadChromeButton>)}
-    </div>
-    <p className="dock-mode-hint">{hints.map(hint => <span key={hint}>{hint}</span>)}</p>
+  return <div className="frame-mode" role="group" aria-label={t("pane.inputAria")}>
+    {[false, true].map(option => <PadChromeButton key={String(option)} type="button"
+      className={option ? "frame-mode-option is-live" : "frame-mode-option"}
+      aria-pressed={live === option ? "true" : "false"}
+      title={t(option ? "pane.liveAria" : "pane.composeAria")}
+      onClick={() => { if (live !== option) onChange(option); }}>
+      {t(option ? "compose.live" : "compose.batch")}
+    </PadChromeButton>)}
   </div>;
 }

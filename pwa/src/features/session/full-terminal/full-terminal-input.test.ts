@@ -281,7 +281,7 @@ describe("complete-terminal xterm keyboard gate", () => {
 });
 
 describe("complete-terminal pad chrome", () => {
-  test("shows esc and arrows, then more keys after expand", () => {
+  test("the keys wait behind 按键, which opens esc, arrows and the rest of the pad", () => {
     setKeysExpanded(false);
     setPadKind("keys");
     const sent: string[] = [];
@@ -294,11 +294,11 @@ describe("complete-terminal pad chrome", () => {
       },
     }));
     const pad = appRoot();
-    const labels = [...pad.querySelectorAll(".full-terminal-pad button")].map((el) => el.getAttribute("aria-label") || el.textContent);
-    expect(labels.slice(0, 6)).toEqual(["Esc", "上箭头", "下箭头", "左箭头", "右箭头", "退格"]);
-    expect(pad.querySelector('[aria-label="更多按键"]') !== null).toBeTrue();
-    act(() => { (pad.querySelector('[aria-label="更多按键"]') as HTMLButtonElement).click(); });
+    expect(pad.querySelector(".keys")).toBeNull();
+    act(() => { pad.querySelector<HTMLButtonElement>(".dock-keys-btn")!.click(); });
     expect(keysExpanded()).toBe(true);
+    const labels = [...pad.querySelectorAll(".keys .key")].map((el) => el.getAttribute("aria-label") || el.textContent);
+    expect(labels.slice(0, 6)).toEqual(["Esc", "上箭头", "下箭头", "左箭头", "右箭头", "退格"]);
     const expanded = [...pad.querySelectorAll(".full-terminal-pad button")].map((el) => el.textContent);
     expect(pad.querySelector('[aria-label="Ctrl+C"]') !== null).toBeTrue();
     expect(expanded).toContain("Alt");

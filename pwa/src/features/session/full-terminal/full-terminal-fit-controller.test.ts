@@ -177,6 +177,10 @@ function column(mode: "fit" | "pan", cols: 80 | 100 | 120 = 80) {
   Object.defineProperties(host, {
     clientWidth: { get: () => width },
     clientHeight: { get: () => height },
+    getBoundingClientRect: {
+      configurable: true,
+      value: () => ({ top: 0, bottom: height, left: 0, right: width, width, height }),
+    },
   });
   const pad = document.createElement("div");
   pad.className = "full-terminal-pad";
@@ -218,21 +222,20 @@ function column(mode: "fit" | "pan", cols: 80 | 100 | 120 = 80) {
       appRoot().classList.add("rail-hidden");
       appRoot().style.setProperty("--rail-w", `${listWidth}px`);
     },
-    /** The momentary pad opens (and takes its height from the host) or closes. */
-    keys(keysHeight: number | null) {
+    /**
+     * The floating key panel opens over the host, covering `cover` of its bottom,
+     * or closes. It takes no layout height: the host stays the height it was.
+     */
+    keys(cover: number | null) {
       pad.replaceChildren();
-      const padHeight = 80 + (keysHeight ?? 0);
-      height = 648 - (keysHeight ?? 0);
-      Object.defineProperties(pad, {
-        offsetHeight: { value: padHeight + 1, configurable: true },
-        clientHeight: { value: padHeight, configurable: true },
-        scrollHeight: { value: padHeight, configurable: true },
+      if (cover === null) return;
+      const panel = document.createElement("div");
+      panel.className = "pad-panel";
+      Object.defineProperty(panel, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ top: height - cover, bottom: height, left: 0, right: 0, width: 0, height: cover }),
       });
-      if (keysHeight === null) return;
-      const controls = document.createElement("div");
-      controls.className = "full-terminal-pad-controls is-momentary";
-      Object.defineProperty(controls, "offsetHeight", { value: keysHeight });
-      pad.append(controls);
+      pad.append(panel);
     },
     /** The draft is `lines` long: every line past the first takes 20px from the host. */
     draft(lines: number) {

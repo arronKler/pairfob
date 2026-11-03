@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { useComposeDraft, useComposeFocused, usePaneId } from "../hooks";
 import { t } from "../../../lib/i18n";
 import { OPERATION_INPUT_LIMITS } from "../../../lib/operations";
@@ -16,12 +16,12 @@ import { useFullTerminalStopTarget } from "./full-terminal-stop";
 
 export type FullTerminalComposeProps = {
   send: (text: string, enter: boolean) => boolean;
-  /** A mouse-driven pad keeps its keys behind a "按键" button beside the field. */
-  keysButton?: boolean;
+  /** 组字 / 实时 folded into the field's right end on a pointer surface. */
+  modeSwitch?: ReactNode;
 };
 
 /** Batch compose form. The textarea is controller-owned after mount. */
-export function FullTerminalCompose({ send, keysButton = false }: FullTerminalComposeProps) {
+export function FullTerminalCompose({ send, modeSwitch }: FullTerminalComposeProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const sendRef = useRef(send);
@@ -62,7 +62,8 @@ export function FullTerminalCompose({ send, keysButton = false }: FullTerminalCo
     <label className="sr-only" htmlFor="full-terminal-compose">{aria}</label>
     <AttachButton />
     <ComposeFrame field={fieldRef} draft={draft} live={false} focused={focused}
-      foldable={phone} onResize={() => { if (fieldRef.current) fitComposeHeight(fieldRef.current); }}>
+      foldable={phone} modeSwitch={modeSwitch}
+      onResize={() => { if (fieldRef.current) fitComposeHeight(fieldRef.current); }}>
       <textarea
         ref={fieldRef}
         id="full-terminal-compose"
@@ -80,7 +81,7 @@ export function FullTerminalCompose({ send, keysButton = false }: FullTerminalCo
         maxLength={OPERATION_INPUT_LIMITS.prompt}
       />
     </ComposeFrame>
-    {keysButton && <DockKeysButton />}
+    <DockKeysButton />
     <div className="send-slot">
       <SendIssuePopover attachments={sendState.attachments} />
       <SendButton

@@ -120,6 +120,20 @@ describe("fitting the field to its draft", () => {
     expect(el.style.height).toBe(`${COMPOSE_MIN_PX}px`);
   });
 
+  test("a dense dock rests the field on its shorter row", async () => {
+    const { el } = await field(41);
+    const dock = document.createElement("div");
+    dock.className = "dock is-dense";
+    document.body.append(dock);
+    dock.append(el);
+    try {
+      fitComposeHeight(el);
+      expect(el.style.height).toBe("44px");
+    } finally {
+      dock.remove();
+    }
+  });
+
   test("a surface's own resting height leaves every other dock's alone, and cannot pass its cap", async () => {
     const fine = await field(4);
     fitComposeHeight(fine.el, 36);

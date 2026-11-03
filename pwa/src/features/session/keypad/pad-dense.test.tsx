@@ -94,7 +94,7 @@ describe("the guided dock on a phone turned on its side", () => {
     expect(root().querySelector(".dock")?.classList.contains("is-dense")).toBeTrue();
     expect(root().querySelector(".pad-pages")?.classList.contains("is-one-row")).toBeTrue();
     // The survival row is still the first thing in the pad, seven cells.
-    expect(root().querySelectorAll(".keys-wrap > .keys > *")).toHaveLength(7);
+    expect(root().querySelectorAll(".pad-panel > .keys > *")).toHaveLength(7);
     expect(pageKeys()).toEqual(["Control", "Alt / Option", "Shift", "Command", "Tab", "Shift+Tab", "Enter"]);
     expect(dots()).toHaveLength(4);
     expect(pageName()).toBe("控制");
@@ -218,7 +218,7 @@ describe("a row too narrow for its seven keys", () => {
       expect(count().textContent).toBe(`1 / ${pages}`);
       expect(count().getAttribute("aria-label")).toBe(`第 1 页，共 ${pages} 页，点按翻到下一页`);
       // The survival row is untouched: seven cells across the dock's own width.
-      expect(root().querySelectorAll(".keys-wrap > .keys > *")).toHaveLength(7);
+      expect(root().querySelectorAll(".pad-panel > .keys > *")).toHaveLength(7);
       // Every key of both groups is on some page, in order, and the page name follows the keys on it.
       const seen: Array<string | null> = [];
       const names: Array<string | undefined> = [];

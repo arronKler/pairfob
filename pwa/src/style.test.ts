@@ -37,11 +37,49 @@ function contrast(a: string, b: string): number {
   return (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05);
 }
 
+/** A selector list as the compiled sheet spells it, news trimmed and spaces collapsed. */
+function selectorKey(selector: string): string {
+  return selector
+    // Sass omits optional quotes around identifier-valued attribute selectors.
+    .replace(/\[([\w-]+)="([\w-]+)"\]/g, "[$1=$2]")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Split a selector list on its top-level commas, not those of a `:is()` or `:not()`. */
+function selectorParts(list: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < list.length; index++) {
+    const char = list[index];
+    if (char === "(" || char === "[") depth += 1;
+    else if (char === ")" || char === "]") depth -= 1;
+    else if (char === "," && depth === 0) {
+      parts.push(selectorKey(list.slice(start, index)));
+      start = index + 1;
+    }
+  }
+  parts.push(selectorKey(list.slice(start)));
+  return parts;
+}
+
+/* A selector is matched whole, in a list or alone, so `.key` never reads the
+   dense `.is-dense .key`. A rule that names it alone wins over one that shares
+   a list with others; among shares, the first wins, as a cascade would. */
+const ownRules = new Map<string, string>();
+const sharedRules = new Map<string, string>();
+for (const [, list, body] of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}@]+?)\s*\{([^{}]*)\}/g)) {
+  const key = selectorKey(list);
+  if (!ownRules.has(key)) ownRules.set(key, body);
+  for (const selector of selectorParts(key)) {
+    if (!sharedRules.has(selector)) sharedRules.set(selector, body);
+  }
+}
+
 function rule(selector: string): string {
-  // Sass omits optional quotes around identifier-valued attribute selectors.
-  const serialized = selector.replace(/\[([\w-]+)="([\w-]+)"\]/g, "[$1=$2]");
-  const escaped = serialized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] || "";
+  const key = selectorKey(selector);
+  return ownRules.get(key) ?? sharedRules.get(key) ?? "";
 }
 
 function atRuleBody(header: string): string {
@@ -275,9 +313,10 @@ describe("UI accessibility guardrails", () => {
   });
 
   test("the live terminal row is the compose row, so a mode switch resizes nothing", () => {
-    // Both rows are the same form (full-terminal-pad.tsx): one margin over the pad.
+    // Both rows are the same form (full-terminal-pad.tsx); the pad's padding is
+    // the whole gap, so neither place adds a margin of its own.
     expect(rule(".full-terminal-compose-form")).toMatch(/display:\s*flex/);
-    expect(rule(".full-terminal-compose-form")).toMatch(/margin-top:\s*8px/);
+    expect(rule(".full-terminal-compose-form")).not.toMatch(/margin-top/);
     expect(css).not.toContain(".full-terminal-live-actions:has(");
     expect(css).not.toContain(".full-terminal-kb");
   });
@@ -556,8 +595,10 @@ describe("UI accessibility guardrails", () => {
     expect(rule(".full-terminal-host")).not.toMatch(/position:\s*absolute/);
     expect(rule(".full-terminal-pad")).toMatch(/flex:\s*0 0 auto/);
     expect(rule(".full-terminal-pad")).toMatch(/min-height:\s*0/);
-    expect(rule(".full-terminal-pad")).toMatch(/max-height:\s*calc\(var\(--vv-height, 100dvh\) - 53px - env\(safe-area-inset-top, 0px\) - var\(--full-terminal-min-host-height, 128px\)\)/);
-    expect(rule(".full-terminal-pad")).toMatch(/overflow-y:\s*auto/);
+    // One row: a key press opens a panel that floats over old output, so this
+    // box never grows for it and never needs a height ceiling or a scroll.
+    expect(rule(".full-terminal-pad")).not.toMatch(/max-height/);
+    expect(rule(".full-terminal-pad")).not.toMatch(/overflow-y/);
     expect(rule(".full-terminal-pad")).not.toMatch(/position:\s*(absolute|fixed)/);
   });
 
@@ -575,74 +616,74 @@ describe("UI accessibility guardrails", () => {
     expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*max-width:\s*calc\(100% - 8px\)/);
     expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*overflow-x:\s*auto/);
     expect(shortLandscape).toMatch(/\.full-terminal-scroll\s*\{[^}]*overflow-y:\s*hidden/);
-    expect(shortLandscape).toMatch(/\.full-terminal-pad\s*\{[^}]*max-height:\s*calc\([^}]* - 48px\)/);
+    // The pad is one row now, so the rail's row is the whole of what it reserves.
+    expect(shortLandscape).not.toMatch(/\.full-terminal-pad\s*\{/);
     expect(rule(".full-terminal-scroll-btn")).toMatch(/min-width:\s*44px/);
     expect(rule(".full-terminal-scroll-btn")).toMatch(/min-height:\s*44px/);
 
     // Contract arithmetic only. Ego/Chromium owns the real getBoundingClientRect acceptance check.
+    // 53px of chrome; the one-row pad is 6 + 46 + 6 + its 1px top border.
     const chrome = { top: 0, bottom: 53 };
-    const host = { top: chrome.bottom, bottom: chrome.bottom + 128 + 48 };
+    const pad = { top: 390 - 59, bottom: 390 };
+    const host = { top: chrome.bottom, bottom: pad.top };
     const canvas = { top: host.top + 4, bottom: host.bottom - 4 - 48 };
-    const rail = { top: canvas.bottom + 2, bottom: canvas.bottom + 2 + 44 };
-    const pad = { top: host.bottom, bottom: host.bottom + (390 - 53 - 128 - 48) };
-    expect(canvas).toEqual({ top: 57, bottom: 177 });
-    expect(rail).toEqual({ top: 179, bottom: 223 });
-    expect(pad).toEqual({ top: 229, bottom: 390 });
+    const rail = { top: canvas.bottom + 6, bottom: canvas.bottom + 50 };
+    expect(canvas).toEqual({ top: 57, bottom: 279 });
+    expect(rail).toEqual({ top: 285, bottom: 329 });
+    expect(pad).toEqual({ top: 331, bottom: 390 });
     expect(chrome.bottom).toBeLessThanOrEqual(canvas.top);
     expect(canvas.bottom).toBeLessThanOrEqual(rail.top);
     expect(rail.bottom).toBeLessThanOrEqual(host.bottom);
     expect(host.bottom).toBeLessThanOrEqual(pad.top);
   });
 
-  test("a phone on its side gets a dense pad that fits under a five-row terminal without scrolling", () => {
+  test("a phone on its side gets one dense row and a panel that floats over old output", () => {
     // Everything dense hangs off one class, which keypad/short-landscape.ts sets:
     // portrait, and a mouse's pad, never match a rule below.
     const dense = rule(".dock.is-dense,\n.full-terminal-pad.is-dense");
-    expect(dense).toMatch(/padding-top:\s*6px/);
-    expect(dense).toMatch(/padding-bottom:\s*calc\(6px \+ env\(safe-area-inset-bottom, 0px\)\)/);
-    // A custom property keeps its line breaks; the formula is read on one line.
-    const formula = dense.replace(/\s+/g, " ").match(/--pad-key-h: clamp\( ?36px, calc\(\(var\(--vv-height, 100dvh\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\) - 53px - var\(--full-terminal-min-host-height, 113px\) - 48px - (\d+)px\) \/ 2\), 44px ?\)/);
-    expect(formula, dense).not.toBeNull();
+    expect(dense).toMatch(/--pad-key-h:\s*44px/);
+    expect(dense).toMatch(/padding-top:\s*4px/);
+    expect(dense).toMatch(/padding-bottom:\s*calc\(4px \+ env\(safe-area-inset-bottom, 0px\)\)/);
+    // The one row: 4px, the 44px field, 4px, and the dock's top border.
+    expect(4 + 44 + 4 + 1).toBe(53);
+    // The attach control is the field's row, not the shared dock's 46px one.
+    expect(rule(".is-dense .attach-btn")).toMatch(/width:\s*44px/);
+    expect(rule(".is-dense .attach-btn")).toMatch(/min-height:\s*44px/);
     expect(rule(".is-dense .key")).toMatch(/min-height:\s*var\(--pad-key-h\)/);
     expect(rule(".is-dense .keys")).toMatch(/padding:\s*0/);
+    expect(rule(".is-dense .pad-panel")).toMatch(/padding-bottom:\s*4px/);
+    expect(rule(".is-dense .pad-panel .keys")).toMatch(/padding-bottom:\s*2px/);
 
-    // One row to a page, its tabs, dots and page name beside it instead of under it.
+    // The old three rows survive as a panel that floats above the field. It
+    // takes no layout row and has no ceiling to scroll: the buffer behind it
+    // keeps its rows, and the canvas lifts only the cursor's row (full-terminal.ts).
+    expect(rule(".pad-panel")).toMatch(/position:\s*absolute/);
+    expect(rule(".pad-panel")).toMatch(/bottom:\s*calc\(100% \+ 8px\)/);
+    expect(rule(".pad-panel")).not.toMatch(/max-height/);
+    // The complete terminal is dark in every theme. Its panel names the root so
+    // the light theme's veil, which outranks a plain class chain, cannot take it.
+    expect(rule(":root .full-terminal-root .pad-panel")).toMatch(/--pad-panel-bg:\s*rgba\(28, 36, 46, 0\.24\)/);
+    expect(css).not.toContain("--dense-host-floor");
+    expect(css).not.toContain("--dense-lend");
+    expect(css).not.toMatch(/\.full-terminal-pad\.is-dense\s*\{[^}]*max-height/);
+
+    // One row to a page: name, keys, dots and switch beside it.
     const row = rule(".pad-pages.is-one-row");
     expect(row).toMatch(/display:\s*grid/);
     expect(row).toMatch(/grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto/);
+    expect(row).toMatch(/grid-template-rows:\s*auto var\(--pad-key-h, 44px\)/);
     expect(rule(".pad-pages.is-one-row > .pad-page")).toMatch(/grid-template-rows:\s*var\(--pad-key-h, 44px\)/);
     expect(rule(".pad-pages.is-one-row > .pad-pagination")).toMatch(/display:\s*contents/);
     expect(rule(".pad-pages.is-one-row .pad-pagination-start")).toMatch(/grid-area:\s*2\s*\/\s*1/);
     expect(rule(".pad-pages.is-one-row .pad-dots")).toMatch(/grid-area:\s*2\s*\/\s*3/);
     expect(rule(".pad-pages.is-one-row .pad-pagination-end")).toMatch(/grid-area:\s*2\s*\/\s*4/);
+    // Arranging commands puts its hint in a row above the keys.
+    expect(rule(".pad-pages.is-one-row > .pad-edit-hint")).toMatch(/grid-area:\s*1\s*\/\s*1\s*\/\s*2\s*\/\s*-1/);
+    expect(rule(".pad-pages.is-one-row > .pad-edit-hint")).toMatch(/margin-bottom:\s*4px/);
     // A page name that cannot be shown whole beside seven 44px keys is not shown cut.
     expect(css).toMatch(/@container pad-row \(max-width: 699\.98px\) \{\s*\.pad-pages\.is-one-row \.pad-page-name \{\s*display: none;/);
+    expect(css).toMatch(/@container pad-row \(max-width: 599\.98px\) \{\s*\.pad-pages\.is-one-row \.pad-page-dot \{\s*width: 24px;/);
 
-    // What the formula's constant stands for, read back from the rules that spend it.
-    const px = (declarations: string, property: string) => Number(new RegExp(`${property}:\\s*(\\d+)px`).exec(declarations)?.[1]);
-    const fixed = 1 /* the dock's top border */ + 6 + 6
-      + px(rule(".is-dense .pad-pages"), "margin-top")
-      + px(rule(".is-dense .dock-form,\n.is-dense .full-terminal-compose-form"), "margin-top")
-      + px(rule(".full-terminal-compose-input"), "min-height");
-    expect(fixed).toBe(Number(formula?.[1]));
-
-    // Contract arithmetic for the screens the walkthrough used (five rows of the
-    // default 13px terminal are 113px). Chromium owns the real rectangles.
-    const hostFloor = 113 + 48;
-    for (const [height, key] of [[390, 44], [375, 44], [360, 38.5], [430, 44]] as const) {
-      const keyHeight = Math.min(44, Math.max(36, (height - 53 - hostFloor - fixed) / 2));
-      expect(keyHeight, String(height)).toBe(key);
-      const padHeight = fixed + 2 * keyHeight;
-      const ceiling = height - 53 - hostFloor;
-      expect(padHeight, String(height)).toBeLessThanOrEqual(ceiling);
-    }
-    // Arranging commands adds a 22px line; the terminal lends it rather than let the compose row scroll away.
-    const hint = Number(/min-height:\s*(\d+)px/.exec(rule(".pad-edit-hint"))?.[1]) + Number(/margin-bottom:\s*(\d+)px/.exec(rule(".pad-pages.is-one-row > .pad-edit-hint"))?.[1]);
-    expect(hint).toBe(22);
-    expect(rule(".full-terminal-root:has(> .full-terminal-pad.is-dense .pad-edit-hint)")).toMatch(/--dense-lend:\s*22px/);
-    for (const [height, key] of [[390, 44], [375, 44], [360, 38.5]] as const) {
-      expect(fixed + 2 * key + hint, String(height)).toBeLessThanOrEqual(height - 53 - hostFloor + hint);
-    }
     // The guided buffer above it ends on the rail's row, so its last line gives back the screen-edge padding.
     expect(rule("[data-react-guided-pane]:has(.dock.is-dense) .term")).toMatch(/padding-bottom:\s*8px/);
     expect(rule(".term")).toMatch(/padding:\s*10px 12px 18px/);
@@ -653,30 +694,6 @@ describe("UI accessibility guardrails", () => {
     // A row short of dots at that width counts its pages in one box a finger wide; no dot is drawn closer.
     expect(rule(".pad-page-count")).toMatch(new RegExp(`min-width:\\s*${padFit.PAGE_COUNT_PX}px`));
     expect(css).not.toContain('data-dots="tight"');
-
-    // Under about 355px five rows and the densest pad do not both fit. The pad
-    // does not scroll: the terminal's floor is the lesser of five rows and what
-    // that pad leaves.
-    const densest = fixed + 2 * 36;
-    expect(densest).toBe(141);
-    const root = rule(".full-terminal-root:has(> .full-terminal-pad.is-dense)").replace(/\s+/g, " ");
-    expect(root).toContain("--dense-host-floor: max(0px, min( calc(var(--full-terminal-min-host-height, 128px) + 48px - var(--dense-lend)),");
-    expect(root).toContain(`- 53px - ${densest}px - var(--dense-lend))`);
-    expect(rule(".full-terminal-root:has(> .full-terminal-pad.is-dense) > .full-terminal-host")).toMatch(/min-height:\s*var\(--dense-host-floor\)/);
-    expect(css.replace(/\s+/g, " ")).toContain(".full-terminal-pad.is-dense { max-height: calc(100dvh - 53px - env(safe-area-inset-top, 0px) - var(--dense-host-floor)); }".replace("100dvh", "var(--vv-height, 100dvh)"));
-    expect(rule("#app.desk .full-terminal-pad.is-dense")).toMatch(/max-height:\s*calc\(100% - 53px - var\(--dense-host-floor\)\)/);
-    for (const [height, rows] of [[320, 3], [340, 4], [354, 4], [355, 5], [360, 5], [390, 5]] as const) {
-      const keyHeight = Math.min(44, Math.max(36, (height - 53 - hostFloor - fixed) / 2));
-      const floor = Math.max(0, Math.min(hostFloor, height - 53 - densest));
-      const ceiling = height - 53 - floor;
-      // The pad always fits under its ceiling, at every height.
-      expect(fixed + 2 * keyHeight, String(height)).toBeLessThanOrEqual(ceiling);
-      // What the terminal shows of its 21px rows above the scroll rail's row.
-      expect(Math.min(5, Math.floor((height - 53 - (fixed + 2 * keyHeight) - 8 - 48) / 21)), String(height)).toBe(rows);
-    }
-
-    // 组字 and 实时 share the compose row, whose margin is part of the budget above.
-    expect(rule(".is-dense .full-terminal-compose-form")).toMatch(/margin-top:\s*6px/);
   });
 
   test("portrait and desktop retain the vertical in-host rail baseline", () => {

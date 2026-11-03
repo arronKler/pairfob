@@ -8,7 +8,7 @@ describe("compose send button", () => {
   test("is a real Enter key and does not depend on parsed terminal text", () => {
     expect(composeSource).not.toContain("liftedPromptSelect");
     expect(composeSource).not.toContain("prompt-select");
-    expect(composeViewSource).toContain("submitting: snap.submitBusy && !snap.live");
+    expect(composeViewSource).toContain("submitting: snap.submitBusy && !live");
     expect(controlsSource).toContain('const inert = kind === "busy" || kind === "stopping"');
     // The empty-draft button is the ⏎ key, labelled for what it does.
     expect(controlsSource).toContain('<CornerDownLeft size={19} aria-hidden="true" />, aria: t("compose.enterAria")');

@@ -86,7 +86,7 @@ describe("React full-terminal compose", () => {
     const input = app.querySelector("textarea")!;
     act(() => { input.focus(); });
     input.setSelectionRange(1, 3);
-    const more = app.querySelector<HTMLButtonElement>(".key-more")!;
+    const more = app.querySelector<HTMLButtonElement>(".dock-keys-btn")!;
     const view = app.ownerDocument.defaultView!;
     const down = new view.PointerEvent("pointerdown", { button: 0, cancelable: true });
     act(() => { more.dispatchEvent(down); });
@@ -230,12 +230,15 @@ describe("React full-terminal compose", () => {
   });
 
   test("expanded pad Enter completes an IME even when blur emits no compositionend", async () => {
-    setKeysExpanded(true);
+    setKeysExpanded(false);
     const sent: Array<[string, boolean]> = [];
     await act(() => { paint((text, enter) => { sent.push([text, enter]); return true; }); });
     const input = app.querySelector("textarea") as HTMLTextAreaElement;
     const view = app.ownerDocument.defaultView!;
     act(() => { input.focus(); });
+    // The panel opens beside the field already focused, so the composition
+    // starts with both on screen, as it does when a mouse calls the keys up.
+    act(() => { app.querySelector<HTMLButtonElement>(".dock-keys-btn")!.click(); });
     act(() => { input.dispatchEvent(new view.Event("compositionstart")); });
     input.value = "屏幕回车";
     act(() => { input.dispatchEvent(new view.Event("input")); });

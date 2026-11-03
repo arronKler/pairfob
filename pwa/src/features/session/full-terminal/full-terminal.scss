@@ -256,14 +256,14 @@ html.page-zoomed .full-terminal-host .full-terminal-pan {
   touch-action: pan-x pan-y pinch-zoom;
 }
 
+/* One compose row. The pad floats above it (keypad/pad-panel.scss), so this box
+   never grows for a key press and never scrolls away from the field. */
 .full-terminal-pad {
+  position: relative;
   flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
-  max-height: calc(var(--vv-height, 100dvh) - 53px - env(safe-area-inset-top, 0px) - var(--full-terminal-min-host-height, 128px));
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
   background: var(--dock-bg);
   border-top: 1px solid var(--line);
 }
@@ -272,8 +272,7 @@ html.page-zoomed .full-terminal-host .full-terminal-pan {
   Four 44px controls plus gaps are taller than the five-row host retained in
   short landscape. Add a real grid row for the horizontal rail: it must not
   float over either the session chrome or the terminal canvas. The row is the
-  rail and 2px either side; every pixel more is taken from the key pad, which
-  has to fit under it without scrolling (dock-dense.scss counts the same 48).
+  rail and 2px either side; the floating pad takes none of it.
 */
 @media (max-height: 500px) and (orientation: landscape) {
   .full-terminal-host {
@@ -304,16 +303,12 @@ html.page-zoomed .full-terminal-host .full-terminal-pan {
     scrollbar-width: thin;
   }
 
-  .full-terminal-pad {
-    max-height: calc(var(--vv-height, 100dvh) - 53px - env(safe-area-inset-top, 0px) - var(--full-terminal-min-host-height, 128px) - 48px);
   }
-}
 
 .full-terminal-compose-form {
   display: flex;
   gap: 8px;
   align-items: flex-end;
-  margin-top: 8px;
 }
 
 .full-terminal-compose-input {
@@ -475,12 +470,6 @@ html.full-terminal-active body {
 
 @media (prefers-reduced-motion: reduce) {
   .full-terminal-pan-thumb { transition: none; }
-}
-
-/* The pad's ceiling is measured from the column it sits in, which can start
-   below the link back to the board, rather than from the whole viewport. */
-#app.desk .full-terminal-pad {
-  max-height: calc(100% - 53px - var(--full-terminal-min-host-height, 128px));
 }
 
 /* A mouse has a wheel and the pad's paging; the press-and-hold rail is a finger's. */

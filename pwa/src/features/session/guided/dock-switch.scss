@@ -55,6 +55,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pad-kind[data-from]::before,
-  .dock-mode-switch[data-from]::before { animation: none; }
+  .pad-kind[data-from]::before { animation: none; }
 }

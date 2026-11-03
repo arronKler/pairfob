@@ -301,6 +301,17 @@ function easeCollapse(field: HTMLTextAreaElement, from: number, to: number): voi
 }
 
 /**
+ * The dense dock's row is 44px: one line plus the field's borders, and still a
+ * full touch target. The shared dock rests at `COMPOSE_MIN_PX`.
+ */
+const DENSE_COMPOSE_MIN_PX = 44;
+
+/** A field's resting height where it stands; a dense dock's row is shorter. */
+export function composeMinPx(field: Element): number {
+  return field.closest(".is-dense") ? DENSE_COMPOSE_MIN_PX : COMPOSE_MIN_PX;
+}
+
+/**
  * Size a compose textarea to its content within the room it has. Returns true
  * when the height changed, so the caller can keep its scroller pinned.
  *
@@ -313,10 +324,11 @@ function easeCollapse(field: HTMLTextAreaElement, from: number, to: number): voi
  * dock it stands on whole lines (`showWholeLines`).
  *
  * `min` is the field's resting height, for a surface whose own frame starts
- * shorter or taller than the shared dock's (`COMPOSE_MIN_PX`). It never raises
- * the cap: a surface with less room keeps its cap and scrolls inside.
+ * shorter or taller than the shared dock's (`COMPOSE_MIN_PX`); the dense dock
+ * rests at its own 44px row. It never raises the cap: a surface with less room
+ * keeps its cap and scrolls inside.
  */
-export function fitComposeHeight(field: HTMLTextAreaElement, min = COMPOSE_MIN_PX): boolean {
+export function fitComposeHeight(field: HTMLTextAreaElement, min = composeMinPx(field)): boolean {
   const before = field.style.height;
   // Mid-collapse the box is between two heights; what is measured below is the field itself.
   const moving = collapsing.get(field);
