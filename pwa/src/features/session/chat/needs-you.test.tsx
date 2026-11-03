@@ -1,5 +1,5 @@
 import { resetTestDOM } from "../../../../test-support/boot-dom";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import { act } from "react";
 import { appRoot } from "../../../app/dom-root";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
@@ -27,7 +27,7 @@ const drain = () => act(async () => { for (let tick = 0; tick < 4; tick += 1) aw
 const button = (label: string) => [...appRoot().querySelectorAll<HTMLButtonElement>("button")].find((node) => node.textContent?.includes(label))!;
 
 beforeEach(async () => { await resetTestDOM(); setLang("zh"); selectPane("p1"); });
-afterEach(() => { act(unmountReact); attachLiveSession(null); selectPane(""); });
+afterEach(() => { jest.useRealTimers(); act(unmountReact); attachLiveSession(null); selectPane(""); });
 
 test("a numbered prompt is answered with the guarded keys for the chosen option", async () => {
   const sent: Sent[] = [];
@@ -101,6 +101,13 @@ test("a prompt that is not a list shows the screen excerpt and only the terminal
 });
 
 test("after an answer the same screen stays locked; a new prompt opens again", async () => {
+  // The card re-reads the screen at 1500ms and 4000ms after the answer, and
+  // the note's line shuts over one motion window. Drive those timers directly.
+  jest.useFakeTimers();
+  const advance = (ms: number) => act(async () => {
+    jest.advanceTimersByTime(ms);
+    for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
+  });
   let screen = SCREEN;
   let hash = HASH;
   let sends = 0;
@@ -112,16 +119,16 @@ test("after an answer the same screen stays locked; a new prompt opens again", a
   await drain();
   act(() => button("Yes, proceed").click());
   await act(async () => { button(t("needs.send")).click(); await Promise.resolve(); });
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1600)); });
+  await advance(1600);
   expect(appRoot().textContent).toContain(t("needs.sent"));
   expect(button(t("needs.send")).disabled).toBeTrue();
   screen = SCREEN.replace("rm -rf dist", "git push --force");
   hash = "b".repeat(64);
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2600)); });
+  await advance(2600);
   expect(appRoot().querySelector(".needs-question")?.textContent).toBe("$ git push --force");
   // Its line shuts, out of reach at once, and its words go when it has shut.
   expect(appRoot().querySelector(".needs-fold")?.classList.contains("is-shut")).toBeTrue();
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 320)); });
+  await advance(320);
   expect(appRoot().textContent).not.toContain(t("needs.sent"));
   expect(sends).toBe(1);
 });
