@@ -1,5 +1,5 @@
 import { Window } from "happy-dom";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 
 const happy = new Window({ url: "https://pairfob.com/pair", width: 390, height: 844 });
 const g = globalThis as unknown as Record<string, unknown>;
@@ -19,9 +19,14 @@ const {
   subscribeEcho,
 } = await import("./echo.ts");
 
-const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+/** Advance the fake clock and flush the microtasks the echo resolves on. */
+async function wait(ms: number): Promise<void> {
+  jest.advanceTimersByTime(ms);
+  for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
+}
 
-afterEach(() => resetEcho());
+beforeEach(() => { jest.useFakeTimers(); });
+afterEach(() => { jest.useRealTimers(); resetEcho(); });
 
 describe("what may be predicted at all", () => {
   test("printable characters are predictable; TUI control keys never are", () => {
@@ -76,7 +81,7 @@ describe("predict then roll back", () => {
     predictKeys("p1", ["l", "s"], "h0");
     expect(settleEcho("p1", ["$ something else"], "h1")).toBeTrue();
     expect(echoGhost("p1")).toEqual({ text: "ls", rollback: true });
-    await wait(ECHO_ROLLBACK_MS + 60);
+    await wait(ECHO_ROLLBACK_MS);
     expect(echoGhost("p1")).toEqual({ text: "", rollback: false });
   });
 
@@ -94,7 +99,7 @@ describe("predict then time out", () => {
   test("a prediction no read ever covered disappears rather than passing for truth", async () => {
     predictText("p1", "hello", "h0");
     expect(echoGhost("p1").text).toBe("hello");
-    await wait(ECHO_TIMEOUT_MS + 120);
+    await wait(ECHO_TIMEOUT_MS);
     expect(echoGhost("p1")).toEqual({ text: "", rollback: false });
   });
 
