@@ -20,9 +20,20 @@ import (
 
 func runtimeRPCClient(t *testing.T, rt runtime.Runtime) (*Engine, *phone.Client) {
 	t.Helper()
+	return runtimeRPCClientWith(t, rt, nil)
+}
+
+// runtimeRPCClientWith is the same fixture with a chance to configure the
+// engine before the session is established, for behavior that hangs off the
+// handshake (quota prefetch).
+func runtimeRPCClientWith(t *testing.T, rt runtime.Runtime, setup func(*Engine)) (*Engine, *phone.Client) {
+	t.Helper()
 	hub := mux.NewHub("pf_runtime_rpc")
 	engineSide, hubDaemon := mux.NewPipePair(128)
 	engine := NewEngine(hub, engineSide, rt)
+	if setup != nil {
+		setup(engine)
+	}
 	stopDaemon := pump(t, hubDaemon, func(frame envelope.Frame) { hub.HandleDaemon(hubDaemon, frame) })
 	t.Cleanup(func() { close(stopDaemon) })
 	if err := engine.Register("pf_runtime_rpc"); err != nil {

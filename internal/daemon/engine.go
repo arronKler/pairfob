@@ -198,9 +198,14 @@ type Engine struct {
 	operationSeq uint64
 	lastRPC      atomic.Int64 // unix nanos of the most recent dispatched RPC
 
-	reads        observeGroup
-	quotas       quotaCache
-	QuotaSources func() []runtimeapi.QuotaSource
+	reads  observeGroup
+	quotas quotaCache
+	// QuotaPrefetch warms the account cache when a phone establishes a session,
+	// so the first quota view usually answers from it. Off unless the daemon
+	// process enables it; tests keep provider reads under their own control.
+	QuotaPrefetch bool
+	quotaWarm     atomic.Bool
+	QuotaSources  func() []runtimeapi.QuotaSource
 
 	dirs dirIndexer
 

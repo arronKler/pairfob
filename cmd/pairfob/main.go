@@ -127,6 +127,9 @@ func runDaemon(store *state.Store, sock string) error {
 	// committed files. Ordinary disconnects do not call this.
 	defer eng.CloseUploads()
 	eng.Build = version
+	// The phone shows balances as soon as it connects: warm the account cache
+	// when its session is established instead of on the first quota request.
+	eng.QuotaPrefetch = true
 	updater := newRemoteUpdater(store.Dir)
 	eng.Updater = updater
 	if getenv("PAIRFOB_MACHINE_LINK", "1") != "0" {

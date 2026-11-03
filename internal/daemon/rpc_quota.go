@@ -107,6 +107,22 @@ func (e *Engine) quotaReadings() []runtime.QuotaReading {
 	return out
 }
 
+// prefetchQuota reads every account once in the background when a phone
+// establishes a session. The cache decides what is actually asked: an account
+// read less than a minute ago, or one whose provider asked to be left alone,
+// is not read again. This is the same batch a quota request makes, started
+// before the reader opens the page, so the first view usually answers from
+// the cache instead of waiting for the slowest provider.
+func (e *Engine) prefetchQuota() {
+	if !e.QuotaPrefetch || !e.quotaWarm.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer e.quotaWarm.Store(false)
+		e.quotaReadings()
+	}()
+}
+
 // rpcAgentQuota answers the first quota operation: the six providers it
 // defined, in its item shape, from the read AgentQuotaV2 shares.
 func (e *Engine) rpcAgentQuota(s *sess, id string, params json.RawMessage) {

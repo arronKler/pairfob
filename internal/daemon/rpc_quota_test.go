@@ -99,6 +99,53 @@ func TestAgentQuotaOperationsRejectParametersAndShareOneRead(t *testing.T) {
 	}
 }
 
+// A session that is established warms the account cache before the phone asks
+// for it, so the first quota view answers without waiting for the provider.
+func TestAgentQuotaPrefetchMakesTheFirstViewFast(t *testing.T) {
+	const providerTime = time.Second
+	var calls atomic.Int32
+	engine, client := runtimeRPCClientWith(t, runtime.NewFake(), func(e *Engine) {
+		e.QuotaPrefetch = true
+		e.QuotaSources = func() []runtime.QuotaSource {
+			return []runtime.QuotaSource{{ID: "codex", Read: func(context.Context) runtime.QuotaReading {
+				calls.Add(1)
+				time.Sleep(providerTime)
+				return quotaTestReading("codex", "ok", "", 25)
+			}}}
+		}
+	})
+	// The handshake started the warm read; wait for its result to be stored.
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		engine.quotas.mu.Lock()
+		entry := engine.quotas.entries["codex"]
+		warm := entry != nil && entry.running == nil && !entry.sampled.IsZero()
+		engine.quotas.mu.Unlock()
+		if warm {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the established session did not warm the quota cache")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	started := time.Now()
+	raw, err := client.RPC("AgentQuotaV2", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	elapsed := time.Since(started)
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("the first view read the provider again: %d reads", got)
+	}
+	if elapsed >= providerTime/10 {
+		t.Fatalf("warm first view took %v, want under %v", elapsed, providerTime/10)
+	}
+	if !strings.Contains(string(raw), `"used_percent":25`) {
+		t.Fatalf("%s", raw)
+	}
+}
+
 func TestAgentQuotaConcurrentRefreshesShareTheReadInFlight(t *testing.T) {
 	engine, client := runtimeRPCClient(t, runtime.NewFake())
 	var calls atomic.Int32

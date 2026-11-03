@@ -20,6 +20,7 @@ import type { QuotaReport } from "../../lib/agent-quota-report";
 import type { LiveSession } from "../../lib/protocol/session-types";
 import { ProtocolError } from "../../lib/protocol/errors";
 import { quotaResetIn } from "../../features/agent-quota/model";
+import { loadQuotaCache, resetQuotaCache, saveQuotaCache } from "../../lib/quota-cache";
 import { CREATE_MEMORY_KEY } from "../../features/operations/create-memory";
 import { refreshAgentQuota, openQuota } from "../../features/agent-quota/actions";
 import { views } from "../../features/agent-quota/store";
@@ -60,6 +61,8 @@ function mountLiveOn(screen: "settings" | "quota"): void {
 
 beforeEach(async () => {
   await resetBoardTestDOM();
+  // A saved answer from one case must not paint in the next.
+  resetQuotaCache();
   await (await import("../../app/connected-loader")).loadConnectedRuntime();
   Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
   registerSessionOwnerPreparer(registerSessionView);
@@ -142,6 +145,37 @@ test("quota panel does not fetch while rendering", async () => {
   expect(calls).toBe(1);
 });
 
+test("the last saved answer paints while a slow read is still running", async () => {
+  saveQuotaCache("d_aaaaaaaaaaaaaaaaaaaa", { items: [sample()], legacy: false, unknown: 0 });
+  mountLiveOn("quota");
+  let finish!: (accounts: QuotaAccount[]) => void;
+  useSession(() => new Promise<QuotaAccount[]>(resolve => { finish = resolve; }));
+  let pending!: Promise<unknown>;
+  act(() => { pending = refreshAgentQuota(); });
+  await settle();
+  // The balances are on screen from the first frame, with the read still out.
+  expect(appRoot().querySelector("#quota-codex.quota-card")).not.toBeNull();
+  expect(meterValue()).toBe(75);
+  expect(appRoot().querySelector(".quota-panel")?.getAttribute("aria-busy")).toBe("true");
+  await act(async () => { finish([sample()]); await pending; });
+});
+
+test("a refresh keeps the answer for the next app start, and a failure leaves it in place", async () => {
+  mountLiveOn("quota");
+  // One sample for the whole case: its observed_at comes from the clock, so a
+  // second call could land in the next second and compare two different reads.
+  const account = sample();
+  let fail = false;
+  useSession(async () => { if (fail) throw new Error("offline"); return [account]; });
+  await act(async () => { await refreshAgentQuota(); });
+  expect(loadQuotaCache("d_aaaaaaaaaaaaaaaaaaaa")?.items).toEqual([account]);
+  fail = true;
+  await act(async () => { await refreshAgentQuota(); });
+  await settle();
+  expect(loadQuotaCache("d_aaaaaaaaaaaaaaaaaaaa")?.items).toEqual([account]);
+  expect(appRoot().querySelector("#quota-codex.quota-card")).not.toBeNull();
+});
+
 test("a refresh updates the mounted quota page through its subscription with no App commit", async () => {
   mountLiveOn("quota");
   useSession(async () => [sample()]);
@@ -176,6 +210,24 @@ test("late reply cannot appear under another computer", async () => {
   await act(async () => { resolve([sample()]); await pending; });
   // The late reply landed on the replaced session; the mounted page shows none.
   expect(appRoot().textContent).not.toContain("Codex");
+});
+
+test("a late reply is not kept under the computer that replaced it", async () => {
+  mountLiveOn("quota");
+  let resolve!: (accounts: QuotaAccount[]) => void;
+  useSession(() => new Promise<QuotaAccount[]>(r => { resolve = r; }));
+  let pending!: Promise<unknown>;
+  act(() => { pending = refreshAgentQuota(); });
+  act(() => {
+    setCredential({
+      daemonId: "d_bbbbbbbbbbbbbbbbbbbb", deviceId: "dev_phone",
+      psk: new Uint8Array(32), daemonPk: new Uint8Array(32),
+      relayOrigin: "https://pairfob.com", fp: "fp", label: "Phone", createdAt: 1,
+    });
+    attachLiveSession({ isConnected: () => true, agentQuota: async () => quotaReport(sample()) } as LiveSession);
+  });
+  await act(async () => { resolve([sample()]); await pending; });
+  expect(loadQuotaCache("d_bbbbbbbbbbbbbbbbbbbb")).toBeNull();
 });
 
 test("old daemon gets an upgrade message and refresh cannot duplicate an in-flight read", async () => {

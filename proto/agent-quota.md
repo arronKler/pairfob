@@ -295,6 +295,17 @@ one phone or several and through either operation, share the read in flight
 rather than starting another process or request. A provider that answers 429
 is `throttled` and, when it sent `Retry-After`, is not asked again before then
 (held to between one minute and one hour). Nothing is retried automatically.
+
+An established session also warms that cache once: the daemon starts the same
+batch in the background when a phone connects, so the first quota request of
+the connection usually answers from the cache instead of waiting for the
+slowest provider. It changes when the read starts, not what is read: the same
+sources, deadline and retry hold apply, no provider is asked more often than
+the 60-second cache allows, and one that answered 429 is still left alone
+until its retry time. The phone keeps the last answer it received and paints
+it while the refresh runs; the sample times in that answer still decide what
+may be shown.
+
 Account-read failures produce a state and do not expose raw subprocess output.
 The UI has an explicit refresh button and does not poll in the background.
 A daemon that answers `unknown_op` to both operations is displayed as an

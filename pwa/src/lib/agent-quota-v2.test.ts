@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseQuotaAccounts } from "./agent-quota-v2";
+import { parseQuotaAccounts, quotaAccountToWire } from "./agent-quota-v2";
 
 const share = { kind: "quota", name: "codex", pool: "plan", headline: true, used_percent: 0, window_minutes: 300, resets_at: 1800001000 };
 const ok = { id: "codex", provider: "codex", plan: "pro", state: "ok", observed_at: 1800000000, meters: [share] };
@@ -102,6 +102,26 @@ describe("AgentQuotaV2 boundary", () => {
       .toEqual([["five hour", 300, 1800001000], ["seven day", 10080, 1800001000], ["monthly", 0, 1800001000]]);
     expect(accounts[1]!.meters[0]).toMatchObject({ count: { used: 98, limit: 1400, scale: 2, unit: "usd" } });
     expect(accounts[1]!.meters[1]).toMatchObject({ kind: "balance", name: "monthly balance", amount: 5343, unit: "usd", resets_at: 1800002000 });
+  });
+
+  test("a decoded answer written back to the wire decodes to itself, so the phone can keep it", () => {
+    const { accounts } = parseQuotaAccounts({ items: [
+      { ...ok, scope: "org", region: "cn", label: "work", source: "oauth" },
+      { ...ok, id: "deepseek", provider: "deepseek", plan: "", source: "api", meters: [
+        { kind: "balance", name: "balance", pool: "cny", headline: true, amount: 21139, scale: 2, unit: "cny" },
+      ] },
+      { ...ok, id: "command-code", provider: "command-code", plan: "Goat", source: "api", meters: [
+        { ...share, used: 188, limit: 500, unit: "requests" },
+        { kind: "balance", name: "monthly balance", pool: "usd", headline: true, amount: 5343, unit: "usd", resets_at: 1800002000 },
+      ] },
+      { ...ok, id: "grok", provider: "grok", state: "throttled", observed_at: 0, retry_at: 1800000600, meters: [] },
+      { ...ok, id: "claude", provider: "claude", state: "needs_action", reason: "relogin", observed_at: 0, meters: [] },
+      { ...ok, id: "cursor", provider: "cursor", state: "partial", meters: [
+        { kind: "quota", name: "Included plan", pool: "plan", headline: true, used_percent: 45 },
+        { kind: "unread", name: "on demand", pool: "on-demand" },
+      ] },
+    ] });
+    expect(parseQuotaAccounts({ items: accounts.map(quotaAccountToWire) }).accounts).toEqual(accounts);
   });
 
   test("an account of a provider this build cannot name is left out, and the rest still show", () => {

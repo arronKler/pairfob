@@ -1,8 +1,10 @@
-import { liveSession } from "../computers/catalog-store";
+import { currentDaemonId, liveSession } from "../computers/catalog-store";
 import { goToScreen } from "../../app/navigation-store";
 import { ProtocolError } from "../../lib/protocol/errors";
 import { commitView } from "../../app/host";
-import { quotaSnapshot, setQuotaSnapshot } from "./store";
+import { loadQuotaCache, saveQuotaCache } from "../../lib/quota-cache";
+import type { LiveSession } from "../../lib/protocol/session-types";
+import { quotaSnapshot, setQuotaSnapshot, type QuotaSnapshot } from "./store";
 
 /**
  * Quota controller — the feature's one connected adapter.
@@ -27,6 +29,19 @@ function alreadyLoading(): boolean {
 }
 
 /**
+ * What this session already shows, else the last answer saved for this
+ * computer. A page opened after a reload paints those balances immediately
+ * while the read below runs; the sample times inside the answer still decide
+ * how old they are.
+ */
+function previousSnapshot(session: LiveSession, daemon: string | null): QuotaSnapshot | undefined {
+  const live = quotaSnapshot(session);
+  if (live) return live;
+  const saved = daemon ? loadQuotaCache(daemon) : null;
+  return saved ? { loading: false, items: saved.items, legacy: saved.legacy, unknown: saved.unknown, error: "" } : undefined;
+}
+
+/**
  * How a refresh ended, for the control that asked: `unchanged` is an answer
  * that says what the page already shows (the computer keeps a read for a
  * minute), which would otherwise look like a press that did nothing.
@@ -36,13 +51,19 @@ export type QuotaRefresh = "skipped" | "updated" | "unchanged" | "failed";
 export async function refreshAgentQuota(): Promise<QuotaRefresh> {
   const session = liveSession();
   if (!session || !session.isConnected() || alreadyLoading()) return "skipped";
-  const previous = quotaSnapshot(session);
+  // The computer this read belongs to, captured with the session: a switch
+  // while it is in flight must not file its answer under the next computer.
+  const daemon = currentDaemonId();
+  const previous = previousSnapshot(session, daemon);
   const kept = { items: previous?.items ?? null, legacy: previous?.legacy, unknown: previous?.unknown };
   setQuotaSnapshot(session, { loading: true, ...kept, error: "" });
   try {
     const report = await session.agentQuota();
     const unchanged = !!previous?.items && !previous.error && sameSample(previous.items, report.accounts);
     setQuotaSnapshot(session, { loading: false, items: report.accounts, legacy: report.legacy, unknown: report.unknown, error: "" });
+    if (daemon && liveSession() === session) {
+      saveQuotaCache(daemon, { items: report.accounts, legacy: report.legacy, unknown: report.unknown });
+    }
     return unchanged ? "unchanged" : "updated";
   } catch (error) {
     // What was read before stays on the page under the error: a failed read

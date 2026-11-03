@@ -145,6 +145,53 @@ function account(v: Record<string, unknown>): QuotaAccount | null {
   };
 }
 
+/** One decoded meter in the wire shape: only the fields its kind carries, empty ones left out. */
+function meterToWire(meter: QuotaMeter): Record<string, unknown> {
+  const out: Record<string, unknown> = { kind: meter.kind, name: meter.name, pool: meter.pool };
+  if (meter.headline) out.headline = true;
+  if (meter.window_minutes) out.window_minutes = meter.window_minutes;
+  if (meter.resets_at) out.resets_at = meter.resets_at;
+  switch (meter.kind) {
+    case "quota":
+      out.used_percent = meter.used_percent;
+      if (meter.count) {
+        out.used = meter.count.used;
+        out.limit = meter.count.limit;
+        out.unit = meter.count.unit;
+        if (meter.count.scale) out.scale = meter.count.scale;
+      }
+      break;
+    case "balance":
+      out.amount = meter.amount;
+      out.unit = meter.unit;
+      if (meter.scale) out.scale = meter.scale;
+      break;
+    case "level":
+      out.level = meter.level;
+      break;
+  }
+  return out;
+}
+
+/**
+ * A decoded account back in the shape the computer sends, so an answer kept on
+ * the phone can be read with the same strict decoder. Optional fields that were
+ * left out on the wire stay out, as the schema requires.
+ */
+export function quotaAccountToWire(account: QuotaAccountRead): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    id: account.id, provider: account.provider, plan: account.plan, state: account.state,
+    observed_at: account.observed_at, meters: account.meters.map(meterToWire),
+  };
+  if (account.scope) out.scope = account.scope;
+  if (account.region) out.region = account.region;
+  if (account.label) out.label = account.label;
+  if (account.source) out.source = account.source;
+  if (account.reason) out.reason = account.reason;
+  if (account.retry_at) out.retry_at = account.retry_at;
+  return out;
+}
+
 /**
  * Decode an AgentQuotaV2 result. An item whose provider this build does not
  * know is left out and counted, so one newer provider never blanks the page;

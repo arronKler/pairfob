@@ -19,6 +19,7 @@ import { commitView } from "../../app/host";
 import { applyComposeDraft, bumpViewIncarnation, parkComposeView } from "../session/drafts/compose-drafts";
 import { computerTitle } from "../../lib/computer-catalog";
 import { deleteCredential, saveCredential } from "../../lib/credentials";
+import { clearQuotaCache } from "../../lib/quota-cache";
 import { t } from "../../lib/i18n";
 import { fragmentUsableOnOrigin, parsePairingFragment } from "../../lib/pairing-input";
 import { pairOverWS, ProtocolError, type PairResult } from "../../lib/protocol/client";
@@ -210,6 +211,7 @@ export async function forgetComputer(daemonId: string): Promise<void> {
   // After the credential is gone, drop that daemon's attachment journal and
   // local rows (its epoch is marked before any await, so late writes can't
   // resurrect them). No server RPC; other daemons are preserved.
+  clearQuotaCache(forgottenDaemonId);
   await forgetDaemonAttachments(forgottenDaemonId);
   // Its own push worker goes too, and its subscription with it. A subscription
   // on the app's registration stays: the phone keeps no record of its owner.

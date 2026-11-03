@@ -388,6 +388,10 @@ func (e *Engine) FinishHello3(s *sess, proofP []byte, ts int64) bool {
 		return false
 	}
 	e.audit("session_established", map[string]any{"device_id": s.deviceID, "route_id": hex.EncodeToString(s.routeID[:])})
+	// The phone is now here; warm the quota cache in the background so the
+	// first view does not wait for the slowest provider. Never blocks the
+	// handshake, and the cache still decides what is asked.
+	e.prefetchQuota()
 	return true
 }
 
