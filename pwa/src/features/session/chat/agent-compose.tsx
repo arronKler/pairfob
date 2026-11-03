@@ -22,9 +22,11 @@ import { publishAgentChatUI } from "./agent-chat-ui";
 import { pageAgentStreamFromField } from "./reading-keys";
 import { Button, Fold } from "../../../shared/ui/primitives";
 import { AttachButton } from "../attachments/attach-button";
+import { currentAttachmentScope } from "../attachments/attachments-context";
+import { markAttachmentsSent } from "../attachments/attachments-send";
 import { fitComposeHeight } from "../compose-size";
 import { phoneEnterKeyHint, returnAddsNewline } from "../compose-keys";
-import { acceptComposePaste, attachmentMessage, markSentAttachments, requestSend, resetSendGate } from "../guided/send-gate";
+import { acceptComposePaste, attachmentMessage, requestSend, resetSendGate } from "../guided/send-gate";
 import { AttachmentTray } from "../attachments/attachment-tray";
 import { useSoftKeyboardOpen } from "../keypad/soft-keyboard";
 import { usePreferenceField } from "../../settings/hooks";
@@ -106,9 +108,9 @@ export function typeIntoAgentCompose(event: KeyboardEvent): void {
  * Send the prompt with its ready attachments: draft, a blank line, then one
  * path per line (see send-gate). The prompt path reads the visible draft, so
  * the message is placed there for the submit. It is put back to what the
- * reader wrote when the prompt did not go (refused, or a failure that restored
- * it), so a retry cannot carry the paths twice; the tray is cleared only once
- * the prompt left.
+ * reader wrote when the prompt failed, so a retry cannot carry the paths
+ * twice; the tray is cleared only once the prompt left, and only for the pane
+ * it was sent from (the reader may switch panes while it is on the wire).
  */
 export function submitAgentMessage(): Promise<void> {
   return Promise.resolve(requestSend(async (paths) => {
@@ -116,6 +118,9 @@ export function submitAgentMessage(): Promise<void> {
       await submitAgentPrompt();
       return;
     }
+    // Capture the tray's owner before awaiting: `currentAttachmentScope()` in
+    // the callback would name whichever pane is open when the prompt settles.
+    const scope = currentAttachmentScope();
     const draft = composeDraft();
     const message = attachmentMessage(draft, paths);
     if (fitOperationPrompt(message).truncated) {
@@ -123,12 +128,16 @@ export function submitAgentMessage(): Promise<void> {
       return;
     }
     showDraft(message);
-    await submitAgentPrompt();
-    if (composeDraft() === message) {
-      showDraft(draft);
+    const outcome = await submitAgentPrompt();
+    if (outcome === "sent") {
+      markAttachmentsSent(scope);
       return;
     }
-    markSentAttachments();
+    // A failure puts the reader's own text back without the paths (they stay
+    // in the tray), so a retry cannot carry them twice. A newer draft already
+    // in the field is the reader's: never overwrite it. An unknown outcome
+    // keeps the controller's cleared field, since the prompt may have arrived.
+    if (outcome === "failed" && composeDraft() === message) showDraft(draft);
   }));
 }
 

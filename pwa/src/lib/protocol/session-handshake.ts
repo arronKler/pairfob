@@ -68,7 +68,7 @@ export function beginSessionEpoch(
     }
     const hello = parseJSON(helloFrame);
     if (hello.op !== "DeviceHello2" || !hello.ok) {
-      throw new ProtocolError(String(hello.error?.code || "bad_message"), "DeviceHello2 拒绝凭证");
+      throw new ProtocolError(String(hello.error?.code || "unpaired"), "DeviceHello2 拒绝凭证");
     }
     const ephemeralDaemon = parseExactB64(hello.eph_x25519, 32, "eph_x25519");
     const proofDaemon = parseExactB64(hello.proof_d, 32, "proof_d");
@@ -149,7 +149,7 @@ async function waitSessionEstablished(channel: FrameChannel, routeId: Uint8Array
       try {
         const hello = parseJSON(frame);
         if (hello.op === "DeviceHello2" && !hello.ok) {
-          throw new ProtocolError(String(hello.error?.code || "bad_message"), "DeviceHello3 被拒绝");
+          throw new ProtocolError(String(hello.error?.code || "unpaired"), "DeviceHello3 被拒绝");
         }
       } catch (error) {
         if (error instanceof ProtocolError) throw error;

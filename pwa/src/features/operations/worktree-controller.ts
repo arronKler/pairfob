@@ -41,31 +41,37 @@ import { showWorktreeForm, type OperationGate } from "./worktree-sheet";
  * with a fresh operation_id; cancel only drops the card (there is no cancel
  * RPC), and a late result is ignored.
  */
-function worktreeJobDriver(session: LiveSession, scope: ListWorktreesInput): WorktreeJobDriver {
+function worktreeJobDriver(session: LiveSession, scope: ListWorktreesInput): {
+  driver: WorktreeJobDriver;
+  owns: () => boolean;
+} {
   const herdSession = session.herdSession?.() ?? null;
   const sameTarget = () => (session.herdSession?.() ?? null) === herdSession;
   const ownsTarget = () => liveSession() === session && sameTarget();
   return {
-    create: async (input) => {
-      if (!sameTarget()) throw new ProtocolError("conflict", t("err.worktreeSessionChanged"));
-      return session.createWorktree(input);
-    },
-    // The job outlives the dialog: effects must still own both the connection
-    // and its original Herdr target after every awaited step.
-    refresh: async () => {
-      if (ownsTarget()) await refreshFromSession();
-    },
-    openPane: async (paneId) => {
-      if (ownsTarget()) await openPane(paneId);
-    },
-    reconcile: (error) => reconcileMutationFailure(error, {
-      snapshot: async () => { if (ownsTarget()) await refreshSnapshotOnly(session, ownsTarget); },
-      listWorktrees: async () => { if (ownsTarget()) await session.listWorktrees(scope); },
-    }).then(() => undefined),
-    messageOf,
-    repaint: commitView,
-    succeeded: () => {
-      if (ownsTarget()) showStatus(t("op.createdWorktree"));
+    owns: ownsTarget,
+    driver: {
+      create: async (input) => {
+        if (!ownsTarget()) throw new ProtocolError("conflict", t("err.worktreeSessionChanged"));
+        return session.createWorktree(input);
+      },
+      // The job outlives the dialog: effects must still own both the connection
+      // and its original Herdr target after every awaited step.
+      refresh: async () => {
+        if (ownsTarget()) await refreshFromSession();
+      },
+      openPane: async (paneId) => {
+        if (ownsTarget()) await openPane(paneId);
+      },
+      reconcile: (error) => reconcileMutationFailure(error, {
+        snapshot: async () => { if (ownsTarget()) await refreshSnapshotOnly(session, ownsTarget); },
+        listWorktrees: async () => { if (ownsTarget()) await session.listWorktrees(scope); },
+      }).then(() => undefined),
+      messageOf,
+      repaint: commitView,
+      succeeded: () => {
+        if (ownsTarget()) showStatus(t("op.createdWorktree"));
+      },
     },
   };
 }
@@ -189,8 +195,9 @@ function startWorktree(input: CreateWorktreeInput): Promise<SheetOutcome> | null
   const session = liveSession();
   const scope = worktreeScope(input.workspace_id, input.cwd);
   if (!session || !scope || !capabilityEnabled("create_worktree")) return null;
-  const followed = followWorktreeJob(worktreeJobDriver(session, scope));
-  const job = startWorktreeJob(followed.driver, input);
+  const { driver, owns } = worktreeJobDriver(session, scope);
+  const followed = followWorktreeJob(driver);
+  const job = startWorktreeJob(followed.driver, input, owns);
   if (job) return followed.outcome(job);
   showError(t("op.worktreeJobLimit"));
   commitView();

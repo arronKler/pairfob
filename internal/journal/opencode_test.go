@@ -141,6 +141,21 @@ func TestOpencodeMarksCompactionAndAbortedTurns(t *testing.T) {
 	}
 }
 
+func TestOpencodeDropsInjectedUserWrappers(t *testing.T) {
+	fixture := newOpencodeFixture(t)
+	fixture.message("msg_001", "user", 1000, nil)
+	fixture.part("msg_001", "prt_001", map[string]any{"type": "text", "text": "<system-reminder>\n[BACKGROUND TASK COMPLETED]\n</system-reminder>"})
+	fixture.part("msg_001", "prt_002", map[string]any{"type": "text", "text": "Keep the tests\n<system-reminder>plan mode</system-reminder>"})
+	fixture.part("msg_001", "prt_003", map[string]any{"type": "text", "text": "<ultrawork-mode>\nMANDATORY\n</ultrawork-mode>"})
+	fixture.part("msg_001", "prt_004", map[string]any{"type": "text", "text": "<file>\npackage main\n</file>"})
+	fixture.part("msg_001", "prt_005", map[string]any{"type": "text", "text": "<command-instruction>\nrun a plan\n</command-instruction>\n<Work_Context>\nnotepad\n</Work_Context>\nFix the layout"})
+	reader := &Reader{OpencodeRoot: fixture.root}
+	want := []string{"user||||Keep the tests\n\n<file>\npackage main\n</file>\n\nFix the layout"}
+	if got := opencodeSummary(t, reader, TraceOptions{}); !slices.Equal(got, want) {
+		t.Fatalf("summary:\n got %q\nwant %q", got, want)
+	}
+}
+
 func TestOpencodeFollowsAPartThatGrowsAndKeepsEarlierOffsets(t *testing.T) {
 	fixture := newOpencodeFixture(t)
 	fixture.message("msg_001", "user", 1000, nil)

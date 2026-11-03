@@ -612,6 +612,121 @@ func TestCoreConnWatchStreamClosesOnBufferedOverflow(t *testing.T) {
 	}
 }
 
+// startStalledCorePipe answers the hello line and then stops reading, so any
+// frame written to the pipe blocks in the writer.
+func startStalledCorePipe(t *testing.T, writeTimeout time.Duration) *coreConn {
+	t.Helper()
+	client, server := net.Pipe()
+	conn := newCoreConn(client, func() { _ = client.Close() }, nil)
+	conn.writeTimeout = writeTimeout
+	t.Cleanup(func() {
+		_ = conn.Close()
+		_ = server.Close()
+	})
+	go func() {
+		reader := bufio.NewReader(server)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		reply, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 0, "result": coreScriptHello()})
+		if err != nil {
+			return
+		}
+		_, _ = server.Write(append(reply, '\n'))
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := conn.start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	return conn
+}
+
+func TestCoreConnCallWriteHonorsContext(t *testing.T) {
+	conn := startStalledCorePipe(t, coreWriteTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	err := conn.Call(ctx, "server.status", nil, nil)
+	elapsed := time.Since(started)
+	var transportErr *coreTransportError
+	if !errors.As(err, &transportErr) || !transportErr.timeout {
+		t.Fatalf("Call returned %v, want a transport timeout", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Call cause=%v, want context deadline exceeded", err)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("Call waited %v for a 100ms context", elapsed)
+	}
+}
+
+func TestCoreConnInputWritesTimeOut(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(*coreConn) error
+	}{
+		{"type", func(conn *coreConn) error { return conn.TypeInput(7, []byte("x")) }},
+		{"resize", func(conn *coreConn) error { return conn.ResizeInput(7, 80, 24) }},
+		{"close", func(conn *coreConn) error { return conn.CloseInput(7) }},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			conn := startStalledCorePipe(t, 100*time.Millisecond)
+			started := time.Now()
+			err := testCase.call(conn)
+			elapsed := time.Since(started)
+			var transportErr *coreTransportError
+			if !errors.As(err, &transportErr) || !transportErr.timeout {
+				t.Fatalf("%s returned %v, want a transport timeout", testCase.name, err)
+			}
+			if elapsed > time.Second {
+				t.Fatalf("%s waited %v with a 100ms write timeout", testCase.name, elapsed)
+			}
+		})
+	}
+}
+
+func TestCoreConnCreditWriteTimesOutWithoutReader(t *testing.T) {
+	client, server := net.Pipe()
+	conn := newCoreConn(client, func() { _ = client.Close() }, nil)
+	conn.writeTimeout = 100 * time.Millisecond
+	t.Cleanup(func() {
+		_ = conn.Close()
+		_ = server.Close()
+	})
+	go func() {
+		reader := bufio.NewReader(server)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		reply, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 0, "result": coreScriptHello()})
+		if err != nil {
+			return
+		}
+		if _, err := server.Write(append(reply, '\n')); err != nil {
+			return
+		}
+		// The attach output makes the read loop write a credit; the server
+		// then stops reading, so that write stalls.
+		_ = writeCoreScriptFrame(server, 7, coreKindData, []byte("paint"))
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := conn.start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	select {
+	case <-conn.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("connection stayed open after the credit write stalled")
+	}
+	var transportErr *coreTransportError
+	if err := conn.closedError(); !errors.As(err, &transportErr) || !transportErr.timeout {
+		t.Fatalf("connection closed with %v, want a write timeout", err)
+	}
+}
+
 func TestCoreOpenConfigured(t *testing.T) {
 	socket := filepath.Join(t.TempDir(), "herdr.sock")
 	t.Setenv("HERDR_SOCKET_PATH", socket)

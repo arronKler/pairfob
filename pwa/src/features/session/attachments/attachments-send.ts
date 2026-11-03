@@ -8,6 +8,7 @@
 import { composeDraft, composeStore } from "../compose-store";
 import { sessionStore } from "../session-store";
 import { attachmentP2PReady, currentAttachmentScope } from "./attachments-context";
+import type { AttachmentScope } from "./attach-model";
 import { subscribeAttachmentP2P } from "./attachments-connection";
 import { removeItem } from "./attachments-controller";
 import { attachmentScopeKey, attachmentsStore } from "./attachments-store";
@@ -85,8 +86,7 @@ export function subscribeSendAttachments(listener: () => void): () => void {
 }
 
 /** After a successful send: drop the sent items from the tray (uploaded files stay on the computer). */
-export function markAttachmentsSent(): void {
-  const scope = currentAttachmentScope();
+export function markAttachmentsSent(scope: AttachmentScope | null = currentAttachmentScope()): void {
   if (!scope) return;
   for (const item of visibleItems(attachmentScopeKey(scope))) {
     // Committed rows are terminal on the computer: removal only drops the row.

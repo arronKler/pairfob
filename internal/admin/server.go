@@ -12,10 +12,14 @@ import (
 const (
 	maxAdminRequest = 4096
 	adminTimeout    = 5 * time.Second
-	pairNewTimeout  = 30 * time.Second
 	rekeyTimeout    = 20 * time.Second
 	pairWaitTimeout = 305 * time.Second
 )
+
+// PairNewTimeout bounds how long the operator waits for a fresh pairing offer.
+// Tests that run the race detector raise it, because Argon2 is much slower
+// under instrumentation; production keeps the 30 second deadline.
+var PairNewTimeout = 30 * time.Second
 
 func Serve(ln net.Listener, svc Service) error {
 	if svc == nil {
@@ -61,7 +65,7 @@ func timeoutFor(op string) time.Duration {
 		return pairWaitTimeout
 	}
 	if op == "pair.new" {
-		return pairNewTimeout
+		return PairNewTimeout
 	}
 	if op == "relay.rekey" {
 		return rekeyTimeout

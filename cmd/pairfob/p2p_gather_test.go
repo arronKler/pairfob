@@ -87,7 +87,7 @@ func TestWebRTCAcceptorAnswersWithoutWaitingOutAnUnansweredSTUNServer(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer caller.Close()
+	defer closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 	protocol := p2pDataChannelProtocol
 	channel, err := caller.CreateDataChannel(p2pDataChannelLabel, &webrtc.DataChannelInit{Ordered: boolPointer(true), Protocol: &protocol})
 	if err != nil {
@@ -117,7 +117,7 @@ func TestWebRTCAcceptorAnswersWithoutWaitingOutAnUnansweredSTUNServer(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer link.Close()
+	defer closeP2PTestWithin(t, "acceptor", link.Close)
 	if elapsed := time.Since(started); elapsed >= 4*time.Second {
 		t.Fatalf("answered after %v", elapsed)
 	}

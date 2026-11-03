@@ -62,6 +62,9 @@ func updateExecutableLocked(dest, base string) error {
 	if err != nil {
 		return err
 	}
+	if err := checkManualUpdateVersion(manifest.Version, version); err != nil {
+		return err
+	}
 	want, err := manifest.Hash("daemon/" + name)
 	if err != nil {
 		return err
@@ -95,6 +98,27 @@ func updateExecutableLocked(dest, base string) error {
 	}
 	fmt.Printf("Updated to %s.\n", remoteVersion)
 	return nil
+}
+
+// checkManualUpdateVersion refuses a signed release older than the running
+// binary, so a replayed release.json and VERSION cannot downgrade an
+// installation. Equal versions stay installable so a damaged binary can be
+// repaired, and a development build (version "dev" or empty) has no release
+// line to compare against.
+func checkManualUpdateVersion(remote, current string) error {
+	if !releaseVersion.MatchString(remote) || !releaseVersion.MatchString(current) {
+		return nil
+	}
+	if sameReleaseVersion(remote, current) || newerVersion(remote, current) {
+		return nil
+	}
+	return fmt.Errorf("refusing to downgrade pairfob from %s to %s", current, remote)
+}
+
+// sameReleaseVersion compares release versions while tolerating the optional
+// leading "v" that release.sh accepts for tags and VERSION files.
+func sameReleaseVersion(a, b string) bool {
+	return strings.TrimPrefix(a, "v") == strings.TrimPrefix(b, "v")
 }
 
 func restartInstalledServiceFor(dest, wantVersion string, release func()) error {

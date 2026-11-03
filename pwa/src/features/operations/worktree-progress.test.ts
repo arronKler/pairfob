@@ -27,7 +27,7 @@ function renderHome(): void {
 }
 const { t } = await import("../../lib/i18n.ts");
 const { NO_OPERATION_CAPABILITIES } = await import("../../lib/operations.ts");
-const { dismissWorktreeJob, startWorktreeJob, worktreeJobs } = await import("../../lib/worktree-jobs.ts");
+const { dismissWorktreeJob, retryWorktreeJob, startWorktreeJob, worktreeJobs } = await import("../../lib/worktree-jobs.ts");
 
 function app(): HTMLElement {
   return appRoot();
@@ -229,5 +229,45 @@ describe("worktree progress cards on home", () => {
     act(() => { dismissAgain?.click(); });
     expect(worktreeJobs()).toHaveLength(0);
     expect((app().querySelector(".worktree-job")) === null).toBe(true);
+  });
+
+  test("a failed job from another session says where it belongs and cannot retry here", async () => {
+    boot();
+    let owned = true;
+    const fake = fakeDriver();
+    const job = startWorktreeJob(fake.driver, { workspace_id: "w1", branch: "feat/x" }, () => owned)!;
+    renderHome();
+
+    fake.pendings[0].reject(new Error("git fetch failed"));
+    await settle();
+    renderHome();
+    const retryLabels = () => [...(app().querySelectorAll(".worktree-job button") ?? [])].map(button => button.textContent);
+    expect(retryLabels()).toContain(t("retry"));
+
+    // A click on Retry can race a session switch: the card was painted while
+    // this session owned the job, so the click itself must repaint into the
+    // explanation instead of creating the Worktree on the newly selected one.
+    owned = false;
+    const staleRetry = [...app().querySelectorAll(".worktree-job button")].find(button => button.textContent === t("retry"))!;
+    act(() => { staleRetry.click(); });
+    const card = app().querySelector(".worktree-job")!;
+    expect(card.textContent).toContain("git fetch failed");
+    expect(card.textContent).toContain(t("err.worktreeSessionChanged"));
+    expect(retryLabels()).toEqual([t("dismiss")]);
+    expect(fake.pendings).toHaveLength(1);
+    expect(worktreeJobs()[0]?.status).toBe("failed");
+
+    // Even a stale call cannot reach CreateWorktree from the wrong session.
+    expect(retryWorktreeJob(job.id)).toBe("not-owner");
+    expect(fake.pendings).toHaveLength(1);
+    expect(worktreeJobs()[0]?.status).toBe("failed");
+
+    // Back on the owner, the same card retries the job again.
+    owned = true;
+    renderHome();
+    const retry = [...app().querySelectorAll(".worktree-job button")].find(button => button.textContent === t("retry"))!;
+    act(() => { retry.click(); });
+    expect(fake.pendings).toHaveLength(2);
+    expect(worktreeJobs()[0]?.status).toBe("working");
   });
 });

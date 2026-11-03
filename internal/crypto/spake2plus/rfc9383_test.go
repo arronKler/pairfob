@@ -50,6 +50,13 @@ func TestRFC9383P256SHA256(t *testing.T) {
 }
 
 func TestPairfobRoundTrip(t *testing.T) {
+	// This test proves both sides derive the same keys; the frozen vector test
+	// is the one that pins the production Argon2id bytes. Use the cheap test
+	// cost here so a race build does not spend a minute on two KDF calls.
+	previous := TestArgon2Cost
+	TestArgon2Cost = &Argon2Cost{Time: 1, Memory: 8 * 1024, Threads: 1}
+	t.Cleanup(func() { TestArgon2Cost = previous })
+
 	pairRef, _ := hex.DecodeString("4f7a2c9e1b0d88aa55cc3311abde7001")
 	_ = pairRef
 	rec := DeriveRecord("7K3M9H2P", "d_test", "4f7a2c9e1b0d88aa55cc3311abde7001")

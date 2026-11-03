@@ -128,7 +128,9 @@ func TestAgentTraceClipsLargeEscapedToolOutputToEnvelope(t *testing.T) {
 	engine, client := runtimeRPCClient(t, fake)
 	engine.Journal = &journal.Reader{CodexRoot: root}
 
-	raw, err := client.RPC("AgentTrace", map[string]any{"pane_id": "w0:p1", "limit": 200})
+	// The 240 KB transcript is already inside the reply budget; a long timeout
+	// keeps a loaded race build from reporting a timeout instead of clipping.
+	raw, err := client.RPCTimeout("AgentTrace", map[string]any{"pane_id": "w0:p1", "limit": 200}, 30*time.Second)
 	if err != nil {
 		t.Fatalf("large trace should be clipped instead of rejected: %v", err)
 	}

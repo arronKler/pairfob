@@ -111,7 +111,7 @@ func TestSocketPathMustBeAbsolute(t *testing.T) {
 }
 
 func TestLongControlPlaneOperationsUseTheirOwnDeadlines(t *testing.T) {
-	if timeoutFor("pair.new") != pairNewTimeout || timeoutFor("relay.rekey") != rekeyTimeout || timeoutFor("pair.wait") != pairWaitTimeout || timeoutFor("pair.status") != adminTimeout {
+	if timeoutFor("pair.new") != PairNewTimeout || timeoutFor("relay.rekey") != rekeyTimeout || timeoutFor("pair.wait") != pairWaitTimeout || timeoutFor("pair.status") != adminTimeout {
 		t.Fatalf("unexpected deadlines new=%s rekey=%s wait=%s status=%s", timeoutFor("pair.new"), timeoutFor("relay.rekey"), timeoutFor("pair.wait"), timeoutFor("pair.status"))
 	}
 }

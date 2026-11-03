@@ -14,7 +14,9 @@ Install the lockfiles the gate uses, once:
 (cd site/doc && bun install --frozen-lockfile)
 ```
 
-Local Worker tests run against the in-repo harness.
+Local Worker tests run against the in-repo harness. Typechecks use the pinned
+native TypeScript preview (`tsgo`); `bun run typecheck:tsc` in the PWA and
+Worker packages keeps the upstream compiler as a fallback.
 
 Local pairing runs against the same Worker as production:
 
@@ -131,6 +133,19 @@ Choose checks by change scope and stage; the full rules are in
 - Reuse passed checks while their inputs, dependencies, configuration and
   relevant environment remain unchanged. Rerun checks affected by later edits;
   a new commit or status request alone does not require another full run.
+- Locally the four gates run together, and the Go suite is sharded across the
+  machine's cores. Every test runs once under the race detector; a package's
+  ordinary build is added only when a `//go:build race` / `!race` file makes
+  its test files differ between the two builds. Shards use `go test`, so an
+  unchanged tree replays Go's cached results; `PAIRFOB_VERIFY_BINARIES=1`
+  prebuilds test binaries for a cold run and gives up that reuse.
+  `PAIRFOB_VERIFY_JOBS` caps the shard count when a loaded machine needs fewer
+  concurrent test processes. The gate resolves Bun from `~/.bun/bin` when that
+  copy matches `.bun-version`, so an older system Bun cannot silently run the
+  PWA suite one file at a time. A green PWA shard is reused when its inputs
+  (`pwa/`, `proto/`, the shard planner, the timings manifest, `.bun-version`
+  and the locale environment) are byte-identical; a failure is never stored,
+  and `PAIRFOB_VERIFY_CACHE=0` forces the suite to run.
 
 `.github/workflows/verify.yml` runs the same scripts for pull requests and
 pushes. A pull request runs only the jobs for the paths it touches, plus the

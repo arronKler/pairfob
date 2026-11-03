@@ -93,7 +93,7 @@ func (h *Hub) sessionAttach(st *clientState, f envelope.Frame) {
 		h.mu.Lock()
 		var late []pendingSend
 		if b.kind == kindResumeHello && b.daemon.binds[b.id] == b {
-			late = h.queueCloseBindLocked(b, routeErrFrame(b, "timeout", "15s DeviceHello timeout"), true)
+			late = h.queueCloseBindLocked(b, routeErrFrame(b, "unpaired", "15s DeviceHello timeout"), true)
 		}
 		h.mu.Unlock()
 		flushPending(late)

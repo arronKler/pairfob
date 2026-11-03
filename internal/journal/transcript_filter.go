@@ -3,6 +3,7 @@ package journal
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -14,6 +15,15 @@ import (
 var codexInjectedTags = []string{
 	"environment_context", "user_instructions", "developer_instructions", "INSTRUCTIONS",
 	"turn_aborted", "subagent_notification", "skill", "codex_internal_context",
+	"recommended_plugins",
+	// A task orchestrator submits its request as a leading <task> block
+	// followed by policy blocks; the person never typed them.
+	"task", "research_mode", "grounding_rules", "citation_rules",
+	"missing_context_gating", "compact_output_contract", "default_follow_through_policy",
+	// A "!" shell command is the user's action, not a question. Its wrapper
+	// is unpacked by codexShellCommand; this entry only keeps a malformed one
+	// from surfacing as raw markup.
+	"user_shell_command",
 }
 
 // Codex 0.162 writes these empty image references ahead of the user's request.
@@ -47,7 +57,16 @@ func (w *codexImageWrapper) drops(text string) bool {
 var claudeInjectedTags = []string{
 	"system-reminder", "local-command-caveat", "local-command-stdout", "local-command-stderr",
 	"task-notification", "bash-stdout", "bash-stderr", "user-prompt-submit-hook",
+	"teammate-message",
 }
+
+// Claude Code submits a message from another session as one user record: a
+// prose lead-in, the tagged message, and a generated note explaining that a
+// peer may not grant escalation. The record is context, never a typed prompt.
+const (
+	claudeTeammateLead = "Another Claude session sent a message:"
+	claudeTeammateNote = "This came from another Claude session"
+)
 
 // claudeRecordFlags marks Claude Code records that never reach the chat as
 // typed: meta records (caveats, skill bodies, image notes), sidechains,
@@ -80,6 +99,9 @@ func (f claudeRecordFlags) syntheticPlaceholder(model string) bool {
 // tagged blocks), so only leading blocks are stripped; the same tags later in
 // a prompt are the user's own text.
 func visibleCodexUserText(text string) string {
+	if command, _, _, ok := codexShellCommand(text); ok {
+		return "! " + command
+	}
 	if body, ok := leadingTaggedBody(text, "send_user_message_question_reply"); ok {
 		return codexQuestionAnswers(body)
 	}
@@ -113,6 +135,50 @@ func visibleCodexUserText(text string) string {
 	return strings.TrimSpace(rest)
 }
 
+// codexShellCommand unpacks the record Codex writes when the user runs a "!"
+// shell command in its TUI. The command and its captured result share one
+// generated wrapper; the person typed neither tag.
+func codexShellCommand(text string) (command, output, state string, ok bool) {
+	body, ok := leadingTaggedBody(text, "user_shell_command")
+	if !ok {
+		return "", "", "", false
+	}
+	command, ok = leadingTaggedBody(body, "command")
+	if !ok || strings.TrimSpace(command) == "" {
+		return "", "", "", false
+	}
+	command = strings.TrimSpace(command)
+	if rest, stripped := withoutLeadingBlock(body, []string{"command"}); stripped {
+		if result, found := leadingTaggedBody(rest, "result"); found {
+			output, state = codexShellResult(result)
+		}
+	}
+	return command, output, state, true
+}
+
+// codexShellResult reads the exit code and output Codex captures after a "!"
+// command. An empty output still marks the step done.
+func codexShellResult(result string) (output, state string) {
+	state = "done"
+	lines := strings.Split(result, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if code, found := strings.CutPrefix(trimmed, "Exit code:"); found {
+			if exit, err := strconv.Atoi(strings.TrimSpace(code)); err == nil && exit != 0 {
+				state = "error"
+			}
+		}
+		if trimmed == "Output:" {
+			output = strings.TrimSpace(strings.Join(lines[i+1:], "\n"))
+			break
+		}
+	}
+	if output == "" {
+		output = "(no output)"
+	}
+	return output, state
+}
+
 // codexQuestionAnswers shows what the user picked or typed for a Codex
 // question tool, without the question echo and internal item IDs.
 func codexQuestionAnswers(body string) string {
@@ -129,6 +195,41 @@ func codexQuestionAnswers(body string) string {
 		}
 	}
 	return strings.Join(answers, "\n")
+}
+
+// withoutClaudeTeammateWrapper drops a leading message from another Claude
+// session, including the generated note after it. Only a complete leading
+// wrapper goes; a typed prompt that happens to contain the same words stays
+// visible, and words the record carries after the note are the user's own.
+func withoutClaudeTeammateWrapper(text string) (string, bool) {
+	dropped := false
+	for {
+		rest := strings.TrimLeft(text, " \t\r\n")
+		if !strings.HasPrefix(rest, claudeTeammateLead) {
+			break
+		}
+		block := strings.TrimLeft(rest[len(claudeTeammateLead):], " \t\r\n")
+		after, ok := withoutLeadingBlock(block, []string{"teammate-message"})
+		if !ok {
+			break
+		}
+		dropped = true
+		after = strings.TrimSpace(after)
+		if strings.HasPrefix(after, claudeTeammateNote) {
+			// The note is one generated paragraph; only its line goes.
+			after = after[len(claudeTeammateNote):]
+			if end := strings.IndexByte(after, '\n'); end >= 0 {
+				after = strings.TrimSpace(after[end+1:])
+			} else {
+				after = ""
+			}
+		}
+		if after == "" {
+			return "", true
+		}
+		text = after
+	}
+	return text, dropped
 }
 
 // claudeUserEvent classifies one Claude Code user text as a typed prompt, a
@@ -155,6 +256,7 @@ func claudeUserEvent(text string) (Event, bool) {
 		}
 		return Event{Type: EventCommand, Text: "! " + input}, true
 	}
+	text, _ = withoutClaudeTeammateWrapper(text)
 	stripped := unwrapTagLines(stripTaggedBlocks(text, claudeInjectedTags), "pasted_content")
 	if stripped != text {
 		text = strings.TrimSpace(stripped)
@@ -204,6 +306,10 @@ func claudeShellEvents(text string) ([]parsedEvent, bool) {
 // always carry their own ids, so the output never lands on one of them; with
 // the command on an older page the output is simply dropped.
 const claudeShellCall = "claude-shell"
+
+// codexShellCall pairs the command and the result Codex records in one
+// wrapper, so the output never lands on an agent tool.
+const codexShellCall = "codex-shell"
 
 func inlineTagBody(text, tag string) string {
 	_, rest, ok := strings.Cut(text, "<"+tag+">")

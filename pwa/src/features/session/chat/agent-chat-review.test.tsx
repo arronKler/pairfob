@@ -27,6 +27,7 @@ import { AgentChatPane } from "./agent-chat";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { COMPOSE_ENTER_SENDS_KEY, setComposeEnterSends } from "../../settings/preferences-store";
 import { MOTION_MS } from "../../../shared/ui/dom/motion";
+import { adoptIncoming, attachmentScopeKey, patchStatus, queueSnapshot, resetAttachmentQueues } from "../attachments/attachments-store";
 
 const handlers = { onBack() {}, onWorkspace() {}, onMenu() {}, onSwitch() {} };
 const page = (text: string): AgentTracePage => ({ items: [
@@ -38,6 +39,21 @@ function deferred<T>() {
   let reject!: (error: unknown) => void;
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
+}
+
+const attachScope = (paneId: string) => ({ daemonId: null, paneId });
+
+/** A committed row as an earlier successful upload leaves it in one pane's tray. */
+function seedCommittedAttachment(paneId: string, name: string): string {
+  const scope = attachScope(paneId);
+  const key = attachmentScopeKey(scope);
+  const [localId] = adoptIncoming(key, scope, [new File([new Uint8Array(3)], name, { type: "text/plain" })]);
+  patchStatus(key, localId, "committed", { path: `/repo/${name}` });
+  return key;
+}
+
+function trayRows(key: string): number {
+  return queueSnapshot(key)?.items.length ?? 0;
 }
 
 function catalog(paneIds: string[], statuses: Record<string, string> = {}): Parameters<typeof replaceAgentsFromSnapshot>[0] {
@@ -83,6 +99,7 @@ beforeEach(async () => {
   globals.cancelAnimationFrame = happy.cancelAnimationFrame.bind(happy);
   resetComposeDrafts();
   clearAgentTraceCache();
+  resetAttachmentQueues();
   resetPaneView();
   setLang("zh");
   setPhase("live");
@@ -466,7 +483,6 @@ test("ready attachments ride with the prompt and leave the tray only once it wen
   const { submitAgentMessage } = await import("./agent-compose");
   const submitted: string[] = [];
   let fail = true;
-  let marked = 0;
   setSession({
     promptAgent: async (input: { text: string }) => {
       submitted.push(input.text);
@@ -479,11 +495,12 @@ test("ready attachments ride with the prompt and leave the tray only once it wen
   connectSendAttachments({
     state: () => ({ readyPaths: ["/w/a.png", "/w/b.png"], pending: 0, blocked: 0 }),
     subscribe: () => () => undefined,
-    markSent: () => { marked++; },
+    markSent: () => undefined,
     retryBlocked: () => undefined,
     dropBlocked: () => undefined,
     acceptPaste: () => false,
   });
+  const key = seedCommittedAttachment("p1", "a.png");
   try {
     act(() => { setComposeDraft("compare these"); field().value = "compare these"; });
     await act(async () => { await submitAgentMessage(); });
@@ -492,14 +509,77 @@ test("ready attachments ride with the prompt and leave the tray only once it wen
     // A failed prompt puts back what the reader wrote, never the paths.
     expect(composeDraft()).toBe("compare these");
     expect(field().value).toBe("compare these");
-    expect(marked).toBe(0);
+    expect(trayRows(key)).toBe(1);
 
     fail = false;
     await act(async () => { await submitAgentMessage(); });
     await drain();
     expect(submitted.at(-1)).toBe("compare these\n\n/w/a.png\n/w/b.png");
     expect(composeDraft()).toBe("");
-    expect(marked).toBe(1);
+    expect(trayRows(key)).toBe(0);
+  } finally {
+    resetSendGate();
+  }
+});
+
+test("a failed prompt with a newer draft keeps that draft and the ready attachments", async () => {
+  const { connectSendAttachments, resetSendGate } = await import("../guided/send-gate");
+  const { submitAgentMessage } = await import("./agent-compose");
+  const failure = deferred<never>();
+  setSession({ promptAgent: () => failure.promise });
+  act(mount);
+  connectSendAttachments({
+    state: () => ({ readyPaths: ["/w/a.png"], pending: 0, blocked: 0 }),
+    subscribe: () => () => undefined,
+    markSent: () => undefined,
+    retryBlocked: () => undefined,
+    dropBlocked: () => undefined,
+    acceptPaste: () => false,
+  });
+  const key = seedCommittedAttachment("p1", "a.png");
+  try {
+    act(() => { setComposeDraft("compare these"); field().value = "compare these"; });
+    let sending!: Promise<void>;
+    await act(async () => { sending = submitAgentMessage(); await Promise.resolve(); });
+    act(() => { setComposeDraft("new plan"); field().value = "new plan"; });
+    await act(async () => { failure.reject(new ProtocolError("rejected", "busy")); await sending; });
+    await drain();
+    // The reader's newer draft is not the failed message and is never overwritten.
+    expect(composeDraft()).toBe("new plan");
+    expect(field().value).toBe("new plan");
+    // Nothing reached the pane, so the tray still holds the ready path.
+    expect(trayRows(key)).toBe(1);
+  } finally {
+    resetSendGate();
+  }
+});
+
+test("a prompt that settles after a pane switch clears only the sending pane's tray", async () => {
+  const { connectSendAttachments, resetSendGate } = await import("../guided/send-gate");
+  const { submitAgentMessage } = await import("./agent-compose");
+  const applied = deferred<{ outcome: string }>();
+  setSession({ promptAgent: () => applied.promise });
+  act(mount);
+  connectSendAttachments({
+    state: () => ({ readyPaths: ["/w/a.png"], pending: 0, blocked: 0 }),
+    subscribe: () => () => undefined,
+    markSent: () => undefined,
+    retryBlocked: () => undefined,
+    dropBlocked: () => undefined,
+    acceptPaste: () => false,
+  });
+  const keyA = seedCommittedAttachment("p1", "a.png");
+  const keyB = seedCommittedAttachment("p2", "b.png");
+  try {
+    act(() => { setComposeDraft("from p1"); field().value = "from p1"; });
+    let sending!: Promise<void>;
+    await act(async () => { sending = submitAgentMessage(); await Promise.resolve(); });
+    act(() => { selectPane("p2"); });
+    await act(async () => { applied.resolve({ outcome: "applied" }); await sending; });
+    await drain();
+    // The prompt left p1: only p1's sent rows go. The pane now open keeps its tray.
+    expect(trayRows(keyA)).toBe(0);
+    expect(trayRows(keyB)).toBe(1);
   } finally {
     resetSendGate();
   }

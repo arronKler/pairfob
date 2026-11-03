@@ -78,6 +78,9 @@ declare const WebSocketPair: { new (): WebSocketPair };
 
 interface WebSocket {
   accept(): void;
+  // Workers accepts ArrayBufferView. Naming Uint8Array keeps the hibernating
+  // socket assignable when the library types require ArrayBuffer-backed views.
+  send(data: Uint8Array): void;
   serializeAttachment(attachment: unknown): void;
   deserializeAttachment(): unknown;
 }

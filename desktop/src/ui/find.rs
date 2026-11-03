@@ -28,6 +28,17 @@ const FIND_DEBOUNCE: Duration = Duration::from_millis(150);
 /// A pane that is still printing answers `stale_content`; retry against the
 /// newer revision a couple of times, then let the user see the failure.
 const STALE_RETRIES: u8 = 2;
+/// The endpoint lane answers a timeout, but a lane torn down by a disconnect
+/// returns without one. This backstop keeps a search from owning the bar
+/// forever when no connection event ever clears it.
+const FIND_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// A `pane.copy_search` request on the wire, and when it went out.
+#[derive(Clone, Copy, Debug)]
+struct PendingSearch {
+    id: u64,
+    since: Instant,
+}
 
 #[derive(Debug)]
 pub(crate) struct FindState {
@@ -41,7 +52,7 @@ pub(crate) struct FindState {
     /// The query changed since the last request; the answer on screen belongs
     /// to text that is no longer there.
     dirty: bool,
-    pending: Option<u64>,
+    pending: Option<PendingSearch>,
     next_id: u64,
     last_edit: Option<Instant>,
     stale_retries: u8,
@@ -87,6 +98,35 @@ impl FindState {
         self.current_match = None;
         self.matches.clear();
         self.stale_retries = 0;
+    }
+
+    /// The settled query still needs its first (or next) request. An answer on
+    /// screen is not asked for again until the query changes.
+    fn request_due(&self, now: Instant) -> bool {
+        !self.query.is_empty()
+            && self.dirty
+            && self.pending.is_none()
+            && self
+                .last_edit
+                .is_none_or(|edit| now.saturating_duration_since(edit) >= FIND_DEBOUNCE)
+    }
+
+    /// The in-flight request will never be answered: the link dropped under it
+    /// or the answer took too long. The query stays on the bar so a reconnect,
+    /// another Enter or an edit can ask again.
+    fn abandon_pending(&mut self, reason: &str) -> bool {
+        if self.pending.take().is_none() {
+            return false;
+        }
+        self.stale_retries = 0;
+        self.dirty = true;
+        self.error = Some(reason.to_owned());
+        true
+    }
+
+    fn pending_expired(&self, now: Instant) -> bool {
+        self.pending
+            .is_some_and(|pending| now.saturating_duration_since(pending.since) >= FIND_TIMEOUT)
     }
 
     /// `3 of 17`, or what is wrong instead.
@@ -248,8 +288,8 @@ impl PairfobWindow {
         cx.notify();
     }
 
-    /// Runs every tick: retires a bar whose pane left the screen and sends a
-    /// settled query.
+    /// Runs every tick: retires a bar whose pane left the screen, drops a
+    /// request the link can no longer answer, and sends a settled query.
     pub(crate) fn poll_find(&mut self, now: Instant, cx: &mut Context<Self>) -> bool {
         let Some(find) = self.find.as_ref() else {
             return false;
@@ -264,13 +304,31 @@ impl PairfobWindow {
             self.marked.clear();
             return true;
         }
-        if find.pending.is_some() || find.query.is_empty() {
-            return false;
+        // The last frame stays on screen while Herdr reconnects, so `frame` is
+        // not a liveness test. A request that was on the wire when the link
+        // dropped never gets a reply; clearing it makes the bar usable again.
+        let ready = self.app.connection.is_ready();
+        if !ready || find.pending_expired(now) {
+            let reason = if ready {
+                "the search timed out; press Enter to try again"
+            } else {
+                "Herdr is reconnecting; the search will run when it is back"
+            };
+            let abandoned = self
+                .find
+                .as_mut()
+                .is_some_and(|find| find.abandon_pending(reason));
+            if abandoned {
+                cx.notify();
+            }
+            if !ready {
+                return abandoned;
+            }
         }
-        if !find
-            .last_edit
-            .is_none_or(|edit| now.saturating_duration_since(edit) >= FIND_DEBOUNCE)
-        {
+        let Some(find) = self.find.as_ref() else {
+            return false;
+        };
+        if !find.request_due(now) {
             return false;
         }
         self.send_find(false, cx);
@@ -314,7 +372,7 @@ impl PairfobWindow {
         let Some(find) = self.find.as_mut() else {
             return false;
         };
-        if find.pending != Some(request_id) {
+        if find.pending.map(|pending| pending.id) != Some(request_id) {
             return false;
         }
         find.pending = None;
@@ -368,6 +426,19 @@ impl PairfobWindow {
     }
 
     fn send_find(&mut self, backward: bool, cx: &mut Context<Self>) {
+        // The engine silently drops a pane request with no connection under
+        // it. Sending one here would leave `pending` set with no reply to
+        // clear it, so the request waits for the reconnect instead.
+        if !self.app.connection.is_ready() {
+            if let Some(find) = self.find.as_mut() {
+                find.dirty = true;
+                find.pending = None;
+                find.error =
+                    Some("Herdr is reconnecting; the search will run when it is back".into());
+            }
+            cx.notify();
+            return;
+        }
         let Some(frame) = self.app.frame.clone() else {
             return;
         };
@@ -420,13 +491,21 @@ impl PairfobWindow {
         };
         if let Err(error) = request.validate() {
             find.error = Some(error);
+            // The daemon would refuse the same query again; wait for an edit.
+            find.dirty = false;
             return;
         }
         find.dirty = false;
+        find.error = None;
         let id = find.next_id;
         find.next_id = find.next_id.wrapping_add(1);
         match self.handle.search(id, request) {
-            Ok(()) => find.pending = Some(id),
+            Ok(()) => {
+                find.pending = Some(PendingSearch {
+                    id,
+                    since: Instant::now(),
+                })
+            }
             Err(error) => find.error = Some(error.to_string()),
         }
         cx.notify();
@@ -628,5 +707,56 @@ mod tests {
         find.error = None;
         find.retyped();
         assert_eq!(find.label(), "searching…", "an old answer is not shown");
+    }
+
+    #[test]
+    fn a_search_dropped_by_the_link_can_run_again_after_reconnect() {
+        let now = Instant::now();
+        let mut find = FindState::new("w1:p1".into());
+        find.query = "needle".into();
+        find.last_edit = now.checked_sub(FIND_DEBOUNCE);
+        find.retyped();
+        find.pending = Some(PendingSearch { id: 7, since: now });
+        assert_eq!(find.label(), "searching…");
+        assert!(!find.request_due(now), "one request at a time");
+
+        assert!(find.abandon_pending("Herdr is reconnecting"));
+        assert!(find.pending.is_none(), "the dead request is forgotten");
+        assert_eq!(find.label(), "Herdr is reconnecting");
+        assert!(
+            find.request_due(now + FIND_DEBOUNCE),
+            "the same query is sent again once the link returns"
+        );
+        assert!(!find.abandon_pending("again"), "nothing was in flight");
+    }
+
+    #[test]
+    fn an_answered_query_is_not_sent_again_until_it_changes() {
+        let now = Instant::now();
+        let mut find = FindState::new("w1:p1".into());
+        find.query = "needle".into();
+        find.retyped();
+        assert!(find.request_due(now + FIND_DEBOUNCE));
+
+        // `send_find` clears the flag when the request goes out; the answer
+        // retires the pending entry without making the query due again.
+        find.dirty = false;
+        find.pending = Some(PendingSearch { id: 1, since: now });
+        find.pending = None;
+        assert!(!find.request_due(now + FIND_DEBOUNCE * 10));
+
+        find.retyped();
+        assert!(find.request_due(now + FIND_DEBOUNCE * 11));
+    }
+
+    #[test]
+    fn a_pending_search_expires_instead_of_searching_forever() {
+        let now = Instant::now();
+        let mut find = FindState::new("w1:p1".into());
+        find.query = "needle".into();
+        find.retyped();
+        find.pending = Some(PendingSearch { id: 3, since: now });
+        assert!(!find.pending_expired(now + FIND_TIMEOUT - Duration::from_millis(1)));
+        assert!(find.pending_expired(now + FIND_TIMEOUT));
     }
 }

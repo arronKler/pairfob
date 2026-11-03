@@ -87,7 +87,7 @@ func (i *Inspector) List(root, relative, cursor string, limit int) (DirectoryPag
 	}
 	entries := make([]Entry, 0, len(raw))
 	for _, item := range raw {
-		if item.Name() == ".git" {
+		if strings.EqualFold(item.Name(), ".git") {
 			continue
 		}
 		entryInfo, infoErr := item.Info()
@@ -158,26 +158,15 @@ func (i *Inspector) List(root, relative, cursor string, limit int) (DirectoryPag
 }
 
 func (i *Inspector) Read(root, relative string) (FileView, error) {
-	root, clean, resolved, err := resolveExisting(root, relative)
-	if err != nil || clean == "" {
-		if err == nil {
-			err = ErrInvalidPath
-		}
-		return FileView{}, err
-	}
-	path := filepath.Join(root, filepath.FromSlash(clean))
-	info, err := os.Lstat(path)
-	if err != nil {
-		return FileView{}, err
-	}
-	if !info.Mode().IsRegular() {
-		return FileView{}, ErrInvalidPath
-	}
-	file, err := os.Open(resolved)
+	// Authorize and open through os.Root in one step: a file swapped for a
+	// symlink between a separate check and this open is never followed.
+	file, dir, ident, err := openAuthorizedRegular(root, relative)
 	if err != nil {
 		return FileView{}, err
 	}
 	defer file.Close()
+	defer dir.Close()
+	clean, info := ident.clean, ident.info
 	buffer, err := io.ReadAll(io.LimitReader(file, MaxPreviewBytes+1))
 	if err != nil {
 		return FileView{}, err

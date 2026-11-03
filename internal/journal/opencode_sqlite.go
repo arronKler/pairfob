@@ -129,6 +129,23 @@ func opencodeV1Rows(data []byte, id, revertMessage, revertPart string) ([]storeR
 		return nil, ErrUnavailable
 	}
 	records := make([]storeRecord, 0)
+	// The query keeps the newest maxOpencodeMessages+1 messages in message
+	// order. Like the file layout, a longer session keeps its newest window
+	// instead of becoming unreadable, so only the oldest extra message goes.
+	drop := 0
+	if revertMessage == "" {
+		distinct := 0
+		previous := ""
+		for _, row := range rows {
+			if row.MID != previous {
+				distinct++
+				previous = row.MID
+			}
+		}
+		if distinct > maxOpencodeMessages {
+			drop = distinct - maxOpencodeMessages
+		}
+	}
 	last := ""
 	messages := 0
 	reverted := revertMessage == ""
@@ -148,7 +165,10 @@ func opencodeV1Rows(data []byte, id, revertMessage, revertPart string) ([]storeR
 			messages++
 			last = row.MID
 		}
-		if messages > maxOpencodeMessages {
+		if messages <= drop {
+			continue
+		}
+		if messages-drop > maxOpencodeMessages {
 			return nil, ErrUnavailable
 		}
 		var m opencodeMessage
@@ -175,8 +195,16 @@ func opencodeV1Rows(data []byte, id, revertMessage, revertPart string) ([]storeR
 
 func opencodeV2Rows(data []byte, id, revertMessage string) ([]storeRecord, error) {
 	var rows []struct{ ID, SID, Type, Data string }
-	if len(data) > maxScanBytes || json.Unmarshal(data, &rows) != nil || len(rows) > maxOpencodeMessages {
+	// The query keeps the newest maxOpencodeMessages+1 rows in seq order.
+	if len(data) > maxScanBytes || json.Unmarshal(data, &rows) != nil || len(rows) > maxOpencodeMessages+1 {
 		return nil, ErrUnavailable
+	}
+	// A revert point truncates the scan below, so the window can overflow only
+	// when there is none. Then the oldest row is the one that fell out of the
+	// newest window. A revert point older than the fetched rows stays
+	// unavailable rather than guessing what it hid.
+	if revertMessage == "" && len(rows) > maxOpencodeMessages {
+		rows = rows[len(rows)-maxOpencodeMessages:]
 	}
 	records := make([]storeRecord, 0)
 	reverted := revertMessage == ""
@@ -208,8 +236,8 @@ func opencodeV2Rows(data []byte, id, revertMessage string) ([]storeRecord, error
 		at := recordTime(m.Time.Created)
 		switch row.Type {
 		case "user":
-			if m.Text != "" {
-				records = append(records, storeRecord{Kind: storeUser, Text: m.Text, At: at})
+			if text := opencodeUserText(m.Text); text != "" {
+				records = append(records, storeRecord{Kind: storeUser, Text: text, At: at})
 			}
 		case "compaction":
 			records = append(records, storeRecord{Kind: storeCompaction, At: at})

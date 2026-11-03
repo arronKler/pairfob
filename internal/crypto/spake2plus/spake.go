@@ -26,6 +26,23 @@ var (
 
 const Context = "pairfob-v1/spake2plus"
 
+// Argon2Cost is the Argon2id parameter set that turns a pairing code into the
+// SPAKE2+ record.
+type Argon2Cost struct {
+	Time    uint32
+	Memory  uint32 // KiB
+	Threads uint8
+}
+
+var productionArgon2Cost = Argon2Cost{Time: 3, Memory: 64 * 1024, Threads: 1}
+
+// TestArgon2Cost, when non-nil, replaces the production cost. Test binaries
+// that run full pairing handshakes set it because the race detector makes the
+// production cost dominate their runtime. It stays nil in the shipped daemon,
+// and the protocol vector tests never set it, so the wire bytes remain pinned
+// to the production parameters.
+var TestArgon2Cost *Argon2Cost
+
 type Record struct {
 	W0, W1 *big.Int
 	L      []byte // uncompressed 65
@@ -37,7 +54,11 @@ func DeriveRecord(normalizedS, daemonID, pairRefHex string) Record {
 		canon.EncStr(daemonID),
 		canon.EncStr(pairRefHex),
 	))
-	expanded := argon2.IDKey([]byte(normalizedS), saltFull[:16], 3, 64*1024, 1, 80)
+	cost := productionArgon2Cost
+	if TestArgon2Cost != nil {
+		cost = *TestArgon2Cost
+	}
+	expanded := argon2.IDKey([]byte(normalizedS), saltFull[:16], cost.Time, cost.Memory, cost.Threads, 80)
 	w0 := os2ipMod(expanded[0:40])
 	w1 := os2ipMod(expanded[40:80])
 	lx, ly := curve.ScalarBaseMult(pad32(w1))

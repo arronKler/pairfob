@@ -706,13 +706,20 @@ function releasePromptOwner(owner: { lockId: number }, live: boolean): void {
   if (!composeFocused() && sessionMayTakeFocus()) composeEl()?.focus({ preventScroll: true });
 }
 
-export async function submitAgentPrompt(): Promise<void> {
+/**
+ * What became of one prompt submission. `unknown` is the daemon's ambiguous
+ * outcome: the prompt may have reached the pane, so a caller must neither
+ * treat it as sent nor replay it.
+ */
+export type PromptSubmission = "sent" | "failed" | "unknown";
+
+export async function submitAgentPrompt(): Promise<PromptSubmission> {
   const session = liveSession();
   const selected = selectedAgent();
   const text = composeDraft().trim();
-  if (!session || !selected || !text || !canSend(selected) || operationBusy()) return;
+  if (!session || !selected || !text || !canSend(selected) || operationBusy()) return "failed";
   const owner = capturePromptRequest(session, selected.paneId, text);
-  if (!owner) return;
+  if (!owner) return "failed";
   const occupant = promptOccupant(selected);
   const progress = createPromptProgress(selected);
   const notice = visibleNotice();
@@ -729,7 +736,9 @@ export async function submitAgentPrompt(): Promise<void> {
   paintPromptOwner(wasAtTail);
   try {
     await session.promptAgent({ pane_id: owner.draftScope.paneId, text: owner.text });
-    if (promptRequestOwnsComputer(owner) && !promptOccupantIsCurrent(owner.draftScope.paneId, occupant)) return;
+    // The mutation resolved, so the prompt reached the pane even if the view
+    // moved to another pane or computer while it was on the wire.
+    if (promptRequestOwnsComputer(owner) && !promptOccupantIsCurrent(owner.draftScope.paneId, occupant)) return "sent";
     if (promptRequestOwnsComputer(owner)) markPaneSubmitted(owner.draftScope.paneId);
     settlePromptSuccess(owner);
     if (promptRequestIsLive(owner)) {
@@ -740,8 +749,9 @@ export async function submitAgentPrompt(): Promise<void> {
       paintPromptOwner();
       await refreshAgentTrace();
     }
+    return "sent";
   } catch (error) {
-    if (promptRequestOwnsComputer(owner) && !promptOccupantIsCurrent(owner.draftScope.paneId, occupant)) return;
+    if (promptRequestOwnsComputer(owner) && !promptOccupantIsCurrent(owner.draftScope.paneId, occupant)) return "unknown";
     const { unknownOutcome, message, restoredVisible } = settlePromptFailure(owner, error);
     if (promptRequestIsLive(owner)) {
       batch(() => {
@@ -762,6 +772,7 @@ export async function submitAgentPrompt(): Promise<void> {
     } else if (restoredVisible) {
       restoreOwnerComposeField();
     }
+    return unknownOutcome ? "unknown" : "failed";
   } finally {
     releasePromptOwner(owner, promptOccupantIsCurrent(owner.draftScope.paneId, occupant) && promptRequestIsLive(owner));
   }

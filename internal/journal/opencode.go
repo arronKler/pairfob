@@ -219,6 +219,22 @@ func readOpencodeFile(root *os.Root, file opencodeEntry) []byte {
 	return data
 }
 
+// opencodeInjectedTags are context wrappers opencode plugins store as ordinary
+// user text parts. They are instructions for the model, never a typed prompt.
+// A part with only these blocks is dropped; text the person typed around one is
+// kept.
+var opencodeInjectedTags = []string{
+	"system-reminder", "ultrawork-mode",
+	// Sisyphus/oh-my-opencode command wrappers. They precede the person's
+	// actual request inside the same text part, so only the blocks are cut.
+	"Work_Context", "command-instruction", "session-context", "user-request",
+}
+
+// opencodeUserText removes the injected wrappers from one user text part.
+func opencodeUserText(text string) string {
+	return strings.TrimSpace(stripTaggedBlocks(text, opencodeInjectedTags))
+}
+
 func opencodePartRecords(role string, part opencodePart, created int64) []storeRecord {
 	at := created
 	for _, start := range []int64{part.State.Time.Start, part.Time.Start} {
@@ -230,7 +246,7 @@ func opencodePartRecords(role string, part opencodePart, created int64) []storeR
 	switch {
 	case part.Type == "text" && part.Text != "" && !part.Synthetic && !part.Ignored:
 		if role == "user" {
-			if text := strings.TrimSpace(part.Text); text != "" {
+			if text := opencodeUserText(part.Text); text != "" {
 				return []storeRecord{{Kind: storeUser, Text: text, At: at}}
 			}
 			return nil

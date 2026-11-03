@@ -46,7 +46,7 @@ export function shardTestFiles(root: string, index: number, total: number): stri
   const weight = (file: string): number => (MEASURED[file] ?? 0) + (sizes.get(file) ?? 0) / 1000;
   const buckets: string[][] = Array.from({ length: total }, () => []);
   const loads = new Array<number>(total).fill(0);
-  for (const file of [...files].sort((left, right) => weight(right) - weight(left) || left.localeCompare(right))) {
+  for (const file of [...files].sort((left, right) => weight(right) - weight(left) || (left < right ? -1 : left > right ? 1 : 0))) {
     let target = 0;
     for (let candidate = 1; candidate < total; candidate++) {
       if (loads[candidate] < loads[target]) target = candidate;

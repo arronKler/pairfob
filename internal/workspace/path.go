@@ -54,8 +54,13 @@ func cleanRelative(relative string) (string, error) {
 	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", ErrInvalidPath
 	}
-	if clean == ".git" || strings.HasPrefix(clean, ".git"+string(filepath.Separator)) {
-		return "", ErrInvalidPath
+	// Git metadata is refused in every component and in every spelling: a
+	// case-insensitive filesystem reaches .git through .GIT, and a nested
+	// repository's metadata is as private as the workspace's own.
+	for _, component := range strings.Split(clean, string(filepath.Separator)) {
+		if strings.EqualFold(component, ".git") {
+			return "", ErrInvalidPath
+		}
 	}
 	return filepath.ToSlash(clean), nil
 }
@@ -63,6 +68,23 @@ func cleanRelative(relative string) (string, error) {
 func within(root, candidate string) bool {
 	relative, err := filepath.Rel(root, candidate)
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
+}
+
+// outsideGitMetadata reports whether a resolved path stays clear of Git
+// metadata under root. cleanRelative checks the requested name, but a
+// directory symlink can give .git an ordinary alias; the resolved target is
+// what the file operations actually touch.
+func outsideGitMetadata(root, resolved string) bool {
+	relative, err := filepath.Rel(root, resolved)
+	if err != nil {
+		return false
+	}
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		if strings.EqualFold(component, ".git") {
+			return false
+		}
+	}
+	return true
 }
 
 func resolveExisting(root, relative string) (string, string, string, error) {
@@ -88,6 +110,9 @@ func resolveExisting(root, relative string) (string, string, string, error) {
 	if !within(root, resolved) {
 		return "", "", "", ErrInvalidPath
 	}
+	if !outsideGitMetadata(root, resolved) {
+		return "", "", "", ErrInvalidPath
+	}
 	return root, clean, resolved, nil
 }
 
@@ -105,7 +130,7 @@ func validateGitPath(root, relative string) (string, string, error) {
 	for {
 		resolved, resolveErr := filepath.EvalSymlinks(probe)
 		if resolveErr == nil {
-			if !within(root, resolved) {
+			if !within(root, resolved) || !outsideGitMetadata(root, resolved) {
 				return "", "", ErrInvalidPath
 			}
 			break

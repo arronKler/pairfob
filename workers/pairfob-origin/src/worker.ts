@@ -161,8 +161,13 @@ async function routeWs(req: Request, env: Env): Promise<Response> {
     return errorJson(build, 400, "bad_token", noStore());
   }
 
+  // Daemons and ticketless clients both take a pending hello slot in the room.
+  // One shared per-IP budget keeps a single address from filling
+  // MAX_PENDING_HELLO across both roles, while a real daemon reconnect stays far
+  // below the cap. Ticket-bearing client upgrades are single-use and skip it.
   const ticket = url.searchParams.get("pair_ticket");
-  if (role === "client" && (ticket === null || ticket === "")) {
+  const ticketlessClient = role === "client" && (ticket === null || ticket === "");
+  if (role === "daemon" || ticketlessClient) {
     if (!allowSessionIP(clientIP(req), Date.now())) {
       observeError(env, "rate_limited", daemonId);
       return errorJson(build, 429, "rate_limited", noStore());

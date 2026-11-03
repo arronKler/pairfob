@@ -25,6 +25,50 @@ fn direction(key: &str) -> Option<Direction> {
     }
 }
 
+/// Which text surface owns typing right now. The order is the routing order:
+/// a rename, find or filter bar floats over the chat column and takes the
+/// keyboard first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ActiveTextField {
+    Rename,
+    Find,
+    Filter,
+    Chat,
+}
+
+impl ActiveTextField {
+    fn resolve(rename: bool, find: bool, filter: bool, chat: bool) -> Option<Self> {
+        if rename {
+            Some(Self::Rename)
+        } else if find {
+            Some(Self::Find)
+        } else if filter {
+            Some(Self::Filter)
+        } else if chat {
+            Some(Self::Chat)
+        } else {
+            None
+        }
+    }
+}
+
+/// Where a clipboard item goes. Only the chat composer accepts an image, and
+/// only while it is the field that owns input.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PasteRoute {
+    ChatImage,
+    Text,
+    Ignore,
+}
+
+fn paste_route(field: Option<ActiveTextField>, has_text: bool, has_image: bool) -> PasteRoute {
+    match field {
+        Some(ActiveTextField::Chat) if has_image => PasteRoute::ChatImage,
+        Some(_) if has_text => PasteRoute::Text,
+        _ => PasteRoute::Ignore,
+    }
+}
+
 impl PairfobWindow {
     pub(crate) fn key_down(
         &mut self,
@@ -277,26 +321,56 @@ impl PairfobWindow {
 
     /// Whether a filter, search, rename or chat field has the keyboard.
     pub(crate) fn text_field_active(&self) -> bool {
-        self.filter_active || self.find.is_some() || self.rename.is_some() || self.chat_visible()
+        self.active_text_field().is_some()
     }
 
-    /// Paste into the active text field. A screenshot on the clipboard belongs
-    /// to the chat; everything else goes through the same input handler path
-    /// the platform uses, so IME commit and paste share one insert.
+    /// The field that owns typing and paste. The chat column sits under the
+    /// rename, find and filter bars, so it only owns input when none of them
+    /// is open.
+    pub(crate) fn active_text_field(&self) -> Option<ActiveTextField> {
+        ActiveTextField::resolve(
+            self.rename.is_some(),
+            self.find.is_some(),
+            self.filter_active,
+            self.chat_visible(),
+        )
+    }
+
+    /// Paste into the active text field. A screenshot belongs to the chat
+    /// composer, but only while the composer is the field that owns input;
+    /// everything else goes through the same input handler path the platform
+    /// uses, so IME commit and paste share one insert.
     fn paste_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(item) = cx.read_from_clipboard() else {
             return;
         };
-        if self.chat_visible() {
-            if let Some(image) = item.entries.iter().find_map(|entry| match entry {
-                ClipboardEntry::Image(image) => Some(image),
-                _ => None,
-            }) {
-                self.chat_attach_image(image, cx);
-                return;
+        let has_image = item
+            .entries
+            .iter()
+            .any(|entry| matches!(entry, ClipboardEntry::Image(_)));
+        match paste_route(self.active_text_field(), item.text().is_some(), has_image) {
+            PasteRoute::ChatImage => {
+                if let Some(image) = item.entries.iter().find_map(|entry| match entry {
+                    ClipboardEntry::Image(image) => Some(image),
+                    _ => None,
+                }) {
+                    self.chat_attach_image(image, cx);
+                }
             }
+            PasteRoute::Text => EntityInputHandler::paste(self, item, window, cx),
+            PasteRoute::Ignore => {}
         }
-        EntityInputHandler::paste(self, item, window, cx);
+    }
+
+    /// Insert committed text into whichever field owns input.
+    fn insert_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        match self.active_text_field() {
+            Some(ActiveTextField::Rename) => self.rename_push(text, cx),
+            Some(ActiveTextField::Find) => self.find_push(text, cx),
+            Some(ActiveTextField::Filter) => self.edit_filter(text, cx),
+            Some(ActiveTextField::Chat) => self.chat_insert(text, cx),
+            None => self.send_input(KeyInput::Text(text.to_owned()), cx),
+        }
     }
 
     pub(crate) fn send_input(&mut self, input: KeyInput, cx: &mut Context<Self>) {
@@ -364,21 +438,15 @@ impl EntityInputHandler for PairfobWindow {
             if text.is_empty() {
                 return;
             }
-            if self.rename.is_some() {
-                self.rename_push(&text, cx);
-            } else if self.find.is_some() {
-                self.find_push(&text, cx);
-            } else if self.filter_active {
-                self.edit_filter(&text, cx);
-            } else if self.chat_visible() {
-                self.chat_insert(&text, cx);
+            if self.text_field_active() {
+                self.insert_text(&text, cx);
             } else {
                 self.send_input(KeyInput::Paste(text), cx);
             }
         }
-        // An image on the clipboard is attached by the chat key handler, which
-        // is the path this window actually gets its Cmd+V through; attaching
-        // here as well would add the same screenshot twice.
+        // An image on the clipboard is attached by `paste_text`, which sees
+        // the key before the platform does; attaching here as well would add
+        // the same screenshot twice.
     }
 
     fn replace_text_in_range(
@@ -391,17 +459,7 @@ impl EntityInputHandler for PairfobWindow {
         self.marked.clear();
         self.marked_selection = None;
         if !text.is_empty() {
-            if self.rename.is_some() {
-                self.rename_push(text, cx);
-            } else if self.find.is_some() {
-                self.find_push(text, cx);
-            } else if self.filter_active {
-                self.edit_filter(text, cx);
-            } else if self.chat_visible() {
-                self.chat_insert(text, cx);
-            } else {
-                self.send_input(KeyInput::Text(text.to_owned()), cx);
-            }
+            self.insert_text(text, cx);
         }
         cx.notify();
     }
@@ -658,5 +716,55 @@ mod tests {
         let modifiers = mods(false, false, true, false);
         assert_eq!(key_code("tab", modifiers), Some(KeyCode::Tab));
         assert!(key_modifiers(modifiers).shift);
+    }
+
+    #[test]
+    fn the_topmost_text_field_owns_typing() {
+        assert_eq!(
+            ActiveTextField::resolve(true, true, true, true),
+            Some(ActiveTextField::Rename)
+        );
+        assert_eq!(
+            ActiveTextField::resolve(false, true, true, true),
+            Some(ActiveTextField::Find)
+        );
+        assert_eq!(
+            ActiveTextField::resolve(false, false, true, true),
+            Some(ActiveTextField::Filter)
+        );
+        assert_eq!(
+            ActiveTextField::resolve(false, false, false, true),
+            Some(ActiveTextField::Chat)
+        );
+        assert_eq!(ActiveTextField::resolve(false, false, false, false), None);
+    }
+
+    #[test]
+    fn a_screenshot_reaches_chat_only_while_chat_owns_the_keyboard() {
+        assert_eq!(
+            paste_route(Some(ActiveTextField::Chat), false, true),
+            PasteRoute::ChatImage
+        );
+        for field in [
+            ActiveTextField::Rename,
+            ActiveTextField::Find,
+            ActiveTextField::Filter,
+        ] {
+            assert_eq!(
+                paste_route(Some(field), false, true),
+                PasteRoute::Ignore,
+                "{field:?} must not attach the image to the chat"
+            );
+            assert_eq!(
+                paste_route(Some(field), true, true),
+                PasteRoute::Text,
+                "{field:?} takes the text and drops the image"
+            );
+        }
+        assert_eq!(
+            paste_route(Some(ActiveTextField::Chat), true, false),
+            PasteRoute::Text
+        );
+        assert_eq!(paste_route(None, true, true), PasteRoute::Ignore);
     }
 }

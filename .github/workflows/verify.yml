@@ -85,6 +85,9 @@ jobs:
         with:
           go-version: "1.26.10"
           cache: true
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
       - run: bash scripts/verify-go.sh --part race --shard ${{ matrix.shard }}/5
 
   go-vuln:
@@ -108,7 +111,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+        shard: [0, 1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -143,7 +146,7 @@ jobs:
         if: steps.scope.outputs.web == 'true'
         run: (cd pwa && bun install --frozen-lockfile)
       - if: steps.scope.outputs.web == 'true'
-        run: bash scripts/verify-web.sh --part tests --shard ${{ matrix.shard }}/8
+        run: bash scripts/verify-web.sh --part tests --shard ${{ matrix.shard }}/6
 
   web-static:
     runs-on: ubuntu-latest
@@ -307,9 +310,9 @@ jobs:
       - run: bash scripts/verify-desktop.sh
 
   scripts:
-    # Start with the web jobs: these checks read the repository, not the scope
-    # decision, and the gate still waits for both. Waiting for changes put the
-    # whole scripts run behind the longest scope diff.
+    # Wait for the scope decision like the other non-shard jobs, so the six
+    # test shards get the runners first.
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -341,11 +344,26 @@ jobs:
       - docs
       - desktop
       - scripts
-    runs-on: ubuntu-latest
+    # The gate only reads the needs JSON; a shared container starts sooner
+    # than a full VM and costs no verification capacity.
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
-      - name: Require every job to pass or skip
+      - name: Require the scope outputs and every job to pass or skip
         env:
           NEEDS: ${{ toJSON(needs) }}
         run: |
-          echo "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
+          # A skipped job is legitimate only when its scope output is "false".
+          # toJSON(needs) can carry no outputs at all after a failure, which
+          # would silently skip jobs; require changes to succeed with all four
+          # outputs present and boolean-looking before accepting any skip.
+          echo "$NEEDS" | jq -e '
+            def scope_output_ok($name):
+              ((.outputs // {})[$name] == "true") or ((.outputs // {})[$name] == "false");
+            (.changes.result == "success")
+            and (.changes | scope_output_ok("go"))
+            and (.changes | scope_output_ok("web"))
+            and (.changes | scope_output_ok("docs"))
+            and (.changes | scope_output_ok("desktop"))
+            and all(.[]; .result == "success" or .result == "skipped")
+          '

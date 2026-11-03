@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
@@ -43,20 +41,15 @@ func diffStats(patch string) (int, int, bool) {
 }
 
 func untrackedPatch(root, relative string) (string, bool, bool, error) {
-	root, _, resolved, err := resolveExisting(root, relative)
-	if err != nil {
-		return "", false, false, err
-	}
-	path := filepath.Join(root, filepath.FromSlash(relative))
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return "", false, false, err
-	}
-	file, err := os.Open(resolved)
+	// The open is authorized and performed through one os.Root: the patch is
+	// never read from a file a local writer swapped for an escaping symlink.
+	file, dir, ident, err := openAuthorizedRegular(root, relative)
 	if err != nil {
 		return "", false, false, err
 	}
 	defer file.Close()
+	defer dir.Close()
+	info := ident.info
 	data, err := io.ReadAll(io.LimitReader(file, MaxDiffBytes+1))
 	if err != nil {
 		return "", false, false, err

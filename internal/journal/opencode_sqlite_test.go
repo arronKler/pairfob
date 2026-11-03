@@ -1,6 +1,8 @@
 package journal
 
 import (
+	"encoding/json"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -64,7 +66,7 @@ func TestOpencodeSQLiteV2Observation(t *testing.T) {
 	sqliteFixture(t, db, `create table session(id text primary key,title text,revert text);
 create table session_message(id text,session_id text,type text,seq integer,data text);
 insert into session values('ses_native123','V2 title',null);
-insert into session_message values('msg_sys','ses_native123','synthetic',0,'{"text":"hidden instructions"}'),('msg_1','ses_native123','user',1,'{"text":"Fix session titles","time":{"created":1767225600000}}'),('msg_2','ses_native123','assistant',2,'{"content":[{"type":"tool","id":"call-1","name":"Read","state":{"status":"error","input":{"file_path":"src/main.ts"},"content":[{"type":"text","text":"Not found"}]}}]}'),('msg_pending','ses_native123','user',null,'{"text":"hidden uncommitted"}');`)
+insert into session_message values('msg_sys','ses_native123','synthetic',0,'{"text":"hidden instructions"}'),('msg_1','ses_native123','user',1,'{"text":"Fix session titles","time":{"created":1767225600000}}'),('msg_2','ses_native123','assistant',2,'{"content":[{"type":"tool","id":"call-1","name":"Read","state":{"status":"error","input":{"file_path":"src/main.ts"},"content":[{"type":"text","text":"Not found"}]}}]}'),('msg_pending','ses_native123','user',null,'{"text":"hidden uncommitted"}'),('msg_injected','ses_native123','user',3,'{"text":"<system-reminder>plan mode</system-reminder>","time":{"created":1767225600003}}');`)
 	r := &Reader{NativeRoots: map[string]string{"kilo": root}}
 	ref := Ref{Source: "herdr:kilo", Agent: "kilo", Kind: "id", Value: "ses_native123"}
 	page, err := r.Read(ref, nil, 50)
@@ -108,5 +110,64 @@ insert into session_message values('msg_1','ses_populated123','user',1,'{"text":
 	ref.Value = "ses_populated123"
 	if title := r.ReadTitle(ref); title.Prompt != "Fix new session titles" {
 		t.Fatalf("v2 title %+v", title)
+	}
+}
+
+// A session longer than the bound keeps its newest messages, exactly as the
+// pre-1.2 file layout does, instead of becoming unreadable.
+func TestOpencodeSQLiteKeepsNewestMessagesInLongSessions(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		total int
+		sql   string
+	}{
+		{
+			name:  "v2",
+			total: 2105,
+			sql: `create table session(id text primary key,title text,revert text);
+create table session_message(id text,session_id text,type text,seq integer,data text);
+insert into session values('ses_long123','Long session',null);
+with recursive n(i) as (select 1 union all select i+1 from n where i<2105)
+insert into session_message select 'msg_'||i,'ses_long123','user',i,'{"text":"prompt '||i||'","time":{"created":'||i||'}}' from n;`,
+		},
+		{
+			name:  "v1",
+			total: 2010,
+			sql: `create table session(id text primary key,title text,revert text);
+create table message(id text,session_id text,time_created integer,data text);
+create table part(id text,message_id text,session_id text,data text);
+insert into session values('ses_long123','Long session',null);
+with recursive n(i) as (select 1 union all select i+1 from n where i<2010)
+insert into message select 'msg_'||i,'ses_long123',i,'{"role":"user"}' from n;
+with recursive n(i) as (select 1 union all select i+1 from n where i<2010)
+insert into part select 'prt_'||i,'msg_'||i,'ses_long123','{"type":"text","text":"prompt '||i||'"}' from n;`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			sqliteFixture(t, filepath.Join(root, "opencode.db"), tc.sql)
+			r := &Reader{OpencodeRoot: root}
+			ref := Ref{Source: "herdr:opencode", Agent: "opencode", Kind: "id", Value: "ses_long123"}
+			snapshot, err := r.loadStore(ref, true)
+			if err != nil {
+				t.Fatalf("long session unavailable: %v", err)
+			}
+			lines := strings.Split(strings.TrimSpace(string(snapshot.data)), "\n")
+			if len(lines) != maxOpencodeMessages {
+				t.Fatalf("records=%d want %d", len(lines), maxOpencodeMessages)
+			}
+			want := fmt.Sprintf("prompt %d", tc.total-maxOpencodeMessages+1)
+			var oldest, newest storeRecord
+			if err := json.Unmarshal([]byte(lines[0]), &oldest); err != nil || oldest.Text != want {
+				t.Fatalf("oldest=%+v want %q err=%v", oldest, want, err)
+			}
+			if err := json.Unmarshal([]byte(lines[len(lines)-1]), &newest); err != nil || newest.Text != fmt.Sprintf("prompt %d", tc.total) {
+				t.Fatalf("newest=%+v err=%v", newest, err)
+			}
+			page, err := r.Read(ref, nil, 200)
+			if err != nil || len(page.Messages) != 200 || page.Messages[0].Text != want {
+				t.Fatalf("page=%+v err=%v", page, err)
+			}
+		})
 	}
 }

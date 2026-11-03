@@ -48,7 +48,7 @@ func (e *Engine) rpcWorkspaceMutation(s *sess, id, op string, params json.RawMes
 		NewName string
 	}{op, p, newName}
 	receipt, err := e.executeTrackedMutation(ctx, s.deviceID, runtimeSession(p.Session), p.OperationID, intent, func() (runtime.Receipt, error) {
-		descriptor, describeErr := e.RT.Describe(ctx, runtime.DefaultSession())
+		descriptor, describeErr := e.RT.Describe(ctx, runtimeSession(p.Session))
 		if describeErr != nil {
 			return runtime.Receipt{}, describeErr
 		}

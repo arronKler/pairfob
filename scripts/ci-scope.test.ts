@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { SCOPES, classifyPaths, type Scope } from "./ci-scope.ts";
+
+const CLI = fileURLToPath(new URL("./ci-scope.ts", import.meta.url));
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
+
+function runCli(...args: string[]): string {
+  return execFileSync(process.execPath, [CLI, ...args], { cwd: ROOT, encoding: "utf8" });
+}
 
 function enabled(paths: string[]): Scope[] {
   const result = classifyPaths(paths);
@@ -19,7 +28,8 @@ const cases: Array<[name: string, paths: string[], scopes: Scope[]]> = [
   ["proto changes run Go and web", ["proto/envelope.md"], ["go", "web"]],
   ["pwa changes run web", ["pwa/src/main.ts"], ["web"]],
   ["worker changes run web", ["workers/pairfob-origin/src/index.ts"], ["web"]],
-  ["site docs run docs, not web", ["site/doc/index.md"], ["docs"]],
+  ["site docs run docs and web", ["site/doc/index.md"], ["web", "docs"]],
+  ["the doc lang.js config runs docs and web", ["site/doc/.vitepress/config.ts"], ["web", "docs"]],
   ["site changes run web", ["site/index.html"], ["web"]],
   ["docs changes run docs", ["docs/develop.md"], ["docs"]],
   ["desktop changes run desktop", ["desktop/src/main.rs"], ["desktop"]],
@@ -50,3 +60,14 @@ const cases: Array<[name: string, paths: string[], scopes: Scope[]]> = [
 for (const [name, paths, scopes] of cases) {
   test(name, () => expect(enabled(paths)).toEqual(scopes));
 }
+
+// The workflow appends stdout straight to $GITHUB_OUTPUT, so the gate depends
+// on every scope appearing exactly once, in a fixed order.
+test("the CLI prints every scope exactly once", () => {
+  expect(runCli("--all")).toBe("go=true\nweb=true\ndocs=true\ndesktop=true\n");
+});
+
+test("the CLI prints an explicit false for an unchanged range", () => {
+  const lines = runCli("HEAD").trimEnd().split("\n");
+  expect(lines).toEqual(["go=false", "web=false", "docs=false", "desktop=false"]);
+});

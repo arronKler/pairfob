@@ -71,6 +71,115 @@ func TestUpdateExecutableReplacesAndVerifies(t *testing.T) {
 	}
 }
 
+func TestUpdateVersionFloor(t *testing.T) {
+	for _, tc := range []struct {
+		name, remote, current string
+		wantErr               bool
+	}{
+		{"older release", "1.4.10", "1.4.11", true},
+		{"equal release", "1.4.11", "1.4.11", false},
+		{"equal release across the v prefix", "v1.4.11", "1.4.11", false},
+		{"newer release", "1.4.12", "1.4.11", false},
+		{"development build has no floor", "1.0.0", "dev", false},
+		{"empty running version has no floor", "1.0.0", "", false},
+		{"different component counts are not ordered", "1.4", "1.4.11", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := checkManualUpdateVersion(tc.remote, tc.current)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("remote=%s current=%s err=%v", tc.remote, tc.current, err)
+			}
+		})
+	}
+}
+
+func TestUpdateExecutableRefusesOlderSignedRelease(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	withVersion(t, "2.0.0")
+	dir := t.TempDir()
+	name := artifactName(runtime.GOOS, runtime.GOARCH)
+	dest := filepath.Join(dir, "pairfob")
+	installed := []byte("installed-2.0.0")
+	if err := os.WriteFile(dest, installed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var artifactRequests atomic.Int32
+	handler := updateFixture(name, "1.9.0", []byte("replayed-1.9.0"))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/"+name {
+			artifactRequests.Add(1)
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(server.Close)
+
+	err := updateExecutable(dest, server.URL)
+	if err == nil || !strings.Contains(err.Error(), "refusing to downgrade") {
+		t.Fatalf("got %v", err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(installed) {
+		t.Fatalf("downgrade changed installed bytes: %q", got)
+	}
+	if artifactRequests.Load() != 0 {
+		t.Fatal("downgrade downloaded an artifact")
+	}
+}
+
+func TestUpdateExecutableReinstallsSameVersion(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	withVersion(t, "1.4.11")
+	dir := t.TempDir()
+	name := artifactName(runtime.GOOS, runtime.GOARCH)
+	dest := filepath.Join(dir, "pairfob")
+	if err := os.WriteFile(dest, []byte("damaged-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fresh := []byte("replacement-1.4.11")
+	server := httptest.NewServer(updateFixture(name, "1.4.11", fresh))
+	t.Cleanup(server.Close)
+	if err := updateExecutable(dest, server.URL); err == nil || !strings.Contains(err.Error(), "could not restart") {
+		t.Fatalf("same version must still reinstall: %v", err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(fresh) {
+		t.Fatalf("got %q", got)
+	}
+	if err := updateExecutable(dest, server.URL); err == nil || !strings.Contains(err.Error(), "running daemon could not be verified") {
+		t.Fatalf("matching same-version bytes must still verify the runtime: %v", err)
+	}
+}
+
+func TestUpdateExecutableInstallsNewerRelease(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	withVersion(t, "1.4.11")
+	dir := t.TempDir()
+	name := artifactName(runtime.GOOS, runtime.GOARCH)
+	dest := filepath.Join(dir, "pairfob")
+	if err := os.WriteFile(dest, []byte("installed-1.4.11"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fresh := []byte("release-1.4.12")
+	server := httptest.NewServer(updateFixture(name, "1.4.12", fresh))
+	t.Cleanup(server.Close)
+	if err := updateExecutable(dest, server.URL); err == nil || !strings.Contains(err.Error(), "could not restart") {
+		t.Fatalf("newer release must install: %v", err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(fresh) {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestUpdateExecutableRejectsHashMismatch(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	name := artifactName(runtime.GOOS, runtime.GOARCH)

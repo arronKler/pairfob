@@ -17,10 +17,19 @@ import (
 //
 //	PAIRFOB_SCAN_LOCAL_TRANSCRIPTS=1 go test ./internal/journal -run LocalTranscripts -v
 //
-// A hit prints the file and a snippet. Text a person really typed (pasted
-// HTML, for example) can match; anything else needs a filter in
-// transcript_filter.go and a fixture test.
-var injectedLooking = regexp.MustCompile(`(?m)^\s*<[A-Za-z][A-Za-z0-9_-]*[ >]|\[Request interrupted|<local-command-caveat>|Base directory for this skill|\[Image: original|^# AGENTS\.md instructions`)
+// A hit prints the file and a snippet. Injected wrappers are stored as the
+// leading text of a user turn; a tag on a later line is usually the person's
+// own pasted content (HTML, a task's XML example). Only leading wrapper tags
+// are generic hits, so pasted examples do not fail the scan forever. The
+// specific markers below still match anywhere in the turn.
+const injectedMarkerPattern = `\[Request interrupted|<local-command-caveat>|Base directory for this skill|\[Image: original|(?m)^# AGENTS\.md instructions`
+
+var (
+	// Title excerpts are short: any tag there is suspect, wherever it sits.
+	injectedLooking  = regexp.MustCompile(`(?m)^\s*<[A-Za-z][A-Za-z0-9_-]*[ >]|` + injectedMarkerPattern)
+	injectedLeading  = regexp.MustCompile(`^\s*<[A-Za-z][A-Za-z0-9_-]*[ >]`)
+	injectedAnywhere = regexp.MustCompile(injectedMarkerPattern)
+)
 
 func TestLocalTranscriptsShowNoInjectedContext(t *testing.T) {
 	if os.Getenv("PAIRFOB_SCAN_LOCAL_TRANSCRIPTS") != "1" {
@@ -182,7 +191,7 @@ func scanLocalTranscript(t *testing.T, path string, parse traceParser) []parsedE
 
 func reportInjected(t *testing.T, agent, path string, ev parsedEvent) {
 	t.Helper()
-	if !injectedLooking.MatchString(ev.Text) {
+	if !injectedLeading.MatchString(ev.Text) && !injectedAnywhere.MatchString(ev.Text) {
 		return
 	}
 	snippet := strings.ReplaceAll(ev.Text, "\n", "⏎")

@@ -7,21 +7,21 @@ import type { LiveSession } from "../../lib/protocol/client";
 import { ProtocolError } from "../../lib/protocol/errors";
 import { NO_OPERATION_CAPABILITIES } from "../../lib/operations";
 import { setLang, t } from "../../lib/i18n";
-import { dismissWorktreeJob, startWorktreeJob, worktreeJobs, type WorktreeJobDriver } from "../../lib/worktree-jobs";
+import { dismissWorktreeJob, retryWorktreeJob, startWorktreeJob, worktreeJobs, type WorktreeJobDriver } from "../../lib/worktree-jobs";
 import { mountApp, unmountApp } from "../../app/mount";
 import { commitView } from "../../app/host";
 import { registerSessionOwnerPreparer } from "../../app/frame";
 import { setScreen } from "../../app/navigation-store";
 import { clearNotice } from "../../app/notices-store";
 import { registerSessionView } from "../session/register";
-import { attachLiveSession, setComputers, setCredential } from "../computers/catalog-store";
+import { attachLiveSession, liveSession, setComputers, setCredential } from "../computers/catalog-store";
 import { setNetworkOnline, setPhase } from "../connection/connection-store";
 import { replaceAgentsFromSnapshot } from "../dashboard/catalog-store";
 import { selectPane, setAgentChat, setFullTerminal } from "../session/session-store";
 import { bindOverlayOrigin } from "../../shared/ui/overlay/origin";
 import { DIALOG_STEP, ModalFrame, presentModal } from "../../shared/ui/overlay/modal";
 import { applyCapabilities, setOperationBusy } from "./capabilities-store";
-import { createSelectedWorktree, listSelectedWorktrees, openSelectedWorktree, operationGate } from "./controller";
+import { createSelectedWorktree, createWorktreeFrom, listSelectedWorktrees, openSelectedWorktree, operationGate } from "./controller";
 import { followWorktreeJob } from "./worktree-outcome";
 import { runDialogStep } from "./worktree-steps";
 
@@ -359,4 +359,30 @@ test("a followed job settles once: created, failed with its reason, or dropped w
   const outcome = gone.outcome(dropped);
   dismissWorktreeJob(dropped.id);
   expect(await outcome).toEqual({ ok: false, message: "" });
+});
+
+test("a failed job retried on another computer never mutates the first computer", async () => {
+  boot();
+  const first = liveSession()!;
+  let firstCreates = 0;
+  first.createWorktree = async () => { firstCreates += 1; throw new Error("create failed"); };
+  expect(createWorktreeFrom({ workspace_id: "w1", branch: "test-branch" })).toBe(true);
+  await settle();
+  const job = worktreeJobs()[0]!;
+  expect(job.status).toBe("failed");
+  expect(firstCreates).toBe(1);
+
+  // The first computer stays pooled, so its own Herdr target is unchanged;
+  // only the live session identity says the job no longer belongs here.
+  act(() => { attachLiveSession({ isConnected: () => true } as LiveSession); });
+  expect(retryWorktreeJob(job.id)).toBe("not-owner");
+  await settle();
+  expect(firstCreates).toBe(1);
+  expect(job.status).toBe("failed");
+
+  // Switching back restores the job's owner and its retry.
+  act(() => { attachLiveSession(first); });
+  expect(retryWorktreeJob(job.id)).toBe("started");
+  await settle();
+  expect(firstCreates).toBe(2);
 });

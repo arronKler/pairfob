@@ -13,16 +13,34 @@ import (
 )
 
 // These tests assert frame transport and queue closure, not ICE latency. Give
-// instrumented builds time to connect on a busy host; p2p_gather_test.go checks
-// the product's answer budget separately.
-const p2pTransportTestWait = 15 * time.Second
+// instrumented builds time to connect on a busy host, including one shard per
+// core running the other cmd/pairfob tests beside this one; p2p_gather_test.go
+// checks the product's answer budget separately.
+const p2pTransportTestWait = 30 * time.Second
+
+// closeP2PTestWithin bounds a Pion teardown. After a failed ICE restart,
+// PeerConnection.Close can block in DTLS. Without this, one failed assertion
+// holds the test binary until the shard's go test -timeout.
+func closeP2PTestWithin(t *testing.T, label string, fn func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		fn()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Logf("%s close did not return within 5s", label)
+	}
+}
 
 func TestWebRTCAcceptorCarriesPairfobFramesBothWays(t *testing.T) {
 	caller, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer caller.Close()
+	defer closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 	protocol := p2pDataChannelProtocol
 	channel, err := caller.CreateDataChannel(p2pDataChannelLabel, &webrtc.DataChannelInit{
 		Ordered:  boolPointer(true),
@@ -73,7 +91,7 @@ func TestWebRTCAcceptorCarriesPairfobFramesBothWays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer link.Close()
+	defer closeP2PTestWithin(t, "acceptor", link.Close)
 	if err := caller.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +175,7 @@ func TestWebRTCAcceptorCarriesPairfobFramesBothWays(t *testing.T) {
 		t.Fatal("caller did not receive frame after ICE restart")
 	}
 
-	link.Close()
+	closeP2PTestWithin(t, "acceptor", link.Close)
 	select {
 	case <-closed:
 	case <-time.After(time.Second):
@@ -186,25 +204,25 @@ func openP2PTestPair(t *testing.T) *p2pTestPair {
 		Protocol: &protocol,
 	})
 	if err != nil {
-		caller.Close()
+		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal(err)
 	}
 	opened := make(chan struct{})
 	channel.OnOpen(func() { close(opened) })
 	offer, err := caller.CreateOffer(nil)
 	if err != nil {
-		caller.Close()
+		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal(err)
 	}
 	gathered := webrtc.GatheringCompletePromise(caller)
 	if err := caller.SetLocalDescription(offer); err != nil {
-		caller.Close()
+		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal(err)
 	}
 	select {
 	case <-gathered:
 	case <-time.After(5 * time.Second):
-		caller.Close()
+		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal("caller ICE gathering timed out")
 	}
 	pair := &p2pTestPair{closed: make(chan struct{}, 1)}
@@ -221,34 +239,34 @@ func openP2PTestPair(t *testing.T) *p2pTestPair {
 	})
 	if err != nil {
 		cancel()
-		caller.Close()
+		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal(err)
 	}
 	rtc, ok := link.(*webRTCConn)
 	if !ok {
 		cancel()
-		link.Close()
-		caller.Close()
+		closeP2PTestWithin(t, "acceptor", link.Close)
+		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal("Accept did not return webRTCConn")
 	}
 	pair.link = rtc
 	if err := caller.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
 		cancel()
-		link.Close()
-		caller.Close()
+		closeP2PTestWithin(t, "acceptor", link.Close)
+		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal(err)
 	}
 	select {
 	case <-opened:
 	case <-ctx.Done():
 		cancel()
-		link.Close()
-		caller.Close()
+		closeP2PTestWithin(t, "acceptor", link.Close)
+		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal("data channel did not open")
 	}
 	pair.cleanup = func() {
-		link.Close()
-		caller.Close()
+		closeP2PTestWithin(t, "acceptor", link.Close)
+		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		cancel()
 	}
 	return pair

@@ -17,9 +17,14 @@ export const WORKTREE_JOB_LIMIT = 3;
 
 export type WorktreeJobStatus = "working" | "failed";
 
+/** True while the session and target that started the job are still the live ones. */
+export type WorktreeJobOwner = () => boolean;
+
 export type WorktreeJob = {
   readonly id: number;
   readonly input: CreateWorktreeInput;
+  /** Re-read on every retry and paint: a job belongs to one computer and one Herdr session. */
+  readonly owns: WorktreeJobOwner;
   status: WorktreeJobStatus;
   /** CreateWorktree calls made for this job; retry always adds a fresh one. */
   attempts: number;
@@ -40,15 +45,24 @@ export type WorktreeJobDriver = {
 
 const jobs: WorktreeJob[] = [];
 const drivers = new Map<number, WorktreeJobDriver>();
+const alwaysOwned: WorktreeJobOwner = () => true;
 let serial = 0;
 
 export function worktreeJobs(): readonly WorktreeJob[] {
   return jobs;
 }
 
-export function startWorktreeJob(driver: WorktreeJobDriver, input: CreateWorktreeInput): WorktreeJob | null {
+/**
+ * `owns` is the job's live owner check; absent in driver-only fixtures, where
+ * there is no session or target that can move behind the job.
+ */
+export function startWorktreeJob(
+  driver: WorktreeJobDriver,
+  input: CreateWorktreeInput,
+  owns: WorktreeJobOwner = alwaysOwned,
+): WorktreeJob | null {
   if (jobs.length >= WORKTREE_JOB_LIMIT) return null;
-  const job: WorktreeJob = { id: ++serial, input, status: "working", attempts: 0, error: "" };
+  const job: WorktreeJob = { id: ++serial, input, owns, status: "working", attempts: 0, error: "" };
   jobs.push(job);
   drivers.set(job.id, driver);
   driver.repaint();
@@ -56,14 +70,28 @@ export function startWorktreeJob(driver: WorktreeJobDriver, input: CreateWorktre
   return job;
 }
 
-export function retryWorktreeJob(id: number): void {
+export type WorktreeRetry = "started" | "not-owner" | "ignored";
+
+/**
+ * Start a fresh attempt only while the job still belongs to the live session.
+ * Retrying from another computer must never issue CreateWorktree there: its
+ * effects could not be refreshed, opened or reported on the screen that asked.
+ */
+export function retryWorktreeJob(id: number): WorktreeRetry {
   const job = jobs.find((item) => item.id === id);
   const driver = drivers.get(id);
-  if (!job || !driver || job.status !== "failed") return;
+  if (!job || !driver || job.status !== "failed") return "ignored";
+  // The target moved since the card painted Retry. Repaint so the card shows
+  // where the job belongs instead of leaving a button that cannot work.
+  if (!job.owns()) {
+    driver.repaint();
+    return "not-owner";
+  }
   job.status = "working";
   job.error = "";
   driver.repaint();
   void runWorktreeJob(job, driver);
+  return "started";
 }
 
 /** Dropping a working job is a local cancel: no RPC is sent and the late result is ignored. */

@@ -3,6 +3,7 @@ package workspace
 import (
 	"errors"
 	"os"
+	"path/filepath"
 )
 
 // mediaOpenHook is a test seam invoked immediately before the root-relative open.
@@ -15,6 +16,20 @@ func openAuthorizedRegular(root, relative string) (*os.File, *os.Root, mediaIden
 	}
 	clean, err := cleanRelative(relative)
 	if err != nil || clean == "" {
+		return nil, nil, mediaIdentity{}, ErrInvalidPath
+	}
+	// Root confinement keeps an absolute escape out, but a directory symlink
+	// inside the root can still give .git an ordinary alias. Resolve the name
+	// first and refuse anything that lands in metadata; the leaf policy below
+	// still refuses a symlink at the name itself.
+	resolved, err := filepath.EvalSymlinks(filepath.Join(canon, filepath.FromSlash(clean)))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil, mediaIdentity{}, ErrNotFound
+		}
+		return nil, nil, mediaIdentity{}, err
+	}
+	if !within(canon, resolved) || !outsideGitMetadata(canon, resolved) {
 		return nil, nil, mediaIdentity{}, ErrInvalidPath
 	}
 	dir, err := os.OpenRoot(canon)

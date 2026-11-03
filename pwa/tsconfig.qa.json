@@ -1,5 +1,8 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "node_modules/.cache/tsc/qa.tsbuildinfo"
+  },
   "include": ["qa/**/*.ts", "qa/**/*.tsx"],
   "exclude": []
 }

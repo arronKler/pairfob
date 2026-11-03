@@ -30,6 +30,12 @@ export function allowIntentIP(ip: string, now: number): boolean {
   return allow(`intent-ip:${ip}`, LIMITS.intentIP.n, LIMITS.intentIP.windowMs, now);
 }
 
+/**
+ * Budget for `/v2/ws` upgrades that create a pending hello slot: daemons and
+ * ticketless clients share one per-IP key, so neither role can spend the other's
+ * allowance to fill the room's MAX_PENDING_HELLO. Ticket-bearing client upgrades
+ * are bounded by single-use ticket consumption and do not count here.
+ */
 export function allowSessionIP(ip: string, now: number): boolean {
   return allow(`session-ip:${ip}`, LIMITS.sessionIP.n, LIMITS.sessionIP.windowMs, now);
 }

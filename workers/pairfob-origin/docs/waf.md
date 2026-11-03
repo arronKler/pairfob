@@ -18,10 +18,18 @@ Create two custom Rate Limiting rules (or equivalent WAF rate-limit). Counting u
 | --- | --- | --- | --- |
 | pair-intent | `http.request.uri.path eq "/v2/pair-intent"` and `http.request.method eq "POST"` | **10 / 10 minutes / IP** | Block (429). Must run **before** any Index Durable Object RPC. |
 | enroll | `http.request.uri.path eq "/v2/enroll"` and `http.request.method eq "POST"` | **5 / hour / IP** | Block (429). Worker also caps open enroll per hashed IP. |
-| session Upgrade | `http.request.uri.path eq "/v2/ws"` and `http.request.uri.query contains "role=client"` and `not http.request.uri.query contains "pair_ticket="` | **60 / minute / IP** | Block (429). QR + SessionWS. |
+| session Upgrade | `http.request.uri.path eq "/v2/ws"` and (`http.request.uri.query contains "role=daemon"` or (`http.request.uri.query contains "role=client"` and not `http.request.uri.query contains "pair_ticket="`)) | **60 / minute / IP** | Block (429). Daemon reconnect plus ticketless QR/SessionWS share one budget; ticket-bearing pairing upgrades pass. |
 | events beacon | `http.request.uri.path eq "/v2/events"` and `http.request.method eq "POST"` | **60 / minute / IP** | Block (429). First-party PWA/site beacons only. |
 
 Hand-entry is already capped by pair-intent; do **not** put `pair_loc` on `/v2/ws` (Worker returns 404 unpaired without Index lookup).
+
+A daemon upgrade is capped exactly like a ticketless client upgrade. Both take a
+pending hello slot in the `DaemonRoom`; an uncapped daemon path lets one address
+hold all `MAX_PENDING_HELLO` slots, so the real daemon and every phone get
+`429`. The Worker enforces the same shared per-IP budget before the Room, so a
+single address cannot fill the pending cap through either role. Daemons behind
+one NAT share the 60/minute budget; normal reconnects are a handful per minute,
+and each ticket-bearing pairing upgrade is single-use and excluded.
 
 ## Abuse caps
 

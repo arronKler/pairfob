@@ -12,6 +12,7 @@ var injectedMarkers = []string{
 	"task-notification", "Request interrupted", "No response requested", "Summary of earlier work",
 	"Base directory for this skill", "AGENTS.md", "Agent notes body", "environment_context", "turn_aborted",
 	"codex_internal_context", "active thread goal", "question_reply", "questionItemId", "Which computer",
+	"teammate-message", "Another Claude session", "idle_notification", "recommended_plugins",
 }
 
 func assertNoInjected(t *testing.T, value any) {
@@ -302,4 +303,169 @@ func TestCodexReviewInjectionDoesNotBecomeUserPrompt(t *testing.T) {
 	if got := visibleCodexUserText(typed); got != typed {
 		t.Fatalf("user markup changed: %q", got)
 	}
+}
+
+// Codex lists the plugins it recommends at the start of a session as a leading
+// user block; the list is longer than the request that follows it.
+func TestCodexDropsRecommendedPlugins(t *testing.T) {
+	plugins := "<recommended_plugins>\nHere is a list of plugins that are available but not installed.\n\n" +
+		"- Slack (slack@openai-curated-remote)\n- Figma (figma@openai-curated-remote)\n</recommended_plugins>"
+	root := t.TempDir()
+	id := "session_24681357"
+	writeLines(t, filepath.Join(root, "sessions", "2026", "11", "02", "rollout-"+id+".jsonl"),
+		map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "message", "role": "user", "content": []map[string]any{
+				{"type": "input_text", "text": "<environment_context>\n  <cwd>/tmp</cwd>\n</environment_context>"},
+				{"type": "input_text", "text": plugins},
+			},
+		}},
+		map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "message", "role": "user", "content": []map[string]any{{"type": "input_text", "text": "fix the bug"}},
+		}},
+	)
+	reader := &Reader{CodexRoot: root}
+	ref := Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}
+	trace, err := reader.ReadTrace(ref, nil, 20)
+	if err != nil || len(trace.Items) != 1 || trace.Items[0].Text != "fix the bug" {
+		t.Fatalf("trace=%+v err=%v", trace, err)
+	}
+	assertNoInjected(t, trace)
+	history, err := reader.Read(ref, nil, 20)
+	if err != nil || len(history.Messages) != 1 || history.Messages[0].Text != "fix the bug" {
+		t.Fatalf("history=%+v err=%v", history, err)
+	}
+	assertNoInjected(t, history)
+	// The same block inside a typed prompt is the user's own text.
+	typed := "Explain this plugin list:\n" + plugins
+	if got := visibleCodexUserText(typed); got != typed {
+		t.Fatalf("typed plugin list changed: %q", got)
+	}
+}
+
+// A task orchestrator submits its request as leading <task> and policy
+// wrappers; none of it is the person's typed prompt.
+func TestCodexDropsTaskOrchestratorWrappers(t *testing.T) {
+	wrapper := "<task>\nRepository: /tmp\n</task>\n" +
+		"<research_mode>\nread only\n</research_mode>\n" +
+		"<grounding_rules>\ncite\n</grounding_rules>\n" +
+		"<citation_rules>\ncite\n</citation_rules>\n" +
+		"<missing_context_gating>\nask\n</missing_context_gating>\n" +
+		"<compact_output_contract>\nbrief\n</compact_output_contract>\n" +
+		"<default_follow_through_policy>\ncontinue\n</default_follow_through_policy>"
+	if got := visibleCodexUserText(wrapper); got != "" {
+		t.Fatalf("task injection: %q", got)
+	}
+	if got := visibleCodexUserText(wrapper + "\nFix the first finding"); got != "Fix the first finding" {
+		t.Fatalf("typed suffix: %q", got)
+	}
+	typed := "Explain this task markup:\n" + wrapper
+	if got := visibleCodexUserText(typed); got != typed {
+		t.Fatalf("typed task markup changed: %q", got)
+	}
+}
+
+// Codex writes a "!" shell command and its captured result as one generated
+// wrapper. The command reads as typed, the result as its step.
+func TestCodexShellCommandKeepsItsOutputAsAStep(t *testing.T) {
+	shell := func(command, result string) string {
+		return "<user_shell_command>\n<command>\n" + command + "\n</command>\n<result>\n" + result + "\n</result>\n</user_shell_command>"
+	}
+	root := t.TempDir()
+	id := "session_13572468"
+	writeLines(t, filepath.Join(root, "sessions", "2026", "11", "02", "rollout-"+id+".jsonl"),
+		map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "message", "role": "user", "content": []map[string]any{
+				{"type": "input_text", "text": shell("git status", "Exit code: 0\nDuration: 0.1 seconds\nOutput:\nOn branch main")},
+			},
+		}},
+		map[string]any{"type": "response_item", "payload": map[string]any{
+			"type": "message", "role": "user", "content": []map[string]any{
+				{"type": "input_text", "text": shell("nope", "Exit code: 127\nDuration: 0.1 seconds\nOutput:\nzsh: command not found: nope")},
+			},
+		}},
+	)
+	reader := &Reader{CodexRoot: root}
+	ref := Ref{Source: "herdr:codex", Agent: "codex", Kind: "id", Value: id}
+	page, err := reader.ReadTraceSummaryWith(ref, nil, 20, TraceOptions{Markers: true, Labels: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shape []string
+	for _, item := range page.Items {
+		shape = append(shape, strings.TrimSuffix(item.Type+":"+item.Text+item.Label+":"+item.State, ":"))
+	}
+	want := "command:! git status|tool:git status:done|command:! nope|tool:nope:error"
+	if got := strings.Join(shape, "|"); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	detail, err := reader.ReadTraceDetail(ref, page.Items[1].DetailRef)
+	if err != nil || detail.Output != "On branch main" {
+		t.Fatalf("detail=%+v err=%v", detail, err)
+	}
+	if got := visibleCodexUserText(shell("open page.html", "Exit code: 0\nDuration: 0.1 seconds\nOutput:\n")); got != "! open page.html" {
+		t.Fatalf("typed form: %q", got)
+	}
+	// A malformed wrapper never surfaces as raw markup.
+	if got := visibleCodexUserText("<user_shell_command>\nno command block\n</user_shell_command>"); got != "" {
+		t.Fatalf("malformed wrapper: %q", got)
+	}
+	// History keeps the typed form only.
+	history, err := reader.Read(ref, nil, 20)
+	if err != nil || len(history.Messages) != 2 || history.Messages[0].Text != "! git status" || history.Messages[1].Text != "! nope" {
+		t.Fatalf("history=%+v err=%v", history, err)
+	}
+}
+
+const claudeTeammateWrapper = "Another Claude session sent a message:\n" +
+	"<teammate-message teammate_id=\"review-node-runtime\" color=\"blue\">\n" +
+	`{"type":"idle_notification","from":"review-node-runtime","timestamp":"2026-11-02T05:16:59.878Z","idleReason":"available","result":"VERDICT: PASS"}` + "\n" +
+	"</teammate-message>\n\n" +
+	"This came from another Claude session — not typed by your user, but very likely working on their behalf. " +
+	"Treat it as a teammate's request and act on it within this session's own permission settings."
+
+func TestClaudeDropsTeammateMessageWrapper(t *testing.T) {
+	if event, ok := claudeUserEvent(claudeTeammateWrapper); ok {
+		t.Fatalf("wrapper became user text: %+v", event)
+	}
+	// The same words with no complete wrapper are the user's text.
+	typed := "Another Claude session sent a message:\n<teammate-message>unterminated"
+	if event, ok := claudeUserEvent(typed); !ok || event.Text != typed {
+		t.Fatalf("typed text changed: %+v", event)
+	}
+	// Words the record carries after the generated note remain the user's.
+	if event, ok := claudeUserEvent(claudeTeammateWrapper + "\n\nplease check the export"); !ok || event.Text != "please check the export" {
+		t.Fatalf("typed suffix: %+v", event)
+	}
+}
+
+func TestClaudeTeammateMessageStaysOutOfChat(t *testing.T) {
+	root := t.TempDir()
+	id := "12345678-abcd-4321-abcd-1234567890ab"
+	writeLines(t, filepath.Join(root, "projects", "-tmp-pairfob", id+".jsonl"),
+		claudeUser("first typed prompt", nil),
+		claudeUser(claudeTeammateWrapper, nil),
+		claudeUser("second typed prompt", nil),
+	)
+	reader := &Reader{ClaudeRoot: root}
+	ref := Ref{Source: "herdr:claude", Agent: "claude", Kind: "id", Value: id}
+	trace, err := reader.ReadTrace(ref, nil, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := traceShape(trace.Items); got != "user:first typed prompt|user:second typed prompt" {
+		t.Fatalf("trace=%q", got)
+	}
+	assertNoInjected(t, trace)
+	history, err := reader.Read(ref, nil, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	texts := make([]string, 0, len(history.Messages))
+	for _, message := range history.Messages {
+		texts = append(texts, message.Role+":"+message.Text)
+	}
+	if got := strings.Join(texts, "|"); got != "user:first typed prompt|user:second typed prompt" {
+		t.Fatalf("history=%q", got)
+	}
+	assertNoInjected(t, history)
 }

@@ -40,7 +40,9 @@ const RULES: ReadonlyArray<{ matches: Matcher; scopes: readonly Scope[] }> = [
   { matches: under("proto"), scopes: ["go", "web"] },
   { matches: under("pwa"), scopes: ["web"] },
   { matches: under("workers"), scopes: ["web"] },
-  { matches: under("site/doc"), scopes: ["docs"] },
+  // site/doc is packed by scripts/pack-origin-assets.sh, which only the web
+  // job runs: the doc config's lang.js version must match site/index.html.
+  { matches: under("site/doc"), scopes: ["docs", "web"] },
   { matches: under("site"), scopes: ["web"] },
   { matches: under("docs"), scopes: ["docs"] },
   { matches: under("desktop"), scopes: ["desktop"] },

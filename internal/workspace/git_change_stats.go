@@ -88,19 +88,17 @@ func parseNumstat(data []byte, cut bool, repo repositoryState) map[string]LineCo
 // its diff is drawn: every line is an addition. A file too large to be read
 // as a diff is left without a count.
 func untrackedCount(root, relative string) (LineCount, bool) {
-	_, _, resolved, err := resolveExisting(root, relative)
-	if err != nil {
-		return LineCount{}, false
-	}
-	info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(relative)))
-	if err != nil || !info.Mode().IsRegular() || info.Size() > MaxDiffBytes {
-		return LineCount{}, false
-	}
-	file, err := os.Open(resolved)
+	// Same authorized open as a preview: a symlink swapped in after a separate
+	// check can never redirect the count outside the workspace.
+	file, dir, ident, err := openAuthorizedRegular(root, relative)
 	if err != nil {
 		return LineCount{}, false
 	}
 	defer file.Close()
+	defer dir.Close()
+	if ident.info.Size() > MaxDiffBytes {
+		return LineCount{}, false
+	}
 	data, err := io.ReadAll(io.LimitReader(file, MaxDiffBytes+1))
 	if err != nil || len(data) > MaxDiffBytes {
 		return LineCount{}, false

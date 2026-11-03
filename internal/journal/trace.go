@@ -391,6 +391,17 @@ func parseCodexTrace(line []byte) (events []parsedEvent) {
 				if image.drops(text) {
 					continue
 				}
+				if command, output, state, ok := codexShellCommand(text); ok {
+					arguments, _ := json.Marshal(map[string]string{"command": command})
+					out = append(out,
+						parsedEvent{Event: Event{Type: EventCommand, Text: "! " + command}},
+						parsedEvent{Event: Event{Type: "tool", Name: "Bash", Input: string(arguments)}, call: codexShellCall},
+					)
+					if output != "" {
+						out = append(out, parsedEvent{Event: Event{Type: "tool", Output: output, State: state}, call: codexShellCall, outputOnly: true})
+					}
+					continue
+				}
 				text = visibleCodexUserText(text)
 			}
 			if text != "" {

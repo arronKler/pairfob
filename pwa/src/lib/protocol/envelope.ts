@@ -38,7 +38,9 @@ export function validateFrame(frame: Frame): void {
   if (frame.payload.length > MAX_PAYLOAD) throw new Error(`payload length ${frame.payload.length} exceeds ${MAX_PAYLOAD}`);
 }
 
-export function encode(frame: Frame): Uint8Array {
+// A fresh allocation is always backed by an ArrayBuffer; keeping that in the
+// type lets WebSocket.send accept it without a copy under lib.dom.
+export function encode(frame: Frame): Uint8Array<ArrayBuffer> {
   validateFrame(frame);
   const out = new Uint8Array(HEADER_SIZE + frame.payload.length);
   out[0] = frame.version;

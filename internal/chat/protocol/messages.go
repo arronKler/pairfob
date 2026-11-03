@@ -2,8 +2,10 @@ package protocol
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"unicode/utf8"
 )
 
 // Version is the only pairfob-chat protocol version.
@@ -14,6 +16,16 @@ const (
 	MaxLineBytes = 4 << 20
 	// MaxAttachmentBytes bounds one attachment after base64 decoding.
 	MaxAttachmentBytes = 8 << 20
+	// MaxEntryWireBytes bounds the encoded JSON of one transcript entry. The
+	// transcript clips oversized entry content with TruncatedMarker before it
+	// records the entry, so one entry always fits a change frame.
+	MaxEntryWireBytes = 512 << 10
+	// MaxSnapshotStateBytes bounds the encoded State in one snapshot, leaving
+	// room for the frame envelope inside MaxLineBytes.
+	MaxSnapshotStateBytes = MaxLineBytes - (64 << 10)
+	// TruncatedMarker ends content clipped to fit the transcript budget. A view
+	// renders it as part of the text, so the loss is visible.
+	TruncatedMarker = "\n[content truncated]"
 )
 
 // Message types, split by direction. Ping and pong travel both ways.
@@ -166,8 +178,24 @@ type ServerMessage struct {
 	Error   *Error   `json:"error,omitempty"`
 }
 
-// Validate checks the envelope and the payload for its type.
+// Validate checks the envelope and the payload for its type. A frame that
+// would not fit one line is rejected instead of being written: the writer
+// closes the connection, which is a resync the view can recover from.
 func (m ServerMessage) Validate() error {
+	if err := m.validatePayload(); err != nil {
+		return err
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	if len(data)+1 > MaxLineBytes {
+		return errors.New("frame exceeds 4 MiB")
+	}
+	return nil
+}
+
+func (m ServerMessage) validatePayload() error {
 	if m.V != Version {
 		return fmt.Errorf("unsupported protocol version %d", m.V)
 	}
@@ -390,7 +418,59 @@ func (e Entry) Validate() error {
 	if len(e.Text) > MaxLineBytes {
 		return errors.New("entry text exceeds 4 MiB")
 	}
+	if EntryWireBytes(e) > MaxEntryWireBytes {
+		return errors.New("entry exceeds 512 KiB")
+	}
 	return nil
+}
+
+// EntryWireBytes returns the encoded JSON length of one entry.
+func EntryWireBytes(entry Entry) int {
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return MaxEntryWireBytes + 1
+	}
+	return len(data)
+}
+
+// ClipText shortens one text field to limit bytes, ending it with
+// TruncatedMarker when it did not fit. It is the visible half of the
+// transcript content budget.
+func ClipText(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	if limit <= len(TruncatedMarker) {
+		return TruncatedMarker[:limit]
+	}
+	return TruncateUTF8(text, limit-len(TruncatedMarker)) + TruncatedMarker
+}
+
+// TruncateUTF8 cuts text to at most limit bytes without splitting a rune.
+func TruncateUTF8(text string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	if len(text) <= limit {
+		return text
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut]
+}
+
+// StateWireBytes returns the encoded JSON length of one transcript state.
+func StateWireBytes(state *State) int {
+	if state == nil {
+		return 0
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return MaxSnapshotStateBytes + 1
+	}
+	return len(data)
 }
 
 // Tool is a tool call rendered inside a tool entry.

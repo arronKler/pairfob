@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
 
 // herdr-core's framed connection. Channel 0 carries JSON-RPC as DATA frames;
@@ -207,10 +208,12 @@ type coreConn struct {
 	r      *bufio.Reader
 	hello  coreHello
 
-	wmu     sync.Mutex
 	callMu  sync.Mutex
 	nextID  uint64
 	pending chan coreResponse
+
+	writeCh      chan coreWriteRequest
+	writeTimeout time.Duration
 
 	done      chan struct{}
 	closeOnce sync.Once
@@ -228,6 +231,7 @@ func newCoreConn(rw io.ReadWriteCloser, stop func(), stderr *boundedBuffer) *cor
 	return &coreConn{
 		rw: rw, stop: stop, stderr: stderr, r: bufio.NewReaderSize(rw, 64<<10),
 		pending: make(chan coreResponse, 1), done: make(chan struct{}),
+		writeCh: make(chan coreWriteRequest, coreWriteQueue), writeTimeout: coreWriteTimeout,
 		streams: make(map[uint32]*coreStream), pendingIn: make(map[uint32][]coreStreamItem),
 	}
 }
@@ -251,6 +255,7 @@ func (c *coreConn) start(ctx context.Context) (coreHello, error) {
 			return coreHello{}, result.err
 		}
 		c.hello = result.hello
+		go c.writeLoop()
 		go c.readLoop()
 		return result.hello, nil
 	case <-ctx.Done():
@@ -314,7 +319,7 @@ func (c *coreConn) Call(ctx context.Context, method string, params any, out any)
 	if err != nil {
 		return coreProtocol(method, "failed to encode the terminal core request")
 	}
-	if err := c.writeFrame(coreRPCChannel, coreKindData, payload); err != nil {
+	if err := c.writeFrame(ctx, coreRPCChannel, coreKindData, payload); err != nil {
 		c.shutdown(c.transportErr(err))
 		return c.transportErr(err)
 	}
@@ -411,6 +416,10 @@ func (c *coreConn) OpenEvents(ctx context.Context) (uint32, <-chan coreStreamIte
 
 // watchStream attaches a sink to a channel and replays anything that arrived
 // before the sink existed. A channel the core already closed is closed at once.
+//
+// The replay runs while streamsMu is held: the read loop delivers later frames
+// straight to a registered sink, so releasing the lock before the replay would
+// let a newer frame overtake the buffered ones.
 func (c *coreConn) watchStream(channel uint32) <-chan coreStreamItem {
 	sink := newCoreStreamSink()
 	c.streamsMu.Lock()
@@ -421,7 +430,6 @@ func (c *coreConn) watchStream(channel uint32) <-chan coreStreamItem {
 	}
 	stream.sink = sink
 	buffered, ended := c.takePending(channel), stream.ended || c.streamsClosed
-	c.streamsMu.Unlock()
 	overflowed := false
 	for _, item := range buffered {
 		if !sink.deliver(item) {
@@ -432,6 +440,7 @@ func (c *coreConn) watchStream(channel uint32) <-chan coreStreamItem {
 	if ended {
 		sink.close()
 	}
+	c.streamsMu.Unlock()
 	if overflowed {
 		c.endStream(channel)
 	}
@@ -524,7 +533,7 @@ func (c *coreConn) TypeInput(channel uint32, data []byte) error {
 	if c.streamEnded(channel) {
 		return &coreStreamClosedError{channel: channel}
 	}
-	if err := c.writeFrame(channel, coreKindData, data); err != nil {
+	if err := c.writeFrame(context.Background(), channel, coreKindData, data); err != nil {
 		return c.transportErr(err)
 	}
 	return nil
@@ -546,7 +555,7 @@ func (c *coreConn) ResizeInput(channel uint32, cols, rows int) error {
 	payload := make([]byte, 4)
 	binary.LittleEndian.PutUint16(payload[0:2], uint16(cols))
 	binary.LittleEndian.PutUint16(payload[2:4], uint16(rows))
-	if err := c.writeFrame(channel, coreKindResize, payload); err != nil {
+	if err := c.writeFrame(context.Background(), channel, coreKindResize, payload); err != nil {
 		return c.transportErr(err)
 	}
 	return nil
@@ -554,7 +563,7 @@ func (c *coreConn) ResizeInput(channel uint32, cols, rows int) error {
 
 func (c *coreConn) CloseInput(channel uint32) error {
 	c.endStream(channel)
-	if err := c.writeFrame(channel, coreKindClose, nil); err != nil {
+	if err := c.writeFrame(context.Background(), channel, coreKindClose, nil); err != nil {
 		return c.transportErr(err)
 	}
 	return nil
@@ -562,24 +571,6 @@ func (c *coreConn) CloseInput(channel uint32) error {
 
 func (c *coreConn) Close() error {
 	c.shutdown(&coreTransportError{cause: errors.New("terminal core connection closed")})
-	return nil
-}
-
-func (c *coreConn) writeFrame(channel uint32, kind byte, payload []byte) error {
-	frame := make([]byte, coreFrameHeader+len(payload))
-	binary.LittleEndian.PutUint32(frame[0:4], channel)
-	frame[4] = kind
-	binary.LittleEndian.PutUint32(frame[5:9], uint32(len(payload)))
-	copy(frame[coreFrameHeader:], payload)
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-	written, err := c.rw.Write(frame)
-	if err != nil {
-		return err
-	}
-	if written != len(frame) {
-		return io.ErrShortWrite
-	}
 	return nil
 }
 
@@ -628,7 +619,7 @@ func (c *coreConn) readLoop() {
 			if len(payload) > 0 {
 				consumed := make([]byte, 4)
 				binary.LittleEndian.PutUint32(consumed, uint32(len(payload)))
-				if err := c.writeFrame(channel, coreKindCredit, consumed); err != nil {
+				if err := c.writeFrame(context.Background(), channel, coreKindCredit, consumed); err != nil {
 					c.shutdown(c.transportErr(err))
 					return
 				}

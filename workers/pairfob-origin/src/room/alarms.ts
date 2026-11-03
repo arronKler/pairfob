@@ -97,7 +97,7 @@ function closeExpiredResumes(room: RoomCore, now: number, notifications: Teardow
     const a = room.att(ws);
     if (a?.kind !== "resumehello") continue;
     if (now - a.created_ms >= RESUME_MS) {
-      room.closeBind(ws, "timeout", "15s DeviceHello timeout", true, notifications);
+      room.closeBind(ws, "unpaired", "15s DeviceHello timeout", true, notifications);
     }
   }
 }
