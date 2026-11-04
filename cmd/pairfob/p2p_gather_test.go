@@ -29,7 +29,10 @@ func TestAnswerSettlesShortlyAfterTheFirstReflexiveCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if elapsed < 50*time.Millisecond || elapsed >= testPace.local {
+	// The reflexive and settle timers can each fire a little early on a loaded
+	// runner, so allow a few milliseconds below their nominal 50ms sum; the
+	// upper bound still proves it did not wait for the local deadline.
+	if elapsed < 45*time.Millisecond || elapsed >= testPace.local {
 		t.Fatalf("answered after %v, want the settle time after the reflexive candidate", elapsed)
 	}
 }

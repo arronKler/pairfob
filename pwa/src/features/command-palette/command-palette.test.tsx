@@ -33,6 +33,20 @@ function source(agents: DashboardAgentCard[], overrides: Partial<HerdModelInput>
 }
 
 const pause = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Let the app finish the work a key or click queued, then assert it happened.
+ * A fixed pause guesses how long the dialog's close takes on the running
+ * machine; on a loaded CI runner that guess is too short, so wait for the
+ * effect up to a bounded time and fail the following assertion when it never
+ * arrives.
+ */
+async function until(done: () => boolean, timeout = 1_000): Promise<void> {
+  const started = Date.now();
+  while (!done() && Date.now() - started < timeout) {
+    await act(async () => { await pause(10); });
+  }
+}
 const dialogs = () => [...document.querySelectorAll<HTMLDialogElement>("dialog.command-palette")];
 const field = () => dialogs()[0].querySelector<HTMLInputElement>("input")!;
 const options = () => [...dialogs()[0].querySelectorAll<HTMLElement>("[role=option]")];
@@ -136,7 +150,7 @@ describe("command palette", () => {
     expect(key("Enter").defaultPrevented).toBeTrue();
     await act(async () => { await Promise.resolve(); });
     expect(events).toEqual([]);
-    await act(async () => { await pause(10); });
+    await until(() => events.length > 0);
     expect(events).toEqual(["open:ask"]);
     expect(dialogs()).toEqual([]);
     expect(listeners.size).toBe(0);
@@ -186,7 +200,8 @@ describe("command palette", () => {
     act(() => create.click());
     expect(dialogs()[0].open).toBeTrue();
     const settings = options().find((option) => option.textContent?.startsWith(t("palette.settings")))!;
-    await act(async () => { settings.click(); await pause(10); });
+    act(() => { settings.click(); });
+    await until(() => events.length > 0);
     expect(events).toEqual(["run:settings"]);
   });
 
@@ -352,7 +367,7 @@ describe("files of the open session's workspace", () => {
     expect(activeText()).toBe("zeta.ts");
     key("Enter");
     // The jump runs once the dialog has finished closing, as the action rows' does.
-    await act(async () => { await pause(10); });
+    await until(() => events.length > 0);
     expect(dialogs()).toEqual([]);
     expect(events).toEqual(["file:src/zeta.ts"]);
   });
@@ -430,7 +445,7 @@ describe("files of the open session's workspace", () => {
     expect(fileRows()).toEqual(["src|settings.ts"]);
     expect(activeText()).toBe(t("palette.settings"));
     key("Enter");
-    await act(async () => { await pause(10); });
+    await until(() => events.length > 0);
     expect(events).toEqual(["run:settings"]);
   });
 
