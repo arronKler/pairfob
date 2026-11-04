@@ -28,6 +28,12 @@ export type MetricsEnv = {
  */
 const counters: CounterMap = Object.create(null) as CounterMap;
 
+// Beacon result tokens are client-supplied, so the counter map needs a ceiling.
+// Past it, new series fold into one overflow key: /v2/admin/stats stays
+// bounded and already-known series keep counting.
+export const MAX_COUNTERS = 512;
+export const COUNTER_OVERFLOW = "counter_overflow";
+
 const LABEL_RE = /^[A-Za-z0-9._:-]{1,64}$/;
 const SECRET_RE = /\b(?:jg_|rt_|it_)[0-9a-f]+\b/i;
 const SECRET_KEY_RE = /pair_ticket|reconnect_token|join_grant|new_reconnect_token/i;
@@ -46,7 +52,16 @@ export function sanitizeIndex(value: string | undefined): string {
 }
 
 export function inc(name: string, n = 1): void {
-  counters[name] = (counters[name] ?? 0) + n;
+  const current = counters[name];
+  if (current !== undefined) {
+    counters[name] = current + n;
+    return;
+  }
+  if (Object.keys(counters).length >= MAX_COUNTERS) {
+    counters[COUNTER_OVERFLOW] = (counters[COUNTER_OVERFLOW] ?? 0) + n;
+    return;
+  }
+  counters[name] = n;
 }
 
 export function snapshot(): CounterMap {

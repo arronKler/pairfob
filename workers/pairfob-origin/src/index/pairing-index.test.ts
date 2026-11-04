@@ -19,4 +19,28 @@ describe("pairing index persist", () => {
     expect(index.lookup("ABCDEG")).toBeNull();
     expect(ops.at(-1)).toBe("del:ABCDEG");
   });
+
+  test("sweeps expired rows in one statement", () => {
+    let now = 1_000;
+    const sweeps: number[] = [];
+    const index = new IndexCore(new Map(), () => now, {
+      load: () => new Map([
+        ["OLD001", { pair_loc: "OLD001", daemon_id: "d", pair_ref: "r", exp: 500 }],
+        ["LIVE01", { pair_loc: "LIVE01", daemon_id: "d", pair_ref: "r", exp: 2_000 }],
+      ]),
+      put: () => {},
+      delete: () => {
+        throw new Error("sweep must not delete row by row");
+      },
+      sweep: (at) => sweeps.push(at),
+    });
+    index.sweepExpired();
+    expect(sweeps).toEqual([1_000]);
+    expect(index.lookup("OLD001")).toBeNull();
+    expect(index.lookup("LIVE01")).not.toBeNull();
+    now = 3_000;
+    index.sweepExpired();
+    expect(sweeps).toEqual([1_000, 3_000]);
+    expect(index.lookup("LIVE01")).toBeNull();
+  });
 });

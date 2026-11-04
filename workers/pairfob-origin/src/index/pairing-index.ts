@@ -18,6 +18,7 @@ export class IndexCore {
       load(): Map<string, LocRow>;
       put(row: LocRow): void;
       delete(loc: string): void;
+      sweep?(now: number): void;
     },
   ) {
     this.now = now;
@@ -25,6 +26,17 @@ export class IndexCore {
       const loaded = persist.load();
       for (const [k, v] of loaded) this.rows.set(k, v);
     }
+  }
+
+  /**
+   * Drop rows whose pairing window has closed. Storage is swept in one
+   * statement rather than row by row; callers run this while the object is warm.
+   */
+  sweepExpired(now = this.now()): void {
+    for (const [loc, row] of this.rows) {
+      if (row.exp <= now) this.rows.delete(loc);
+    }
+    this.persist?.sweep?.(now);
   }
 
   lookup(loc: string): LocRow | null {
@@ -90,8 +102,11 @@ export class IndexCore {
   }
 }
 
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+
 export class PairingIndex {
   private readonly core: IndexCore;
+  private sweptAt = Date.now();
 
   constructor(ctx: DurableObjectState, _env: unknown) {
     const sql = ctx.storage.sql;
@@ -101,12 +116,19 @@ export class PairingIndex {
       pair_ref TEXT NOT NULL,
       exp INTEGER NOT NULL
     )`);
+    // Cold start: drop expired locators before loading, so memory only ever
+    // holds the live set instead of every locator the shard has seen.
+    const now = Date.now();
+    sql.exec("DELETE FROM locs WHERE exp <= ?", now);
     const persist = {
       load(): Map<string, LocRow> {
         const m = new Map<string, LocRow>();
-        const rows = sql.exec<LocRow>("SELECT pair_loc, daemon_id, pair_ref, exp FROM locs").toArray();
+        const rows = sql.exec<LocRow>("SELECT pair_loc, daemon_id, pair_ref, exp FROM locs WHERE exp > ?", now).toArray();
         for (const r of rows) m.set(r.pair_loc, r);
         return m;
+      },
+      sweep(at: number): void {
+        sql.exec("DELETE FROM locs WHERE exp <= ?", at);
       },
       put(row: LocRow): void {
         sql.exec(
@@ -125,6 +147,11 @@ export class PairingIndex {
   }
 
   fetch(request: Request): Promise<Response> {
+    const now = Date.now();
+    if (now - this.sweptAt >= SWEEP_INTERVAL_MS) {
+      this.sweptAt = now;
+      this.core.sweepExpired(now);
+    }
     return this.core.fetch(request);
   }
 }

@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { observeAlarmLate, observeEnroll, observeError, resetMetrics, sanitizeIndex, sanitizeLabel, snapshot } from "./metrics.ts";
+import {
+  COUNTER_OVERFLOW,
+  inc,
+  MAX_COUNTERS,
+  observeAlarmLate,
+  observeEnroll,
+  observeError,
+  resetMetrics,
+  sanitizeIndex,
+  sanitizeLabel,
+  snapshot,
+} from "./metrics.ts";
 import { FakeMetrics, testEnv } from "./testutil/make-room.ts";
 
 beforeEach(() => resetMetrics());
@@ -58,6 +69,17 @@ describe("metrics labels", () => {
     expect(dumped).not.toContain("pair_ticket");
     expect(dumped).not.toContain("req.url");
     expect(logs.some((line) => line.includes('"event":"enroll"'))).toBe(true);
+  });
+
+  test("caps client-named counter series", () => {
+    inc("enroll");
+    for (let i = 0; i < MAX_COUNTERS + 50; i += 1) inc(`beacon.result_${i}`);
+    const snap = snapshot();
+    expect(Object.keys(snap).length).toBeLessThanOrEqual(MAX_COUNTERS + 1);
+    expect(snap.enroll).toBe(1);
+    expect(snap[COUNTER_OVERFLOW]).toBeGreaterThan(0);
+    expect(snap["beacon.result_0"]).toBe(1);
+    expect(snap[`beacon.result_${MAX_COUNTERS + 49}`]).toBeUndefined();
   });
 
   test("source does not log request URLs", () => {
