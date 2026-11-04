@@ -190,8 +190,11 @@
 
 .pane-row-accent { color: var(--accent); }
 
+/* The question takes its width from the card, never from its own content: a
+   long session path or a scaled-up label cannot widen it past the sheet. */
 .pane-confirm {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 4px 0 14px;
   border-top: 1px solid var(--line);
@@ -215,6 +218,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
   padding-top: 10px;
 }
 
@@ -232,11 +236,16 @@
   text-overflow: ellipsis;
 }
 
+/* Cancel and the destructive answer share the row while each can keep its word;
+   on a sheet too narrow for both (or with the reader's text scaled up) the row
+   stacks instead of pushing the last button out of the card. */
 .pane-confirm-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(7rem, 100%), 1fr));
   gap: var(--space-2);
 }
+
+.pane-confirm-actions .btn { min-width: 0; }
 
 /* --- Anchored under the header button -----------------------------------------
    Opened with a mouse on a desk layout the same panel hangs under the "more"
