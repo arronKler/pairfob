@@ -15,7 +15,7 @@ import type { ComputersViewModel } from "./model";
  */
 const row = (daemonId: string, title: string, current: boolean, held = false) => ({
   daemonId, title, current, held, currentPill: current ? "当前" : null, meta: current ? "已连接" : held ? "已连接 · 即时切换" : "上次连接：昨天",
-  forgetAria: `忘记 ${title}`, forgetLabel: "忘记",
+  forgetAria: `忘记 ${title}`, forgetLabel: "忘记", renameAria: `重命名 ${title}`, renameLabel: "重命名",
 });
 const model = (current: string, held: string[] = []): ComputersViewModel => ({
   withBack: true, backTitle: "电脑", backTarget: "settings", heading: null,
@@ -25,9 +25,17 @@ const model = (current: string, held: string[] = []): ComputersViewModel => ({
 
 let connect: (() => void) | null = null;
 const switched: string[] = [];
+const renamed: string[] = [];
+const forgotten: string[] = [];
 function paint(current: string, held: string[] = []): void {
-  renderReact(<ComputerListView view={model(current, held)} onForget={() => {}} onAdd={() => {}} onBack={() => {}}
+  renderReact(<ComputerListView view={model(current, held)} onForget={(daemonId) => { forgotten.push(daemonId); }}
+    onRename={(daemonId) => { renamed.push(daemonId); }} onAdd={() => {}} onBack={() => {}}
     onSwitch={(daemonId) => { switched.push(daemonId); return new Promise<void>((resolve) => { connect = resolve; }); }} />);
+}
+function paintStandalone(): void {
+  renderReact(<ComputerListView view={{ ...model("a"), withBack: false, heading: { title: "连不上电脑", lede: "" } }}
+    onForget={(daemonId) => { forgotten.push(daemonId); }} onRename={(daemonId) => { renamed.push(daemonId); }}
+    onAdd={() => {}} onBack={() => {}} onSwitch={() => {}} />);
 }
 const items = () => [...appRoot().querySelectorAll<HTMLElement>(".computer-item")];
 const face = (item: HTMLElement) => item.querySelector<HTMLElement>(".computer-trail-face")!;
@@ -37,6 +45,8 @@ beforeEach(async () => {
   setLang("zh");
   connect = null;
   switched.length = 0;
+  renamed.length = 0;
+  forgotten.length = 0;
 });
 afterEach(() => act(unmountReact));
 
@@ -85,11 +95,39 @@ test("a held row offers Switch where a cold one offers Connect, and says so", ()
   expect(cold.querySelector(".set-item-sub")?.textContent).toBe("上次连接：昨天");
 });
 
-test("under Edit the slot holds Forget and nothing keeps it wide", () => {
+test("under Edit the slot holds Rename and Forget, and nothing keeps it wide", () => {
   paint("a");
   act(() => appRoot().querySelector<HTMLButtonElement>(".computers-edit")!.click());
   for (const item of items()) {
     expect(item.querySelector(".computer-trail-size")).toBeNull();
     expect(face(item).querySelector(".computer-forget-action")?.textContent).toBe("忘记");
   }
+});
+
+test("under Edit every row offers Rename before Forget, and each action owns its tap", () => {
+  paint("a");
+  act(() => appRoot().querySelector<HTMLButtonElement>(".computers-edit")!.click());
+  for (const item of items()) {
+    const actions = [...face(item).querySelectorAll<HTMLButtonElement>("button.set-action")];
+    expect(actions.map(action => action.textContent)).toEqual(["重命名", "忘记"]);
+  }
+  const [first, second] = items();
+  act(() => face(second).querySelectorAll<HTMLButtonElement>("button.set-action")[0].click());
+  expect(renamed).toEqual(["b"]);
+  expect(forgotten).toEqual([]);
+  act(() => face(first).querySelectorAll<HTMLButtonElement>("button.set-action")[1].click());
+  expect(forgotten).toEqual(["a"]);
+});
+
+test("the offline picker offers Rename beside Forget on every saved computer", () => {
+  paintStandalone();
+  const rows = [...appRoot().querySelectorAll<HTMLElement>(".computer-row")];
+  expect(rows).toHaveLength(2);
+  for (const item of rows) {
+    expect(item.querySelector<HTMLButtonElement>(".computer-rename")?.textContent).toBe("重命名");
+    expect(item.querySelector<HTMLButtonElement>(".computer-forget")?.textContent).toBe("忘记");
+  }
+  act(() => rows[1].querySelector<HTMLButtonElement>(".computer-rename")!.click());
+  expect(renamed).toEqual(["b"]);
+  expect(forgotten).toEqual([]);
 });

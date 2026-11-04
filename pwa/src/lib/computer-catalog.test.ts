@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  computerDisplayName,
   computerTitle,
   credentialIsBurned,
   phaseAfterComputers,
   pickResumeCredential,
   sortComputers,
+  validComputerAlias,
+  withCarriedAlias,
 } from "./computer-catalog.ts";
 import type { PairResult } from "./protocol/client.ts";
 
@@ -46,6 +49,43 @@ describe("computer catalog", () => {
     expect(computerTitle(pair("d_0123456789abcdefaaaa", { hostname: "studio" }))).toBe("studio");
     expect(computerTitle(pair("d_0123456789abcdefaaaa"))).toBe("未命名电脑");
     expect(computerTitle(pair("d_0123456789abcdefaaaa", { hostname: "  " }))).toBe("未命名电脑");
+  });
+
+  test("this browser's alias names the computer before its hostname", () => {
+    expect(computerTitle(pair("d_0123456789abcdefaaaa", { hostname: "studio", alias: " Studio Mac " }))).toBe("Studio Mac");
+    expect(computerTitle(pair("d_0123456789abcdefaaaa", { hostname: "studio", alias: "   " }))).toBe("studio");
+  });
+
+  test("display names prefer the alias, then the reported host, then the saved name", () => {
+    const aliased = pair("d_0123456789abcdefaaaa", { hostname: "studio", alias: "Studio Mac" });
+    const saved = pair("d_0123456789abcdefaaaa", { hostname: "studio" });
+    expect(computerDisplayName(aliased, "Studio-Display")).toBe("Studio Mac");
+    expect(computerDisplayName(saved, " Studio-Display ")).toBe("Studio-Display");
+    expect(computerDisplayName(saved, "")).toBe("studio");
+    expect(computerDisplayName(null, "Studio-Display")).toBe("Studio-Display");
+    expect(computerDisplayName(null, "")).toBe("当前电脑");
+    expect(computerDisplayName(pair("d_0123456789abcdefaaaa"))).toBe("未命名电脑");
+    expect(computerDisplayName(null)).toBe("当前电脑");
+  });
+
+  test("re-pairing keeps the name this browser already used", () => {
+    const existing = pair("d_0123456789abcdefaaaa", { alias: "Studio Mac" });
+    const fresh = pair("d_0123456789abcdefaaaa", { hostname: "studio" });
+    expect(withCarriedAlias(fresh, existing).alias).toBe("Studio Mac");
+    expect("alias" in withCarriedAlias(fresh, null)).toBeFalse();
+    expect("alias" in withCarriedAlias(fresh, pair("d_0123456789abcdefaaaa", { alias: "  " }))).toBeFalse();
+    expect(withCarriedAlias(pair("d_0123456789abcdefaaaa", { alias: "New" }), existing).alias).toBe("New");
+  });
+
+  test("alias rules: blank is valid, 64 runes is the cap, control characters are not", () => {
+    expect(validComputerAlias("")).toBeTrue();
+    expect(validComputerAlias("   ")).toBeTrue();
+    expect(validComputerAlias("a".repeat(64))).toBeTrue();
+    expect(validComputerAlias("a".repeat(65))).toBeFalse();
+    expect(validComputerAlias("studio\nlab")).toBeFalse();
+    expect(validComputerAlias("studio\u009flab")).toBeFalse();
+    expect(validComputerAlias("😀".repeat(64))).toBeTrue();
+    expect(validComputerAlias("😀".repeat(65))).toBeFalse();
   });
 
   test("only burns credentials that the daemon rejected", () => {

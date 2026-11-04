@@ -26,7 +26,7 @@
  */
 import { capabilityEnabled, operationBusy } from "../../features/operations/capabilities-store";
 import { computersStore, currentHerdSession, liveSession } from "../../features/computers/catalog-store";
-import { computerTitle } from "../../lib/computer-catalog";
+import { computerDisplayName } from "../../lib/computer-catalog";
 import { settingsNetworkPath, settingsNetworkPathInUse } from "../../features/settings/model";
 import { t } from "../../lib/i18n";
 import { connectionStore, networkOnline } from "../../features/connection/connection-store";
@@ -221,7 +221,7 @@ export function herdPreferencesKey(snapshot: object): string {
 export function readHerdHost(status: HerdStatus): HerdHostView {
   const runtime = runtimeStore.get();
   const pair = computersStore.get().credential;
-  const name = runtime.herdHost || (pair ? computerTitle(pair) : "") || t("settings.currentComputer");
+  const name = computerDisplayName(pair, runtime.herdHost);
   if (status.tone !== "live") {
     // Connected but the state cannot be confirmed, or Herdr is off: the title
     // opens the panel whose first entry retries, so the line says so where the
@@ -267,13 +267,14 @@ function troubleBrief(status: HerdStatus, line: string, retry: boolean): readonl
  */
 function herdStatus(): HerdStatus {
   const runtime = runtimeStore.get();
+  const pair = computersStore.get().credential;
   const phase = connectionPhaseOf(liveSession());
   const online = networkOnline();
   return herdStatusModel({
     phase,
     networkOnline: online,
     runtimeKind: runtime.runtimeKind,
-    herdHost: runtime.herdHost,
+    herdHost: runtime.herdHost ? computerDisplayName(pair, runtime.herdHost) : "",
     reading: runtime.identityPending,
   });
 }

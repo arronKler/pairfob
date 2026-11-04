@@ -1,6 +1,6 @@
 import { clearPairingFragment } from "../connection/connection-store";
 import {
-  computers, computersStore, currentDaemonId, liveSession, setAddingComputer,
+  computers, computersStore, credential, currentDaemonId, liveSession, setAddingComputer,
   setComputers, setCredential,
 } from "./catalog-store";
 import type { ComputersRecord } from "./catalog-store";
@@ -12,12 +12,12 @@ import type { NavigationRecord } from "../../app/navigation-store";
 import {
   clearPairErrorTarget, pairAbortHandle, setPairCodeDraft, setPairManualOpen,
 } from "../pairing/form-store";
-import { clearNotice, showStatus } from "../../app/notices-store";
+import { clearNotice, showError, showStatus } from "../../app/notices-store";
 import { batch, type DomainView } from "../../shared/model/domain-store";
 import { bindSessionOwnerFromLive } from "../../features/session/bind-live";
 import { commitView } from "../../app/host";
 import { applyComposeDraft, bumpViewIncarnation, parkComposeView } from "../session/drafts/compose-drafts";
-import { computerTitle } from "../../lib/computer-catalog";
+import { computerTitle, validComputerAlias, withCarriedAlias } from "../../lib/computer-catalog";
 import { deleteCredential, saveCredential } from "../../lib/credentials";
 import { clearQuotaCache } from "../../lib/quota-cache";
 import { t } from "../../lib/i18n";
@@ -30,7 +30,7 @@ import {
   closeComputerSession, establish, instantComputers, landAfterDisconnect, refreshFromSession, reloadComputers,
   startPolling, stopPolling,
 } from "../connection/controller";
-import { askConfirm } from "../../shared/ui/overlay/basic-dialogs";
+import { askConfirm, askText } from "../../shared/ui/overlay/basic-dialogs";
 import { forgetDaemonAttachments } from "../session/attachments/attachments-recovery";
 import { retirePairingWork } from "../pairing/work";
 import type { ComputersBackTarget, ComputersViewInput } from "./model";
@@ -243,6 +243,52 @@ export async function forgetComputer(daemonId: string): Promise<void> {
 }
 
 /**
+ * The alias is this browser's own record, so a rename is one local write and
+ * the catalog is the authority afterwards — no reload, no session needed.
+ */
+export async function renameComputer(daemonId: string, rawName: string): Promise<void> {
+  const pair = computers().find(item => item.daemonId === daemonId);
+  if (!pair) return;
+  if (!validComputerAlias(rawName)) {
+    showError(t("computers.renameInvalid"));
+    return;
+  }
+  const name = rawName.trim();
+  const nextAlias = name && name !== pair.hostname?.trim() ? name : undefined;
+  if (nextAlias === pair.alias) return;
+  const next = { ...pair };
+  if (nextAlias) next.alias = nextAlias;
+  else delete next.alias;
+  try {
+    await saveCredential(next);
+  } catch {
+    showError(t("computers.renameFailed"));
+    return;
+  }
+  batch(() => {
+    setComputers(computers().map(item => item.daemonId === daemonId ? next : item));
+    if (credential()?.daemonId === daemonId) setCredential(next);
+  });
+}
+
+export async function renameComputerFlow(daemonId: string): Promise<void> {
+  const pair = computers().find(item => item.daemonId === daemonId);
+  if (!pair) return;
+  const value = await askText({
+    title: t("computers.renameTitle"),
+    initial: pair.alias?.trim() || pair.hostname?.trim() || "",
+    label: t("computers.renameLabel"),
+    hint: t("computers.renameHint"),
+    // Blank restores the system name only when there is an alias to remove.
+    emptyHint: pair.alias ? t("computers.renameEmptyHint") : undefined,
+    allowEmpty: Boolean(pair.alias),
+    validate: name => validComputerAlias(name) ? null : t("computers.renameInvalid"),
+  });
+  if (value === null) return;
+  await renameComputer(daemonId, value);
+}
+
+/**
  * A relayed link is trusted no further than a scanned one: it must be this
  * page's own `/pair` link and name its daemon and fingerprint, which the
  * handshake then checks.
@@ -277,7 +323,10 @@ export const machineLinks = createMachineLinks({
     confirmLabel: t("machines.install"), tone: "primary",
   }),
   pair: pairFromMachineLink,
-  save: saveCredential,
+  save: async pair => {
+    const existing = computers().find(item => item.daemonId === pair.daemonId) ?? null;
+    await saveCredential(withCarriedAlias(pair, existing));
+  },
   reload: () => reloadComputers(),
   announce: label => showStatus(t("machines.addedToast", { name: label })),
   delay: ms => new Promise(resolve => setTimeout(resolve, ms)),

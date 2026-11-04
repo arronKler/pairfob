@@ -114,6 +114,11 @@ describe("connection lifecycle", () => {
     for (const release of stop) release();
   });
 
+  test("a connection keeps the name this browser gave the computer", async () => {
+    await establish({ ...pair(daemonIds[0]), hostname: "studio", alias: "Studio Mac" }, async () => fakeSession());
+    expect(credential()?.alias).toBe("Studio Mac");
+  });
+
   test("a slower first establish cannot attach after a newer one has won", async () => {
     let releaseFirst!: (session: LiveSession) => void;
     let started = false;

@@ -32,7 +32,8 @@ import {
   setBoardReturn,
 } from "../../features/board/layout-store";
 import { capabilityEnabled, operationBusy } from "../../features/operations/capabilities-store";
-import { liveSession } from "../../features/computers/catalog-store";
+import { credential, liveSession } from "../../features/computers/catalog-store";
+import { computerDisplayName } from "../../lib/computer-catalog";
 import { networkOnline } from "../../features/connection/connection-store";
 import { dashboardStore, liveAgents, selectedAgent } from "../../features/dashboard/catalog-store";
 import { commitView } from "../../app/host";
@@ -144,7 +145,7 @@ export function readBoardInput(): BoardModelInput {
     status: herdStatusModel({ phase,
       networkOnline: online,
       runtimeKind: runtime.runtimeKind,
-      herdHost: runtime.herdHost,
+      herdHost: runtime.herdHost ? computerDisplayName(credential(), runtime.herdHost) : "",
       reading: runtime.identityPending,
       liveness: herdLivenessModel({ connected, networkOnline: online, runtimeKind: runtime.runtimeKind }),
     }),

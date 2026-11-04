@@ -43,11 +43,12 @@ function RouteGroup({ connection }: { connection: ConnectionRecord }) {
   </SetGroup>;
 }
 
-export function ComputerSection({ name, link, connection, runtime, connected }: {
+export function ComputerSection({ name, link, connection, runtime, connected, onRename }: {
   name: string; link: LinkState; connection: ConnectionRecord; runtime: DomainView<RuntimeRecord>; connected: boolean;
+  onRename?: () => void;
 }) {
   return <>
-    <ComputerPanel name={name} link={link} />
+    <ComputerPanel name={name} link={link} onRename={onRename} />
     <RouteGroup connection={connection} />
     <SetGroup className="daemon-group" id="settings-daemon" label={t("set.computerGroup")}><DaemonUpdate /></SetGroup>
     <DevicesGroup runtime={runtime} connected={connected} />

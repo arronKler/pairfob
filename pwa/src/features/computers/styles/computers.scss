@@ -16,18 +16,22 @@
   flex: 1 1 auto;
 }
 
-.computer-forget {
+.computer-forget,
+.computer-rename {
   flex: none;
   min-width: 44px;
   min-height: 52px;
   padding: 0 10px;
   border-radius: var(--r-md);
-  color: var(--muted);
   font-size: var(--text-secondary);
   font-weight: 550;
 }
 
+.computer-forget { color: var(--muted); }
+.computer-rename { color: var(--accent); }
+
 .computer-forget:active { color: var(--danger-bright); }
+.computer-rename:active { filter: brightness(1.2); }
 
 .computer-add {
   margin-top: 16px;
@@ -54,7 +58,7 @@
 .computer-trail { flex: none; display: inline-grid; align-items: center; justify-items: end; }
 .computer-trail > * { grid-area: 1 / 1; }
 .computer-trail-size { visibility: hidden; pointer-events: none; }
-.computer-trail-face { display: inline-flex; align-items: center; }
+.computer-trail-face { display: inline-flex; align-items: center; gap: 6px; }
 
 .set-icon.is-accent {
   background: var(--accent-13);

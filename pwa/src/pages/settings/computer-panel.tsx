@@ -1,10 +1,10 @@
-import { Monitor } from "lucide-react";
+import { Monitor, Pencil } from "lucide-react";
 import type { ReactNode } from "react";
 import type { HerdStatus } from "../../features/connection/herd-status";
 import { settingsNetworkP2PFail, settingsNetworkPath, type SettingsNetworkInput } from "../../features/settings/model";
 import { ThisDeviceIcon } from "../../features/settings/this-device";
 import { t } from "../../lib/i18n";
-import { Button, Chevron } from "../../shared/ui/primitives";
+import { Button, Chevron, SetAction } from "../../shared/ui/primitives";
 
 /**
  * The computer panel shared by the overview and the computer page: the
@@ -48,12 +48,22 @@ function Link({ link }: { link: LinkState }) {
   </span>;
 }
 
-/** `onOpen` makes the head a button into the computer page; rows below it (update, switch) arrive as children. */
-export function ComputerPanel({ name, link, onOpen, children }: {
-  name: string; link: LinkState; onOpen?: () => void; children?: ReactNode;
+/**
+ * `onOpen` makes the head a button into the computer page; rows below it
+ * (update, switch) arrive as children. Rename only exists on the computer page,
+ * where the head is not itself a button.
+ */
+export function ComputerPanel({ name, link, onOpen, onRename, children }: {
+  name: string; link: LinkState; onOpen?: () => void; onRename?: () => void; children?: ReactNode;
 }) {
   const body = <>
-    <span className="cp-head"><span className="cp-name">{name}</span>{onOpen ? <Chevron className="chev set-chev" /> : null}</span>
+    <span className="cp-head">
+      <span className="cp-name">{name}</span>
+      {!onOpen && onRename
+        ? <SetAction className="cp-rename" onClick={onRename}><Pencil size={14} aria-hidden="true" />{t("computers.rename")}</SetAction>
+        : null}
+      {onOpen ? <Chevron className="chev set-chev" /> : null}
+    </span>
     <Link link={link} />
     {link.note ? <span className={`cp-note${link.noteTone === "warn" ? " is-warn" : ""}`}>{link.note}</span> : null}
   </>;

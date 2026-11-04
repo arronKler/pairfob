@@ -37,6 +37,12 @@ button.cp-main:active { background: var(--surface-2); }
   letter-spacing: -0.01em;
 }
 
+.cp-rename {
+  flex: none;
+  font-size: var(--text-secondary);
+  padding-inline: 10px;
+}
+
 .cp-link {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) 40px;

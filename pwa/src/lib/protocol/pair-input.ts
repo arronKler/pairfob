@@ -13,6 +13,8 @@ export interface PairResult {
   createdAt: number;
   hostname?: string;
   lastSeen?: number;
+  /** This browser's local name for the computer; never crosses the protocol. */
+  alias?: string;
 }
 
 export interface PairInput {

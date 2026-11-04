@@ -2,7 +2,9 @@ import { useComputers } from "../../features/computers/hooks";
 import { useConnectionPhase } from "../../features/connection/hooks";
 import { useNavigation } from "../../app/domain-hooks";
 import { usePaneId } from "../../features/session/hooks";
-import { beginAddComputer, computersPageInput, forgetComputer, leaveComputers, machineLinks, switchComputer } from "../../features/computers/actions";
+import {
+  beginAddComputer, computersPageInput, forgetComputer, leaveComputers, machineLinks, renameComputerFlow, switchComputer,
+} from "../../features/computers/actions";
 import { ComputerListView } from "../../features/computers/computer-list-view";
 import { computersViewModel } from "../../features/computers/model";
 import { MachineLinkSection } from "../../features/computers/machine-link-view";
@@ -64,6 +66,7 @@ export function ComputersContent({ withBack }: { withBack: boolean }) {
       view={view}
       onSwitch={daemonId => switchComputer(daemonId)}
       onForget={daemonId => void forgetComputer(daemonId)}
+      onRename={daemonId => void renameComputerFlow(daemonId)}
       onAdd={beginAddComputer}
       onBack={() => leaveComputers(view.backTarget)}
       notice={<AppNotice />}

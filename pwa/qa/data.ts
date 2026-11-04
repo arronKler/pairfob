@@ -12,6 +12,7 @@ import {
   type WorkspaceMediaKind,
   type WorkspaceMediaOpen,
 } from "../src/lib/protocol/workspace-media";
+import { fingerprint16 } from "../src/lib/protocol/hello";
 import { FIXED_NOW } from "./environment";
 import { CODEX_APPROVAL_SCREEN, GROK_QUESTION_SCREEN, PI_SELECTOR_SCREEN } from "../src/lib/terminal-dialog.fixtures";
 import { WIDE_PNG, WIDE_PNG_HEIGHT, WIDE_PNG_PATH, WIDE_PNG_SHA, WIDE_PNG_WIDTH } from "./wide-image";
@@ -55,8 +56,11 @@ export function computers(): PairResult[] {
     { daemonId: "d_aaaaaaaaaaaaaaaaaaaa", deviceId: "dev_aaaaaaaaaaaa", hostname: "MacBook Pro", label: "This phone", lastSeen: FIXED_NOW - 60000 },
     { daemonId: "d_bbbbbbbbbbbbbbbbbbbb", deviceId: "dev_bbbbbbbbbbbb", hostname: "Studio Mac", label: "This phone", lastSeen: FIXED_NOW - 3600000 },
     { daemonId: "d_cccccccccccccccccccc", deviceId: "dev_cccccccccccc", hostname: "Linux workstation", label: "This phone", lastSeen: FIXED_NOW - 86400000 },
-  ].map((item) => ({ ...item, psk: new Uint8Array(32), daemonPk: new Uint8Array(32), relayOrigin: location.origin,
-    fp: "0123456789abcdef", createdAt: FIXED_NOW - 7 * 86400000 }));
+  ].map((item, index) => {
+    const daemonPk = new Uint8Array(32).fill(index + 1);
+    return { ...item, psk: new Uint8Array(32), daemonPk, relayOrigin: location.origin,
+      fp: fingerprint16(daemonPk), createdAt: FIXED_NOW - 7 * 86400000 };
+  });
 }
 
 export function snapshot(): SnapshotWire {

@@ -1,7 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { fingerprint16 } from "./protocol/hello.ts";
 import { b64url } from "./protocol/bytes.ts";
+import type { PairResult } from "./protocol/client.ts";
 import { decodeCredential, encodeCredential, migrateLegacyCredential, validateStoredCredential } from "./credentials.ts";
+
+function pair(extra: Partial<PairResult> = {}): PairResult {
+  const daemonPk = Uint8Array.from({ length: 32 }, (_, index) => index);
+  return {
+    daemonId: "d_0123456789abcdefabcd",
+    deviceId: "dev_abcdefgh",
+    psk: new Uint8Array(32).fill(7),
+    daemonPk,
+    fp: fingerprint16(daemonPk),
+    relayOrigin: "https://pairfob.com",
+    label: "Test phone",
+    createdAt: 123,
+    hostname: "studio",
+    lastSeen: 456,
+    ...extra,
+  };
+}
 
 describe("stored credentials", () => {
   test("round trips every required field", () => {
@@ -87,6 +105,32 @@ describe("stored credentials", () => {
       label: "phone",
       createdAt: 1,
     })).toThrow("invalid credential");
+  });
+
+  test("round trips this browser's alias with the rest of the record", () => {
+    const stored = encodeCredential(pair({ alias: "  Studio Mac  " }));
+    expect(stored.alias).toBe("Studio Mac");
+    expect(stored.hostname).toBe("studio");
+    expect(stored.last_seen).toBe(456);
+    expect(decodeCredential(stored)).toEqual(pair({ alias: "Studio Mac" }));
+  });
+
+  test("a blank alias is no key, not an empty one", () => {
+    expect("alias" in encodeCredential(pair({ alias: "   " }))).toBeFalse();
+    expect("alias" in decodeCredential(encodeCredential(pair({ alias: "" })))).toBeFalse();
+  });
+
+  test("rejects an alias longer than 64 runes or with a control character", () => {
+    expect(encodeCredential(pair({ alias: "名".repeat(64) })).alias).toBe("名".repeat(64));
+    expect(() => encodeCredential(pair({ alias: "名".repeat(65) }))).toThrow("invalid credential");
+    expect(() => encodeCredential(pair({ alias: "studio\u0000" }))).toThrow("invalid credential");
+  });
+
+  test("drops an invalid stored alias without failing the row", () => {
+    const stored = encodeCredential(pair({ alias: "Studio" }));
+    const { alias: _alias, ...withoutAlias } = stored;
+    expect(validateStoredCredential({ ...stored, alias: "bad\u007fname" })).toEqual(withoutAlias);
+    expect(validateStoredCredential({ ...stored, alias: "名".repeat(65) })).toEqual(withoutAlias);
   });
 
   test("upgrades the prototype typed-array record", () => {

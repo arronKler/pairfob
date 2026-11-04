@@ -1,4 +1,4 @@
-import { pickResumeCredential } from "./computer-catalog.ts";
+import { pickResumeCredential, validComputerAlias } from "./computer-catalog.ts";
 import { validDaemonId, validDeviceId } from "./identifiers.ts";
 import { b64url, b64urlDecode } from "./protocol/bytes.ts";
 import type { PairResult } from "./protocol/client.ts";
@@ -16,6 +16,7 @@ export interface StoredCredential {
   created_at: number;
   hostname?: string;
   last_seen?: number;
+  alias?: string;
 }
 
 const DB_NAME = "pairfob";
@@ -93,6 +94,13 @@ function optionalTimestamp(value: unknown): number | undefined {
   return value;
 }
 
+function optionalAlias(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const alias = value.trim();
+  if (!alias || !validComputerAlias(alias)) return undefined;
+  return alias;
+}
+
 function exactB64(value: unknown, bytes: number): Uint8Array | null {
   if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) return null;
   try {
@@ -128,6 +136,7 @@ export function validateStoredCredential(value: unknown): StoredCredential | nul
   if (!psk || !daemonPk || fingerprint16(daemonPk) !== item.fp) return null;
   const hostname = optionalHostname(item.hostname);
   const lastSeen = optionalTimestamp(item.last_seen);
+  const alias = optionalAlias(item.alias);
   const stored: StoredCredential = {
     daemon_id: daemonId,
     device_id: deviceId,
@@ -140,6 +149,7 @@ export function validateStoredCredential(value: unknown): StoredCredential | nul
   };
   if (hostname) stored.hostname = hostname;
   if (lastSeen) stored.last_seen = lastSeen;
+  if (alias) stored.alias = alias;
   return stored;
 }
 
@@ -180,8 +190,13 @@ export function encodeCredential(pair: PairResult): StoredCredential {
   };
   const hostname = optionalHostname(pair.hostname);
   const lastSeen = optionalTimestamp(pair.lastSeen);
+  const alias = optionalAlias(pair.alias);
+  // An empty name means "no alias"; a non-empty one that fails the rules is a
+  // caller bug, never a silent clear.
+  if (pair.alias?.trim() && !alias) throw new Error("invalid credential");
   if (hostname) stored.hostname = hostname;
   if (lastSeen) stored.last_seen = lastSeen;
+  if (alias) stored.alias = alias;
   if (!validateStoredCredential(stored)) throw new Error("invalid credential");
   return stored;
 }
@@ -201,6 +216,7 @@ export function decodeCredential(stored: StoredCredential): PairResult {
   };
   if (valid.hostname) pair.hostname = valid.hostname;
   if (valid.last_seen) pair.lastSeen = valid.last_seen;
+  if (valid.alias) pair.alias = valid.alias;
   return pair;
 }
 

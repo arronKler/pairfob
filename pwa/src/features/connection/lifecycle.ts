@@ -250,6 +250,7 @@ export async function establish(
     createdAt: pair.createdAt,
     hostname: pair.hostname,
     lastSeen: pair.lastSeen,
+    alias: pair.alias,
   };
   ctx.ports.captureComposeDraft();
   if (ctx.ports.isFullTerminal()) await ctx.ports.leaveFullTerminal();

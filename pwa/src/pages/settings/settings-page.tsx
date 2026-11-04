@@ -3,7 +3,8 @@ import { useRememberedScroll } from "../../shared/ui/dom/remembered-scroll";
 import { useComputers } from "../../features/computers/hooks";
 import { useConnection, useRuntime } from "../../features/connection/hooks";
 import { usePreferences } from "../../features/settings/hooks";
-import { computerTitle } from "../../lib/computer-catalog";
+import { computerDisplayName } from "../../lib/computer-catalog";
+import { renameComputerFlow } from "../../features/computers/actions";
 import { t } from "../../lib/i18n";
 import { leaveSettings } from "../../features/settings/actions";
 import { nativePushAvailable, supportsWebPush } from "../../lib/platform";
@@ -52,11 +53,12 @@ export function SettingsContent({ withBack }: { withBack: boolean }) {
   // composition hold keeps the panel on the published phase/online values until
   // the queued commit, so the row can never show offline a frame early.
   const connected = computers.live?.isConnected() === true;
+  const computerName = computerDisplayName(computers.credential, runtime.herdHost);
   const status = herdStatusOf({
     phase: connectionPhaseOf(computers.live),
     networkOnline: connection.networkOnline,
     runtimeKind: runtime.runtimeKind,
-    herdHost: runtime.herdHost,
+    herdHost: runtime.herdHost ? computerName : "",
     reading: runtime.identityPending,
   });
   const network = {
@@ -66,7 +68,7 @@ export function SettingsContent({ withBack }: { withBack: boolean }) {
     networkMode: connection.networkMode,
     lastP2PAttempt: connection.lastP2PAttempt,
   };
-  const computerName = runtime.herdHost || (computers.credential ? computerTitle(computers.credential) : t("settings.currentComputer"));
+  const currentDaemonId = computers.credential?.daemonId ?? null;
   const link = linkState(status, network, connected);
   const back = section === "overview" ? (withBack ? leaveSettings : null) : () => travelSettingsSection("overview");
   const named = useNameUnderBar(section === "connection");
@@ -77,7 +79,8 @@ export function SettingsContent({ withBack }: { withBack: boolean }) {
         : <h1 className="settings-title">{title}</h1>}
       <AppNotice />
       {section === "connection" ? (
-        <ComputerSection name={computerName} link={link} connection={connection} runtime={runtime} connected={connected} />
+        <ComputerSection name={computerName} link={link} connection={connection} runtime={runtime} connected={connected}
+          onRename={currentDaemonId ? () => void renameComputerFlow(currentDaemonId) : undefined} />
       ) : (
         <SettingsOverview input={{
           computerName,

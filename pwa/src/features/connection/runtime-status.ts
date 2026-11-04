@@ -1,5 +1,6 @@
 import { networkOnline } from "./connection-store";
-import { liveSession } from "../computers/catalog-store";
+import { credential, liveSession } from "../computers/catalog-store";
+import { computerDisplayName } from "../../lib/computer-catalog";
 import { identityPending, runtimeIdentity } from "./runtime-store";
 import type { RuntimeLiveness } from "../../lib/runtime-liveness";
 import { connectionPhaseOf } from "../../lib/connection-phase";
@@ -29,7 +30,7 @@ export function currentHerdStatusInput(): HerdStatusInput {
     phase: connectionPhaseOf(liveSession()),
     networkOnline: networkOnline(),
     runtimeKind: identity.runtimeKind,
-    herdHost: identity.herdHost,
+    herdHost: identity.herdHost ? computerDisplayName(credential(), identity.herdHost) : "",
     reading: identityPending(),
   };
 }

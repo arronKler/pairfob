@@ -67,6 +67,24 @@ describe("computers view model", () => {
     expect(view.showManualUpdateHelp).toBeFalse();
   });
 
+  test("each row carries rename copy for its own title", () => {
+    setLang("zh");
+    const view = computersViewModel({
+      computers: [desk, studio],
+      credentialDaemonId: null,
+      live: false,
+      lastUsedDaemonId: null,
+      heldDaemonIds: new Set(),
+      computersFrom: "home",
+      desk: false,
+      paneId: "",
+      withBack: false,
+    });
+    expect(view.rows[0]?.renameLabel).toBe("重命名");
+    expect(view.rows[0]?.renameAria).toBe("重命名 desk");
+    expect(view.rows[1]?.renameAria).toBe("重命名 studio");
+  });
+
   test("a held computer is named connected, and the current one keeps its own line", () => {
     setLang("zh");
     const view = computersViewModel({

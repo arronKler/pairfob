@@ -21,7 +21,7 @@ import { createSelectedTab, createWorktreeFrom, startNewConversation } from "../
 import { loadCreateMemory, rememberCreate } from "../../features/operations/create-memory";
 import { askCreate, NEW_WORKSPACE, type CreateRequest, type CreateWorkspaceOption } from "../../features/operations/create-sheet";
 import { loadLastAgentKind } from "../../features/operations/operation-form-model";
-import { computerTitle } from "../../lib/computer-catalog";
+import { computerDisplayName } from "../../lib/computer-catalog";
 import type { DashboardAgentCard } from "../../lib/dashboard";
 import { readDirIndexCache, writeDirIndexCache, type DirIndexPort } from "../../lib/dir-index";
 import { t } from "../../lib/i18n";
@@ -63,8 +63,7 @@ function contextWorkspace(): string | undefined {
 }
 
 function hostName(): string {
-  const pair = computersStore.get().credential;
-  return runtimeStore.get().herdHost || (pair ? computerTitle(pair) : "") || t("settings.currentComputer");
+  return computerDisplayName(computersStore.get().credential, runtimeStore.get().herdHost);
 }
 
 function run(request: CreateRequest, anchors: Anchors): void {

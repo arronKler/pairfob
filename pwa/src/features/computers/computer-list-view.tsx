@@ -14,16 +14,17 @@ import type { ComputersViewModel } from "./model";
  * whole on one of them (`keepPhrases`).
  *
  * Inside the app (a back bar) it is one icon list: the current computer is
- * tagged, the others carry a Connect action, and Forget waits behind Edit so
- * the list is not narrowed by a column of destructive links. Connect, the
+ * tagged, the others carry a Connect action, and Rename and Forget wait behind
+ * Edit so the list is not narrowed by a column of actions. Connect, the
  * spinner of a connection being made and the tag take turns in one slot at the
  * row's end (`.computer-trail`), each swapped in. The standalone
  * picker (no session yet) keeps its selectable rows.
  */
-export function ComputerListView({ view, onSwitch, onForget, onAdd, onBack, notice, footer }: {
+export function ComputerListView({ view, onSwitch, onForget, onRename, onAdd, onBack, notice, footer }: {
   view: ComputersViewModel;
   onSwitch: (daemonId: string) => void | Promise<void>;
   onForget: (daemonId: string) => void;
+  onRename: (daemonId: string) => void;
   onAdd: () => void;
   onBack: () => void;
   notice?: ReactNode;
@@ -44,6 +45,7 @@ export function ComputerListView({ view, onSwitch, onForget, onAdd, onBack, noti
               <SelectionRow selected={row.current} onClick={() => onSwitch(row.daemonId)}
                 title={row.title} description={row.meta}
                 badge={row.currentPill ? <span className="pill pill-live">{row.currentPill}</span> : null} />
+              <Button className="computer-rename" aria-label={row.renameAria} onClick={() => onRename(row.daemonId)}>{row.renameLabel}</Button>
               <Button className="computer-forget" aria-label={row.forgetAria} onClick={() => onForget(row.daemonId)}>{row.forgetLabel}</Button>
             </div>
           ))}
@@ -75,7 +77,10 @@ export function ComputerListView({ view, onSwitch, onForget, onAdd, onBack, noti
               {editing ? null : <span className="set-action computer-trail-size" aria-hidden="true">{t("set.connect")}</span>}
               <Swap className="computer-trail-face" on={editing ? "edit" : pending === row.daemonId ? "connecting" : row.current ? "current" : "connect"}>
                 {editing
-                  ? <SetAction tone="danger" className="computer-forget-action" aria-label={row.forgetAria} onClick={() => onForget(row.daemonId)}>{row.forgetLabel}</SetAction>
+                  ? <>
+                      <SetAction aria-label={row.renameAria} onClick={() => onRename(row.daemonId)}>{row.renameLabel}</SetAction>
+                      <SetAction tone="danger" className="computer-forget-action" aria-label={row.forgetAria} onClick={() => onForget(row.daemonId)}>{row.forgetLabel}</SetAction>
+                    </>
                   : pending === row.daemonId ? <Spinner />
                   : row.current ? <SetTag tone="ok">{row.currentPill}</SetTag>
                   : <SetAction disabled={pending !== null} onClick={() => {

@@ -24,6 +24,8 @@ export type ComputerRowModel = {
   currentPill: string | null;
   forgetAria: string;
   forgetLabel: string;
+  renameAria: string;
+  renameLabel: string;
 };
 
 export type ComputersViewModel = {
@@ -95,6 +97,8 @@ export function computersViewModel(input: ComputersViewInput): ComputersViewMode
         meta: rowMeta(pair, current, held, lastUsedDaemonId),
         forgetAria: t("computers.forgetAria", { title }),
         forgetLabel: t("forget"),
+        renameAria: t("computers.renameAria", { title }),
+        renameLabel: t("computers.rename"),
       };
     }),
     addLabel: t("settings.addComputer"),

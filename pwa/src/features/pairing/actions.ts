@@ -16,6 +16,7 @@ import type { ComputersRecord } from "../computers/catalog-store";
 import type { PairingRecord } from "./form-store";
 import { cancelAddComputer } from "../computers/cancel-add";
 import { prepareSessionPresentation, sessionPresentationIsReady } from "../connection/presentation-ready";
+import { withCarriedAlias } from "../../lib/computer-catalog";
 import { FRIENDLY_ERROR, messageOf } from "../../lib/notices";
 import { t } from "../../lib/i18n";
 import { fragmentUsableOnOrigin, parseCodeAndLocator, parsePairingCode, resolveHandPairing } from "../../lib/pairing-input";
@@ -219,7 +220,8 @@ export async function beginPairing(rawCode: string): Promise<void> {
       signal: abort.signal,
     });
     if (work !== currentWork()) return;
-    await saveCredential(pair);
+    const carried = withCarriedAlias(pair, computers().find(item => item.daemonId === pair.daemonId) ?? null);
+    await saveCredential(carried);
     if (work !== currentWork()) return;
     offerNotifications(pair.daemonId);
     const { resumeComputer } = await import("../computers/actions");
@@ -231,12 +233,12 @@ export async function beginPairing(rawCode: string): Promise<void> {
       setPairCodeDraft("");
       setPairManualOpen(false);
       setPairFailure(null, null);
-      setCredential(pair);
+      setCredential(carried);
       setAddingComputer(false);
     });
     clearPairingTransport(abort);
     track("pwa_pairing_result", { result: "ok", extra: scanned ? "qr" : "manual" });
-    await resumeComputer(pair);
+    await resumeComputer(carried);
   } catch (error) {
     if (!pairingErrorStillOwned(work, abort, page)) return;
     const code = error instanceof ProtocolError ? error.code : "";
