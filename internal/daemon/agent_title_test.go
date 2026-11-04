@@ -140,3 +140,30 @@ func TestAgentTitleUsesBoundClaudeSession(t *testing.T) {
 		t.Fatal("unbound pane borrowed Claude title")
 	}
 }
+
+// A task launched through a slash command is a real submission even though the
+// transcript's first record is a command, not a plain prompt.
+func TestAgentTitleAndStatusForSlashStartedClaudeSession(t *testing.T) {
+	e := NewEngine(nil, nil, newMonitorTestRuntime())
+	root := t.TempDir()
+	const id = "claude_slash_session"
+	path := filepath.Join(root, "projects", "-repo", id+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	data := `{"type":"user","sessionId":"` + id + `","message":{"role":"user","content":"<command-message>pstack:poteto-mode</command-message>\n<command-name>/pstack:poteto-mode</command-name>\n<command-args>修复 Claude 会话标题</command-args>"}}` + "\n"
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	e.Journal = &journal.Reader{ClaudeRoot: root}
+	ref := &runtime.AgentSessionRef{Source: "herdr:claude", Agent: "claude", Kind: "id", Value: id}
+	pane := runtime.Pane{PaneID: "p1", Agent: "claude", AgentStatus: "working", AgentSession: ref, TerminalTitle: "◑ Claude Code"}
+	got := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
+	if got.AgentStatus != "working" || got.Tokens["task"] != "修复 Claude 会话标题" {
+		t.Fatalf("decorated=%+v", got)
+	}
+	pane.AgentStatus = "done"
+	if got := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; got.AgentStatus != "idle" {
+		t.Fatalf("finished command-only turn=%+v", got)
+	}
+}

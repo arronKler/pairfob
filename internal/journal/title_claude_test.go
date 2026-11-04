@@ -61,6 +61,45 @@ func TestClaudeTitleFirstRequestSkipsCommandsAndInjectedContext(t *testing.T) {
 	}
 }
 
+func TestClaudeTitleUsesSlashCommandRequest(t *testing.T) {
+	r, ref, path := claudeTitleFixture(t)
+	now := time.Unix(100, 0)
+	r.now = func() time.Time { return now }
+	appendClaudeTitleRecord(t, path, claudeUser("<command-message>pstack:poteto-mode</command-message>\n"+
+		"<command-name>/pstack:poteto-mode</command-name>\n"+
+		"<command-args>现在 claude code 任务开始执行的时候, pairfob 列表页好像不展示标题了</command-args>", nil))
+	want := Title{Prompt: "现在 claude code 任务开始执行的时候, pairfob 列表页好像不展示标题了"}
+	if got := r.ReadTitle(ref); got != want {
+		t.Fatalf("title=%+v", got)
+	}
+	appendClaudeTitleRecord(t, path, map[string]string{"type": "ai-title", "sessionId": ref.Value, "aiTitle": "自动任务名"})
+	now = now.Add(3 * time.Second)
+	if got := r.ReadTitle(ref); got.Name != "自动任务名" || got.Prompt != want.Prompt {
+		t.Fatalf("named=%+v", got)
+	}
+}
+
+func TestClaudeTitleSlashCommandNestedRequest(t *testing.T) {
+	r, ref, path := claudeTitleFixture(t)
+	// A command that forwards to another command: the nested name is the
+	// carrier, the text after it is the request.
+	appendClaudeTitleRecord(t, path, claudeUser("<command-name>/goal</command-name>\n"+
+		"<command-message>goal</command-message>\n"+
+		"<command-args>/poteto-mode 基于 https://github.com/longbridge/nsh 做原生的移动端版本</command-args>", nil))
+	want := Title{Prompt: "基于 https://github.com/longbridge/nsh 做原生的移动端版本"}
+	if got := r.ReadTitle(ref); got != want {
+		t.Fatalf("title=%+v", got)
+	}
+}
+
+func TestClaudeTitleSlashCommandWithoutArgsStaysEmpty(t *testing.T) {
+	r, ref, path := claudeTitleFixture(t)
+	appendClaudeTitleRecord(t, path, claudeUser("<command-name>/clear</command-name>\n<command-args></command-args>", nil))
+	if got := r.ReadTitle(ref); got != (Title{}) {
+		t.Fatalf("title=%+v", got)
+	}
+}
+
 func TestClaudeTitleRefreshesNativeNameAndPrefersCustomName(t *testing.T) {
 	r, ref, path := claudeTitleFixture(t)
 	now := time.Unix(100, 0)

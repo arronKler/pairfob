@@ -87,6 +87,21 @@ func TestActivityBoundedTailAndPartialRecords(t *testing.T) {
 	}
 }
 
+func TestActivityCountsClaudeSlashCommandSubmission(t *testing.T) {
+	command := `{"type":"user","message":{"role":"user","content":"<command-name>/pstack:poteto-mode</command-name>\n<command-args>fix the list title</command-args>"}}` + "\n"
+	got := scanActivity("claude", []byte(command), 0)
+	// The command itself is a submission, not yet the task's model work: it
+	// must not change completion evidence.
+	if !got.Known || !got.Submitted || got.Key != "" {
+		t.Fatalf("slash command submission=%+v", got)
+	}
+	// Injected command output is not a submission.
+	output := `{"type":"user","message":{"role":"user","content":"<local-command-stdout>Set model to Opus</local-command-stdout>"}}` + "\n"
+	if got := scanActivity("claude", []byte(output), 0); !got.Known || got.Submitted || got.Key != "" {
+		t.Fatalf("command output became a submission: %+v", got)
+	}
+}
+
 func TestActivityOtherProvidersAndPiBranch(t *testing.T) {
 	claude := `{"type":"user","message":{"role":"user","content":"go"}}` + "\n"
 	if got := scanActivity("claude", []byte(claude), 0); got.Key == "" {

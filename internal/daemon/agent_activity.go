@@ -56,7 +56,13 @@ func (e *Engine) decorateTaskStatus(pane *runtime.Pane) {
 	}
 	// Missing bindings, a rotating file or an incomplete bounded tail are
 	// unknown, not evidence of an empty startup. Preserve the runtime state.
-	if (pane.AgentStatus == "done" || pane.AgentStatus == "working") && activity.Known && activity.Key == "" {
+	if pane.AgentStatus == "done" && activity.Known && activity.Key == "" {
+		pane.AgentStatus = "idle"
+	}
+	// A typed command is a submission even before its model output lands, so a
+	// working turn is not an empty launch. A finished command-only turn still
+	// has no work to report.
+	if pane.AgentStatus == "working" && activity.Known && activity.Key == "" && !activity.Submitted {
 		pane.AgentStatus = "idle"
 	}
 }

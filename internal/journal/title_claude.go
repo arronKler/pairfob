@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strings"
 )
 
 // Claude appends ai-title and custom-title metadata to its bound transcript.
@@ -93,14 +94,30 @@ func (s *claudeTitleState) read(file io.ReaderAt, start, end int64, id string, p
 				continue
 			}
 			for _, event := range parseClaudeTrace(line) {
-				if event.Type == "user" {
-					if prompt := promptTitle(event.Text); prompt != "" {
-						s.prompt = prompt
-						break
-					}
+				prompt := ""
+				switch {
+				case event.Type == "user":
+					prompt = promptTitle(event.Text)
+				case event.Type == EventCommand && strings.HasPrefix(event.Text, "/"):
+					prompt = commandTitle(event.Text)
+				}
+				if prompt != "" {
+					s.prompt = prompt
+					break
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// commandTitle reads the request a typed slash command carries. The command
+// name is the carrier, not the task; "/pstack:poteto-mode 修标题" is "修标题",
+// and "/goal /poteto-mode 修标题" nests command names that a path would not.
+func commandTitle(text string) string {
+	fields := strings.Fields(text)
+	for len(fields) > 1 && strings.HasPrefix(fields[0], "/") && !strings.Contains(fields[0][1:], "/") {
+		fields = fields[1:]
+	}
+	return promptTitle(strings.Join(fields, " "))
 }

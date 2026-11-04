@@ -15,10 +15,13 @@ import (
 // Activity is evidence of an actual prompt or model execution in a trusted
 // native transcript. A launch, session header, or injected instructions are
 // not a task. Key identifies the latest evidence without exposing its content.
+// Submitted reports any typed prompt or command, so a session whose turn has
+// not produced its first model output is still not an empty launch.
 type Activity struct {
-	Known bool
-	Key   string
-	State string
+	Known     bool
+	Key       string
+	State     string
+	Submitted bool
 }
 
 const activityReadBytes = 512 << 10
@@ -101,7 +104,13 @@ func scanActivity(agent string, data []byte, offset int64) Activity {
 		line := data[:end]
 		if !json.Valid(line) && len(bytes.TrimSpace(line)) > 0 {
 			activity.Known = false
-		} else if activityLine(agent, line) {
+			offset += int64(end + 1)
+			data = data[end+1:]
+			continue
+		}
+		evidence, submitted := classifyActivityLine(agent, line)
+		activity.Submitted = activity.Submitted || submitted
+		if evidence {
 			activity.Known = true
 			activity.Key = activityKey(strconv.FormatInt(offset, 10), line)
 			if agent == "codex" {
@@ -117,6 +126,15 @@ func scanActivity(agent string, data []byte, offset int64) Activity {
 }
 
 func activityLine(agent string, line []byte) bool {
+	evidence, _ := classifyActivityLine(agent, line)
+	return evidence
+}
+
+// classifyActivityLine separates task evidence, the model work a session has
+// done, from a submission, a prompt or typed command the user sent. A command
+// that has not started model work yet still proves the session is not an empty
+// launch.
+func classifyActivityLine(agent string, line []byte) (evidence, submitted bool) {
 	if agent == "codex" {
 		var record struct {
 			Type    string `json:"type"`
@@ -125,12 +143,12 @@ func activityLine(agent string, line []byte) bool {
 			} `json:"payload"`
 		}
 		if json.Unmarshal(line, &record) != nil {
-			return false
+			return false, false
 		}
 		if record.Type == "event_msg" {
 			switch record.Payload.Type {
 			case "task_started", "task_complete", "user_message", "turn_aborted":
-				return true
+				return true, true
 			}
 		}
 	}
@@ -140,14 +158,14 @@ func activityLine(agent string, line []byte) bool {
 		if agent == "codex" && event.Type == "user" && codexContextMessage(line) {
 			continue
 		}
-		// Commands and markers are not task evidence: a command that starts
-		// work is followed by assistant or tool events, which are.
 		switch event.Type {
 		case "user", "assistant", "thinking", "tool":
-			return true
+			return true, event.Type == "user"
+		case EventCommand:
+			submitted = true
 		}
 	}
-	return false
+	return false, submitted
 }
 
 func codexContextMessage(line []byte) bool {
@@ -245,6 +263,7 @@ func (r *Reader) piActivity(ref Ref) Activity {
 		return Activity{}
 	}
 	// Follow the active branch; extension welcome messages are not task output.
+	submitted := false
 	for i := len(session.branch) - 1; i >= 0; i-- {
 		entry := session.branch[i]
 		if entry.Type != "message" {
@@ -256,8 +275,11 @@ func (r *Reader) piActivity(ref Ref) Activity {
 		}
 		switch message.Role {
 		case "user", "assistant", "toolResult":
-			return Activity{Known: true, Key: activityKey(session.id+":"+entry.ID, entry.Message)}
+			return Activity{Known: true, Key: activityKey(session.id+":"+entry.ID, entry.Message), Submitted: true}
+		case "bashExecution":
+			// A `!command` the user ran is a submission, not model output.
+			submitted = true
 		}
 	}
-	return Activity{Known: true}
+	return Activity{Known: true, Submitted: submitted}
 }
