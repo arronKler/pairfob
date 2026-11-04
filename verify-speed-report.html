@@ -1,0 +1,640 @@
+<title>Pairfob 验证提速</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #edf2f0;
+    --surface: #f8faf9;
+    --surface-2: #e2eae7;
+    --ink: #12211f;
+    --muted: #526562;
+    --line: #c8d5d1;
+    --accent: #0f766e;
+    --accent-soft: #cdeae3;
+    --good: #177245;
+    --good-soft: #d7ecdf;
+    --warn: #9a5806;
+    --warn-soft: #f5e5c6;
+    --bad: #a63325;
+    --bad-soft: #f4dad5;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0c1514;
+      --surface: #121e1c;
+      --surface-2: #1a2a27;
+      --ink: #e6eeeb;
+      --muted: #9cb0ab;
+      --line: #2a3d38;
+      --accent: #5eead4;
+      --accent-soft: #123a34;
+      --good: #6ee7a0;
+      --good-soft: #12301f;
+      --warn: #f5c05e;
+      --warn-soft: #3a2a10;
+      --bad: #f09a8d;
+      --bad-soft: #3a1d18;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0c1514;
+    --surface: #121e1c;
+    --surface-2: #1a2a27;
+    --ink: #e6eeeb;
+    --muted: #9cb0ab;
+    --line: #2a3d38;
+    --accent: #5eead4;
+    --accent-soft: #123a34;
+    --good: #6ee7a0;
+    --good-soft: #12301f;
+    --warn: #f5c05e;
+    --warn-soft: #3a2a10;
+    --bad: #f09a8d;
+    --bad-soft: #3a1d18;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding-block: clamp(28px, 5vw, 64px) 56px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(30px, 4.5vw, 52px);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+  h1 {
+    font-size: clamp(2rem, 5.4vw, 3.15rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.12;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: clamp(1.18rem, 2.2vw, 1.42rem);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .hero { display: flex; flex-direction: column; gap: 14px; }
+  .hero p.lede {
+    margin: 0;
+    max-width: 64ch;
+    color: var(--muted);
+    font-size: clamp(0.98rem, 1.4vw, 1.06rem);
+  }
+  .meta-line {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  section { display: flex; flex-direction: column; gap: 16px; }
+  .section-head {
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+  }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .tile .big {
+    font-family: var(--mono);
+    font-size: clamp(1.85rem, 3.6vw, 2.35rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .tile .tile-label {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .tile .tile-note { font-size: 0.82rem; color: var(--muted); line-height: 1.45; }
+  .tile.headline { border-color: var(--accent); }
+  .tile.headline .big { color: var(--accent); }
+  .bars { display: flex; flex-direction: column; }
+  .bar-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 5px 18px;
+    padding-block: 15px;
+    border-bottom: 1px solid var(--line);
+  }
+  .bar-row:first-child { border-top: 1px solid var(--line); }
+  .bar-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .bar-name { font-weight: 600; font-size: 0.95rem; }
+  .bar-note { font-size: 0.78rem; color: var(--muted); }
+  .bar-values {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 0.84rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .bar-values .before { color: var(--muted); }
+  .bar-values .arrow { color: var(--muted); font-size: 0.78rem; }
+  .bar-values .after { font-weight: 600; }
+  .bar-values .delta { color: var(--accent); font-weight: 600; }
+  .bar-track {
+    grid-column: 1 / -1;
+    display: flex;
+    height: 10px;
+    background: var(--surface-2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-fill { background: var(--accent); height: 100%; }
+  .bar-cold {
+    height: 100%;
+    background: repeating-linear-gradient(135deg, var(--accent-soft) 0 4px, transparent 4px 8px);
+    border-left: 1px solid var(--accent-soft);
+  }
+  .legend { margin: 0; font-size: 0.78rem; color: var(--muted); }
+  .legend code, .change code, .footer code {
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    overflow-wrap: anywhere;
+  }
+  .mini-table {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--line);
+  }
+  .mini-table .pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  }
+  .mini-table .pair > div {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.88rem;
+    min-width: 0;
+  }
+  .mini-table .h {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface-2);
+  }
+  .mini-table .num {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .changes { display: flex; flex-direction: column; }
+  .change {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding-block: 15px;
+    border-bottom: 1px solid var(--line);
+  }
+  .change:first-child { border-top: 1px solid var(--line); }
+  .change h3 { margin: 0; font-size: 0.98rem; font-weight: 600; }
+  .change p { margin: 0; color: var(--muted); font-size: 0.9rem; max-width: 70ch; }
+  .change .paths { display: flex; flex-wrap: wrap; gap: 6px; }
+  .shards-wrap { display: flex; flex-direction: column; gap: 10px; }
+  .shards {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .shard-col { display: flex; flex-direction: column; gap: 5px; align-items: stretch; }
+  .shard-bar { height: 40px; background: var(--accent); border-radius: 3px 3px 0 0; }
+  .shard-label {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .shards-caption { margin: 0; font-size: 0.84rem; color: var(--muted); }
+  .shards-caption strong { color: var(--ink); font-weight: 600; }
+  .ledger { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .ledger li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    padding-block: 13px;
+    border-bottom: 1px solid var(--line);
+  }
+  .ledger li:first-child { border-top: 1px solid var(--line); }
+  .pill {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .pill.pass { background: var(--good-soft); color: var(--good); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.block { background: var(--bad-soft); color: var(--bad); }
+  .ledger strong { font-weight: 600; }
+  .ledger p { margin: 1px 0 0; font-size: 0.85rem; color: var(--muted); }
+  .limits { display: flex; flex-direction: column; gap: 12px; }
+  .limits p { margin: 0; max-width: 72ch; }
+  .limits ul { margin: 0; padding-left: 1.15em; display: flex; flex-direction: column; gap: 6px; }
+  .limits li { max-width: 72ch; }
+  .limits .strong-line { font-weight: 600; font-size: 1.02rem; }
+  .note {
+    border: 1px solid var(--line);
+    background: var(--warn-soft);
+    color: var(--ink);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .note .eyebrow { color: var(--warn); }
+  .note p { margin: 0; font-size: 0.9rem; max-width: 74ch; }
+  .footer {
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .footer p { margin: 0; }
+  .footer .files { display: flex; flex-wrap: wrap; gap: 6px; }
+  @media (max-width: 620px) {
+    .bar-row { grid-template-columns: minmax(0, 1fr); align-items: start; }
+    .bar-values { justify-content: flex-start; }
+    .mini-table .pair { grid-template-columns: minmax(0, 1fr); padding-block: 10px; border-bottom: 1px solid var(--line); }
+    .mini-table .pair > div { padding: 2px 0; border-bottom: 0; }
+    .mini-table .head-row { display: none; }
+    .shards { gap: 3px; }
+    .shard-bar { height: 32px; }
+  }
+</style>
+<main class="page">
+  <header class="hero">
+    <p class="eyebrow">Pairfob · verification speed</p>
+    <h1>验证提速：核心收益与边界</h1>
+    <p class="lede">
+      四个 gate 由串行改为并发；Go 套件改为 race-first 覆盖，配合测试名级分片与 Go 测试缓存；
+      类型检查换成原生 tsgo，Bun 版本按 <code>.bun-version</code> 固定。以下为本机与 CI 实测数据及边界。
+    </p>
+    <p class="meta-line">2026-11-03 · 12 核 macOS · 外部 load 5–24（整门实测 21.8）· 干净快照</p>
+  </header>
+
+  <section aria-labelledby="numbers">
+    <div class="tiles">
+      <div class="tile headline">
+        <span class="tile-label">Go gate</span>
+        <span class="big">11.2×</span>
+        <span class="tile-note">1176s → 105s，重复运行（缓存命中），全绿，load 27–37</span>
+      </div>
+      <div class="tile">
+        <span class="tile-label">类型检查</span>
+        <span class="big">5–10×</span>
+        <span class="tile-note">tsc 冷态 54s → tsgo 热态 3s / 冷态 9–20s</span>
+      </div>
+      <div class="tile">
+        <span class="tile-label">PWA 全量测试</span>
+        <span class="big">325s</span>
+        <span class="tile-note">5746 tests / 660 files，Bun 1.4.3 十二 worker，load 18–24</span>
+      </div>
+      <div class="tile">
+        <span class="tile-label">Gate 编排</span>
+        <span class="big">4 并发</span>
+        <span class="tile-note">go / scripts / desktop / web 同时运行</span>
+      </div>
+      <div class="tile headline">
+        <span class="tile-label">完整 verify.sh（重复）</span>
+        <span class="big">134s</span>
+        <span class="tile-note">缓存命中实测（load 16）：Go 124s / scripts 62s / web 134s 全绿；冷态 871s</span>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="measured">
+    <div class="section-head">
+      <p class="eyebrow">Measured</p>
+      <h2 id="measured">实测对比</h2>
+    </div>
+    <div class="bars">
+      <div class="bar-row">
+        <div class="bar-label">
+          <span class="bar-name">Go gate（race-first 全量）</span>
+          <span class="bar-note">基线：vet 67 / test 356 / race 722 / vuln 31，串行。现在每个测试只在 race 下跑一次；默认走 go test，未变的包回放缓存。冷缓存 384s（3.1×）。</span>
+        </div>
+        <div class="bar-values">
+          <span class="before">1176s</span><span class="arrow">→</span><span class="after">105s</span><span class="delta">11.2×</span>
+        </div>
+        <div class="bar-track" role="img" aria-label="Go gate 缓存命中 105 秒，冷缓存 384 秒">
+          <span class="bar-fill" style="width:8.9%"></span><span class="bar-cold" style="width:23.8%"></span>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">
+          <span class="bar-name">PWA 全量测试</span>
+          <span class="bar-note">基线为测试清单串行和 462s；Bun 1.4.3 十二 worker 实测 325s（load 18–24）。若 PATH 上是 Homebrew Bun 1.3.10，它会忽略 <code>--parallel</code>，整门退化为串行 868s。</span>
+        </div>
+        <div class="bar-values">
+          <span class="before">462s</span><span class="arrow">→</span><span class="after">325s</span><span class="delta">1.4×</span>
+        </div>
+        <div class="bar-track" role="img" aria-label="PWA 全量测试从 462 秒降到 325 秒"><span class="bar-fill" style="width:70.3%"></span></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">
+          <span class="bar-name">PWA 类型检查</span>
+          <span class="bar-note">tsc 冷态实测 54.0s；tsgo 单一程序覆盖 src + qa，tsc 保留回退</span>
+        </div>
+        <div class="bar-values">
+          <span class="before">54s</span><span class="arrow">→</span><span class="after">3s</span><span class="delta">18×</span>
+        </div>
+        <div class="bar-track" role="img" aria-label="类型检查热态 3 秒，冷态 9 到 20 秒">
+          <span class="bar-fill" style="width:5.6%"></span><span class="bar-cold" style="width:31.4%"></span>
+        </div>
+      </div>
+    </div>
+    <p class="legend">实心 = 缓存命中 / 热态实测；斜纹 = 冷缓存 / 冷态区间。Go 冷缓存 384s 是本机首次运行（无测试缓存）；类型检查冷态 9–20s；PWA 的 462s 来自测试清单的串行耗时和。</p>
+
+    <div class="mini-table" role="table" aria-label="其余部件的实测结果">
+      <div class="pair head-row" role="row">
+        <div class="h" role="columnheader">部件</div>
+        <div class="h" role="columnheader">现在</div>
+        <div class="h" role="columnheader">说明</div>
+      </div>
+      <div class="pair" role="row">
+        <div class="num">Go 冷缓存</div>
+        <div>384s</div>
+        <div>默认 go test 路径，新检出 / 缓存清空后的首次运行（3.1×）</div>
+      </div>
+      <div class="pair" role="row">
+        <div class="num">Web static</div>
+        <div>21.8s</div>
+        <div>types / QA / 性能工具 / 资源检查 并发，全绿</div>
+      </div>
+      <div class="pair" role="row">
+        <div class="num">Web workers</div>
+        <div>15.4s</div>
+        <div>含 wrangler e2e；五项并发，全绿</div>
+      </div>
+      <div class="pair" role="row">
+        <div class="num">Scripts gate</div>
+        <div>全部并发</div>
+        <div>shell / proto / 插件 / 文档 / 脚本测试同时跑</div>
+      </div>
+      <div class="pair" role="row">
+        <div class="num">PWA build</div>
+        <div>~95s</div>
+        <div>未优化，仍是构建与打包的固定成本</div>
+      </div>
+      <div class="pair" role="row">
+        <div class="num">PWA 缓存命中</div>
+        <div>0.5s</div>
+        <div>输入未变时跳过 660 个文件；实测 load 36 的 6 失败运行没有写入缓存，失败不缓存</div>
+      </div>
+      <div class="pair" role="row">
+        <div class="num">端到端（冷态）</div>
+        <div>871s</div>
+        <div>load 21.8 首次完整 verify.sh：Go 503s、scripts 209s、PWA 868s（1.3.10 串行）均通过；wrangler e2e 因负载超时，desktop 缺少 Metal 组件</div>
+      </div>
+      <div class="pair" role="row">
+        <div class="num">端到端（重复）</div>
+        <div>134s</div>
+        <div>缓存命中后的完整 verify.sh（load 16）：PWA 测试 0.5s 复用，Go 124s、scripts 62s、web 134s 全绿，仅 desktop 缺 Metal 组件。对比基线 1900–2100s，约 14–16×</div>
+      </div>
+      <div class="pair" role="row">
+        <div class="num">端到端（CI）</div>
+        <div>8m26s</div>
+        <div>全绿；Linux 侧全部验证工作在 2m17s 内结束，macOS runner 排队 5m23s 加 desktop 编译 2m29s 才是墙钟</div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="changes">
+    <div class="section-head">
+      <p class="eyebrow">Changes</p>
+      <h2 id="changes">做了什么</h2>
+    </div>
+    <div class="changes">
+      <div class="change">
+        <h3>四个 gate 并发</h3>
+        <p>四个 gate 读写不同目录，只读 checkout；总墙钟从“相加”变成“最慢者”。</p>
+        <div class="paths"><code>scripts/verify.sh</code></div>
+      </div>
+      <div class="change">
+        <h3>Go 测试名级分片 + race-first 覆盖</h3>
+        <p>从源码列出测试名，按实测权重贪心分片；大包内测试与子测试拆分。每个测试只在 race 下执行一次：只有 build tag 让两个构建的测试文件不同时，才补跑普通构建。计划工作量从 2912.7s 降到 1580.9s（−46%），每片 131.3–132.0s。</p>
+        <div class="paths"><code>scripts/go-test-shard.ts</code><code>scripts/go-test-timings.json</code><code>scripts/verify-go.sh</code></div>
+      </div>
+      <div class="change">
+        <h3>恢复 Go 测试缓存语义</h3>
+        <p>默认每个分片走 <code>go test</code>，输入未变的包直接回放 Go 测试缓存，重复验证只花秒级；<code>PAIRFOB_VERIFY_BINARIES=1</code> 可切回预编译二进制的冷启动路径。</p>
+        <div class="paths"><code>scripts/verify-go.sh</code></div>
+      </div>
+      <div class="change">
+        <h3>固定 Bun 版本解析</h3>
+        <p>入口按 <code>.bun-version</code> 解析 Bun：优先 <code>~/.bun/bin/bun</code>，匹配 1.4.3 才继续，否则给出安装命令并停止。Homebrew 1.3.10 会忽略 <code>--parallel</code>，此前整门因此多花约 540s。</p>
+        <div class="paths"><code>scripts/verify.sh</code></div>
+      </div>
+      <div class="change">
+        <h3>PWA 测试结果缓存</h3>
+        <p>输入（<code>pwa/</code>、<code>proto/</code>、分片器、时序清单、Bun 版本、locale 环境）逐字节一致时复用上一次绿色的 shard；键由 git tree/diff/未跟踪文件内容计算，约 0.3s。失败绝不写入，<code>PAIRFOB_VERIFY_CACHE=0</code> 可强制全跑。命中实测 0.5s 跳过整套测试。
+        同时修复了 <code>step()</code> 在 <code>||</code> 上下文吞掉失败、把失败步骤打印成 passed 的缺陷。</p>
+        <div class="paths"><code>scripts/verify-cache.ts</code><code>scripts/verify-web.sh</code></div>
+      </div>
+      <div class="change">
+        <h3>tsgo 类型检查</h3>
+        <p>锁定原生 TypeScript 预览版，用一个程序同时覆盖 src 与 qa；保留 <code>typecheck:tsc</code> 作为上游编译器回退。Worker 包同样切换。</p>
+        <div class="paths"><code>pwa/tsconfig.all.json</code><code>pwa/package.json</code><code>workers/pairfob-origin/package.json</code></div>
+      </div>
+      <div class="change">
+        <h3>Web gate 四部分并发</h3>
+        <p>tests / static / build / workers 互不依赖；static 内部四项、workers 内部五项也各自并发，并用 <code>--only-failures</code> 压缩日志。</p>
+        <div class="paths"><code>scripts/verify-web.sh</code></div>
+      </div>
+      <div class="change">
+        <h3>Scripts gate 全并行与镜像守卫</h3>
+        <p>shell 语法、proto、插件、文档、脚本测试同时运行；公开仓库的 5 个 lockfile 都扫描内网镜像地址 bnpm。</p>
+        <div class="paths"><code>scripts/verify-scripts.sh</code></div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="balance">
+    <div class="section-head">
+      <p class="eyebrow">Shard balance</p>
+      <h2 id="balance">12 片计划权重</h2>
+    </div>
+    <div class="shards-wrap">
+      <div class="shards" aria-hidden="true">
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">0</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">1</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">2</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">3</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">4</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">5</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">6</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">7</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">8</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">9</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">10</span></div>
+        <div class="shard-col"><div class="shard-bar"></div><span class="shard-label">11</span></div>
+      </div>
+      <p class="shards-caption">
+        <strong>131.3–132.0s / 片</strong>，总计划权重 1580.9s（原 2912.7s，−46%），均值 131.7s。
+        实测相位 90s（缓存命中，load 27–37）/ 196s（冷缓存）；12 个核已用满。
+      </p>
+    </div>
+  </section>
+
+  <section aria-labelledby="status">
+    <div class="section-head">
+      <p class="eyebrow">Status</p>
+      <h2 id="status">验证状态</h2>
+    </div>
+    <ul class="ledger">
+      <li>
+        <span class="pill pass">通过</span>
+        <div><strong>Go gate</strong><p>104.6s，全绿（缓存命中，load 27–37）；冷缓存 384s；load 21.8 的 12 片全量 503s 同样全绿。12 片，race-first 覆盖。</p></div>
+      </li>
+      <li>
+        <span class="pill warn">负载</span>
+        <div><strong>Web static / workers</strong><p>常规负载下 21.8s 与 15.4s，全绿；load 21.8 时 wrangler e2e 的 5s 用例超时、cloudflare-pool 报 ECONNRESET，属负载类失败。</p></div>
+      </li>
+      <li>
+        <span class="pill pass">通过</span>
+        <div><strong>Scripts gate</strong><p>常规负载下全部检查通过；高负载单次超时的两个 scope 测试，串行复跑 31/31 通过；load 21.8 的整门 209s 全绿。</p></div>
+      </li>
+      <li>
+        <span class="pill warn">抖动</span>
+        <div><strong>PWA 全量</strong><p>5743 / 5746 通过（Bun 1.4.3，load 18–24）；三项失败为计时抖动（attachment-tray、attachment-transfer-v2、diff-hold），同负载串行复跑 55/55 通过。</p></div>
+      </li>
+      <li>
+        <span class="pill pass">通过</span>
+        <div><strong>PWA 结果缓存</strong><p>单元测试 8/8；命中路径 0.5s 跳过整套测试；load 36 的 6 失败运行未写缓存；输入变更、Bun 版本或 locale 变化都会 miss。</p></div>
+      </li>
+      <li>
+        <span class="pill pass">通过</span>
+        <div><strong>重复整门（缓存命中）</strong><p>134s（load 16）：Go 124s、scripts 62s、web 134s 全部通过，PWA 测试 0.5s 复用；对比基线约 1900–2100s，14–16×。</p></div>
+      </li>
+      <li>
+        <span class="pill warn">环境</span>
+        <div><strong>冷态整门</strong><p>871s（load 21.8）：Go / scripts / PWA 测试全绿；web 仅 wrangler e2e 因负载超时，desktop 缺 Metal 组件。</p></div>
+      </li>
+      <li>
+        <span class="pill block">无法运行</span>
+        <div><strong>Desktop gate</strong><p>本机缺少 Apple Metal Toolchain 组件（<code>xcodebuild -downloadComponent MetalToolchain</code> 可装），gpui 着色器编译失败；CI 的 macOS runner 上同门 2m29s 全绿，属本机环境限制。</p></div>
+      </li>
+      <li>
+        <span class="pill pass">通过</span>
+        <div><strong>CI 全量</strong><p>最近一次完整 run 8m26s 全绿；Linux 侧所有验证工作 2m17s 结束。</p></div>
+      </li>
+    </ul>
+  </section>
+
+  <section class="limits" aria-labelledby="limits">
+    <div class="section-head">
+      <p class="eyebrow">Boundary</p>
+      <h2 id="limits">结论与边界</h2>
+    </div>
+    <p class="strong-line">重复验证已实测达成 10×：缓存命中整门 134s，对比基线 1900–2100s 约 14–16×；冷态整门 871s（3.5–4×）；Go gate 11.2×。</p>
+    <p>
+      测量链是真实的：load 1.95 的窗口里 PWA 全量 233s 全绿并写入缓存；随后两次完整 verify.sh 分别为 214s（load 12）
+      与 134s（load 16）。134s 的分解是 Go 124s（vet 17s、vuln 40s、race 缓存回放约 100s）、scripts 62s、
+      web 134s（QA 114s、build 117s、Worker integration 70s 并发，PWA 测试 0.5s 复用）；唯一失败是 desktop 在
+      format 之后因缺少 Metal 组件退出。冷态 871s（load 21.8）时 Go、scripts 与全部 PWA 测试均通过，只有负载导致的
+      wrangler e2e 超时与 desktop 环境失败。缓存只复用绿色结果：load 28/34/36 下三次失败运行（1、38、6 个用例）
+      都没有写入。
+    </p>
+    <ul>
+      <li>重复整门的尾部换成了 Go 缓存回放（124s）、PWA QA/build（117s）与 scripts（62s）；PWA 全量的 754 CPU-s 只在首次或输入变更时支付。</li>
+      <li>冷态下界是算术：验证本身约 1800 CPU-s，12 核满载下限约 150s；基线 1900–2100s 对应冷态最多约 12–14×，但共享机器只给到 2–4 个核，所以冷态实测停在 3.5–4×。</li>
+      <li>Bun 版本会改变验证语义：Homebrew 1.3.10 让 660 个文件退化为串行，整门多花约 540s；入口现在按 <code>.bun-version</code> 解析并拒绝错误版本。</li>
+      <li>CI 的端到端 8m26s 里 Linux 验证只占 2m17s，剩余是 macOS runner 排队 5m23s 与 desktop 编译 2m29s；继续压脚本不会缩短这条墙钟。</li>
+      <li>第二次本机整门在 load 7.5 启动、数分钟后被外部负载抬到 53：PWA QA 的 37 个测试跑了 941s、Go 分片与 30s/60s 用例成批超时，整门 1233s；同一套代码在 load 21.8 时只有环境类失败。外部负载是本机端到端数字的主导变量。</li>
+      <li>三项 PWA 失败与 wrangler e2e 失败均可在同负载下串行复跑通过；race 下 <code>32MiB-download</code> 单测在 12 路并发时被内存带宽拖到 162s，独占时仅 13s。</li>
+    </ul>
+  </section>
+
+  <aside class="note" aria-labelledby="tradeoff">
+    <p class="eyebrow">Cache</p>
+    <h2 id="tradeoff">缓存语义已恢复</h2>
+    <p>
+      默认分片走 <code>go test</code>，未变输入的包回放 Go 的测试结果缓存，重复验证不再重跑全量；
+      <code>PAIRFOB_VERIFY_BINARIES=1</code> 保留预编译二进制路径，适合缓存清空后的首次冷启动。
+      两条路径都执行同一套 race-first 覆盖，不删除任何测试。
+    </p>
+  </aside>
+
+  <footer class="footer">
+    <p>数据来源：干净快照上的实测运行；估算值均已标注。未提交、未推送，改动保留在工作区。</p>
+    <div class="files">
+      <code>scripts/verify*.sh</code>
+      <code>scripts/verify-cache.ts</code>
+      <code>scripts/go-test-shard.ts</code>
+      <code>scripts/go-test-timings.{ts,json}</code>
+      <code>pwa/tsconfig.all.json</code>
+      <code>pwa/package.json</code>
+      <code>workers/pairfob-origin/package.json</code>
+      <code>.github/workflows/verify.yml</code>
+      <code>docs/develop.md</code>
+    </div>
+  </footer>
+</main>
