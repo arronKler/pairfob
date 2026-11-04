@@ -27,8 +27,10 @@
   font-weight: 550;
 }
 
-.computer-forget { color: var(--muted); }
-.computer-rename { color: var(--accent); }
+/* Scoped to the row so the shared sizing rule above stays the one that names
+   `.computer-forget` alone; an unscoped color rule would shadow its 44px target. */
+.computer-row .computer-forget { color: var(--muted); }
+.computer-row .computer-rename { color: var(--accent); }
 
 .computer-forget:active { color: var(--danger-bright); }
 .computer-rename:active { filter: brightness(1.2); }

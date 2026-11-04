@@ -80,9 +80,9 @@ describe("computers view model", () => {
       paneId: "",
       withBack: false,
     });
-    expect(view.rows[0]?.renameLabel).toBe("重命名");
-    expect(view.rows[0]?.renameAria).toBe("重命名 desk");
-    expect(view.rows[1]?.renameAria).toBe("重命名 studio");
+    expect(view.rows[0]?.renameLabel).toBe("改电脑名");
+    expect(view.rows[0]?.renameAria).toBe("改电脑名 desk");
+    expect(view.rows[1]?.renameAria).toBe("改电脑名 studio");
   });
 
   test("a held computer is named connected, and the current one keeps its own line", () => {

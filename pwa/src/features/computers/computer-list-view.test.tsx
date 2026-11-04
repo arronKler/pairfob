@@ -15,7 +15,7 @@ import type { ComputersViewModel } from "./model";
  */
 const row = (daemonId: string, title: string, current: boolean, held = false) => ({
   daemonId, title, current, held, currentPill: current ? "当前" : null, meta: current ? "已连接" : held ? "已连接 · 即时切换" : "上次连接：昨天",
-  forgetAria: `忘记 ${title}`, forgetLabel: "忘记", renameAria: `重命名 ${title}`, renameLabel: "重命名",
+  forgetAria: `忘记 ${title}`, forgetLabel: "忘记", renameAria: `改电脑名 ${title}`, renameLabel: "改电脑名",
 });
 const model = (current: string, held: string[] = []): ComputersViewModel => ({
   withBack: true, backTitle: "电脑", backTarget: "settings", heading: null,
@@ -109,7 +109,7 @@ test("under Edit every row offers Rename before Forget, and each action owns its
   act(() => appRoot().querySelector<HTMLButtonElement>(".computers-edit")!.click());
   for (const item of items()) {
     const actions = [...face(item).querySelectorAll<HTMLButtonElement>("button.set-action")];
-    expect(actions.map(action => action.textContent)).toEqual(["重命名", "忘记"]);
+    expect(actions.map(action => action.textContent)).toEqual(["改电脑名", "忘记"]);
   }
   const [first, second] = items();
   act(() => face(second).querySelectorAll<HTMLButtonElement>("button.set-action")[0].click());
@@ -124,7 +124,7 @@ test("the offline picker offers Rename beside Forget on every saved computer", (
   const rows = [...appRoot().querySelectorAll<HTMLElement>(".computer-row")];
   expect(rows).toHaveLength(2);
   for (const item of rows) {
-    expect(item.querySelector<HTMLButtonElement>(".computer-rename")?.textContent).toBe("重命名");
+    expect(item.querySelector<HTMLButtonElement>(".computer-rename")?.textContent).toBe("改电脑名");
     expect(item.querySelector<HTMLButtonElement>(".computer-forget")?.textContent).toBe("忘记");
   }
   act(() => rows[1].querySelector<HTMLButtonElement>(".computer-rename")!.click());

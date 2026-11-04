@@ -545,7 +545,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "computers.lastUsed": "Last used · {when}",
   "computers.neverConnected": "Not connected yet",
   "computers.forgetAria": "Remove {title} from this device",
-  "computers.rename": "Rename",
+  "computers.rename": "Rename computer",
   "computers.renameTitle": "Rename computer",
   "computers.renameLabel": "Name in this browser",
   "computers.renameHint": "Only this browser uses this name. Up to 64 characters.",
