@@ -18,12 +18,14 @@
 }
 
 .conn-path {
-  display: grid;
-  grid-template-columns: auto minmax(16px, 1fr) auto minmax(16px, 1fr) auto;
-  align-items: start;
+  display: flex;
+  align-items: flex-start;
 }
 
-.conn-node { display: grid; justify-items: center; gap: 3px; min-width: 70px; text-align: center; transition: opacity var(--dur-2) var(--ease); }
+.conn-node { flex: 0 1 auto; display: grid; justify-items: center; gap: 3px; min-width: 70px; max-width: 100%; text-align: center; transition: opacity var(--dur-2) var(--ease); }
+/* A computer name longer than its share of the route ellipsizes here instead of
+   pushing the third stop past the card. */
+.conn-node b, .conn-node small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .conn-node b { color: var(--ink); font-size: var(--text-caption); font-weight: 650; white-space: nowrap; }
 .conn-node small { color: var(--muted); font-size: 0.68rem; white-space: nowrap; }
 .conn-node.is-wait small { color: var(--warn); }
@@ -71,7 +73,7 @@
   to { box-shadow: 0 0 0 10px rgba(255, 178, 36, 0); }
 }
 
-.conn-link { position: relative; height: 2px; margin-top: 20px; }
+.conn-link { flex: 1 1 16px; position: relative; height: 2px; margin-top: 20px; }
 .conn-link.is-idle { background: var(--line-strong); }
 
 /* The through line lies over the link at no length and is drawn across from

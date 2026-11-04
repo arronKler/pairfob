@@ -65,6 +65,14 @@
   transition: transform var(--dur-3) var(--ease);
 }
 
+/* The name is the one part that gives way: it ellipsizes in its own box, so a
+   long computer keeps the chevron after it and the status row beneath it. */
+.host-title-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .host-title-name svg { flex: none; color: var(--muted); }
 
 .host-title-line {

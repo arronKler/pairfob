@@ -56,7 +56,7 @@ function BootFrame() {
             <StatusDot tone={slow ? "warn" : "pending"} />
             <span className="host-title-text">
               {name
-                ? <span className="host-title-name">{name}</span>
+                ? <span className="host-title-name"><span className="host-title-label">{name}</span></span>
                 : <span className="herd-sk boot-shell-name" aria-hidden="true" />}
               <span className="host-title-line">{line}</span>
             </span>

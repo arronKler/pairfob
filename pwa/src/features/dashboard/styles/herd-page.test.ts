@@ -28,6 +28,13 @@ describe("phone list targets", () => {
     expect(rules(".rail .attn-ticket::after")).toBe("");
   });
 
+  test("a long computer name gives way by ellipsis, keeping the chevron and the status row", () => {
+    const label = rules(".host-title-label");
+    expect(label).toMatch(/min-width:\s*0/);
+    expect(label).toMatch(/overflow:\s*hidden/);
+    expect(label).toMatch(/text-overflow:\s*ellipsis/);
+  });
+
   test("the path line under a heading lets a press through to the title and tools it overlaps", () => {
     // Pulled up under the title's row, it lies over the lower edge of the 44px controls beside it.
     expect(rules(".group-path")).toMatch(/margin:\s*-8px 0 0 28px/);

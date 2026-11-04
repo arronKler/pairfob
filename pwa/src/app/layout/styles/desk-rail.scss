@@ -44,8 +44,6 @@
   line-height: 1.3;
 }
 
-/* The name gives way to the controls beside it; the chevron stays in view. */
-.rail-head .host-title-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rail-head .host-title-name svg { width: 14px; height: 14px; }
 .rail-head .host-title-line { max-height: none; font-size: var(--text-caption); line-height: 1.4; }
 

@@ -17,6 +17,18 @@ const declared = (source: string, selector: string) => [...source.matchAll(/([^{
 const px = (body: string, property: string) => Number(body.match(new RegExp(`${property}:\\s*(-?[\\d.]+)px`))?.[1]);
 const inset = (body: string) => (body.match(/inset:\s*([^;]+);/g) ?? []).at(-1)!.match(/-?\d+/g)!.map(Number);
 
+describe("the route with a long computer name", () => {
+  test("the computer's stop gives way by ellipsis instead of pushing past the card", () => {
+    expect(declared(css, ".conn-path")).toMatch(/display:\s*flex/);
+    expect(declared(css, ".conn-node")).toMatch(/flex:\s*0 1 auto/);
+    expect(declared(css, ".conn-node")).toMatch(/min-width:\s*70px/);
+    const label = declared(css, ".conn-node b");
+    expect(label).toMatch(/max-width:\s*100%/);
+    expect(label).toMatch(/overflow:\s*hidden/);
+    expect(label).toMatch(/text-overflow:\s*ellipsis/);
+  });
+});
+
 describe("small links under a finger", () => {
   test("the links under the route reach 44px without being drawn any taller", () => {
     expect(px(declared(css, ".conn-path-actions .text-link"), "min-height")).toBe(36);

@@ -169,7 +169,7 @@ export function UnreachableShell({ retrying = false }: { retrying?: boolean }) {
             onClick={openUnreachableSheet}>
             <StatusDot tone="off" />
             <span className="host-title-text">
-              <span className="host-title-name">{name}<MoreHorizontal size={16} aria-hidden="true" /></span>
+              <span className="host-title-name"><span className="host-title-label">{name}</span><MoreHorizontal size={16} aria-hidden="true" /></span>
               <span className="host-title-line">{line}</span>
             </span>
           </Button>
