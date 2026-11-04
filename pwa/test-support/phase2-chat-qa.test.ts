@@ -115,11 +115,12 @@ test("the steps scene keeps routine failures off the card header and names comma
   // The agent worked past a failed read and answered: the card counts its steps.
   expect(cards[0].className).toBe("work-card is-done");
   expect(cards[0].querySelector(".work-title")?.textContent).toBe("Done · 5 steps");
-  // The agent's note before its first step speaks outside the card, not as a row in it.
-  expect(document.querySelector(".agent-finding")?.textContent).toContain("I will refresh the production stats");
+  // The agent's note before its first step is a row in the card.
+  expect(cards[0].querySelector(".work-step.is-note")?.textContent).toContain("I will refresh the production stats");
   // Three settled commands in a row fold into one row that names their count.
   const rows = [...cards[0].querySelectorAll(".work-step")].filter((row) => row.querySelector(".work-step-text"));
   expect(rows.map((row) => row.querySelector(".work-step-text")?.textContent)).toEqual([
+    "I will refresh the production stats and compare them with the last run.",
     "cat /tmp/usage.ts +1", "Read command output", "bun /tmp/usage.ts +1 · Read command output +1",
   ]);
   const folded = cards[0].querySelector(".work-folded")!;
@@ -139,12 +140,12 @@ test("recorded Cursor, Hermes and opencode sessions render from the daemon's own
   const rows = () => [...card().querySelectorAll(".work-step")].filter((row) => row.querySelector(".work-step-text") && !row.className.includes("is-think"))
     .map((row) => row.className.includes("work-folded")
       ? `folded:${row.closest(".work-folded")?.querySelector(".work-folded-count")?.textContent ?? ""}`
-      : `${row.className.match(/is-(read|search|edit|command|web|other|think)/)?.[1]}:${row.className.match(/is-(done|error|ended|running)/)?.[1] ?? ""}`);
+      : `${row.className.match(/is-(read|search|edit|command|web|other|think|note)/)?.[1]}:${row.className.match(/is-(done|error|ended|running)/)?.[1] ?? ""}`);
   await start("chat-cursor");
   // Cursor records no results: steps are ended, the card claims nothing.
   expect(card().className).toBe("work-card is-neutral");
-  // Its three settled commands are one folded row; the read and search keep their own.
-  expect(rows()).toEqual(["read:ended", "folded:3 items", "search:ended"]);
+  // Its three settled commands are one folded row; the read, note and search keep their own.
+  expect(rows()).toEqual(["read:ended", "note:", "folded:3 items", "search:ended"]);
   await act(async () => { card().querySelector<HTMLButtonElement>(".work-folded-head")!.click(); await Promise.resolve(); });
   expect([...card().querySelectorAll(".work-folded-steps .work-step-text")].map((node) => node.textContent)).toHaveLength(3);
   expect(document.querySelector(".agent-user-text")?.textContent).toStartWith("Do these steps in order");

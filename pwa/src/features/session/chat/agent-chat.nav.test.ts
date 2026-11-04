@@ -71,7 +71,7 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(app.querySelectorAll(".agent-assistant")).toHaveLength(2);
   }));
 
-  test("keeps preamble, tool, and final reply in source order", async () => await act(async () => {
+  test("keeps a note, its tool, and the final reply in source order", async () => await act(async () => {
     bootAgentChat();
     setAgents([{ ...(selectedAgent() ?? { paneId: "p1" }), status: "idle" }]);
     setTrace({ agentTraceItems: [
@@ -83,19 +83,18 @@ describe("agent-chat remembers its mode per pane", () => {
     expect(patchAgentChat({ follow: true })).toBe(true);
 
     const fold = app.querySelector(".work-card");
-    // The preamble speaks in the transcript, not as a row inside the card.
-    const preamble = app.querySelector(".agent-finding");
+    // The note is a row in the card, ahead of the tool it introduces.
+    const note = fold?.querySelector(".work-step.is-note");
     const tool = fold?.querySelector(".work-step.is-read");
     const final = app.querySelector(".agent-assistant-final");
-    if (!(fold instanceof HTMLElement) || !(preamble instanceof HTMLElement) || !(tool instanceof HTMLElement) || !(final instanceof HTMLElement)) {
+    if (!(fold instanceof HTMLElement) || !(note instanceof HTMLElement) || !(tool instanceof HTMLElement) || !(final instanceof HTMLElement)) {
       throw new Error("missing chronological step card");
     }
-    expect(preamble.textContent).toContain("I will inspect it first.");
+    expect(note.textContent).toContain("I will inspect it first.");
     expect(tool.textContent).toContain("Read a.ts");
     expect(final.textContent).toContain("Everything is fine.");
-    // Source order holds across the card's edge: a finding spoken before any
-    // step introduces the work and stays above the card; the reply stays below.
-    expect(Boolean(preamble.compareDocumentPosition(fold) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    // Source order holds inside the card, and the reply stays below it.
+    expect(Boolean(note.compareDocumentPosition(tool) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(Boolean(fold.compareDocumentPosition(final) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   }));
 

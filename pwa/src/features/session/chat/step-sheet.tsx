@@ -19,9 +19,8 @@ import { useChat } from "../hooks";
  */
 export function openStepSheet(paneId: string, item: AgentTraceItem, verified: boolean, steps: AgentTraceItem[] = [item],
   locate?: () => AgentTraceItem[] | null): void {
-  // A step that is not one of the card's rows — a finding, which speaks outside
-  // the card — is its own page: its pager must not borrow a tool list, or Next
-  // would jump into the middle of a run that does not contain it.
+  // A step opened without the card's rows (a caller that only has the one)
+  // pages alone: its pager must not borrow a list that does not contain it.
   const listed = steps.includes(item);
   const list = listed ? steps : [item];
   const locateRows = listed ? locate : undefined;
@@ -179,8 +178,11 @@ function StepSheetBody({ paneId, item, verified }: { paneId: string; item: Agent
     return <div className="step-sheet-body"><Section title={t("sheet.thinking")} copy={item.text}><pre className="step-prose">{item.text}</pre></Section></div>;
   }
   if (item.type === "assistant") {
-    // The Markdown renderer returns sanitized allowlisted HTML.
-    return <div className="step-sheet-body"><div className="agent-md" dangerouslySetInnerHTML={{ __html: html }} /></div>;
+    // The Markdown renderer returns sanitized allowlisted HTML. A note is the
+    // agent's whole message between steps, so the sheet offers it as text too.
+    return <div className="step-sheet-body"><Section title={t("sheet.note")} copy={item.text}>
+      <div className="agent-md" dangerouslySetInnerHTML={{ __html: html }} />
+    </Section></div>;
   }
   return <div className="step-sheet-body">
     <div className="step-sheet-state"><StatePill state={stepState(item, verified)} /></div>

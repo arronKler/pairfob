@@ -110,6 +110,24 @@ export function releaseModifier(mod: Modifier): void {
   paintAllModifiers();
 }
 
+/**
+ * A modifier the field's own keyboard can finish a chord with. Shift is the
+ * field's, not the pad's: a soft keyboard raises it for a capital, so a
+ * Shift-only latch stays with the panel instead of swallowing typed text.
+ */
+export function chordModifierActive(): boolean {
+  return active("ctrl") || active("alt") || active("cmd");
+}
+
+/**
+ * Apply and consume the pad's modifiers for one character typed into a field.
+ * Null when no chord modifier is armed; an empty array means one was armed but
+ * the terminal has no bytes for that key, so the field keeps the edit.
+ */
+export function withKeyboardModifiers(key: string): string[] | null {
+  return chordModifierActive() ? withModifiers(key) : null;
+}
+
 /** Apply held/latched modifiers to logical keys; transports encode the chords. */
 export function withModifiers(key: string): string[] {
   lastTap = null;

@@ -240,6 +240,20 @@ button.work-head:active { background: var(--surface-2); }
   color: var(--muted);
 }
 
+/*
+  A note is the agent speaking between steps, not a tool: its words are the
+  content, so the row reads at full ink with the icon in the accent, and the
+  chevron says the rest opens in the sheet.
+*/
+.work-step.is-note .work-step-icon { color: var(--accent); opacity: 1; }
+.work-step.is-note .work-step-text { color: var(--ink); }
+
+.work-step-open {
+  flex: none;
+  color: var(--muted);
+  opacity: 0.6;
+}
+
 .work-step-state {
   flex: none;
   color: var(--muted);

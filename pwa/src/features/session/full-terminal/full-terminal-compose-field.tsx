@@ -16,16 +16,20 @@ import { useFullTerminalStopTarget } from "./full-terminal-stop";
 
 export type FullTerminalComposeProps = {
   send: (text: string, enter: boolean) => boolean;
+  /** Deliver a chord typed into the field while a pad modifier is armed. */
+  sendKey?: (key: string) => void;
   /** 组字 / 实时 folded into the field's right end on a pointer surface. */
   modeSwitch?: ReactNode;
 };
 
 /** Batch compose form. The textarea is controller-owned after mount. */
-export function FullTerminalCompose({ send, modeSwitch }: FullTerminalComposeProps) {
+export function FullTerminalCompose({ send, sendKey, modeSwitch }: FullTerminalComposeProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const sendRef = useRef(send);
   sendRef.current = send;
+  const sendKeyRef = useRef(sendKey);
+  sendKeyRef.current = sendKey;
   // The form draws the button's face, not the field's focus or live choice: a
   // focus change must not repaint it, and the text reaches React only here.
   const draft = useComposeDraft();
@@ -50,7 +54,10 @@ export function FullTerminalCompose({ send, modeSwitch }: FullTerminalComposePro
       // The draft reaches React through the compose domain; the feedback only
       // keeps the controller from writing the button's label behind React.
       () => undefined,
-      { phoneField: () => !hardwareKeyboard() },
+      {
+        phoneField: () => !hardwareKeyboard(),
+        sendKey: (key) => sendKeyRef.current?.(key),
+      },
     );
   }, []);
 

@@ -117,21 +117,22 @@ function streamShape(stream: HTMLElement) {
   };
 }
 
-test("an unchanged finding keeps its drawn nodes while the turn's reply grows", () => {
+test("an unchanged note keeps its drawn row while the turn's reply grows", () => {
   const turn = (finding: string, reply: string): AgentTraceItem[] => [user,
     { type: "assistant", text: finding }, { type: "tool", name: "Read", output: "done" },
     { type: "assistant", text: reply }];
-  const render = (items: AgentTraceItem[]) => act(() => renderReact(<AgentStream items={items} working={false} empty={empty} />));
+  // A running card is open, so its rows are drawn.
+  const render = (items: AgentTraceItem[]) => act(() => renderReact(<AgentStream items={items} working empty={empty} />));
   render(turn("First finding", "Final one"));
-  const drawn = current().querySelector<HTMLElement>(".agent-finding .agent-md")!;
+  const drawn = current().querySelector<HTMLElement>(".work-step.is-note .work-step-text")!;
   const child = drawn.firstChild;
-  // The reply grows in place; the finding's own markup is not written again,
-  // so a selection inside it survives a streaming update.
+  // The reply grows in place; the note's own row is not written again, so the
+  // reader's place in it survives a streaming update.
   render(turn("First finding", "Final one and more"));
-  expect(current().querySelector(".agent-finding .agent-md")?.firstChild).toBe(child);
-  expect(current().querySelector(".agent-assistant-final")?.textContent).toBe("Final one and more\n");
+  expect(current().querySelector(".work-step.is-note .work-step-text")?.firstChild).toBe(child);
+  expect(current().querySelector(".agent-assistant-intermediate")?.textContent).toBe("Final one and more\n");
   render(turn("First finding, revised", "Final one"));
-  expect(current().querySelector(".agent-finding .agent-md")?.textContent).toContain("First finding, revised");
+  expect(current().querySelector(".work-step.is-note .work-step-text")?.textContent).toBe("First finding, revised");
   act(unmountReact);
 });
 
@@ -156,11 +157,10 @@ test("ordered mixed blocks keep source order inside the card and the reply outsi
   const outer = () => [...current().querySelector(".agent-stream-inner")!.children].map(node => node.className);
   const steps = () => [...current().querySelectorAll(".work-step")].map(node => node.className);
   act(() => renderReact(<AgentStream items={mixed} working={false} empty={empty} truncated />));
-  // The finding leaves the card and speaks for itself between the steps and the reply.
-  expect(outer()).toEqual(["agent-trace-limit", "agent-user", "work-card is-neutral", "agent-finding", "agent-assistant agent-assistant-final"]);
-  // The card keeps the steps; the agent's own words are drawn outside it.
-  expect(steps()).toEqual(["work-step is-think", "work-step is-read is-ended"]);
-  expect(current().querySelector(".agent-finding .agent-md")?.textContent).toBe("Intermediate\n");
+  // The card holds thinking, the note and the tool in source order; the reply follows it.
+  expect(outer()).toEqual(["agent-trace-limit", "agent-user", "work-card is-neutral", "agent-assistant agent-assistant-final"]);
+  expect(steps()).toEqual(["work-step is-think", "work-step is-note", "work-step is-read is-ended"]);
+  expect(current().querySelector(".work-step.is-note .work-step-text")?.textContent).toBe("Intermediate");
   const done = current().querySelector<HTMLElement>(".work-card")!;
   expect(done.dataset.key).toBe("w:u:12:Inspect this:s:thinking:::Read:");
   expect(expanded(done)).toBeFalse();
@@ -168,7 +168,7 @@ test("ordered mixed blocks keep source order inside the card and the reply outsi
   act(unmountReact);
   act(() => renderReact(<AgentStream items={mixed} working empty={empty} truncated />));
   // While the turn runs the card is open and the trailing text is the latest note under it.
-  expect(outer()).toEqual(["agent-trace-limit", "agent-user", "work-card is-running", "agent-finding", "agent-assistant agent-assistant-intermediate"]);
+  expect(outer()).toEqual(["agent-trace-limit", "agent-user", "work-card is-running", "agent-assistant agent-assistant-intermediate"]);
   const live = current().querySelector<HTMLElement>(".work-card")!;
   expect([expanded(live), live.dataset.autoOpen]).toEqual([true, "1"]);
   expect(current().querySelector(".agent-reply-copy")).toBeNull();

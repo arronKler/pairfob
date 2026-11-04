@@ -110,8 +110,8 @@ test("a step pressed inside a folded run opens that step, at its own place in th
   ];
   act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified onOpenStep={(item, steps) => {
     opened.push(item);
-    // The list the sheet pages is the card's own rows: the finding is not in it.
-    expect(steps?.map((step) => step.detailRef ?? step.type)).toEqual(["r1", "r2", "r3"]);
+    // The list the sheet pages is the card's own rows, the note included.
+    expect(steps?.map((step) => step.detailRef ?? step.type)).toEqual(["assistant", "r1", "r2", "r3"]);
     expect(opened.at(-1)!.detailRef).toBe("r3");
   }} />));
   act(() => appRoot().querySelector<HTMLButtonElement>(".work-folded-head")!.click());
@@ -134,51 +134,47 @@ test("an 'other' tool never folds, even in a run of its own kind", () => {
     .toEqual(["one", "two", "three"]);
 });
 
-test("a finding opens on its own page, not as the first item of the tool pager", () => {
-  const finding = "The snapshot keeps no URL.";
+test("a note opens in the sheet as one of the card's own rows", () => {
+  const note = "The snapshot keeps no URL.";
   const turn: AgentTraceItem[] = [{ type: "user", text: "inspect" },
     { type: "tool", name: "Read", label: "a.go", toolState: "done", detailRef: "r1" },
     { type: "tool", name: "Read", label: "b.go", toolState: "done", detailRef: "r2" },
     { type: "tool", name: "Read", label: "c.go", toolState: "done", detailRef: "r3" },
-    // A step after the finding keeps it in the turn's entries, so it draws a bubble.
-    { type: "assistant", text: finding },
+    // A step after the note keeps it in the turn's entries, so it draws a row.
+    { type: "assistant", text: note },
     { type: "tool", name: "Edit", label: "a.go", toolState: "done", detailRef: "e1" },
     { type: "assistant", text: "Fixed." }];
   let opened: { item: AgentTraceItem; steps?: AgentTraceItem[] } | null = null;
   act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified
     onOpenStep={(item, steps) => { opened = { item, steps }; }} />));
-  const bubble = appRoot().querySelector<HTMLButtonElement>(".agent-finding-open")!;
-  act(() => bubble.click());
-  // The finding is not one of the card's rows, so the press carries the card's
-  // tool list; `openStepSheet` drops it and pages the finding alone.
-  expect(opened!.item.text).toBe(finding);
-  expect(opened!.steps!.map((step) => step.detailRef ?? step.type)).toEqual(["r1", "r2", "r3", "e1"]);
-  expect(opened!.steps!.includes(opened!.item)).toBe(false);
+  const row = appRoot().querySelector<HTMLButtonElement>(".work-step.is-note")!;
+  act(() => row.click());
+  // The note is one of the card's rows, so the press carries the whole list and
+  // the sheet opens on the note, at its own place among the steps.
+  expect(opened!.item.text).toBe(note);
+  expect(opened!.steps!.map((step) => step.detailRef ?? step.type)).toEqual(["r1", "r2", "r3", "assistant", "e1"]);
+  expect(opened!.steps!.indexOf(opened!.item)).toBe(3);
 });
 
-test("a turn's finding stands on its own between the steps and the reply", () => {
-  const finding = "The snapshot keeps no URL, so the character photo is lost at submit.";
+test("a turn's note is a row inside the card, between the steps it separates", () => {
+  const note = "The snapshot keeps no URL, so the character photo is lost at submit.";
   const turn: AgentTraceItem[] = [
     { type: "user", text: "inspect" },
     { type: "tool", name: "Read", label: "gen.go", toolState: "done", detailRef: "r1" },
-    { type: "assistant", text: finding },
+    { type: "assistant", text: note },
     { type: "tool", name: "Edit", label: "gen.go", toolState: "done", detailRef: "e1" },
     { type: "assistant", text: "Fixed." },
   ];
   act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified />));
   const card = appRoot().querySelector<HTMLElement>(".work-card")!;
-  const bubble = appRoot().querySelector<HTMLElement>(".agent-finding")!;
-  // The card holds steps alone: no step row repeats the finding.
-  expect(card.querySelector(".agent-finding")).toBeNull();
-  expect([...card.querySelectorAll(".work-step-text")].map((node) => node.textContent)).toEqual(["gen.go", "gen.go"]);
-  // The finding is its own message, between the card and the reply, in order.
-  expect(bubble.textContent).toContain(finding);
-  expect(Boolean(card.compareDocumentPosition(bubble) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-  const reply = appRoot().querySelector(".agent-assistant-final")!;
-  expect(Boolean(bubble.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  // The note keeps its source place: after the read, before the edit.
+  expect([...card.querySelectorAll(".work-step-text")].map((node) => node.textContent)).toEqual(["gen.go", note, "gen.go"]);
+  expect(card.querySelector(".work-step.is-note")).not.toBeNull();
+  // Nothing speaks outside the card any more.
+  expect(appRoot().querySelector(".agent-finding")).toBeNull();
 });
 
-test("a finding's open control is named by the words it opens", () => {
+test("a note's row is named by the words it opens", () => {
   const turn: AgentTraceItem[] = [
     { type: "user", text: "inspect" },
     { type: "tool", name: "Read", label: "a.go", toolState: "done", detailRef: "r1" },
@@ -188,15 +184,15 @@ test("a finding's open control is named by the words it opens", () => {
     { type: "tool", name: "Edit", label: "b.go", toolState: "done", detailRef: "e1" },
   ];
   act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified />));
-  const labels = [...appRoot().querySelectorAll(".agent-finding-open")]
-    .map((button) => button.getAttribute("aria-label") ?? "");
-  // Several findings share one page: each control is named by its own words.
+  const labels = [...appRoot().querySelectorAll(".work-step.is-note")]
+    .map((row) => row.getAttribute("aria-label") ?? "");
+  // Each row is named by its own first line.
   expect(labels).toHaveLength(2);
   expect(labels[0]).toContain("The snapshot keeps no URL.");
   expect(labels[1]).toContain("The photo is dropped at submit.");
 });
 
-test("a finding with no words draws neither prose nor a control", () => {
+test("a note with no words draws no row", () => {
   const turn: AgentTraceItem[] = [
     { type: "user", text: "inspect" },
     { type: "tool", name: "Read", label: "a.go", toolState: "done", detailRef: "r1" },
@@ -205,8 +201,8 @@ test("a finding with no words draws neither prose nor a control", () => {
     { type: "assistant", text: "Fixed." },
   ];
   act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified />));
-  expect(appRoot().querySelector(".agent-finding")).toBeNull();
-  expect(appRoot().querySelector(".agent-finding-open")).toBeNull();
+  expect(appRoot().querySelector(".work-step.is-note")).toBeNull();
+  expect([...appRoot().querySelectorAll(".work-step-text")].map((node) => node.textContent)).toEqual(["a.go", "a.go"]);
 });
 
 test("a manual collapse of a live card survives new output and keeps its card node", () => {
@@ -603,7 +599,7 @@ test("a final reply of nothing but space leaves no blank bubble to focus", () =>
   expect(appRoot().querySelectorAll(".agent-assistant button")).toHaveLength(0);
 });
 
-test("a finding spoken before the first step introduces the work, above the card", () => {
+test("a note spoken before the first step introduces the work from inside the card", () => {
   const turn: AgentTraceItem[] = [{ type: "user", text: "inspect" },
     { type: "assistant", text: "I'll take a look first." },
     { type: "tool", name: "Read", label: "a.go", toolState: "done", detailRef: "r1" },
@@ -612,13 +608,10 @@ test("a finding spoken before the first step introduces the work, above the card
     { type: "assistant", text: "Fixed." }];
   act(() => renderReact(<AgentStream items={turn} working={false} empty={empty} verified />));
   const card = appRoot().querySelector<HTMLElement>(".work-card")!;
-  const [intro, between] = [...appRoot().querySelectorAll<HTMLElement>(".agent-finding")];
-  // The one that opens the turn stands before the work it introduces.
-  expect(intro!.textContent).toContain("I'll take a look first.");
-  expect(Boolean(intro!.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-  // The one spoken mid-run stays after the card, where it was said.
-  expect(between!.textContent).toContain("Found it.");
-  expect(Boolean(card.compareDocumentPosition(between!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  const notes = [...card.querySelectorAll<HTMLElement>(".work-step.is-note")];
+  // Both notes are rows of the card, in the order they were said.
+  expect(notes.map((row) => row.textContent)).toEqual(["I'll take a look first.", "Found it."]);
+  expect(appRoot().querySelector(".agent-finding")).toBeNull();
 });
 
 test("a finished turn with more runs than the window keeps four rows, and reveals whole runs", () => {

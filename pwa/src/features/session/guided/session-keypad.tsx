@@ -8,6 +8,7 @@ import {
   PAGE_KEYS,
   EXPANDED_KEYS,
   EXTRA_KEYS,
+  chordModifierActive,
   clearModifiers,
   modifierSnapshot,
   subscribeModifiers,
@@ -32,9 +33,10 @@ const sendKey = (key: string) => (el: HTMLElement) => queueKey(key, el);
  * keep their modifiers, so a lock made on one page still applies on the next.
  *
  * The pad and the soft keyboard are never shown together. Asking for the pad
- * from the field puts the keyboard away first, and touching the field closes
- * the pad. Opening the panel lifts the transcript's last line above it; it
- * takes no layout height, so the buffer does not reflow.
+ * from the field puts the keyboard away first, and touching the field folds the
+ * pad while a Ctrl, Alt or Cmd latch stays for the key about to be typed.
+ * Opening the panel lifts the transcript's last line above it; it takes no
+ * layout height, so the buffer does not reflow.
  *
  * `paging` is the mouse-driven dock: the hidden scroll rail's PgUp/PgDn live in
  * the primary row. `dense` is a phone on its side: one row of keys to a page.
@@ -80,7 +82,11 @@ export function SessionKeyPad({ paging = false, dense = false }: { paging?: bool
     clearModifiers();
     setKeysExpanded(false);
   };
-  return <PadPanel panel={panel} onClose={close} panelRef={panelRef}>
+  const fold = (): void => {
+    if (!chordModifierActive()) clearModifiers();
+    setKeysExpanded(false);
+  };
+  return <PadPanel panel={panel} onClose={close} onFieldClose={fold} panelRef={panelRef}>
     <SessionSlashPad rows={dense ? 1 : 2} keyItems={[...EXPANDED_KEYS, ...EXTRA_KEYS]
       .map((spec) => <PadKey key={spec.key} spec={spec} onPress={sendKey(spec.key)} />)} />
     <div className={paging ? "keys keys-paged" : "keys"} role="group" aria-label={t("keys.primary")}>

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { setLang, t } from "./i18n.ts";
 import type { AgentTraceItem } from "./operations";
-import { findingBreaks, formatElapsed, groupSteps, pendingAsk, recordsStepResults, stepCategory, stepObject, stepRows, stepState, turnOutcome, turnSpan } from "./agent-trace-steps";
+import { formatElapsed, groupSteps, pendingAsk, recordsStepResults, stepCategory, stepObject, stepState, turnOutcome, turnSpan } from "./agent-trace-steps";
 
 beforeEach(() => setLang("zh"));
 
@@ -31,6 +31,12 @@ describe("step categories follow each agent's own tool names", () => {
     ];
     for (const [name, category] of cases) expect([name, stepCategory(tool(name))]).toEqual([name, category]);
     expect(stepCategory({ type: "thinking", text: "x" })).toBe("think");
+    // The agent's own words between steps are a note, named by their first line.
+    expect(stepCategory({ type: "assistant", text: "**Now the parser.**\nDetails" })).toBe("note");
+    expect(stepObject({ type: "assistant", text: "\n  Now the parser.\nDetails" })).toBe("Now the parser.");
+    // The row says the note's opening in words; the Markdown belongs to the sheet.
+    expect(stepObject({ type: "assistant", text: "## Two gaps\n\n- `aria-label` is missing" })).toBe("Two gaps");
+    expect(stepObject({ type: "assistant", text: "**Fixed** the `agent_status` badge" })).toBe("Fixed the agent_status badge");
   });
 
   test("objects shorten paths, keep commands and name MCP servers", () => {
@@ -143,7 +149,7 @@ describe("consecutive same-kind tools fold into one row", () => {
       .toEqual([1, 1]);
   });
 
-  test("a finding or thinking step breaks the run, and a running or failed tool never folds", () => {
+  test("a note or thinking step breaks the run, and a running or failed tool never folds", () => {
     const broken = groupSteps([tool("Read", { toolState: "done" }), { type: "assistant", text: "found it" },
       tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" })]);
     expect(broken.map((group) => group.steps.length)).toEqual([1, 1, 3]);
@@ -156,38 +162,23 @@ describe("consecutive same-kind tools fold into one row", () => {
   });
 });
 
-describe("the rows a card draws", () => {
-  test("findings leave the list so a press and the sheet count the same rows", () => {
-    const entries = [
-      { type: "assistant" as const, text: "Let me look first." },
-      tool("Read", { toolState: "done", detailRef: "r1" }),
-      { type: "assistant" as const, text: "Now the next one." },
-      tool("Read", { toolState: "done", detailRef: "r2" }),
-    ];
-    // The finding is drawn as its own message; the rows keep only the steps.
-    expect(stepRows(entries).map((row) => row.detailRef)).toEqual(["r1", "r2"]);
-    // Without findings the list is untouched, so a plain turn keeps its identity.
-    const plain = [tool("Read", { toolState: "done" })];
-    expect(stepRows(plain)).toEqual(plain);
-  });
-});
-
-describe("a finding breaks the run it interrupted", () => {
-  test("rows either side of a finding fold as two runs, not one", () => {
-    const entries = [
+describe("a note between steps is a row of its own", () => {
+  test("reads either side of a note fold as two runs, with the note between them", () => {
+    const entries: AgentTraceItem[] = [
       tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }),
-      { type: "assistant" as const, text: "Now the parser." },
+      { type: "assistant", text: "Now the parser." },
       tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }),
     ];
-    // Three rows before the finding, a fourth starts the next run.
-    expect(findingBreaks(entries)).toEqual([3]);
-    expect(groupSteps(stepRows(entries), findingBreaks(entries)).map((group) => group.steps.length)).toEqual([3, 3]);
-    // Without the break the six reads would read as one deed.
-    expect(groupSteps(stepRows(entries))).toHaveLength(1);
+    // Three rows, the note, three rows: the note never joins a tool run.
+    expect(groupSteps(entries).map((group) => [group.category, group.steps.length])).toEqual([["read", 3], ["note", 1], ["read", 3]]);
+    // Without the note the six reads would read as one deed.
+    expect(groupSteps(entries.filter((item) => item.type !== "assistant"))).toHaveLength(1);
   });
 
-  test("a finding before any step, or with nothing after it, breaks nothing", () => {
-    expect(findingBreaks([{ type: "assistant", text: "first" }, tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" })])).toEqual([]);
-    expect(findingBreaks([tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), { type: "assistant", text: "last" }])).toEqual([]);
+  test("a note before any step, or with nothing after it, is still its own row", () => {
+    const lead = groupSteps([{ type: "assistant", text: "first" }, tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" })]);
+    expect(lead.map((group) => group.category)).toEqual(["note", "read", "read"]);
+    const trail = groupSteps([tool("Read", { toolState: "done" }), tool("Read", { toolState: "done" }), { type: "assistant", text: "last" }]);
+    expect(trail.map((group) => group.category)).toEqual(["read", "read", "note"]);
   });
 });

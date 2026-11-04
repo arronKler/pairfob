@@ -476,6 +476,7 @@ export const zh = {
   "pad.expandAria": "展开完整按键",
   "pad.collapseAria": "收起到主键",
   "pad.lockedSuffix": "锁",
+  "pad.clearModifiersWithAria": "清除修饰键（{mods}）",
   "compose.live": "实时",
   "compose.batch": "组字",
   "compose.send": "发送",

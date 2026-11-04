@@ -2,15 +2,10 @@ import { useLayoutEffect, useRef, useSyncExternalStore, type ReactNode, type Ref
 import { t } from "../../../lib/i18n";
 import { composeIME } from "../compose-store";
 import { PadChromeButton, focusRestoresPanel } from "../compose-focus";
-import { activeModifiers, modifierSnapshot, subscribeModifiers, type ActiveModifier } from "./keypad";
+import { activeModifiers, modifierSnapshot, subscribeModifiers } from "./keypad";
+import { modifierStatusAria, modifierStatusText } from "./modifier-status";
 
 export type PadPanelState = "rail" | "pages";
-
-const statusText = (mods: ActiveModifier[]): string =>
-  mods.map((mod) => `${mod.label}${mod.locked ? t("pad.lockedSuffix") : ""}`).join("+");
-
-const statusAria = (mods: ActiveModifier[]): string =>
-  mods.map((mod) => `${mod.label} ${t(mod.locked ? "keys.modifierLocked" : "keys.modifierHint")}`).join("，");
 
 /**
  * The floating key panel shared by the guided dock and the complete terminal.
@@ -18,12 +13,19 @@ const statusAria = (mods: ActiveModifier[]): string =>
  * It is anchored above its dock and takes no layout height there, so opening
  * it never resizes the program on the computer. The handle is the way out;
  * paging and the rail's lock report ride in it, and a downward swipe closes it
- * as a tap does. Taps on the terminal or the compose field close it too,
+ * as a tap does. Taps on the terminal or the compose field fold it too,
  * without stealing the tap from either.
+ *
+ * The field closes the panel, not the arm: a Ctrl, Alt or Cmd latch is the
+ * chord the reader is about to finish on the field's own keyboard. The dock
+ * carries a clearable latch on screen while the panel is away, and the next
+ * typed character spends it. An explicit close still clears it.
  */
-export function PadPanel({ panel, onClose, panelRef, children }: {
+export function PadPanel({ panel, onClose, onFieldClose = onClose, panelRef, children }: {
   panel: PadPanelState;
   onClose: () => void;
+  /** Fold for typing, keeping a chord modifier the field keyboard will spend. */
+  onFieldClose?: () => void;
   panelRef: RefObject<HTMLDivElement | null>;
   children: ReactNode;
 }) {
@@ -31,6 +33,8 @@ export function PadPanel({ panel, onClose, panelRef, children }: {
   const mods = activeModifiers();
   const close = useRef(onClose);
   close.current = onClose;
+  const fold = useRef(onFieldClose);
+  fold.current = onFieldClose;
   const start = useRef<number | null>(null);
 
   useLayoutEffect(() => {
@@ -52,10 +56,12 @@ export function PadPanel({ panel, onClose, panelRef, children }: {
   useLayoutEffect(() => {
     const down = (event: PointerEvent) => {
       const target = event.target;
-      if (!(target instanceof Element) || target.closest(".pad-panel, .dock-keys-btn")) return;
+      if (!(target instanceof Element) || target.closest(".pad-panel, .dock-keys")) return;
       // The field is a tap away even when it already holds the caret, where no
-      // focus report will come to fold the panel.
-      if (target.closest(".term-stage, .full-terminal-host, textarea")) close.current();
+      // focus report will come to fold the panel. The guided terminal is a
+      // reading surface, not a keyboard, so a tap there is an explicit close.
+      if (target.closest(".term-stage")) close.current();
+      else if (target.closest(".full-terminal-host, .full-terminal-live-focus, textarea")) fold.current();
     };
     document.addEventListener("pointerdown", down, true);
     return () => document.removeEventListener("pointerdown", down, true);
@@ -76,14 +82,14 @@ export function PadPanel({ panel, onClose, panelRef, children }: {
       active = event.target;
       const report = event.target === regained;
       regained = null;
-      if (!report && !focusRestoresPanel(event.target) && event.target.matches(field)) close.current();
+      if (!report && !focusRestoresPanel(event.target) && event.target.matches(field)) fold.current();
     };
     const input = (event: Event) => {
       // An IME owns the field until compositionend: its updates must not fold
       // the panel or clear a lock mid-word, and the pad's Enter is the one
       // submit that finishes the composition itself.
       if (composeIME()) return;
-      if (event.target instanceof Element && event.target.matches("textarea")) close.current();
+      if (event.target instanceof Element && event.target.matches("textarea")) fold.current();
     };
     document.addEventListener("focusin", focus, true);
     document.addEventListener("focusout", out, true);
@@ -99,7 +105,7 @@ export function PadPanel({ panel, onClose, panelRef, children }: {
     };
   }, []);
 
-  const label = mods.length ? `${t("pad.closeAria")}，${statusAria(mods)}` : t("pad.closeAria");
+  const label = mods.length ? `${t("pad.closeAria")}，${modifierStatusAria(mods)}` : t("pad.closeAria");
   return <div ref={panelRef} className="pad-panel" data-panel={panel} role="group" aria-label={t("pad.aria")}>
     <PadChromeButton
       type="button"
@@ -109,7 +115,7 @@ export function PadPanel({ panel, onClose, panelRef, children }: {
       onClick={() => { if (start.current === null) close.current(); }}
     >
       <i aria-hidden="true" />
-      {mods.length > 0 && <span className="pad-handle-lock" aria-hidden="true">{statusText(mods)}</span>}
+      {mods.length > 0 && <span className="pad-handle-lock" aria-hidden="true">{modifierStatusText(mods)}</span>}
     </PadChromeButton>
     {children}
   </div>;

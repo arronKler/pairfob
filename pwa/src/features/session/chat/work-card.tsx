@@ -91,10 +91,8 @@ function useHeldOpen(live: boolean, follow: boolean): boolean {
  * `historyLoads` counts the older pages put in front of the transcript: when it
  * changes, history moved in front of the card and none of its steps are new.
  */
-export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept, verified, span, models, anchor, historyLoads = 0, breaks, onOpen }: {
+export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept, verified, span, models, anchor, historyLoads = 0, onOpen }: {
   traceKey: string; entries: AgentTraceItem[]; outcome: TurnOutcome; live: boolean; follow?: boolean; kept?: DetailsState;
-  /** Row indices a finding interrupted, so a run never folds across one. */
-  breaks?: readonly number[];
   verified: boolean; models?: AgentTraceModel[]; span?: { start?: number; end?: number };
   anchor: { anchor: string; ordinal: number; ordinalFromEnd: number }; historyLoads?: number; onOpen: OpenStep;
 }) {
@@ -116,7 +114,7 @@ export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept
   // those groups hold are what the list has to drop. A group is never split, and
   // the disclosure says the number of steps it reveals.
   const foldsNow = !live && filter === "all";
-  const groups = foldsNow ? groupSteps(filtered, breaks) : null;
+  const groups = foldsNow ? groupSteps(filtered) : null;
   let hidden = 0;
   if (!all && filter === "all") {
     if (groups) {
@@ -153,9 +151,8 @@ export function WorkCard({ traceKey, entries, outcome, live, follow = true, kept
         {edits.length > 0 && chip("edits", t("work.filterEdits", { n: edits.length }))}
       </div>}
       {hidden > 0 && <Button className="work-earlier" onClick={() => setAll(true)}>{t("work.earlier", { n: hidden })}</Button>}
-      <StepList steps={filtered} hidden={hidden} listKey={filter} breaks={filter === "all" ? breaks : undefined}
-        folds={foldsNow}
-                arrivals={arrivals} verified={verified} onOpen={openStep} />
+      <StepList steps={filtered} hidden={hidden} listKey={filter}
+        folds={foldsNow} arrivals={arrivals} verified={verified} onOpen={openStep} />
     </div>}
   </AgentDetails>;
 }

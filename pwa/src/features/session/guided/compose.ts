@@ -38,6 +38,7 @@ import { LiveInputPump } from "./live-input";
 import { liveComposeOwner, liveOwnerMoved, parkLiveComposeText } from "./live-owner";
 import { fitComposeHeight } from "../compose-size";
 import { hardwareLiveKey } from "../keypad/hardware-keys";
+import { withKeyboardModifiers } from "../keypad/keypad";
 import { returnAddsNewline, withQuickCommand, withSlashCommand, fieldKeepsControlChord } from "../compose-keys";
 import { acceptComposePaste, attachmentMessage, markSentAttachments, requestSend } from "./send-gate";
 
@@ -688,6 +689,17 @@ export function bindTermField(input: HTMLTextAreaElement): () => void {
   input.value = composeDraft();
   sizeCompose(input);
   let blurTimer: number | null = null;
+  const onBeforeInput = (event: InputEvent) => {
+    // Live input already turns each character into terminal bytes through
+    // `encodeLiveKey`, which applies the same latch. A draft does not, so the
+    // character that would have joined it is spent as the chord instead.
+    if (composeLive() || composeIME() || event.isComposing) return;
+    if (event.inputType !== "insertText" || !event.data || Array.from(event.data).length !== 1) return;
+    const mapped = withKeyboardModifiers(event.data === " " ? "space" : event.data);
+    if (!mapped?.length) return;
+    event.preventDefault();
+    for (const key of mapped) queueKey(key, input);
+  };
   const onInput = (event: Event) => {
     if (composeLive()) {
       // Self-heal for input methods that fire compositionstart without the
@@ -752,6 +764,7 @@ export function bindTermField(input: HTMLTextAreaElement): () => void {
     if (!composeLive() && returnAddsNewline(event, input.id === "compose-text-mobile")) return;
     handlePaneKey(event, true);
   };
+  input.addEventListener("beforeinput", onBeforeInput);
   input.addEventListener("input", onInput);
   input.addEventListener("paste", acceptComposePaste);
   input.addEventListener("compositionstart", onCompositionStart);
@@ -761,6 +774,7 @@ export function bindTermField(input: HTMLTextAreaElement): () => void {
   input.addEventListener("keydown", onKeyDown);
   return () => {
     if (blurTimer !== null) window.clearTimeout(blurTimer);
+    input.removeEventListener("beforeinput", onBeforeInput);
     input.removeEventListener("input", onInput);
     input.removeEventListener("compositionstart", onCompositionStart);
     input.removeEventListener("compositionend", onCompositionEnd);

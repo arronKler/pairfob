@@ -339,6 +339,44 @@
    switch lives inside the field on a pointer surface, which keeps the dock at
    one row instead of adding a mode line under it. */
 
+/* The button and the latch it raises share one flex cell, so the latch floats
+   over the dock without moving the field or the button. */
+.dock-keys {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+}
+
+/* The modifier folded away for the field's keyboard: a tap cancels it, the next
+   typed key spends it. Reads as the armed keycap, not as a second control. */
+.dock-latch {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--accent-50);
+  border-radius: 999px;
+  background: var(--dock-bg);
+  color: var(--accent);
+  font: 600 10px/1 var(--font);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.dock-latch:active { transform: translateX(-50%) scale(0.96); }
+
+@media (any-pointer: coarse) {
+  /* The folded keycap stays small; the finger still gets 44px, all above the
+     dock's controls so no neighbouring button loses part of its box. */
+  .dock-latch::before { content: ""; position: absolute; inset: -20px 0 0; }
+}
+
 .dock-keys-btn {
   flex: 0 0 auto;
   display: inline-flex;

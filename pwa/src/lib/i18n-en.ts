@@ -473,6 +473,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "pad.expandAria": "Show all keys",
   "pad.collapseAria": "Show primary keys only",
   "pad.lockedSuffix": " locked",
+  "pad.clearModifiersWithAria": "Clear modifiers ({mods})",
   "compose.live": "Live",
   "compose.batch": "Compose",
   "compose.send": "Send",

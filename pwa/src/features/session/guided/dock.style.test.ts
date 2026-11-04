@@ -251,6 +251,19 @@ describe("the keyboard's ring on the pad's small controls", () => {
   });
 });
 
+describe("the folded chord latch", () => {
+  test("a finger gets 44px on a 24px keycap, all of it above the dock's controls", () => {
+    const latch = rule(compose, ".dock-latch");
+    expect(px(latch, "height")).toBe(24);
+    // The stand-off stays between the keycap and the keys button.
+    expect(latch).toContain("bottom: calc(100% + 6px)");
+    const start = compose.indexOf("@media (any-pointer: coarse) {");
+    const block = compose.slice(start, compose.indexOf("\n}\n", start));
+    expect(block).toContain(".dock-latch::before { content: \"\"; position: absolute; inset: -20px 0 0; }");
+    expect(24 + 20).toBe(44);
+  });
+});
+
 describe("the echo of live input in the buffer", () => {
   test("it never widens its row, on a phone or beside the list: it takes the room left and is cut there, or wraps where rows do", () => {
     const cut = rule(terminal, ".term:not(.wrapped) .term-line > .term-ghost");

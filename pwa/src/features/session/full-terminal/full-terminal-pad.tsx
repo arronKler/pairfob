@@ -26,6 +26,7 @@ import {
   PAGE_KEYS,
   EXPANDED_KEYS,
   EXTRA_KEYS,
+  chordModifierActive,
   clearModifiers,
   modifierSnapshot,
   subscribeModifiers,
@@ -224,7 +225,12 @@ function FullTerminalPadControls({
     setKeysExpanded(false);
     repaint();
   };
-  return <PadPanel panel={panel} onClose={close} panelRef={panelRef}>
+  const fold = (): void => {
+    if (!chordModifierActive()) clearModifiers();
+    setKeysExpanded(false);
+    repaint();
+  };
+  return <PadPanel panel={panel} onClose={close} onFieldClose={fold} panelRef={panelRef}>
     <SessionSlashPad rows={dense ? 1 : 2} onSelect={selectCommand} onCustomSelect={(text) => {
       // A saved command can span lines, so it lands in the batch field (at the
       // caret) rather than being typed live, where each newline would be Enter.
@@ -328,6 +334,7 @@ export function FullTerminalPad({ options, onPage }: FullTerminalPadProps) {
     {live
       ? <FullTerminalLiveRow optionsRef={optionsRef} pointer={pointer} setLive={setLive} />
       : <FullTerminalCompose send={(text, enter) => optionsRef.current.sendCompose(text, enter)}
+        sendKey={(key) => optionsRef.current.sendKey(key)}
         modeSwitch={pointer ? <FieldModeSwitch live={false} onChange={setLive} /> : undefined} />}
   </div>;
 }

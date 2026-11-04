@@ -4,7 +4,10 @@ import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { unmountReact } from "../../../../test-support/react-harness";
 import { appRoot } from "../../../app/dom-root";
 
-const { TERTIARY_KEYS, bindModifier, clearModifiers, pressModifier, releaseModifier, withModifiers } = await import("./keypad.ts");
+const {
+  TERTIARY_KEYS, bindModifier, chordModifierActive, clearModifiers, modifierIsActive,
+  pressModifier, releaseModifier, withKeyboardModifiers, withModifiers,
+} = await import("./keypad.ts");
 
 const bindings: Array<{ destroy(): void }> = [];
 beforeEach(async () => {
@@ -61,6 +64,43 @@ describe("pad modifiers", () => {
     releaseModifier("ctrl");
     expect(withModifiers("c")).toEqual(["ctrl+c"]);
     expect(withModifiers("c")).toEqual(["c"]);
+  });
+
+  test("a chord modifier follows the field keyboard and one typed key spends it", () => {
+    pressModifier("ctrl");
+    releaseModifier("ctrl");
+    expect(chordModifierActive()).toBe(true);
+    expect(withKeyboardModifiers("s")).toEqual(["ctrl+s"]);
+    expect(chordModifierActive()).toBe(false);
+    expect(withKeyboardModifiers("s")).toBeNull();
+  });
+
+  test("Shift alone belongs to the field keyboard, not to a typed chord", () => {
+    pressModifier("shift");
+    releaseModifier("shift");
+    expect(chordModifierActive()).toBe(false);
+    expect(withKeyboardModifiers("s")).toBeNull();
+    expect(modifierIsActive("shift")).toBe(true);
+    expect(withModifiers("s")).toEqual(["S"]);
+  });
+
+  test("a locked chord stays for the next typed key until it is cleared", () => {
+    pressModifier("ctrl");
+    releaseModifier("ctrl");
+    pressModifier("ctrl");
+    releaseModifier("ctrl");
+    expect(withKeyboardModifiers("c")).toEqual(["ctrl+c"]);
+    expect(chordModifierActive()).toBe(true);
+    expect(withKeyboardModifiers("d")).toEqual(["ctrl+d"]);
+    clearModifiers();
+    expect(chordModifierActive()).toBe(false);
+  });
+
+  test("a typed key with no terminal bytes keeps the edit and drops the latch", () => {
+    pressModifier("ctrl");
+    releaseModifier("ctrl");
+    expect(withKeyboardModifiers(",")).toEqual([]);
+    expect(chordModifierActive()).toBe(false);
   });
 
   test("pointerup followed by lost capture latches once; cancelling never latches", () => {

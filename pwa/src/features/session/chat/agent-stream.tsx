@@ -2,11 +2,11 @@ import { captureFileLinkOwner, openChatFile } from "../../workspace/file-links";
 import { useLayoutEffect, useMemo, useRef, useState, memo, type MouseEvent, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import { groupAgentTurns, replyText, submittedText, turnKey, type AgentTurn } from "../../../lib/agent-trace-view";
-import { findingBreaks, pendingAsk, splitTurn, stepObject, stepRows, turnOutcome, turnSpan, type TurnRef } from "../../../lib/agent-trace-steps";
+import { pendingAsk, splitTurn, stepObject, turnOutcome, turnSpan, type TurnRef } from "../../../lib/agent-trace-steps";
 import type { AgentTraceItem } from "../../../lib/operations";
 import { t } from "../../../lib/i18n";
 import type { AgentEmptySpec, DetailsState } from "./agent-chat-stream";
-import { Button, Chevron, Spinner } from "../../../shared/ui/primitives";
+import { Button, Spinner } from "../../../shared/ui/primitives";
 import { CompactionDivider, PendingCard, ReplyActions, TurnHead, type TraceAnchorData } from "./turn-parts";
 import { NeedsYouCard } from "./needs-you";
 import { turnModels } from "./turn-models";
@@ -140,49 +140,8 @@ function AssistantReply({ items, final, anchor, part, onCopy }: {
   </article>;
 }
 
-/**
- * The finding's first words name its control: several identical "Open" buttons
- * tell a screen reader no more than an unnamed one.
- */
-function findingTitle(text: string, max = 60): string {
-  const first = text.split("\n")
-    .map((line) => line.replace(/^[#>\s*-]+|[*_`]/g, "").trim())
-    .find(Boolean) ?? "";
-  return first.length > max ? `${first.slice(0, max - 1)}…` : first;
-}
 
 /**
- * What the agent found, spoken between its steps: its own message in the
- * transcript, beside the card rather than inside it, so a finding reads in the
- * flow of the conversation and a run of steps never buries it. The prose is
- * content and the press is a control of its own: a block of headings, lists and
- * links inside a button would collapse into one long name.
- */
-function FindingBubble({ item, anchor, part, onOpen }: {
-  item: AgentTraceItem; anchor: TraceAnchor; part: string; onOpen: (item: AgentTraceItem) => void;
-}) {
-  // Same object for the same words: a turn that re-renders for a later step must
-  // not throw away the finding's DOM, and with it the reader's selection.
-  const markup = useMemo(() => ({ __html: renderMarkdown(item.text || "", false) }), [item.text]);
-  // A record can carry an empty text (an agent that only called tools, or a
-  // placeholder the daemon later replaced). Its action row would be a bare pill
-  // under nothing.
-  const text = item.text ?? "";
-  if (!text.trim()) return null;
-  return <article {...anchorData(anchor, part)} className="agent-finding">
-    {/* The existing Markdown parser returns sanitized allowlisted HTML. */}
-    <div className="agent-md" dangerouslySetInnerHTML={markup} />
-    <div className="agent-finding-actions">
-      <Button className="agent-quiet-pill agent-finding-open" onClick={() => onOpen(item)}
-        aria-label={t("chat.openFindingAria", { title: findingTitle(text) || t("chat.openFinding") })}>
-        {t("chat.openFinding")}
-        <Chevron />
-      </Button>
-    </div>
-  </article>;
-}
-
-
 /**
  * The card's saved open/closed choice key. Repeated prompts share a turn key,
  * so the first tool tells their cards apart when older history is prepended.
@@ -294,19 +253,9 @@ function sameTurnProps(before: TraceTurnProps, after: TraceTurnProps): boolean {
 
 const TraceTurn = memo(function TraceTurn({ turn, state, anchor, kept, onCopy, onTerminal, onAnswered, onOpenStep }: TraceTurnProps) {
   const { entries, reply, compacted, interrupted } = splitTurn(turn);
-  // Findings are the agent's own words between steps. They leave the card and
-  // speak in the transcript, so a run of steps never buries what it concluded.
-  // One spoken before any step introduces the work rather than summarising it,
-  // so it keeps its place ahead of the card.
-  const firstStep = entries.findIndex((item) => item.type !== "assistant");
-  const preamble = firstStep < 0 ? entries.filter((item) => item.type === "assistant") : entries.slice(0, firstStep);
-  const findings = firstStep < 0 ? [] : entries.slice(firstStep).filter((item) => item.type === "assistant");
-  // The card draws `steps`, and the sheet pages through that same list: one
-  // source for both, or a press would carry an index into another list.
-  const steps = stepRows(entries);
-  // A finding between two steps breaks the run there: the rows either side are
-  // two deeds with something said between them, not one long stretch.
-  const breaks = findingBreaks(entries);
+  // The card draws every entry before the reply, in order: steps, thinking and
+  // the agent's own notes between them. The sheet pages through that same list,
+  // so a press carries an index into the rows it is looking at.
   const { live, waiting } = state;
   const outcome = turnOutcome(turn.items, state);
   const tools = entries.filter((item) => item.type === "tool");
@@ -318,20 +267,16 @@ const TraceTurn = memo(function TraceTurn({ turn, state, anchor, kept, onCopy, o
   if (state.partial) outcome.detail = [t("work.partial"), outcome.detail].filter(Boolean).join(" · ");
   const models = turnModels(turn.items);
   // A turn that stopped to ask before any step has nothing to show but the needs-you card below it.
-  const card = models !== undefined || steps.length > 0 || interrupted || (live && !state.pending && !waiting);
+  const card = models !== undefined || entries.length > 0 || interrupted || (live && !state.pending && !waiting);
   // The agent stopped to ask while this turn was on screen: its card is raised, not just drawn.
   const asked = useTurned(live && waiting);
   return <>
     {turn.user && <TurnHead item={turn.user} anchorData={anchorData(anchor, "user")} arriving={state.sent} />}
     {state.pending && !turn.items.length && <PendingCard {...state.pending} arriving={state.sent} />}
-    {preamble.map((item, index) => <FindingBubble key={`${anchor.key}:pre:${index}`} item={item}
-      anchor={anchor} part={`pre-${index}`} onOpen={(step) => onOpenStep(step, steps, { key: anchor.key, ordinal: anchor.ordinal })} />)}
-    {card && <WorkCard traceKey={workKey(turn)} entries={steps} breaks={breaks} outcome={outcome} live={live} follow={state.follow} kept={kept}
+    {card && <WorkCard traceKey={workKey(turn)} entries={entries} outcome={outcome} live={live} follow={state.follow} kept={kept}
       verified={state.verified} models={models} span={turnSpan(turn.user, turn.items)} historyLoads={state.historyLoads}
       onOpen={(item, steps) => onOpenStep(item, steps, { key: anchor.key, ordinal: anchor.ordinal })}
       anchor={{ anchor: `${anchor.key}:work`, ordinal: anchor.ordinal, ordinalFromEnd: anchor.ordinalFromEnd }} />}
-    {findings.map((item, index) => <FindingBubble key={`${anchor.key}:finding:${index}`} item={item}
-      anchor={anchor} part={`finding-${index}`} onOpen={(step) => onOpenStep(step, steps, { key: anchor.key, ordinal: anchor.ordinal })} />)}
     {live && waiting && <NeedsYouCard ask={pendingAsk(turn.items)} raised={asked} onTerminal={onTerminal} onAnswered={onAnswered} />}
     {reply.length > 0 && <AssistantReply items={reply} final={!live} anchor={anchor} part="reply" onCopy={onCopy} />}
     {compacted && <CompactionDivider />}

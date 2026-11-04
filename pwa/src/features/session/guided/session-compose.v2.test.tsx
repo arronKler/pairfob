@@ -19,6 +19,7 @@ const { selectPane } = await import("../session-store");
 const { flushLiveInput, insertQuickCommand, insertSlashCommand } = await import("./compose");
 const { withSlashCommand } = await import("../compose-keys");
 const { dropQueuedKeys, flushKeys } = await import("./keys");
+const { clearModifiers, modifierIsActive, pressModifier, releaseModifier } = await import("../keypad/keypad");
 const { cancelStop, STOP_WATCH_MS } = await import("./session-stop");
 const { SessionCompose } = await import("./session-compose");
 const { STOP_ARM_MS } = await import("./compose-controls");
@@ -49,6 +50,15 @@ function sendButton(): HTMLButtonElement {
 function key(input: HTMLTextAreaElement, init: KeyboardEventInit): KeyboardEvent {
   const view = input.ownerDocument.defaultView!;
   const event = new view.KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+  act(() => { input.dispatchEvent(event); });
+  return event;
+}
+
+function beforeInput(input: HTMLTextAreaElement, data: string): InputEvent {
+  const view = input.ownerDocument.defaultView!;
+  const event = new view.InputEvent("beforeinput", {
+    inputType: "insertText", data, bubbles: true, cancelable: true,
+  });
   act(() => { input.dispatchEvent(event); });
   return event;
 }
@@ -87,6 +97,7 @@ afterEach(async () => {
     setComposeIME(false);
     setComposeFocused(false);
     setComposeEnterSends(false);
+    clearModifiers();
     restorer.restore();
     applyRuntimeIdentity(runtimeBefore);
     attachLiveSession(null);
@@ -121,6 +132,32 @@ describe("multi-line compose", () => {
     expect(enter.defaultPrevented).toBeTrue();
     await act(async () => { await flushKeys(); });
     expect(sentKeys).toEqual([["enter"]]);
+  });
+
+  test("a latched chord modifier turns the next typed character into a terminal key", async () => {
+    const input = paint(true);
+    act(() => { pressModifier("ctrl"); releaseModifier("ctrl"); });
+    const typed = beforeInput(input, "s");
+    expect(typed.defaultPrevented).toBeTrue();
+    await act(async () => { await flushKeys(); });
+    expect(sentKeys).toEqual([["ctrl+s"]]);
+    expect(sentText).toEqual([]);
+    expect(input.value).toBe("");
+    expect(composeDraft()).toBe("");
+    expect(modifierIsActive("ctrl")).toBe(false);
+  });
+
+  test("live input spends the same latch as the terminal byte", async () => {
+    act(() => { setComposeLive(true); });
+    const input = paint(true);
+    act(() => { pressModifier("ctrl"); releaseModifier("ctrl"); });
+    input.value = "c";
+    act(() => { input.dispatchEvent(new (input.ownerDocument.defaultView!.Event)("input", { bubbles: true })); });
+    await act(async () => { await flushLiveInput(); });
+    expect(sentText).toEqual(["\x03"]);
+    expect(sentKeys).toEqual([]);
+    expect(input.value).toBe("");
+    expect(modifierIsActive("ctrl")).toBe(false);
   });
 
   test("the desktop field keeps Enter = send and Shift+Enter = newline", async () => {

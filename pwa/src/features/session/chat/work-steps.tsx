@@ -1,5 +1,5 @@
 import {
-  Check, FileText, GitBranch, Globe, ListChecks, MessageCircleQuestionMark, Pencil, Plug, Search,
+  Check, ChevronRight, FileText, GitBranch, Globe, ListChecks, MessageCircleQuestionMark, MessageSquare, Pencil, Plug, Search,
   Sparkles, Terminal, Wrench, X, type LucideIcon,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -13,7 +13,7 @@ import { useTurned } from "./use-turned";
 
 const CATEGORY_ICON: Record<StepCategory, LucideIcon> = {
   read: FileText, search: Search, edit: Pencil, command: Terminal, web: Globe, subtask: GitBranch,
-  plan: ListChecks, question: MessageCircleQuestionMark, mcp: Plug, think: Sparkles, other: Wrench,
+  plan: ListChecks, question: MessageCircleQuestionMark, mcp: Plug, think: Sparkles, note: MessageSquare, other: Wrench,
 };
 
 export type StepArrivals = {
@@ -68,14 +68,18 @@ function StepRow({ item, verified, arriving = false, onOpen }: {
   // A result that came in on this row pops; a row drawn with its result does not.
   const settled = useTurned(state !== null && state !== "running");
   const row = arriving ? "is-arriving" : undefined;
-  if (item.type === "assistant") {
-    // A finding is the agent speaking, so it is drawn as a message of its own
-    // outside the card; the card never reaches this branch.
-    return null;
-  }
   const stateLabel = state ? t(`work.state.${state}`) : "";
   const aria = state ? t("work.stepAria", { category: categoryLabel(category), object, state: stateLabel }) : `${categoryLabel(category)} ${object}`;
   const mark = `work-step-state${settled ? " pop-in" : ""}`;
+  // The agent's own words between steps: a row like any other step, named by
+  // its first line, opening the whole note in the sheet.
+  if (category === "note") {
+    return <li className={row}><Button className="work-step is-note" aria-label={aria} onClick={() => onOpen(item)}>
+      <Icon className="work-step-icon" size={15} aria-hidden="true" />
+      <span className="work-step-text is-prose">{object || categoryLabel(category)}</span>
+      <ChevronRight className="work-step-open" size={15} aria-hidden="true" />
+    </Button></li>;
+  }
   return <li className={row}><Button className={`work-step is-${category}${state ? ` is-${state}` : ""}`} aria-label={aria}
     title={category === "subtask" ? t("work.subtaskHidden") : undefined} onClick={() => onOpen(item)}>
     <Icon className="work-step-icon" size={15} aria-hidden="true" />
@@ -121,12 +125,10 @@ function FoldedRow({ group, verified, arriving, onOpen }: {
  * work went. The card's box is final from the first frame: only the rows travel,
  * inside a window that clips them, and the transcript below does not move twice.
  */
-export function StepList({ steps, hidden, listKey, breaks = [], folds = true, arrivals, verified, onOpen }: {
+export function StepList({ steps, hidden, listKey, folds = true, arrivals, verified, onOpen }: {
   steps: readonly AgentTraceItem[]; hidden: number;
   /** Tells one filter's rows from another's. */
   listKey: string;
-  /** Row indices where a finding sat between steps, so no run folds across one. */
-  breaks?: readonly number[];
   /** A running turn draws every step as itself; a finished one folds its runs. */
   folds?: boolean;
   arrivals: StepArrivals; verified: boolean; onOpen: (item: AgentTraceItem, steps?: AgentTraceItem[]) => void;
@@ -151,7 +153,7 @@ export function StepList({ steps, hidden, listKey, breaks = [], folds = true, ar
   // is measured in the same rows.
   const visible = steps.slice(hidden);
   const groups = listKey === "all" && folds
-    ? groupSteps(visible, breaks.map((at) => at - hidden).filter((at) => at >= 0))
+    ? groupSteps(visible)
     : visible.map((item) => ({ items: [item], steps: [item], category: stepCategory(item) }));
   // The rows keep the steps' order and cover them whole, so each row's first
   // step is the running total: asking `visible` for every row would make a long

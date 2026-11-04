@@ -17,6 +17,7 @@ import { haptic } from "../../../lib/dom";
 import { showError } from "../../../app/notices-store";
 import { fitComposeHeight } from "../compose-size";
 import { returnAddsNewline, withQuickCommand, withSlashCommand } from "../compose-keys";
+import { withKeyboardModifiers } from "../keypad/keypad";
 import { acceptComposePaste, attachmentMessage, markSentAttachments, requestSend } from "../guided/send-gate";
 
 export type TerminalKeyboardControl = {
@@ -185,6 +186,8 @@ export type FullTerminalComposeFeedback = {
 export type FullTerminalComposeOptions = {
   /** A phone keyboard's Return adds a line instead of sending (see compose-keys). */
   phoneField?: () => boolean;
+  /** Deliver a chord typed into the field with a pad modifier armed. */
+  sendKey?: (key: string) => void;
 };
 
 const padComposeBindings = new WeakMap<HTMLFormElement, () => void>();
@@ -325,6 +328,16 @@ export function bindFullTerminalCompose(
     }
   };
 
+  const onBeforeInput = (event: InputEvent): void => {
+    // The batch field edits a draft, so unlike live input it needs the latch
+    // spent here: the character becomes the chord instead of joining the text.
+    if (!options.sendKey || composeLive() || enterPolicy.composing || composeIME() || event.isComposing) return;
+    if (event.inputType !== "insertText" || !event.data || Array.from(event.data).length !== 1) return;
+    const mapped = withKeyboardModifiers(event.data === " " ? "space" : event.data);
+    if (!mapped?.length) return;
+    event.preventDefault();
+    for (const key of mapped) options.sendKey(key);
+  };
   const onInput = (): void => {
     if (enterPolicy.composing) {
       setComposeDraft(field.value);
@@ -396,6 +409,7 @@ export function bindFullTerminalCompose(
     });
   });
 
+  field.addEventListener("beforeinput", onBeforeInput);
   field.addEventListener("input", onInput);
   field.addEventListener("compositionstart", onCompositionStart);
   field.addEventListener("compositionend", finishComposition);
@@ -415,6 +429,7 @@ export function bindFullTerminalCompose(
     if (blurTimer !== null) window.clearTimeout(blurTimer);
     blurTimer = null;
     padComposeSubmitters.delete(form);
+    field.removeEventListener("beforeinput", onBeforeInput);
     field.removeEventListener("input", onInput);
     field.removeEventListener("compositionstart", onCompositionStart);
     field.removeEventListener("compositionend", finishComposition);

@@ -19,7 +19,14 @@ import { PadChromeButton, preventComposeBlurUnlessIME } from "../compose-focus";
 import { draftLineCount } from "../compose-size";
 import { playMove } from "../measured-move";
 import { usePointerFine } from "../../../app/input-mode";
-import { clearModifiers } from "../keypad/keypad";
+import {
+  activeModifiers,
+  chordModifierActive,
+  clearModifiers,
+  modifierSnapshot,
+  subscribeModifiers,
+} from "../keypad/keypad";
+import { modifierStatusText } from "../keypad/modifier-status";
 import { useShortLandscape } from "../keypad/short-landscape";
 import { dismissSoftKeyboard, useSoftKeyboardOpen } from "../keypad/soft-keyboard";
 import { useKeysExpanded } from "../../settings/hooks";
@@ -454,31 +461,47 @@ export function ComposeFrame({ field, draft, live, focused, foldable, modeSwitch
  * never a layout row, so no key press resizes the program on the computer.
  * Asking for keys puts the soft keyboard away first; the two never share the
  * screen. Closing clears any latched or locked modifier with the panel.
+ *
+ * A chord modifier folded away for the field's keyboard stays on the button as
+ * a clearable latch: the reader can see what the next typed key will spend.
  */
 export function DockKeysButton({ beforeOpen }: { beforeOpen?: () => void } = {}) {
   const expanded = useKeysExpanded();
   const keyboard = useSoftKeyboardOpen();
   const pointer = usePointerFine();
   const shown = expanded && !keyboard;
-  return <PadChromeButton type="button" className="dock-keys-btn"
-    aria-label={t(shown ? "deskDock.keysHide" : "deskDock.keysShow")}
-    aria-expanded={shown ? "true" : "false"}
-    title={t(shown ? "deskDock.keysHide" : "deskDock.keysShow")}
-    onClick={() => {
-      if (shown) {
-        clearModifiers();
-        setKeysExpanded(false);
-        return;
-      }
-      beforeOpen?.();
-      // A hardware keyboard's field keeps its focus (and an IME its composition);
-      // only the glass keyboard has to go before the panel can take its place.
-      if (keyboard) dismissSoftKeyboard();
-      setKeysExpanded(true);
-    }}>
-    <Keyboard size={pointer ? 16 : 20} aria-hidden="true" />
-    {pointer && <span className="keys-word">{t("deskDock.keys")}</span>}
-  </PadChromeButton>;
+  useSyncExternalStore(subscribeModifiers, modifierSnapshot, modifierSnapshot);
+  const armed = chordModifierActive() && !shown;
+  const latchText = modifierStatusText(activeModifiers());
+  const latchLabel = t("pad.clearModifiersWithAria", { mods: latchText });
+  return <div className="dock-keys">
+    {armed && <PadChromeButton type="button" className="dock-latch"
+      aria-label={latchLabel}
+      title={latchLabel}
+      onClick={() => clearModifiers()}>
+      <span>{latchText}</span>
+      <X size={10} aria-hidden="true" />
+    </PadChromeButton>}
+    <PadChromeButton type="button" className="dock-keys-btn"
+      aria-label={t(shown ? "deskDock.keysHide" : "deskDock.keysShow")}
+      aria-expanded={shown ? "true" : "false"}
+      title={t(shown ? "deskDock.keysHide" : "deskDock.keysShow")}
+      onClick={() => {
+        if (shown) {
+          clearModifiers();
+          setKeysExpanded(false);
+          return;
+        }
+        beforeOpen?.();
+        // A hardware keyboard's field keeps its focus (and an IME its composition);
+        // only the glass keyboard has to go before the panel can take its place.
+        if (keyboard) dismissSoftKeyboard();
+        setKeysExpanded(true);
+      }}>
+      <Keyboard size={pointer ? 16 : 20} aria-hidden="true" />
+      {pointer && <span className="keys-word">{t("deskDock.keys")}</span>}
+    </PadChromeButton>
+  </div>;
 }
 
 /**

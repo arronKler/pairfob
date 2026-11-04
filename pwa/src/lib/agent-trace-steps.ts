@@ -7,7 +7,7 @@ import { groupAgentTurns, toolState, toolSummary, turnKey, type AgentTurn } from
  * tool name every agent reports), a short target, and a result-first summary.
  * Pure: no DOM, no stores.
  */
-export type StepCategory = "read" | "search" | "edit" | "command" | "web" | "subtask" | "plan" | "question" | "mcp" | "think" | "other";
+export type StepCategory = "read" | "search" | "edit" | "command" | "web" | "subtask" | "plan" | "question" | "mcp" | "think" | "note" | "other";
 
 /** Tool names as Claude Code, Codex, Grok, Pi, Prime Agent, Cursor, Hermes and opencode write them, lowercased. */
 const CATEGORY_NAMES: ReadonlyArray<readonly [StepCategory, readonly string[]]> = [
@@ -25,6 +25,8 @@ const CATEGORY_NAMES: ReadonlyArray<readonly [StepCategory, readonly string[]]> 
 
 export function stepCategory(item: AgentTraceItem): StepCategory {
   if (item.type === "thinking") return "think";
+  // The agent's own words between steps: process, not a result.
+  if (item.type === "assistant") return "note";
   const name = (item.name || "").toLowerCase();
   if (name.startsWith("mcp__")) return "mcp";
   // Hermes names each browser action its own tool (browser_navigate, browser_click).
@@ -55,15 +57,31 @@ function firstLine(text: string): string {
 }
 
 /**
+ * A note's opening line as words: the row beside the steps says what the note
+ * starts with, while the sheet renders the Markdown around it. Only markers
+ * rooted in the line are removed, so an identifier keeps its underscores.
+ */
+function noteLine(text: string): string {
+  return firstLine(text)
+    .replace(/^(?:#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+)/, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .trim();
+}
+
+/**
  * Codex reads a running command through write_stdin (nearly always with nothing
  * to type); as a step name it says nothing. Code mode labels the call by its
  * tool name, with " +N" for further calls in the same snippet.
  */
 const COMMAND_OUTPUT = /^write_stdin( \+\d+)?$/;
 
-/** The step's target in a few words: a path tail, a command line, a query. */
+/** The step's target in a few words: a path tail, a command line, a query, a note's first line. */
 export function stepObject(item: AgentTraceItem): string {
   if (item.type === "thinking") return firstLine(item.text || "");
+  if (item.type === "assistant") return noteLine(item.text || "");
   const category = stepCategory(item);
   const name = item.name || "";
   if (category === "mcp") {
@@ -196,14 +214,16 @@ export function formatElapsed(ms: number): string {
 /**
  * A turn's parts: the steps (thinking, tools, interim notes) go in the card;
  * the trailing agent text is the reply, or, while the turn runs, the latest
- * note under the card. Markers are facts about the turn, not entries.
+ * note under the card. Markers are facts about the turn, not entries, and a
+ * record that carries only blank text draws no row.
  */
 export function splitTurn(turn: AgentTurn) {
   const content = turn.items.filter((item) => item.type !== "compaction" && item.type !== "interrupt");
   let tail = content.length;
   while (tail > 0 && content[tail - 1].type === "assistant") tail -= 1;
+  const entries = content.slice(0, tail).filter((item) => item.type !== "assistant" || (item.text ?? "").trim());
   return {
-    entries: content.slice(0, tail),
+    entries,
     reply: content.slice(tail),
     compacted: turn.items.some((item) => item.type === "compaction"),
     interrupted: turn.items.some((item) => item.type === "interrupt"),
@@ -214,10 +234,12 @@ export type TurnRef = { key: string; ordinal: number };
 
 /**
  * A run of consecutive steps the card shows as one row: same category tools,
- * no findings between them, so "read 6 files" reads as one deed instead of six
- * rows a phone has to scroll. A run shorter than the threshold stays expanded;
- * so does one holding a running or failed step, whose row has to be pressable
- * to open the failure. Everything else is a run of one, shown as itself.
+ * with nothing else between them, so "read 6 files" reads as one deed instead
+ * of six rows a phone has to scroll. A run shorter than the threshold stays
+ * expanded; so does one holding a running or failed step, whose row has to be
+ * pressable to open the failure. Everything else is a run of one, shown as
+ * itself — a note in the middle of the work is a row of its own, and the run
+ * on either side of it is two deeds, not one long stretch.
  */
 export type StepGroup = {
   /** Rows the card draws: a grouped run is one entry holding its steps. */
@@ -230,17 +252,15 @@ export type StepGroup = {
 /** Short enough to read as a list already; only longer runs fold. */
 const FOLD_FROM = 3;
 
-export function groupSteps(steps: readonly AgentTraceItem[], breaks: readonly number[] = []): StepGroup[] {
+export function groupSteps(steps: readonly AgentTraceItem[]): StepGroup[] {
   const settled = (step: AgentTraceItem) => step.type === "tool" && toolState(step) === "done" && stepCategory(step) !== "other";
-  const cut = new Set(breaks);
   const groups: StepGroup[] = [];
-  for (const [index, item] of steps.entries()) {
+  for (const item of steps) {
     const previous = groups.at(-1);
     const category = stepCategory(item);
-    // A run is broken by anything between it: a finding the agent spoke, or a
-    // step of another kind. Reads on either side of "now the parser" are two
-    // deeds with something said between them, and fold as two rows.
-    const joins = previous && previous.category === category && previous.steps.every(settled) && !cut.has(index);
+    // A run is broken by anything between it: a step of another kind, or the
+    // agent speaking. Reads on either side of "now the parser" are two deeds.
+    const joins = previous && previous.category === category && previous.steps.every(settled);
     if (settled(item) && joins) {
       previous.steps.push(item);
       continue;
@@ -259,43 +279,9 @@ export function turnEntries(items: readonly AgentTraceItem[], ref: TurnRef): Age
   return turn ? splitTurn(turn).entries : null;
 }
 
-/**
- * The rows the card draws for a turn's steps: the same list the sheet pages
- * through, so a press and the index it carries agree after a repaint. Findings
- * speak in the transcript as their own message, so they leave this list.
- */
-export function stepRows(entries: readonly AgentTraceItem[]): AgentTraceItem[] {
-  return entries.filter((item) => item.type !== "assistant");
-}
 
-/**
- * Where a finding sat between two steps, so a run is not folded across it.
- * `stepRows` drops findings, and folding the rows either side of one would say
- * the agent read six files in a row when it stopped to report after three.
- * Returns the row each finding interrupted: rows at or after the index start a
- * new run.
- */
-export function findingBreaks(entries: readonly AgentTraceItem[]): number[] {
-  const breaks: number[] = [];
-  let rows = 0;
-  let spoke = false;
-  for (const item of entries) {
-    if (item.type === "assistant") {
-      // Only a finding with steps on both sides breaks a run.
-      if (rows > 0) spoke = true;
-      continue;
-    }
-    if (spoke) {
-      breaks.push(rows);
-      spoke = false;
-    }
-    rows += 1;
-  }
-  return breaks;
-}
 
 /** The step rows of the turn a sheet was opened from, or null once it is gone. */
 export function turnStepRows(items: readonly AgentTraceItem[], ref: TurnRef): AgentTraceItem[] | null {
-  const entries = turnEntries(items, ref);
-  return entries ? stepRows(entries) : null;
+  return turnEntries(items, ref);
 }

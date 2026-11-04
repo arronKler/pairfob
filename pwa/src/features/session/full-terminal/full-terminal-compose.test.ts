@@ -16,6 +16,7 @@ const {
 } = await import("./full-terminal-compose.ts");
 const { FullTerminalPad } = await import("./full-terminal-pad.tsx");
 const { notifyFullTerminalKeyboard } = await import("./full-terminal-input.ts");
+const { clearModifiers, modifierIsActive } = await import("../keypad/keypad.ts");
 
 function keyboard() {
   let open = false;
@@ -27,9 +28,9 @@ function keyboard() {
   };
 }
 
-function render(sendCompose: (text: string, enter: boolean) => boolean) {
+function render(sendCompose: (text: string, enter: boolean) => boolean, sendKey: (key: string) => void = () => undefined) {
   const options = {
-    sendKey: () => undefined,
+    sendKey,
     sendCompose,
     keyboard: keyboard(),
     hardwareKeyboard: false,
@@ -82,6 +83,7 @@ afterEach(async () => {
   setComposeLive(false);
   setKeysExpanded(false);
   setPadKind("keys");
+  clearModifiers();
   paneComposeRestorer.restore("p1");
   setComposeEnterSends(false);
   if (enterSendsRaw === null) localStorage.removeItem(COMPOSE_ENTER_SENDS_KEY);
@@ -114,6 +116,45 @@ describe("complete-terminal compose input", () => {
     const sendDown = new PointerEvent("pointerdown", { button: 0, cancelable: true });
     act(() => { send.dispatchEvent(sendDown); });
     expect(sendDown.defaultPrevented).toBe(true);
+  });
+
+  test("a pad chord modifier follows the keyboard into the batch field", () => {
+    delete document.documentElement.dataset.kb;
+    setKeysExpanded(true);
+    const sentKeys: string[] = [];
+    const root = render(() => true, (key) => { sentKeys.push(key); });
+    const input = root.querySelector("textarea")!;
+    const view = viewOf(input);
+    const ctrl = root.querySelector<HTMLButtonElement>(".key-mod")!;
+    act(() => {
+      ctrl.dispatchEvent(new view.PointerEvent("pointerdown", {
+        pointerId: 1, button: 0, bubbles: true, cancelable: true,
+      }));
+      ctrl.dispatchEvent(new view.PointerEvent("pointerup", {
+        pointerId: 1, button: 0, bubbles: true, cancelable: true,
+      }));
+    });
+    expect(modifierIsActive("ctrl")).toBe(true);
+    act(() => {
+      input.dispatchEvent(new view.PointerEvent("pointerdown", {
+        pointerId: 2, pointerType: "touch", isPrimary: true, button: 0,
+        clientX: 10, clientY: 0, bubbles: true, cancelable: true,
+      }));
+      input.focus();
+    });
+    expect(root.querySelector(".pad-panel")).toBeNull();
+    expect(modifierIsActive("ctrl")).toBe(true);
+    expect(root.querySelector(".dock-latch")?.textContent).toContain("Ctrl");
+
+    const typed = new view.InputEvent("beforeinput", {
+      inputType: "insertText", data: "s", bubbles: true, cancelable: true,
+    });
+    act(() => { input.dispatchEvent(typed); });
+    expect(typed.defaultPrevented).toBe(true);
+    expect(sentKeys).toEqual(["ctrl+s"]);
+    expect(input.value).toBe("");
+    expect(root.querySelector(".dock-latch")).toBeNull();
+    expect(modifierIsActive("ctrl")).toBe(false);
   });
 
   test("sends composed text before a distinct Enter command", () => {

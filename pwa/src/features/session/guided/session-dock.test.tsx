@@ -8,7 +8,10 @@ import { renderReact, unmountReact } from "../../../../test-support/react-harnes
 import { appRoot } from "../../../app/dom-root";
 import { composeDraft, composeFocused, composeIME, setComposeDraft, setComposeFocused, setComposeIME } from "../compose-store";
 import { keysExpanded, padKind, setKeysExpanded, setPadKind } from "../../settings/preferences-store";
-const { clearModifiers } = await import("../keypad/keypad");
+import type { LiveSession } from "../../../lib/protocol/client";
+const { clearModifiers, modifierIsActive } = await import("../keypad/keypad");
+const { flushKeys } = await import("./keys");
+const { attachLiveSession } = await import("../../computers/catalog-store");
 const { SLASH_COMMANDS } = await import("../../../lib/slash-commands");
 const { SessionDock } = await import("./session-dock");
 
@@ -30,6 +33,8 @@ afterEach(async () => {
   setComposeIME(false);
   setComposeFocused(false);
   setComposeDraft("");
+  attachLiveSession(null);
+  selectPadPane("");
   appRoot().replaceChildren();
 });
 
@@ -124,6 +129,85 @@ describe("React session dock", () => {
     expectSameNode(appRoot().querySelector(".key-mod"), ctrl);
     expect(ctrl.getAttribute("aria-pressed")).toBe("true");
     expect(ctrl.classList.contains("on")).toBe(true);
+  });
+
+  test("a chord modifier survives the field tap and the next typed key sends it", async () => {
+    seedPadSnapshot({ panes: [{ pane_id: "chord-test", agent: "claude" }] });
+    selectPadPane("chord-test");
+    const sent: string[][] = [];
+    attachLiveSession({
+      isConnected: () => true,
+      sendKeys: async (_paneId: string, keys: string[]) => { sent.push(keys); },
+      sendText: async () => undefined,
+    } as unknown as LiveSession);
+    setKeysExpanded(true);
+    setPadKind("keys");
+    await act(() => { paint(); });
+    const input = appRoot().querySelector("textarea")!;
+    const ctrl = appRoot().querySelector<HTMLButtonElement>(".key-mod")!;
+    const view = appRoot().ownerDocument.defaultView!;
+    await act(() => {
+      ctrl.dispatchEvent(new view.PointerEvent("pointerdown", {
+        pointerId: 1, button: 0, bubbles: true, cancelable: true,
+      }));
+      ctrl.dispatchEvent(new view.PointerEvent("pointerup", {
+        pointerId: 1, button: 0, bubbles: true, cancelable: true,
+      }));
+    });
+    expect(modifierIsActive("ctrl")).toBe(true);
+    // The field tap folds the panel for the soft keyboard, but keeps the arm.
+    await act(() => {
+      input.dispatchEvent(new view.PointerEvent("pointerdown", {
+        pointerId: 2, pointerType: "touch", isPrimary: true, button: 0,
+        clientX: 10, clientY: 0, bubbles: true, cancelable: true,
+      }));
+      input.focus();
+    });
+    expect(appRoot().querySelector(".pad-panel")).toBeNull();
+    expect(keysExpanded()).toBe(false);
+    expect(modifierIsActive("ctrl")).toBe(true);
+    expect(appRoot().querySelector(".dock-latch")?.textContent).toContain("Ctrl");
+
+    const typed = new view.InputEvent("beforeinput", {
+      inputType: "insertText", data: "s", bubbles: true, cancelable: true,
+    });
+    act(() => { input.dispatchEvent(typed); });
+    expect(typed.defaultPrevented).toBe(true);
+    await act(async () => { await flushKeys(); });
+    expect(sent).toEqual([["ctrl+s"]]);
+    expect(input.value).toBe("");
+    expect(composeDraft()).toBe("");
+    expect(appRoot().querySelector(".dock-latch")).toBeNull();
+    expect(modifierIsActive("ctrl")).toBe(false);
+  });
+
+  test("the dock latch clears the arm without opening the panel", async () => {
+    setKeysExpanded(true);
+    setPadKind("keys");
+    await act(() => { paint(); });
+    const ctrl = appRoot().querySelector<HTMLButtonElement>(".key-mod")!;
+    const view = appRoot().ownerDocument.defaultView!;
+    await act(() => {
+      ctrl.dispatchEvent(new view.PointerEvent("pointerdown", {
+        pointerId: 1, button: 0, bubbles: true, cancelable: true,
+      }));
+      ctrl.dispatchEvent(new view.PointerEvent("pointerup", {
+        pointerId: 1, button: 0, bubbles: true, cancelable: true,
+      }));
+    });
+    const input = appRoot().querySelector("textarea")!;
+    await act(() => {
+      input.dispatchEvent(new view.PointerEvent("pointerdown", {
+        pointerId: 2, pointerType: "touch", isPrimary: true, button: 0,
+        clientX: 10, clientY: 0, bubbles: true, cancelable: true,
+      }));
+      input.focus();
+    });
+    const latch = appRoot().querySelector<HTMLButtonElement>(".dock-latch")!;
+    expect(latch).toBeTruthy();
+    act(() => { latch.click(); });
+    expect(modifierIsActive("ctrl")).toBe(false);
+    expect(appRoot().querySelector(".dock-latch")).toBeNull();
   });
 
   test("unmount destroys pad bindings so a detached key cannot stay pressed", async () => {

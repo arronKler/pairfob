@@ -198,7 +198,7 @@ describe("the live row's trailing action", () => {
       // Field, 按键, one action: the guided dock's row, in that order. (Attach
       // leads it only where the computer advertises uploads; this fixture does not.)
       expect([...root().querySelector(".full-terminal-live-actions")!.children].map((el) => el.className.split(" ")[0]))
-        .toEqual(["compose-field", "dock-keys-btn", "send-slot"]);
+        .toEqual(["compose-field", "dock-keys", "send-slot"]);
       expect(liveSend()?.dataset.sendKind).toBe("stop");
       expect(liveSend()?.getAttribute("aria-label")).toBe("停止当前任务");
 

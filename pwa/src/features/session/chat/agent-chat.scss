@@ -305,22 +305,10 @@ html.page-zoomed .agent-stream { touch-action: pan-y pinch-zoom; }
   margin-top: 10px;
 }
 
-/*
-  A finding: what the agent worked out between its steps, spoken in the
-  transcript rather than filed inside the run of tools. It is plain prose at
-  the reply's reading size, set apart by its place in the flow; a press opens
-  the finding on its own.
-*/
-.agent-finding {
-  align-self: stretch;
-  min-width: 0;
-  margin-top: 10px;
-}
 
-/* The row a turn's one trailing control sits in: a reply's copy and a finding's
-   open share it (the control itself is the quiet pill further down). */
-.agent-reply-actions,
-.agent-finding-actions {
+/* The row a reply's copy control sits in (the control itself is the quiet pill
+   further down). */
+.agent-reply-actions {
   display: flex;
   gap: 6px;
   margin-top: 8px;
@@ -517,9 +505,6 @@ html.page-zoomed .agent-stream { touch-action: pan-y pinch-zoom; }
   cursor: pointer;
   position: relative;
 }
-
-// A finding's chevron sits closer to its word than the copy's mark does.
-.agent-finding-open { gap: 3px; }
 
 .agent-quiet-pill::before {
   content: "";

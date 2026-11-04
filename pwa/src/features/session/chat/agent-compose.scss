@@ -99,19 +99,26 @@
   align-self: center;
 }
 
-/* The idle send is one round mark; stop, wait, busy and force keep the labelled
-   button, at this frame's height and its own horizontal padding. */
 .agent-dock .agent-compose .send-btn {
   height: 32px;
   min-height: 32px;
 }
 
-.agent-dock .agent-compose .send-btn.send-kind-send {
+/* The idle send is one round mark, and so is every face the button wears while
+   a run is under way: send arrow, stop square, stopping spinner and the red ×
+   of a force stop share one box, so the field beside it never gives way. */
+.agent-dock .agent-compose .send-btn.send-kind-send,
+.agent-dock .agent-compose .send-btn.send-kind-stop,
+.agent-dock .agent-compose .send-btn.send-kind-stopping,
+.agent-dock .agent-compose .send-btn.send-kind-force {
   width: 32px;
   min-width: 32px;
   padding: 0;
   border-radius: 50%;
   border-color: transparent;
+}
+
+.agent-dock .agent-compose .send-btn.send-kind-send {
   background: var(--ink);
   color: var(--bg);
 }
@@ -119,6 +126,29 @@
 .agent-dock .agent-compose .send-btn.send-kind-send:disabled {
   background: var(--surface-2);
   color: var(--muted);
+}
+
+/* A stop is the send's twin: the arrow becomes a square in the same ink. */
+.agent-dock .agent-compose .send-btn.send-kind-stop {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* The stop is already under way: the circle goes quiet and turns its spinner. */
+.agent-dock .agent-compose .send-btn.send-kind-stopping,
+.agent-dock .agent-compose .send-btn.send-kind-stopping:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* Red is the one thing the dock says only for a force stop, and only here. */
+.agent-dock .agent-compose .send-btn.send-kind-force {
+  background: var(--danger);
+  color: #fff;
+}
+
+.agent-dock .agent-compose .send-btn.send-kind-force:active:not(:disabled) {
+  background: #b8322a;
 }
 
 /* One row under a finger: 44px targets inside the same frame. The dock's
@@ -163,14 +193,20 @@
   }
 
   .agent-dock .agent-compose .send-btn,
-  .agent-dock .agent-compose .send-btn.send-kind-send {
+  .agent-dock .agent-compose .send-btn.send-kind-send,
+  .agent-dock .agent-compose .send-btn.send-kind-stop,
+  .agent-dock .agent-compose .send-btn.send-kind-stopping,
+  .agent-dock .agent-compose .send-btn.send-kind-force {
     width: auto;
     min-width: 44px;
     height: 44px;
     min-height: 44px;
   }
 
-  .agent-dock .agent-compose .send-btn.send-kind-send {
+  .agent-dock .agent-compose .send-btn.send-kind-send,
+  .agent-dock .agent-compose .send-btn.send-kind-stop,
+  .agent-dock .agent-compose .send-btn.send-kind-stopping,
+  .agent-dock .agent-compose .send-btn.send-kind-force {
     width: 44px;
     padding: 0;
   }
