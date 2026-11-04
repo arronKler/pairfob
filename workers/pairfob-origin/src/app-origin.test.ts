@@ -68,9 +68,14 @@ describe("app origins", () => {
     expect(res.status).toBe(101);
   });
 
-  test("client WebSocket rejects missing, foreign, non-exact, and dev-http origins", async () => {
+  test("client WebSocket accepts a native client with no Origin", async () => {
     const env = seededEnv();
-    for (const origin of [undefined, "https://evil.example", "https://localhost:4321", "http://localhost"]) {
+    expect((await handleFetch(wsRequest("client", undefined), env)).status).toBe(101);
+  });
+
+  test("client WebSocket rejects an empty, null, foreign, non-exact, or dev-http Origin", async () => {
+    const env = seededEnv();
+    for (const origin of ["", "null", "https://evil.example", "https://localhost:4321", "http://localhost"]) {
       const res = await handleFetch(wsRequest("client", origin), env);
       expect(res.status).toBe(403);
     }

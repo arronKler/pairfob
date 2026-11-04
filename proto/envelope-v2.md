@@ -44,7 +44,7 @@ No cookies. Enroll, pair-intent, rekey, and config responses use
 | POST | `/v2/enroll` | Absent or non-browser | Validate and echo the client-persisted `daemon_id` / `reconnect_token` |
 | POST | `/v2/pair-intent` | **Same-origin required** | Metered locator lookup; 10 requests per 10 minutes per IP |
 | POST | `/v2/rekey` | Absent or non-browser | Atomically replace the old reconnect token with the client-persisted new token and echo it |
-| GET | `/v2/ws` | Phone must be same-origin; daemon may omit Origin | Upgrade with `pairfob.v2` |
+| GET | `/v2/ws` | Phone must be same-origin or omit Origin (native client); daemon may omit Origin | Upgrade with `pairfob.v2` |
 | GET | `/v1/ws` | - | **426** |
 
 Only `CF-Connecting-IP` is trusted as the client IP.

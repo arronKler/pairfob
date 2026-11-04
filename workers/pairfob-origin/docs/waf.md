@@ -38,7 +38,7 @@ Open enroll is always on. Cost control is the per-IP D1 cap (`SELF_GRANT_PER_IP`
 ## Headers the WAF must not strip
 
 - `CF-Connecting-IP` (required)
-- `Origin` (pair-intent requires same-host; enroll/rekey **reject** browser Origin)
+- `Origin` (pair-intent requires same-host; the client `/v2/ws` accepts its absence for a native client and any present value must be same-host or an exact app origin; enroll/rekey **reject** browser Origin)
 - `Authorization` on `/v2/admin/*`
 - `Sec-WebSocket-Protocol` (`pairfob.v2`; `/v1/ws` is 426)
 

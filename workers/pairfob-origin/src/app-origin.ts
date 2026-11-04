@@ -1,5 +1,5 @@
 import type { Env } from "./env.ts";
-import { hasBrowserOrigin, isSameHostOrigin, originValue } from "./http.ts";
+import { isSameHostOrigin, originValue } from "./http.ts";
 
 /**
  * Exact app origins allowed to call the relay from a web view: the native shell
@@ -46,12 +46,17 @@ export function hasAppOrigin(req: Request, env: Env): boolean {
   return origin !== null && origin !== "" && isAppOrigin(origin, env);
 }
 
-/** Client WebSocket: a non-empty Origin that is same-host or an exact app origin. */
+/**
+ * Client WebSocket: no Origin at all is a native client, and a present Origin
+ * must be same-host or an exact app origin. A browser always sends one on a
+ * WebSocket handshake, so accepting its absence opens nothing to a web page:
+ * the pairing code and the session keys stay the only authority.
+ */
 export function isAllowedClientOrigin(req: Request, env: Env): boolean {
-  if (!hasBrowserOrigin(req)) return false;
-  if (isSameHostOrigin(req)) return true;
   const origin = originValue(req);
-  return origin !== null && isAppOrigin(origin, env);
+  if (origin === null) return true;
+  if (origin === "") return false;
+  return isSameHostOrigin(req) || isAppOrigin(origin, env);
 }
 
 /** Browser HTTP calls (pair-intent, events): non-empty and same-host or an app origin. */
