@@ -30,6 +30,7 @@ export function useSheetHeight(inside: RefObject<HTMLElement | null>): void {
     watch(card);
     const duration = motionMs(MOTION_MS.panel);
     if (before === undefined || Math.abs(before - after) < 2 || !duration || typeof card.animate !== "function") return;
-    card.animate([{ height: `${before}px` }, { height: `${after}px` }], { duration, easing: MOTION_SPRING });
+    const animation = card.animate([{ height: `${before}px` }, { height: `${after}px` }], { duration, easing: MOTION_SPRING });
+    void animation.finished?.catch(() => undefined);
   }, [inside]);
 }

@@ -121,6 +121,9 @@ export function flyKeyToCursor(
     { duration: FLIGHT_MS, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "forwards" },
   );
   const done = () => spark.remove();
+  // Removing the spark cancels the travel, and the engine rejects its finished
+  // promise; the finish and cancel events own the cleanup, not the promise.
+  void travel.finished?.catch(() => undefined);
   travel.addEventListener("finish", done);
   travel.addEventListener("cancel", done);
 }

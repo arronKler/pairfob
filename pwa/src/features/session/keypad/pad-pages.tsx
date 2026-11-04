@@ -78,6 +78,9 @@ export function PadPages({ items, kind, label, columns = 4, rows = 2, className 
       { opacity: 0.4, transform: `translateX(${page > before.page ? 20 : -20}px)` },
       { opacity: 1, transform: "translateX(0)" },
     ], { duration: 180, easing: "ease-out" });
+    // The cleanup cancels a running page turn; that rejects the finished
+    // promise, which nothing awaits.
+    void animation?.finished?.catch(() => undefined);
     return () => animation?.cancel();
   }, [kind, page, rows]);
   const selectRef = useRef<(next: number) => void>(() => undefined);

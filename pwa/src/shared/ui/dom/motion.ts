@@ -54,5 +54,10 @@ export const MOTION_SPRING = "cubic-bezier(0.2, 1.05, 0.35, 1)";
 export function playMove(element: Element, frames: Keyframe[], ms: number, options: KeyframeAnimationOptions = {}): Animation | null {
   const duration = motionMs(ms);
   if (!duration || typeof element.animate !== "function") return null;
-  return element.animate(frames, { duration, easing: MOTION_EASE, ...options });
+  const animation = element.animate(frames, { duration, easing: MOTION_EASE, ...options });
+  // A move is often cancelled when the element is measured or unmounted, and
+  // the engine rejects its finished promise. Nobody awaits a move, so handle
+  // that rejection here instead of leaving it unhandled.
+  void animation.finished?.catch(() => undefined);
+  return animation;
 }

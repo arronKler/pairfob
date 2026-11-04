@@ -552,7 +552,12 @@ function track(animations: Animation[], cleanup: () => void, generation: number)
   const finish = (): void => {
     if (settled) return;
     settled = true;
-    for (const animation of animations) animation.cancel();
+    for (const animation of animations) {
+      // Cancelling rejects the finished promise; nothing awaits it, so handle
+      // the rejection here.
+      void animation.finished?.catch(() => undefined);
+      animation.cancel();
+    }
     cleanup();
     if (generation === morphGeneration) {
       stopMorph = null;
