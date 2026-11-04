@@ -200,7 +200,7 @@ describe("session list object controls", () => {
     expect(facts).toContain("/tmp/a");
     expect(facts).toContain("alpha");
     expect(facts).not.toContain("p1");
-    expect(plain?.textContent).toContain("改会话名");
+    expect(plain?.textContent).not.toContain("改会话名");
     expect(plain?.textContent).toContain("关闭会话");
     expect(plain?.textContent).not.toContain("改标签页名");
     expect(plain?.textContent).not.toContain("关闭标签页");
@@ -251,7 +251,7 @@ describe("session list object controls", () => {
 
     cardNamed("one").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     const cardSheet = document.querySelector("dialog.sheet");
-    expect(cardSheet?.textContent).toContain("改会话名");
+    expect(cardSheet?.textContent).not.toContain("改会话名");
     expect(cardSheet?.textContent).not.toContain("改工作区名");
     expect(cardSheet?.textContent).not.toContain("关闭工作区");
   }));

@@ -22,12 +22,12 @@ describe("pane object menu model", () => {
   test("the base card menu keeps its order, facts and title", () => {
     const model = paneMenuModel({ agent: agent("p2"), ...plain });
     expect(model.title).toBe("Target");
-    expect(kinds(model.items)).toEqual(["pin", "renamePane", "closePane", "openBoard", "renameWorkspace", "closeWorkspace"]);
+    expect(kinds(model.items)).toEqual(["pin", "closePane", "openBoard", "renameWorkspace", "closeWorkspace"]);
     expect(model.items.map((item) => item.label)).toEqual([
-      t("menu.pin"), t("menu.renamePane"), t("op.closePane"), t("menu.board"),
+      t("menu.pin"), t("op.closePane"), t("menu.board"),
       t("menu.renameWorkspace"), t("op.closeWorkspace"),
     ]);
-    expect(model.items.map((item) => item.danger === true)).toEqual([false, false, true, false, false, true]);
+    expect(model.items.map((item) => item.danger === true)).toEqual([false, true, false, false, true]);
     expect(model.facts.map((row) => row.key)).toContain(t("detail.path"));
     expect(model.facts.find((row) => row.kind === "path")?.value).toBe("/two/project");
   });
@@ -44,9 +44,9 @@ describe("pane object menu model", () => {
 
   test("create_tab adds the beside-tab entry only for a card with a workspace", () => {
     expect(kinds(paneMenuModel({ agent: agent("p2"), ...plain, createTab: true }).items))
-      .toEqual(["pin", "renamePane", "closePane", "openBoard", "newTabBeside", "renameWorkspace", "closeWorkspace"]);
+      .toEqual(["pin", "closePane", "openBoard", "newTabBeside", "renameWorkspace", "closeWorkspace"]);
     const homeless = paneMenuModel({ agent: agent("p2", { workspaceId: "", workspaceLabel: "" }), ...plain, createTab: true });
-    expect(kinds(homeless.items)).toEqual(["pin", "renamePane", "closePane"]);
+    expect(kinds(homeless.items)).toEqual(["pin", "closePane"]);
   });
 
   test("tab rename needs a visible label or a split, tab close needs a split", () => {
@@ -68,7 +68,7 @@ describe("pane object menu model", () => {
 
   test("workspace grouping moves parent management to the heading menu", () => {
     const grouped = paneMenuModel({ agent: agent("p2"), agents: [agent("p2")], listGroup: "space", pinned: false, createTab: false });
-    expect(kinds(grouped.items)).toEqual(["pin", "renamePane", "closePane", "openBoard"]);
+    expect(kinds(grouped.items)).toEqual(["pin", "closePane", "openBoard"]);
     expect(grouped.title).toBe("Target");
   });
 
@@ -95,7 +95,7 @@ describe("object menu sections", () => {
     const sections = objectMenuSections(everything());
     expect(sections.map((section) => section.title)).toEqual([t("menu.thisPane"), t("menu.tab"), t("menu.workspace")]);
     expect(sections.map((section) => kinds(section.items))).toEqual([
-      ["pin", "renamePane", "closePane"],
+      ["pin", "closePane"],
       ["openBoard", "renameTab", "closeTab"],
       ["newTabBeside", "renameWorkspace", "closeWorkspace"],
     ]);

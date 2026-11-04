@@ -16,7 +16,7 @@ export const zhShell = {
   "list.loading": "正在读取会话",
   "boot.connectingLine": "正在连接 · 经 pairfob.com",
   "empty.hostTitle": "{host} 上还没有会话",
-  "empty.createSub": "在这里新建会话，它会在你的电脑上运行。在其他终端（iTerm、VS Code 等）里打开的会话不会出现；请改在 `herdr` 里打开。",
+  "empty.createSub": "在这里新建会话，它会在你的电脑上运行。在其他终端（iTerm、VS Code 等）里打开的会话不会出现；请改在 herdr 里打开。",
   "empty.openSub": "这台电脑没有开放远程新建。在电脑上用 Herdr 打开一个会话，列表会自动出现。",
   "empty.recentDirs": "最近用过的目录",
   "empty.runOnComputer": "在电脑终端运行",

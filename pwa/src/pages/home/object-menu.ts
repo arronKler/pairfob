@@ -29,7 +29,6 @@ import {
   closePane,
   closeTab,
   closeWorkspace,
-  renamePane,
   renameTab,
   renameWorkspace,
 } from "../../features/operations/controller";
@@ -79,8 +78,6 @@ function runObjectMenuAction(kind: ObjectMenuKind, agent: AgentCard): void | Pro
       return openCreateSheet({ workspaceId: agent.workspaceId });
     case "openBoard":
       return openBoard({ workspaceId: agent.workspaceId, tabId: agent.tabId });
-    case "renamePane":
-      return renamePane(agent);
     case "closePane":
       return closePane(agent);
     case "renameTab":

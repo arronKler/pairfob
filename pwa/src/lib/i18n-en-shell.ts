@@ -18,7 +18,7 @@ export const enShell: Record<keyof typeof zhShell, string> = {
   "list.loading": "Reading sessions",
   "boot.connectingLine": "Connecting · via pairfob.com",
   "empty.hostTitle": "No sessions on {host} yet",
-  "empty.createSub": "Start a session here and it runs on your computer. Sessions opened in other terminals (iTerm, VS Code…) won't show up; open them in `herdr` instead.",
+  "empty.createSub": "Start a session here and it runs on your computer. Sessions opened in other terminals (iTerm, VS Code…) won't show up; open them in herdr instead.",
   "empty.openSub": "This computer doesn't allow starting sessions remotely. Open one in Herdr on the computer and it shows up here.",
   "empty.recentDirs": "Recent folders",
   "empty.runOnComputer": "Run on the computer",

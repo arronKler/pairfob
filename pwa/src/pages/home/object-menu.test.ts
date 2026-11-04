@@ -95,7 +95,7 @@ test("object actions keep full facts above the list and pin the card rather than
   const body = document.querySelector(".sheet-body")!;
   expect(body.firstElementChild?.className).toBe("sheet-facts");
   expect(body.querySelector(".sheet-fact-path")?.textContent).toContain("/two/project");
-  expect(labels()).toContain(t("menu.renamePane"));
+  expect(labels()).not.toContain(t("menu.renamePane"));
   expect(labels()).toContain(t("op.closePane"));
   expect(labels()).not.toContain(t("cancel"));
   await act(async () => {
@@ -158,7 +158,7 @@ test("the new-tab rows are offered only while a session can be started: not once
     act(() => applyRuntimeIdentity({ herdHost: "MacBook Pro", runtimeKind }));
     act(() => openListPaneMenu(targetCard()));
     // The rows that are not about starting anything stay.
-    expect(labels()).toContain(t("menu.renamePane"));
+    expect(labels()).toContain(t("menu.pin"));
     expect(labels()).not.toContain(t("menu.newTabBeside"));
     await act(async () => { closeTestDialogs(); await pause(); });
     act(() => openListWorkspaceMenu(targetCard()));
