@@ -252,7 +252,7 @@
 .workspace-git-mark.mark-deleted { background: rgba(255, 128, 128, 0.13); color: var(--mark-deleted); }
 .workspace-git-mark.mark-renamed,
 .workspace-git-mark.mark-copied,
-.workspace-git-mark.mark-type { background: var(--accent-14); color: #8fb8ff; }
+.workspace-git-mark.mark-type { background: var(--accent-14); color: var(--link); }
 .workspace-git-mark.mark-conflict { background: #ffb224; color: #1a0d00; }
 
 .workspace-dir-mark {
@@ -550,7 +550,7 @@
 .workspace-remote-toggle svg { transition: transform var(--dur-2) var(--ease); }
 .workspace-remote-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 
-.workspace-jump-indent { display: inline-flex; color: #7fb0ff; }
+.workspace-jump-indent { display: inline-flex; color: var(--link); }
 
 @media (min-width: 900px) {
   .workspace-row,

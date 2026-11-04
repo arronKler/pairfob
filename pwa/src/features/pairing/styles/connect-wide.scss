@@ -14,8 +14,6 @@
     .page.connect-page.is-wide {
       max-width: none;
       padding: calc(env(safe-area-inset-top, 0px) + 14px) 28px calc(24px + env(safe-area-inset-bottom, 0px));
-      /* The page's one ornament when the miniature is not there to carry it. */
-      background: radial-gradient(640px 420px at 50% 46%, rgba(61, 123, 253, 0.1), transparent 70%);
     }
 
     /* "Add a computer" leads back from above the columns it belongs to. */

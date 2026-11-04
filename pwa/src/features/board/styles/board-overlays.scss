@@ -232,7 +232,7 @@
   z-index: 10;
   max-width: calc(100% - 20px);
   border-color: var(--line-strong);
-  background: rgba(26, 32, 41, 0.95);
+  background: var(--plate-2);
   box-shadow: var(--shadow-1);
   transform: translateX(-50%);
 }

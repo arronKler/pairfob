@@ -214,13 +214,13 @@
 .workspace-code-line.is-found { background: rgba(230, 173, 48, 0.12); }
 .workspace-code-line.is-found-current { background: rgba(230, 173, 48, 0.3); box-shadow: inset 3px 0 0 var(--warn); }
 .workspace-code-line.is-found-current::before { color: var(--ink); }
-.syntax-comment { color: #98a3b3; font-style: italic; }
-.syntax-keyword { color: #c9a7ff; }
-.syntax-literal { color: #78dce8; }
-.syntax-number { color: #f6c177; }
-.syntax-property { color: #8bd5ca; }
-.syntax-string { color: #a6da95; }
-.syntax-tag { color: #82aaff; }
+.syntax-comment { color: var(--syn-comment); font-style: italic; }
+.syntax-keyword { color: var(--syn-keyword); }
+.syntax-literal { color: var(--syn-literal); }
+.syntax-number { color: var(--syn-number); }
+.syntax-property { color: var(--syn-property); }
+.syntax-string { color: var(--syn-string); }
+.syntax-tag { color: var(--syn-tag); }
 
 /* --- Diff ------------------------------------------------------------------------ */
 
@@ -275,10 +275,10 @@
 .workspace-diff-banner {
   margin: 10px 12px 2px;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 178, 36, 0.3);
+  border: 1px solid var(--warn-edge);
   border-radius: var(--r-md);
-  background: rgba(255, 178, 36, 0.09);
-  color: #ffd28a;
+  background: var(--warn-tint);
+  color: var(--warn);
   font-size: var(--text-caption);
   line-height: 1.5;
   flex: none;

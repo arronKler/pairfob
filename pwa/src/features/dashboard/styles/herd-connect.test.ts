@@ -73,8 +73,10 @@ describe("the route's moves", () => {
   test("a node going idle dims over the element duration, and its result is an element that can arrive", () => {
     expect(declared(css, ".conn-node")).toMatch(/transition:\s*opacity var\(--dur-2\) var\(--ease\)/);
     expect(declared(css, ".conn-node-badge")).toMatch(/position:\s*absolute/);
-    expect(declared(css, ".conn-node.is-ok .conn-node-badge::before")).toMatch(/content:\s*"✓"/);
-    expect(declared(css, ".conn-node.is-fail .conn-node-badge::before")).toMatch(/content:\s*"✕"/);
+    // The check and the cross are drawn icons in the card, not font glyphs.
+    expect(declared(css, ".conn-node-badge")).toMatch(/display:\s*grid/);
+    expect(css).not.toMatch(/content:\s*"[✓✕]"/);
+    expect(declared(css, ".conn-link > svg")).toMatch(/position:\s*absolute/);
     expect(css).not.toMatch(/\.conn-node-icon::after/);
   });
 

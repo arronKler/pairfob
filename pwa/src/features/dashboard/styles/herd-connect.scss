@@ -47,25 +47,23 @@
 .conn-node.is-idle .conn-node-icon { color: var(--muted); }
 
 /* The result on a node: an element of its own, so one that has just been
-   reached can arrive (the card adds `pop-in`). Its mark is generated, as the
-   node's text is its name and note only. */
+   reached can arrive (the card adds `pop-in`). Its mark is a drawn icon, not a
+   font glyph: the check and the cross must keep one weight on every platform. */
 .conn-node-badge {
   position: absolute;
   right: -2px;
   bottom: -2px;
+  display: grid;
+  place-items: center;
   width: 15px;
   height: 15px;
   border: 2px solid var(--surface);
   border-radius: 50%;
   color: var(--bg);
-  font: 700 9px/11px var(--font);
-  text-align: center;
 }
 
 .conn-node.is-ok .conn-node-badge { background: var(--ok); }
-.conn-node.is-ok .conn-node-badge::before { content: "✓"; }
 .conn-node.is-fail .conn-node-badge { background: var(--error); }
-.conn-node.is-fail .conn-node-badge::before { content: "✕"; }
 .conn-node.is-wait .conn-node-icon { animation: conn-ring calc(var(--pulse) * 2) ease-out infinite; }
 
 @keyframes conn-ring {
@@ -105,19 +103,20 @@
 
 .conn-link.is-fail { background: repeating-linear-gradient(90deg, var(--error) 0 4px, transparent 4px 8px); }
 
-.conn-link.is-fail::after {
-  content: "✕";
+/* The broken hop carries the same drawn cross as a failed node, on the plate
+   so the dashed line stops at it. */
+.conn-link > svg {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 16px;
-  height: 16px;
+  box-sizing: content-box;
+  width: 12px;
+  height: 12px;
+  padding: 2px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: var(--surface);
   color: var(--error);
-  font: 700 11px/16px var(--font);
-  text-align: center;
 }
 
 /* Notes of a line or two break into even lines (see `.herd-empty-sub`). */

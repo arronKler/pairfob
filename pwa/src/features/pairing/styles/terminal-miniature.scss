@@ -1,31 +1,32 @@
 /* --- Terminal miniature ---------------------------------------------------------
-   A small picture of what `pairfob pair` prints on the computer right now. The
-   page's one ornament: a soft accent glow behind the window. Motion is limited
-   to the scan sweep over the QR, the caret, and the CLI's own shine on
-   "Press Enter to pair"; reduced motion stills all three.
+   A small picture of what `pairfob pair` prints on the computer right now. It
+   is a picture of the CLI's own output, not a themeable terminal surface: its
+   ink is light, so it carries its own dark plate on paper too; the light
+   theme's white ground would swallow that ink. Motion is limited to the scan
+   sweep over the QR and the caret. Reduced motion stills both.
    -------------------------------------------------------------------------------- */
 
 .term-mini {
+  /* The miniature is dark on both sides of the theme. Its ink, lines and
+     accent are stated once here, not read from the page, so a paper theme
+     cannot repaint the picture. */
+  --mini-plate: #0b0e13;
+  --mini-ink: #c9d1dc;
+  --mini-muted: #8a94a3;
+  --mini-line: rgba(233, 237, 243, 0.14);
+  --mini-accent: #6ea8fe;
+  --mini-ok: #46d68c;
   position: relative;
   margin-top: 14px;
-}
-
-.term-mini::before {
-  content: "";
-  position: absolute;
-  inset: 4% -14% -16%;
-  background: radial-gradient(closest-side, rgba(61, 123, 253, 0.34), transparent);
-  filter: blur(14px);
-  pointer-events: none;
 }
 
 .term-mini-window {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--mini-line);
   border-radius: var(--r-xl);
-  background: var(--term-bg);
-  color: #c9d1dc;
+  background: var(--mini-plate);
+  color: var(--mini-ink);
   font: 500 12px/1.6 var(--mono);
 }
 
@@ -34,18 +35,16 @@
 .term-mini-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
   height: 30px;
   padding: 0 14px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--mini-line);
 }
 
-.term-mini-bar i { width: 9px; height: 9px; border-radius: 50%; background: #262c36; }
-.term-mini-bar span { margin-left: auto; color: #5d6776; font-size: 10.5px; font-family: var(--font); }
+.term-mini-bar span { color: var(--mini-muted); font-size: 10.5px; font-family: var(--font); }
 
 .term-mini-body { padding: 12px 16px 14px; }
-.term-mini-dim { color: #6d7787; }
-.term-mini-prompt { color: var(--ok); }
+.term-mini-dim { color: var(--mini-muted); }
+.term-mini-prompt { color: var(--mini-ok); }
 
 .term-mini-qr {
   position: relative;
@@ -55,13 +54,13 @@
   transition: opacity var(--dur-3) var(--ease);
 }
 
-.term-mini-qr svg { display: block; width: 100%; height: 100%; fill: var(--ink); }
+.term-mini-qr svg { display: block; width: 100%; height: 100%; fill: var(--mini-ink); }
 
 .term-mini-corner {
   position: absolute;
   width: 16px;
   height: 16px;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--mini-accent);
   transition: opacity var(--dur-2) var(--ease);
 }
 
@@ -75,10 +74,9 @@
   top: 0;
   left: -4px;
   right: -4px;
-  height: 2px;
+  height: 1.5px;
   border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  box-shadow: 0 0 12px 1px var(--accent-70);
+  background: linear-gradient(90deg, transparent, var(--mini-accent), transparent);
   animation: term-mini-sweep 2.6s var(--ease-in-out) infinite;
 }
 
@@ -93,7 +91,7 @@
 .term-mini-window.is-quiet :is(.term-mini-corner, .term-mini-sweep) { opacity: 0; animation: none; }
 
 .term-mini-mask { display: inline-flex; gap: 5px; vertical-align: -1px; }
-.term-mini-mask i { height: 0.85em; border-radius: 3px; background: var(--ink-line-strong); }
+.term-mini-mask i { height: 0.85em; border-radius: 3px; background: rgba(233, 237, 243, 0.2); }
 .term-mini-mask i:nth-child(-n + 2) { width: 26px; }
 .term-mini-mask i:last-child { width: 40px; }
 
@@ -106,32 +104,27 @@
   height: 1.05em;
   margin-left: 4px;
   vertical-align: -2px;
-  background: #c9d1dc;
+  background: var(--mini-ink);
   animation: term-mini-blink 1.1s steps(1) infinite;
 }
 
 @keyframes term-mini-blink { 50% { opacity: 0; } }
 
-/* The same chip and colours as the CLI (cmd/pairfob/pair_prompt.go). */
+/* The same chip the CLI draws (cmd/pairfob/pair_prompt.go), flat: the shine it
+   wore was a page decoration, not a terminal state. */
 .term-mini-enter {
   display: inline-block;
   margin-top: 3px;
   padding: 1px 0;
   border-radius: 3px;
-  color: var(--accent-ink);
+  color: #081018;
   font-weight: 700;
   white-space: pre;
-  background: linear-gradient(90deg, #3d7bfd, #8bbbff 45%, #e9edf3 50%, #8bbbff 55%, #3d7bfd) 0 0 / 250% 100%;
-  animation: term-mini-shine 2.2s linear infinite;
-}
-
-@keyframes term-mini-shine {
-  from { background-position: 100% 0; }
-  to { background-position: -150% 0; }
+  background: var(--mini-accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .term-mini-sweep { display: none; }
-  .term-mini-caret, .term-mini-enter { animation: none; }
+  .term-mini-caret { animation: none; }
   .term-mini-qr { transition: none; }
 }

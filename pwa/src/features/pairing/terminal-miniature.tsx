@@ -45,7 +45,7 @@ export function TerminalMiniature({ stage }: { stage: ConnectStage }) {
   const quiet = stage === "connecting" || stage === "approve";
   return <div className="term-mini" aria-hidden="true">
     <div className={`term-mini-window${quiet ? " is-quiet" : ""}`}>
-      <div className="term-mini-bar"><i /><i /><i /><span>{t("connect.termLabel")}</span></div>
+      <div className="term-mini-bar"><span>{t("connect.termLabel")}</span></div>
       <div className="term-mini-body">
         <p><span className="term-mini-prompt">~ %</span> pairfob pair</p>
         <p className="term-mini-dim">Scan from the other device:</p>

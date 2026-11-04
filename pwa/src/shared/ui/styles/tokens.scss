@@ -32,6 +32,22 @@
   --term-bg: #0b0e13;
   --term-ink: #dfe5ee;
   --dock-bg: #0d1117;
+  /* Source highlighting is read on `--term-bg`, so it is a role like any other
+     and restates on paper: the dark values are the pastels a terminal was read
+     with, the light ones the same meanings darkened until each clears 4.5:1
+     against white. */
+  --syn-comment: #98a3b3;
+  --syn-keyword: #c9a7ff;
+  --syn-literal: #78dce8;
+  --syn-number: #f6c177;
+  --syn-property: #8bd5ca;
+  --syn-string: #a6da95;
+  --syn-tag: #82aaff;
+  /* The diff's quiet furniture: the hunk head, its hover, and the gutter a
+     line number sits in. */
+  --diff-hunk-ink: #9fc3ff;
+  --diff-hunk-hover-ink: #c4dbff;
+  --diff-gutter-ink: #647083;
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
@@ -226,6 +242,18 @@
   --term-bg: #ffffff;
   --term-ink: #1b222c;
   --dock-bg: #ffffff;
+  /* The dark theme's pastels do not survive on paper; these carry the same
+     kinds at 4.5:1 or better against white. */
+  --syn-comment: #646e7d;
+  --syn-keyword: #6d28d9;
+  --syn-literal: #0e7490;
+  --syn-number: #b45309;
+  --syn-property: #0f766e;
+  --syn-string: #15803d;
+  --syn-tag: #1d4ed8;
+  --diff-hunk-ink: #1d4ed8;
+  --diff-hunk-hover-ink: #1e40af;
+  --diff-gutter-ink: #6b7280;
 
   /* The same weights, with the alphas a paper surface needs to read. */
   --accent-9: rgba(47, 111, 228, 0.09);

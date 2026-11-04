@@ -102,7 +102,7 @@
   min-width: 0;
   min-height: var(--hunk-head);
   padding: 0 12px 0 8px;
-  color: #9fc3ff;
+  color: var(--diff-hunk-ink);
   font: var(--text-caption) var(--font);
   text-align: left;
 }
@@ -150,7 +150,7 @@ button.workspace-gap-open:active { background: var(--surface); }
 .workspace-diff-more { width: 100%; }
 
 @media (hover: hover) and (pointer: fine) {
-  .workspace-hunk-toggle:hover { background: var(--accent-08); color: #c4dbff; }
+  .workspace-hunk-toggle:hover { background: var(--accent-08); color: var(--diff-hunk-hover-ink); }
   button.workspace-gap-open:hover { background: var(--ink-faint-35); color: var(--muted); }
   .workspace-gap-act { opacity: 0; }
   button.workspace-gap-open:hover .workspace-gap-act,

@@ -199,9 +199,8 @@
   height: 40px;
   padding: 0 4px 0 14px;
   border-radius: 999px;
-  background: rgba(26, 32, 41, 0.94);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line-strong);
+  background: var(--plate-2);
   box-shadow: var(--shadow-1);
   transform: translateX(-50%);
   overflow: visible;
@@ -232,7 +231,7 @@
   border-left: 1px solid var(--line-strong);
   border-radius: 0 999px 999px 0;
   background: none;
-  color: var(--accent);
+  color: var(--link);
   font: 650 var(--text-body) var(--font);
   white-space: nowrap;
   cursor: pointer;

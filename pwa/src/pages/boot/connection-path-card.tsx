@@ -1,4 +1,4 @@
-import { Globe, Monitor } from "lucide-react";
+import { Check, Globe, Monitor, X } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { ThisDeviceIcon } from "../../features/settings/this-device";
 import { t } from "../../lib/i18n";
@@ -40,9 +40,13 @@ export function ConnectionPathCard({ host, phone, link1, relay, link2, computer,
     <section className="conn-path-card">
       <div className="conn-path" role="img" aria-label={label}>
         <Node node={phone} icon={<ThisDeviceIcon size={20} />} name={t("path.phone")} />
-        <span className={`conn-link is-${link1}`} aria-hidden="true" />
+        <span className={`conn-link is-${link1}`} aria-hidden="true">
+          {link1 === "fail" ? <X size={12} strokeWidth={3} /> : null}
+        </span>
         <Node node={relay} icon={<Globe size={20} />} name="pairfob.com" />
-        <span className={`conn-link is-${link2}`} aria-hidden="true" />
+        <span className={`conn-link is-${link2}`} aria-hidden="true">
+          {link2 === "fail" ? <X size={12} strokeWidth={3} /> : null}
+        </span>
         <Node node={computer} icon={<Monitor size={20} />} name={host} />
       </div>
       {children}
@@ -69,7 +73,13 @@ function Node({ node, icon, name }: { node: PathNode; icon: ReactNode; name: str
       <span className="conn-node-icon">
         {icon}
         {/* A new mark for each result this node comes to; the one it was first drawn with is still. */}
-        {marked ? <span key={turns} className={`conn-node-badge${turns ? " pop-in" : ""}`} /> : null}
+        {marked ? (
+          <span key={turns} className={`conn-node-badge${turns ? " pop-in" : ""}`}>
+            {node.state === "ok"
+              ? <Check size={9} strokeWidth={3.2} aria-hidden="true" />
+              : <X size={9} strokeWidth={3.2} aria-hidden="true" />}
+          </span>
+        ) : null}
       </span>
       <b>{name}</b>
       <Swap as="small" on={node.says ?? node.note}>{node.note}</Swap>
