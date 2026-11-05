@@ -41,7 +41,6 @@ import {
 } from "./attachment-image-protocol.ts";
 import {
   MAX_OUTPUT_DIMENSION,
-  MIN_IMAGE_BYTES,
   MIN_SAVING_RATIO,
   THUMBNAIL_MAX_OUTPUT_BYTES,
   THUMBNAIL_MAX_OUTPUT_DIMENSION,

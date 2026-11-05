@@ -13,13 +13,13 @@ import {
   setComposeLive as writeComposeLive,
 } from "../compose-store";
 import { markPaneSubmitted } from "../../dashboard/catalog-store";
-import { clearNotice, clearNoticeForScope, captureNoticeScope, noticeScopeIsCurrent, showError, showStatus } from "../../../app/notices-store";
+import { clearNotice, clearNoticeForScope, captureNoticeScope, noticeScopeIsCurrent, showError } from "../../../app/notices-store";
 import { setPaneComposeLive } from "../../settings/preferences-store";
 import { haptic } from "../../../lib/dom";
 import { messageOf } from "../../../lib/notices";
 import { liveSession } from "../../computers/catalog-store";
 import { currentScreen } from "../../../app/navigation-store";
-import { isAgentChat, isFullTerminal, livePaneHash, openPaneId, paneFollow } from "../session-store";
+import { livePaneHash, openPaneId, paneFollow } from "../session-store";
 import { currentViewIncarnation } from "../drafts/compose-drafts";
 import { guardedReply } from "../../../lib/guarded";
 import { t } from "../../../lib/i18n";

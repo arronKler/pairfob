@@ -31,10 +31,8 @@ describe("i18n catalogs", () => {
 
   test("update and push catalogs cover the former hardcoded copy", () => {
     expect(t("update.check")).toBe("检查更新");
-    expect(t("push.titleBlocked")).toBe("Pairfob · 等待确认");
     setLang("en");
     expect(t("update.check")).toBe("Check for updates");
-    expect(t("push.titleDone")).toBe("Pairfob · Turn finished");
     expect(t("quota.window.premium")).toBe("Premium interactions");
     expect(t("ft.webglLost")).toContain("WebGL");
   });
@@ -182,11 +180,11 @@ test("stored nested copy resolves in the current language", () => {
 
 test("English count copy handles zero, one and many without changing Chinese", () => {
   setLang("en");
-  expect(t("diffNotes.count", { count: 0 })).toBe("0 comments");
-  expect(t("diffNotes.count", { count: 1 })).toBe("1 comment");
-  expect(t("diffNotes.count", { count: 2 })).toBe("2 comments");
-  expect(t("trace.runningSteps", { n: 1 })).toBe("Running · 1 step");
-  expect(t("trace.nSteps", { n: 2 })).toBe("Run · 2 steps");
+  expect(t("workspace.linesAdded", { count: 0 })).toBe("0 lines added");
+  expect(t("workspace.linesAdded", { count: 1 })).toBe("1 line added");
+  expect(t("workspace.linesAdded", { count: 2 })).toBe("2 lines added");
+  expect(t("trace.nTools", { n: 1 })).toBe("Run · 1 tool");
+  expect(t("trace.nTools", { n: 2 })).toBe("Run · 2 tools");
   expect(t("tabs.attentionAria", { count: "1" })).toBe("1 session needs you");
   // The notes bar and its receipt hold one note as often as several.
   expect(t("diffNotes.pending", { count: 1 })).toBe("1 comment to send");
@@ -216,7 +214,7 @@ test("English count copy handles zero, one and many without changing Chinese", (
   expect(t("confirm.paneCount", { n: 1 })).toBe("1 个会话");
   expect(t("boardCanvas.dragRows", { first: "1", second: "11", share: "10" })).toBe("1 行 ─ 11 行 · 10%");
   expect(t("chrome.backWaiting", { n: "1" })).toBe("返回列表，另有 1 个会话在等你");
-  expect(t("diffNotes.count", { count: 1 })).toBe("1 条批注");
+  expect(t("workspace.linesAdded", { count: 1 })).toBe("新增 1 行");
   expect(t("diffNotes.pending", { count: 1 })).toBe("1 条批注待发送");
   expect(t("diffNotes.sentReceipt", { count: 1 })).toBe("1 条批注已发给 Agent");
 });

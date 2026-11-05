@@ -2,7 +2,6 @@ import { t } from "../../../lib/i18n";
 import { fitOperationPrompt } from "../../../lib/operations";
 import {
   composeDraft,
-  composeFocused,
   composeIME,
   composeLive,
   finishComposeComposition,

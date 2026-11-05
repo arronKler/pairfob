@@ -370,12 +370,6 @@ func (e *Engine) PairingStatus() PairingStatus {
 	return e.pairingStatusLocked(e.pair)
 }
 
-func (e *Engine) pairedCount() int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.pairedCountLocked()
-}
-
 func (e *Engine) waitAdmit(pair *pairingSlot) bool {
 	if pair == nil {
 		return false

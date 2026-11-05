@@ -21,15 +21,6 @@ export const zhComposeV2 = {
   "compose2.issueSkip": "不带它发送",
   "compose2.issueDismiss": "关闭提示",
   "compose2.tooLong": "正文加附件路径超过了单条消息的长度上限，请缩短正文或少带几个附件",
-  "settings.enterSends": "键盘回车直接发送",
-  "settings.enterSendsOn": "开",
-  "settings.enterSendsOff": "关",
-  "settings.enterSendsSheet": "键盘回车",
-  "settings.enterSendsNote": "只影响屏幕键盘。关闭时回车换行，用发送键发送；外接键盘始终是 Enter 发送、Shift+Enter 换行。",
-  "settings.enterSendsNewline": "回车换行",
-  "settings.enterSendsNewlineDetail": "用发送键发送（默认）",
-  "settings.enterSendsSend": "回车直接发送",
-  "settings.enterSendsSendDetail": "和以前一样，换行需要用快捷键盘",
 } as const;
 
 export const enComposeV2: { [K in keyof typeof zhComposeV2]: string } = {
@@ -54,13 +45,4 @@ export const enComposeV2: { [K in keyof typeof zhComposeV2]: string } = {
   "compose2.issueSkip": "Send without them",
   "compose2.issueDismiss": "Dismiss",
   "compose2.tooLong": "The text and attachment paths are over the message limit. Shorten the text or attach fewer files",
-  "settings.enterSends": "Return key sends",
-  "settings.enterSendsOn": "On",
-  "settings.enterSendsOff": "Off",
-  "settings.enterSendsSheet": "Return key",
-  "settings.enterSendsNote": "On-screen keyboards only. When off, Return adds a new line and the send button sends. External keyboards always send with Enter and add a line with Shift+Enter.",
-  "settings.enterSendsNewline": "Return adds a new line",
-  "settings.enterSendsNewlineDetail": "Send with the send button (default)",
-  "settings.enterSendsSend": "Return sends",
-  "settings.enterSendsSendDetail": "As before; new lines need the key pad",
 };

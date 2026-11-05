@@ -34,17 +34,6 @@ func Serve(ln net.Listener, svc Service) error {
 	}
 }
 
-func ListenAndServe(path string, svc Service) error {
-	ln, err := Listen(path)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = ln.Close()
-	}()
-	return Serve(ln, svc)
-}
-
 func handleConn(conn net.Conn, svc Service) {
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(adminTimeout))

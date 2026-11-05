@@ -27,12 +27,11 @@
  * after every ownership/source guard, so the upload proceeds with the exact
  * source under correct, atomic metadata.
  */
-import type { AttachmentItem, CompressionReason } from "./attach-model";
+import type { AttachmentItem } from "./attach-model";
 import {
   attachmentScopeKey,
   patchItem,
   queueSnapshot,
-  runtimeAbort,
   runtimeCheckpoint,
   runtimeFile,
   runtimeGeneration,

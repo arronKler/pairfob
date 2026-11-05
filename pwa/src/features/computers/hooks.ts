@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { LiveSession, PairResult } from "../../lib/protocol/client";
-import { computersStore, credential, liveSession } from "./catalog-store";
+import { computersStore, credential } from "./catalog-store";
 import { useConnectionPhase } from "../connection/hooks";
 import { useDomain } from "../../shared/react/use-domain";
 

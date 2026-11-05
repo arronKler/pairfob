@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
 import { Button, EmptyState, AgentAvatar, type EmptySpec } from "../../../shared/ui/primitives";
-import { paneBoxes, type PaneBox, type TabLayout } from "../../../lib/layout";
+import { paneBoxes, type PaneBox } from "../../../lib/layout";
 import { tileFillScale } from "../model/camera";
 import { layoutDraft, subscribeLayoutDraft } from "../model/draft-store";
 import { layoutWithSplitRatio } from "../model/layout-draft";

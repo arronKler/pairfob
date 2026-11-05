@@ -17,7 +17,6 @@ import {
   currentDaemonId,
   liveSession,
   setAddingComputer,
-  setComputers,
   setCredential,
   setLastUsedDaemon,
 } from "../computers/catalog-store";

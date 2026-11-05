@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 )
 
 const (
@@ -126,15 +125,6 @@ func JSON(typ byte, routeID [16]byte, v any) Frame {
 		panic(err)
 	}
 	return Frame{Version: Version, Typ: typ, RouteID: routeID, Payload: p}
-}
-
-func WriteWS(w io.Writer, f Frame) error {
-	b, err := EncodeChecked(f)
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(b)
-	return err
 }
 
 type ErrorBody struct {

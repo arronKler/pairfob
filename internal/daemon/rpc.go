@@ -30,10 +30,6 @@ func (e *Engine) reply(s *sess, id string, result any) bool {
 	return e.sendRPCResult(s, id, result, false)
 }
 
-func (e *Engine) replyMedia(s *sess, id string, result any) bool {
-	return e.sendRPCResult(s, id, result, true)
-}
-
 // replyMediaAuthorized sends a media result, but performs a final BOUNDED owner
 // check after acquiring the send lock and immediately before sealing/sending.
 // The interactive-priority gate can make a media reply wait inside lockSend
@@ -271,11 +267,6 @@ func validMaybePath(value string) bool { return value == "" || validPath(value) 
 
 func validOptionalText(value string, limit int) bool {
 	return value == "" || (utf8.RuneCountInString(value) <= limit && utf8.ValidString(value))
-}
-
-func IsValidHerdrKey(key string) bool {
-	_, ok := runtime.CanonicalSendKey(key)
-	return ok
 }
 
 // IdleSince reports how long no RPC has arrived on any session.

@@ -37,21 +37,21 @@ test("positive normal load owns only plain frozen media view and revokes on reti
 });
 test("loading publication retirement prevents any old Open RPC",async()=>{
  const a=await seed();let retired=false;stops.push(store.subscribeWorkspace(()=>{if(!retired&&store.getWorkspaceSnapshot().media.status==="loading"){retired=true;store.beginLeave();}}));
- const result=await media.loadWorkspaceMedia("a.bin");console.log("RETIRED_INITIAL",JSON.stringify({retired,result,opens:a.opens}));expect(retired).toBeTrue();expect(a.opens).toEqual([]);expect(result).toBeFalse();
+ const result=await media.loadWorkspaceMedia("a.bin");expect(retired).toBeTrue();expect(a.opens).toEqual([]);expect(result).toBeFalse();
 });
 test("a load begun by loading subscriber beats the older continuation",async()=>{
  const a=await seed();let once=false;let newer:Promise<boolean>|undefined;stops.push(store.subscribeWorkspace(()=>{const m=store.getWorkspaceSnapshot().media;if(!once&&m.path==="a.bin"&&m.status==="loading"){once=true;newer=media.loadWorkspaceMedia("b.bin");}}));
- const older=await media.loadWorkspaceMedia("a.bin");const latest=await newer;console.log("REENTRANT_LOAD",JSON.stringify({older,latest,opens:a.opens,media:store.getWorkspaceSnapshot().media}));expect(older).toBeFalse();expect(latest).toBeTrue();expect(store.getWorkspaceSnapshot().media.path).toBe("b.bin");
+ const older=await media.loadWorkspaceMedia("a.bin");const latest=await newer;expect(older).toBeFalse();expect(latest).toBeTrue();expect(store.getWorkspaceSnapshot().media.path).toBe("b.bin");
 });
 test("tab publication cannot clear a replacement media load started by its subscriber",async()=>{
  await seed();media.prepareWorkspaceMedia("a.bin",0);await media.loadWorkspaceMedia("a.bin");let once=false;let newer:Promise<boolean>|undefined;
  stops.push(store.subscribeWorkspace(()=>{if(!once&&store.getWorkspaceSnapshot().tab==="changes"){once=true;media.prepareWorkspaceMedia("b.bin",0);newer=media.loadWorkspaceMedia("b.bin");}}));
- showWorkspaceTab("changes");const latest=await newer;console.log("TAB_REENTRY",JSON.stringify({latest,media:store.getWorkspaceSnapshot().media}));expect(latest).toBeTrue();expect(store.getWorkspaceSnapshot().media.path).toBe("b.bin");
+ showWorkspaceTab("changes");const latest=await newer;expect(latest).toBeTrue();expect(store.getWorkspaceSnapshot().media.path).toBe("b.bin");
 });
 test("actual diff navigation retires a held media operation",async()=>{
  const a=await seed();const gate=deferred<WorkspaceMediaOpen>();const entered=deferred<void>();a.workspaceMediaOpen=async(_pane,path)=>{a.opens.push(path);entered.resolve();return gate.promise;};
  const old=media.loadWorkspaceMedia("a.bin");await entered.promise;await loadGitDiff("other.ts","worktree");gate.resolve(opened("a.bin"));const result=await old;
- console.log("DIFF_OWNER",JSON.stringify({result,view:store.getWorkspaceSnapshot().view,media:store.getWorkspaceSnapshot().media}));expect(result).toBeFalse();expect(store.getWorkspaceSnapshot().view).toBe("diff");expect(store.getWorkspaceSnapshot().media.url).toBe("");
+ expect(result).toBeFalse();expect(store.getWorkspaceSnapshot().view).toBe("diff");expect(store.getWorkspaceSnapshot().media.url).toBe("");
 });
 test("positive root retirement closes late old Open without revoking replacement URL",async()=>{
  const a=await seed();const gate=deferred<WorkspaceMediaOpen>();const entered=deferred<void>();a.workspaceMediaOpen=async(_pane,path)=>{a.opens.push(path);entered.resolve();return gate.promise;};

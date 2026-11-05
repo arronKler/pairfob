@@ -57,13 +57,3 @@ func (t *transcript) Close() {
 func (t *transcript) from(offset int64) io.Reader {
 	return io.NewSectionReader(t.reader, offset, t.size-offset)
 }
-
-// unchanged reports whether a log file still has the size and time it was
-// opened with. Rendered store lines are a snapshot and cannot change.
-func (t *transcript) unchanged() bool {
-	if t.file == nil {
-		return true
-	}
-	info, err := t.file.Stat()
-	return err == nil && info.Size() == t.size && info.ModTime().UnixNano() == t.modified
-}

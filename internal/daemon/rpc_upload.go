@@ -83,10 +83,6 @@ func decodeUploadDataBounded(s string, maxChunk int) ([]byte, error) {
 	return data, nil
 }
 
-func decodeUploadData(s string) ([]byte, error) {
-	return decodeUploadDataBounded(s, uploadChunkBytes)
-}
-
 func (e *Engine) uploadRoot(s *sess, id string, p workspacePaneParams) (string, bool) {
 	if invalidSession(p.Session) || !validID(p.PaneID) {
 		e.replyErr(s, id, "invalid_argument", "invalid upload pane")

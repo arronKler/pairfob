@@ -276,12 +276,6 @@ func (f *fakeCoreTransport) closeEventStream() {
 	}
 }
 
-func (f *fakeCoreTransport) output(channel uint32) chan coreStreamItem {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.outputs[channel]
-}
-
 func (f *fakeCoreTransport) eventCallCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

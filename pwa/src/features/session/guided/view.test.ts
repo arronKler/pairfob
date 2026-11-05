@@ -276,7 +276,7 @@ describe("pane header keeps status surfaces in step", () => {
       patchChromeTitle();
     });
     // "Split" is layout, not identity: it lives in the ⋯ menu.
-    expect(appRoot().querySelector(".chrome-meta")?.textContent).not.toContain(t("chrome.split"));
+    expect(appRoot().querySelector(".chrome-meta")?.textContent).not.toMatch(/Split|分屏/);
     expect(chromeSource).toContain("paneIdentity(");
   });
 });

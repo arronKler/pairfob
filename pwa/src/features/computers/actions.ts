@@ -27,12 +27,11 @@ import { friendlyDeviceLabel } from "../../lib/ui-model";
 import { track } from "../../lib/telemetry";
 import { relayOrigin } from "../../lib/runtime-config";
 import {
-  closeComputerSession, establish, instantComputers, landAfterDisconnect, refreshFromSession, reloadComputers,
+  closeComputerSession, establish, instantComputers, landAfterDisconnect, reloadComputers,
   startPolling, stopPolling,
 } from "../connection/controller";
 import { askConfirm, askText } from "../../shared/ui/overlay/basic-dialogs";
 import { forgetDaemonAttachments } from "../session/attachments/attachments-recovery";
-import { retirePairingWork } from "../pairing/work";
 import type { ComputersBackTarget, ComputersViewInput } from "./model";
 import { advanceComputersFlow, computersFlowId } from "./work";
 import { createMachineLinks } from "./machine-link";

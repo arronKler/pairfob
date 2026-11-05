@@ -1,5 +1,5 @@
 import { topDialogBack, subscribeDialogBack } from "../shared/ui/overlay/back";
-import { getAppFrame, subscribeAppFrame } from "./frame";
+import { subscribeAppFrame } from "./frame";
 import { bindBackHistory } from "./back-history";
 import { parseNotificationURL } from "../lib/notification-target";
 import { connectedPresentation, subscribePresentation } from "./presentation";

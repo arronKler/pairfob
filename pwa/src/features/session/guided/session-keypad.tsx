@@ -2,7 +2,7 @@ import { ChevronDown, Ellipsis } from "lucide-react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../../../lib/i18n";
 import { useKeysExpanded } from "../../settings/hooks";
-import { keysExpanded, setKeysExpanded } from "../../settings/preferences-store";
+import { setKeysExpanded } from "../../settings/preferences-store";
 import {
   PRIMARY_KEYS,
   PAGE_KEYS,

@@ -36,13 +36,11 @@ import { t } from "../../lib/i18n";
 test("current unknown_op retains its actual unsupported-daemon error",async()=>{
  const a=await seed();a.workspaceMediaOpen=async()=>{throw new ProtocolError("unknown_op","WorkspaceMediaOpen");};
  const result=await media.loadWorkspaceMedia("a.bin");const error=store.getWorkspaceSnapshot().media.error;
- console.log("CURRENT_ERROR",JSON.stringify({result,error,expected:t("workspace.media.unsupportedDaemon")}));
  expect(result).toBeFalse();expect(error).toBe(t("workspace.media.unsupportedDaemon"));
 });
 test("ordinary tab navigation retires its current ready media resource",async()=>{
  await seed();expect(await media.loadWorkspaceMedia("a.bin")).toBeTrue();const url=store.getWorkspaceSnapshot().media.url;
  showWorkspaceTab("changes");
- console.log("TAB_RETIRE",JSON.stringify({view:store.getWorkspaceSnapshot().view,media:store.getWorkspaceSnapshot().media,revoked,privateURL:store.workspaceMediaLoader().currentURL()}));
  expect(store.getWorkspaceSnapshot().view).toBe("browser");expect(revoked).toEqual([url]);expect(store.workspaceMediaLoader().currentURL()).toBe("");
 });
 for (const stage of ["file", "prepare"] as const) test(`binary image ${stage} publication retirement prevents old autoload under replacement pane`,async()=>{
@@ -54,7 +52,6 @@ for (const stage of ["file", "prepare"] as const) test(`binary image ${stage} pu
   if(!retired&&at){retired=true;const {ticket}=store.beginEnter(a as unknown as LiveSession,"p2","guided");ticket.finishLoad();}
  }));
  await loadWorkspaceFile("old.png");
- console.log("FILE_PREPARE_OWNER",JSON.stringify({stage,retired,requests,pane:store.getWorkspaceSnapshot().paneId,media:store.getWorkspaceSnapshot().media}));
  expect(retired).toBeTrue();expect(store.getWorkspaceSnapshot().paneId).toBe("p2");expect(requests).toEqual([]);
 });
 

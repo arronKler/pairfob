@@ -93,14 +93,6 @@ func B64URL(b []byte) string {
 	return string(out[:j])
 }
 
-func MustDecodeB64URL(s string) []byte {
-	b, err := DecodeB64URL(s)
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
-
 func DecodeB64URL(s string) ([]byte, error) {
 	const alph = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 	// Raw base64url can only have 0, 2, or 3 characters in its final

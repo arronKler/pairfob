@@ -5,7 +5,7 @@ import { jsonFrame, parseJSON, Typ, type Frame } from "./envelope.ts";
 import { ProtocolError } from "./errors.ts";
 import type { FrameChannel } from "./frame-channel.ts";
 import { envelopeError, parseExactB64, requireHeartbeatPayload, sameBytes, Z16 } from "./frame-socket.ts";
-import { fingerprint16, proof, transcriptD, transcriptP, verifyEd25519 } from "./hello.ts";
+import { proof, transcriptD, transcriptP, verifyEd25519 } from "./hello.ts";
 import { sessionKeys } from "./kdf.ts";
 import type { MuxProtocol } from "./mux.ts";
 import type { PairResult } from "./pair-ws.ts";

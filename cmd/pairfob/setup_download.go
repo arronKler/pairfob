@@ -9,19 +9,6 @@ import (
 	"runtime"
 )
 
-func installHerdr() error {
-	f, err := localHerdrFiles()
-	if err != nil {
-		return err
-	}
-	lock, err := f.lock()
-	if err != nil {
-		return err
-	}
-	defer lock.Close()
-	return installHerdrLocked(f)
-}
-
 func installHerdrLocked(f herdrFiles) error {
 	if err := f.recoverInstall(); err != nil {
 		return err

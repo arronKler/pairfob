@@ -85,9 +85,6 @@ func Listen(opts Options) (*Server, error) {
 	}, nil
 }
 
-// Path is the bound socket file.
-func (s *Server) Path() string { return s.path }
-
 // Serve accepts views until Close. It returns nil after a Close.
 func (s *Server) Serve() error {
 	for {

@@ -222,18 +222,3 @@ func canonicalHTTPOrigin(raw string) (string, error) {
 	}
 	return scheme + "://" + host, nil
 }
-
-func relayPathLabel(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return ""
-	}
-	switch strings.TrimSuffix(u.Path, "/") {
-	case "/v1/ws":
-		return "/v1/ws"
-	case "/v2/ws":
-		return "/v2/ws"
-	default:
-		return u.Path
-	}
-}

@@ -95,7 +95,6 @@ export const zhErrors = {
   "err.timeoutNetwork": "网络请求超时",
   "err.pairStart": "无法开始配对",
   "err.controllerSwitch": "终端控制器已经切换",
-  "err.pairAttach": "v2 PAIR_ATTACH 必须带 pair_ref",
 } as const;
 
 export const enErrors = {
@@ -190,5 +189,4 @@ export const enErrors = {
   "err.timeoutNetwork": "The network request timed out",
   "err.pairStart": "Could not start pairing",
   "err.controllerSwitch": "The terminal controller already switched",
-  "err.pairAttach": "v2 PAIR_ATTACH requires pair_ref",
 } as const;

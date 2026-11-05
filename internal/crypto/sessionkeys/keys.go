@@ -3,7 +3,6 @@ package sessionkeys
 import (
 	"crypto/ed25519"
 	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/json"
 
 	"pairfob/internal/crypto/canon"
@@ -97,5 +96,3 @@ func MustJSON(v any) []byte {
 func HMACEqual(a, b []byte) bool {
 	return hmac.Equal(a, b)
 }
-
-func SHA256(b []byte) [32]byte { return sha256.Sum256(b) }
