@@ -195,6 +195,18 @@ the major only for a backward-incompatible change. A release commit carries the
 matching `herdr-plugin.toml` version and its `plugin/herdr/plugin.test.ts`
 assertion.
 
+macOS daemon artifacts are signed with the project's self-signed `Pairfob
+Daemon Signing` certificate. Its SHA-1 is pinned in
+`scripts/macos-signing.sh` and must stay stable across releases: TCC pins the
+certificate leaf, which is what keeps Screen Recording, Full Disk Access and
+folder grants across updates. The private key lives only in the release Mac's
+keychain, never in the repo or CI logs. Rotating the certificate costs every
+user one privacy re-grant; upgrading to a Developer ID is an allowed one-time
+change. The first self-signed release needs an ad-hoc bridge built from this
+updater and kept live for at least 72 hours, because older released binaries
+reject a teamless certificate candidate. Installations that miss the bridge
+must rerun the installer once.
+
 Daemon artifacts publish with `scripts/publish-daemon.sh`, independently of
 the relay. The shared download Worker also serves Android and the desktop
 channel; use the channel publishers so a fresh checkout restores and verifies

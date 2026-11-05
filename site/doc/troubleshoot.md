@@ -88,9 +88,11 @@ If no daemon is running, `pairfob run` starts it in the foreground. Check
 
 Access to other apps' data and access to Downloads, Desktop or Documents are
 different permissions. Some app-container consent lasts only for the running
-process, so restarting the daemon can prompt again. Old or locally built ad-hoc
-executables may also lose grants on replacement. Release builds use a stable
-developer signing identity; switching from the old identity may require a new grant.
+process, so restarting the daemon can prompt again. Release builds are signed
+with a stable Pairfob certificate, so installing a later version keeps those
+grants. Switching from an older ad-hoc build, or from a different signing
+identity, can require one new grant. Locally built ad-hoc executables may lose
+grants on every replacement.
 
 Terminal and chat do not require access to Photos, screen recording,
 Accessibility or Input Monitoring. File features access the selected workspace;

@@ -282,8 +282,15 @@ signed by the old key that embeds the new one, or a manual reinstall.
 
 #### macOS signing and privacy permissions
 
-Build and publish daemon releases on macOS with the release team's **Developer
-ID Application** certificate and private key installed. Before `release.sh`:
+macOS TCC identifies an app by its designated requirement. Ad-hoc signing pins
+the binary hash (`cdhash`), so every daemon update can ask for Screen
+Recording, Full Disk Access and folder grants again. A certificate-signed
+release pins the certificate leaf instead (`certificate leaf = H"..."`), which
+does not change when the binary does. Build and publish daemon releases on
+macOS with either the release team's **Developer ID Application** certificate
+or the project's self-signed **Pairfob Daemon Signing** certificate.
+
+Developer ID mode is the default. Before `release.sh`:
 
 ```sh
 export PAIRFOB_MACOS_TEAM_ID=YOURTEAMID
@@ -304,7 +311,65 @@ requirements pinned to a binary hash. Signing does not grant privacy permissions
 or constitute Apple notarization; notarization is a separate distribution step.
 See [Apple's distribution signing instructions](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac/).
 
-For a release without a certificate, explicitly enable the no-certificate mode
+Self-signed mode needs no Apple Developer account. Create the certificate once
+on the release Mac and reuse the same identity for every release. Keep the
+working files outside the checkout so a private key can never be staged with
+the repository:
+
+```sh
+signing_dir="$(mktemp -d "${TMPDIR:-/tmp}/pairfob-signing.XXXXXX")"
+chmod 700 "$signing_dir"
+cat >"$signing_dir/pairfob-signing.cnf" <<'EOF'
+[req]
+distinguished_name = dn
+x509_extensions = v3
+prompt = no
+[dn]
+CN = Pairfob Daemon Signing
+[v3]
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,digitalSignature,keyCertSign
+extendedKeyUsage = critical,codeSigning
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always
+EOF
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+  -keyout "$signing_dir/pairfob-signing.key" -out "$signing_dir/pairfob-signing.crt" \
+  -config "$signing_dir/pairfob-signing.cnf"
+printf 'p12 password: '; read -r -s PAIRFOB_SIGNING_P12_PASSWORD; echo
+openssl pkcs12 -export -inkey "$signing_dir/pairfob-signing.key" \
+  -in "$signing_dir/pairfob-signing.crt" -out "$signing_dir/pairfob-signing.p12" \
+  -name "Pairfob Daemon Signing" -passout "pass:$PAIRFOB_SIGNING_P12_PASSWORD"
+security import "$signing_dir/pairfob-signing.p12" \
+  -k "$HOME/Library/Keychains/login.keychain-db" \
+  -P "$PAIRFOB_SIGNING_P12_PASSWORD" -T /usr/bin/codesign
+openssl x509 -in "$signing_dir/pairfob-signing.crt" -outform der | shasum -a 1
+```
+
+Move the `.p12` to encrypted offline storage, then remove `$signing_dir`.
+Trust settings are not required: `codesign` can sign with the imported
+identity, and verification uses the certificate embedded in the signature.
+Signing addresses the certificate by its SHA-1, not by common name, so a
+different certificate with the same name cannot be selected by accident.
+On another release Mac, import the backed-up `.p12` with `security import`
+instead of creating a new certificate. Put the printed SHA-1 in
+`PAIRFOB_MACOS_SELF_SIGNED_SHA1` in `scripts/macos-signing.sh`. Then sign and
+publish with:
+
+```sh
+PAIRFOB_MACOS_SELF_SIGNED=1 VERSION=vX.Y.Z ./scripts/release.sh
+PAIRFOB_MACOS_SELF_SIGNED=1 ./scripts/publish-daemon.sh --source dist/daemon --deploy
+```
+
+The builder signs both Darwin architectures with a timestamp and hardened
+runtime, and verifies the code identifier, `TeamIdentifier=not set`, the
+timestamp, the absence of `cdhash`, and the pinned certificate leaf before
+hashing. The publisher repeats that verification before touching any download
+channel. `PAIRFOB_MACOS_SIGN_IDENTITY` and `PAIRFOB_MACOS_TEAM_ID` are not used
+in this mode. Rotating the certificate costs every installation one privacy
+re-grant, so treat it like a versioned release artifact.
+
+For a release without any certificate, explicitly enable the no-certificate mode
 on a Mac with Xcode Command Line Tools for both building and publishing:
 
 ```sh
@@ -316,19 +381,37 @@ This mode applies and verifies ad-hoc signatures with `com.pairfob.daemon` on bo
 Darwin architectures before hashing or touching the download channels. It needs
 no Team ID or certificate. Ad-hoc signing checks executable integrity, provides
 no publisher identity, and is not notarization. These builds may lose privacy
-grants after updates. The default mode still requires Developer ID signing. Do not re-sign an installed daemon
-in place as a workaround: its published checksum would no longer match.
+grants after updates; prefer self-signed mode when a Developer ID is
+unavailable. The default mode still requires Developer ID signing. Do not
+re-sign an installed daemon in place as a workaround: its published checksum
+would no longer match.
 
 The CLI and remote updater verify the staged Darwin candidate before replacement
-or execution. A signed installed image requires the same Team ID, code identifier,
-and its original designated requirement. HTTPS updates of old unsigned/ad-hoc
-images accept a valid ad-hoc candidate with `com.pairfob.daemon`, or migrate to a
-valid Developer ID candidate with the same identifier. Both paths trust the
-existing HTTPS/checksum channel; the first Developer ID migration establishes
-the team for subsequent updates. A Developer ID installation rejects an ad-hoc
-candidate even when no-certificate publication was explicitly enabled. Only
+or execution. A Developer ID installed image requires the same Team ID, code
+identifier, and its original designated requirement. A self-signed installed
+image requires the same certificate leaf, code identifier, and designated
+requirement. HTTPS updates of old unsigned/ad-hoc images accept a valid ad-hoc
+candidate with `com.pairfob.daemon`, or migrate once to a valid Developer ID or
+self-signed candidate with the same identifier. Both paths trust the existing
+HTTPS/checksum channel and signed manifest; the first migration establishes the
+stable identity for subsequent updates. A self-signed installation may upgrade
+once to Developer ID. Developer ID and self-signed installations reject an
+ad-hoc candidate, a different certificate, or a requirement pinned to a binary
+hash, even when no-certificate publication was explicitly enabled. Only
 unsigned/ad-hoc development installs updated from an HTTP loopback server can
 use unsigned fixtures. That exception never applies to a signed installed image.
+
+Releases published before this verifier shipped reject a self-signed candidate:
+they require a Developer ID or an ad-hoc signature. The first self-signed
+release therefore needs a bridge. Build one ad-hoc release **from this commit**
+with `PAIRFOB_ALLOW_UNSIGNED_MACOS=1`, publish it, and keep it as the live
+`VERSION` through the auto-update soak and a full adoption window (several
+six-hour checks; at least 72 hours) before publishing the first self-signed
+release. Any installation that missed the bridge, or that attempts the
+self-signed release directly, must rerun the install command once; the
+installer replaces the binary without consulting the old updater. Do not
+publish a self-signed release as the immediate successor to a release that
+predates this update logic.
 
 A daemon installed by the user-level service also self-updates patch releases.
 Every six hours it reads `https://dl.pairfob.com/daemon/VERSION` and installs a
@@ -339,12 +422,13 @@ fails to install waits for the next version instead of retrying. Set
 `PAIRFOB_AUTO_UPDATE=0` to turn the loop off; updating from the app keeps
 working either way.
 
-Moving from an old ad-hoc build to the signed identity can require one new user
-grant. Stable signing preserves identity across subsequent updates; it does not
-turn macOS process-lifetime app-container consent into permanent access. Test
-that boundary on a Mac without Full Disk Access: select a concrete project,
-restart the daemon, then upgrade to another build signed by the same team.
-Check directory consent separately from app-container and Keychain prompts.
+Moving from an old ad-hoc build to a Developer ID or self-signed identity can
+require one new user grant. Stable signing preserves identity across subsequent
+updates; it does not turn macOS process-lifetime app-container consent into
+permanent access. Test that boundary on a Mac without Full Disk Access: select a
+concrete project, restart the daemon, then upgrade to another build signed by the
+same team or certificate. Check directory consent separately from app-container
+and Keychain prompts.
 
 Privacy acceptance on a disposable macOS account (do not reset an operator's TCC):
 
@@ -357,9 +441,10 @@ Privacy acceptance on a disposable macOS account (do not reset an operator's TCC
    the admin response, logs, or a phone response.
 3. Restart, lock/unlock, and sleep/wake. Reads may require local action again,
    but ordinary quota refresh must not display Keychain UI.
-4. Upgrade between two builds signed by the same team and identifier; check
-   retained file grants. Reject an ad-hoc, wrong-team, wrong-identifier, modified,
-   or incompatible-requirement candidate before execution and replacement.
+4. Upgrade between two builds signed by the same Team ID or certificate and
+   identifier; check retained file grants. Reject an ad-hoc, wrong-team,
+   wrong-identifier, different-certificate, modified, or incompatible-requirement
+   candidate before execution and replacement.
 5. With `PAIRFOB_QUOTA_PROVIDERS=codex`, confirm disabled sources are not touched.
    With `none` or an invalid list, confirm no provider discovery occurs.
 
