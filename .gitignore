@@ -45,6 +45,8 @@ ui-review/
 !.env.example
 .prod-operator-token
 *.srl
+pairfob-signing.key
+pairfob-signing.p12
 
 # test / tool junk
 pairfob-doctor-*.zip

@@ -16,7 +16,10 @@ import (
 
 const macDaemonIdentifier = "com.pairfob.daemon"
 
-var macTeamID = regexp.MustCompile(`^[A-Z0-9]{10}$`)
+var (
+	macTeamID                 = regexp.MustCompile(`^[A-Z0-9]{10}$`)
+	macCertificateRequirement = regexp.MustCompile(`certificate (?:leaf|0|root)\s*=\s*H"[0-9A-Fa-f]{40}"`)
+)
 
 type macIdentity struct {
 	identifier, team, requirement string
@@ -80,6 +83,16 @@ func readMacIdentity(path string, run codesignRunner) (macIdentity, error) {
 	return identity, nil
 }
 
+// A self-signed release pins the certificate leaf, not the binary hash. TCC
+// keeps grants across updates when that requirement stays unchanged.
+func macStableCertificate(identity macIdentity) bool {
+	return identity.team == "" && !identity.adhoc && identity.identifier == macDaemonIdentifier &&
+		!strings.Contains(identity.requirement, "cdhash") &&
+		macCertificateRequirement.MatchString(identity.requirement)
+}
+
+const macDeveloperRequirement = `anchor apple generic and identifier "%s" and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "%s"`
+
 func verifyUpdateIdentity(current, candidate, base string) error {
 	if runtime.GOOS != "darwin" {
 		return nil
@@ -113,19 +126,27 @@ func verifyMacUpdateIdentity(current, candidate, base string, run codesignRunner
 	if err != nil {
 		return err
 	}
-	// Local fixture/development servers may update an unsigned development image.
-	// A signed installed image never permits this exception, even on loopback.
+	// An installation without a stable publisher identity may be replaced from
+	// a local fixture server. A certificate-signed image never takes this
+	// shortcut, even on loopback.
+	legacy := old.team == "" && (old.adhoc || old.identifier == "")
 	source, _ := url.Parse(base)
-	if old.team == "" && source != nil && source.Scheme == "http" && allowedDownloadBase(base) == nil {
+	if legacy && source != nil && source.Scheme == "http" && allowedDownloadBase(base) == nil {
 		return nil
 	}
 	next, err := readMacIdentity(candidate, run)
 	if err != nil {
 		return err
 	}
+	if next.identifier != macDaemonIdentifier {
+		return errors.New("update requires the com.pairfob.daemon identifier; current binary was kept")
+	}
 	// An installation without a certificate may keep using the HTTPS/checksum
 	// channel. Signed installations never take this path or downgrade identity.
-	if old.team == "" && next.team == "" && next.adhoc && next.identifier == macDaemonIdentifier {
+	if next.adhoc {
+		if !legacy {
+			return errors.New("update would downgrade the macOS privacy identity; current binary was kept")
+		}
 		if allowedDownloadBase(base) != nil {
 			return errors.New("invalid update source")
 		}
@@ -134,23 +155,47 @@ func verifyMacUpdateIdentity(current, candidate, base string, run codesignRunner
 		}
 		return nil
 	}
-	if next.team == "" || next.identifier != macDaemonIdentifier || strings.Contains(next.requirement, "cdhash") {
-		return errors.New("update requires a stable Developer ID signature; current binary was kept")
+	if strings.Contains(next.requirement, "cdhash") {
+		return errors.New("update requires a stable signature requirement; current binary was kept")
 	}
-	required := fmt.Sprintf(`anchor apple generic and identifier "%s" and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "%s"`, macDaemonIdentifier, next.team)
-	if _, err = run("--verify", "--strict", "--test-requirement", "="+required, candidate); err != nil {
-		return errors.New("update failed Developer ID signature verification; current binary was kept")
+	developerID := next.team != ""
+	if !developerID && !macStableCertificate(next) {
+		return errors.New("update requires a Developer ID or self-signed certificate signature; current binary was kept")
 	}
-	if old.team == "" {
+	if developerID {
+		required := fmt.Sprintf(macDeveloperRequirement, macDaemonIdentifier, next.team)
+		if _, err = run("--verify", "--strict", "--test-requirement", "="+required, candidate); err != nil {
+			return errors.New("update failed Developer ID signature verification; current binary was kept")
+		}
+	} else if _, err = run("--verify", "--strict", "--test-requirement", "="+next.requirement, candidate); err != nil {
+		// Evaluate the candidate against its own requirement so a custom
+		// requirement cannot name a certificate that did not sign it.
+		return errors.New("update failed certificate signature verification; current binary was kept")
+	}
+
+	// First migration from an installation without a stable identity trusts the
+	// HTTPS, signed-manifest and checksum channel, as the Developer ID migration
+	// does. Later updates must keep the installed requirement.
+	if legacy {
 		return nil
-	} // First migration: HTTPS + checksum + Developer ID.
-	if old.team != next.team || old.identifier != next.identifier || strings.Contains(old.requirement, "cdhash") {
+	}
+	if old.team != "" {
+		if !developerID || old.team != next.team {
+			return errors.New("update would change the Developer ID identity; current binary was kept")
+		}
+	} else if developerID {
+		// One-time upgrade from the self-signed identity to Developer ID.
+		return nil
+	}
+	if old.identifier != next.identifier || strings.Contains(old.requirement, "cdhash") {
 		return errors.New("update would change macOS privacy identity; current binary was kept")
 	}
 	if _, err = run("--verify", "--strict", current); err != nil {
 		return errors.New("installed macOS signature is invalid")
 	}
-	// Same Team ID alone is insufficient: the candidate must satisfy the old DR.
+	// Same Team ID or certificate alone is insufficient: the candidate must
+	// satisfy the installed designated requirement. For a self-signed image
+	// that requirement pins the certificate leaf hash.
 	if _, err = run("--verify", "--strict", "--test-requirement", "="+old.requirement, candidate); err != nil {
 		return errors.New("update does not preserve the installed macOS signing requirement")
 	}

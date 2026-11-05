@@ -111,8 +111,14 @@ func writePrivacyDoctor(out io.Writer, sock string) {
 		fmt.Fprintln(out, "  Signing     could not inspect the installed image")
 		return
 	}
-	if identity.team == "" {
+	if identity.adhoc || identity.identifier == "" {
 		fmt.Fprintln(out, "  Signing     unsigned or ad-hoc; updates can require new privacy grants")
+	} else if identity.team == "" {
+		if macStableCertificate(identity) {
+			fmt.Fprintln(out, "  Signing     self-signed certificate; privacy grants survive updates")
+		} else {
+			fmt.Fprintln(out, "  Signing     certificate without a stable privacy requirement; updates can require new grants")
+		}
 	} else {
 		fmt.Fprintf(out, "  Signing     %q (team %s)\n", identity.identifier, identity.team)
 	}
