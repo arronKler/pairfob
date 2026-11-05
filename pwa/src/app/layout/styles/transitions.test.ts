@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * A fade between pages at one depth moves the page, not what stays beside it.
  * What is seen is checked in a browser; the rules it rests on are pinned here.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
   .map(match => ({ selectors: match[1].split(",").map(part => part.trim().replace(/\s+/g, " ").replace(/"/g, "")), body: match[2] }));

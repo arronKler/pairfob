@@ -1,8 +1,7 @@
 import { expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
-const canvas = compile(fileURLToPath(new URL("./board-canvas.scss", import.meta.url)), { style: "expanded" }).css;
+const canvas = compileScss(new URL("./board-canvas.scss", import.meta.url)).css;
 
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

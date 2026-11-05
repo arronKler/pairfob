@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * The close question at the foot of the session menu. Its boxes are measured in
  * a browser; the rules that keep a long path and a scaled-up label inside the
  * card are pinned here.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 const rules = (selector: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
   .filter(match => match[1].split(",").map(part => part.trim().replace(/\s+/g, " ")).includes(selector)).map(match => match[2]).join("\n");

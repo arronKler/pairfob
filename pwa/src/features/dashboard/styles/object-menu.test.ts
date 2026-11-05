@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * The row menu as a sheet. Whether its actions fit a phone is measured in a
  * browser; what that rests on is pinned here: the heights the sheet is built
  * from, and that none of it reaches the popover or another sheet.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(match => ({ selector: match[1].trim().replace(/\s+/g, " "), body: match[2] }));
 const rules = (selector: string) => blocks.filter(block => block.selector.split(",").map(part => part.trim()).includes(selector))

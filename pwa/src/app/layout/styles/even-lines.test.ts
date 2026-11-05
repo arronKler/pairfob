@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * A short explanatory paragraph (a note, a footnote, a lede, an item's second
@@ -10,7 +9,7 @@ import { fileURLToPath } from "node:url";
  * every width and in both languages; that every such paragraph asks for it is
  * pinned here, across the sheets that own them.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 const declared = (selector: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
   .filter(match => match[1].split(",").map(part => part.trim()).includes(selector)).map(match => match[2]).join("\n");

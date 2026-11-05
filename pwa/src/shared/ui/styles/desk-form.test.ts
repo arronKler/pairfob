@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * Below 900px a dialog is a bottom sheet by width alone, so every rule that
  * makes or dresses the sheet has to step aside for the desk form: the card a
  * mouse or the keyboard gets beside the list must be the wide window's card.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Every rule inside every `@media (max-width: 899.98px)` block, as `[selector, body]`. */

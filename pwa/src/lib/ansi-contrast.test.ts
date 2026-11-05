@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../test-support/compiled-style";
 import { parseAnsi, spanCss, spanInk } from "./ansi";
 import { contrast, legibleInk, MIN_TEXT_CONTRAST, TERM_BACKGROUND, TERM_INK, UNREADABLE_CONTRAST } from "./ansi-contrast";
 
-const css = compile(fileURLToPath(new URL("../style.scss", import.meta.url))).css;
+const css = compileScss(new URL("../style.scss", import.meta.url)).css;
 
 describe("contrast", () => {
   test("is the WCAG ratio, either way round", () => {

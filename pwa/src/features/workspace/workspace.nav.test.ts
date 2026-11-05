@@ -18,7 +18,7 @@ const { openPaneId, resetPaneView, selectPane } = await import("../session/sessi
 const { attachLiveSession, liveSession } = await import("../computers/catalog-store.ts");
 const { applySnapshot } = await import("../dashboard/catalog-store.ts");
 const { applyCapabilities, clearCapabilities, setOperationBusy } = await import("../operations/capabilities-store.ts");
-const { enterWorkspace, leaveWorkspace, loadDirectory, loadGitDiff, loadWorkspaceFile, refreshWorkspace, workspaceModel, WORKSPACE_PENDING_DELAY_MS, clearWorkspacePendingReveal } = await import("./index.ts");
+const { enterWorkspace, leaveWorkspace, loadDirectory, loadGitDiff, loadWorkspaceFile, refreshWorkspace, workspaceModel, clearWorkspacePendingReveal } = await import("./index.ts");
 const { ProtocolError } = await import("../../lib/protocol/errors.ts");
 const { diffNoteScope, upsertDiffNote, diffNotes, clearAllDiffNotes } = await import("../../lib/diff-notes.ts");
 const { WORKSPACE_CACHE_TTL_MS } = await import("../../lib/workspace-cache.ts");
@@ -121,8 +121,14 @@ async function actRun(work: () => unknown): Promise<void> {
   await act(async () => { await work(); });
 }
 
-async function waitForPending(): Promise<void> {
-  await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, WORKSPACE_PENDING_DELAY_MS + 20)); });
+// The skeleton is what the test is about, so wait for it rather than for a
+// clock: a loaded machine can delay the pending timer past any fixed sleep.
+async function waitForPending(selector: string): Promise<void> {
+  const deadline = Date.now() + 5000;
+  while (!app.querySelector(selector)) {
+    if (Date.now() >= deadline) throw new Error(`waitForPending timed out: ${selector}`);
+    await act(async () => { await new Promise<void>((resolve) => window.setTimeout(resolve, 10)); });
+  }
 }
 
 function prepare(live: LiveSession = liveFixture()): void {
@@ -399,7 +405,7 @@ describe("mobile workspace navigation", () => {
     let load!: ReturnType<typeof loadWorkspaceFile>;
     act(() => { load = loadWorkspaceFile("src/app.ts"); });
     expect(app.querySelector(".workspace-file-pending")).toBeNull();
-    await waitForPending();
+    await waitForPending(".workspace-file-pending");
     const pending = app.querySelector(".workspace-file-pending");
     expect(pending).toBeTruthy();
     expect(pending?.getAttribute("role")).toBe("status");
@@ -597,7 +603,7 @@ describe("mobile workspace navigation", () => {
     });
     let opening!: Promise<void>;
     act(() => { opening = enterWorkspace("p1", undefined, false, "files"); });
-    await waitForPending();
+    await waitForPending(".workspace-list-pending");
     const pending = app.querySelector(".workspace-list-pending");
     expect(pending?.getAttribute("aria-label")).toContain("正在读取工作区");
     expect(app.querySelectorAll(".workspace-list-skeleton-row").length).toBe(10);
@@ -641,7 +647,7 @@ describe("mobile workspace navigation", () => {
 
     let load!: ReturnType<typeof loadGitDiff>;
     act(() => { load = loadGitDiff("src/app.ts", "worktree"); });
-    await waitForPending();
+    await waitForPending(".workspace-diff-pending");
     const pending = app.querySelector(".workspace-diff-pending");
     expect(pending?.getAttribute("aria-label")).toContain("正在读取差异");
     expect(app.querySelectorAll(".workspace-diff-skeleton-line").length).toBe(28);

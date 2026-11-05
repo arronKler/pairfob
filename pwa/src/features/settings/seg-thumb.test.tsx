@@ -1,8 +1,7 @@
 import { resetBoardTestDOM } from "../../../test-support/dom";
 import { expectSameNode } from "../../../test-support/node-identity";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../test-support/compiled-style";
 import { renderReact, unmountReact } from "../../../test-support/react-harness";
 import { SegmentedControl, SegmentedOption } from "../../shared/ui/primitives";
 import { SegThumb } from "./seg-thumb";
@@ -13,7 +12,7 @@ import { SegThumb } from "./seg-thumb";
  * segment's box is given by its `data-box` ("left,width").
  */
 // The whole stylesheet, as the other settings style tests read it: the shared bar's rules are part of the answer.
-const css = compile(fileURLToPath(new URL("../../style.scss", import.meta.url)), { style: "expanded" }).css.replace(/\/\*[\s\S]*?\*\//g, "");
+const css = compileScss(new URL("../../style.scss", import.meta.url)).css.replace(/\/\*[\s\S]*?\*\//g, "");
 const declared = (selector: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
   .filter(match => match[1].split(",").map(part => part.trim()).includes(selector)).map(match => match[2]).join("\n");
 const box = (node: HTMLElement) => (node.dataset.box ?? "0,0").split(",").map(Number);

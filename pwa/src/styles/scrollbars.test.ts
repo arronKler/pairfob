@@ -1,14 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../test-support/compiled-style";
 
 /**
  * Scrollbars under a mouse: one themed rule for every scroller, and nothing
  * for a finger, whose platform draws overlay scrollbars.
  */
-const css = compile(fileURLToPath(new URL("../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
-const partial = compile(fileURLToPath(new URL("./scrollbars.scss", import.meta.url)), { style: "expanded" }).css
+const partial = compileScss(new URL("./scrollbars.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "").trim();
 
 const FINE = "@media (hover: hover) and (pointer: fine)";

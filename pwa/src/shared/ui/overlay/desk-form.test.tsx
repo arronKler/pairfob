@@ -1,6 +1,7 @@
 import { expectSameNode } from "../../../../test-support/node-identity";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
+import { waitFor } from "../../../../test-support/wait";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act } from "react";
 import { setLang } from "../../../lib/i18n";
@@ -137,7 +138,8 @@ describe("which dialogs take the desk form", () => {
     });
     const picked = dialog().querySelector<HTMLButtonElement>("[role=menuitem]");
     expect(picked).not.toBeNull();
-    await act(async () => { picked!.click(); await pause(5); });
+    await act(async () => { picked!.click(); });
+    await waitFor(() => asked !== undefined, "the picked row opened its dialog");
     expect(asked).toBeDefined();
     expect(dialog().className).toBe("modal text-edit desk-form");
   });

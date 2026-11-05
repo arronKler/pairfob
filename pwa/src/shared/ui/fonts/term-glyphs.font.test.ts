@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { brotliDecompressSync } from "node:zlib";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 import { FULL_TERM_FONT_FAMILY } from "../../../features/session/full-terminal/full-terminal-fit";
 import { ICON_FAMILY, ICON_RANGES_BMP, ICON_RANGES_MDI, iconFace } from "./term-glyphs";
 
 const fonts = new URL("./", import.meta.url);
 const rules = await Bun.file(new URL("icon-font.css", fonts)).text();
-const tokens = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url))).css;
+const tokens = compileScss(new URL("../../../style.scss", import.meta.url)).css;
 
 /** WOFF2 known table tags, by the index its directory stores. */
 const CMAP = 0;

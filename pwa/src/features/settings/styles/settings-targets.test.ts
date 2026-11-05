@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * Settings controls that are drawn smaller than a finger: each keeps its look
  * and takes its target from an invisible box around it. The sizes are checked
  * with real taps in a browser; the boxes they rest on are pinned here.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 const declared = (selector: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
   .filter(match => match[1].split(",").map(part => part.trim()).includes(selector)).map(match => match[2]).join("\n");

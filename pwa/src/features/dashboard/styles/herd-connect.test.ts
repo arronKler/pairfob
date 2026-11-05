@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * The text links on the reconnecting and cannot-reach pages are drawn as words
@@ -8,7 +7,7 @@ import { fileURLToPath } from "node:url";
  * up to 44px; the boxes are measured with real touches in a browser and the
  * numbers they rest on are pinned here.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 const coarse = css.slice(css.indexOf("@media (any-pointer: coarse) {\n  .conn-path-actions .text-link"));
 const block = coarse.slice(0, coarse.indexOf("\n}\n"));

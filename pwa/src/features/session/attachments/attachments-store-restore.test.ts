@@ -4,6 +4,7 @@ import type { AttachmentJournalRecord } from "../../../lib/attachment-journal-co
 import { attachmentScopeKey, queueSnapshot, resetAttachmentQueues, restoreAttachmentRecord, runtimeAbort, runtimeCheckpoint, runtimeFile, runtimeGeneration, runtimeObjectUrl, runtimePhotoOrigin, runtimePreparedImage, runtimeSourceFile } from "./attachments-store";
 import { setThumbnailPreparer } from "./attachments-thumbnails";
 import { resetAttachmentRecovery } from "./attachments-recovery";
+import { waitFor } from "../../../../test-support/wait";
 
 const scopeA = { daemonId: "d1", paneId: "p1" };
 const keyA = attachmentScopeKey(scopeA);
@@ -141,7 +142,8 @@ describe("restoreAttachmentRecord", () => {
     expect(item.etaSeconds).toBeUndefined();
     expect(item.waiting).toBeUndefined();
     expect(item.stageTimings).toBeUndefined();
-    await flush(); // and nothing auto-starts: still queued
+    await waitFor(() => createdFrom.length === 1, "the restored row's thumbnail");
+    // Nothing auto-starts: the row is still queued once its thumbnail exists.
     expect(queueSnapshot(keyA)?.items.find((row) => row.localId === id)?.status).toBe("queued");
     expect(runtimeGeneration(keyA, id)).toBe(0);
     expect(createdFrom).toHaveLength(1); // its thumbnail renders from the SOURCE

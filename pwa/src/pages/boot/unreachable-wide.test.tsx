@@ -3,8 +3,7 @@ import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { closeTestDialogs } from "../../../test-support/close-dialogs";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act } from "react";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../test-support/compiled-style";
 import type { PairResult } from "../../lib/protocol/client";
 import { batch } from "../../shared/model/domain-store";
 import { mountApp, unmountApp } from "../../app/mount";
@@ -264,7 +263,7 @@ describe("the only computer cannot be reached, on a wide layout", () => {
 });
 
 describe("the wide page's styles", () => {
-  const css = compile(fileURLToPath(new URL("../../style.scss", import.meta.url)), { style: "expanded" }).css
+  const css = compileScss(new URL("../../style.scss", import.meta.url)).css
     .replace(/\/\*[\s\S]*?\*\//g, "");
   const rule = (selector: string) => {
     const at = css.indexOf(`${selector} {`);

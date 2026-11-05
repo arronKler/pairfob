@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * What the create sheet moves, pinned where the stylesheet says it: blocks that
  * fold without cutting a focus ring or leaving room behind, a choice that is
  * acknowledged over the press duration, and the full list travelling as a page.
  */
-const css = compile(fileURLToPath(new URL("./create-sheet.scss", import.meta.url)), { style: "expanded" }).css.replace(/\/\*[\s\S]*?\*\//g, "");
+const css = compileScss(new URL("./create-sheet.scss", import.meta.url)).css.replace(/\/\*[\s\S]*?\*\//g, "");
 const declared = (selector: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
   .filter(match => match[1].split(",").map(part => part.trim()).includes(selector)).map(match => match[2]).join("\n");
 const px = (body: string, property: string) => Number(body.match(new RegExp(`${property}:\\s*(-?[\\d.]+)px`))?.[1]);

@@ -212,7 +212,7 @@ repository gate after every local edit or merely because a task is ending.
 | Change / stage | Required verification |
 | --- | --- |
 | Documentation or copy-only edit | Check the diff, links and affected rendering as relevant; no unrelated code suites. |
-| Local implementation iteration | Run affected module tests and relevant type/format checks. For shared code, include its affected consumers. |
+| Local implementation iteration | Run affected module tests and relevant type/format checks. For shared code, include its affected consumers. PWA's fast layer is `cd pwa && bun run test:changed` (working-tree changes, or the paths named); `bun run test` stays the full layer the gate runs. |
 | UI behavior or layout change | Add focused browser checks for the changed interaction, on each surface it can reach: a phone with touch (390x844), a tablet with touch (about 1024x768, and 820 wide for the 720–899 tier when the change touches layout), and a desktop with a mouse and keyboard (1440x900). Shared components and anything keyed on width or input reach all three. Drive them with real touch and mouse input through the `pwa/qa` scenes; a unit test at one width does not cover the others. Fixtures, live transport and physical-device acceptance are distinct. |
 | Agent transcript adapter (`internal/journal`) or an agent CLI upgrade | Run `PAIRFOB_SCAN_LOCAL_TRANSCRIPTS=1 go test ./internal/journal -run LocalTranscripts -v` on a machine with real Claude Code / Codex / Grok / Pi / Prime Agent / Cursor / Hermes / opencode sessions; a hit is injected context leaking into chat. |
 | PWA UI-only production release | Run `./scripts/verify.sh --pwa-only <verified-release-commit>` against a trustworthy baseline in the current checkout. |

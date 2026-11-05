@@ -1,9 +1,9 @@
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../test-support/compiled-style";
 import { resetBoardTestDOM } from "../../../test-support/dom";
 import { all, bootWorkspaceScreen, one, press, settle, teardownWorkspaceScreen } from "../../../test-support/workspace-harness";
+import { waitFor } from "../../../test-support/wait";
 import { stepWorkspaceDiff, workspaceDiffStep } from "./actions";
 import { loadGitDiff, workspaceModel } from "./index";
 import { resetReviewProgress } from "./review-progress";
@@ -121,7 +121,7 @@ describe("a list longer than it draws", () => {
     await open("src/f198.ts");
     expect(workspaceDiffStep().index).toBe(199);
     await act(async () => { stepWorkspaceDiff(1); });
-    await settle();
+    await waitFor(() => workspaceModel.detailPath === "src/f199.ts", "the step reached the row the list had not drawn");
     expect(workspaceModel.detailPath).toBe("src/f199.ts");
     expect(drawn()).toContain("worktree:src/f199.ts");
     expect(one(`[data-change="worktree:src/f199.ts"]`).classList.contains("active")).toBeTrue();
@@ -144,7 +144,7 @@ describe("a folded group", () => {
 
     await press(one(`[data-change="staged:README.md"]`));
     await act(async () => { stepWorkspaceDiff(1); });
-    await settle();
+    await waitFor(() => workspaceModel.detailPath === "src/app.ts", "the step opened the folded group's row");
     expect(workspaceModel.detailPath).toBe("src/app.ts");
     expect(worktree().getAttribute("aria-expanded")).toBe("true");
     expect(drawn()).toEqual(["staged:README.md", "worktree:src/app.ts"]);
@@ -157,7 +157,7 @@ describe("a folded group", () => {
  * the whole page at 820px. The widths themselves are checked in a browser.
  */
 describe("the change list's styles", () => {
-  const css = compile(fileURLToPath(new URL("../../style.scss", import.meta.url)), { style: "expanded" }).css
+  const css = compileScss(new URL("../../style.scss", import.meta.url)).css
     .replace(/\/\*[\s\S]*?\*\//g, "");
   const declared = (selector: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
     .filter((match) => match[1].split(",").map((part) => part.trim()).includes(selector)).map((match) => match[2]).join("\n");

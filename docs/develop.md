@@ -121,7 +121,13 @@ Choose checks by change scope and stage; the full rules are in
 [`AGENTS.md#verify`](../AGENTS.md#verify). In short:
 
 - During local iteration, run affected module tests and relevant type/format
-  checks. Include affected consumers when shared code changes.
+  checks. Include affected consumers when shared code changes. The PWA suite has
+  two layers: `cd pwa && bun run test:changed` runs the test files that reach
+  the working tree's changes (or the files and directories named; `--all` runs
+  everything), while `bun run test` runs every file under `src` and is what the
+  gate and a release use. Style tests compile SCSS through
+  `pwa/test-support/compiled-style.ts`, which caches each compiled sheet under
+  `pwa/.cache/` keyed on every `.scss` file.
 - For UI behavior/layout changes, check the changed interactions and viewports
   in a browser. Documentation/copy-only changes need relevant diff, link or
   rendering checks, not unrelated code suites.

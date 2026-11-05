@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { compile, compileString } from "sass";
+import { compileScss } from "../../../../test-support/compiled-style";
+import { compileString } from "sass";
 import { fileURLToPath } from "node:url";
 
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css;
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css;
 
 /** The stylesheet a viewport under the desk breakpoint can match: every 900px block removed. */
 function phoneCss(): string {

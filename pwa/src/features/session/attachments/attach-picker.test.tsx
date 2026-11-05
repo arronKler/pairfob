@@ -3,6 +3,7 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { createElement, renderReact, unmountReact } from "../../../../test-support/react-harness";
+import { waitFor } from "../../../../test-support/wait";
 import { setScreen } from "../../../app/navigation-store";
 import { setLang } from "../../../lib/i18n";
 import { NO_OPERATION_CAPABILITIES } from "../../../lib/operations";
@@ -33,10 +34,14 @@ const port: AttachmentTransferPort = {
   async cancel() { throw new Error("no cancel should occur during picking"); },
 };
 
+/** Held while a test needs "during the recovery" to stay open past the gate. */
+let holdConfig: Promise<void> | null = null;
+
 /** GetConfig as the computer answers it, a moment after the page is back. */
 const session = {
   isConnected: () => true,
   getConfig: async () => {
+    if (holdConfig) await holdConfig;
     await new Promise((resolve) => setTimeout(resolve, 20));
     return {
       protocol: 1, build: "v1.0.0", daemon_id: "d1", hostname: "herdbox", runtime: "herdr", vapid_public: "",
@@ -84,6 +89,7 @@ async function settle(): Promise<void> {
 }
 
 beforeEach(async () => {
+  holdConfig = null;
   await resetBoardTestDOM();
   setLang("en");
   setPhase("live"); setSessionTransport("relay");
@@ -134,12 +140,19 @@ describe("attach picker", () => {
   test("a selection returned during the foreground recovery is adopted once GetConfig lands", async () => {
     const input = await openPicker();
     // Android hands the page back (visible) before it delivers the selection.
+    // Hold the answer so the picker returns while GetConfig is still in flight;
+    // otherwise a slow turn lets the recovery finish before the selection.
+    let release!: () => void;
+    holdConfig = new Promise<void>((resolve) => { release = resolve; });
     let recovery!: Promise<boolean>;
     await act(async () => { recovery = refreshHerdConfig(recoveryPorts); });
     expect(button()).toBeNull();
     deliver(input, [new File(["e"], "e.txt")]);
-    await act(async () => { await recovery; });
-    await settle();
+    await act(async () => { holdConfig = null; release(); await recovery; });
+    await waitFor(
+      () => button() !== null && queueSnapshot(KEY)?.items.map((row) => row.name).join() === "e.txt",
+      "the selection made during the recovery lands once GetConfig does",
+    );
     expect(button()).not.toBeNull();
     expect(queueSnapshot(KEY)?.items.map((row) => row.name)).toEqual(["e.txt"]);
   });

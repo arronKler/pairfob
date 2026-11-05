@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 import { fullTerminalOptions } from "./full-terminal-renderer";
 
-const css = compile(fileURLToPath(new URL("./full-terminal.scss", import.meta.url)), { style: "expanded" }).css;
+const css = compileScss(new URL("./full-terminal.scss", import.meta.url)).css;
 const xtermCss = await Bun.file(new URL("../../../../node_modules/@xterm/xterm/css/xterm.css", import.meta.url)).text();
 
 /** Every `selector { body }` of a flat stylesheet, comments dropped. */

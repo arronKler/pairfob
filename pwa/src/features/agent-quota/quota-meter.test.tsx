@@ -1,8 +1,7 @@
 import { resetBoardTestDOM } from "../../../test-support/dom";
 import { expectSameNode, expectSameNodes } from "../../../test-support/node-identity";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../test-support/compiled-style";
 import { renderReact, unmountReact } from "../../../test-support/react-harness";
 import { setLang } from "../../lib/i18n";
 import type { QuotaModuleModel, QuotaModuleRow } from "./model";
@@ -13,7 +12,7 @@ import { QuotaModuleView } from "./quota-module-view";
  * been read arrives, a refreshed share travels and its number is swapped in,
  * and a module drawn with its data, or drawn again with the same data, is still.
  */
-const css = compile(fileURLToPath(new URL("./styles/quota.scss", import.meta.url)), { style: "expanded" }).css.replace(/\/\*[\s\S]*?\*\//g, "");
+const css = compileScss(new URL("./styles/quota.scss", import.meta.url)).css.replace(/\/\*[\s\S]*?\*\//g, "");
 const row = (provider: string, remaining: number): QuotaModuleRow => ({
   id: provider, provider: provider as QuotaModuleRow["provider"], name: provider, sub: "5h",
   meter: { kind: "limited", remaining, tone: "ok" as never, aria: `${provider} ${remaining}` },

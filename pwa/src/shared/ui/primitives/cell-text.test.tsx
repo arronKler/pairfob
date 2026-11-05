@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 import { cellText } from "./cell-text";
 
 const html = (text: string) => renderToStaticMarkup(<span>{cellText(text)}</span>);
@@ -30,7 +29,7 @@ test("a separator can be given the colour of its bar when the run around it was 
 
 for (const entry of ["../../../style.scss", "../../../connected.scss"]) {
   test(`${entry.split("/").pop()} styles the cell and all sixteen shapes`, () => {
-    const css = compile(fileURLToPath(new URL(entry, import.meta.url)), { style: "expanded" }).css;
+    const css = compileScss(new URL(entry, import.meta.url)).css;
     // The rule whose whole selector this is: `.term.wrapped .cell-shape` is another rule.
     const rule = (selector: string) => css.match(new RegExp(`(?:^|\n)${selector.replace(/[.:]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
     // One cell wide, and free to run into the next: that is the terminal's rule for an icon.

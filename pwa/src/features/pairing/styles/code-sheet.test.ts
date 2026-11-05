@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * The feedback slot under the code field. The sheet is anchored to the floor
@@ -9,7 +8,7 @@ import { fileURLToPath } from "node:url";
  * would move the field under the finger, or the field and the button apart
  * under the pointer.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 const rule = (selector: string) => {
   const at = css.indexOf(`${selector} {`);

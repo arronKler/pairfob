@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * The session's motion as the compiled stylesheet says it: which properties
@@ -8,7 +7,7 @@ import { fileURLToPath } from "node:url";
  * step shorter. A test DOM runs no animation, so the rules are read.
  */
 
-const css = compile(fileURLToPath(new URL("../../../connected.scss", import.meta.url)), { style: "expanded" }).css;
+const css = compileScss(new URL("../../../connected.scss", import.meta.url)).css;
 
 /** The declarations of every rule whose selector list is exactly `selector`, joined. */
 function rule(selector: string): string {

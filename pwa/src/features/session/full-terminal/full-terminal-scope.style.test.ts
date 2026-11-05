@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * The complete terminal draws on a near-black plate whatever the page wears, so
@@ -10,7 +9,7 @@ import { fileURLToPath } from "node:url";
  * white field.
  */
 
-const sheet = (path: string): string => compile(fileURLToPath(new URL(path, import.meta.url)), { style: "expanded" }).css;
+const sheet = (path: string): string => compileScss(new URL(path, import.meta.url)).css;
 const css = sheet("../../../style.scss");
 const terminal = sheet("./full-terminal.scss");
 

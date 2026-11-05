@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
-const sheet = (name: string) => compile(fileURLToPath(new URL(name, import.meta.url)), { style: "expanded" }).css;
+const sheet = (name: string) => compileScss(new URL(name, import.meta.url)).css;
 const canvas = sheet("./board-canvas.scss");
 const chrome = sheet("./board-chrome.scss");
 const menu = sheet("./pane-menu.scss");

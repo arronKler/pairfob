@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { compile } from "sass";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 const source = (name: string): string => readFileSync(fileURLToPath(new URL(name, import.meta.url)), "utf8");
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css;
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css;
 /** The declarations of the first rule whose selector is exactly `selector`. */
 function rule(selector: string, from = css): string {
   const at = from.indexOf(`${selector} {`);

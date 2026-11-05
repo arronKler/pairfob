@@ -2,8 +2,7 @@ import { happy, resetBoardTestDOM } from "../../../../test-support/dom";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { act } from "react";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 import { setLang } from "../../../lib/i18n";
 import { MenuItem, showActionSheet } from "./action-sheet";
 import { askConfirm, askText } from "./basic-dialogs";
@@ -98,7 +97,7 @@ test("the mark stays with the dialog across a pushed page, and a second dialog r
 });
 
 test("one rule draws it: no ring inside a marked dialog, however specific a control's own ring is", () => {
-  const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+  const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
     .replace(/\/\*[\s\S]*?\*\//g, "");
   const rules = [...css.matchAll(/([^{}]*data-quiet-focus[^{}]*)\{([^{}]*)\}/g)];
   expect(rules.map(match => match[1].trim())).toEqual(["dialog[data-quiet-focus] :focus-visible"]);

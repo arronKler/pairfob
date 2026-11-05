@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
-const sheet = (name: string) => compile(fileURLToPath(new URL(name, import.meta.url)), { style: "expanded" }).css.replace(/\/\*[\s\S]*?\*\//g, "");
+const sheet = (name: string) => compileScss(new URL(name, import.meta.url)).css.replace(/\/\*[\s\S]*?\*\//g, "");
 const canvas = sheet("./board-canvas.scss");
 const overlays = sheet("./board-overlays.scss");
 const declared = (css: string, selector: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]

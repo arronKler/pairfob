@@ -7,7 +7,7 @@ import { all, bootWorkspaceScreen, one, press, settle, teardownWorkspaceScreen, 
 import { clearAllDiffNotes, diffNoteScope } from "../../lib/diff-notes";
 import { WORKSPACE_CACHE_TTL_MS } from "../../lib/workspace-cache";
 import { useDiffHold, type DiffHold } from "./diff-hold";
-import { clearWorkspacePendingReveal, getWorkspaceSnapshot, loadGitDiff, WORKSPACE_PENDING_DELAY_MS } from "./index";
+import { clearWorkspacePendingReveal, getWorkspaceSnapshot, loadGitDiff } from "./index";
 import { emptyWorkspaceModel, type WorkspaceSnapshot } from "./model";
 import { clearOpenNotes } from "./note-drafts";
 
@@ -124,6 +124,14 @@ describe("stepping through the changes on the screen", () => {
   };
   /** A press whose first paint is what is asked about: drawn before this returns, so the wait for the skeleton cannot run out. */
   const tap = (target: HTMLElement): void => { act(() => { target.click(); }); };
+  /** Wait, inside act, until the page shows it: a loaded machine can delay the pending timer past any fixed sleep. */
+  const showingUp = async (selector: string): Promise<void> => {
+    const deadline = Date.now() + 5000;
+    while (!document.querySelector(selector)) {
+      if (Date.now() >= deadline) throw new Error(`timed out waiting for ${selector}`);
+      await act(async () => { await new Promise<void>((done) => window.setTimeout(done, 10)); });
+    }
+  };
   const arrive = async (path: string) => {
     await act(async () => {
       // The read is asked for a turn after the press that wanted it.
@@ -163,6 +171,9 @@ describe("stepping through the changes on the screen", () => {
 
     slow.add("src/b.ts");
     tap(next());
+    // This test is about the hold before the skeleton: the read stays out for as
+    // long as the test needs, without the wait for the skeleton running out first.
+    clearWorkspacePendingReveal();
     // The store has let the diff and its notes go; the picture has not.
     expect(getWorkspaceSnapshot().diff).toBeNull();
     expect(diffNoteScope()).toBeNull();
@@ -222,7 +233,7 @@ describe("stepping through the changes on the screen", () => {
     slow.add("src/b.ts");
     tap(next());
     expect(lines() === was).toBeTrue();
-    await act(async () => { await new Promise<void>((done) => window.setTimeout(done, WORKSPACE_PENDING_DELAY_MS + 40)); });
+    await showingUp(".workspace-diff-pending");
     expect(was.isConnected).toBeFalse();
     expect(body().classList.contains("is-stale")).toBeFalse();
     expect(body().hasAttribute("inert")).toBeFalse();

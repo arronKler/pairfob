@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * One anatomy for every dialog a mouse or the keyboard opens beside the list:
  * title top left, close top right, actions in a footer at the bottom right,
  * a light scrim. All of it hangs off `.desk-form`, so the sheet keeps its bar.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** A selector list's members; a comma inside `:is(…)` is not a separator. */

@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../test-support/compiled-style";
 
-const css = compile(fileURLToPath(new URL("./style.scss", import.meta.url)), { style: "expanded" }).css;
+const css = compileScss(new URL("./style.scss", import.meta.url)).css;
 const html = await Bun.file(new URL("../index.html", import.meta.url)).text();
 const manifest = JSON.parse(await Bun.file(new URL("../public/manifest.webmanifest", import.meta.url)).text());
 const main = await Bun.file(new URL("../src/main.ts", import.meta.url)).text();

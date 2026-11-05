@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { compile } from "sass";
-import { fileURLToPath } from "node:url";
+import { compileScss } from "../../../../test-support/compiled-style";
 
 /**
  * The settings family's back bar (Settings on the desk, the computer page,
  * quotas, the live computer list): it stays in place while the page scrolls,
  * so a long page never takes the way back with it.
  */
-const css = compile(fileURLToPath(new URL("../../../style.scss", import.meta.url)), { style: "expanded" }).css
+const css = compileScss(new URL("../../../style.scss", import.meta.url)).css
   .replace(/\/\*[\s\S]*?\*\//g, "");
 const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
   .map(match => ({ parts: match[1].split(",").map(part => part.trim()), body: match[2] }));
