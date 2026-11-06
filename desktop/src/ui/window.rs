@@ -7,16 +7,15 @@ use std::collections::{HashSet, VecDeque};
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
-use crossbeam_channel::Receiver;
 #[cfg(feature = "shot")]
 use gpui::{point, px, Point};
 use gpui::{Bounds, Context, FocusHandle, Pixels, ScrollHandle, Window};
 
 use crate::app::{App, AppEvent, Connection, Notice};
 use crate::herdr::{ConnectTarget, Desktop, EngineHandle};
+use crate::mailbox::spawn_pump;
 use crate::model::{PaneId, Size, SplitRect, TabId};
 use crate::terminal::Theme;
 
@@ -37,10 +36,7 @@ use super::theme::{Appearance, Chrome};
 
 /// Events wake the window as they arrive; the tick only drives clocks (the
 /// pairing countdown) and the startup tasks' results. A keystroke therefore
-/// does not wait for a poll interval before it reaches the screen. The queue
-/// is bounded so a stalled window cannot grow memory without limit; dropping
-/// old frames is safe because newer frames replace them.
-const MAILBOX_LIMIT: usize = 2048;
+/// does not wait for a poll interval before it reaches the screen.
 const TICK_INTERVAL: Duration = Duration::from_millis(250);
 /// How long a notice stays on screen when nothing replaces it.
 const NOTICE_TTL: Duration = Duration::from_secs(10);
@@ -727,27 +723,4 @@ fn shot_selection(app: &App) -> Option<Selection> {
         anchor: (rect.x, rect.y),
         head: (rect.right() - 1, (rect.y + 1).min(rect.bottom() - 1)),
     })
-}
-
-pub(super) fn spawn_pump(
-    events: Receiver<AppEvent>,
-    mailbox: Arc<Mutex<VecDeque<AppEvent>>>,
-    wake: async_channel::Sender<()>,
-) {
-    thread::spawn(move || {
-        while let Ok(event) = events.recv() {
-            match mailbox.lock() {
-                Ok(mut queue) => {
-                    queue.push_back(event);
-                    if queue.len() > MAILBOX_LIMIT {
-                        queue.pop_front();
-                    }
-                }
-                Err(_) => break,
-            }
-            // A full wake channel already has an unmatched signal, which is
-            // all this task needs to drain whatever arrived in the meantime.
-            let _ = wake.try_send(());
-        }
-    });
 }

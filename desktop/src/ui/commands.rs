@@ -154,7 +154,7 @@ impl super::window::PairfobWindow {
         match crate::herdr::start(config) {
             Ok(Desktop { handle, events }) => {
                 self.handle = handle.clone();
-                super::window::spawn_pump(events, Arc::clone(&self.mailbox), self.wake.clone());
+                crate::mailbox::spawn_pump(events, Arc::clone(&self.mailbox), self.wake.clone());
                 self.resize_tx = spawn_resize_worker(handle);
             }
             Err(error) => {

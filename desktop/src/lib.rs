@@ -18,6 +18,7 @@ pub mod chat;
 pub mod devices;
 pub mod herdr;
 pub mod log;
+pub mod mailbox;
 pub mod model;
 pub mod pairing;
 pub mod process;
