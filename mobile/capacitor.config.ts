@@ -9,6 +9,14 @@ import type { CapacitorConfig } from "@capacitor/cli";
  */
 const scheme: "http" | "https" = process.env.PAIRFOB_ANDROID_SCHEME === "http" ? "http" : "https";
 
+/**
+ * iOS cannot use `https` here. WebKit already owns that scheme, so Capacitor's
+ * `WKWebView.handlesURLScheme` check rejects it and falls back to
+ * `capacitor://localhost`. The native bridge accepts exactly that origin; keep
+ * it unless the bridge and the PWA's non-http origin handling change together.
+ */
+const iosScheme = "capacitor";
+
 const config: CapacitorConfig = {
   appId: "com.pairfob.app",
   appName: "Pairfob",
@@ -16,6 +24,7 @@ const config: CapacitorConfig = {
   server: {
     hostname: "localhost",
     androidScheme: scheme,
+    iosScheme,
   },
 };
 

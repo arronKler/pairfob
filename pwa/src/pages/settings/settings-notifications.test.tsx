@@ -87,4 +87,31 @@ describe("native notification row", () => {
     expect(root.querySelector(".set-state")?.textContent).toBe("已拒绝");
     expect(button("开启", root)).toBeUndefined();
   });
+
+  test("an iPhone reads iOS copy for the permission and the background schedule", async () => {
+    const original = Object.getOwnPropertyDescriptor(navigator, "userAgent");
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      get: () => "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+    });
+    try {
+      nativeFixture("denied");
+      const denied = host();
+      renderReactScreen(denied, <NotificationItem input={{ channel: "native" }} />);
+      await settle();
+      expect(denied.querySelector(".set-item-sub")?.textContent).toContain("iOS");
+      leaveReactScreen();
+
+      nativeFixture("granted");
+      const allowed = host();
+      renderReactScreen(allowed, <NotificationItem input={{ channel: "native" }} />);
+      await settle();
+      act(() => button("开启", allowed)!.click());
+      await settle();
+      expect(allowed.textContent).toContain("iOS 会按使用习惯决定何时运行");
+    } finally {
+      if (original) Object.defineProperty(navigator, "userAgent", original);
+      else delete (navigator as unknown as Record<string, unknown>).userAgent;
+    }
+  });
 });

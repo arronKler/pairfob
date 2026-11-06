@@ -2,6 +2,7 @@ import { topDialogBack, subscribeDialogBack } from "../shared/ui/overlay/back";
 import { subscribeAppFrame } from "./frame";
 import { bindBackHistory } from "./back-history";
 import { parseNotificationURL } from "../lib/notification-target";
+import { pageOrigin } from "../lib/runtime-config";
 import { connectedPresentation, subscribePresentation } from "./presentation";
 
 export function systemBackAction(): (() => void | Promise<void>) | null {
@@ -41,7 +42,7 @@ export function bindSystemBack(): () => void {
   const hash = (event: HashChangeEvent) => {
     // Notification capture scrubs the hash first. Use the event's original URL;
     // ordinary links and iframe history are not application navigation.
-    if (parseNotificationURL(event.newURL, location.origin)) owner.consumeHashEntry();
+    if (parseNotificationURL(event.newURL, pageOrigin())) owner.consumeHashEntry();
   };
   window.addEventListener("hashchange", hash);
   return () => {

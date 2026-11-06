@@ -2,12 +2,22 @@ import type { Env } from "./env.ts";
 import { isSameHostOrigin, originValue } from "./http.ts";
 
 /**
- * Exact app origins allowed to call the relay from a web view: the native shell
- * loads its bundle from `https://localhost` (Capacitor's Android origin). A
- * plain `http://localhost` build is a development-only target and requires the
+ * Exact app origins allowed to call the relay from a web view: the Android
+ * shell loads its bundle from `https://localhost` (Capacitor's Android
+ * origin), and the iOS shell from `capacitor://localhost`. A plain
+ * `http://localhost` build is a development-only target and requires the
  * explicit `ALLOW_HTTP_APP_ORIGINS=1` var; production never sets it.
  */
 const DEV_HTTP_APP_ORIGIN = "http://localhost";
+
+/**
+ * Capacitor cannot serve the iOS app from `https` (WebKit owns the scheme), so
+ * the iOS shell loads from `capacitor://localhost` and every request it makes
+ * carries that exact Origin. A web page cannot produce a custom-scheme origin,
+ * so this is the same native-shell trust as the Android entry above; the
+ * pairing code and the session keys remain the only authority.
+ */
+const IOS_APP_ORIGIN = "capacitor://localhost";
 
 function canonicalAppOrigin(value: string, allowHttp: boolean): string | null {
   if (!value) return null;
@@ -32,6 +42,7 @@ export function appOrigins(env: Env): ReadonlySet<string> {
     const origin = canonicalAppOrigin(entry.trim(), allowHttp);
     if (origin) origins.add(origin);
   }
+  origins.add(IOS_APP_ORIGIN);
   if (allowHttp) origins.add(DEV_HTTP_APP_ORIGIN);
   return origins;
 }

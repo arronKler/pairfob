@@ -14,9 +14,19 @@ export type NativePlatform = {
   pushChannels: PushChannel[];
 };
 
-function nativeKind(): NativePlatform["kind"] {
-  const agent = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  return /iPhone|iPad|iPod/i.test(agent) ? "ios" : "android";
+/**
+ * Which native shell this user agent belongs to. Callers that already know
+ * they are in a shell (a native-only settings row) read this directly; the
+ * runtime flag alone cannot tell Android from iOS.
+ */
+export function nativePlatformKind(): NativePlatform["kind"] {
+  if (typeof navigator === "undefined") return "android";
+  const agent = navigator.userAgent;
+  // An iPad can present a desktop-class user agent ("Macintosh") while still
+  // being a touch device; without the second test it would be read as Android
+  // and offered the Android update card.
+  const ipad = /Macintosh/i.test(agent) && navigator.maxTouchPoints > 1;
+  return /iPhone|iPad|iPod/i.test(agent) || ipad ? "ios" : "android";
 }
 
 /** The native shell's platform facts, or null in the hosted web build. */
@@ -25,7 +35,7 @@ export function nativePlatform(
   notify: Pick<NativeNotifyBridge, "post"> | null = nativeNotify(),
 ): NativePlatform | null {
   if (!native) return null;
-  return { kind: nativeKind(), pushChannels: notify ? ["local"] : [] };
+  return { kind: nativePlatformKind(), pushChannels: notify ? ["local"] : [] };
 }
 
 /**

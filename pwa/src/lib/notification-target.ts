@@ -12,8 +12,13 @@ const PANE_ID_RE = /^[A-Za-z0-9._:-]{1,256}$/;
 export function parseNotificationURL(value: unknown, origin: string): NotificationTarget | null {
   if (typeof value !== "string") return null;
   try {
+    const base = new URL(origin);
     const url = new URL(value, origin);
-    if (url.origin !== origin || url.pathname !== "/pair" || url.search) return null;
+    // `URL.origin` is the string "null" for a non-special scheme. The iOS
+    // shell serves the app from `capacitor://localhost`, so compare the
+    // scheme and host instead of relying on the origin serialization.
+    if (url.protocol !== base.protocol || url.host !== base.host) return null;
+    if (url.pathname !== "/pair" || url.search) return null;
     return parseNotificationTarget(url.hash);
   } catch {
     return null;

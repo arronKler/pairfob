@@ -1,15 +1,15 @@
 # Pairfob mobile shell
 
-Capacitor 8 Android shell for the existing PWA. The shell adds no screens of
-its own: it bundles `pwa/dist-native` into the APK, serves it from the local
+Capacitor 8 Android and iOS shells for the existing PWA. A shell adds no screens
+of its own: it bundles `pwa/dist-native` into the app, serves it from the local
 WebView origin, and points the existing screens at a relay origin.
 
 ```
 pwa/src (same app) --bun run build:native--> pwa/dist-native
                                                    |
-                                      cap sync android
+                                      cap sync android / ios
                                                    |
-                                    android/app/src/main/assets/public
+                              android/.../assets/public  ios/App/App/public
 ```
 
 The generated bundle and Gradle output are not committed. `pwa/dist-native` is
@@ -63,6 +63,49 @@ Install and launch on the running emulator:
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.pairfob.app/.MainActivity
 ```
+
+## Build the iOS app
+
+The iOS project uses Swift Package Manager, not CocoaPods. `cap sync ios`
+writes `App/CapApp-SPM/Package.swift`, and Xcode resolves
+`capacitor-swift-pm` at the pinned Capacitor version.
+
+Requirements:
+
+- macOS with Xcode 15 or later and an iOS 15+ simulator
+- Bun 1.3 or newer
+- A network Xcode can reach GitHub from, for the first package resolution
+
+```sh
+cd mobile
+bun install
+bun run ios:debug
+```
+
+`ios:debug` runs the same three steps as the Android build, stopping at a
+simulator build instead of Gradle:
+
+1. `pwa:native` runs the PWA `build:native` script into `pwa/dist-native`
+2. `sync:ios` runs `cap sync ios`, copying the bundle into the iOS project
+3. `xcodebuild -scheme App -sdk iphonesimulator` builds without signing
+
+`bun run ios:run` builds and launches on a simulator that Capacitor picks. Open
+`ios/App/App.xcodeproj` (or the `App` scheme) for the Xcode UI.
+
+The app is served from `capacitor://localhost`, not an `https` origin: WebKit
+owns `https`, so Capacitor's scheme check rejects it as a custom scheme. The
+same scheme is used by both the production and the dev build, so IndexedDB and
+pairing survive switching between them on iOS.
+
+### Device and TestFlight builds
+
+Open the project in Xcode, select the `App` target, and set a signing team for
+bundle id `com.pairfob.app`. `MARKETING_VERSION` is the three-part app version
+and `CURRENT_PROJECT_VERSION` is the build number; raise the build number for
+every upload. Archive to the App Store or a TestFlight group as usual.
+
+The shell has no self-update path. App Store and TestFlight are the only update
+channels, so the Android update card is not shown on iOS.
 
 ## Beta release APK
 
@@ -182,6 +225,20 @@ The WebView origin also changes between the two builds, so IndexedDB (device
 credentials and session state) does not carry across them. Pair again after
 switching.
 
+On iOS the simulator shares the host's loopback, so there is no `adb reverse`
+step:
+
+```sh
+cd mobile
+bun run ios:debug:dev
+bun run ios:run
+```
+
+`ios:debug:dev` points the bundle at `http://localhost:18786`; the ATS
+`NSAllowsLocalNetworking` allowance and a `localhost` exception permit that
+cleartext connection. The web origin stays `capacitor://localhost` in both
+builds, so switching relays keeps the app's stored session.
+
 ## What the shell handles
 
 - `MainActivity` routes the system back gesture into WebView history when the
@@ -197,13 +254,24 @@ switching.
   relay and its WebSocket origin.
 - Notices reach the system notification shade. See **Notifications** below.
 
+On iOS, `PairfobBridgeViewController` is the scene's root: it keeps the window
+dark behind the page, adds the notification and theme scripts before the first
+document loads, and follows the document's `data-theme` with the status-bar
+text colour. The system back gesture is the edge swipe; the PWA's own back
+handling covers in-app navigation, and with nothing to go back to the swipe
+returns to the Home screen. The keyboard is handled by WebKit's viewport
+(`interactive-widget=resizes-content` in the PWA viewport tag), with the PWA's
+safe-area padding keeping the compose field above it.
+
 ## Notifications
 
 A WebView has no Web Push, so the shell raises notices itself.
 `NotifyBridge` installs an origin-restricted WebView message listener before
 navigation, beside `UpdateBridge`. Only the `https://localhost` main frame can
 post, cancel, or ask for permission. Debug builds also allow
-`http://localhost`.
+`http://localhost`. The iOS bridge accepts the same messages from
+`capacitor://localhost` and exposes the same `window.PairfobNotify` face, so the
+PWA has one client (`pwa/src/lib/native-notify.ts`).
 
 The PWA keeps the decision of when a notice is due. A visible page shows its own
 attention strip and posts nothing. A hidden page that still runs follows agent
@@ -245,13 +313,39 @@ notifications on, not at first launch. Below API 33 only the system settings
 screen can change the permission, so the row never offers a prompt it cannot
 show.
 
+### iOS
+
+`PairfobNotify` maps the same port onto `UNUserNotificationCenter`: one request
+per pane tag, so a finished turn replaces a stale needs-you row, and the tap URL
+travels back to the page through `ready` / `onmessage`. Permission is requested
+when the user turns notifications on; a denied permission is reported as
+denied, and the settings row does not prompt again.
+
+iOS cannot keep the page running in the background, so the analogue of
+`NotifySyncJobService` is `BGAppRefreshTask` (`BackgroundRefresh.swift`). A
+request is submitted when notifications are turned on and re-armed at launch,
+since a reboot can drop the pending request while the stored choice stays on.
+When iOS runs the task, an offscreen `WKWebView` loads the bundled page at
+`capacitor://localhost` through `PairfobAssetHandler`, sharing the app's data
+store, and the same producer posts whatever transition it reaches. The task
+holds the page for 24 seconds and completes exactly once.
+
+This is best effort. iOS decides whether and when a refresh runs from the
+user's habits and the device state, so a notice can arrive much later than the
+Android job's fifteen-minute cadence, or not at all. If Background App Refresh
+is off for the app, `BGTaskScheduler` refuses the request and enabling
+notifications reports the failure instead of promising a wake that cannot
+happen.
+
 ## Not in this scaffold
 
 - FCM/HMS/MiPush/OPPO/vivo/Honor/aggregator delivery, which would let a notice
   arrive with the app process gone. The shell raises local notices instead and
   reports `pushChannels: ["local"]`; a WebView without the bridge keeps the list
   empty and the row hidden.
-- Play Store packaging and OTA updates.
-- iOS. `NativePlatform` accepts `"ios"` but no iOS project exists here.
+- Play Store and App Store packaging. Android has a sideloaded beta channel;
+  iOS builds go out through TestFlight and Xcode archiving.
 - Native deep-link and QR plugins. The typed pairing code path is the
   acceptance fallback.
+- Background delivery with a guarantee. Android's job scheduler and iOS's
+  background refresh both defer to the OS; neither promises an exact moment.

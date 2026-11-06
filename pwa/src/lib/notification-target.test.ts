@@ -1,7 +1,28 @@
 import { describe, expect, test } from "bun:test";
-import { parseNotificationTarget, resolveNotificationTarget } from "./notification-target.ts";
+import { parseNotificationTarget, parseNotificationURL, resolveNotificationTarget } from "./notification-target.ts";
 
 describe("notification deep links", () => {
+  test("accepts the app origin on a non-special native scheme", () => {
+    expect(parseNotificationURL(
+      "/pair#notify=1&d=d_0123456789abcdefabcd&pane=w0%3Ap1",
+      "capacitor://localhost",
+    )).toEqual({ daemonId: "d_0123456789abcdefabcd", paneId: "w0:p1" });
+  });
+
+  test("accepts the Android app origin too", () => {
+    expect(parseNotificationURL("/pair#notify=1&d=d_0123456789abcdefabcd&pane=w0:p1", "https://localhost"))
+      .toEqual({ daemonId: "d_0123456789abcdefabcd", paneId: "w0:p1" });
+  });
+
+  test("rejects a deep link on another host or scheme", () => {
+    expect(parseNotificationURL("https://evil.example/pair#notify=1&d=d_0123456789abcdefabcd&pane=w0:p1", "capacitor://localhost"))
+      .toBeNull();
+    expect(parseNotificationURL("capacitor://evil/pair#notify=1&d=d_0123456789abcdefabcd&pane=w0:p1", "capacitor://localhost"))
+      .toBeNull();
+    expect(parseNotificationURL("https://localhost/pair#notify=1&d=d_0123456789abcdefabcd&pane=w0:p1", "capacitor://localhost"))
+      .toBeNull();
+  });
+
   test("accepts one exact daemon and pane target", () => {
     expect(parseNotificationTarget("#d=d_0123456789abcdefabcd&notify=1&pane=w0%3Ap1")).toEqual({
       daemonId: "d_0123456789abcdefabcd",

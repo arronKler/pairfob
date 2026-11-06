@@ -82,7 +82,13 @@ function buildEnv(): RuntimeEnv {
  * imports; a running app always has `location`.
  */
 export function pageOrigin(): string {
-  if (typeof location !== "undefined" && location.origin) return location.origin;
+  if (typeof location !== "undefined") {
+    if (location.origin && location.origin !== "null") return location.origin;
+    // The iOS shell serves the app from a non-special scheme, whose
+    // `location.origin` is the string "null". Rebuild the base from the
+    // scheme and host so relative app links can still be parsed.
+    if (location.protocol && location.host) return `${location.protocol}//${location.host}`;
+  }
   return "http://localhost";
 }
 

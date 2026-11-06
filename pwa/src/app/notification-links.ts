@@ -98,7 +98,7 @@ export function bindNotificationLinks(signal: AbortSignal, ports?: NotificationP
     wake();
   };
   window.addEventListener("hashchange", () => {
-    const target = parseNotificationURL(location.href, location.origin);
+    const target = parseNotificationURL(location.href, pageOrigin());
     if (!target) return;
     history.replaceState(null, "", `${location.pathname}${location.search}`);
     capture(target, "hashchange");

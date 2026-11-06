@@ -88,6 +88,70 @@ describe("app origins", () => {
     expect(res.status).toBe(101);
   });
 
+  test("the iOS capacitor://localhost origin upgrades the client WebSocket", async () => {
+    const env = seededEnv();
+    const res = await handleFetch(wsRequest("client", "capacitor://localhost"), env);
+    expect(res.status).toBe(101);
+  });
+
+  test("client WebSocket rejects every near-miss of the iOS origin", async () => {
+    const env = seededEnv();
+    for (const origin of [
+      "capacitor://evil",
+      "capacitor://localhost:4321",
+      "capacitor://LOCALHOST",
+      "capacitor://localhost/",
+      "capacitor://localhost/pair",
+      "http://capacitor://localhost",
+    ]) {
+      const res = await handleFetch(wsRequest("client", origin), env);
+      expect(res.status).toBe(403);
+    }
+  });
+
+  test("the daemon WebSocket path refuses the iOS app origin", async () => {
+    const env = seededEnv();
+    expect((await handleFetch(wsRequest("daemon", "capacitor://localhost"), env)).status).toBe(403);
+  });
+
+  test("pair-intent and events answer the iOS origin with credentialed CORS", async () => {
+    const env = seededEnv();
+    const intent = await handleFetch(pairIntent("capacitor://localhost"), env);
+    expect(intent.status).toBe(404);
+    expect(intent.headers.get("Access-Control-Allow-Origin")).toBe("capacitor://localhost");
+    expect(intent.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+    expect(intent.headers.get("Vary")).toBe("Origin");
+    const telemetry = await handleFetch(events("capacitor://localhost"), env);
+    expect(telemetry.status).toBe(200);
+    expect(telemetry.headers.get("Access-Control-Allow-Origin")).toBe("capacitor://localhost");
+    expect(telemetry.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+  });
+
+  test("preflight answers the iOS origin and refuses its near-misses", async () => {
+    const env = seededEnv();
+    const allowed = await handleFetch(new Request("https://pairfob.com/v2/pair-intent", {
+      method: "OPTIONS",
+      headers: {
+        Origin: "capacitor://localhost",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type",
+      },
+    }), env);
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe("capacitor://localhost");
+    expect(allowed.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+    for (const origin of ["capacitor://evil", "capacitor://localhost:4321"]) {
+      const res = await handleFetch(new Request("https://pairfob.com/v2/pair-intent", {
+        method: "OPTIONS",
+        headers: { Origin: origin, "Access-Control-Request-Method": "POST" },
+      }), env);
+      // The route's own OPTIONS answer, with no CORS grant attached.
+      expect(res.status).toBe(405);
+      expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+      expect(res.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+    }
+  });
+
   test("the daemon WebSocket path still requires same-host or absent Origin", async () => {
     const env = seededEnv();
     expect((await handleFetch(wsRequest("daemon", "https://localhost"), env)).status).toBe(403);

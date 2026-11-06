@@ -8,6 +8,7 @@ import {
 import { t } from "../../lib/i18n";
 import { messageOf } from "../../lib/notices";
 import type { NativeNotificationPermission } from "../../lib/native-notify";
+import { nativePlatformKind } from "../../lib/platform";
 import { CommandLine, Fold, SetAction, SetItem } from "../../shared/ui/primitives";
 
 /**
@@ -129,13 +130,16 @@ function LocalNotificationItem() {
   };
   const denied = status?.permission === "denied";
   const on = enabled && status?.permission === "granted";
+  // The schedule behind the row differs: Android runs a 15-minute job, iOS
+  // lets the system decide when a background refresh may happen.
+  const ios = nativePlatformKind() === "ios";
   let sub = t(enabled ? "settings.pushOn" : "settings.pushOff");
   let subTone: "error" | "warn" | undefined;
   let trailing;
   if (reading && status === null) {
     trailing = <span className="skel" aria-label={t("push.loading")} />;
   } else if (denied) {
-    sub = t("notify.androidDenied");
+    sub = t(ios ? "notify.iosDenied" : "notify.androidDenied");
     subTone = "warn";
     trailing = <span className="set-state">{t("notify.androidDeniedState")}</span>;
   } else if (on) {
@@ -156,7 +160,7 @@ function LocalNotificationItem() {
     <SetItem label={t("settings.notifications")} sub={sub} subTone={subTone} trailing={trailing} />
     <Fold open={on} lazy>
       <div className="notification-sync">
-        <p>{t("notify.backgroundSync")}</p>
+        <p>{t(ios ? "notify.iosBackgroundSync" : "notify.backgroundSync")}</p>
         <p>{t("notify.backgroundSyncOff")}</p>
       </div>
     </Fold>
