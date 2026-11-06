@@ -52,8 +52,8 @@ test("installer aliases use the same script and HEAD/range semantics survive", a
   }
 });
 
-test("daemon version CORS grants only the app and official web origins, including errors", async () => {
-  for (const origin of ["https://localhost", "https://pairfob.com", "https://evil.example"]) {
+test("daemon version CORS grants only the native apps and official web origins, including errors", async () => {
+  for (const origin of ["https://localhost", "capacitor://localhost", "https://pairfob.com", "https://evil.example"]) {
     for (const status of [200, 404, 503]) {
       const response = await worker.fetch(new Request("https://dl.pairfob.com/daemon/VERSION", { headers: { Origin: origin } }), {
         ASSETS: { fetch: async () => new Response("version", { status }) },
@@ -64,6 +64,31 @@ test("daemon version CORS grants only the app and official web origins, includin
       expect(response.status).toBe(status);
     }
   }
+});
+
+test("daemon preflight allows cache-control and pragma only for trusted app origins", async () => {
+  const env = { ASSETS: { fetch: async () => { throw new Error("must not read asset"); } } };
+  for (const origin of ["capacitor://localhost", "https://localhost", "https://pairfob.com"]) {
+    const response = await worker.fetch(new Request("https://pairfob.com/dl/VERSION", {
+      method: "OPTIONS",
+      headers: { Origin: origin, "Access-Control-Request-Headers": "Cache-Control, Pragma, X-Unused" },
+    }), env);
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(origin);
+    expect(response.headers.get("Access-Control-Allow-Methods")).toBe("GET, HEAD, OPTIONS");
+    expect(response.headers.get("Access-Control-Allow-Headers")).toBe("cache-control, pragma");
+    expect(response.headers.get("Access-Control-Max-Age")).toBe("600");
+    expect(response.headers.get("Vary")).toBe("Origin, Access-Control-Request-Headers");
+  }
+  const untrusted = await worker.fetch(new Request("https://pairfob.com/dl/VERSION", {
+    method: "OPTIONS",
+    headers: { Origin: "https://evil.example", "Access-Control-Request-Headers": "cache-control" },
+  }), env);
+  expect(untrusted.status).toBe(204);
+  expect(untrusted.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  expect(untrusted.headers.get("Access-Control-Allow-Methods")).toBeNull();
+  expect(untrusted.headers.get("Access-Control-Allow-Headers")).toBeNull();
+  expect(untrusted.headers.get("Access-Control-Max-Age")).toBeNull();
 });
 
 test("unknown daemon assets and write methods fail closed without reading assets", async () => {

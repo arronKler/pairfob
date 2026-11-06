@@ -8,7 +8,10 @@ const FILES = new Set([
   "pairfob-chat-darwin-amd64", "pairfob-chat-darwin-arm64",
   "pairfob-chat-linux-amd64", "pairfob-chat-linux-arm64",
 ]);
-const ORIGINS = new Set(["https://pairfob.com", "https://localhost"]);
+// The Android shell loads from https://localhost and the iOS shell from
+// capacitor://localhost; both fetch /dl/VERSION cross-origin with
+// cache: "no-store", so the preflight below must also allow the cache headers.
+const ORIGINS = new Set(["https://pairfob.com", "https://localhost", "capacitor://localhost"]);
 
 export async function daemonDownload(
   req: Request,
@@ -25,7 +28,20 @@ export async function daemonDownload(
   if (origin && ORIGINS.has(origin)) headers.set("Access-Control-Allow-Origin", origin);
   if (!installer && !FILES.has(name)) return new Response(null, { status: 404, headers });
   if (req.method === "OPTIONS") {
-    headers.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    if (origin && ORIGINS.has(origin)) {
+      headers.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      // `cache: "no-store"` makes the browser send Cache-Control and Pragma,
+      // which are not CORS-safelisted headers; reflect only those we use.
+      const requested = (req.headers.get("Access-Control-Request-Headers") || "")
+        .toLowerCase()
+        .split(",")
+        .map((header) => header.trim())
+        .filter((header) => header === "cache-control" || header === "pragma");
+      headers.set("Access-Control-Allow-Headers", requested.length ? requested.join(", ") : "content-type");
+      headers.set("Access-Control-Max-Age", "600");
+      // The reflected allow-list varies with the request, not only the origin.
+      headers.set("Vary", "Origin, Access-Control-Request-Headers");
+    }
     return new Response(null, { status: 204, headers });
   }
   if (req.method !== "GET" && req.method !== "HEAD") {
