@@ -1,7 +1,7 @@
 /** Classify changed paths into the verification jobs they affect. */
 import { execFileSync } from "node:child_process";
 
-export const SCOPES = ["go", "web", "docs", "desktop"] as const;
+export const SCOPES = ["go", "web", "docs", "desktop", "mobile"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 type Matcher = (path: string) => boolean;
@@ -15,7 +15,7 @@ const rootName = (matches: Matcher): Matcher => (path) => !path.includes("/") &&
 
 const RULES: ReadonlyArray<{ matches: Matcher; scopes: readonly Scope[] }> = [
   { matches: (path) => path === ".github" || under(".github")(path), scopes: ALL },
-  { matches: exact("scripts/verify.sh", "scripts/ci-scope.ts", "scripts/ci-scope.test.ts"), scopes: ALL },
+  { matches: exact("scripts/verify.sh", "scripts/ci-scope.ts", "scripts/ci-scope-baseline.sh", "scripts/ci-scope.test.ts"), scopes: ALL },
   {
     matches: exact(
       "scripts/release.sh",
@@ -51,7 +51,7 @@ const RULES: ReadonlyArray<{ matches: Matcher; scopes: readonly Scope[] }> = [
   { matches: exact("scripts/verify-desktop.sh"), scopes: ["desktop"] },
   { matches: under("scripts"), scopes: NONE },
   { matches: (path) => under("plugin")(path) || path === "herdr-plugin.toml", scopes: NONE },
-  { matches: under("mobile"), scopes: ["web"] },
+  { matches: under("mobile"), scopes: ["web", "mobile"] },
   { matches: exact("AGENTS.md", "DESIGN.md", "SECURITY.md", "LICENSE", "NOTICE"), scopes: ["docs"] },
   { matches: rootName((path) => path.startsWith("README")), scopes: ["docs"] },
 ];

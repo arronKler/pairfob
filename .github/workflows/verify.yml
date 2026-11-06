@@ -23,6 +23,7 @@ jobs:
       web: ${{ steps.scope.outputs.web }}
       docs: ${{ steps.scope.outputs.docs }}
       desktop: ${{ steps.scope.outputs.desktop }}
+      mobile: ${{ steps.scope.outputs.mobile }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -309,6 +310,51 @@ jobs:
             ${{ runner.os }}-cargo-v2-
       - run: bash scripts/verify-desktop.sh
 
+  android:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.1.0"
+      - name: Install PWA deps
+        run: (cd pwa && bun install --frozen-lockfile)
+      - name: Install mobile deps
+        run: (cd mobile && bun install --frozen-lockfile)
+      - name: Build debug APK
+        run: (cd mobile && bun run build:debug)
+
+  ios:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install PWA deps
+        run: (cd pwa && bun install --frozen-lockfile)
+      - name: Install mobile deps
+        run: (cd mobile && bun install --frozen-lockfile)
+      - name: Build iOS simulator app
+        run: (cd mobile && bun run ios:debug)
+
   scripts:
     # Wait for the scope decision like the other non-shard jobs, so the six
     # test shards get the runners first.
@@ -343,6 +389,8 @@ jobs:
       - web-workers
       - docs
       - desktop
+      - android
+      - ios
       - scripts
     # The gate only reads the needs JSON; a shared container starts sooner
     # than a full VM and costs no verification capacity.
@@ -355,15 +403,33 @@ jobs:
         run: |
           # A skipped job is legitimate only when its scope output is "false".
           # toJSON(needs) can carry no outputs at all after a failure, which
-          # would silently skip jobs; require changes to succeed with all four
+          # would silently skip jobs; require changes to succeed with all five
           # outputs present and boolean-looking before accepting any skip.
           echo "$NEEDS" | jq -e '
             def scope_output_ok($name):
               ((.outputs // {})[$name] == "true") or ((.outputs // {})[$name] == "false");
+            # A skipped scoped job is legitimate only when its scope is false.
+            def job_ok($job; $scope):
+              (.[$job].result == "success")
+              or ((.[$job].result == "skipped")
+                  and ((.changes.outputs // {})[$scope] == "false"));
             (.changes.result == "success")
             and (.changes | scope_output_ok("go"))
             and (.changes | scope_output_ok("web"))
             and (.changes | scope_output_ok("docs"))
             and (.changes | scope_output_ok("desktop"))
-            and all(.[]; .result == "success" or .result == "skipped")
+            and (.changes | scope_output_ok("mobile"))
+            and job_ok("go-fmt-vet"; "go")
+            and job_ok("go-test"; "go")
+            and job_ok("go-race"; "go")
+            and job_ok("go-vuln"; "go")
+            and job_ok("docs"; "docs")
+            and job_ok("desktop"; "desktop")
+            and job_ok("android"; "mobile")
+            and job_ok("ios"; "mobile")
+            and .["web-tests"].result == "success"
+            and .["web-static"].result == "success"
+            and .["web-build"].result == "success"
+            and .["web-workers"].result == "success"
+            and .scripts.result == "success"
           '

@@ -87,10 +87,18 @@ simulator build instead of Gradle:
 
 1. `pwa:native` runs the PWA `build:native` script into `pwa/dist-native`
 2. `sync:ios` runs `cap sync ios`, copying the bundle into the iOS project
-3. `xcodebuild -scheme App -sdk iphonesimulator` builds without signing
+3. `xcodebuild -scheme App -sdk iphonesimulator` builds a simulator app
+   without release signing credentials
 
 `bun run ios:run` builds and launches on a simulator that Capacitor picks. Open
 `ios/App/App.xcodeproj` (or the `App` scheme) for the Xcode UI.
+
+CI builds both shells: `.github/workflows/verify.yml` runs an Android debug APK
+job on `ubuntu-latest` and an iOS simulator job on `macos-latest` for changes
+under `mobile/`, alongside the existing web checks. Neither native job needs
+release signing credentials: the Android job builds a debug APK and the iOS job
+a simulator app. A local `build:debug` or `ios:debug` reproduces the same
+compile.
 
 The app is served from `capacitor://localhost`, not an `https` origin: WebKit
 owns `https`, so Capacitor's scheme check rejects it as a custom scheme. The

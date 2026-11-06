@@ -230,6 +230,7 @@ repository gate after every local edit or merely because a task is ending.
 | PWA UI-only production release | Run `./scripts/verify.sh --pwa-only <verified-release-commit>` against a trustworthy baseline in the current checkout. |
 | Desktop client change | Run `bash scripts/verify-desktop.sh`. Engine, input or lifecycle changes also run `PF_DESKTOP_LIVE=1 cargo test --test live -- --ignored` against a running `pffixture` session. A UI change is not verified until the window has been seen on the surfaces it reaches; say which ones you could not open. |
 | Android shell / APK-only production release | Run `./scripts/verify.sh --android-only <verified-release-commit>` against a trustworthy baseline. It covers the bundled PWA, the download channel publisher and the APK provenance checks, and refuses changes to the protocol client, daemon, relay, release scripts or anything beyond the two version literals in `mobile/android/app/build.gradle`. |
+| Mobile shell change | CI runs the `android` (debug APK) and `ios` (simulator) jobs for `mobile/**`; run `cd mobile && bun run build:debug` or `bun run ios:debug` locally when that platform's toolchain is installed. |
 | Backend, protocol, cross-module contract or release-tooling delivery | Run the full `./scripts/verify.sh` once on the final candidate before handoff/merge/release. Use focused checks during iteration. |
 | Production release outside both guarded scopes, or without a trustworthy baseline | Run the full gate on the final release candidate. |
 

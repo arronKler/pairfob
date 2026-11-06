@@ -36,7 +36,7 @@ if [[ -z "$SCOPE" ]]; then
 fi
 
 # A missing or malformed line must fail the job, never skip the suite.
-for key in go web docs desktop; do
+for key in go web docs desktop mobile; do
   if ! grep -qx "$key=true" <<< "$SCOPE" && ! grep -qx "$key=false" <<< "$SCOPE"; then
     echo "scope: missing $key in classifier output" >&2
     exit 1
