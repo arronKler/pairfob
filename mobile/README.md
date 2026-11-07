@@ -107,10 +107,44 @@ pairing survive switching between them on iOS.
 
 ### Device and TestFlight builds
 
-Open the project in Xcode, select the `App` target, and set a signing team for
-bundle id `com.pairfob.app`. `MARKETING_VERSION` is the three-part app version
-and `CURRENT_PROJECT_VERSION` is the build number; raise the build number for
+TestFlight needs a paid Apple Developer Program membership and an App Store
+Connect app record for `com.pairfob.app`. The project uses automatic signing
+but ships no `DEVELOPMENT_TEAM`; open it in Xcode, select the `App` target and
+pick the team, or pass `DEVELOPMENT_TEAM=<team id>` to `xcodebuild`.
+`MARKETING_VERSION` is the three-part app version and
+`CURRENT_PROJECT_VERSION` is the build number; raise the build number for
 every upload. Archive to the App Store or a TestFlight group as usual.
+
+Before the first upload:
+
+- `App/PrivacyInfo.xcprivacy` must stay in the `App` target's Copy Bundle
+  Resources. It declares only `NSPrivacyAccessedAPICategoryUserDefaults`
+  (reason `CA92.1`) for the background-sync flag; the app does no tracking and
+  collects no data. The Capacitor frameworks carry their own manifests.
+- Answer App Store Connect's export-compliance question. The app encrypts pair
+  and session traffic, so the answer is the developer's own export
+  classification; `ITSAppUsesNonExemptEncryption` is deliberately left unset
+  instead of guessed.
+- Metadata: name `Pairfob`, support URL `https://pairfob.com`, privacy policy
+  `https://pairfob.com/doc/privacy`, a category, a 6.9-inch iPhone screenshot
+  set, an age rating, and TestFlight test information. Internal testers need
+  no review; external testers need Beta App Review.
+
+Signing identities and App Store Connect keys never enter the repository.
+With an App Store Connect API key (`.p8` path, key id, issuer id):
+
+```
+xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+  -destination 'generic/platform=iOS' -archivePath build/Pairfob.xcarchive \
+  archive -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY" \
+  -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+```
+
+Export the archive with an `-exportOptionsPlist` whose `method` is
+`app-store-connect` and `signingStyle` is `automatic`, then upload the `.ipa`
+with `xcrun altool --upload-app -f build/export/App.ipa -t ios --apiKey
+"$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"`. Uploads are outward-facing: upload
+only a build that passed the checks above.
 
 The shell has no self-update path. App Store and TestFlight are the only update
 channels, so the Android update card is not shown on iOS.

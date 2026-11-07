@@ -14,6 +14,7 @@
 		A1F0B1022C3D4E5F60718293 /* PairfobBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F0B1012C3D4E5F60718293 /* PairfobBridgeViewController.swift */; };
 		A1F0B1042C3D4E5F60718293 /* NotifyBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F0B1032C3D4E5F60718293 /* NotifyBridge.swift */; };
 		A1F0B1062C3D4E5F60718293 /* BackgroundRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F0B1052C3D4E5F60718293 /* BackgroundRefresh.swift */; };
+		A1F0B1092C3D4E5F60718293 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A1F0B1072C3D4E5F60718293 /* PrivacyInfo.xcprivacy */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
@@ -29,6 +30,7 @@
 		A1F0B1012C3D4E5F60718293 /* PairfobBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairfobBridgeViewController.swift; sourceTree = "<group>"; };
 		A1F0B1032C3D4E5F60718293 /* NotifyBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotifyBridge.swift; sourceTree = "<group>"; };
 		A1F0B1052C3D4E5F60718293 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
+		A1F0B1072C3D4E5F60718293 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -76,6 +78,7 @@
 				A1F0B1012C3D4E5F60718293 /* PairfobBridgeViewController.swift */,
 				A1F0B1032C3D4E5F60718293 /* NotifyBridge.swift */,
 				A1F0B1052C3D4E5F60718293 /* BackgroundRefresh.swift */,
+				A1F0B1072C3D4E5F60718293 /* PrivacyInfo.xcprivacy */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -154,6 +157,7 @@
 				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
+				A1F0B1092C3D4E5F60718293 /* PrivacyInfo.xcprivacy in Resources */,
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
