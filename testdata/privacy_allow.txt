@@ -1,0 +1,24 @@
+# Allow list of privacy_test.go. This file is public: it holds only
+# non-personal path segments (such as me u x test zh en private runner work)
+# and <file>:<kind> entries, never the name of a person, a machine or a volume.
+
+# Placeholder user name used by test fixtures.
+me
+# Placeholder user name used by test fixtures.
+u
+# Placeholder user name used by test fixtures.
+x
+# Placeholder home directory name used by test fixtures.
+test
+# Site route segments (/home/en/, /home/zh/), not a directory of a person.
+en
+# Site route segments (/home/en/, /home/zh/), not a directory of a person.
+zh
+# Brace expansion of the two site routes, not a directory.
+{en,zh}
+# Generic word used by fixtures for a path outside any allowed root.
+private
+# CI runner account and workspace, generic.
+runner
+# CI workspace directory, generic.
+work

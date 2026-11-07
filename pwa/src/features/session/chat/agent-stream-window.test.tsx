@@ -7,7 +7,10 @@ import type { AgentTraceItem } from "../../../lib/operations";
 import { AgentStream } from "./agent-stream";
 
 beforeEach(async () => { await resetTestDOM(); setLang("en"); });
-afterEach(() => act(unmountReact));
+afterEach(async () => {
+  await act(unmountReact);
+  setLang("zh");
+});
 
 const empty = { kind: "empty" as const, title: "No history" };
 

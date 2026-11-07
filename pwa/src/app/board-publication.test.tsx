@@ -55,6 +55,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   unmountTestApp();
+  // The fake live session must not outlive the suite: a later boot would see a live connection.
+  attachLiveSession(null);
 });
 
 describe("stable App board seam", () => {

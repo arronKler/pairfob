@@ -43,6 +43,7 @@ afterEach(() => {
   selectPane("");
   window.matchMedia = savedMatchMedia;
   if (savedTouch) Object.defineProperty(navigator, "maxTouchPoints", savedTouch);
+  else delete (navigator as unknown as Record<string, unknown>).maxTouchPoints;
 });
 
 test("choosing auto in the pane menu leaves auto stored", async () => {

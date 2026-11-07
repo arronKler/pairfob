@@ -1,17 +1,17 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import "../../test-support/boot-dom";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { installTestDOM } from "../../test-support/boot-dom";
 import { copy, resolveCopy, copyKeys, detectLang, lang, langPref, setLang, setLangPref, t } from "./i18n";
 import { enSingular } from "./i18n-en-plurals";
 import { en } from "./i18n-en";
 import { zh } from "./i18n-zh";
 
+// Another suite may have replaced the browser globals; storage is read through them.
+beforeEach(installTestDOM);
+
 afterEach(() => {
+  // Clears the stored choice and the cookie, so later suites start unset.
+  setLangPref("auto");
   setLang("zh");
-  try {
-    localStorage.removeItem("pairfob_lang");
-  } catch {
-    /* happy-dom may not have storage */
-  }
 });
 
 describe("i18n catalogs", () => {
@@ -101,4 +101,9 @@ test("singular alternatives preserve every interpolation slot", () => {
   for (const [key, value] of Object.entries(enSingular)) {
     expect(slots(value!)).toEqual(slots(en[key as keyof typeof en]));
   }
+});
+
+test("a stored choice does not outlive its test", () => {
+  expect(langPref()).toBe("auto");
+  expect(document.cookie).not.toContain("pairfob_lang=en");
 });
