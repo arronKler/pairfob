@@ -1,3 +1,4 @@
+import { Copy } from "lucide-react";
 import { Fragment, memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { renderMarkdown } from "../../../lib/agent-markdown";
 import { groupAgentTurns, groupAgentTurnBlocks, processTitle, replyText, turnKey,
@@ -21,13 +22,37 @@ function anchorData(anchor: TraceAnchor, part: string) {
   };
 }
 
+const PRE_BLOCK = /(<pre(?:\s[^>]*)?>[\s\S]*?<\/pre>)/i;
+
+function CodeBlock({ html, onCopy }: { html: string; onCopy?: CopyReply }) {
+  const box = useRef<HTMLDivElement | null>(null);
+  const copy = () => {
+    const code = (box.current?.querySelector("pre")?.textContent ?? "").replace(/\n$/, "");
+    if (code) void onCopy?.(code);
+  };
+  return <div ref={box} className="agent-code">
+    <div className="agent-md-html" dangerouslySetInnerHTML={{ __html: html }} />
+    {onCopy && <button type="button" className="agent-code-copy" aria-label={t("chat.copyCodeAria")} onClick={copy}><Copy size={16} aria-hidden="true" /></button>}
+  </div>;
+}
+
+/** Sanitized html split at <pre> boundaries: each block gets a button React owns, so a live reply's html rewrite cannot wipe it. */
+function ReplyBody({ text, onCopy }: { text: string; onCopy?: CopyReply }) {
+  const parts = renderMarkdown(text).split(PRE_BLOCK);
+  return <div className="agent-md">
+    {parts.map((html, index) => index % 2
+      ? <CodeBlock key={index} html={html} onCopy={onCopy} />
+      : html && <div key={index} className="agent-md-html" dangerouslySetInnerHTML={{ __html: html }} />)}
+  </div>;
+}
+
 function AssistantReply({ items, final, live, anchor, part, onCopy }: {
   items: AgentTraceItem[]; final: boolean; live: boolean; anchor: TraceAnchor; part: string; onCopy?: CopyReply;
 }) {
   const text = replyText(items);
   return <article {...anchorData(anchor, part)} className={`agent-assistant${final ? " agent-assistant-final" : " agent-assistant-intermediate"}`}>
     {/* The existing Markdown parser returns sanitized allowlisted HTML. */}
-    <div className="agent-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
+    <ReplyBody text={text} onCopy={onCopy} />
     {final && !live && onCopy && text && <div className="agent-reply-actions">
       <Button className="agent-reply-copy" aria-label={t("chat.copyReplyAria")} onClick={() => void onCopy(text)}>{t("chat.copyReply")}</Button>
     </div>}

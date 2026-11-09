@@ -692,6 +692,7 @@ export const zh = {
   "chat.streamAria": "对话",
   "chat.copyReply": "复制回答",
   "chat.copyReplyAria": "复制这条 Agent 回答",
+  "chat.copyCodeAria": "复制这段代码",
   "chat.copiedReply": "已复制回答",
 
   "ft.opening": "正在打开终端…",

@@ -195,6 +195,28 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.agent-md-html { display: contents; }
+
+.agent-code { position: relative; }
+
+.agent-code-copy {
+  position: absolute;
+  top: calc(0.65em + 4px);
+  right: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.agent-code-copy:focus-visible,
+.agent-code-copy:active { color: var(--ink); }
+
 .agent-md pre code {
   background: none;
   padding: 0;

@@ -689,6 +689,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chat.streamAria": "Chat",
   "chat.copyReply": "Copy reply",
   "chat.copyReplyAria": "Copy this agent reply",
+  "chat.copyCodeAria": "Copy this code block",
   "chat.copiedReply": "Reply copied",
 
   "ft.opening": "Opening the terminal…",

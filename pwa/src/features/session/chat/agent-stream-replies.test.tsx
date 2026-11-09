@@ -52,3 +52,38 @@ test("two replies with no step between them are both visible outside any fold", 
   expect(appRoot().textContent).toContain("one");
   expect(appRoot().textContent).toContain("two");
 });
+
+function renderCopy(text: string, working: boolean, copied: string[]) {
+  act(() => renderReact(<AgentStream items={[{ type: "user", text: "go" }, { type: "assistant", text }]} working={working}
+    empty={empty} onCopyReply={value => { copied.push(value); }} />));
+}
+
+function codeButtons(): HTMLButtonElement[] {
+  return [...appRoot().querySelectorAll<HTMLButtonElement>(".agent-code-copy")];
+}
+
+for (const working of [false, true]) {
+  test(`a code block of a ${working ? "live" : "final"} reply has a copy button that copies its line`, () => {
+    const copied: string[] = [];
+    const md = "run:\n\n```\necho hi\n```";
+    renderCopy(md, working, copied);
+    expect(codeButtons()).toHaveLength(1);
+    act(() => codeButtons()[0].click());
+    expect(copied).toEqual(["echo hi"]);
+    if (working) {
+      renderCopy(`${md}\n\nthen wait`, working, copied);
+      expect(codeButtons()).toHaveLength(1);
+      act(() => codeButtons()[0].click());
+      expect(copied).toEqual(["echo hi", "echo hi"]);
+    }
+  });
+}
+
+test("each of two code blocks copies only its own text", () => {
+  const copied: string[] = [];
+  renderCopy("```\none\n```\n\nmid\n\n```\ntwo\n```", false, copied);
+  expect(codeButtons()).toHaveLength(2);
+  act(() => codeButtons()[1].click());
+  act(() => codeButtons()[0].click());
+  expect(copied).toEqual(["two", "one"]);
+});
