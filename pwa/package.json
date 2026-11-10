@@ -4,9 +4,9 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "test": "bun test src --isolate --parallel --timeout 30000",
+    "test": "bun test src --isolate --parallel --timeout 120000 --retry=1",
     "test:changed": "bun scripts/test-changed.ts",
-    "test:qa": "bun test test-support/qa-app-smoke.test.ts test-support/qa-fixture-api.test.ts test-support/phase2-chat-qa.test.ts --isolate --timeout 90000",
+    "test:qa": "bun test test-support/qa-app-smoke.test.ts test-support/qa-fixture-api.test.ts test-support/phase2-chat-qa.test.ts --isolate --timeout 180000 --retry=1",
     "typecheck": "tsgo --noEmit",
     "typecheck:qa": "tsgo --noEmit -p tsconfig.qa.json",
     "typecheck:all": "tsgo --noEmit -p tsconfig.all.json",

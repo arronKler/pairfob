@@ -19,6 +19,12 @@ import (
 	"pairfob/internal/chat/protocol"
 )
 
+// hangGuard bounds a socket wait that exists to fail a deadlock, not to
+// measure latency. The gate runs packages under the race detector beside
+// other shards, where a few seconds can be CPU starvation; the package
+// timeout still fails a real hang.
+const hangGuard = 30 * time.Second
+
 // stubAgent is the smallest hub.Agent: prompts block until the test answers.
 type stubAgent struct {
 	events  chan acp.Event
@@ -100,7 +106,7 @@ func (v *view) send(message protocol.ClientMessage) {
 	if err != nil {
 		v.t.Fatalf("encode frame: %v", err)
 	}
-	_ = v.conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+	_ = v.conn.SetWriteDeadline(time.Now().Add(hangGuard))
 	if _, err := v.conn.Write(append(data, '\n')); err != nil {
 		v.t.Fatalf("write frame: %v", err)
 	}
@@ -118,7 +124,7 @@ func (v *view) command(id string, command protocol.Command) {
 
 func (v *view) read() protocol.ServerMessage {
 	v.t.Helper()
-	_ = v.conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = v.conn.SetReadDeadline(time.Now().Add(hangGuard))
 	if !v.lines.Scan() {
 		v.t.Fatalf("read frame: %v", v.lines.Err())
 	}
@@ -135,7 +141,7 @@ func (v *view) read() protocol.ServerMessage {
 
 func (v *view) expectClosed() {
 	v.t.Helper()
-	_ = v.conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = v.conn.SetReadDeadline(time.Now().Add(hangGuard))
 	var scratch [1]byte
 	if _, err := v.conn.Read(scratch[:]); err == nil {
 		v.t.Fatal("connection is still open")
@@ -345,7 +351,7 @@ func TestPromptCommandQueuesAndReportsOK(t *testing.T) {
 	if result := v.readResult("c1"); result.OK == nil || !*result.OK {
 		t.Fatalf("first prompt result = %+v", result)
 	}
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(hangGuard)
 	for rig.agent.promptCount() == 0 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
@@ -388,7 +394,7 @@ func TestOversizedLineClosesConnection(t *testing.T) {
 	payload := bytes.Repeat([]byte("a"), protocol.MaxLineBytes+1)
 	payload = append(payload, '\n')
 	go func() {
-		_ = v.conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+		_ = v.conn.SetWriteDeadline(time.Now().Add(hangGuard))
 		_, _ = v.conn.Write(payload)
 	}()
 	v.expectClosed()
@@ -397,7 +403,7 @@ func TestOversizedLineClosesConnection(t *testing.T) {
 func TestMalformedHelloClosesConnection(t *testing.T) {
 	rig := startRig(t, 0)
 	v := dialView(t, rig.path)
-	_ = v.conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+	_ = v.conn.SetWriteDeadline(time.Now().Add(hangGuard))
 	if _, err := v.conn.Write([]byte("not json\n")); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -577,7 +583,7 @@ func TestViewSeesHubClose(t *testing.T) {
 	v := dialView(t, rig.path)
 	v.greet(nil)
 	rig.agent.stop()
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(hangGuard)
 	for rig.hub.Snapshot().Status != protocol.StatusExited && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}

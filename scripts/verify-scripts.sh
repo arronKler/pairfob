@@ -48,7 +48,9 @@ check_registry() {
 }
 # The files work in their own temp trees and spawn their own processes, so
 # they can share workers instead of queuing behind the slowest git call.
-check_scripts() { bun test --isolate --parallel scripts/*.test.ts --timeout 30000; }
+# The timeout guards a hang, not a latency budget: these files spawn git and
+# Go processes, and a shared machine can stall one of them for a minute.
+check_scripts() { bun test --isolate --parallel scripts/*.test.ts --timeout 120000; }
 
 start_check "shell syntax" check_shell_syntax
 start_check "download channel tests" python3 scripts/download-channel.test.py

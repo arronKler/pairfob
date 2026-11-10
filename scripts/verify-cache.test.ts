@@ -94,7 +94,7 @@ describe("verification cache key", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  }, 30000);
+  }, 120000);
 
   test("a commit that changes nothing keeps the key", () => {
     const root = gitFixture();
@@ -108,7 +108,7 @@ describe("verification cache key", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  }, 30000);
+  }, 120000);
 
   test("a changed locale environment misses", () => {
     const root = fixture();
@@ -141,5 +141,5 @@ describe("verification cache key", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 30000);
+  }, 120000);
 });

@@ -113,7 +113,9 @@ func TestWebRTCAcceptorAnswersWithoutWaitingOutAnUnansweredSTUNServer(t *testing
 	acceptor := &webRTCAcceptor{configuration: webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{{URLs: []string{"stun:192.0.2.1:3478"}}},
 	}}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	// The deadline only bounds a stuck acceptor; the early-answer behavior is
+	// asserted below, against the four-second mark, not against this guard.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	started := time.Now()
 	answer, link, err := acceptor.Accept(ctx, caller.LocalDescription().SDP, func(mux.Conn, envelope.Frame) {}, func(mux.Conn) {})

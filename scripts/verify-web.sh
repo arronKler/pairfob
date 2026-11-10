@@ -77,12 +77,15 @@ run_tests() {
   # Bun 1.4.3 runs the files in worker processes; `--isolate` still holds when an
   # older Bun ignores `--parallel` and runs them in order. A preload's
   # setDefaultTimeout does not reach a directory run, so pass it here.
+  # The timeout guards a hang, not a latency budget: a shared machine can stall
+  # a test for a minute without a defect. One retry absorbs that stall; a real
+  # regression fails both attempts, and every first failure still prints.
   # The timings manifest decides the split and starts the slowest files first.
   # Refresh it with
   # `bun test --timings=../scripts/pwa-test-timings.json --update-timings`.
   # Passing tests are not printed: a shard's log is thousands of lines, and the
   # job's log upload is part of its wall time. Failures and the summary stay.
-  step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --only-failures --timings="$ROOT/scripts/pwa-test-timings.json" --timeout 30000 "${files[@]}" || code=$?
+  step "PWA tests shard $SHARD_INDEX/$SHARD_TOTAL" bun test --isolate --parallel --only-failures --timings="$ROOT/scripts/pwa-test-timings.json" --timeout 120000 --retry=1 "${files[@]}" || code=$?
   if ((code == 0)) && [[ -n "$cache_key" ]]; then
     bun "$ROOT/scripts/verify-cache.ts" store pwa-tests "$SHARD_INDEX/$SHARD_TOTAL" "$cache_key" || true
   fi

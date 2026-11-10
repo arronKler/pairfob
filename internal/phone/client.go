@@ -294,8 +294,12 @@ func (c *Client) Resume(daemonID string) error {
 	return nil
 }
 
+// RPC's default deadline is a hang guard, not a latency assertion. The daemon
+// end-to-end suite runs under the race detector beside other gates, where a
+// few seconds can be CPU starvation instead of a missing reply; a test that
+// checks an explicit deadline passes its own RPCTimeout.
 func (c *Client) RPC(op string, params any) (json.RawMessage, error) {
-	return c.RPCTimeout(op, params, 3*time.Second)
+	return c.RPCTimeout(op, params, 30*time.Second)
 }
 
 func (c *Client) RPCTimeout(op string, params any, timeout time.Duration) (json.RawMessage, error) {

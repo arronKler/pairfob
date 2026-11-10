@@ -146,7 +146,12 @@ Choose checks by change scope and stage; the full rules are in
   unchanged tree replays Go's cached results; `PAIRFOB_VERIFY_BINARIES=1`
   prebuilds test binaries for a cold run and gives up that reuse.
   `PAIRFOB_VERIFY_JOBS` caps the shard count when a loaded machine needs fewer
-  concurrent test processes. The gate resolves Bun from `~/.bun/bin` when that
+  concurrent test processes. On a shared machine a gate can also run on its own
+  (`bash scripts/verify-web.sh --part tests|static|build|workers`), so it does
+  not compete with the other gates for cores. Test and socket deadlines are
+  hang guards, not latency assertions: the PWA suite allows two minutes per
+  test and one retry for a starved worker, and a real regression fails both
+  attempts. The gate resolves Bun from `~/.bun/bin` when that
   copy matches `.bun-version`, so an older system Bun cannot silently run the
   PWA suite one file at a time. A green PWA shard is reused when its inputs
   (`pwa/`, `proto/`, the shard planner, the timings manifest, `.bun-version`
