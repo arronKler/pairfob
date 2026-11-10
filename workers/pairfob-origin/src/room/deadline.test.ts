@@ -38,7 +38,7 @@ describe("pending session deadline boundaries", () => {
         await h.core.alarm();
       }
       expect(phone.closed).toBe(true);
-      expect(phone.closeReason).toBe("unpaired");
+      expect(phone.closeReason).toBe("timeout");
       expect(h.core.countKinds().resume).toBe(0);
       expect(h.store.listBinds()).toEqual([]);
       expect(h.store.listAlarms()).toEqual([]);

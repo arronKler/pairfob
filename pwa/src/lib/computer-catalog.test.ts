@@ -96,6 +96,10 @@ describe("computer catalog", () => {
     expect(credentialIsBurned("kicked")).toBe(false);
     expect(credentialIsBurned("too_many_devices")).toBe(false);
     expect(credentialIsBurned("ws_open_failed")).toBe(false);
+    // Relay and transport liveness failures keep the saved computer.
+    expect(credentialIsBurned("timeout")).toBe(false);
+    expect(credentialIsBurned("bad_frame")).toBe(false);
+    expect(credentialIsBurned("bad_message")).toBe(false);
     expect(phaseAfterComputers(2)).toBe("pick");
     expect(phaseAfterComputers(0)).toBe("connect");
   });

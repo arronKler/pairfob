@@ -305,7 +305,7 @@ func TestPingDoesNotExtendResumeHelloDeadline(t *testing.T) {
 	if fr, ok := cA.RecvTimeout(time.Second); !ok || fr.Typ != envelope.TypPONG {
 		t.Fatalf("PONG ok=%v typ=%d", ok, fr.Typ)
 	}
-	assertErrorCode(t, cA, "unpaired")
+	assertErrorCode(t, cA, "timeout")
 }
 
 func TestHubRejectsInvalidEnvelopeAsBadFrame(t *testing.T) {
