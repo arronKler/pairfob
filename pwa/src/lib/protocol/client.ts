@@ -48,6 +48,7 @@ export {
   type PairResult,
 } from "./pair-ws.ts";
 export {
+  CONFIG_RPC_TIMEOUT_MS,
   MEDIA_OPEN_RPC_TIMEOUT_MS,
   MUTATION_RPC_TIMEOUT_MS,
   READ_RPC_TIMEOUT_MS,

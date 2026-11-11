@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { enqueueHandshakeFrame, heartbeatPayload, MAX_HANDSHAKE_QUEUE, MEDIA_OPEN_RPC_TIMEOUT_MS, MUTATION_RPC_TIMEOUT_MS, normalizeDeviceLabel, ProtocolError, READ_RPC_TIMEOUT_MS, TERMINAL_RPC_TIMEOUT_MS, trackMutationDelivery, validateEstablishedFWD, validateSessionEstablished, validateSessionMessage } from "./client.ts";
+import { CONFIG_RPC_TIMEOUT_MS, enqueueHandshakeFrame, heartbeatPayload, MAX_HANDSHAKE_QUEUE, MEDIA_OPEN_RPC_TIMEOUT_MS, MUTATION_RPC_TIMEOUT_MS, normalizeDeviceLabel, ProtocolError, READ_RPC_TIMEOUT_MS, TERMINAL_RPC_TIMEOUT_MS, trackMutationDelivery, validateEstablishedFWD, validateSessionEstablished, validateSessionMessage } from "./client.ts";
 import { jsonFrame, Typ } from "./envelope.ts";
 import { bytesToHex } from "./bytes.ts";
 import { reconcileMutationFailure } from "../operations.ts";
@@ -89,6 +89,10 @@ describe("rpc deadlines", () => {
     expect(MEDIA_OPEN_RPC_TIMEOUT_MS).toBe(20_000);
     expect(MEDIA_OPEN_RPC_TIMEOUT_MS).toBeGreaterThan(READ_RPC_TIMEOUT_MS);
     expect(MUTATION_RPC_TIMEOUT_MS).toBeGreaterThan(READ_RPC_TIMEOUT_MS);
+    // GetConfig must outlive the daemon's own 12 s describe budget; a shorter
+    // client deadline turns a slow but healthy answer into a false verdict.
+    expect(CONFIG_RPC_TIMEOUT_MS).toBeGreaterThan(12_000);
+    expect(CONFIG_RPC_TIMEOUT_MS).toBeGreaterThan(READ_RPC_TIMEOUT_MS);
   });
 });
 

@@ -12,7 +12,7 @@ import { noticesStore, clearNotice } from "../../app/notices-store";
 import { batch } from "../../shared/model/domain-store";
 import { FRIENDLY_ERROR } from "../../lib/notices";
 import { parseRuntimeOperationsConfig } from "../../lib/operations";
-import type { LiveSession, PairResult } from "../../lib/protocol/client";
+import { CONFIG_RPC_TIMEOUT_MS, ProtocolError, type LiveSession, type PairResult } from "../../lib/protocol/client";
 import { herdConfigIsCurrent, nextHerdConfigRequest } from "./generations";
 import { rememberPushConfig } from "../settings/push-config";
 
@@ -29,10 +29,24 @@ export type RuntimeObservationPorts = {
 
 /**
  * How long an unanswered first GetConfig reads as "still reading" before the
- * header falls back to "cannot confirm Herdr". A healthy computer answers in
- * well under a second; this covers a slow relay hop or a just-woken daemon.
+ * header falls back to "cannot confirm Herdr". The daemon allows its own
+ * describe work 12 s and the client's GetConfig deadline sits above that, so
+ * this grace ends only after the read itself has given up. A deadline is not a
+ * verdict about Herdr.
  */
-export const IDENTITY_READ_GRACE_MS = 8_000;
+export const IDENTITY_READ_GRACE_MS = CONFIG_RPC_TIMEOUT_MS + 1_000;
+
+/**
+ * A GetConfig that did not answer has not said anything about Herdr. These
+ * codes mean "not answered yet" (the client deadline, or a full session
+ * queue), so a connected session asks again instead of publishing an empty
+ * identity that only an unrelated reconnect would repair.
+ */
+const TRANSIENT_CONFIG_CODES: ReadonlySet<string> = new Set(["timeout", "backpressure"]);
+const IDENTITY_RETRY_DELAYS_MS = [1_000, 3_000, 8_000];
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryAttempts = 0;
+let retrySession: LiveSession | null = null;
 
 let identityTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -53,6 +67,36 @@ export function endIdentityRead(): void {
   setIdentityPending(false);
 }
 
+/** The read settled or the session retired: no follow-up observation is owed. */
+export function cancelIdentityRetry(): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
+  retryAttempts = 0;
+  retrySession = null;
+}
+
+/**
+ * Ask the observation again while the session stays up. The last delay
+ * repeats, so a path that heals without a new event still repairs the header.
+ */
+function scheduleIdentityRetry(session: LiveSession, ports: RuntimeObservationPorts): void {
+  if (retryTimer) return;
+  const delay = IDENTITY_RETRY_DELAYS_MS[Math.min(retryAttempts++, IDENTITY_RETRY_DELAYS_MS.length - 1)];
+  retrySession = session;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (ports.currentLive() !== retrySession) {
+      cancelIdentityRetry();
+      return;
+    }
+    void refreshRuntimeState(ports).catch(() => undefined);
+  }, delay);
+}
+
+function transientConfigFailure(error: unknown): boolean {
+  return error instanceof ProtocolError && TRANSIENT_CONFIG_CODES.has(error.code);
+}
+
 /** The accepted observation still owns the request, session and credential. */
 function acceptedStillCurrent(request: number, session: LiveSession, ports: RuntimeObservationPorts): boolean {
   return herdConfigIsCurrent(request) && ports.currentLive() === session;
@@ -64,8 +108,9 @@ export async function refreshHerdConfig(ports: RuntimeObservationPorts): Promise
   clearCapabilities();
   if (!session) return false;
   // Only an identity never read is "pending"; a known one stays on screen
-  // while a foreground recovery re-reads it.
-  if (!runtimeStore.get().runtimeKind) beginIdentityRead();
+  // while a foreground recovery re-reads it. A retry keeps the state its first
+  // attempt showed instead of starting the reading window over.
+  if (!runtimeStore.get().runtimeKind && retryAttempts === 0) beginIdentityRead();
   if (!acceptedStillCurrent(request, session, ports)) return false;
   try {
     const config = await session.getConfig();
@@ -93,6 +138,7 @@ export async function refreshHerdConfig(ports: RuntimeObservationPorts): Promise
       applyCapabilities(operations.capabilities, operations.agentKinds);
       endIdentityRead();
     });
+    cancelIdentityRetry();
     if (!acceptedStillCurrent(request, session, ports)) return false;
     if (credential && hostname && credential.hostname !== hostname) {
       const updated = { ...credential, hostname, lastSeen: Math.floor(Date.now() / 1000) };
@@ -104,17 +150,24 @@ export async function refreshHerdConfig(ports: RuntimeObservationPorts): Promise
       if (!acceptedStillCurrent(request, session, ports)) return false;
     }
     return true;
-  } catch {
-    if (acceptedStillCurrent(request, session, ports)) {
-      batch(() => {
-        clearCapabilities();
-        applyRuntimeIdentity({ herdHost: "", runtimeKind: "" });
-        // A failed read is an answer: the header may now say it cannot confirm.
-        endIdentityRead();
-      });
-      return true;
+  } catch (error) {
+    if (!acceptedStillCurrent(request, session, ports)) return false;
+    if (transientConfigFailure(error) && session.isConnected?.() === true) {
+      // The read did not answer; that is not a state Herdr reported. Keep what
+      // is known and ask again while this session stays connected. An identity
+      // never read stays "pending" until its grace ends, so the header keeps
+      // reading instead of flashing the cannot-confirm line on a slow hop.
+      scheduleIdentityRetry(session, ports);
+      return false;
     }
-    return false;
+    batch(() => {
+      clearCapabilities();
+      applyRuntimeIdentity({ herdHost: "", runtimeKind: "" });
+      // A definite failure is an answer: the header may say it cannot confirm.
+      endIdentityRead();
+    });
+    cancelIdentityRetry();
+    return true;
   }
 }
 

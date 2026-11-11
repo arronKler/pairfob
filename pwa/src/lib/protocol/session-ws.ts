@@ -67,6 +67,7 @@ import type { DialStyle, RelayConnection } from "./relay-dial.ts";
 import { RelayWarmup } from "./relay-warmup.ts";
 import { isRecord } from "./session-message.ts";
 import {
+  CONFIG_RPC_TIMEOUT_MS,
   MUTATION_RPC_TIMEOUT_MS,
   SessionTransport,
   TERMINAL_RPC_TIMEOUT_MS,
@@ -97,10 +98,12 @@ import {
 import { TerminalRPC } from "./terminal-rpc.ts";
 import { AgentTraceRPC } from "./agent-trace.ts";
 import { parseDirIndex } from "../dir-index.ts";
+import { trackMutationDelivery } from "./session-mutation.ts";
 
 export { validateSessionMessage } from "./session-message.ts";
 export { validateSessionEstablished } from "./session-handshake.ts";
 export {
+  CONFIG_RPC_TIMEOUT_MS,
   MEDIA_OPEN_RPC_TIMEOUT_MS,
   MUTATION_RPC_TIMEOUT_MS,
   READ_RPC_TIMEOUT_MS,
@@ -111,28 +114,15 @@ export {
 const TERMINAL_CODES = new Set(["revoked", "unpaired", "too_many_devices", "bad_proof", "bad_signature"]);
 /** Losses no further handshake answers: the credential is gone, or another page took the session. */
 const endsSession = (code: string) => TERMINAL_CODES.has(code) || code === "kicked";
-const UNCERTAIN_MUTATION_TRANSPORT_CODES = new Set(["timeout", "disconnected", "heartbeat_timeout", "daemon_replaced"]);
 
 export type { FinishedP2PAttemptObservation, P2PAttemptObservation } from "./session-direct.ts";
+export { trackMutationDelivery } from "./session-mutation.ts";
 
 export type SessionOptions = {
   p2p?: boolean;
   networkMode?: NetworkMode;
   onP2PAttempt?: (observation: P2PAttemptObservation) => void;
 };
-
-/** Run one mutation transport attempt and preserve whether its encrypted frame was sent. */
-export async function trackMutationDelivery<T>(runOnce: (markSent: () => void) => Promise<T>): Promise<T> {
-  let sent = false;
-  try {
-    return await runOnce(() => { sent = true; });
-  } catch (error) {
-    if (sent && error instanceof ProtocolError && UNCERTAIN_MUTATION_TRANSPORT_CODES.has(error.code)) {
-      throw new ProtocolError("unknown_outcome", "连接在确认结果前中断；操作可能已经执行。请先刷新确认，不要立即重试。");
-    }
-    throw error;
-  }
-}
 
 class ReconnectingSession implements LiveSession {
   private readonly recovery = new RecoveryDiagnostics();
@@ -345,7 +335,7 @@ class ReconnectingSession implements LiveSession {
     const transport = await this.captureTransport();
     if (!transport) throw new ProtocolError("reconnecting", "连接正在恢复");
     try {
-      const result = await ((transport === live && ahead) || transport.rpc("GetConfig", params)) as Record<string, unknown>;
+      const result = await ((transport === live && ahead) || transport.rpc("GetConfig", params, CONFIG_RPC_TIMEOUT_MS)) as Record<string, unknown>;
       if (
         requestToken === this.configRequest &&
         transport === this.transport &&

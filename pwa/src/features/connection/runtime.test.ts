@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import "../../../test-support/boot-dom";
 import type { LiveSession } from "../../lib/protocol/session-types";
+import { ProtocolError } from "../../lib/protocol/client";
 import { capabilitiesStore, capabilityEnabled, clearCapabilities, setOperationBusy } from "../operations/capabilities-store";
 import { applyRuntimeIdentity, resetRuntime, runtimeStore } from "./runtime-store";
 import { resetGenerationsForTests } from "./generations";
-import { beginIdentityRead, endIdentityRead, IDENTITY_READ_GRACE_MS, refreshHerdConfig, type RuntimeObservationPorts } from "./runtime";
+import { beginIdentityRead, cancelIdentityRetry, endIdentityRead, IDENTITY_READ_GRACE_MS, refreshHerdConfig, type RuntimeObservationPorts } from "./runtime";
 
 function legalConfig(): Record<string, unknown> {
   const capabilities: Record<string, boolean> = {};
@@ -29,6 +30,25 @@ function legalConfig(): Record<string, unknown> {
   };
 }
 
+/** Capture scheduled timers so a retry can be fired by the test, not by the clock. */
+function captureTimeouts() {
+  const realSetTimeout = globalThis.setTimeout;
+  const captured: Array<{ delay: number; run: () => void }> = [];
+  globalThis.setTimeout = ((run: () => void, delay?: number) => {
+    captured.push({ delay: delay ?? 0, run });
+    return captured.length;
+  }) as unknown as typeof setTimeout;
+  return {
+    delays: () => captured.map((entry) => entry.delay),
+    take(delay: number): (() => void) | null {
+      const index = captured.findIndex((entry) => entry.delay === delay);
+      if (index < 0) return null;
+      return captured.splice(index, 1)[0].run;
+    },
+    restore(): void { globalThis.setTimeout = realSetTimeout; },
+  };
+}
+
 function portsFor(live: () => LiveSession | null): RuntimeObservationPorts {
   return {
     acceptDaemonVersion: () => undefined,
@@ -43,6 +63,7 @@ function portsFor(live: () => LiveSession | null): RuntimeObservationPorts {
 }
 
 afterEach(() => {
+  cancelIdentityRetry();
   endIdentityRead();
   clearCapabilities();
   applyRuntimeIdentity({ herdHost: "", runtimeKind: "" });
@@ -141,6 +162,74 @@ describe("the first runtime read", () => {
     await refreshHerdConfig(portsFor(() => live));
     expect(runtimeStore.get().identityPending).toBe(false);
     expect(runtimeStore.get().runtimeKind).toBe("");
+  });
+
+  test("a read that did not answer is not a verdict and is asked again", async () => {
+    const calls: string[] = [];
+    const live = {
+      isConnected: () => true,
+      getConfig: async () => {
+        calls.push("timeout");
+        throw new ProtocolError("timeout", "GetConfig 未回答");
+      },
+    } as unknown as LiveSession;
+    const timers = captureTimeouts();
+    try {
+      const updated = await refreshHerdConfig(portsFor(() => live));
+      expect(updated).toBe(false);
+      expect(calls).toEqual(["timeout"]);
+      expect(runtimeStore.get().identityPending).toBe(true);
+      expect(runtimeStore.get().runtimeKind).toBe("");
+      // The screen keeps reading, and the observation is asked again rather
+      // than claiming Herdr cannot be confirmed.
+      expect(timers.delays()).toContain(1_000);
+    } finally {
+      timers.restore();
+    }
+  });
+
+  test("a known identity survives a read that did not answer", async () => {
+    applyRuntimeIdentity({ herdHost: "herdbox", runtimeKind: "herdr" });
+    const live = {
+      isConnected: () => true,
+      getConfig: async () => { throw new ProtocolError("timeout", "GetConfig 未回答"); },
+    } as unknown as LiveSession;
+    const timers = captureTimeouts();
+    try {
+      await refreshHerdConfig(portsFor(() => live));
+      expect(runtimeStore.get().herdHost).toBe("herdbox");
+      expect(runtimeStore.get().runtimeKind).toBe("herdr");
+      expect(runtimeStore.get().identityPending).toBe(false);
+    } finally {
+      timers.restore();
+    }
+  });
+
+  test("the scheduled retry publishes an identity the first read could not get", async () => {
+    let attempts = 0;
+    const live = {
+      isConnected: () => true,
+      getConfig: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new ProtocolError("timeout", "GetConfig 未回答");
+        return legalConfig();
+      },
+    } as unknown as LiveSession;
+    const timers = captureTimeouts();
+    try {
+      await refreshHerdConfig(portsFor(() => live));
+      expect(runtimeStore.get().identityPending).toBe(true);
+      const retry = timers.take(1_000);
+      timers.restore();
+      expect(retry).not.toBeNull();
+      retry!();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(attempts).toBe(2);
+      expect(runtimeStore.get().identityPending).toBe(false);
+      expect(runtimeStore.get().runtimeKind).toBe("herdr");
+    } finally {
+      timers.restore();
+    }
   });
 
   test("a known identity is not re-marked pending by a foreground re-read", async () => {

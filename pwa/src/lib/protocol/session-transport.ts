@@ -24,6 +24,12 @@ export const MAX_BULK_IN_FLIGHT = 4;
 const BULK_RPC_OPS = new Set(["WorkspaceUploadWrite", "WorkspaceUploadWriteV2"]);
 /** Snapshot/Ping/History and other reads. */
 export const READ_RPC_TIMEOUT_MS = 8_000;
+/**
+ * GetConfig describes the runtime and the daemon allows that work up to 12 s.
+ * The client deadline sits above the daemon's own budget, so a slow but healthy
+ * answer is never mistaken for a Herdr that cannot be confirmed.
+ */
+export const CONFIG_RPC_TIMEOUT_MS = 15_000;
 /** Mutations share the daemon executeRPC deadline. */
 export const MUTATION_RPC_TIMEOUT_MS = 45_000;
 /** Live terminal control fails visibly instead of stalling the input queue. */
@@ -79,6 +85,11 @@ export type SentRead = FlightRead & {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
 };
+
+/** A read sent ahead keeps the deadline its op gets when the screen asks. */
+function readTimeoutMs(op: string): number {
+  return op === "GetConfig" ? CONFIG_RPC_TIMEOUT_MS : READ_RPC_TIMEOUT_MS;
+}
 
 function encodeRequest(op: string, params: unknown): { id: string; plaintext: Uint8Array } {
   const id = `req_${b64url(crypto.getRandomValues(new Uint8Array(12)))}`;
@@ -222,10 +233,11 @@ export class SessionTransport {
   }
 
   private adopt(read: SentRead): void {
+    const timeout = readTimeoutMs(read.op);
     const entry: Pending = {
       op: read.op, resolve: read.resolve, reject: read.reject, bulk: false, counted: false, abort: new AbortController(),
-      deadline: performance.now() + READ_RPC_TIMEOUT_MS, sent: true, startedAt: performance.now(),
-      timer: globalThis.setTimeout(() => this.expireRPC(read.id, entry, read.op), READ_RPC_TIMEOUT_MS),
+      deadline: performance.now() + timeout, sent: true, startedAt: performance.now(),
+      timer: globalThis.setTimeout(() => this.expireRPC(read.id, entry, read.op), timeout),
     };
     this.pending.set(read.id, entry);
   }

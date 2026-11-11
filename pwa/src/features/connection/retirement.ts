@@ -25,6 +25,7 @@ import {
 } from "./connection-store";
 import { resetDashboard } from "../dashboard/catalog-store";
 import { resetRuntime } from "./runtime-store";
+import { cancelIdentityRetry } from "./runtime";
 import { resetObservationLifecycle, resetPaneView, selectPane } from "../session/session-store";
 
 export type RetirementPorts = {
@@ -40,6 +41,7 @@ export type RetirementPorts = {
 export function retireLiveDomains(): void {
   attachLiveSession(null);
   resetRuntime();
+  cancelIdentityRetry();
   noteRelayRtt(null);
   setSessionTransport("relay");
   noteP2PAttempt(null);
