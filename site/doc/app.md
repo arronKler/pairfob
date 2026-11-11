@@ -249,7 +249,7 @@ Tap **Settings** at the bottom on a phone, or at the bottom of the left rail on 
 - **Notifications:** see [Notifications](/push). Once enabled, this device is notified when an Agent needs you or finishes; if the computer has not enabled push, the row says so and **How to enable** expands the setup steps
 - **Paired devices** (on the computer's page): label, online or offline, last used, and notification state. The current row is marked **This device**. Other rows have **Unpair**; already unpaired rows are omitted
 - **Export connection diagnostics** (on the computer's page, under **Diagnostics**): export recent connection events when something goes wrong; see the [FAQ](/faq)
-- **Computer update:** a reminder on the list, and **Check for updates** / **Update computer** on the **Computer version** row in Settings when the user service can do it. Confirming briefly disconnects, then reconnects. Never automatic. Command-line: [CLI](/cli)
+- **Computer update:** a reminder on the list, and **Check for updates** / **Update computer** on the **Computer version** row in Settings when the user service can do it. Confirming briefly disconnects, then reconnects. Patch releases within the installed major.minor also install in the background after a 12-hour soak; `PAIRFOB_AUTO_UPDATE=0` turns that off. Command-line: [CLI](/cli)
 - **Unpair this device:** at the bottom of the computer's page. Pairing is required to connect again
 
 A lost phone that can still open Pairfob can also unpair other devices from Settings. `pairfob forget` that phone on the computer immediately — [Multiple devices](/devices).

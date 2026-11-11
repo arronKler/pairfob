@@ -26,7 +26,6 @@ import {
 import { resetDashboard } from "../dashboard/catalog-store";
 import { resetRuntime } from "./runtime-store";
 import { resetObservationLifecycle, resetPaneView, selectPane } from "../session/session-store";
-import { batch } from "../../shared/model/domain-store";
 
 export type RetirementPorts = {
   /** A parked compose draft belongs to the retired view incarnation. */
@@ -35,8 +34,6 @@ export type RetirementPorts = {
   clearBoardPreviews(): void;
   /** Status marks compare panes by id; another computer or Herdr session is another list. */
   clearHerdAttention(): void;
-  /** Screens remembered for this computer's panes answer for no one else. */
-  clearPaneBufferCache(): void;
 };
 
 /** Domain writes only; callers wrap this in their own `batch` for a larger transaction. */
@@ -64,15 +61,4 @@ export function retireHerdView(): void {
   selectPane("");
   resetPaneView();
   resetObservationLifecycle();
-}
-
-export function resetLiveConnection(ports: RetirementPorts): void {
-  ports.bumpViewIncarnation();
-  ports.clearAgentTraceCache();
-  ports.clearBoardPreviews();
-  ports.clearHerdAttention();
-  ports.clearPaneBufferCache();
-  batch(() => {
-    retireLiveDomains();
-  });
 }

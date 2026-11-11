@@ -25,7 +25,7 @@ export function TurnModelDetails({ models }: { models: AgentTraceModel[] }) {
     {!models.length ? <p>{t("work.modelMissing")}</p> : models.map((model, index) => <div key={index} className="work-model-record">
       <dl>
         <div><dt>{t("work.model")}</dt><dd>{model.model}</dd></div>
-        <div><dt>Thinking effort</dt><dd>{model.effort || t("work.notRecorded")}</dd></div>
+        <div><dt>{t("work.thinkingEffort")}</dt><dd>{model.effort || t("work.notRecorded")}</dd></div>
       </dl>
       <p>{t(MODEL_SOURCE_KEYS[model.source])}</p>
     </div>)}

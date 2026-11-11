@@ -51,7 +51,7 @@ func finishMediaOpen(ctx context.Context, file *os.File, dir *os.Root, ident med
 	if err != nil {
 		return nil, err
 	}
-	kind, mime, width, height := sniffMedia(head, size)
+	kind, mime, width, height := sniffMedia(head)
 	if size > mediaCap(kind) {
 		return nil, ErrTooLarge
 	}

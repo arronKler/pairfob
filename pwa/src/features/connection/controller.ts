@@ -53,7 +53,7 @@ import { track } from "../../lib/telemetry";
 import { applyComposeDraft, bumpViewIncarnation, captureComposeDraft, currentViewIncarnation, parkComposeView } from "../session/drafts/compose-drafts";
 import { clearAgentTraceCache } from "../../lib/agent-trace-cache";
 import { resetHerdAttention } from "../../lib/herd-attention";
-import { clearPaneBufferCache, rememberPaneBuffer, restorePaneBuffer } from "../session/pane-buffer";
+import { rememberPaneBuffer, restorePaneBuffer } from "../session/pane-buffer";
 import { clearBoardPreviews } from "../board/preview/store";
 import { liveView, liveViewIsCurrent } from "./generations";
 import { hasRetainedView } from "./retained-view";
@@ -178,7 +178,6 @@ const retirementPorts: RetirementPorts = {
   clearAgentTraceCache,
   clearBoardPreviews,
   clearHerdAttention: resetHerdAttention,
-  clearPaneBufferCache,
 };
 
 const lifecyclePorts: LifecyclePorts = {

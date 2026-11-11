@@ -42,9 +42,9 @@ No cookies. Enroll, pair-intent, rekey, and config responses use
 | GET | `/api/config` | - | `{protocol:2, build,p2p}`; `p2p` is the direct-upgrade kill switch |
 | GET | `/v2/health` | - | `{ok:true, protocol:2}` |
 | POST | `/v2/enroll` | Absent or non-browser | Validate and echo the client-persisted `daemon_id` / `reconnect_token` |
-| POST | `/v2/pair-intent` | **Same-origin required** | Metered locator lookup; 10 requests per 10 minutes per IP |
+| POST | `/v2/pair-intent` | **Same-origin or a configured app origin** | Metered locator lookup; 10 requests per 10 minutes per IP |
 | POST | `/v2/rekey` | Absent or non-browser | Atomically replace the old reconnect token with the client-persisted new token and echo it |
-| GET | `/v2/ws` | Phone must be same-origin or omit Origin (native client); daemon may omit Origin | Upgrade with `pairfob.v2` |
+| GET | `/v2/ws` | Phone must be same-origin, omit Origin (native client), or use a configured app origin; daemon may omit Origin | Upgrade with `pairfob.v2` |
 | GET | `/v1/ws` | - | **426** |
 
 Only `CF-Connecting-IP` is trusted as the client IP.
@@ -211,9 +211,12 @@ protocol ping frames; the Cloudflare runtime returns a pong without waking a
 hibernating Durable Object, and protocol pings are not billed. A pong extends
 the daemon's 60-second read deadline. Phones, whose browser API cannot send
 control frames, keep using envelope PING; the Durable Object answers with an
-application-level PONG. Neither form performs SQLite operations or calls
-`setAlarm`. `RecvWithin(60s)` and the pong deadline prove client liveness, not
-Room liveness.
+application-level PONG. Neither form calls `setAlarm`, and protocol pings do no
+storage work. An established phone's envelope PING also offers a conversion
+checkpoint, as does FWD; it is throttled per daemon to one storage read/write
+and D1 update per five minutes, and a failed write never breaks the session.
+`RecvWithin(60s)` and the pong deadline prove client liveness, not Room
+liveness.
 
 ## Security headers
 

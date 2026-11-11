@@ -14,7 +14,7 @@ import { closePane, createSelectedTab, listSelectedWorktrees, renamePane, revoke
 import { disposeFullTerminal } from "../features/session/full-terminal/full-terminal";
 import { dropQueuedKeys } from "../features/session/guided/keys";
 import { submitTyped } from "../features/session/guided/compose";
-import type { AgentCard } from "../lib/dashboard";
+import type { AgentCard } from "../lib/ranking";
 type LiveSession = import("../lib/protocol/session-types").LiveSession;
 const { setPhase, setNetworkOnline } = await import("../features/connection/connection-store");
 const { setScreen, currentScreen } = await import("./navigation-store");

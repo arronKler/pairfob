@@ -281,3 +281,14 @@ func TestDirIndexSkipsPoisonedPath(t *testing.T) {
 		t.Fatalf("the poisoned path was listed %d times, want 1", slowCalls)
 	}
 }
+
+func TestDirIndexRebuildsForDifferentRoots(t *testing.T) {
+	first, second := t.TempDir(), t.TempDir()
+	indexer := &dirIndexer{}
+	for _, want := range []string{first, second, first} {
+		snapshot, _ := indexer.snapshot([]string{want}, "")
+		if len(snapshot.Roots) != 1 || snapshot.Roots[0].Path != want {
+			t.Fatalf("served roots %v for %s", snapshot.Roots, want)
+		}
+	}
+}

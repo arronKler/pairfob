@@ -249,9 +249,8 @@ describe("a file the agent changed again", () => {
 });
 
 describe("a daemon that counts lines and stamps files", () => {
-  const NOW = Date.now();
-
   test("every row has its size before any diff is opened, and the header adds them up", async () => {
+    const NOW = Date.now();
     stats = {
       "src/app.ts": { stat: { staged: { additions: 4, deletions: 0 }, worktree: { additions: 1, deletions: 2 } }, modified_ms: NOW - 2 * 60_000 },
       "src/styles.scss": { stat: { worktree: { additions: 10, deletions: 0 } }, modified_ms: NOW - 3 * 3_600_000 },
@@ -279,6 +278,7 @@ describe("a daemon that counts lines and stamps files", () => {
   });
 
   test("a row says when its file last changed, warm while that is minutes ago", async () => {
+    const NOW = Date.now();
     stats = {
       "src/app.ts": { modified_ms: NOW - 2 * 60_000 },
       "src/styles.scss": { modified_ms: NOW - 3 * 3_600_000 },

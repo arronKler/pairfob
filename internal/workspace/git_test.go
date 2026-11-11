@@ -187,3 +187,12 @@ func TestAnEmptyNewFileHasNoHunk(t *testing.T) {
 		t.Fatalf("diff=%+v err=%v", diff, err)
 	}
 }
+
+func TestFilepathSlashKeepsLiteralBackslashOnUnix(t *testing.T) {
+	if filepath.Separator == '\\' {
+		t.Skip("Windows uses backslash as its path separator")
+	}
+	if got := filepathSlash(`one\two`); got != `one\two` {
+		t.Fatalf("filepathSlash changed a legal Unix filename: %q", got)
+	}
+}

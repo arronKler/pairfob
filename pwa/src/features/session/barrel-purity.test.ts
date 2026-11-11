@@ -52,7 +52,7 @@ describe("public session owner/model barrel", () => {
     expect(/document/i.test(report.canary.error ?? "")).toBeTrue();
     expect(report.canaryPresent.ok).toBeTrue();
     expect(report.ok).toBeTrue();
-    expect(report.checked).toBe(8);
+    expect(report.checked).toBe(7);
     expect(run.exitCode).toBe(0);
   }, 15_000);
 });

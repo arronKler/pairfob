@@ -14,21 +14,10 @@ import { dashboardStore, refreshBusy, replaceAgentsFromSnapshot } from "../dashb
 import { applyRuntimeIdentity, runtimeStore, setPushEnabled } from "./runtime-store";
 import { paneReadBusy, queueSnapshot, resetPaneView, selectPane, sessionStore, setFullTerminal, setPaneReadBusy, snapshotIsPending } from "../session/session-store";
 import { domainStores } from "../../app/domain-publication";
+import { batch } from "../../shared/model/domain-store";
 import type { LiveSession } from "../../lib/protocol/session-types";
 import { NO_OPERATION_CAPABILITIES } from "../../lib/operations";
-import { resetLiveConnection, type RetirementPorts } from "./retirement";
-
-function portsSpy() {
-  const calls: string[] = [];
-  const ports: RetirementPorts = {
-    bumpViewIncarnation: () => calls.push("incarnation"),
-    clearAgentTraceCache: () => calls.push("traceCache"),
-    clearBoardPreviews: () => calls.push("previews"),
-    clearHerdAttention: () => calls.push("herdAttention"),
-    clearPaneBufferCache: () => calls.push("paneBuffers"),
-  };
-  return { calls, ports };
-}
+import { retireLiveDomains } from "./retirement";
 
 const session = { isConnected: () => true } as unknown as LiveSession;
 
@@ -96,8 +85,7 @@ afterEach(() => {
 
 describe("session retirement", () => {
   test("every session-scoped domain is dropped, and each publishes at most once", () => {
-    const { calls, ports } = portsSpy();
-    resetLiveConnection(ports);
+    batch(() => retireLiveDomains());
 
     expect(liveSession()).toBeNull();
     expect(runtimeStore.get().herdHost).toBe("");
@@ -116,7 +104,6 @@ describe("session retirement", () => {
     expect(snapshotIsPending()).toBe(false);
     expect(paneReadBusy()).toBe(false);
     expect(networkOnline()).toBe(true);
-    expect(calls).toEqual(["incarnation", "traceCache", "previews", "herdAttention", "paneBuffers"]);
 
     // One transaction: no domain publishes twice for a single retirement.
     for (const [domain, count] of Object.entries(publishes)) {
@@ -128,20 +115,16 @@ describe("session retirement", () => {
   });
 
   test("no subscriber ever observes a half-retired application", () => {
-    const { ports } = portsSpy();
-    resetLiveConnection(ports);
+    batch(() => retireLiveDomains());
     expect(observedMidRetirement).toEqual([]);
   });
 
   test("retiring an already retired session is quiet and idempotent", () => {
-    const first = portsSpy();
-    resetLiveConnection(first.ports);
+    batch(() => retireLiveDomains());
     while (releases.length) releases.pop()!();
     watchAllDomains();
-    const second = portsSpy();
-    resetLiveConnection(second.ports);
+    batch(() => retireLiveDomains());
     expect(liveSession()).toBeNull();
-    expect(second.calls).toEqual(["incarnation", "traceCache", "previews", "herdAttention", "paneBuffers"]);
     for (const [domain, count] of Object.entries(publishes)) {
       expect([domain, count <= 1]).toEqual([domain, true]);
     }

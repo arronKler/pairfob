@@ -67,7 +67,7 @@ func (e *Engine) dispatchPushSubscribe(s *sess, id string, params json.RawMessag
 		e.replyErr(s, id, "unknown_op", "invalid params")
 		return
 	}
-	operationID, ok := mutationOperationID(p.OperationID, id, true)
+	operationID, ok := mutationOperationID(p.OperationID)
 	if !ok {
 		e.replyErr(s, id, "invalid_argument", "invalid operation_id")
 		return

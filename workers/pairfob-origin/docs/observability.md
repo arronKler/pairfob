@@ -35,7 +35,7 @@ Labels are fail-closed: only `[A-Za-z0-9._:-]{1,64}`. `jg_` / `rt_` / `it_` / `p
 
 Same-origin browser POST, 60 / minute / IP. Body `{ v: 2, events: [{ name, result?, extra? }] }`, at most 8 events. Allowed names only:
 
-`pwa_boot`, `pwa_pairing_start`, `pwa_pairing_result`, `pwa_resume`, `pwa_live`, `pwa_disconnect`, `pwa_terminal`, `pwa_settings`, `pwa_add_computer`, `site_copy`
+`pwa_boot`, `pwa_pairing_start`, `pwa_pairing_result`, `pwa_resume`, `pwa_live`, `pwa_disconnect`, `pwa_terminal`, `pwa_agent_trace`, `pwa_settings`, `pwa_p2p`, `pwa_add_computer`, `site_copy`
 
 Clients cannot emit `enroll` / `ws_open` / `error`.
 

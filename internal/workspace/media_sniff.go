@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func sniffMedia(head []byte, size int64) (kind, mime string, width, height int) {
+func sniffMedia(head []byte) (kind, mime string, width, height int) {
 	if looksLikeSVG(head) {
 		return MediaDownload, "image/svg+xml", 0, 0
 	}
@@ -46,9 +46,6 @@ func sniffMedia(head []byte, size int64) (kind, mime string, width, height int) 
 	}
 	if bytes.HasPrefix(head, []byte{0x1a, 0x45, 0xdf, 0xa3}) {
 		return MediaVideo, "video/webm", 0, 0
-	}
-	if size == 0 {
-		return MediaDownload, "application/octet-stream", 0, 0
 	}
 	return MediaDownload, "application/octet-stream", 0, 0
 }

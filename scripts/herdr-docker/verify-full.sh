@@ -7,7 +7,7 @@ mkdir -p /work
 git -c safe.directory=/src -C /src ls-files -z --cached --others --exclude-standard \
   | tar -C /src --null -T - -cf - | tar -C /work -xf -
 cd /work
-for dir in pwa site/doc workers/pairfob-origin; do
+for dir in pwa site/doc workers/pairfob-origin workers/pairfob-downloads; do
   (cd "$dir" && bun install --frozen-lockfile)
 done
 # Permission-denial tests must run as a normal user: root bypasses mode 000.

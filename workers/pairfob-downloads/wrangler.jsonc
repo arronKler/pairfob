@@ -9,6 +9,7 @@
     // custom domain without deploying or proxying through the relay Worker.
     { "pattern": "pairfob.com/dl/VERSION*", "zone_name": "pairfob.com" },
     { "pattern": "pairfob.com/dl/SHA256SUMS*", "zone_name": "pairfob.com" },
+    { "pattern": "pairfob.com/dl/release.json*", "zone_name": "pairfob.com" },
     { "pattern": "pairfob.com/dl/pairfob-*", "zone_name": "pairfob.com" },
     { "pattern": "pairfob.com/install.sh*", "zone_name": "pairfob.com" }
   ],

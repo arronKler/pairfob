@@ -1,9 +1,11 @@
 # Build the base Dockerfile as pairfob-herdr-test first.
 FROM pairfob-herdr-test
+COPY .bun-version /tmp/bun-version
 RUN python3 - <<'PY'
 import hashlib, io, json, os, tarfile, urllib.request, zipfile
 arch = {'aarch64': 'aarch64', 'x86_64': 'x64'}[os.uname().machine]
-release = json.load(urllib.request.urlopen('https://api.github.com/repos/oven-sh/bun/releases/tags/bun-v1.3.14', timeout=60))
+bun_version = open('/tmp/bun-version').read().strip()
+release = json.load(urllib.request.urlopen('https://api.github.com/repos/oven-sh/bun/releases/tags/bun-v' + bun_version, timeout=60))
 name = 'bun-linux-' + arch + '.zip'
 asset = next(a for a in release['assets'] if a['name'] == name)
 body = urllib.request.urlopen(asset['browser_download_url'], timeout=180).read()

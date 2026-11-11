@@ -46,7 +46,7 @@ pairfob_require_shipable_version() {
 pairfob_require_shipable_version_file() {
   local path="$1"
   if [[ ! -f "$path" ]]; then
-    echo "missing $path (PAIRFOB_PACK_DL=1 needs a shippable dist/dl)" >&2
+    echo "missing $path (PAIRFOB_PACK_DL=1 needs a shippable dist/daemon or dist/dl)" >&2
     return 1
   fi
   local v

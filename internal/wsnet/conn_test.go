@@ -125,17 +125,6 @@ func TestProtocolPingPongExtendsReadDeadline(t *testing.T) {
 	}
 }
 
-func TestHasV1SubprotocolRequiresExplicitOffer(t *testing.T) {
-	req := httptest.NewRequest("GET", "http://relay.test/v1/ws", nil)
-	if HasV1Subprotocol(req) {
-		t.Fatal("accepted missing subprotocol")
-	}
-	req.Header.Set("Sec-WebSocket-Protocol", "other, pairfob.v1")
-	if !HasV1Subprotocol(req) {
-		t.Fatal("did not find pairfob.v1 offer")
-	}
-}
-
 func TestHasSubprotocolMatchesNamedOffer(t *testing.T) {
 	req := httptest.NewRequest("GET", "http://origin.test/v2/ws", nil)
 	if HasSubprotocol(req, SubprotocolV2) {
@@ -144,9 +133,6 @@ func TestHasSubprotocolMatchesNamedOffer(t *testing.T) {
 	req.Header.Set("Sec-WebSocket-Protocol", "pairfob.v2")
 	if !HasSubprotocol(req, SubprotocolV2) {
 		t.Fatal("did not find pairfob.v2 offer")
-	}
-	if HasV1Subprotocol(req) {
-		t.Fatal("v2 offer must not satisfy HasV1Subprotocol")
 	}
 }
 
@@ -172,9 +158,6 @@ func TestDialProtocolNegotiatesNamedSubprotocol(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := Dial(raw); err == nil {
-		t.Fatal("pairfob.v1 Dial accepted a v2-only server")
-	}
 }
 
 func TestCheckSameHostOrigin(t *testing.T) {
@@ -191,7 +174,7 @@ func TestCheckSameHostOrigin(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "https://relay.example:8443/v1/ws", nil)
+			req := httptest.NewRequest("GET", "https://relay.example:8443/v2/ws", nil)
 			if tt.origin != "" {
 				req.Header.Set("Origin", tt.origin)
 			}
@@ -211,7 +194,8 @@ type testWSHandler struct {
 }
 
 func (h *testWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ws, err := Upgrader.Upgrade(w, r, nil)
+	upgrader := UpgraderFor(SubprotocolV2)
+	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
@@ -222,7 +206,7 @@ func (h *testWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func dialTestWS(t *testing.T, serverURL string) *websocket.Conn {
 	t.Helper()
 	url := "ws" + strings.TrimPrefix(serverURL, "http")
-	dialer := websocket.Dialer{Subprotocols: []string{"pairfob.v1"}}
+	dialer := websocket.Dialer{Subprotocols: []string{SubprotocolV2}}
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		t.Fatal(err)

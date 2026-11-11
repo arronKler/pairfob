@@ -13,14 +13,16 @@ pwa/src (same app) --bun run build:native--> pwa/dist-native
 ```
 
 The generated bundle and Gradle output are not committed. `pwa/dist-native` is
-built from the checked-out PWA; rerun `bun run sync` after every PWA change.
+built from the checked-out PWA; after a PWA change run `bun run pwa:native &&
+bun run sync` for Android (or use `build:debug` / `ios:debug`, which rebuild and
+sync in one step).
 
 ## Prerequisites
 
 - macOS or Linux with Android Studio and an emulator
 - JDK 21, for example `/Applications/Android Studio.app/Contents/jbr/Contents/Home`
 - Android SDK platform 36 (`android-36`) and build-tools `36.1.0`
-- Bun 1.3 or newer
+- Bun 1.4.3 (the version pinned in `.bun-version`)
 - `adb` from the same SDK
 
 Create `android/local.properties` (untracked) when Gradle cannot find the SDK:
@@ -39,6 +41,7 @@ export PATH="$ANDROID_HOME/platform-tools:$PATH"
 
 cd mobile
 bun install
+(cd ../pwa && bun install --frozen-lockfile)
 bun run build:debug
 ```
 
@@ -73,12 +76,13 @@ writes `App/CapApp-SPM/Package.swift`, and Xcode resolves
 Requirements:
 
 - macOS with Xcode 15 or later and an iOS 15+ simulator
-- Bun 1.3 or newer
+- Bun 1.4.3 (the version pinned in `.bun-version`)
 - A network Xcode can reach GitHub from, for the first package resolution
 
 ```sh
 cd mobile
 bun install
+(cd ../pwa && bun install --frozen-lockfile)
 bun run ios:debug
 ```
 

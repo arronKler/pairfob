@@ -34,7 +34,7 @@ func (e *Engine) rpcSendText(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "too_large", "text exceeds 32 KiB")
 		return
 	}
-	operationID, ok := mutationOperationID(p.OperationID, id, true)
+	operationID, ok := mutationOperationID(p.OperationID)
 	if !ok {
 		e.replyErr(s, id, "invalid_argument", "invalid operation_id")
 		return
@@ -96,7 +96,7 @@ func (e *Engine) rpcPromptAgent(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "agent_not_found", "pane does not currently host an agent")
 		return
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.PromptAgentCommand{Target: p.PaneID, Text: p.Text}, "agent_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.PromptAgentCommand{Target: p.PaneID, Text: p.Text}, "agent_not_found")
 	if !ok {
 		return
 	}
@@ -167,7 +167,7 @@ func (e *Engine) dispatchSendKeys(s *sess, id string, params json.RawMessage) {
 			}
 		}
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.SendKeysCommand{PaneID: p.PaneID, Keys: p.Keys}, "pane_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.SendKeysCommand{PaneID: p.PaneID, Keys: p.Keys}, "pane_not_found")
 	if !ok {
 		return
 	}

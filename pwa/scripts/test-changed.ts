@@ -23,7 +23,6 @@ import { dirname, join, relative, resolve } from "node:path";
 
 const PWA = resolve(import.meta.dir, "..");
 const REPO = resolve(PWA, "..");
-const ROOTS = [join(PWA, "src"), join(PWA, "test-support"), join(PWA, "scripts")];
 const SOURCE = /\.(?:ts|tsx)$/;
 const TEST = /\.(?:test|spec)\.(?:ts|tsx)$/;
 const HOPS = 2;
@@ -75,7 +74,7 @@ function resolveImport(from: string, specifier: string): string | undefined {
 function importsOf(file: string): string[] {
   const text = readFileSync(file, "utf8");
   const found: string[] = [];
-  for (const match of text.matchAll(/(?:from|import)\s*\(?\s*"(\.[^"]*)"/g)) {
+  for (const match of text.matchAll(/(?:from|import)\s*\(?\s*["'](\.[^"']*)["']/g)) {
     const target = resolveImport(file, match[1]);
     if (target) found.push(target);
   }
@@ -111,7 +110,7 @@ function changedFromArgs(args: string[]): string[] {
 
 const argv = process.argv.slice(2);
 const everything = argv.includes("--all");
-const files = walk(PWA).concat(...ROOTS.map((root) => walk(root))); // de-duplicated below
+const files = walk(PWA); // includes every ROOT below
 const all = [...new Set(files)].filter((file) => SOURCE.test(file));
 const tests = new Set(all.filter((file) => TEST.test(file)));
 

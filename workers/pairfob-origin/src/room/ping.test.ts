@@ -6,7 +6,7 @@ import { onMessage } from "./ws.ts";
 import { makeRoom } from "../testutil/make-room.ts";
 
 describe("PING storage", () => {
-  test("PING/PONG does not touch SQL or platform alarms", async () => {
+  test("PING/PONG on an unattached phone does not touch SQL or platform alarms", async () => {
     const h = makeRoom();
     const acc = h.accept("phone");
     expect(acc.ok).toBe(true);

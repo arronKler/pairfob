@@ -465,7 +465,7 @@
             "properties": {
               "model": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$" },
               "effort": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$" },
-              "source": { "enum": ["codex_context", "claude_message"] }
+              "source": { "enum": ["codex_context", "claude_message", "pi_message"] }
             },
             "additionalProperties": false
           }

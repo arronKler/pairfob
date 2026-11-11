@@ -9,7 +9,7 @@ fields. v2 only adds the mux control plane (`proto/envelope-v2.md`); `pair_loc`
 never enters SPAKE / Argon2.
 
 ```
-phone PWA --HTTPS/WSS pairfob.v2--> pairfob.com (Worker+R2)
+phone PWA --HTTPS/WSS pairfob.v2--> pairfob.com (Worker + Workers Assets)
                                       Worker /v2/ws → DaemonRoom DO
 pairfob --outbound WSS--> that DO --opaque FWD-- the phone on the same DO
 pairfob --loopback--> HarnessRuntime
@@ -71,7 +71,7 @@ from the original module so imports do not churn.
 | --- | --- |
 | `cmd/pairfob` | outbound origin, pairing CLI, local Herdr |
 | `desktop` | native window over the local Herdr session (Rust + GPUI); attaches to `herdr-client.sock`, never owns a PTY |
-| `workers/pairfob-origin` | the only relay: Worker + R2 + DaemonRoom DO (production and `wrangler dev`) |
+| `workers/pairfob-origin` | the only relay: Worker + Workers Assets + DaemonRoom DO (production and `wrangler dev`) |
 | `workers/pairfob-downloads` | daemon, Android and desktop artifacts at `dl.pairfob.com`; owns legacy daemon download/install routes independently of the relay |
 | `cmd/genvectors` | generate `proto/pairfob-vectors.json` from the Go crypto |
 | `internal/mux` | frame routing; does not touch FWD plaintext |
@@ -93,7 +93,7 @@ from the original module so imports do not churn.
 | `site/` `site/doc` | homepage and VitePress docs, packed into the Worker by `scripts/pack-origin-assets.sh` |
 | `herdr-plugin.toml` `plugin/herdr` | Herdr plugin listing and its pane scripts |
 | `scripts/verify.sh` | format, vet, Go tests (including race), PWA tests, Worker origin tests, typecheck, production build |
-| `scripts/verify-web.sh` `scripts/verify-android.sh` | the web and APK halves of the gate, run through `scripts/verify.sh --pwa-only` / `--android-only` after its scope check |
+| `scripts/verify-web.sh` `scripts/verify-android.sh` | the web-only and Android-release halves of the gate, run through `scripts/verify.sh --pwa-only` / `--android-only` after its scope check |
 | `scripts/pwa-release-scope.ts` `scripts/android-release-scope.ts` | refuse a scoped release whose changes left that scope |
 | `scripts/install.sh` | one-line install of pairfob (checksum, enroll, user-level service) |
 | `scripts/release.sh` | cross-compile SemVer `dist/daemon/pairfob-{os}-{arch}` + SHA256SUMS (`git tag vX.Y.Z`) |
@@ -228,8 +228,8 @@ repository gate after every local edit or merely because a task is ending.
 | UI behavior or layout change | Add focused browser checks for the changed interaction, on each surface it can reach: a phone with touch (390x844), a tablet with touch (about 1024x768, and 820 wide for the 720–899 tier when the change touches layout), and a desktop with a mouse and keyboard (1440x900). Shared components and anything keyed on width or input reach all three. Drive them with real touch and mouse input through the `pwa/qa` scenes; a unit test at one width does not cover the others. Fixtures, live transport and physical-device acceptance are distinct. |
 | Agent transcript adapter (`internal/journal`) or an agent CLI upgrade | Run `PAIRFOB_SCAN_LOCAL_TRANSCRIPTS=1 go test ./internal/journal -run LocalTranscripts -v` on a machine with real Claude Code / Codex / Grok / Pi / Prime Agent / Cursor / Hermes / opencode sessions; a hit is injected context leaking into chat. |
 | PWA UI-only production release | Run `./scripts/verify.sh --pwa-only <verified-release-commit>` against a trustworthy baseline in the current checkout. |
-| Desktop client change | Run `bash scripts/verify-desktop.sh`. Engine, input or lifecycle changes also run `PF_DESKTOP_LIVE=1 cargo test --test live -- --ignored` against a running `pffixture` session. A UI change is not verified until the window has been seen on the surfaces it reaches; say which ones you could not open. |
-| Android shell / APK-only production release | Run `./scripts/verify.sh --android-only <verified-release-commit>` against a trustworthy baseline. It covers the bundled PWA, the download channel publisher and the APK provenance checks, and refuses changes to the protocol client, daemon, relay, release scripts or anything beyond the two version literals in `mobile/android/app/build.gradle`. |
+| Desktop client change | Run `bash scripts/verify-desktop.sh`. Engine, input or lifecycle changes also run `PF_DESKTOP_LIVE=1 cargo test --test live --test connect_live --test search_live -- --ignored` against a running `pffixture` session. A UI change is not verified until the window has been seen on the surfaces it reaches; say which ones you could not open. |
+| Android shell / APK-only production release | Run `./scripts/verify.sh --android-only <verified-release-commit>` against a trustworthy baseline. It covers the bundled PWA, the download channel publisher and the APK provenance checks, and refuses changes outside `pwa/` (except `pwa/src/lib/protocol/`), `mobile/` (except the two version literals in `mobile/android/app/build.gradle`), and `docs/`. |
 | Mobile shell change | CI runs the `android` (debug APK) and `ios` (simulator) jobs for `mobile/**`; run `cd mobile && bun run build:debug` or `bun run ios:debug` locally when that platform's toolchain is installed. |
 | Backend, protocol, cross-module contract or release-tooling delivery | Run the full `./scripts/verify.sh` once on the final candidate before handoff/merge/release. Use focused checks during iteration. |
 | Production release outside both guarded scopes, or without a trustworthy baseline | Run the full gate on the final release candidate. |
@@ -253,6 +253,9 @@ final candidate:
 
 ```
 (cd pwa && bun install --frozen-lockfile)
+(cd workers/pairfob-origin && bun install --frozen-lockfile)
+(cd workers/pairfob-downloads && bun install --frozen-lockfile)
+(cd site/doc && bun install --frozen-lockfile)
 ./scripts/verify.sh
 ```
 
@@ -261,7 +264,7 @@ guess-success to make tests pass.
 
 ## Cursor Cloud specific instructions
 
-Go 1.26.9 is already on the image. The environment install script puts Bun
+Go 1.26.10 is already on the image. The environment install script puts Bun
 1.4.3 on `/usr/local/bin` and runs the frozen installs in
 [`docs/develop.md`](docs/develop.md#local-stack), then `go mod download`.
 Login shells do not need `~/.bashrc` for Bun.

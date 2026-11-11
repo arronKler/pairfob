@@ -35,13 +35,6 @@ pub struct CellMetrics {
 }
 
 impl CellMetrics {
-    /// The default-size cell, kept as the entry point for callers that do not
-    /// carry a size.
-    #[allow(dead_code)]
-    pub fn measure(window: &Window) -> Self {
-        Self::measure_at(window, layout::TERMINAL_FONT_SIZE)
-    }
-
     /// The same cell at a chosen size. The size is clamped because a stored
     /// setting can predate the current range.
     pub fn measure_at(window: &Window, font_size: f32) -> Self {

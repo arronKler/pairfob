@@ -158,7 +158,7 @@ export function startServiceWorkerDownload(
     if (settled) return;
     if (pullTimer !== null) clearTimeout(pullTimer);
     pullTimer = setTimeout(() => {
-      if (!settled && !reading) fail("下载数据超时");
+      if (!settled && !reading) fail("download_timeout");
     }, pullTimeout);
   };
   const pump = async () => {
@@ -168,7 +168,7 @@ export function startServiceWorkerDownload(
       const chunk = await source();
       if (settled || cancelled) return;
       if (!(chunk.bytes instanceof Uint8Array)) {
-        fail("无效的下载数据");
+        fail("download_invalid");
         return;
       }
       const view = chunk.bytes;
@@ -204,7 +204,7 @@ export function startServiceWorkerDownload(
     }
     if (type === "error") {
       finish(new Error(typeof (data as { message?: unknown }).message === "string"
-        ? (data as { message: string }).message : "下载失败"));
+        ? (data as { message: string }).message : "download_failed"));
       return;
     }
     if (type === "cancel") finish(new DOMException("取消下载", "AbortError"));

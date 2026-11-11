@@ -130,6 +130,11 @@ func TestKimiCodeNativeObservation(t *testing.T) {
 	if title := r.ReadTitle(ref); title.Name != "Updated title" {
 		t.Fatal(title)
 	}
+	writeNativeFixture(t, state, `{"id":"session_native-session","version":2,"title":"Updated title","custom_title":"My name"}`)
+	r.now = func() time.Time { return time.Now().Add(6 * time.Second) }
+	if title := r.ReadTitle(ref); title.Name != "My name" {
+		t.Fatal(title)
+	}
 	writeNativeFixture(t, state, `{"id":"session_other-session","version":2}`)
 	if _, err := r.loadStore(ref, true); err == nil {
 		t.Fatal("state mismatch accepted")

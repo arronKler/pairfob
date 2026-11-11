@@ -120,7 +120,16 @@ func unknownOperationFault(cause error) error {
 func (e *Engine) pruneExpiredOperationsLocked(now time.Time) {
 	cutoff := now.Add(-operationRetention).Unix()
 	for key, record := range e.operations {
-		if record.completedAt > 0 && record.completedAt < cutoff {
+		if record.completedAt > 0 {
+			if record.completedAt < cutoff {
+				delete(e.operations, key)
+			}
+			continue
+		}
+		// A pending row is a crash record: its outcome is never replayed, so
+		// age past the retention window like a completed one instead of
+		// filling the ledger until every mutation is rate-limited.
+		if record.createdAt < cutoff {
 			delete(e.operations, key)
 		}
 	}

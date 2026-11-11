@@ -24,7 +24,7 @@ import { observeError, observeUpgrade } from "./metrics.ts";
 import { handlePairIntent } from "./pair-intent.ts";
 import { handleRekey } from "./rekey.ts";
 
-const PLACEHOLDER = `<!doctype html><meta charset="utf-8"><title>Pairfob</title><h1>Pairfob</h1><p>Hosted origin. Production copies pwa/dist into R2.</p>`;
+const PLACEHOLDER = `<!doctype html><meta charset="utf-8"><title>Pairfob</title><h1>Pairfob</h1><p>Hosted origin. Production packs pwa/dist into the Worker's assets.</p>`;
 
 /** Public paths the native shell reads cross-origin. */
 const APP_CORS_PATHS = new Set([

@@ -17,11 +17,12 @@ func (e *Engine) rpcListWorktrees(s *sess, id string, params json.RawMessage) {
 		return
 	}
 	if p.CWD != "" {
-		if err := e.pathAllowed(p.Session, p.CWD, false); err != nil {
+		cwd, err := e.allowedPath(p.Session, p.CWD, false)
+		if err != nil {
 			e.replyErr(s, id, "invalid_argument", "worktree source is outside allowed local roots")
 			return
 		}
-		p.CWD, _ = resolvedPath(p.CWD)
+		p.CWD = cwd
 	}
 	view, err := e.observe(p.Session, runtime.WorktreeListQuery{WorkspaceID: p.WorkspaceID, CWD: p.CWD})
 	if err != nil {
@@ -112,11 +113,12 @@ func (e *Engine) dispatchWorktreeMutation(s *sess, id string, params json.RawMes
 		return
 	}
 	if p.CWD != "" {
-		if err := e.pathAllowed(p.Session, p.CWD, false); err != nil {
+		cwd, err := e.allowedPath(p.Session, p.CWD, false)
+		if err != nil {
 			e.replyErr(s, id, "invalid_argument", "worktree source is outside allowed local roots")
 			return
 		}
-		p.CWD, _ = resolvedPath(p.CWD)
+		p.CWD = cwd
 	}
 	resultBranch := p.Branch
 	if open {
@@ -131,7 +133,7 @@ func (e *Engine) dispatchWorktreeMutation(s *sess, id string, params json.RawMes
 			e.replyErr(s, id, "worktree_not_found", "worktree is not uniquely reported by Herdr")
 			return
 		}
-		if err := e.pathAllowed(p.Session, trusted.Path, false); err != nil {
+		if _, err := e.allowedPath(p.Session, trusted.Path, false); err != nil {
 			e.replyErr(s, id, "invalid_argument", "worktree is outside allowed roots")
 			return
 		}
@@ -145,11 +147,12 @@ func (e *Engine) dispatchWorktreeMutation(s *sess, id string, params json.RawMes
 			resultBranch = ""
 		}
 	} else if p.Path != "" {
-		if err := e.pathAllowed(p.Session, p.Path, true); err != nil {
+		path, err := e.allowedPath(p.Session, p.Path, true)
+		if err != nil {
 			e.replyErr(s, id, "invalid_argument", "worktree path is outside allowed roots")
 			return
 		}
-		p.Path, _ = resolvedPath(p.Path)
+		p.Path = path
 	}
 	var command runtime.Command
 	op := "create_worktree"
@@ -159,7 +162,7 @@ func (e *Engine) dispatchWorktreeMutation(s *sess, id string, params json.RawMes
 	} else {
 		command = runtime.WorktreeCreateCommand{WorkspaceID: p.WorkspaceID, CWD: p.CWD, Branch: p.Branch, Base: p.Base, Path: p.Path, Label: p.Label}
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, command, "worktree_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, command, "worktree_not_found")
 	if !ok {
 		return
 	}
@@ -230,7 +233,7 @@ func (e *Engine) dispatchLayoutMutation(s *sess, id string, params json.RawMessa
 		e.replyErr(s, id, "invalid_argument", "invalid pane layout target")
 		return
 	}
-	receipt, opID, ok := e.executeRPC(s, id, session, operationID, true, command, "pane_not_found")
+	receipt, opID, ok := e.executeRPC(s, id, session, operationID, command, "pane_not_found")
 	if !ok {
 		return
 	}

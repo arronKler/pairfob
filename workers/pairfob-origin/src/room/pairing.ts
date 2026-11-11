@@ -15,6 +15,16 @@ import { armPairFirst, clearKindRef, schedule, settleHello } from "./alarms.ts";
 import type { RoomCore } from "./core.ts";
 import type { RoomSocket } from "./types.ts";
 
+// A refresh moves the pair_ttl alarm before the index insert. If either step
+// fails, put the alarm back with the slot deadline so cleanup is not postponed.
+async function restorePairAlarm(room: RoomCore, pairRef: string, deadline: number): Promise<void> {
+  try {
+    await schedule(room.store, "pair_ttl", pairRef, deadline);
+  } catch {
+    // The slot already records the old deadline; report the original failure.
+  }
+}
+
 export async function handlePairOpen(room: RoomCore, ws: RoomSocket, frame: Frame): Promise<void> {
   await room.withPairingLock(() => handlePairOpenLocked(room, ws, frame));
 }
@@ -61,6 +71,7 @@ async function handlePairOpenLocked(room: RoomCore, ws: RoomSocket, frame: Frame
     } catch {
       existing.deadline = previousDeadline;
       room.store.putSlot(existing);
+      await restorePairAlarm(room, pairRef, previousDeadline);
       sendErr(ws, "index_unavailable", "pairing slot refresh failed", { pairRef });
       return;
     }
@@ -73,6 +84,7 @@ async function handlePairOpenLocked(room: RoomCore, ws: RoomSocket, frame: Frame
     if (ins !== "ok") {
       existing.deadline = previousDeadline;
       room.store.putSlot(existing);
+      await restorePairAlarm(room, pairRef, previousDeadline);
       sendErr(ws, "index_unavailable", "pairing index refresh failed", { pairRef });
       return;
     }

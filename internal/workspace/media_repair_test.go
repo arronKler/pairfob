@@ -195,7 +195,7 @@ func adtsHeader(second byte) []byte {
 func TestMediaRepairADTSIsAudioAAC(t *testing.T) {
 	for _, second := range []byte{0xf1, 0xf9} {
 		head := adtsHeader(second)
-		kind, mime, _, _ := sniffMedia(head, int64(len(head)))
+		kind, mime, _, _ := sniffMedia(head)
 		if kind != MediaAudio || mime != "audio/aac" {
 			t.Fatalf("ADTS %x sniffed as %s/%s; want audio/aac", second, kind, mime)
 		}
@@ -219,20 +219,20 @@ func TestMediaRepairMPEGFramesStayAudioMPEG(t *testing.T) {
 	// Real MP3 frame syncs across versions and layers; layer bits are non-zero.
 	for _, second := range []byte{0xfb, 0xfa, 0xfc, 0xfe, 0xf3, 0xf2} {
 		head := append([]byte{0xff, second}, make([]byte, 32)...)
-		kind, mime, _, _ := sniffMedia(head, int64(len(head)))
+		kind, mime, _, _ := sniffMedia(head)
 		if kind != MediaAudio || mime != "audio/mpeg" {
 			t.Fatalf("MP3 frame ff %x sniffed as %s/%s; want audio/mpeg", second, kind, mime)
 		}
 	}
 	// An ID3-tagged MP3 still classifies as MPEG audio.
 	id3 := append([]byte("ID3\x03\x00\x00\x00\x00\x00\x00"), make([]byte, 32)...)
-	kind, mime, _, _ := sniffMedia(id3, int64(len(id3)))
+	kind, mime, _, _ := sniffMedia(id3)
 	if kind != MediaAudio || mime != "audio/mpeg" {
 		t.Fatalf("ID3 mp3 sniffed as %s/%s; want audio/mpeg", kind, mime)
 	}
 	// Reserved layer (0b00) that is not ADTS is not promoted to audio/mpeg.
 	reserved := append([]byte{0xff, 0xe9}, make([]byte, 32)...) // sync, version set, layer 00, id bit
-	kind, _, _, _ = sniffMedia(reserved, int64(len(reserved)))
+	kind, _, _, _ = sniffMedia(reserved)
 	if kind == MediaAudio {
 		t.Fatalf("reserved-layer frame classified as audio")
 	}

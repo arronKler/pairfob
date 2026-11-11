@@ -107,11 +107,14 @@ cp "$ROOT/scripts/install.sh" "$DEST/install.sh"
 if [[ "${PAIRFOB_PACK_DL:-}" == "1" ]]; then
   # shellcheck source=ship-guard.sh
   . "$ROOT/scripts/ship-guard.sh"
-  pairfob_require_release_dir "$ROOT/dist/dl"
+  # Current releases write dist/daemon; dist/dl is the historical goreleaser output.
+  dl_source="$ROOT/dist/daemon"
+  [[ -d "$dl_source" ]] || dl_source="$ROOT/dist/dl"
+  pairfob_require_release_dir "$dl_source"
   mkdir -p "$DEST/dl"
   # Only the daemon release files belong on the relay's /dl. The Android
   # channel lives on dl.pairfob.com; its manifest uses different paths.
-  find "$ROOT/dist/dl" -maxdepth 1 -type f -exec cp {} "$DEST/dl/" \;
+  find "$dl_source" -maxdepth 1 -type f -exec cp {} "$DEST/dl/" \;
 fi
 if [[ -d "$legacy_stage/beta" ]]; then
   mkdir -p "$DEST/dl/android"

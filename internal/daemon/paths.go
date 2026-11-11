@@ -82,17 +82,25 @@ func ValidateAllowedRoots() error {
 // may additionally use a sibling of a live checkout, matching Git's common
 // worktree layout.
 func (e *Engine) pathAllowed(session *string, candidate string, allowWorkspaceSibling bool) error {
+	_, err := e.allowedPath(session, candidate, allowWorkspaceSibling)
+	return err
+}
+
+// allowedPath is pathAllowed plus the canonical spelling it authorized, so a
+// caller does not have to resolve the path a second time and race with it
+// disappearing.
+func (e *Engine) allowedPath(session *string, candidate string, allowWorkspaceSibling bool) (string, error) {
 	resolvedCandidate, err := resolvedPath(candidate)
 	if err != nil {
-		return err
+		return "", err
 	}
 	snapshot, err := e.snapshot(session)
 	if err != nil {
-		return err
+		return "", err
 	}
 	configuredRoots, err := configuredAllowedRoots()
 	if err != nil {
-		return err
+		return "", err
 	}
 	roots := make([]string, 0, len(snapshot.Workspaces)+len(snapshot.Panes)+len(configuredRoots))
 	workspaceRoots := make([]string, 0, len(snapshot.Workspaces))
@@ -121,15 +129,15 @@ func (e *Engine) pathAllowed(session *string, candidate string, allowWorkspaceSi
 	roots = append(roots, configuredRoots...)
 	for _, root := range roots {
 		if withinPath(root, resolvedCandidate) {
-			return nil
+			return resolvedCandidate, nil
 		}
 	}
 	if allowWorkspaceSibling {
 		for _, root := range workspaceRoots {
 			if resolvedCandidate != root && filepath.Dir(resolvedCandidate) == filepath.Dir(root) {
-				return nil
+				return resolvedCandidate, nil
 			}
 		}
 	}
-	return errors.New("path is outside live Herdr roots and PAIRFOB_ALLOWED_ROOTS")
+	return "", errors.New("path is outside live Herdr roots and PAIRFOB_ALLOWED_ROOTS")
 }

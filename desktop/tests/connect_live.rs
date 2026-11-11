@@ -13,7 +13,7 @@ use pairfob_desktop::model::Size;
 const TIMEOUT: Duration = Duration::from_secs(15);
 
 fn live_target() -> ConnectTarget {
-    let name = std::env::var("PF_DESKTOP_SESSION").unwrap_or_else(|_| "pffixture".into());
+    let name = std::env::var("PF_DESKTOP_LIVE_SESSION").unwrap_or_else(|_| "pffixture".into());
     ConnectTarget::Session {
         name,
         development: false,

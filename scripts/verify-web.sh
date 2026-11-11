@@ -121,6 +121,9 @@ run_static() {
 
 run_build() {
   step "PWA build" bun run build
+  # The native shell bundles a different entry (native flag, relay origin); a
+  # PWA change can break it without breaking the browser build.
+  step "PWA native build" bun run build:native
   step "PWA startup budget" bun run perf:budget
   step "origin pack (includes docs build)" bash "$ROOT/scripts/pack-origin-assets.sh"
   test -f "$ROOT/workers/pairfob-origin/public-dist/install.sh"

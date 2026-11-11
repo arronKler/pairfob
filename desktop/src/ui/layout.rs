@@ -34,7 +34,6 @@ pub const FONT_SIZE_DEFAULT: f32 = 13.;
 pub const FONT_SIZE_MIN: f32 = 9.;
 pub const FONT_SIZE_MAX: f32 = 24.;
 pub const FONT_SIZE_STEP: f32 = 1.;
-pub const TERMINAL_FONT_SIZE: f32 = FONT_SIZE_DEFAULT;
 /// Radii: rows are pills, cards are windows, controls sit between.
 pub const RADIUS_ROW: f32 = 7.;
 pub const RADIUS_CARD: f32 = 12.;

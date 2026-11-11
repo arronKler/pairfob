@@ -143,11 +143,7 @@ func runDaemon(store *state.Store, sock string) error {
 		PushEnabled: getenv("PAIRFOB_PUSH", "1") == "1",
 		AutoAdmit:   getenv("PAIRFOB_DEV_AUTO_ADMIT", "") == "1",
 	}
-	if plan.Origin != "" {
-		runtimeConfig.Origin = plan.Origin
-	} else if origin := getenv("PAIRFOB_ORIGIN", ""); origin != "" {
-		runtimeConfig.Origin = origin
-	}
+	runtimeConfig.Origin = plan.Origin
 	if plan.NeedEnroll {
 		relay, err := enrollV2(store, plan.Origin)
 		if err != nil {

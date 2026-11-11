@@ -121,32 +121,47 @@ func (d *dirIndexer) listing() func(string) ([]os.DirEntry, error) {
 // behind it so no keystroke or page open waits for the filesystem.
 func (d *dirIndexer) snapshot(roots []string, version string) (dirIndexSnapshot, bool) {
 	bounds := d.bounds()
-	now := d.clock()
-	d.mu.Lock()
-	current := d.snap
-	if current != nil && now.Sub(current.BuiltAt) <= bounds.ttl {
-		out := *current
-		d.mu.Unlock()
-		return out, out.Version == version
-	}
-	if current != nil {
-		if d.building == nil {
-			d.startLocked(roots)
+	for {
+		now := d.clock()
+		d.mu.Lock()
+		current := d.snap
+		if dirIndexRootsMatch(current, roots) {
+			if now.Sub(current.BuiltAt) <= bounds.ttl {
+				out := *current
+				d.mu.Unlock()
+				return out, out.Version == version
+			}
+			if d.building == nil {
+				d.startLocked(roots)
+			}
+			out := *current
+			d.mu.Unlock()
+			return out, out.Version == version
 		}
-		out := *current
+		// No index yet, or one built for another session's roots. A stale copy
+		// of different roots cannot answer this request, so wait for a build.
+		wait := d.building
+		if wait == nil {
+			wait = d.startLocked(roots)
+		}
 		d.mu.Unlock()
-		return out, out.Version == version
+		<-wait
 	}
-	wait := d.building
-	if wait == nil {
-		wait = d.startLocked(roots)
+}
+
+// dirIndexRootsMatch reports whether snapshot covers exactly this request's
+// root list. One daemon serves every paired session, and sessions can name
+// different workspaces, so a cached index is only reusable for its own roots.
+func dirIndexRootsMatch(snapshot *dirIndexSnapshot, roots []string) bool {
+	if snapshot == nil || len(snapshot.Roots) != len(roots) {
+		return false
 	}
-	d.mu.Unlock()
-	<-wait
-	d.mu.Lock()
-	out := *d.snap
-	d.mu.Unlock()
-	return out, out.Version == version
+	for index, root := range roots {
+		if snapshot.Roots[index].Path != root {
+			return false
+		}
+	}
+	return true
 }
 
 // startLocked starts the only build allowed at a time. The caller holds d.mu.

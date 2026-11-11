@@ -316,7 +316,7 @@ func (e *Engine) registrationFrame(join string) envelope.Frame {
 	e.mu.Unlock()
 	payload := map[string]any{
 		"v": v, "op": "RegisterDaemon", "hostname": e.hostname(), "os": runtime.GOOS,
-		"version": "0.1.0", "ed25519_pk": canon.B64URL(e.PK), "protocol": v,
+		"version": e.runningBuild(), "ed25519_pk": canon.B64URL(e.PK), "protocol": v,
 	}
 	if daemonID != "" && reconnect != "" {
 		payload["daemon_id"] = daemonID

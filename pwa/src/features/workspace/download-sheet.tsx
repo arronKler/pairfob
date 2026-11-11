@@ -43,11 +43,17 @@ function downloadMessage(error: unknown, size: number): string {
       case "rate_limited": return t("workspace.download.busy");
       case "disconnected":
       case "reconnecting": return t("workspace.download.offline");
-      case "unsupported": return error.message || t("workspace.download.unsupported");
-      default: return error.message || t("workspace.download.failed");
+      case "unsupported": return t("workspace.download.unsupported");
+      default: return t("workspace.download.failed");
     }
   }
-  return error instanceof Error && error.message ? error.message : t("workspace.download.failed");
+  if (error instanceof Error) {
+    switch (error.message) {
+      case "download_timeout": return t("workspace.download.timeout");
+      case "download_invalid": return t("workspace.download.invalid");
+    }
+  }
+  return t("workspace.download.failed");
 }
 
 /**

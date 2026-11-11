@@ -97,10 +97,9 @@ func (c *Conn) Close() { _ = c.ws.Close() }
 
 var _ mux.Conn = (*Conn)(nil)
 
-const (
-	SubprotocolV1 = "pairfob.v1"
-	SubprotocolV2 = "pairfob.v2"
-)
+// SubprotocolV2 is the only relay subprotocol. The retired pairfob.v1 relay
+// surface is deliberately absent.
+const SubprotocolV2 = "pairfob.v2"
 
 // UpgraderFor negotiates a single WebSocket subprotocol.
 func UpgraderFor(subprotocol string) websocket.Upgrader {
@@ -109,9 +108,6 @@ func UpgraderFor(subprotocol string) websocket.Upgrader {
 		CheckOrigin:  CheckSameHostOrigin,
 	}
 }
-
-// Upgrader is the pairfob.v1 wrapper used by the self-hosted relay.
-var Upgrader = UpgraderFor(SubprotocolV1)
 
 // CheckSameHostOrigin permits non-browser daemon/CLI connections (which omit
 // Origin), while requiring browser websocket requests to originate from the
@@ -140,15 +136,6 @@ func HasSubprotocol(r *http.Request, name string) bool {
 		}
 	}
 	return false
-}
-
-// HasV1Subprotocol reports whether the client explicitly offered pairfob.v1.
-func HasV1Subprotocol(r *http.Request) bool {
-	return HasSubprotocol(r, SubprotocolV1)
-}
-
-func Dial(rawURL string) (*Conn, error) {
-	return DialProtocol(rawURL, SubprotocolV1)
 }
 
 func DialProtocol(rawURL, subprotocol string) (*Conn, error) {

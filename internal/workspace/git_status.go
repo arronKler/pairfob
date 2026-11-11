@@ -3,6 +3,7 @@ package workspace
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"path/filepath"
 	"strings"
 )
 
@@ -72,8 +73,11 @@ func parseStatus(data []byte, repo repositoryState) ([]Change, bool) {
 	return changes, truncated
 }
 
+// filepathSlash converts this platform's separators for Git paths. Git emits
+// `/` on every platform, so on Unix it is identity and a literal backslash in
+// a filename survives.
 func filepathSlash(value string) string {
-	return strings.ReplaceAll(value, "\\", "/")
+	return filepath.ToSlash(value)
 }
 
 func (i *Inspector) Status(root string) (Status, error) {

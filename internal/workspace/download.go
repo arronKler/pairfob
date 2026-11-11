@@ -61,7 +61,7 @@ func finishDownloadOpen(
 	if err != nil {
 		return nil, err
 	}
-	kind, mime, _, _ := sniffMedia(head, size)
+	kind, mime, _, _ := sniffMedia(head)
 	// A download has no preview cap: any regular file under maxBytes can be
 	// saved, including a large image or video.
 	st, err := file.Stat()

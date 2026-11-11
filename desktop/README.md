@@ -205,7 +205,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo test --no-default-features
-PF_DESKTOP_LIVE=1 cargo test --test live -- --ignored --nocapture
+PF_DESKTOP_LIVE=1 cargo test --test live --test connect_live --test search_live -- --ignored --nocapture
 ```
 
 `./scripts/verify.sh` runs the first four through `scripts/verify-desktop.sh`.

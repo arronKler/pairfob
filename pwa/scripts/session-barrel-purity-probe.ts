@@ -61,7 +61,6 @@ const SAFE = [
   "../src/features/session/ports.ts",
   "../src/features/session/guided/model.ts",
   "../src/features/session/chat/model.ts",
-  "../src/pages/session/index.ts",
 ] as const;
 
 /** Former barrel exports that now cold-import pure (no import-time DOM read). */

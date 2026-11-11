@@ -405,9 +405,9 @@ func TestPersistedKeysListEveryVariableTheServiceWrites(t *testing.T) {
 }
 
 func TestSystemdEnvironmentReadsWrittenAndHandEditedForms(t *testing.T) {
-	unit, err := systemdUnitRuntime([]byte("[Unit]\nEnvironment=IGNORED=1\n[Service]\nEnvironment=STALE=1\nEnvironment=\nEnvironment=A=plain\n  Environment = \"B=two words\" C=\"50%%\"\n# Environment=D=comment\nExecStart=/bin/x\nEnvironment=HOME=/home/a%b\nEnvironment=E=\"x\"y\n[Install]\nEnvironment=FOREIGN=1\n"))
+	unit, err := systemdUnitRuntime([]byte("[Unit]\nEnvironment=IGNORED=1\n[Service]\nEnvironment=STALE=1\nEnvironment=\nEnvironment=A=plain\n  Environment = \"B=two words\" C=\"50%%\"\n# Environment=D=comment\nExecStart=/bin/x\nEnvironment=HOME=/home/a%b\nEnvironment=E=\"x\"y\nEnvironment=Z=\"\"\n[Install]\nEnvironment=FOREIGN=1\n"))
 	env := unit.env
-	if err != nil || len(env) != 5 || env["A"] != "plain" || env["B"] != "two words" || env["C"] != "50%" || env["E"] != "xy" || len(unit.directives) != 0 {
+	if err != nil || len(env) != 6 || env["A"] != "plain" || env["B"] != "two words" || env["C"] != "50%" || env["E"] != "xy" || env["Z"] != "" || len(unit.directives) != 0 {
 		t.Fatalf("unit=%v err=%v", unit, err)
 	}
 	unit, err = systemdUnitRuntime([]byte("[Service]\nEnvironmentFile=/a\nPassEnvironment=X\nEnvironmentFile=\nEnvironmentFile=-/b\n"))

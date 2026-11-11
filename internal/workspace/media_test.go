@@ -30,7 +30,7 @@ func writePNG(t *testing.T, path string, w, h int) []byte {
 
 func TestSniffRecognizesImagesAudioVideoAndSVG(t *testing.T) {
 	pngBytes := writePNG(t, filepath.Join(t.TempDir(), "x.png"), 3, 5)
-	kind, mime, w, h := sniffMedia(pngBytes, int64(len(pngBytes)))
+	kind, mime, w, h := sniffMedia(pngBytes)
 	if kind != MediaImage || mime != "image/png" || w != 3 || h != 5 {
 		t.Fatalf("png sniff kind=%s mime=%s %dx%d", kind, mime, w, h)
 	}
@@ -38,7 +38,7 @@ func TestSniffRecognizesImagesAudioVideoAndSVG(t *testing.T) {
 	if err := jpeg.Encode(&jpegBuf, image.NewRGBA(image.Rect(0, 0, 2, 4)), &jpeg.Options{Quality: 80}); err != nil {
 		t.Fatal(err)
 	}
-	kind, mime, w, h = sniffMedia(jpegBuf.Bytes(), int64(jpegBuf.Len()))
+	kind, mime, w, h = sniffMedia(jpegBuf.Bytes())
 	if kind != MediaImage || mime != "image/jpeg" || w != 2 || h != 4 {
 		t.Fatalf("jpeg sniff kind=%s mime=%s %dx%d", kind, mime, w, h)
 	}
@@ -46,28 +46,28 @@ func TestSniffRecognizesImagesAudioVideoAndSVG(t *testing.T) {
 	if err := gif.Encode(&gifBuf, image.NewPaletted(image.Rect(0, 0, 6, 7), palette.Plan9), nil); err != nil {
 		t.Fatal(err)
 	}
-	kind, mime, w, h = sniffMedia(gifBuf.Bytes(), int64(gifBuf.Len()))
+	kind, mime, w, h = sniffMedia(gifBuf.Bytes())
 	if kind != MediaImage || mime != "image/gif" || w != 6 || h != 7 {
 		t.Fatalf("gif sniff kind=%s mime=%s %dx%d", kind, mime, w, h)
 	}
 	webp := []byte("RIFF\x1a\x00\x00\x00WEBPVP8X\x0a\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 	webp[24], webp[27] = 9, 11
-	kind, mime, w, h = sniffMedia(webp, int64(len(webp)))
+	kind, mime, w, h = sniffMedia(webp)
 	if kind != MediaImage || mime != "image/webp" || w != 10 || h != 12 {
 		t.Fatalf("webp sniff kind=%s mime=%s %dx%d", kind, mime, w, h)
 	}
 	svg := []byte("<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\"></svg>")
-	kind, mime, _, _ = sniffMedia(svg, int64(len(svg)))
+	kind, mime, _, _ = sniffMedia(svg)
 	if kind != MediaDownload || mime != "image/svg+xml" {
 		t.Fatalf("svg sniff kind=%s mime=%s", kind, mime)
 	}
 	mp4 := []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm'}
-	kind, mime, _, _ = sniffMedia(mp4, 2048)
+	kind, mime, _, _ = sniffMedia(mp4)
 	if kind != MediaVideo || mime != "video/mp4" {
 		t.Fatalf("mp4 sniff kind=%s mime=%s", kind, mime)
 	}
 	m4a := []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'M', '4', 'A', ' '}
-	kind, mime, _, _ = sniffMedia(m4a, 2048)
+	kind, mime, _, _ = sniffMedia(m4a)
 	if kind != MediaAudio || mime != "audio/mp4" {
 		t.Fatalf("m4a sniff kind=%s mime=%s", kind, mime)
 	}

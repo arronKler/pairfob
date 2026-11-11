@@ -285,6 +285,7 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 		e.mu.Unlock()
 		candidate.sendMu.Unlock()
 		parent.sendMu.Unlock()
+		e.replyErr(parent, id, "internal", "transport commit is too large")
 		return
 	}
 	payload, sealErr := aead.Seal(parent.s2c, oldRoute, body)
@@ -292,6 +293,7 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 		e.mu.Unlock()
 		candidate.sendMu.Unlock()
 		parent.sendMu.Unlock()
+		e.replyErr(parent, id, "internal", "transport commit could not be sealed")
 		return
 	}
 	e.mu.Unlock()

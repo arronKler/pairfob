@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Android shell gate, for an APK-only release whose changes stayed inside
+# Android release gate, for an APK-only release whose changes stayed inside
 # --android-only scope. Covers the page the APK bundles, the channel publisher
 # and the APK's own provenance checks. Run scripts/verify.sh --android-only
 # <verified-commit> instead of calling this directly: it checks the scope first.

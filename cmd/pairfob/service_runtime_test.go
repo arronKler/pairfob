@@ -178,6 +178,30 @@ func TestServicePersistsCoreRuntimeFromExplicitSelection(t *testing.T) {
 	}
 }
 
+func TestServicePersistsAllowedRootsIncludingAnExplicitEmptyLockdown(t *testing.T) {
+	roots := t.TempDir() + string(os.PathListSeparator) + filepath.Join(t.TempDir(), "more")
+	t.Setenv("PAIRFOB_ALLOWED_ROOTS", roots)
+	env := map[string]string{}
+	for _, entry := range serviceRuntimeEnvironment() {
+		env[entry[0]] = entry[1]
+	}
+	if env["PAIRFOB_ALLOWED_ROOTS"] != roots {
+		t.Fatalf("service changed the allowed roots: %v", env["PAIRFOB_ALLOWED_ROOTS"])
+	}
+	// Unset falls back to the user's home; explicitly empty allows no web path.
+	// Losing the empty value would silently widen the daemon's reach.
+	t.Setenv("PAIRFOB_ALLOWED_ROOTS", "")
+	found := false
+	for _, entry := range serviceRuntimeEnvironment() {
+		if entry[0] == "PAIRFOB_ALLOWED_ROOTS" {
+			found = entry[1] == ""
+		}
+	}
+	if !found {
+		t.Fatal("an explicit empty allowed-root list must survive service install")
+	}
+}
+
 func TestServicePersistsCoreRuntimeFromAutoDetection(t *testing.T) {
 	for _, path := range []string{"/usr/local/bin/herdr", "/opt/homebrew/bin/herdr"} {
 		if _, err := os.Stat(path); err == nil {

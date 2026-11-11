@@ -91,6 +91,7 @@ describe("PAIR_OPEN serialization", () => {
     const pairRef = "33".repeat(16);
     await onMessage(h.core, daemon, pairOpen(h.core.daemonId, pairRef));
     const before = h.store.loadSlot()!;
+    const deadline = h.store.minAlarmAt();
     h.core.deps.index = {
       lookup: async () => null,
       insert: async () => "fail",
@@ -101,6 +102,9 @@ describe("PAIR_OPEN serialization", () => {
     await onMessage(h.core, daemon, pairOpen(h.core.daemonId, pairRef));
 
     expect(h.store.loadSlot()).toEqual(before);
+    // The refresh moved the alarm forward before the insert failed; the old
+    // deadline must be armed again, not left at the abandoned one.
+    expect(h.store.minAlarmAt()).toBe(deadline);
     expect(lastJSON(daemon).body.code).toBe("index_unavailable");
     expect(lastJSON(daemon).body.pair_ref).toBe(pairRef);
   });

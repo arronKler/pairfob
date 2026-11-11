@@ -33,7 +33,7 @@ test("each turn retains its own model beside elapsed time, steps and reply", () 
   expect(cards[0].querySelectorAll(".work-step")).toHaveLength(1);
   act(() => cards[0].querySelector<HTMLButtonElement>("button.work-head")!.click());
   expect(cards[0].querySelector(".fold")?.hasAttribute("inert")).toBeFalse();
-  expect(cards[0].querySelector(".work-models")?.textContent).toContain("Thinking efforthigh");
+  expect(cards[0].querySelector(".work-models")?.textContent).toContain(`${t("work.thinkingEffort")}high`);
   expect(appRoot().querySelectorAll(".agent-assistant-final")).toHaveLength(2);
 });
 
@@ -45,12 +45,12 @@ test("old daemon, missing metadata and Claude's absent effort stay distinct", ()
   act(() => renderReact(<AgentStream items={[{ type: "user", text: "go" }, { type: "assistant", text: "answer", models: [claude] }]}
     working={false} empty={empty} />));
   expect(appRoot().querySelector(".work-detail")?.textContent).toBe("claude-opus-4-1");
-  expect(appRoot().querySelector(".work-models")?.textContent).toContain(`Thinking effort${t("work.notRecorded")}`);
+  expect(appRoot().querySelector(".work-models")?.textContent).toContain(`${t("work.thinkingEffort")}${t("work.notRecorded")}`);
   const pi: AgentTraceModel = { model: "deepseek-v4.1-flash", effort: "max", source: "pi_message" };
   act(() => renderReact(<AgentStream items={[{ type: "user", text: "go" }, { type: "assistant", text: "answer", models: [pi] }]}
     working={false} empty={empty} />));
   expect(appRoot().querySelector(".work-detail")?.textContent).toBe("deepseek-v4.1-flash · max");
-  expect(appRoot().querySelector(".work-models")?.textContent).toContain(`Thinking effortmax`);
+  expect(appRoot().querySelector(".work-models")?.textContent).toContain(`${t("work.thinkingEffort")}max`);
   expect(appRoot().querySelector(".work-models")?.textContent).toContain(t("work.modelPi"));
 });
 

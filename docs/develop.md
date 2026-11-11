@@ -11,6 +11,7 @@ Install the lockfiles the gate uses, once:
 ```sh
 (cd pwa && bun install --frozen-lockfile)
 (cd workers/pairfob-origin && bun install --frozen-lockfile)
+(cd workers/pairfob-downloads && bun install --frozen-lockfile)
 (cd site/doc && bun install --frozen-lockfile)
 ```
 
@@ -471,7 +472,7 @@ the major only for a backward-incompatible change. Keep all three components;
 the daemon and PWA updaters only order versions of equal length.
 
 After verification, tag that exact commit and push the current branch to its
-configured upstream, then push the tag to the same remote. Upload all six
+configured upstream, then push the tag to the same remote. Upload all ten
 files from the verified `dist/daemon/` directory; these are also the files served
 at `https://dl.pairfob.com/daemon/`. Write reviewed release notes to a file outside
 the working tree, including changes, requirements and upgrade instructions.
@@ -481,6 +482,8 @@ For example, replacing `vX.Y.Z` with the chosen version:
 gh release create vX.Y.Z \
   dist/daemon/pairfob-darwin-amd64 dist/daemon/pairfob-darwin-arm64 \
   dist/daemon/pairfob-linux-amd64 dist/daemon/pairfob-linux-arm64 \
+  dist/daemon/pairfob-chat-darwin-amd64 dist/daemon/pairfob-chat-darwin-arm64 \
+  dist/daemon/pairfob-chat-linux-amd64 dist/daemon/pairfob-chat-linux-arm64 \
   dist/daemon/VERSION dist/daemon/SHA256SUMS \
   --repo arronKler/pairfob --verify-tag --draft \
   --title "Pairfob vX.Y.Z" --notes-file /tmp/pairfob-release-notes.md
@@ -488,7 +491,7 @@ gh release create vX.Y.Z \
 
 Before publishing, download the draft's assets to a fresh directory with
 `gh release download`, check every file against `SHA256SUMS`, and confirm
-that `VERSION` matches the tag. Inspect all four binaries with
+that `VERSION` matches the tag. Inspect all eight binaries with
 `go version -m`: their `vcs.revision` must match the tagged commit,
 `vcs.modified` must be `false`, and their OS/architecture must match their
 filenames. Check the native binary's `version` output as well. Then publish:
@@ -497,7 +500,7 @@ filenames. Check the native binary's `version` output as well. Then publish:
 gh release edit vX.Y.Z --repo arronKler/pairfob --verify-tag --draft=false --latest
 ```
 
-Confirm the public Release has all six assets and is the latest stable
+Confirm the public Release has all ten assets and is the latest stable
 release. Do not overwrite published assets or move a released tag; corrections
 to binaries need a new version. GitHub publication does not update the download Worker. After checking the
 GitHub assets, publish the same directory with:
@@ -507,7 +510,7 @@ GitHub assets, publish the same directory with:
 ```
 
 The download Worker serves `/daemon/VERSION`, `/daemon/SHA256SUMS`, the four
-binaries and `/install.sh`. It also owns the legacy `pairfob.com/dl/` daemon
+daemon binaries, the four `pairfob-chat` binaries and `/install.sh`. It also owns the legacy `pairfob.com/dl/` daemon
 URLs and `pairfob.com/install.sh` through narrow Cloudflare routes. Old clients
 and the PWA's same-origin version check keep working without redirects or a
 relay deployment. New daemons download directly from `dl.pairfob.com`.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"sort"
+	"time"
 	"unicode/utf8"
 
 	"pairfob/internal/runtime"
@@ -33,7 +34,7 @@ func (e *Engine) rpcRenamePane(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "too_large", "invalid label")
 		return
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.RenamePaneCommand{PaneID: p.PaneID, Label: label}, "pane_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.RenamePaneCommand{PaneID: p.PaneID, Label: label}, "pane_not_found")
 	if !ok {
 		return
 	}
@@ -52,7 +53,7 @@ func (e *Engine) rpcRenameTab(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "too_large", "invalid label")
 		return
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.RenameTabCommand{TabID: p.TabID, Label: p.Label}, "tab_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.RenameTabCommand{TabID: p.TabID, Label: p.Label}, "tab_not_found")
 	if !ok {
 		return
 	}
@@ -71,7 +72,7 @@ func (e *Engine) rpcRenameWorkspace(s *sess, id string, params json.RawMessage) 
 		e.replyErr(s, id, "too_large", "invalid label")
 		return
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.RenameWorkspaceCommand{WorkspaceID: p.WorkspaceID, Label: p.Label}, "workspace_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.RenameWorkspaceCommand{WorkspaceID: p.WorkspaceID, Label: p.Label}, "workspace_not_found")
 	if !ok {
 		return
 	}
@@ -89,7 +90,7 @@ func (e *Engine) rpcClosePane(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "unknown_op", "invalid params")
 		return
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.ClosePaneCommand{PaneID: p.PaneID}, "pane_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.ClosePaneCommand{PaneID: p.PaneID}, "pane_not_found")
 	if !ok {
 		return
 	}
@@ -107,7 +108,7 @@ func (e *Engine) rpcCloseTab(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "unknown_op", "invalid params")
 		return
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.CloseTabCommand{TabID: p.TabID}, "tab_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.CloseTabCommand{TabID: p.TabID}, "tab_not_found")
 	if !ok {
 		return
 	}
@@ -125,7 +126,7 @@ func (e *Engine) rpcCloseWorkspace(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "unknown_op", "invalid params")
 		return
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.CloseWorkspaceCommand{WorkspaceID: p.WorkspaceID}, "workspace_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.CloseWorkspaceCommand{WorkspaceID: p.WorkspaceID}, "workspace_not_found")
 	if !ok {
 		return
 	}
@@ -160,7 +161,7 @@ func (e *Engine) rpcCreateConversation(s *sess, id string, params json.RawMessag
 		e.replyErr(s, id, "invalid_argument", "cwd must be an existing accessible directory on this computer")
 		return
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.CreateConversationCommand{CWD: p.CWD, Label: p.Label, AgentKind: p.AgentKind}, "workspace_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.CreateConversationCommand{CWD: p.CWD, Label: p.Label, AgentKind: p.AgentKind}, "workspace_not_found")
 	if !ok {
 		return
 	}
@@ -199,13 +200,14 @@ func (e *Engine) rpcCreateTab(s *sess, id string, params json.RawMessage) {
 		return
 	}
 	if p.CWD != "" {
-		if err := e.pathAllowed(p.Session, p.CWD, false); err != nil {
+		cwd, err := e.allowedPath(p.Session, p.CWD, false)
+		if err != nil {
 			e.replyErr(s, id, "invalid_argument", "cwd is outside allowed local roots")
 			return
 		}
-		p.CWD, _ = resolvedPath(p.CWD)
+		p.CWD = cwd
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.CreateTabCommand{WorkspaceID: p.WorkspaceID, CWD: p.CWD, Label: p.Label, AgentKind: string(p.AgentKind)}, "workspace_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.CreateTabCommand{WorkspaceID: p.WorkspaceID, CWD: p.CWD, Label: p.Label, AgentKind: string(p.AgentKind)}, "workspace_not_found")
 	if !ok {
 		return
 	}
@@ -239,13 +241,14 @@ func (e *Engine) rpcSplitPane(s *sess, id string, params json.RawMessage) {
 		return
 	}
 	if p.CWD != "" {
-		if err := e.pathAllowed(p.Session, p.CWD, false); err != nil {
+		cwd, err := e.allowedPath(p.Session, p.CWD, false)
+		if err != nil {
 			e.replyErr(s, id, "invalid_argument", "cwd is outside allowed local roots")
 			return
 		}
-		p.CWD, _ = resolvedPath(p.CWD)
+		p.CWD = cwd
 	}
-	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, true, runtime.SplitPaneCommand{WorkspaceID: pane.WorkspaceID, TargetPaneID: p.PaneID, TargetTabID: pane.TabID, CWD: p.CWD, Direction: p.Direction, Ratio: p.Ratio, AgentKind: string(p.AgentKind)}, "pane_not_found")
+	receipt, operationID, ok := e.executeRPC(s, id, p.Session, p.OperationID, runtime.SplitPaneCommand{WorkspaceID: pane.WorkspaceID, TargetPaneID: p.PaneID, TargetTabID: pane.TabID, CWD: p.CWD, Direction: p.Direction, Ratio: p.Ratio, AgentKind: string(p.AgentKind)}, "pane_not_found")
 	if !ok {
 		return
 	}
@@ -265,7 +268,7 @@ func (e *Engine) rpcRevokeDevice(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "forbidden", "invalid revoke")
 		return
 	}
-	operationID, ok := mutationOperationID(p.OperationID, id, true)
+	operationID, ok := mutationOperationID(p.OperationID)
 	if !ok {
 		e.replyErr(s, id, "invalid_argument", "invalid operation_id")
 		return
@@ -274,7 +277,9 @@ func (e *Engine) rpcRevokeDevice(s *sess, id string, params json.RawMessage) {
 		DeviceID string `json:"device_id"`
 		Reason   string `json:"reason"`
 	}{DeviceID: p.DeviceID, Reason: p.Reason}
-	receipt, err := e.executeTrackedMutation(context.Background(), s.deviceID, runtime.DefaultSession(), operationID, intent, func() (runtime.Receipt, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	receipt, err := e.executeTrackedMutation(ctx, s.deviceID, runtime.DefaultSession(), operationID, intent, func() (runtime.Receipt, error) {
 		if revokeErr := e.markDeviceRevoked(p.DeviceID); revokeErr != nil {
 			return runtime.Receipt{OperationID: operationID, Outcome: runtime.OutcomeNotApplied}, revokeErr
 		}
@@ -282,10 +287,13 @@ func (e *Engine) rpcRevokeDevice(s *sess, id string, params json.RawMessage) {
 	})
 	if err != nil {
 		if errors.Is(err, errRevoked) {
+			// Already revoked is the outcome the caller asked for; still drop
+			// any live session the device holds.
+			e.closeDeviceSessions(p.DeviceID, "revoked")
 			_ = e.reply(s, id, map[string]any{"ok": true, "operation_id": operationID, "outcome": receipt.Outcome})
 			return
 		}
-		e.replyErr(s, id, "internal", "persistent device update failed")
+		e.replyRuntimeErr(s, id, err, "internal")
 		return
 	}
 	defer e.closeDeviceSessions(p.DeviceID, "revoked")

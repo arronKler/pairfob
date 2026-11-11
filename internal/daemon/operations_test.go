@@ -9,6 +9,22 @@ import (
 	"pairfob/internal/state"
 )
 
+func TestOperationLedgerPrunesExpiredPendingRows(t *testing.T) {
+	old := time.Now().Add(-operationRetention - time.Hour).Unix()
+	fresh := time.Now().Unix()
+	engine := &Engine{operations: map[string]*operationRecord{
+		"dev\x00op_old": {createdAt: old},
+		"dev\x00op_new": {createdAt: fresh},
+	}}
+	engine.pruneExpiredOperationsLocked(time.Now())
+	if _, ok := engine.operations["dev\x00op_old"]; ok {
+		t.Fatal("expired pending row survived pruning")
+	}
+	if _, ok := engine.operations["dev\x00op_new"]; !ok {
+		t.Fatal("fresh pending row was pruned")
+	}
+}
+
 func TestOperationLedgerSurvivesRestartAndBindsSessionAndIntent(t *testing.T) {
 	store, err := state.Open(t.TempDir())
 	if err != nil {

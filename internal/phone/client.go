@@ -80,6 +80,7 @@ func (c *Client) Pair(pairRef, code, daemonID string) error {
 		return errors.New("daemon_id mismatch")
 	}
 	pairRef, daemonID = attached.PairRef, attached.DaemonID
+	c.DaemonID = attached.DaemonID
 	c.routeID = f.RouteID
 	norm := canon.NormalizeCrockford(code)
 	rec := spake2plus.DeriveRecord(norm, daemonID, pairRef)

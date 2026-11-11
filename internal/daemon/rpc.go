@@ -200,7 +200,7 @@ func runtimeSession(session *string) runtime.SessionRef {
 	return runtime.NamedSession(*session)
 }
 
-func mutationOperationID(explicit, _ string, _ bool) (string, bool) {
+func mutationOperationID(explicit string) (string, bool) {
 	return explicit, operationName.MatchString(explicit)
 }
 
@@ -216,8 +216,8 @@ func (e *Engine) snapshot(session *string) (runtime.Snapshot, error) {
 	return snapshot.Snapshot, nil
 }
 
-func (e *Engine) executeRPC(s *sess, requestID string, session *string, explicitOperationID string, requireOperationID bool, command runtime.Command, notFoundCode string) (runtime.Receipt, string, bool) {
-	operationID, ok := mutationOperationID(explicitOperationID, requestID, requireOperationID)
+func (e *Engine) executeRPC(s *sess, requestID string, session *string, explicitOperationID string, command runtime.Command, notFoundCode string) (runtime.Receipt, string, bool) {
+	operationID, ok := mutationOperationID(explicitOperationID)
 	if !ok {
 		e.replyErr(s, requestID, "invalid_argument", "invalid operation_id")
 		return runtime.Receipt{}, "", false

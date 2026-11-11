@@ -88,7 +88,7 @@ func (r *Reader) parseKimiSession(data []byte, ref Ref, path, base string) ([]st
 		return nil
 	})
 	title := Title{Name: titleText(state.CustomTitle, 256), Prompt: firstStorePrompt(records)}
-	if current {
+	if current && title.Name == "" {
 		title.Name = titleText(state.Title, 256)
 	}
 	return records, title, err

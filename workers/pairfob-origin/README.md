@@ -15,13 +15,13 @@ bun test src
 bun test e2e
 ```
 
-`src/` is the merge gate for unit logic (CAS enroll, ticket consume, PING zero-storage, caps, crockford, envelope).
+`src/` is the merge gate for unit logic (CAS enroll, ticket consume, PING/PONG, caps, crockford, envelope).
 
 `e2e/` (default `bun test e2e`) is the **S8.5 merge gate**: an in-process room harness (fake sockets + memory SQL + fake D1) covering pair-intent miss/hit/`issueTicket` mismatch (same 404), dual Upgrade on one ticket, QR without ticket, ResumeHello LRU, and the 11th Established.
 
-`bun run e2e:wrangler` runs workerd tests (`e2e/wrangler/`): HTTP plus enroll → HELLO → PAIR_OPEN loc → ticket consume. Config is `wrangler.e2e.jsonc` (`compatibility_date` ≤ 2026-08-22 for workerd). Local/prod `wrangler.jsonc` uses the same date. Miniflare is **not** a hibernation proof — PING zero-storage is asserted with a storage spy in `src/room/ping.test.ts`.
+`bun run e2e:wrangler` runs workerd tests (`e2e/wrangler/`): HTTP plus enroll → HELLO → PAIR_OPEN loc → ticket consume. Config is `wrangler.e2e.jsonc` (`compatibility_date` ≤ 2026-08-22 for workerd), the same date as production `wrangler.jsonc`; `wrangler.local.jsonc` uses 2026-08-26. Miniflare is **not** a hibernation proof — the reply path is asserted in `src/room/ping.test.ts`. An established phone's PING and FWD also offer the throttled conversion checkpoint covered in `src/room/activity-events.test.ts`.
 
-`wrangler.jsonc` `assets.directory` is `./public-dist` (marketing site at `/`, PWA at `/pair`, installer at `/install.sh`). `run_worker_first` is true so `withSecurity` headers (CSP, frame-ancestors, `X-Pairfob-Build`) apply to those files, not only to `/v2` JSON. Pack after a PWA build: `../../scripts/pack-origin-assets.sh`. Desktop binaries from `../../scripts/release.sh` are included at `/dl/` only when packing with `PAIRFOB_PACK_DL=1`.
+`wrangler.jsonc` `assets.directory` is `./public-dist` (marketing site at `/`, PWA at `/pair`, installer at `/install.sh`). `run_worker_first` is true so `withSecurity` headers (CSP, frame-ancestors, `X-Pairfob-Build`) apply to those files, not only to `/v2` JSON. Pack after a PWA build: `../../scripts/pack-origin-assets.sh`. The verified daemon release (`dist/daemon`, or a legacy `dist/dl`) is included at `/dl/` only when packing with `PAIRFOB_PACK_DL=1`.
 
 ## Config
 
@@ -32,7 +32,7 @@ OPERATOR_TOKEN=dev-operator
 IP_HASH_PEPPER=dev-pepper-not-for-prod
 ```
 
-`wrangler.jsonc` `compatibility_date` is `2026-08-26`. Durable Object classes: `DaemonRoom`, `PairingIndex` (SQLite). Apply all ordered D1 migrations in `migrations/`; `0005_grant_enroll_rate.sql` makes the per-grant enroll window authoritative in D1, and `0006_self_serve_grants.sql` adds the per-IP open-enroll ledger.
+`wrangler.jsonc` `compatibility_date` is `2026-08-22`. Durable Object classes: `DaemonRoom`, `PairingIndex` (SQLite). Apply all ordered D1 migrations in `migrations/`; `0005_grant_enroll_rate.sql` makes the per-grant enroll window authoritative in D1, and `0006_self_serve_grants.sql` adds the per-IP open-enroll ledger.
 
 `P2P_OPEN=1` advertises the WebRTC direct-upgrade feature in `/api/config`.
 Set it to `0` to stop new or reloaded PWA sessions from attempting the upgrade;
