@@ -79,12 +79,12 @@ describe("object menu sheet", () => {
 
   test("items keep the projected order and danger styling", () => {
     act(() => openObjectMenu(model([
-      { kind: "markRead", label: t("menu.markRead") },
       { kind: "pin", label: t("menu.pin") },
+      { kind: "renamePane", label: t("menu.renamePane") },
       { kind: "closePane", label: t("op.closePane"), danger: true },
     ]), agent, run));
     const items = [...document.querySelectorAll<HTMLButtonElement>(".sheet-body .menu-item")];
-    expect(items.map((node) => node.textContent)).toEqual([t("menu.markRead"), t("menu.pin"), t("op.closePane")]);
+    expect(items.map((node) => node.textContent)).toEqual([t("menu.pin"), t("menu.renamePane"), t("op.closePane")]);
     expect(items.map((node) => node.classList.contains("menu-danger"))).toEqual([false, false, true]);
   });
 

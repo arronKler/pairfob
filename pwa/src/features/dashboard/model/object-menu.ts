@@ -21,6 +21,7 @@ export type ObjectMenuKind =
   | "pin"
   | "newTabBeside"
   | "openBoard"
+  | "renamePane"
   | "closePane"
   | "renameTab"
   | "closeTab"
@@ -64,8 +65,6 @@ export function objectMenuSections(model: ObjectMenuModel): ObjectMenuSection[] 
 /**
  * The card menu. A workspace-grouped list moves the parent management to the
  * heading, and a tab is only renamable/closable when it is named or split.
- * Renaming the session itself is the session's own menu (its operation sheet),
- * not a row here: it is not something the list acts on.
  */
 export function paneMenuModel(input: {
   agent: AgentCard;
@@ -81,6 +80,7 @@ export function paneMenuModel(input: {
     // agent pane is ever "done" (a plain terminal reads as idle).
     ...(agent.status === "done" ? [{ kind: "markRead" as const, label: t("menu.markRead"), scope: "pane" as const }] : []),
     { kind: "pin", label: t(input.pinned ? "menu.unpin" : "menu.pin"), scope: "pane" },
+    { kind: "renamePane", label: t("menu.renamePane"), scope: "pane" },
     { kind: "closePane", label: t("op.closePane"), scope: "pane", danger: true },
   ];
   if (agent.workspaceId) items.push({ kind: "openBoard", label: t("menu.board"), scope: "tab" });

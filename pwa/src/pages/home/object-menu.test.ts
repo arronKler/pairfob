@@ -95,7 +95,7 @@ test("object actions keep full facts above the list and pin the card rather than
   const body = document.querySelector(".sheet-body")!;
   expect(body.firstElementChild?.className).toBe("sheet-facts");
   expect(body.querySelector(".sheet-fact-path")?.textContent).toContain("/two/project");
-  expect(labels()).not.toContain(t("menu.renamePane"));
+  expect(labels()).toContain(t("menu.renamePane"));
   expect(labels()).toContain(t("op.closePane"));
   expect(labels()).not.toContain(t("cancel"));
   await act(async () => {
