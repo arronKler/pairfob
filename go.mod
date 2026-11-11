@@ -2,7 +2,7 @@ module pairfob
 
 go 1.25.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
