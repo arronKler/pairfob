@@ -249,6 +249,13 @@ html[data-kb="open"] .chrome-avatar .agent-avatar {
 
 .icon-btn:disabled { opacity: 0.4; }
 
+/* A pointer user sees the button before pressing it: these icons carry no fill
+   at rest, so without a hover only the press told them from the title beside
+   them. The inspector's toolbar answers a hover the same way. */
+@media (hover: hover) and (pointer: fine) {
+  .chrome .icon-btn:hover:not(:disabled) { background: var(--surface); color: var(--ink); }
+}
+
 .back {
   min-height: 44px;
   font-size: 1.6rem;

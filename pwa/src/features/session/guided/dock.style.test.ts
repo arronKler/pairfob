@@ -230,6 +230,14 @@ describe("a line that says what a dock field is for", () => {
     expect(px(rule(compose, ".compose-lines"), "right")).toBe(9);
   });
 
+  test("the live tag rides the field's top edge whole, and the field never clips it", () => {
+    // Half over the edge, half on it. The desktop field is its own box (the
+    // switch sits inside it) and a clip there cut the word in half.
+    expect(px(rule(compose, ".compose-live-tag"), "top")).toBe(-7);
+    expect(rule(compose, ".compose-field.has-mode")).not.toContain("overflow");
+    // Its lower half ends above where the first line starts, so it covers no text.
+    expect(px(rule(compose, ".compose-field.has-mode > textarea"), "padding")).toBe(10);
+  });
 });
 
 describe("the keyboard's ring on the pad's small controls", () => {

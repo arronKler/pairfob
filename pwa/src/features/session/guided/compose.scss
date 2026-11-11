@@ -406,11 +406,12 @@
   color: var(--ink);
 }
 
-/* The field becomes the box; the textarea and the switch sit inside its edge. */
+/* The field becomes the box; the textarea and the switch sit inside its edge.
+   No overflow clip: the live tag rides the field's top edge and would lose its
+   upper half here, unlike the phone's field (the tag's own `top: -7px`). */
 .compose-field.has-mode {
   align-items: stretch;
   height: 46px;
-  overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: 13px;
   background: var(--sink);
