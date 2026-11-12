@@ -58,6 +58,7 @@ import { clearBoardPreviews } from "../board/preview/store";
 import { liveView, liveViewIsCurrent } from "./generations";
 import { hasRetainedView } from "./retained-view";
 import { openPaneWithOwner as openOwnedPane, type PaneNavigation } from "./open-pane";
+import { bindSessionSwitch } from "../session/guided/session-ruler-action";
 import { observeP2PAttempt, observeSessionEvent } from "./session-events";
 import { refreshSnapshot as observeSnapshot, refreshSnapshotInBackground } from "./snapshot";
 import type { LifecyclePorts } from "./ports";
@@ -370,14 +371,20 @@ export type { PaneNavigation };
 /**
  * Open a pane. `source` is the list card or "needs you" ticket that was tapped:
  * only then does the card grow into the pane; every other entry (a new session,
- * the board, a notification) keeps its ordinary transition.
+ * the board, a notification) keeps its ordinary transition. `inPlace` is the
+ * session ruler's switch: the destination replaces the open session in its
+ * column on every surface.
  */
-export async function openPane(paneId: string, source?: HTMLElement | null): Promise<void> {
-  await openPaneWithOwner(paneId, source);
+export async function openPane(paneId: string, source?: HTMLElement | null, options?: { inPlace?: boolean }): Promise<void> {
+  await openPaneWithOwner(paneId, source, options);
 }
 
 /** A completed navigation owns further UI only until another route/session/view wins. */
-export async function openPaneWithOwner(paneId: string, source?: HTMLElement | null): Promise<PaneNavigation | null> {
+export async function openPaneWithOwner(
+  paneId: string,
+  source?: HTMLElement | null,
+  options?: { inPlace?: boolean },
+): Promise<PaneNavigation | null> {
   return openOwnedPane(paneId, {
     currentLive: liveSession,
     currentIncarnation: currentViewIncarnation,
@@ -393,6 +400,7 @@ export async function openPaneWithOwner(paneId: string, source?: HTMLElement | n
     // No card grows into a session that takes another's place: that move names no pane.
     nextTransition: (kind, id) => nextTransition(kind as TransitionKind, kind === "session" ? null : id),
     transitionFor: (from) => transitionToPane(from as TransitionScreen),
+    inPlace: options?.inPlace === true,
     currentScreen,
     isFullTerminal,
     findAgent: (id) => dashboardStore.get().agents.find((item) => item.paneId === id),
@@ -400,6 +408,11 @@ export async function openPaneWithOwner(paneId: string, source?: HTMLElement | n
     refreshPane,
   });
 }
+
+// The session ruler reaches the switch through this seam: a static import back
+// into this controller would be a cycle, since the complete terminal's chrome
+// imports the ruler.
+bindSessionSwitch((paneId) => openPane(paneId, null, { inPlace: true }));
 
 function abandonOpenPane(message: string): void {
   parkComposeView();

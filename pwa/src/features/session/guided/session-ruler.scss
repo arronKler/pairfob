@@ -1,0 +1,232 @@
+/* --- Session ruler: the herd list as ticks on the header's bottom border ------ */
+
+/*
+  The title column keeps its clipping on the copy, so the ruler can reach the
+  header's border without the identity spilling past the column.
+*/
+.chrome-title {
+  position: relative;
+  overflow: visible;
+}
+
+.chrome-copy { overflow: hidden; }
+
+/*
+  Nine pixels on the border, clear of the back button and the actions. It takes
+  no row from the title and never moves the content box.
+*/
+.session-ruler {
+  position: absolute;
+  right: 0;
+  bottom: -4px;
+  left: 0;
+  z-index: 2;
+  height: 9px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color var(--dur-1) var(--ease);
+}
+
+.session-ruler:focus-visible {
+  outline: none;
+  background: var(--accent-10);
+}
+
+.session-ruler:focus-visible .session-ruler-count { color: var(--ink); }
+
+/* The folded keyboard header keeps the band inside its 44px line. */
+html[data-kb="open"] .session-ruler { bottom: 0; }
+
+.session-ruler-ticks {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.session-ruler-tick {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line-strong);
+  transition: height var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease);
+}
+
+.session-ruler-tick.is-blocked { background: var(--warn); }
+
+/* While a target is previewed it is the only amber tick. */
+.session-ruler.has-target .session-ruler-tick.is-blocked:not(.is-target) { background: var(--line-strong); }
+
+.session-ruler-tick.is-current {
+  height: 3px;
+  background: var(--accent);
+}
+
+.session-ruler-tick.is-target {
+  height: 3px;
+  background: var(--warn);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .session-ruler:hover .session-ruler-tick:not(.is-current):not(.is-blocked):not(.is-target) {
+    background: var(--ink-thumb);
+  }
+}
+
+.session-ruler-count {
+  flex: none;
+  font: 500 9px/1 var(--mono);
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: color var(--dur-1) var(--ease);
+}
+
+/* The meta row ends before the count, so the two never run into each other. */
+.chrome-title:has(> .session-ruler) .chrome-meta { padding-right: 42px; }
+
+/* --- Target preview ----------------------------------------------------------- */
+
+.session-ruler-peek {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  pointer-events: none;
+  transition: opacity var(--dur-1) var(--ease);
+  animation: session-ruler-peek-in var(--dur-2) var(--ease);
+}
+
+@keyframes session-ruler-peek-in {
+  from { opacity: 0; transform: translateY(-4px); }
+}
+
+.session-ruler-peek-top {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.session-ruler-peek-position {
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-ruler-peek-id {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.session-ruler-peek .agent-avatar-status { border-color: var(--surface-2); }
+
+.session-ruler-peek-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.session-ruler-peek-title {
+  font-size: var(--text-subhead);
+  line-height: 1.2;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-ruler-peek-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--text-caption);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.session-ruler-peek-status {
+  flex: none;
+  font-weight: 650;
+}
+
+.session-ruler-peek-status.is-blocked { color: var(--warn); }
+.session-ruler-peek-status.is-working { color: var(--accent); }
+.session-ruler-peek-status.is-done { color: var(--ok); }
+
+.session-ruler-peek-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-ruler-peek-status + .session-ruler-peek-line::before {
+  content: "·";
+  margin-right: 6px;
+  color: var(--muted);
+}
+
+.session-ruler-peek-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+
+.session-ruler-peek-group {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 620;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.session-ruler-peek-pos {
+  flex: none;
+  font: 500 10px/1 var(--mono);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-ruler,
+  .session-ruler-tick,
+  .session-ruler-count { transition: none; }
+
+  .session-ruler-peek {
+    animation: none;
+    transition: none;
+  }
+}

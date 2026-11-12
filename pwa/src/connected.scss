@@ -1,6 +1,7 @@
 /* Loaded before the first connected composition. Shared overrides retain their original order. */
 @use "./features/agent-quota/styles/quota";
 @use "./features/session/guided/session-shell";
+@use "./features/session/guided/session-ruler";
 @use "./features/session/guided/terminal";
 @use "./shared/ui/styles/cell-text";
 @use "./features/session/guided/key-flight";

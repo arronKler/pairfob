@@ -1,11 +1,13 @@
 import { happy, resetBoardTestDOM } from "../../../test-support/dom";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { isDesk } from "../../app/viewport";
-import { replaceAgentsFromSnapshot, resetDashboard } from "../../features/dashboard/catalog-store";
+import { liveAgents, replaceAgentsFromSnapshot, resetDashboard } from "../../features/dashboard/catalog-store";
 import { buildHerdViewModel } from "../../features/dashboard/model/herd-view";
-import { paneActivated, rememberPane, resetHerdPresentationChoices, setListGroup } from "../../features/settings/preferences-store";
+import { heldShownListOrder } from "../../features/dashboard/list-order";
+import { groupAgents } from "../../lib/ranking";
+import { listGroup, paneActivated, panePinned, rememberPane, resetHerdPresentationChoices, setListGroup } from "../../features/settings/preferences-store";
 import { setLang } from "../../lib/i18n";
-import { readHerdAttention, readHerdInput, resetHerdListOrder } from "./herd-bridge";
+import { consumeHerdAttention, readHerdAttention, readHerdInput, resetHerdListOrder } from "./herd-bridge";
 
 function seed(ids: string[]): void {
   replaceAgentsFromSnapshot({
@@ -99,5 +101,19 @@ describe("list order while the list stays on screen", () => {
     expect(rows()).toEqual(["p3", "p1", "p2"]);
     open("p2");
     expect(rows()).toEqual(["p2", "p3", "p1"]);
+  });
+
+  test("the ruler keeps the order the phone list showed before the tap", () => {
+    size(390, 844);
+    expect(rows()).toEqual(["p1", "p2", "p3"]);
+    consumeHerdAttention();
+    open("p3");
+    // The list, built again, leads with the pane that was just opened.
+    expect(rows()).toEqual(["p3", "p1", "p2"]);
+    const ids = liveAgents().map((agent) => agent.paneId);
+    const held = heldShownListOrder(paneActivated(), ids);
+    const order = groupAgents([...liveAgents()], listGroup(), held, panePinned())
+      .flatMap((group) => group.items.map((card) => card.paneId));
+    expect(order).toEqual(["p1", "p2", "p3"]);
   });
 });

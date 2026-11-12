@@ -14,6 +14,7 @@ import { AgentAvatar, BackButton, Button, Swap } from "../../../shared/ui/primit
 import { useDomain } from "../../../shared/react/use-domain";
 import { isDesk, isRoomy } from "../../../app/viewport";
 import { inspectorStore } from "../../workspace/inspector-store";
+import { SessionRuler } from "./session-ruler";
 
 /**
  * Whether the agent statuses on screen can no longer be confirmed. Subscribes to
@@ -87,11 +88,13 @@ function SessionBack({ onBack, waiting }: { onBack: () => void; waiting: number 
 /**
  * The one session header for guided, agent chat and complete terminal.
  *
- * Display-only: the identity is the list card's own projection (same title,
- * status word and fact line, see `paneIdentity`), plus the workspace the list
- * would have shown as a group heading. It is not a button — switching sessions
- * happens on the list, reached through back or the edge swipe. The avatar and
- * title carry the classes the shared list ↔ pane transition names.
+ * The title, status word and line are the list card's own projection (same
+ * title, status and fact line, see `paneIdentity`), plus the workspace the list
+ * would have shown as a group heading. They are display-only; the header's one
+ * switch control is the ruler on its bottom border (`SessionRuler`), which names
+ * every row of the herd list and moves between them in place. The list itself
+ * is still reached through back or the edge swipe. The avatar and title carry
+ * the classes the shared list ↔ pane transition names.
  *
  * A status that changes while the header is on screen is marked as the list
  * card marks it: the word fades in (`Swap`), the avatar's dot crosses to its
@@ -140,6 +143,7 @@ export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, c
           {line ? <span className="chrome-meta-text">{line}</span> : null}
         </span> : null}
       </span>
+      {agent ? <SessionRuler paneId={agent.paneId} agents={agents} listGroup={listGroup} stale={stale} /> : null}
     </div>
     <SessionActions onWorkspace={handlers.onWorkspace} onMenu={handlers.onMenu} reading={reading} />
   </header>;

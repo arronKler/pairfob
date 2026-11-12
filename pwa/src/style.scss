@@ -13,6 +13,7 @@
 @use "./app/layout/styles/tab-bar";
 @use "./features/pairing/styles/connect";
 @use "./features/session/guided/session-shell";
+@use "./features/session/guided/session-ruler";
 @use "./features/session/guided/terminal";
 @use "./shared/ui/styles/cell-text";
 @use "./features/session/guided/key-flight";

@@ -61,6 +61,11 @@ export type OpenPanePorts = {
   queuedKind(): string;
   nextTransition(kind: string, paneId: string): void;
   transitionFor(from: string, to: string): string;
+  /**
+   * The destination takes the open session's place in its column on every
+   * surface, instead of the transition the route would otherwise pick.
+   */
+  inPlace?: boolean;
   currentScreen(): string;
   isFullTerminal(): boolean;
   findAgent(paneId: string): { paneId: string } | undefined;
@@ -159,7 +164,9 @@ export async function openPaneWithOwner(paneId: string, ports: OpenPanePorts): P
     setComposeLive(paneComposeLive(paneId));
     ports.restoreAgentTrace(paneId);
     ports.restorePaneBuffer(paneId);
-    if (ports.queuedKind() === "none") ports.nextTransition(ports.transitionFor(ports.currentScreen(), "pane"), paneId);
+    if (ports.queuedKind() === "none") {
+      ports.nextTransition(ports.inPlace ? "session" : ports.transitionFor(ports.currentScreen(), "pane"), paneId);
+    }
     setScreen("pane");
     const resolved = ports.resolvedTermMode(paneTermMode(paneId));
     const agent = ports.findAgent(paneId);

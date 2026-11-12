@@ -44,6 +44,7 @@ import type { DashboardAgentCard } from "../../lib/dashboard";
 import type { HerdPaint, StatusMark } from "../../lib/herd-attention";
 import { openHerdPaint } from "../../lib/herd-attention";
 import { groupAgents, holdActivation, syncGroupCollapsed, toggleCollapsedForIds, type ActivationHold, type TouchedAt } from "../../lib/ranking";
+import { herdListScope, rememberShownListOrder, resetShownListOrder } from "../../features/dashboard/list-order";
 import { isDesk } from "../../app/viewport";
 import { connectionPhaseOf } from "../../lib/connection-phase";
 import { haptic } from "../../shared/ui/dom/feedback";
@@ -173,7 +174,7 @@ function listActivation(live: TouchedAt, agents: readonly DashboardAgentCard[], 
     orderHold = null;
     return live;
   }
-  const scope = `${computersStore.get().credential?.daemonId ?? ""}\u0000${runtimeStore.get().herdHost}\u0000${listGroup()}`;
+  const scope = herdListScope();
   orderHold = holdActivation(orderHold, scope, live, agents.map((agent) => agent.paneId));
   return orderHold.stamps;
 }
@@ -181,6 +182,7 @@ function listActivation(live: TouchedAt, agents: readonly DashboardAgentCard[], 
 /** Forget the held list order (tests, and a list that must be built afresh). */
 export function resetHerdListOrder(): void {
   orderHold = null;
+  resetShownListOrder();
 }
 
 /**
@@ -390,9 +392,12 @@ export function consumeHerdAttention(): void {
   const group = listGroup();
   const consumed = openHerdPaint([...agents], group);
   const rebuilt = openRoster(agents, group, herdScope());
+  const activation = listActivation(paneActivated(), agents, dashboardStore.get().snapshotLoaded);
+  // The list the reader is looking at, for controls that outlive this paint.
+  rememberShownListOrder(activation, agents.map((agent) => agent.paneId));
   if (consumed.completed.length && document.visibilityState === "visible") haptic(COMPLETION_HAPTIC_MS);
   if (group !== "flat") {
-    const groups = groupAgents([...agents], group, listActivation(paneActivated(), agents, dashboardStore.get().snapshotLoaded), panePinned());
+    const groups = groupAgents([...agents], group, activation, panePinned());
     const collapsed = listGroupCollapsed();
     const synced = syncGroupCollapsed(groups, collapsed);
     if (!sameCollapsed(synced, collapsed)) setListGroupCollapsed(synced);
