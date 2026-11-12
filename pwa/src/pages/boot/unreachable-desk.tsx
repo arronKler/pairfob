@@ -1,4 +1,5 @@
 import { t } from "../../lib/i18n";
+import { relayHost } from "../../lib/runtime-config";
 import { createHerdActions } from "../../features/dashboard/actions";
 import { RailFoot, RailHead, RailSearch } from "../../features/dashboard/components/rail-chrome";
 import { herdActionPorts, unreachableHerdView } from "../home/herd-bridge";
@@ -32,7 +33,7 @@ export function UnreachableDesk({ retrying = false }: { retrying?: boolean }) {
         <RailFoot view={view} actions={actions} disabled />
       </aside>
       <section className="main main-unreachable">
-        <h2 className="unreachable-title">{t("unreach.deskTitle", { target: relay ? "pairfob.com" : name })}</h2>
+        <h2 className="unreachable-title">{t("unreach.deskTitle", { target: relay ? relayHost() : name })}</h2>
         <UnreachableBody retrying={retrying} />
       </section>
     </>

@@ -17,6 +17,8 @@ import { pointerFine } from "../../app/input-mode";
 import { isRoomy, ROOMY_QUERY } from "../../app/viewport";
 import { appRoot } from "../../app/dom-root";
 import { langRevision, subscribeLang, t } from "../../lib/i18n";
+import { relayOrigin } from "../../lib/runtime-config";
+import { installCommandFor } from "../../lib/install-command";
 import { showHelp } from "../../shared/ui/overlay";
 import { markAppPerformance } from "../../lib/performance-marks";
 
@@ -90,13 +92,16 @@ function usePairingPageOwner(): void {
   }, []);
 }
 
-const INSTALL_COMMAND = "curl -fsSL https://pairfob.com/install.sh | sh";
+/** The installer lives on the relay that serves this app. */
+function installCommand(): string {
+  return installCommandFor(relayOrigin());
+}
 
 /** "Not installed yet?": the install command and the Herdr plugin route. */
 function showPairfobInstall(): void {
   showHelp(t("connect.installTitle"), [
     t("connect.installReq"),
-    { before: t("connect.installRunBefore"), code: INSTALL_COMMAND, after: t("connect.installRunAfter") },
+    { before: t("connect.installRunBefore"), code: installCommand(), after: t("connect.installRunAfter") },
     t("connect.installPlugin"),
   ]);
 }

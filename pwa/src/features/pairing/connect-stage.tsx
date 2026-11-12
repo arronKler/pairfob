@@ -6,6 +6,7 @@ import { PairCodeField } from "./code-field";
 import { pastedPairCode, type ConnectViewModel } from "./model";
 import { PairCommand } from "./pair-command";
 import { keepPhrases } from "./phrases";
+import { relayHost } from "../../lib/runtime-config";
 
 /**
  * What the connect layouts show for the current stage: the title and lede, the
@@ -74,7 +75,7 @@ export function ScanActions({ view, onCancel, onScan, onOpenCode }: {
 
 /** The typed layouts' aside for the reader who wanted the phone. */
 export function PhoneNote() {
-  return <p className="connect-phone-note">{keepPhrases(t("connect.phoneNote"))}</p>;
+  return <p className="connect-phone-note">{keepPhrases(t("connect.phoneNote", { relay: relayHost() }))}</p>;
 }
 
 /**

@@ -63,6 +63,12 @@ function scrub(root: ParentNode, files: boolean): void {
     if (tag === "IMG") {
       const src = el.getAttribute("src") || "";
       if (!/^https?:/i.test(src.trim())) el.removeAttribute("src");
+      else {
+        // A reply can carry several screenshots; only the ones near the reader
+        // should compete with the transcript for the network and the decoder.
+        el.setAttribute("loading", "lazy");
+        el.setAttribute("decoding", "async");
+      }
     }
     if (tag === "INPUT") {
       if (el.getAttribute("type") !== "checkbox") el.remove();

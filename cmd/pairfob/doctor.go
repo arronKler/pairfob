@@ -353,8 +353,17 @@ func writeLiveSnapshot(w io.Writer, sock string) error {
 	} else {
 		fmt.Fprintf(w, "  %s    local terminal\n", herdrTerminalCommand())
 	}
-	fmt.Fprintln(w, "  Browser: https://pairfob.com/pair (this computer, a phone or a tablet)")
+	fmt.Fprintf(w, "  Browser: https://%s/pair (this computer, a phone or a tablet)\n", relayHost(h.Origin))
 	return nil
+}
+
+// relayHost is the relay host readers should open: the enrolled origin, or the
+// official one when this computer has not enrolled yet.
+func relayHost(origin string) string {
+	if host := originHost(origin); host != "" {
+		return host
+	}
+	return originHost(defaultHostedOrigin)
 }
 
 func coreTerminalCommand(command string) string {

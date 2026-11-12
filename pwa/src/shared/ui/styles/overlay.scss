@@ -8,6 +8,17 @@
 
 /* --- Modal / action sheet ------------------------------------------------------------------ */
 
+/* A modal makes the page inert, but not unscrollable: a gesture over the
+   backdrop, or past the end of the dialog's own scroller, would still move the
+   page underneath. Contain both; the backdrop must be a scroll container for
+   overscroll-behavior to apply, so it gets overflow: hidden. */
+dialog:modal { overscroll-behavior: contain; }
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
 dialog.modal {
   width: min(23rem, calc(100vw - 32px));
   max-height: min(40rem, calc(100dvh - 24px));

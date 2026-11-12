@@ -18,8 +18,10 @@ pairfob --loopback--> HarnessRuntime
 The relay / DO is frame-level only and does not parse `FWD`. Identity and keys
 live only on the daemon. Reads and writes require an `Established` session. The
 product relay is `workers/pairfob-origin` (`pairfob.v2`). `https://pairfob.com`
-is this project's official instance. User docs do not offer a self-hosted origin. The
-`internal/mux` Hub is an in-process test stand-in, not a deployable origin.
+is this project's official instance. The public site's user docs describe only
+that instance; operators can deploy their own relay with
+`scripts/selfhost-relay.ts` (see `docs/selfhost.md`). The `internal/mux` Hub is
+an in-process test stand-in, not a deployable origin.
 
 ## File size (hard limit)
 
@@ -96,6 +98,7 @@ from the original module so imports do not churn.
 | `scripts/verify-web.sh` `scripts/verify-android.sh` | the web-only and Android-release halves of the gate, run through `scripts/verify.sh --pwa-only` / `--android-only` after its scope check |
 | `scripts/pwa-release-scope.ts` `scripts/android-release-scope.ts` | refuse a scoped release whose changes left that scope |
 | `scripts/install.sh` | one-line install of pairfob (checksum, enroll, user-level service) |
+| `scripts/selfhost-relay.ts` `scripts/selfhost-config.ts` `scripts/selfhost-pack.ts` | one-command relay deploy to an operator's own Cloudflare account; see `docs/selfhost.md` |
 | `scripts/release.sh` | cross-compile SemVer `dist/daemon/pairfob-{os}-{arch}` + SHA256SUMS (`git tag vX.Y.Z`) |
 | `scripts/publish-daemon.sh` | publish verified daemon artifacts through the download Worker while preserving the live Android channel |
 | `scripts/release-desktop.sh` | build SemVer `dist/desktop/pairfob-desktop-{os}-{arch}` for the host or named Rust targets |

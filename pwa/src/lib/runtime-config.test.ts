@@ -2,9 +2,22 @@ import { describe, expect, test } from "bun:test";
 import {
   normalizeRelayOrigin,
   parseRuntimeConfig,
+  relayHostFor,
   relayURLFor,
   webSocketURLFor,
 } from "./runtime-config.ts";
+
+describe("relayHostFor", () => {
+  test("names the relay the app is served from", () => {
+    expect(relayHostFor("https://pairfob.com")).toBe("pairfob.com");
+    expect(relayHostFor("https://relay.example.com")).toBe("relay.example.com");
+    expect(relayHostFor("http://127.0.0.1:18786")).toBe("127.0.0.1");
+  });
+
+  test("falls back to the official host for an unreadable origin", () => {
+    expect(relayHostFor("not an origin")).toBe("pairfob.com");
+  });
+});
 
 describe("runtime config", () => {
   test("web mode keeps the page origin and ignores a native relay override", () => {

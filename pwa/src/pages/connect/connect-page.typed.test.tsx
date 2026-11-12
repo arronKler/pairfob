@@ -108,7 +108,7 @@ describe("a mouse in a narrow window: one column, the code typed on the page", (
     expect(app.querySelectorAll(".btn-primary")).toHaveLength(1);
     expect(app.querySelector(".connect-card .btn-connect")?.textContent).toBe(t("connect.submit"));
     expect(app.querySelector(".connect-card .trust")?.textContent).toBe(t("connect.trust"));
-    expect(app.querySelector(".connect-phone-note")?.textContent).toBe(t("connect.phoneNote"));
+    expect(app.querySelector(".connect-phone-note")?.textContent).toBe(t("connect.phoneNote", { relay: "pairfob.com" }));
     // The steps lead to the card: it comes after them in the page.
     const steps = app.querySelector(".connect-steps")!;
     expect(steps.compareDocumentPosition(field()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

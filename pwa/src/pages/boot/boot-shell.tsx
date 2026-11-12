@@ -11,6 +11,7 @@ import { Button, Fold, StatusDot } from "../../shared/ui/primitives";
 import { usePresence } from "../../shared/react/use-presence";
 import { MOTION_MS } from "../../shared/ui/dom/motion";
 import type { PairResult } from "../../lib/protocol/client";
+import { relayHost } from "../../lib/runtime-config";
 import { ConnectionPathCard } from "./connection-path-card";
 import { UnreachableShell } from "./unreachable-shell";
 import { useBootBlocked, useConnectionPhase, useRetryingUnreachable } from "../../features/connection/hooks";
@@ -44,9 +45,10 @@ function BootFrame() {
   const shown = useRef<{ pair: PairResult; name: string; hop: PathHop; seconds: number } | null>(null);
   if (slow && current) shown.current = { pair: current, name, hop: slow.hop, seconds: slow.seconds };
   const card = usePresence(showing, MOTION_MS.panel);
+  const relay = relayHost();
   const line = slow
-    ? t(slow.hop === "relay" ? "slow.lineRelay" : "slow.lineComputer", { n: String(slow.seconds) })
-    : t("boot.connectingLine");
+    ? t(slow.hop === "relay" ? "slow.lineRelay" : "slow.lineComputer", { n: String(slow.seconds), relay })
+    : t("boot.connectingLine", { relay });
   return (
     <div className="page herd-page boot-shell">
       <h1 className="sr-only">{t("tabs.sessions")}</h1>
@@ -102,7 +104,7 @@ function SlowPanel({ pair, name, hop, seconds }: { pair: PairResult; name: strin
       relay={relay ? waiting(t("path.relayWait", { n: String(seconds) })) : node("ok", t("path.relayOk"))}
       link2={relay ? "idle" : "wait"}
       computer={relay ? node("idle", t("path.idle")) : waiting(t("path.waitingSeconds", { n: String(seconds) }))}>
-      <p className="conn-path-note">{relay ? t("slow.noteRelay") : t("slow.noteComputer")}</p>
+      <p className="conn-path-note">{t(relay ? "slow.noteRelay" : "slow.noteComputer", { relay: relayHost() })}</p>
       <div className="conn-path-actions">
         {/* A newer attempt supersedes the one in flight; nothing is replayed. */}
         <Button className="text-link" onClick={() => void resumeComputer(pair)}>{t("slow.reconnect")}</Button>

@@ -79,7 +79,7 @@ describe("the boot frame while connecting", () => {
     setConnectionRecordSource(() => [{ event: "connect_start", at: Date.now() }]);
     const node = render(createElement(BootShell));
     expect(node.querySelector(".host-title-name")?.textContent).toBe("Studio");
-    expect(line(node)).toBe(t("boot.connectingLine"));
+    expect(line(node)).toBe(t("boot.connectingLine", { relay: "pairfob.com" }));
     expect(node.querySelector(".conn-path-card")).toBeNull();
     expect(node.querySelector(".herd-skeleton")).not.toBeNull();
   });
@@ -102,7 +102,7 @@ describe("the boot frame while connecting", () => {
     const started = Date.now() - 9_000;
     setConnectionRecordSource(() => [{ event: "connect_start", at: started }]);
     const node = render(createElement(BootShell));
-    expect(line(node)).toBe(t("slow.lineRelay", { n: "9" }));
+    expect(line(node)).toBe(t("slow.lineRelay", { n: "9", relay: "pairfob.com" }));
   });
 
   test("a retry started from the failure page keeps that page up, spinning", () => {
@@ -177,7 +177,7 @@ describe("the connection path's moves", () => {
     expect(fold.hasAttribute("inert")).toBeTrue();
     await advance(300);
     expect(fold.querySelector(".conn-path-card")).toBeNull();
-    expect(line(node)).toBe(t("boot.connectingLine"));
+    expect(line(node)).toBe(t("boot.connectingLine", { relay: "pairfob.com" }));
   });
 
   test("a frame drawn while already slow shows the card open and still", () => {

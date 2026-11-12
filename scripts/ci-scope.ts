@@ -47,7 +47,17 @@ const RULES: ReadonlyArray<{ matches: Matcher; scopes: readonly Scope[] }> = [
   { matches: under("docs"), scopes: ["docs"] },
   { matches: under("desktop"), scopes: ["desktop"] },
   { matches: exact("scripts/verify-go.sh"), scopes: ["go"] },
-  { matches: exact("scripts/verify-web.sh", "scripts/pack-origin-assets.sh", "scripts/retain-pwa-assets.ts"), scopes: ["web"] },
+  {
+    matches: exact(
+      "scripts/verify-web.sh",
+      "scripts/pack-origin-assets.sh",
+      "scripts/retain-pwa-assets.ts",
+      "scripts/selfhost-relay.ts",
+      "scripts/selfhost-config.ts",
+      "scripts/selfhost-pack.ts",
+    ),
+    scopes: ["web"],
+  },
   { matches: exact("scripts/verify-desktop.sh"), scopes: ["desktop"] },
   { matches: under("scripts"), scopes: NONE },
   { matches: (path) => under("plugin")(path) || path === "herdr-plugin.toml", scopes: NONE },

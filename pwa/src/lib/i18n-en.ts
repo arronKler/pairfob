@@ -265,7 +265,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "boot.assetsUnavailable": "The app could not finish loading.",
   "boot.assetsReloadHelp": "When your connection is restored, refresh the page to finish loading. Your saved computers are safe; there is no need to pair again.",
   "err.appLoad": "The app could not finish loading. When your connection is restored, refresh the page, then enter the pairing code again. Your saved computers are safe.",
-  "boot.originUnavailable": "Can't reach pairfob.com right now.",
+  "boot.originUnavailable": "Can't reach {relay} right now.",
   "boot.originRetryHelp": "Your saved computers are still here; no need to pair again. Retrying automatically; you can also tap Retry. If this continues, close and reopen the browser.",
   "boot.offline": "The browser reports no network connection.",
   "boot.offlineHelp": "Your saved computers are still here; no need to pair again. Retrying automatically; you can also tap Retry. If this device does have a network, close and reopen the browser.",

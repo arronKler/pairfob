@@ -25,7 +25,7 @@ starts at login.
 EOF
 }
 
-ORIGIN=""
+ORIGIN="${PAIRFOB_ORIGIN:-}"
 PREFIX="${PAIRFOB_INSTALL_PREFIX:-}"
 NO_SERVICE=0
 NO_ENROLL=0
@@ -401,8 +401,12 @@ if [ "$SKIP_RUNTIME_CHECK" -eq 1 ] || [ "$NO_SERVICE" -eq 1 ]; then
   exit 0
 fi
 
+pair_url=https://pairfob.com
+if [ -n "$ORIGIN" ]; then
+  pair_url="${ORIGIN%/}"
+fi
 echo "Next: ${pairfob_command} pair"
-echo "On this computer, a phone or a tablet: https://pairfob.com/pair"
+echo "On this computer, a phone or a tablet: ${pair_url}/pair"
 echo "Scan or type the code, then press Enter here."
 if [ "$RUNTIME_KIND" = core ]; then
   hc_display=hc

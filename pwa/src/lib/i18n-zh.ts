@@ -268,7 +268,7 @@ export const zh = {
   "boot.assetsUnavailable": "应用暂时未加载完成。",
   "boot.assetsReloadHelp": "网络恢复后，请刷新页面完成加载。已保存的电脑都还在，无需重新配对。",
   "err.appLoad": "应用暂时未加载完成。网络恢复后，请刷新页面，再输入配对码。已保存的电脑不会丢失。",
-  "boot.originUnavailable": "暂时连不上 pairfob.com。",
+  "boot.originUnavailable": "暂时连不上 {relay}。",
   "boot.originRetryHelp": "已保存的电脑都还在，无需重新配对。正在自动重试，也可以点下方重试。若一直无法恢复，请关闭浏览器后重新打开。",
   "boot.offline": "浏览器显示这台设备当前没有网络。",
   "boot.offlineHelp": "已保存的电脑都还在，无需重新配对。正在自动重试，也可以点下方重试。若这台设备其实有网络，请关闭浏览器后重新打开。",

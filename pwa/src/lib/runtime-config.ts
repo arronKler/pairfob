@@ -104,6 +104,25 @@ export function relayOrigin(): string {
   return runtimeConfig().relayOrigin;
 }
 
+/**
+ * The relay host as the reader sees it. The web build is served by the relay,
+ * so this is the page's own hostname; on the official instance it reads
+ * `pairfob.com`. Copy that names the relay passes this instead of hardcoding
+ * the official host, so a self-hosted relay does not point readers elsewhere.
+ */
+export function relayHost(): string {
+  return relayHostFor(relayOrigin());
+}
+
+/** The host of an origin, or the official host when it cannot be read. */
+export function relayHostFor(origin: string): string {
+  try {
+    return new URL(origin).hostname || "pairfob.com";
+  } catch {
+    return "pairfob.com";
+  }
+}
+
 /** An absolute URL on the given relay origin. `path` should start with `/`. */
 export function relayURLFor(origin: string, path: string): string {
   return new URL(path, normalizeRelayOrigin(origin, { allowInsecureHttp: true })).toString();

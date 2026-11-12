@@ -154,6 +154,10 @@ Set `PAIRFOB_DEV_FAKE_RUNTIME=1` for demo data without Herdr. Real-phone
 testing, verification scope, protocol invariants and releases:
 [`docs/develop.md`](docs/develop.md).
 
+To run your own relay instead of the official instance, deploy the Worker,
+Durable Objects, D1 database and web app to your Cloudflare account with one
+command: [`docs/selfhost.md`](docs/selfhost.md).
+
 ## Contributing
 
 Issues and pull requests are welcome at
