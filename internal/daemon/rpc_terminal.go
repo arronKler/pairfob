@@ -339,40 +339,41 @@ func (e *Engine) sendTerminalFrame(s *sess, slot *terminalSlot, frame runtime.Te
 	if len(frame.Data) > 0 {
 		parts = (len(frame.Data) + terminalFrameChunk - 1) / terminalFrameChunk
 	}
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	if !e.terminalSlotActive(s, slot) {
-		return false, false
-	}
+	// Seal owns its output, so subsequent parts can reuse the plaintext buffer.
+	body := make([]byte, 0, 256+base64.StdEncoding.EncodedLen(min(len(frame.Data), terminalFrameChunk)))
 	for index := 0; index < parts; index++ {
 		start := index * terminalFrameChunk
 		end := start + terminalFrameChunk
 		if end > len(frame.Data) {
 			end = len(frame.Data)
 		}
-		body, err := json.Marshal(map[string]any{
-			"v": 1, "op": "TerminalFrame", "params": map[string]any{
-				"terminal_id": slot.id, "seq": fmt.Sprintf("%d", frame.Sequence),
-				"width": frame.Width, "height": frame.Height, "full": frame.Full,
-				"index": index, "count": parts, "data": base64.StdEncoding.EncodeToString(frame.Data[start:end]),
-			},
-		})
-		if err != nil || len(body) > aead.MaxPlaintext {
-			return false, false
+		body = appendTerminalFrame(body[:0], slot.id, frame, index, parts, frame.Data[start:end])
+		if delivered, failed := e.sendTerminalPart(s, slot, body); !delivered {
+			return false, failed
 		}
-		e.mu.Lock()
-		active := s.sendEpochLive() && s.state == "established" && e.sessions[s.routeID] == s && s.s2c != nil
-		e.mu.Unlock()
-		if !active {
-			return false, false
-		}
-		payload, err := aead.Seal(s.s2c, s.routeID, body)
-		if err != nil {
-			return false, false
-		}
-		if e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload}) != nil {
-			return false, true
-		}
+	}
+	return true, false
+}
+
+// Each part is an independent envelope: interactive replies can run between
+// parts while terminal byte order and the AEAD sequence remain unchanged.
+func (e *Engine) sendTerminalPart(s *sess, slot *terminalSlot, body []byte) (bool, bool) {
+	if len(body) > aead.MaxPlaintext {
+		return false, false
+	}
+	if !e.lockOutput(s, len(body), true) {
+		return false, !s.sendEpochLive()
+	}
+	defer s.unlockSend(true)
+	if !e.terminalSlotActive(s, slot) {
+		return false, false
+	}
+	payload, err := aead.Seal(s.s2c, s.routeID, body)
+	if err != nil {
+		return false, false
+	}
+	if e.sendSessionFrame(s, envelope.Frame{Version: 1, Typ: envelope.TypFWD, RouteID: s.routeID, Payload: payload}) != nil {
+		return false, true
 	}
 	return true, false
 }

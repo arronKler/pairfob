@@ -28,6 +28,9 @@ func (e *Engine) runSessionRPC(s *sess) {
 	if s.readQueue != nil {
 		go e.runSessionQueue(s, s.readQueue)
 	}
+	if s.traceQueue != nil {
+		go e.runSessionQueue(s, s.traceQueue)
+	}
 	e.runSessionQueue(s, s.rpcQueue)
 }
 
@@ -53,9 +56,13 @@ func (e *Engine) runSessionQueue(s *sess, queue <-chan rpcRequest) {
 }
 
 func stopSessionRPC(s *sess) {
-	if s != nil && s.rpcStop != nil {
+	if s == nil {
+		return
+	}
+	if s.rpcStop != nil {
 		s.rpcStopOnce.Do(func() { close(s.rpcStop) })
 	}
+	s.stopWrites()
 }
 
 func (e *Engine) handleSessionBound(f envelope.Frame) {
@@ -83,7 +90,7 @@ func (e *Engine) handleSessionBound(f envelope.Frame) {
 	}
 	created := &sess{
 		routeID: rid, state: "resumehello", link: e.Conn, transport: "relay",
-		rpcQueue: make(chan rpcRequest, sessionRPCQueueSize), readQueue: make(chan rpcRequest, sessionReadQueueSize), pingQueue: make(chan rpcRequest, sessionPingQueueSize), rpcStop: make(chan struct{}),
+		rpcQueue: make(chan rpcRequest, sessionRPCQueueSize), readQueue: make(chan rpcRequest, sessionReadQueueSize), traceQueue: make(chan rpcRequest, sessionTraceQueueSize), pingQueue: make(chan rpcRequest, sessionPingQueueSize), rpcStop: make(chan struct{}),
 	}
 	e.sessions[rid] = created
 	e.mu.Unlock()
@@ -112,20 +119,20 @@ func (e *Engine) handleSessFWD(f envelope.Frame, s *sess) {
 		e.handleHello(f, s)
 		return
 	}
-	s.sendMu.Lock()
-	if s.c2s == nil {
-		s.sendMu.Unlock()
-		e.closeSession(s.routeID, "bad_frame", true)
+	s.recvMu.Lock()
+	if s.c2s == nil || s.routeID != f.RouteID {
+		s.recvMu.Unlock()
+		e.closeSession(f.RouteID, "bad_frame", true)
 		return
 	}
-	pt, err := aead.Open(s.c2s, s.routeID, f.Payload)
-	s.sendMu.Unlock()
+	pt, err := aead.Open(s.c2s, f.RouteID, f.Payload)
+	s.recvMu.Unlock()
 	if err != nil {
-		e.closeSession(s.routeID, "bad_frame", true)
+		e.closeSession(f.RouteID, "bad_frame", true)
 		return
 	}
 	e.mu.Lock()
-	active := s.state == "established" && e.sessions[s.routeID] == s
+	active := s.state == "established" && e.sessions[f.RouteID] == s
 	e.mu.Unlock()
 	if !active {
 		return
@@ -151,6 +158,8 @@ func (e *Engine) handleSessFWD(f envelope.Frame, s *sess) {
 	queue := s.rpcQueue
 	if req.Op == "Ping" && s.pingQueue != nil {
 		queue = s.pingQueue
+	} else if sessionTraceRead(request.op) && s.traceQueue != nil {
+		queue = s.traceQueue
 	} else if sessionRead(request.op) && s.readQueue != nil {
 		queue = s.readQueue
 	}
@@ -396,6 +405,16 @@ func (e *Engine) FinishHello3(s *sess, proofP []byte, ts int64) bool {
 }
 
 func (e *Engine) wipeSession(s *sess) {
+	if s == nil {
+		return
+	}
+	s.recvMu.Lock()
+	defer s.recvMu.Unlock()
+	e.wipeSessionLocked(s)
+}
+
+// Both sendMu and recvMu must be held when retiring or moving directional keys.
+func (e *Engine) wipeSessionLocked(s *sess) {
 	if s == nil {
 		return
 	}

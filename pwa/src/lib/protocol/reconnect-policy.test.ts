@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DAEMON_OFFLINE_MAX_MS, PATH_CHECK_FLOOR_MS, pathCheckDue, HELLO_WINDOW_MS, HelloBudget, RECONNECT_BASE_MS, RECONNECT_MAX_MS, STANDBY_HELLO_LIMIT, reconnectDelay, reconnectMax } from "./reconnect-policy.ts";
+import { DAEMON_OFFLINE_MAX_MS, PATH_CHECK_FLOOR_MS, pathCheckDue, HELLO_WINDOW_MS, HelloBudget, ReconnectBackoff, RECONNECT_BASE_MS, RECONNECT_MAX_MS, STANDBY_HELLO_LIMIT, reconnectDelay, reconnectMax } from "./reconnect-policy.ts";
 
 const sessionSource = await Bun.file(new URL("./session-ws.ts", import.meta.url)).text();
 
@@ -16,10 +16,29 @@ describe("mobile reconnect backoff", () => {
     expect(reconnectDelay(0, () => 10)).toBe(Math.round(RECONNECT_BASE_MS * 1.2));
   });
 
-  test("tries once immediately after an established session drops", () => {
-    const start = sessionSource.indexOf("private onDisconnect(");
-    const body = sessionSource.slice(start, sessionSource.indexOf("private scheduleReconnect(", start));
-    expect(body).toContain("this.scheduleReconnect(true)");
+  test("short successful connections retain exponential backoff; stable connections reset it", () => {
+    const backoff = new ReconnectBackoff();
+    backoff.connected(-1_000);
+    expect(backoff.disconnected(-900)).toBe(true); // Preserve the first immediate recovery.
+    const delays: number[] = [];
+    for (let n = 0; n < 8; n++) {
+      backoff.connected(n * 1_000);
+      expect(backoff.disconnected(n * 1_000 + 100)).toBe(false);
+      delays.push(backoff.nextDelay(undefined, () => 0.5));
+    }
+    expect(delays).toEqual([500, 1000, 2000, 4000, 8000, 15000, 15000, 15000]);
+    backoff.connected(100_000);
+    expect(backoff.disconnected(110_000)).toBe(true);
+    expect(backoff.nextDelay(undefined, () => 0.5)).toBe(500);
+    expect(backoff.disconnected(120_000)).toBe(false);
+  });
+
+  test("a backward clock cannot earn a stable retry", () => {
+    const backoff = new ReconnectBackoff();
+    backoff.connected(1_000);
+    expect(backoff.disconnected(1_100)).toBe(true);
+    backoff.connected(20_000);
+    expect(backoff.disconnected(10_000)).toBe(false);
   });
 
   test("a relay with no daemon attached backs off to a minute instead of every 15 s", () => {
@@ -33,7 +52,7 @@ describe("mobile reconnect backoff", () => {
 
   test("a failed dial's code chooses the ceiling for the next one", () => {
     const body = sessionSource.slice(sessionSource.indexOf("private scheduleReconnect("));
-    expect(body).toContain("reconnectMax(this.lastConnectCode)");
+    expect(body).toContain("this.reconnectBackoff.nextDelay(this.lastConnectCode)");
     expect(body).toContain("this.lastConnectCode = protocolError.code");
   });
 });

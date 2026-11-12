@@ -92,11 +92,17 @@ function emit(env: MetricsEnv | undefined, point: Point): void {
   if (result) inc(`${event}.${result}`, point.n ?? 1);
   else if (dim) inc(`${event}.${dim}`, point.n ?? 1);
   const blobs = [event, result, dim, sanitizeLabel(point.extra), sanitizeLabel(buildOf(env ?? {}))];
-  env?.METRICS?.writeDataPoint({
-    indexes: [sanitizeIndex(point.daemonId)],
-    blobs,
-    doubles: [point.n ?? 1, point.bytes ?? 0, point.ms ?? 0],
-  });
+  try {
+    env?.METRICS?.writeDataPoint({
+      indexes: [sanitizeIndex(point.daemonId)],
+      blobs,
+      doubles: [point.n ?? 1, point.bytes ?? 0, point.ms ?? 0],
+    });
+  } catch {
+    // Observability is best effort: never interrupt forwarding or teardown.
+    // Count locally without recursively calling the failing sink.
+    inc("metrics_write_failed");
+  }
   if (point.log === false || env?.BUILD === "test") return;
   console.log(
     JSON.stringify({

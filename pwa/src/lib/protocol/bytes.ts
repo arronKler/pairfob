@@ -81,25 +81,7 @@ export function b64urlDecode(s: string): Uint8Array {
   return decoded;
 }
 
-export function base64Encode(bytes: Uint8Array): string {
-  let binary = "";
-  const chunk = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(index, Math.min(index + chunk, bytes.length)));
-  }
-  return btoa(binary);
-}
-
-export function base64Decode(value: string): Uint8Array {
-  if (value.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
-    throw new Error("base64");
-  }
-  const binary = atob(value);
-  const out = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index++) out[index] = binary.charCodeAt(index);
-  if (base64Encode(out) !== value) throw new Error("base64 non-canonical");
-  return out;
-}
+export { base64Decode, base64Encode } from "./base64.ts";
 
 export function zeros(n: number): Uint8Array {
   return new Uint8Array(n);

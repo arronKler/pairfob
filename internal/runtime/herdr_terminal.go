@@ -237,8 +237,8 @@ func (t *herdrTerminal) read(stdout io.Reader, first chan<- TerminalEvent, stder
 				emit(TerminalEvent{Closed: &TerminalClosed{Reason: "Herdr terminal frame metadata is invalid"}})
 				return
 			}
-			data, err := base64.StdEncoding.DecodeString(record.Bytes)
-			if err != nil || len(data) > maxHerdrTerminalFrameBytes || base64.StdEncoding.EncodeToString(data) != record.Bytes {
+			data, err := decodeHerdrTerminalData(record.Bytes)
+			if err != nil {
 				emit(TerminalEvent{Closed: &TerminalClosed{Reason: "Herdr terminal frame is invalid or too large", Err: err}})
 				return
 			}
@@ -262,6 +262,22 @@ func (t *herdrTerminal) read(stdout io.Reader, first chan<- TerminalEvent, stder
 	}
 	event := TerminalEvent{Closed: &TerminalClosed{Reason: reason, Err: err}}
 	emit(event)
+}
+
+func decodeHerdrTerminalData(encoded string) ([]byte, error) {
+	// Strict checks discarded padding bits, but still permits CR/LF. Reject
+	// those explicitly to preserve canonical Base64 without a full re-encode.
+	if len(encoded) > base64.StdEncoding.EncodedLen(maxHerdrTerminalFrameBytes) || strings.ContainsAny(encoded, "\r\n") {
+		return nil, errors.New("noncanonical or oversized terminal frame")
+	}
+	data, err := base64.StdEncoding.Strict().DecodeString(encoded)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxHerdrTerminalFrameBytes {
+		return nil, errors.New("oversized terminal frame")
+	}
+	return data, nil
 }
 
 func terminalOpenFault(message string, cause error) error {

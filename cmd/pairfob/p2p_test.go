@@ -186,6 +186,7 @@ func TestWebRTCAcceptorCarriesPairfobFramesBothWays(t *testing.T) {
 func boolPointer(value bool) *bool { return &value }
 
 type p2pTestPair struct {
+	received    <-chan envelope.Frame
 	link        *webRTCConn
 	closed      chan struct{}
 	onCloseHook func()
@@ -207,6 +208,17 @@ func openP2PTestPair(t *testing.T) *p2pTestPair {
 		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal(err)
 	}
+	received := make(chan envelope.Frame, 64)
+	var assembler p2pFrameAssembler
+	channel.OnMessage(func(message webrtc.DataChannelMessage) {
+		wire, err := assembler.Push(message.Data)
+		if err == nil && wire != nil {
+			frame, err := envelope.Decode(wire)
+			if err == nil {
+				received <- frame
+			}
+		}
+	})
 	opened := make(chan struct{})
 	channel.OnOpen(func() { close(opened) })
 	offer, err := caller.CreateOffer(nil)
@@ -225,7 +237,7 @@ func openP2PTestPair(t *testing.T) *p2pTestPair {
 		closeP2PTestWithin(t, "caller", func() { _ = caller.Close() })
 		t.Fatal("caller ICE gathering timed out")
 	}
-	pair := &p2pTestPair{closed: make(chan struct{}, 1)}
+	pair := &p2pTestPair{closed: make(chan struct{}, 1), received: received}
 	ctx, cancel := context.WithTimeout(context.Background(), p2pTransportTestWait)
 	acceptor := &webRTCAcceptor{configuration: webrtc.Configuration{}}
 	answer, link, err := acceptor.Accept(ctx, caller.LocalDescription().SDP, func(mux.Conn, envelope.Frame) {}, func(mux.Conn) {

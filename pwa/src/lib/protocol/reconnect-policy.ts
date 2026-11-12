@@ -67,3 +67,27 @@ export class HelloBudget {
     return this.spent.filter((at) => now - at < HELLO_WINDOW_MS);
   }
 }
+
+/** Successful handshakes alone must not reset a flapping connection's backoff. */
+export class ReconnectBackoff {
+  private attempt = 0;
+  private connectedAt: number | null = null;
+  private firstRecovery = true;
+
+  connected(now = performance.now()): void {
+    this.connectedAt = now;
+  }
+
+  disconnected(now = performance.now()): boolean {
+    const stable = this.connectedAt !== null && now - this.connectedAt >= 10_000;
+    this.connectedAt = null;
+    if (stable) this.attempt = 0;
+    const immediate = stable || this.firstRecovery;
+    this.firstRecovery = false;
+    return immediate;
+  }
+
+  nextDelay(code?: string, random = Math.random): number {
+    return reconnectDelay(this.attempt++, random, reconnectMax(code));
+  }
+}

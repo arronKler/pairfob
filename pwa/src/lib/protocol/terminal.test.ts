@@ -48,6 +48,19 @@ describe("terminal protocol", () => {
     expect(() => assembler.push({ ...base, width: 81, index: 1, data: new Uint8Array([2]) })).toThrow("元数据");
   });
 
+  test("single-part frames retain their buffer without affecting later frames", () => {
+    const assembler = new TerminalFrameAssembler();
+    const base = { terminalId, sequence: "7", width: 80, height: 24, full: true, count: 1, index: 0 };
+    const data = new Uint8Array([27, 91, 50, 74]);
+    const first = assembler.push({ ...base, data });
+    expect(first?.data).toBe(data);
+    const next = new Uint8Array([1, 2, 3]);
+    expect(assembler.push({ ...base, sequence: "8", data: next })?.data).toBe(next);
+    expect(first?.data).toEqual(new Uint8Array([27, 91, 50, 74]));
+    expect(() => assembler.push({ ...base, data: new Uint8Array(4 * 1024 * 1024 + 1) })).toThrow("内存限制");
+    expect(assembler.push({ ...base, data })?.data).toBe(data);
+  });
+
   test("binds command and close acknowledgements to their request", () => {
     const operationId = "op_0123456789abcdef";
     expect(parseTerminalCommandResult({

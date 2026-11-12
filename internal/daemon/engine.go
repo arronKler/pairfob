@@ -76,29 +76,37 @@ type pairingSlot struct {
 }
 
 type sess struct {
-	routeID         [16]byte
-	deviceID        string
-	link            mux.Conn
-	transport       string // relay or p2p
-	upgradeFrom     [16]byte
-	attemptID       string
-	directBusy      bool
-	c2s, s2c        *aead.Direction
-	ephSk, ephPk    [32]byte
-	peerPk          [32]byte
-	nonce           []byte
-	hello1          sessionkeys.Hello1
-	ts              int64
-	state           string // resumehello|hello2|upgrade_ready|established|closed
-	sendMu          sync.Mutex
-	interactiveWait atomic.Int32
-	rpcQueue        chan rpcRequest
-	readQueue       chan rpcRequest
-	pingQueue       chan rpcRequest
-	rpcStop         chan struct{}
-	rpcStopOnce     sync.Once
-	terminalMu      sync.Mutex
-	terminal        *terminalSlot
+	routeID          [16]byte
+	deviceID         string
+	link             mux.Conn
+	transport        string // relay or p2p
+	upgradeFrom      [16]byte
+	attemptID        string
+	directBusy       bool
+	c2s, s2c         *aead.Direction
+	ephSk, ephPk     [32]byte
+	peerPk           [32]byte
+	nonce            []byte
+	hello1           sessionkeys.Hello1
+	ts               int64
+	state            string     // resumehello|hello2|upgrade_ready|established|closed
+	recvMu           sync.Mutex // c2s and route migration; never held across dispatch or transport I/O
+	sendMu           sync.Mutex
+	interactiveWait  atomic.Int32
+	writeMu          sync.Mutex
+	writeContext     context.Context
+	cancelWrite      context.CancelFunc
+	priorityMu       sync.Mutex
+	priorityCond     *sync.Cond
+	interactiveBurst int
+	rpcQueue         chan rpcRequest
+	readQueue        chan rpcRequest
+	traceQueue       chan rpcRequest
+	pingQueue        chan rpcRequest
+	rpcStop          chan struct{}
+	rpcStopOnce      sync.Once
+	terminalMu       sync.Mutex
+	terminal         *terminalSlot
 	// epochFailed is set on post-seal send failure so this pointer cannot send
 	// again before lock-taking cleanup runs.
 	epochFailed atomic.Bool

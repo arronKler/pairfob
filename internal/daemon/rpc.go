@@ -47,7 +47,9 @@ func (e *Engine) replyMediaAuthorized(s *sess, id string, result any, h *mediaHa
 		e.replyErr(s, id, "too_large", "response exceeds protocol limit")
 		return false
 	}
-	s.lockSend(true)
+	if !e.lockOutput(s, len(body), true) {
+		return false
+	}
 	defer s.unlockSend(true)
 	if !s.sendEpochLive() {
 		return false
@@ -97,7 +99,9 @@ func (e *Engine) sendRPCResult(s *sess, id string, result any, media bool) bool 
 		e.replyErr(s, id, "too_large", "response exceeds protocol limit")
 		return false
 	}
-	s.lockSend(media)
+	if !e.lockOutput(s, len(body), media) {
+		return false
+	}
 	defer s.unlockSend(media)
 	if !s.sendEpochLive() {
 		return false
@@ -126,7 +130,9 @@ func (e *Engine) replyErr(s *sess, id, code, message string) {
 	if err != nil || len(body) > aead.MaxPlaintext {
 		return
 	}
-	s.lockSend(false)
+	if !e.lockOutput(s, len(body), false) {
+		return
+	}
 	defer s.unlockSend(false)
 	if !s.sendEpochLive() {
 		return

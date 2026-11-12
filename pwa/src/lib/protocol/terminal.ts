@@ -154,7 +154,8 @@ export class TerminalFrameAssembler {
     this.pending = null;
     return {
       terminalId: pending.terminalId, sequence: pending.sequence, width: pending.width,
-      height: pending.height, full: pending.full, data: concat(...pending.parts),
+      height: pending.height, full: pending.full,
+      data: pending.parts.length === 1 ? pending.parts[0] : concat(...pending.parts),
     };
   }
 }

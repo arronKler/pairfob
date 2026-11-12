@@ -1,3 +1,4 @@
+import { roomMetrics, snapshot } from "../metrics.ts";
 import { describe, expect, test } from "bun:test";
 import { routeHex, sha256Hex, ZERO_ROUTE } from "../crypto.ts";
 import { decode, HEADER_SIZE, Typ } from "../envelope.ts";
@@ -175,3 +176,21 @@ describe("opaque FWD hot path", () => {
     expect(room.store.listAlarms().some((alarm) => alarm.kind === "pair_confirm_30s")).toBe(true);
   });
 });
+
+for (const direction of ["phone", "daemon"] as const) {
+  test(`telemetry failure cannot lose an encrypted ${direction} frame`, async () => {
+    const { room, daemon, phone, routeId } = await establishedRoom();
+    room.core.deps.metrics = roomMetrics({ BUILD: "test", METRICS: {
+      writeDataPoint() { throw new Error("injected metrics failure"); },
+    } }, room.core.daemonId);
+    const destination = direction === "phone" ? daemon : phone;
+    const wire = encodeRaw(Typ.FWD, routeId, new Uint8Array(65536).fill(0xa5));
+    const failedBefore = snapshot().metrics_write_failed ?? 0;
+    await onMessage(room.core, direction === "phone" ? phone : daemon, wire);
+    expect(destination.lastSentInput).toBe(wire);
+    expect(snapshot().metrics_write_failed).toBe(failedBefore + 1);
+    expect(room.core.fwdSinceWrite).toBe(0);
+    expect(phone.closed).toBe(false);
+    expect(daemon.closed).toBe(false);
+  });
+}

@@ -113,6 +113,7 @@ type webRTCConn struct {
 	assembler    p2pFrameAssembler
 	// maxBuffered is 0 for the product 2 MiB cap; tests may lower it.
 	maxBuffered uint64
+	drained     chan struct{}
 }
 
 func (c *webRTCConn) Restart(ctx context.Context, offer string) (string, error) {
@@ -155,6 +156,14 @@ func (c *webRTCConn) attach(channel *webrtc.DataChannel) bool {
 		return false
 	}
 	c.channel = channel
+	c.drained = make(chan struct{}, 1)
+	channel.SetBufferedAmountLowThreshold(p2pMaxBufferedBytes / 4)
+	channel.OnBufferedAmountLow(func() {
+		select {
+		case c.drained <- struct{}{}:
+		default:
+		}
+	})
 	return true
 }
 

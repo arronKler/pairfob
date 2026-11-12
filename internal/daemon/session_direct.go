@@ -106,7 +106,7 @@ func (e *Engine) rpcTransportOffer(parent *sess, id string, params json.RawMessa
 	candidate := &sess{
 		routeID: route, deviceID: parent.deviceID, state: "resumehello", transport: "p2p",
 		upgradeFrom: parent.routeID, attemptID: input.AttemptID,
-		rpcQueue: make(chan rpcRequest, sessionRPCQueueSize), readQueue: make(chan rpcRequest, sessionReadQueueSize), pingQueue: make(chan rpcRequest, sessionPingQueueSize), rpcStop: make(chan struct{}),
+		rpcQueue: make(chan rpcRequest, sessionRPCQueueSize), readQueue: make(chan rpcRequest, sessionReadQueueSize), traceQueue: make(chan rpcRequest, sessionTraceQueueSize), pingQueue: make(chan rpcRequest, sessionPingQueueSize), rpcStop: make(chan struct{}),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), directOfferTimeout)
 	defer cancel()
@@ -303,6 +303,10 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 		return
 	}
 
+	parent.recvMu.Lock()
+	candidate.recvMu.Lock()
+	defer parent.recvMu.Unlock()
+	defer candidate.recvMu.Unlock()
 	e.mu.Lock()
 	if e.sessions[oldRoute] != parent || e.sessions[route] != candidate {
 		e.mu.Unlock()
@@ -315,12 +319,12 @@ func (e *Engine) rpcTransportCommit(parent *sess, id string, params json.RawMess
 	parent.routeID = route
 	parent.link = candidate.link
 	parent.transport = "p2p"
-	e.wipeSession(parent)
+	e.wipeSessionLocked(parent)
 	parent.c2s, parent.s2c = candidate.c2s, candidate.s2c
 	candidate.c2s, candidate.s2c = nil, nil
 	candidate.link = nil
 	candidate.state = "closed"
-	e.wipeSession(candidate)
+	e.wipeSessionLocked(candidate)
 	parent.upgradeFrom = [16]byte{}
 	parent.attemptID = ""
 	e.sessions[route] = parent

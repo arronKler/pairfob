@@ -58,7 +58,7 @@ import {
 } from "./attachments.ts";
 import { relayOrigin } from "./frame-socket.ts";
 import type { PairResult } from "./pair-ws.ts";
-import { HelloBudget, reconnectDelay, reconnectMax } from "./reconnect-policy.ts";
+import { HelloBudget, ReconnectBackoff } from "./reconnect-policy.ts";
 import { parseNetworkMode, type NetworkMode } from "../network-mode.ts";
 import { DirectSessionDriver, type P2PAttemptObservation } from "./session-direct.ts";
 import { connectSession } from "./session-connect.ts";
@@ -137,7 +137,7 @@ class ReconnectingSession implements LiveSession {
   private connectAbort: AbortController | null = null;
   private networkMode: NetworkMode = "auto";
   private networkAvailable = true;
-  private attempt = 0;
+  private readonly reconnectBackoff = new ReconnectBackoff();
   private lastConnectCode = "";
   private lastRttMs: number | null = null;
   private lastTransport: "relay" | "p2p" = "relay";
@@ -686,7 +686,7 @@ class ReconnectingSession implements LiveSession {
     transport.recoveryDiagnostic = this.recovery.context();
     this.transport = transport;
     this.firstReads.hold(transport, reads);
-    this.attempt = 0;
+    this.reconnectBackoff.connected();
     this.lastConnectCode = "";
     // A computer that was updated comes back on a new connection.
     this.quotaWire.legacy = false;
@@ -723,9 +723,9 @@ class ReconnectingSession implements LiveSession {
     }
     this.checking = true;
     this.emit({ type: "disconnected", code: error.code, message: error.message });
-    // A healthy session gets one immediate recovery attempt. Only failed
-    // reconnects enter the jittered exponential backoff below.
-    this.scheduleReconnect(true);
+    // Preserve the first immediate recovery. Later short connections retain
+    // backoff; only a stable connection earns another immediate retry.
+    this.scheduleReconnect(this.reconnectBackoff.disconnected());
   }
 
   private beginSwitch(): TransportSwitchLease {
@@ -748,7 +748,7 @@ class ReconnectingSession implements LiveSession {
 
   private scheduleReconnect(immediate = false): void {
     if (this.stopped || !this.networkAvailable || pageHidden() || this.reconnecting || this.reconnectTimer !== null) return;
-    const delay = immediate ? 0 : reconnectDelay(this.attempt++, Math.random, reconnectMax(this.lastConnectCode));
+    const delay = immediate ? 0 : this.reconnectBackoff.nextDelay(this.lastConnectCode);
     this.emit({ type: "reconnecting", message: immediate ? "正在重新连接" : `${Math.ceil(delay / 1000)} 秒后重连` });
     this.reconnectTimer = globalThis.setTimeout(async () => {
       this.reconnectTimer = null;

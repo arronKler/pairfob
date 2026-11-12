@@ -36,11 +36,11 @@ func TestMediaRepairFinalSendWaitRevalidatesOwner(t *testing.T) {
 			defer c.Conn.Close()
 			defer e.closeSession(route, "", false)
 
-			// Hold the interactive gate: a media (non-interactive) reply now spins
+			// Hold the interactive gate: a media (non-interactive) reply now waits
 			// in lockSend until the gate drains.
-			owner.interactiveWait.Add(1)
+			owner.changeInteractiveWait(1)
 			var release sync.Once
-			defer release.Do(func() { owner.interactiveWait.Add(-1) })
+			defer release.Do(func() { owner.changeInteractiveWait(-1) })
 
 			type result struct {
 				length int
@@ -99,7 +99,7 @@ func TestMediaRepairFinalSendWaitRevalidatesOwner(t *testing.T) {
 				}
 			}
 
-			release.Do(func() { owner.interactiveWait.Add(-1) })
+			release.Do(func() { owner.changeInteractiveWait(-1) })
 			got := <-done
 
 			if !retired {

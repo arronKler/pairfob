@@ -114,3 +114,33 @@ func TestExpiredTerminalOpenDoesNotExecute(t *testing.T) {
 		t.Fatal("expired request reached runtime")
 	}
 }
+
+func TestTranscriptReadHasSeparateBoundedLane(t *testing.T) {
+	e, s, send, read := pingSession(t, runtime.NewFake())
+	s.readQueue = make(chan rpcRequest, sessionReadQueueSize)
+	s.traceQueue = make(chan rpcRequest, sessionTraceQueueSize)
+	for range sessionTraceQueueSize {
+		send("trace", "AgentTrace")
+	}
+	send("display", "Snapshot")
+	if len(s.readQueue) != 1 || len(s.traceQueue) != sessionTraceQueueSize {
+		t.Fatal("read lanes were not isolated")
+	}
+	send("overflow", "History")
+	if reply := read(); reply["ok"] != false {
+		t.Fatal(reply)
+	}
+	_ = e
+}
+
+func TestExpiredReadDoesNotExecuteRuntime(t *testing.T) {
+	rt := &terminalBudgetRuntime{Fake: runtime.NewFake()}
+	e, s, _, read := pingSession(t, rt)
+	e.dispatchQueued(s, rpcRequest{id: "expired", op: "Snapshot", receivedAt: time.Now().Add(-sessionReadBudget - time.Second), params: json.RawMessage(`{}`)})
+	if reply := read(); reply["ok"] != false || reply["error"].(map[string]any)["code"] != "backpressure" {
+		t.Fatal(reply)
+	}
+	if rt.observed {
+		t.Fatal("expired read reached runtime")
+	}
+}
