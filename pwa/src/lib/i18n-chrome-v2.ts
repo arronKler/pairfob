@@ -17,7 +17,7 @@ export const enChromeV2: { [K in keyof typeof zhChromeV2]: string } = {
   "chrome.rulerValue": "{n} / {total} · {title}",
   "chrome.rulerPosition": "{n} / {total}",
   "chrome.rulerSameTab": "Same tab",
-  "chrome.rulerOtherTab": "Same workspace · another tab",
+  "chrome.rulerOtherTab": "Same workspace · other tab",
   "chrome.rulerOtherWorkspace": "Another workspace",
   "chrome.rulerNow": "Now",
   "chrome.rulerTarget": "Target",
