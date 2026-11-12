@@ -143,9 +143,9 @@ export function SessionIdentity({ agent, fallbackTitle, includeBack, handlers, c
           {line ? <span className="chrome-meta-text">{line}</span> : null}
         </span> : null}
       </span>
-      {agent ? <SessionRuler paneId={agent.paneId} agents={agents} listGroup={listGroup} stale={stale} /> : null}
     </div>
     <SessionActions onWorkspace={handlers.onWorkspace} onMenu={handlers.onMenu} reading={reading} />
+    {agent ? <SessionRuler paneId={agent.paneId} agents={agents} listGroup={listGroup} stale={stale} /> : null}
   </header>;
 }
 

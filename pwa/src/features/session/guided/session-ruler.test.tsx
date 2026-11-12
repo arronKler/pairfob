@@ -5,6 +5,7 @@ import { renderReact, unmountReact } from "../../../../test-support/react-harnes
 import { appRoot } from "../../../app/dom-root";
 import { setLang, t } from "../../../lib/i18n";
 import { applySnapshot, liveAgents, resetDashboard } from "../../dashboard/catalog-store";
+import { DEFAULT_LIST_GROUP } from "../../../lib/ranking";
 import { resetHerdPresentationChoices, setListGroup } from "../../settings/preferences-store";
 import { resetShownListOrder } from "../../dashboard/list-order";
 import { SessionRuler } from "./session-ruler";
@@ -44,6 +45,8 @@ afterEach(() => {
   unmountReact();
   resetDashboard();
   resetShownListOrder();
+  resetHerdPresentationChoices();
+  setListGroup(DEFAULT_LIST_GROUP);
   happy.happyDOM.setWindowSize({ width: 1024, height: 768 });
 });
 

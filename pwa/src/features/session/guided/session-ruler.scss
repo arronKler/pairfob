@@ -1,25 +1,15 @@
 /* --- Session ruler: the herd list as ticks on the header's bottom border ------ */
 
 /*
-  The title column keeps its clipping on the copy, so the ruler can reach the
-  header's border without the identity spilling past the column.
-*/
-.chrome-title {
-  position: relative;
-  overflow: visible;
-}
-
-.chrome-copy { overflow: hidden; }
-
-/*
-  Nine pixels on the border, clear of the back button and the actions. It takes
-  no row from the title and never moves the content box.
+  The band is a child of the header, not of the title column, so it runs the
+  header's full width and its count sits at the right edge as in the approved
+  design. It takes no row from the title and never moves the content box.
 */
 .session-ruler {
   position: absolute;
-  right: 0;
-  bottom: -4px;
-  left: 0;
+  right: 6px;
+  bottom: 0;
+  left: 6px;
   z-index: 2;
   height: 9px;
   display: flex;
@@ -33,15 +23,15 @@
   transition: background-color var(--dur-1) var(--ease);
 }
 
+/* The back button owns the left end of the header when it is there. */
+.chrome:has(> .chrome-back) .session-ruler { left: 58px; }
+
 .session-ruler:focus-visible {
   outline: none;
   background: var(--accent-10);
 }
 
 .session-ruler:focus-visible .session-ruler-count { color: var(--ink); }
-
-/* The folded keyboard header keeps the band inside its 44px line. */
-html[data-kb="open"] .session-ruler { bottom: 0; }
 
 .session-ruler-ticks {
   flex: 1 1 auto;
@@ -84,7 +74,7 @@ html[data-kb="open"] .session-ruler { bottom: 0; }
 
 .session-ruler-count {
   flex: none;
-  font: 500 9px/1 var(--mono);
+  font: 500 10px/1 var(--mono);
   letter-spacing: 0.02em;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -92,9 +82,6 @@ html[data-kb="open"] .session-ruler { bottom: 0; }
   pointer-events: none;
   transition: color var(--dur-1) var(--ease);
 }
-
-/* The meta row ends before the count, so the two never run into each other. */
-.chrome-title:has(> .session-ruler) .chrome-meta { padding-right: 42px; }
 
 /* --- Target preview ----------------------------------------------------------- */
 
@@ -218,6 +205,55 @@ html[data-kb="open"] .session-ruler { bottom: 0; }
   font: 500 10px/1 var(--mono);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* What the two marks in the small Herdr map mean. */
+.session-ruler-peek-key {
+  display: flex;
+  gap: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.session-ruler-peek-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.session-ruler-peek-key i {
+  width: 10px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.session-ruler-peek-key .is-now i { background: var(--accent); }
+.session-ruler-peek-key .is-target i { background: var(--warn); }
+
+/* The target's tab, as Herdr divides it; the current pane and the target. */
+.session-ruler-peek-map {
+  position: relative;
+  height: 42px;
+}
+
+.session-ruler-peek-map > span {
+  position: absolute;
+  border-radius: 3px;
+  background: var(--line);
+  transform: scale(0.94);
+}
+
+.session-ruler-peek-map > .is-now {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.session-ruler-peek-map > .is-target {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  box-shadow: inset 0 0 0 1px var(--warn);
 }
 
 @media (prefers-reduced-motion: reduce) {

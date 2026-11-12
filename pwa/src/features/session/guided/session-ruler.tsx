@@ -17,7 +17,7 @@ import { usePreferences } from "../../settings/hooks";
 import { useBoard } from "../../board/hooks";
 import { panePosition } from "../../board/model/pane-menu";
 import { heldShownListOrder } from "../../dashboard/list-order";
-import { peekPlacement, rulerView, type PeekPlacement } from "./session-ruler-model";
+import { peekPlacement, rulerMapBoxes, rulerRelation, rulerView, type PeekPlacement } from "./session-ruler-model";
 import { switchSessionInPlace } from "./session-ruler-action";
 
 export type SessionRulerProps = {
@@ -81,12 +81,23 @@ export function SessionRuler({ paneId, agents, listGroup, stale }: SessionRulerP
   const target = targetIndex >= 0 ? view.ticks[targetIndex] ?? null : null;
   const previewing = target !== null;
   const boardTarget = target ? agents.find((agent) => agent.paneId === target.paneId) : undefined;
+  const currentAgent = agents.find((agent) => agent.paneId === paneId);
   const layout = boardTarget?.tabId
     ? board.layouts.find((entry) => entry.workspaceId === boardTarget.workspaceId && entry.tabId === boardTarget.tabId) ?? null
     : null;
   const quadrant = target && layout && layout.panes.length > 1 && !layout.zoomed
     ? panePosition(layout, target.paneId)
     : "";
+  const relation = target ? rulerRelation(currentAgent, boardTarget) : "";
+  const relationLabel = relation === "same-tab"
+    ? [t("chrome.rulerSameTab"), quadrant].filter(Boolean).join(" · ")
+    : relation === "same-workspace" ? t("chrome.rulerOtherTab")
+      : relation === "other-workspace" ? t("chrome.rulerOtherWorkspace")
+        : "";
+  const mapBoxes = target && layout && layout.panes.length > 1
+    ? rulerMapBoxes(layout, paneId, target.paneId)
+    : [];
+  const mapHasCurrent = mapBoxes.some((box) => box.current);
 
   function markSeen(): void {
     if (seen.current) return;
@@ -311,10 +322,29 @@ export function SessionRuler({ paneId, agents, listGroup, stale }: SessionRulerP
             </span>
           </span>
         </div>
-        {target.group || quadrant ? <div className="session-ruler-peek-foot">
-          {target.group ? <span className="session-ruler-peek-group">{target.group}</span> : null}
-          {quadrant ? <span className="session-ruler-peek-pos">{quadrant}</span> : null}
+        {target.group || relationLabel ? <div className="session-ruler-peek-foot">
+          {target.group
+            ? <span className="session-ruler-peek-group">{target.group} · {target.groupWithin} / {target.groupCount}</span>
+            : null}
+          {relationLabel ? <span className="session-ruler-peek-pos">{relationLabel}</span> : null}
         </div> : null}
+        {mapBoxes.length ? <>
+          <div className="session-ruler-peek-key">
+            {mapHasCurrent ? <span className="is-now"><i />{t("chrome.rulerNow")}</span> : null}
+            <span className="is-target"><i />{t("chrome.rulerTarget")}</span>
+          </div>
+          <div className="session-ruler-peek-map">
+            {mapBoxes.map((box) => {
+              const className = [box.current ? "is-now" : "", box.target ? "is-target" : ""].filter(Boolean).join(" ");
+              return <span key={box.paneId} className={className} style={{
+                left: `${box.left * 100}%`,
+                top: `${box.top * 100}%`,
+                width: `${box.width * 100}%`,
+                height: `${box.height * 100}%`,
+              }} />;
+            })}
+          </div>
+        </> : null}
       </div>,
       document.body,
     ) : null}
