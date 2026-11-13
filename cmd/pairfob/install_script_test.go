@@ -86,6 +86,56 @@ func TestInstallScriptEnrollsWithoutOptionalArgs(t *testing.T) {
 	}
 }
 
+func TestInstallScriptPairingURLFollowsItsOrigin(t *testing.T) {
+	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
+	name := artifactName(runtime.GOOS, runtime.GOARCH)
+	payload := []byte("#!/bin/sh\nif [ \"$1\" = runtime ]; then printf '{\"kind\":\"herdr\"}\\n'; exit 0; fi\nif [ \"$1\" = enroll ]; then shift; printf 'enroll'; for arg in \"$@\"; do printf ' %s' \"$arg\"; done; printf '\\n'; fi\nexit 0\n")
+	payload = installerFixturePayload(payload)
+	server := httptest.NewServer(updateFixture(name, "test", payload))
+	t.Cleanup(server.Close)
+
+	for _, tc := range []struct {
+		name string
+		args []string
+		env  []string
+		want string
+	}{
+		{name: "official instance by default", want: "https://pairfob.com/pair"},
+		{name: "the origin flag", args: []string{"--origin", "https://relay.example.com"}, want: "https://relay.example.com/pair"},
+		{name: "the origin environment", env: []string{"PAIRFOB_ORIGIN=https://relay.example.com/"}, want: "https://relay.example.com/pair"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := append([]string{script, "--prefix", t.TempDir()}, tc.args...)
+			cmd := exec.Command("sh", args...)
+			cmd.Env = append(append(os.Environ(), "PAIRFOB_DOWNLOAD_BASE="+server.URL, "PAIRFOB_ORIGIN="), tc.env...)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("install.sh: %v\n%s", err, out)
+			}
+			if !strings.Contains(string(out), "On this computer, a phone or a tablet: "+tc.want) {
+				t.Fatalf("pairing URL is not %q:\n%s", tc.want, out)
+			}
+			// The relay the installer advertises is the one enroll talks to. The
+			// flag is passed through verbatim; the binary canonicalizes it.
+			wantOrigin := strings.TrimSuffix(tc.want, "/pair")
+			wantEnroll := "enroll"
+			if wantOrigin != "https://pairfob.com" {
+				wantEnroll = "enroll --origin " + wantOrigin
+			}
+			enrolled := false
+			for _, line := range strings.Split(string(out), "\n") {
+				// PAIRFOB_ORIGIN may keep its trailing slash on the way to enroll.
+				if line == wantEnroll || line == wantEnroll+"/" {
+					enrolled = true
+				}
+			}
+			if !enrolled {
+				t.Fatalf("enroll did not receive %q:\n%s", wantEnroll, out)
+			}
+		})
+	}
+}
+
 func TestInstallScriptSkipRuntimeCheckLeavesRuntimeUnset(t *testing.T) {
 	script := filepath.Join(repoRoot(t), "scripts", "install.sh")
 	name := artifactName(runtime.GOOS, runtime.GOARCH)

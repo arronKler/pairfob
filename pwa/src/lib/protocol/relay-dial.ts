@@ -1,3 +1,4 @@
+import { createSessionCrypto, type SessionCrypto } from "./session-crypto.ts";
 import type { RecoveryClock } from "./recovery-diagnostics";
 import { recordConnectionDiagnostic } from "./connection-diagnostics.ts";
 import { jsonFrame, Typ } from "./envelope.ts";
@@ -6,7 +7,7 @@ import { openWS, Z16, type FrameSocket } from "./frame-socket.ts";
 import { helloClientBody, muxProtocolFromRelayURL, muxSubprotocol, sessionAttachBody } from "./mux.ts";
 import type { PairResult } from "./pair-ws.ts";
 import type { HelloBudget } from "./reconnect-policy.ts";
-import { awaitSessionBound, beginSessionEpoch, type SessionHello } from "./session-handshake.ts";
+import { awaitSessionBound, awaitSessionCrypto, beginSessionEpoch, type SessionHello } from "./session-handshake.ts";
 import { sendFlightReads, SessionTransport, type FlightRead, type SentRead } from "./session-transport.ts";
 import type { SessionEvent } from "./session-types.ts";
 
@@ -45,37 +46,33 @@ export class RelayDial {
   private hello: Promise<SessionHello> | null = null;
   private bound = false;
 
-  constructor(readonly socket: FrameSocket, readonly trace: ReturnType<typeof connectionTrace>) {}
+  private closed = false;
+  constructor(
+    readonly socket: FrameSocket, readonly trace: ReturnType<typeof connectionTrace>,
+    private preparedCrypto?: Promise<SessionCrypto>,
+  ) {}
 
   static async open(relayWS: string, trace: ReturnType<typeof connectionTrace>, signal?: AbortSignal): Promise<RelayDial> {
-    const socket = await openWS(relayWS, muxSubprotocol(muxProtocolFromRelayURL(relayWS)), signal);
-    trace("ws_open");
-    return new RelayDial(socket, trace);
+    // Local preparation overlaps DNS/TCP/TLS. It opens no additional socket
+    // and sends no speculative authentication to the computer.
+    const prepared = createSessionCrypto();
+    prepared.catch(() => undefined);
+    try {
+      const socket = await openWS(relayWS, muxSubprotocol(muxProtocolFromRelayURL(relayWS)), signal);
+      trace("ws_open");
+      return new RelayDial(socket, trace, prepared);
+    } catch (error) {
+      void prepared.then((crypto) => crypto.dispose(), () => undefined);
+      throw error;
+    }
   }
 
   /** First flight, sent once. Nothing in it replaces the device's live route. */
   async start(context: DialContext): Promise<void> {
     if (!this.hello) {
-      const { relayWS, pair, style, budget } = context;
-      const protocol = muxProtocolFromRelayURL(relayWS);
-      const begin = (routeId: Uint8Array | null) => {
-        budget?.spend();
-        const hello = beginSessionEpoch(this.socket, routeId, pair, protocol, (stage) => {
-          if (stage === "route_bound") this.bound = true;
-          this.trace(stage);
-        });
-        this.trace("hello_sent");
-        return hello;
-      };
-      try {
-        this.socket.send(jsonFrame(Typ.HELLO_CLIENT, Z16, helloClientBody(protocol)));
-        this.socket.send(jsonFrame(Typ.SESSION_ATTACH, Z16, sessionAttachBody(protocol, pair.daemonId)));
-        this.hello = style.helloAhead
-          ? Promise.resolve(begin(null))
-          : awaitSessionBound(this.socket).then((routeId) => { this.trace("route_bound"); return begin(routeId); });
-      } catch (error) {
-        this.hello = Promise.reject(error);
-      }
+      // Install the promise before awaiting native key generation: concurrent
+      // start/establish callers must still send exactly one first flight.
+      this.hello = this.begin(context);
       this.hello.catch(() => undefined);
     }
     try {
@@ -87,6 +84,28 @@ export class RelayDial {
       if (code === "unbound" || (code === "timeout" && this.bound)) context.style.helloAhead = false;
       throw error;
     }
+  }
+
+  private async begin(context: DialContext): Promise<SessionHello> {
+    if (this.closed) throw new ProtocolError("disconnected", "连接已关闭");
+    const crypto = await awaitSessionCrypto(this.socket, this.preparedCrypto ??= createSessionCrypto());
+    if (this.closed) { crypto.dispose(); throw new ProtocolError("disconnected", "连接已关闭"); }
+    const { relayWS, pair, style, budget } = context;
+    const protocol = muxProtocolFromRelayURL(relayWS);
+    try {
+      this.socket.send(jsonFrame(Typ.HELLO_CLIENT, Z16, helloClientBody(protocol)));
+      this.socket.send(jsonFrame(Typ.SESSION_ATTACH, Z16, sessionAttachBody(protocol, pair.daemonId)));
+      const route = style.helloAhead ? null : await awaitSessionBound(this.socket);
+      if (route) this.trace("route_bound");
+      if (this.closed) throw new ProtocolError("disconnected", "连接已关闭");
+      budget?.spend();
+      const hello = beginSessionEpoch(this.socket, route, pair, protocol, (stage) => {
+        if (stage === "route_bound") this.bound = true;
+        this.trace(stage);
+      }, crypto);
+      this.trace("hello_sent");
+      return hello;
+    } catch (error) { crypto.dispose(); throw error; }
   }
 
   /** Second flight. DeviceHello3 replaces the device's previous route on the computer. */
@@ -122,6 +141,8 @@ export class RelayDial {
   }
 
   close(reason = "session handshake failed"): void {
+    this.closed = true;
+    void this.preparedCrypto?.then((crypto) => crypto.dispose(), () => undefined);
     this.socket.close(1000, reason);
   }
 }

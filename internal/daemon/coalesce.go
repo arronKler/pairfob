@@ -21,6 +21,7 @@ type observeGroup struct {
 type observeFlight struct {
 	done    chan struct{}
 	waiters int
+	started time.Time
 	view    runtime.View
 	err     error
 }
@@ -41,27 +42,50 @@ func observeKey(session *string, query runtime.Query) (string, bool) {
 }
 
 func (g *observeGroup) do(key string, fn func() (runtime.View, error)) (runtime.View, error) {
+	return g.doContext(context.Background(), key, fn)
+}
+
+// Cancelling a waiter never cancels the shared, bounded read for other callers.
+func (g *observeGroup) doContext(ctx context.Context, key string, fn func() (runtime.View, error)) (runtime.View, error) {
+	return g.doAfter(ctx, key, time.Time{}, fn)
+}
+
+func (g *observeGroup) doAfter(ctx context.Context, key string, notBefore time.Time, fn func() (runtime.View, error)) (runtime.View, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	g.mu.Lock()
 	if g.inflight == nil {
 		g.inflight = map[string]*observeFlight{}
 	}
-	if flight := g.inflight[key]; flight != nil {
+	flight := g.inflight[key]
+	if flight != nil && flight.started.Before(notBefore) {
+		// A post-event monitor starts fresh immediately; old waiters finish on
+		// their own flight, while later phone reads may join this newer one.
+		flight = nil
+	}
+	if flight != nil {
 		flight.waiters++
-		g.mu.Unlock()
-		<-flight.done
+	} else {
+		flight = &observeFlight{done: make(chan struct{}), waiters: 1, started: time.Now()}
+		g.inflight[key] = flight
+		go func() {
+			flight.view, flight.err = fn()
+			g.mu.Lock()
+			if g.inflight[key] == flight {
+				delete(g.inflight, key)
+			}
+			close(flight.done)
+			g.mu.Unlock()
+		}()
+	}
+	g.mu.Unlock()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-flight.done:
 		return flight.view, flight.err
 	}
-	flight := &observeFlight{done: make(chan struct{}), waiters: 1}
-	g.inflight[key] = flight
-	g.mu.Unlock()
-
-	flight.view, flight.err = fn()
-
-	g.mu.Lock()
-	delete(g.inflight, key)
-	g.mu.Unlock()
-	close(flight.done)
-	return flight.view, flight.err
 }
 
 func (g *observeGroup) waiterCount(key string) int {
@@ -75,6 +99,14 @@ func (g *observeGroup) waiterCount(key string) int {
 
 func (e *Engine) observe(session *string, query runtime.Query) (runtime.View, error) {
 	e.touchRuntimeSession(runtimeSession(session))
+	return e.observeContext(context.Background(), session, query)
+}
+
+func (e *Engine) observeContext(waitCtx context.Context, session *string, query runtime.Query) (runtime.View, error) {
+	return e.observeAfter(waitCtx, session, query, time.Time{})
+}
+
+func (e *Engine) observeAfter(waitCtx context.Context, session *string, query runtime.Query, notBefore time.Time) (runtime.View, error) {
 	run := func() (runtime.View, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 		defer cancel()
@@ -85,7 +117,7 @@ func (e *Engine) observe(session *string, query runtime.Query) (runtime.View, er
 		return e.markHistory(view), nil
 	}
 	if key, ok := observeKey(session, query); ok {
-		return e.reads.do(key, run)
+		return e.reads.doAfter(waitCtx, key, notBefore, run)
 	}
 	return run()
 }

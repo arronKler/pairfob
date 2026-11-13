@@ -1,4 +1,5 @@
 import { t, type CopyKey } from "../../lib/i18n";
+import { relayHost } from "../../lib/runtime-config";
 import { Button } from "../../shared/ui/primitives";
 import { requestBootPairAnyway, requestBootRetry } from "../../app/boot-actions";
 import type { BootBlock } from "../../features/connection/connection-store";
@@ -17,7 +18,7 @@ const COPY: Record<BootBlock, { title: CopyKey; help: CopyKey }> = {
 export function BootRecovery({ block, reload = () => location.reload() }: { block: BootBlock; reload?: () => void }) {
   const copy = COPY[block];
   return <section className="boot-recovery" role="status" data-block={block}>
-    <p>{t(copy.title)}</p>
+    <p>{t(copy.title, { relay: relayHost() })}</p>
     <p>{t(copy.help)}</p>
     <Button className="btn" onClick={block === "assets" ? reload : requestBootRetry}>
       {t(block === "assets" ? "update.reload" : "retry")}

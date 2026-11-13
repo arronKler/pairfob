@@ -219,6 +219,8 @@ html[data-kb="open"] .chrome-avatar .agent-avatar {
 }
 
 .chrome-actions {
+  position: relative;
+  z-index: 3;
   flex: none;
   display: flex;
   align-items: center;

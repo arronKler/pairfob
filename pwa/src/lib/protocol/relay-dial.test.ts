@@ -2,7 +2,9 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { SessionSocket, socketPair, type HoldStage } from "../../../test-support/session-socket-fixture";
 import { parseJSON, Typ } from "./envelope";
 import { HelloBudget } from "./reconnect-policy";
-import type { DialStyle } from "./relay-dial";
+import { RelayDial, type DialStyle } from "./relay-dial";
+import { FrameSocket } from "./frame-socket";
+import { createSessionCrypto, legacySessionCrypto, type SessionCrypto } from "./session-crypto";
 import { connectSession } from "./session-connect";
 
 const URL_WS = "wss://pairfob.test/v2/ws";
@@ -166,4 +168,90 @@ test("every dial spends exactly one DeviceHello1 from the session's budget", asy
   await dial(undefined, budget);
   expect(spent).toHaveBeenCalledTimes(1);
   expect(SessionSocket.log.filter((entry) => entry.endsWith(":DeviceHello1"))).toHaveLength(1);
+});
+
+const context = () => ({ relayWS: URL_WS, pair: socketPair, style: { helloAhead: true, readsAhead: true }, budget: new HelloBudget() });
+
+test("concurrent start and establish share pending key generation and one first flight", async () => {
+  const socket = new SessionSocket();
+  let resolve!: (crypto: SessionCrypto) => void;
+  const ready = new Promise<SessionCrypto>((done) => { resolve = done; });
+  const relay = new RelayDial(new FrameSocket(socket as unknown as WebSocket), () => undefined, ready);
+  const ctx = context(), spent = spyOn(ctx.budget, "spend");
+  const started = relay.start(ctx);
+  const connected = relay.establish(ctx, () => undefined, READS);
+  expect(socket.frames).toHaveLength(0);
+  resolve(await createSessionCrypto());
+  await started;
+  const connection = await connected;
+  open.push(connection.transport);
+  await Promise.all(connection.reads.map((read) => read.answer));
+  expect(SessionSocket.instances).toHaveLength(1);
+  expect(socket.frames.map((frame) => frame.typ)).toEqual([
+    Typ.HELLO_CLIENT, Typ.SESSION_ATTACH, Typ.FWD, Typ.FWD, Typ.FWD, Typ.FWD, Typ.FWD, Typ.PING,
+  ]);
+  expect(socket.operations).toEqual(["Ping", "GetConfig", "Snapshot"]);
+  expect(spent).toHaveBeenCalledTimes(1);
+});
+
+test("cancelling during key generation retires the result without sending authentication", async () => {
+  const socket = new SessionSocket();
+  let resolve!: (crypto: SessionCrypto) => void;
+  const ready = new Promise<SessionCrypto>((done) => { resolve = done; });
+  const relay = new RelayDial(new FrameSocket(socket as unknown as WebSocket), () => undefined, ready);
+  const ctx = context(), spent = spyOn(ctx.budget, "spend");
+  const started = relay.start(ctx).catch((error) => error.code);
+  relay.close();
+  expect(await Promise.race([started, Bun.sleep(100).then(() => "still_waiting")])).toBe("disconnected");
+  const crypto = await createSessionCrypto();
+  resolve(crypto);
+  expect(await started).toBe("disconnected");
+  expect(socket.frames).toHaveLength(0);
+  expect(spent).not.toHaveBeenCalled();
+  await expect(crypto.sharedSecret(new Uint8Array(32).fill(3))).rejects.toThrow("retired");
+});
+
+test("a verification provider error waits for and wipes the parallel DH result", async () => {
+  const socket = new SessionSocket();
+  const crypto = legacySessionCrypto();
+  const failure = new Error("verification provider error");
+  const shared = new Uint8Array(32).fill(8);
+  let resolve!: (bytes: Uint8Array) => void;
+  let deriving = false;
+  crypto.verify = async () => { throw failure; };
+  crypto.sharedSecret = () => { deriving = true; return new Promise((done) => { resolve = done; }); };
+  const disposed = spyOn(crypto, "dispose");
+  const relay = new RelayDial(new FrameSocket(socket as unknown as WebSocket), () => undefined, Promise.resolve(crypto));
+  open.push(relay);
+  let settled = false;
+  const started = relay.start(context()).catch((error) => { settled = true; return error; });
+  const end = Date.now() + 1000;
+  while (!deriving && Date.now() < end) await Bun.sleep(1);
+  expect(deriving).toBe(true);
+  expect(settled).toBe(false);
+  resolve(shared);
+  expect(await started).toBe(failure);
+  expect(shared).toEqual(new Uint8Array(32));
+  expect(disposed).toHaveBeenCalled();
+  expect(SessionSocket.log).toEqual(["1:DeviceHello1"]);
+});
+
+
+test("closing during native verification rejects promptly and ignores its late result", async () => {
+  const socket = new SessionSocket();
+  const crypto = legacySessionCrypto();
+  let resolve!: (valid: boolean) => void;
+  let verifying = false;
+  crypto.verify = () => { verifying = true; return new Promise((done) => { resolve = done; }); };
+  const relay = new RelayDial(new FrameSocket(socket as unknown as WebSocket), () => undefined, Promise.resolve(crypto));
+  const pending = relay.establish(context(), () => undefined, READS).catch((error) => error.code);
+  const end = Date.now() + 1000;
+  while (!verifying && Date.now() < end) await Bun.sleep(1);
+  expect(verifying).toBe(true);
+  relay.close();
+  expect(await Promise.race([pending, Bun.sleep(100).then(() => "still_waiting")])).toBe("disconnected");
+  resolve(true);
+  await Bun.sleep(1);
+  expect(SessionSocket.log).toEqual(["1:DeviceHello1", "1:close"]);
+  expect(socket.operations).toEqual([]);
 });

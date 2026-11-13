@@ -11,6 +11,8 @@ import { currentScreen, setScreen } from "../../app/navigation-store";
 import { applyHerdTouches } from "../settings/preferences-store";
 import {
   applyPaneRead,
+  clearCreatedPane,
+  createdPaneAwaitingCatalog,
   isAgentChat,
   isFullTerminal,
   noteSnapshotAt,
@@ -110,7 +112,12 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
     // persist under the replacement daemon's key. Revalidate before the second
     // owned domain write; checking only after both publications is too late.
     if (!viewIsCurrent(session, viewVersion, ports)) return;
-    applyHerdTouches(previous, dashboardStore.get().agents);
+    // A fold read before the create may lack the pane the mutation already
+    // answered with. Keep its recency while that is possible, and end the
+    // grace only when a fold actually carries the pane.
+    const created = createdPaneAwaitingCatalog();
+    applyHerdTouches(previous, dashboardStore.get().agents, Date.now(), created);
+    if (created && dashboardStore.get().agents.some((agent) => agent.paneId === created)) clearCreatedPane();
     // The dashboard/preferences publications can reenter too.
     if (!viewIsCurrent(session, viewVersion, ports)) return;
     const layoutUnchanged = previousLayoutSig === boardStore.get().lastLayoutSig;
@@ -119,7 +126,10 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
     const screen = currentScreen();
     const agents = dashboardStore.get().agents;
     if (screen === "pane") {
-      selectPane(choosePane(openPaneId(), agents));
+      // A pane the create just made is absent from a fold that started before
+      // it existed; that is not the pane going away.
+      const created = createdPaneAwaitingCatalog();
+      selectPane(created && created === openPaneId() ? created : choosePane(openPaneId(), agents));
       if (!viewIsCurrent(session, viewVersion, ports)) return;
       if (!openPaneId()) {
         ports.abandonOpenPane(t("err.paneGone"));
@@ -136,14 +146,16 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
       if (ports.isDesk() && !(unchanged && layoutUnchanged)) ports.commitView();
       return;
     }
-    if (screen === "workspace" && openPaneId() && !agents.some((agent) => agent.paneId === openPaneId())) {
+    if (screen === "workspace" && openPaneId() && !agents.some((agent) => agent.paneId === openPaneId())
+      && createdPaneAwaitingCatalog() !== openPaneId()) {
       setScreen("home");
       dropGonePane();
       ports.showError(t("err.paneGone"), true);
       ports.commitView();
       return;
     }
-    if (openPaneId() && !agents.some((agent) => agent.paneId === openPaneId())) dropGonePane();
+    if (openPaneId() && !agents.some((agent) => agent.paneId === openPaneId())
+      && createdPaneAwaitingCatalog() !== openPaneId()) dropGonePane();
     if (screen === "board") {
       if (unchanged && layoutUnchanged) return;
       ports.commitView();

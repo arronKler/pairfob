@@ -66,6 +66,8 @@ const observation = {
   snapshotPending: false,
   paneReadBusy: false,
   paneReadPending: false,
+  createdPaneId: "",
+  createdPaneAt: 0,
 };
 
 
@@ -120,6 +122,9 @@ export function paneRow(): number | null {
 /** Point the session view at another pane and clear everything the old one owned. */
 export function selectPane(paneId: string): void {
   if (read().paneId === paneId) return;
+  // The create's grace only covers the pane it opened, and only while it is
+  // still the reader's destination.
+  if (paneId !== observation.createdPaneId) clearCreatedPane();
   // Which pane is open decides the session page and the desk main column.
   composeTransaction([sessionStore], () => {
     stage((record) => {
@@ -190,6 +195,37 @@ export function snapshotIsPending(): boolean {
   return observation.snapshotPending;
 }
 
+/**
+ * How long a just-created pane may outrun the dashboard Snapshot. The mutation
+ * answers with its pane before any fold contains it, and a Snapshot already in
+ * flight when that answer returned predates the pane. Long enough for a slow
+ * catalog read and its queued follow-up; short enough that a pane which really
+ * vanished is not believed forever.
+ */
+const CREATED_PANE_CATALOG_GRACE_MS = 30_000;
+
+/** The mutation answered with this pane; the dashboard has not folded it in yet. */
+export function markCreatedPane(paneId: string): void {
+  observation.createdPaneId = paneId;
+  observation.createdPaneAt = Date.now();
+}
+
+/** The catalog confirmed the pane, or the reader made another pane the destination. */
+export function clearCreatedPane(): void {
+  observation.createdPaneId = "";
+  observation.createdPaneAt = 0;
+}
+
+/** The created pane the catalog may still lag behind, or "" once confirmed. */
+export function createdPaneAwaitingCatalog(now = Date.now()): string {
+  if (!observation.createdPaneId) return "";
+  if (now - observation.createdPaneAt > CREATED_PANE_CATALOG_GRACE_MS) {
+    clearCreatedPane();
+    return "";
+  }
+  return observation.createdPaneId;
+}
+
 /** Queue another Snapshot after the in-flight one. Does not start a fetch. */
 export function queueSnapshot(): void {
   observation.snapshotPending = true;
@@ -238,6 +274,7 @@ export function resetObservationLifecycle(): void {
   observation.snapshotPending = false;
   observation.paneReadBusy = false;
   observation.paneReadPending = false;
+  clearCreatedPane();
   if (read().snapshotAt === 0) return;
   write((record) => {
     record.snapshotAt = 0;

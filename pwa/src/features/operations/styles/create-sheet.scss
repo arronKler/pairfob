@@ -253,6 +253,9 @@
 
 .create-summary { margin: 0 0 8px; font-size: var(--text-secondary); color: var(--muted); }
 .create-submit { width: 100%; }
+/* The wait shows on the button: the spinner takes the button's own ink, since
+   the accent its glyph defaults to is the ground it is drawn on. */
+.create-submit .spinner { color: currentColor; }
 
 /* The desk form (shared/ui/styles/desk-dialog.scss): what will be made, and a
    reason it cannot be, each read on a line of their own above the footer's two

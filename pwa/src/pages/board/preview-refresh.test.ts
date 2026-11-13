@@ -12,7 +12,7 @@ import { setNetworkOnline } from "../../features/connection/connection-store";
 import { attachLiveSession } from "../../features/computers/catalog-store";
 import { replaceAgentsFromSnapshot, resetDashboard } from "../../features/dashboard/catalog-store";
 import type { LiveSession } from "../../lib/protocol/session-types";
-import { refreshBoardPreviews } from "../../features/board/preview/refresh";
+import { refreshBoardPreviews, refreshBoardPreviewHint } from "../../features/board/preview/refresh";
 
 beforeEach(resetBoardTestDOM);
 
@@ -66,6 +66,27 @@ async function paintPreview(text: string, cols = 0, rows = 0): Promise<HTMLEleme
 }
 
 describe("board pane previews", () => {
+  test("a hint arriving during a preview read gets one fresh follow-up", async () => {
+    seedSinglePane("x");
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    attachLiveSession({ isConnected: () => true, paneRead: async () => {
+      reads++;
+      if (reads === 1) await gate;
+      return { text: `read-${reads}`, hash: String(reads) };
+    } } as unknown as LiveSession);
+    await act(async () => {
+      const first = refreshBoardPreviewHint("w1:p1");
+      while (!reads) await Promise.resolve();
+      const next = refreshBoardPreviewHint("w1:p1");
+      release();
+      await Promise.all([first, next]);
+    });
+    expect(reads).toBe(2);
+    expect(boardPreviewText("w1:p1")).toBe("read-2");
+  });
+
   test("paints ANSI color into a compact React screen, not a live xterm", async () => {
     const host = await paintPreview("\x1b[38;2;225;0;0mred\x1b[0m plain");
     expect(host.querySelector(".board-pane-buffer")).toBeTruthy();
@@ -86,7 +107,7 @@ describe("board pane previews", () => {
     expect(host.querySelectorAll(".board-pane-line")).toHaveLength(24);
   });
 
-  test("reads the current tab serially, skips an unchanged hash, and caps the fan-out", async () => {
+  test("reads the focused pane first, skips unchanged rendering, and targets status hints", async () => {
     const order: string[] = [];
     let calls = 0;
     attachLiveSession({
@@ -131,6 +152,10 @@ describe("board pane previews", () => {
 
     await act(refreshBoardPreviews);
     expect(calls).toBe(4);
+    order.length = 0;
+    await act(async () => { await Promise.all([refreshBoardPreviewHint("w1:p1"), refreshBoardPreviewHint("w1:p1")]); });
+    expect(order).toEqual(["w1:p1"]);
+    expect(calls).toBe(5);
     expect(document.querySelector('[data-pane-id="w1:p1"] .board-pane-screen')?.textContent).toContain("screen w1:p1");
   });
 

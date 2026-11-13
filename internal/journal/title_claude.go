@@ -4,8 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"os"
 	"strings"
 )
+
+type claudeTitleCacheEntry struct {
+	info  os.FileInfo
+	title Title
+}
 
 // Claude appends ai-title and custom-title metadata to its bound transcript.
 // Read the head for the first real request and the tail for later renames;
@@ -21,8 +27,15 @@ func (r *Reader) claudeTitle(ref Ref) (Title, bool) {
 	}
 	defer file.Close()
 	info, err := file.Stat()
-	if err != nil {
+	if err != nil || !info.Mode().IsRegular() {
 		return Title{}, false
+	}
+	cacheKey := path + "\x00" + ref.Value
+	r.titleMu.Lock()
+	cached, exists := r.claudeTitles[cacheKey]
+	r.titleMu.Unlock()
+	if exists && os.SameFile(info, cached.info) && info.Size() == cached.info.Size() && info.ModTime() == cached.info.ModTime() {
+		return cached.title, true
 	}
 	var state claudeTitleState
 	headEnd := min(info.Size(), int64(titleReadBytes))
@@ -40,7 +53,19 @@ func (r *Reader) claudeTitle(ref Ref) (Title, bool) {
 	if name == "" {
 		name = state.generated
 	}
-	return Title{Name: name, Prompt: state.prompt}, true
+	title := Title{Name: name, Prompt: state.prompt}
+	// Keep the existing two-second refresh window, but an unchanged, verified
+	// file needs no JSON scan. Replacements and appends always get read again.
+	after, err := file.Stat()
+	if err == nil && info.Size() == after.Size() && info.ModTime() == after.ModTime() {
+		r.titleMu.Lock()
+		if r.claudeTitles == nil || len(r.claudeTitles) >= maxTraceCacheEntries {
+			r.claudeTitles = make(map[string]claudeTitleCacheEntry)
+		}
+		r.claudeTitles[cacheKey] = claudeTitleCacheEntry{info: info, title: title}
+		r.titleMu.Unlock()
+	}
+	return title, true
 }
 
 type claudeTitleState struct {
@@ -67,6 +92,16 @@ func (s *claudeTitleState) read(file io.ReaderAt, start, end int64, id string, p
 		}
 		data = rest
 		if len(line) > maxTranscriptLine {
+			continue
+		}
+		// Once the first request is known, only title metadata can change the
+		// result. Avoid decoding megabytes of tool output just to discard it.
+		// A Unicode escape could encode any of these type values; it always
+		// falls through. A match is only a hint: the original decoder still
+		// verifies the complete record, flags and exact session identity.
+		if !bytes.Contains(line, []byte(`"ai-title"`)) && !bytes.Contains(line, []byte(`"custom-title"`)) &&
+			(!(prompts && s.prompt == "") || !bytes.Contains(line, []byte(`"user"`))) &&
+			!bytes.Contains(line, []byte(`\u`)) {
 			continue
 		}
 		var record struct {

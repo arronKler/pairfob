@@ -10,7 +10,7 @@ import { focusRefused } from "../../shared/ui/overlay/form-focus";
 import { DeskCancel, presentModal, type ModalController } from "../../shared/ui/overlay/modal";
 import { deskInput } from "../../shared/ui/overlay/popover";
 import { SheetFooter } from "../../shared/ui/overlay/sheet-content";
-import { AgentAvatar, Button, Fold } from "../../shared/ui/primitives";
+import { AgentAvatar, Button, Fold, Spinner } from "../../shared/ui/primitives";
 import { SheetSwap } from "./sheet-swap";
 import { AgentKindGrid, kindName } from "./agent-kind-grid";
 import { AgentKindPickerPanel } from "./agent-kind-picker";
@@ -74,7 +74,13 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
   const [base, setBase] = useState("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  // What is running, so the button says it while the sheet waits on the
+  // computer. A new workspace without an agent still creates a conversation.
+  const [pending, setPending] = useState<CreateRequest["kind"] | null>(null);
+  const busy = pending !== null;
+  const pendingLabel = pending === null ? ""
+    : pending === "conversation" ? t("op.creatingConversation")
+      : pending === "worktree" ? t("op.creatingWorktree") : t("op.creatingTab");
   const submitting = useRef(false);
   // A refusal is about the directory: a mouse or keyboard reader is put in
   // its chooser, or in the path being typed (`form-focus`), instead of left on
@@ -129,14 +135,17 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
     if (!input.onCreate) { modal.close(request); return; }
     if (submitting.current) return;
     submitting.current = true;
-    setBusy(true);
+    // A Worktree sheet does not wait for its create: it closes at once and the
+    // worktree flow reports its own progress. A pending label here would only
+    // flash for a frame.
+    if (request.kind !== "worktree") setPending(request.kind);
     setError("");
     void input.onCreate(request).then(outcome => {
       if (outcome.ok) modal.close(request);
       else setError(outcome.message || t("create.notRun"));
     }).catch(() => setError(t("create.notRun"))).finally(() => {
       submitting.current = false;
-      setBusy(false);
+      setPending(null);
     });
   };
 
@@ -307,7 +316,9 @@ function CreateSheetBody({ modal, input }: { modal: ModalController<CreateReques
           <p className="create-summary">{summary}</p>
           {error ? <p className="notice notice-error" role="alert">{error}</p> : null}
           <DeskCancel />
-          <Button className="btn btn-primary create-submit" disabled={busy} aria-busy={busy} onClick={submit}>{t("create.submit")}</Button>
+          <Button className="btn btn-primary create-submit" disabled={busy} aria-busy={busy} onClick={submit}>
+            {pending ? <><Spinner />{pendingLabel}</> : t("create.submit")}
+          </Button>
         </div>
       </SheetFooter>
     </div>

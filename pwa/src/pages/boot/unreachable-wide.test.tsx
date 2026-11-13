@@ -176,7 +176,7 @@ describe("the only computer cannot be reached, on a wide layout", () => {
     recordAttempt(false);
     act(() => setConnectFailure("timeout"));
     const app = await mount();
-    expect(app.querySelector(".rail .host-title-line")?.textContent).toBe(t("unreach.lineRelay"));
+    expect(app.querySelector(".rail .host-title-line")?.textContent).toBe(t("unreach.lineRelay", { relay: "pairfob.com" }));
     expect(app.querySelector(".unreachable-title")?.textContent).toBe(t("unreach.deskTitle", { target: "pairfob.com" }));
     expect([...app.querySelectorAll(".conn-node small")].map(node => node.textContent))
       .toEqual([t("path.phoneOnline"), t("path.unreachable"), t("path.unknown")]);

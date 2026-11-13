@@ -23,6 +23,7 @@ import { commitDirectSession, prepareDirectSession, restartDirectSession, type D
 import type { TransportSwitchLease } from "./transport-switch.ts";
 
 import { pageHidden } from "./page-activity.ts";
+import { DirectOfferWarmup } from "./direct-offer-warmup.ts";
 
 export type P2PAttemptObservation = {
   result: "connected" | "failed" | "cancelled";
@@ -64,6 +65,7 @@ export type DirectSessionHost = {
 
 /** Direct-upgrade, ICE health, and in-band restart for one reconnecting session. */
 export class DirectSessionDriver {
+  private readonly offerWarmup = new DirectOfferWarmup();
   private directAbort: AbortController | null = null;
   private restartAbort: AbortController | null = null;
   private restartAttempt: { transport: SessionTransport; promise: Promise<DirectRestartResult> } | null = null;
@@ -84,7 +86,16 @@ export class DirectSessionDriver {
 
   constructor(private readonly host: DirectSessionHost) {}
 
+  prepareForRelay(): void {
+    if (this.hidden || pageHidden() || this.host.stopped || !this.host.networkAvailable ||
+        !this.host.options.p2p || this.host.networkMode === "relay" || typeof RTCPeerConnection === "undefined") return;
+    this.offerWarmup.start();
+  }
+
+  cancelPreparedOffer(): void { this.offerWarmup.cancel(); }
+
   dispose(): void {
+    this.offerWarmup.cancel();
     this.activityVersion++;
     this.probeAttempt?.cancel();
     this.probeAttempt = null;
@@ -108,6 +119,7 @@ export class DirectSessionDriver {
     this.probeAttempt?.cancel();
     this.probeAttempt = null;
     if (hidden) this.clearDirectRetry();
+    if (hidden) this.offerWarmup.cancel();
   }
 
   resetBackoff(): void {
@@ -152,6 +164,7 @@ export class DirectSessionDriver {
     if (this.host.stopped) throw new ProtocolError("disconnected", "连接已断开");
     const transport = this.host.getTransport();
     if (target === "relay") {
+      this.offerWarmup.cancel();
       this.clearDirectRetry();
       this.directAbort?.abort();
       this.restartAbort?.abort();
@@ -366,7 +379,7 @@ export class DirectSessionDriver {
     const startedAt = performance.now();
     try {
       candidate = await prepareDirectSession(relay, this.host.pair, muxProtocolFromRelayURL(this.host.relayWS), controller.signal,
-        () => this.host.spendHello());
+        () => this.host.spendHello(), () => this.offerWarmup.take(controller.signal));
       const iceGathering = candidate.iceGathering;
       if (this.host.stopped || this.host.getTransport() !== relay || !this.host.networkAvailable) {
         throw new DirectError("cancelled", "P2P 直连尝试已取消");

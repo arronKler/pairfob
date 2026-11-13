@@ -2,10 +2,80 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestCreatedShellBusyStartupAcrossCreateCommands(t *testing.T) {
+	for _, tc := range []struct {
+		name, pane string
+		command    Command
+	}{
+		{"conversation", "w2:p1", CreateConversationCommand{CWD: "/repo", AgentKind: "codex"}},
+		{"tab", "w1:p2", CreateTabCommand{WorkspaceID: "w1", AgentKind: "codex"}},
+		{"split", "w1:p2", SplitPaneCommand{WorkspaceID: "w1", TargetPaneID: "w1:p1", Direction: SplitRight, AgentKind: "codex"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var ready atomic.Bool
+			var starts atomic.Int32
+			observed := make(chan struct{}, 1)
+			socket, _ := startScriptedHerdr(t, func(request scriptedRequest) scriptedReply {
+				switch request.Method {
+				case "pane.process_info":
+					if !ready.Load() {
+						select {
+						case observed <- struct{}{}:
+						default:
+						}
+						return shellProcessReply(tc.pane, 43, 43)
+					}
+					return shellProcessReply(tc.pane, 42, 42)
+				case "agent.start":
+					starts.Add(1)
+					// Model the native RPC contract, not the CLI's retry loop.
+					if !ready.Load() {
+						return scriptedReply{Error: &scriptedError{Code: "agent_pane_busy", Message: "shell initialization is running"}}
+					}
+					var params struct {
+						PaneID string `json:"pane_id"`
+						Name   string `json:"name"`
+					}
+					if err := json.Unmarshal(request.Params, &params); err != nil {
+						t.Error(err)
+					}
+					return scriptedReply{Result: map[string]any{"type": "agent_started", "agent": map[string]any{"pane_id": params.PaneID, "name": params.Name}}}
+				}
+				return standardReply(request)
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			done := make(chan struct{})
+			var receipt Receipt
+			var err error
+			go func() {
+				defer close(done)
+				receipt, err = NewHerdr(socket).Execute(ctx, DefaultSession(), "busy-"+tc.name, tc.command)
+			}()
+			select {
+			case <-done:
+				t.Fatalf("creation completed before shell became ready: receipt=%+v err=%v", receipt, err)
+			case <-ctx.Done():
+				t.Fatal("no readiness observation")
+			case <-observed:
+			}
+			if starts.Load() != 0 {
+				t.Fatal("agent.start sent while shell initialization was running")
+			}
+			ready.Store(true)
+			<-done
+			if err != nil || receipt.Outcome != OutcomeApplied || starts.Load() != 1 {
+				t.Fatalf("receipt=%+v err=%v agent.start calls=%d", receipt, err, starts.Load())
+			}
+		})
+	}
+}
 
 func shellProcessReply(paneID string, foreground int, pids ...int) scriptedReply {
 	processes := make([]any, 0, len(pids))

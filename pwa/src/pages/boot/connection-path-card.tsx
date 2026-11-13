@@ -2,6 +2,7 @@ import { Check, Globe, Monitor, X } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { ThisDeviceIcon } from "../../features/settings/this-device";
 import { t } from "../../lib/i18n";
+import { relayHost } from "../../lib/runtime-config";
 import { Swap } from "../../shared/ui/primitives";
 
 /**
@@ -35,7 +36,7 @@ export function ConnectionPathCard({ host, phone, link1, relay, link2, computer,
   computer: PathNode;
   children?: ReactNode;
 }) {
-  const label = t("path.aria", { phone: phone.note, relay: relay.note, host, computer: computer.note });
+  const label = t("path.aria", { phone: phone.note, relay: relay.note, relayHost: relayHost(), host, computer: computer.note });
   return (
     <section className="conn-path-card">
       <div className="conn-path" role="img" aria-label={label}>
@@ -43,7 +44,7 @@ export function ConnectionPathCard({ host, phone, link1, relay, link2, computer,
         <span className={`conn-link is-${link1}`} aria-hidden="true">
           {link1 === "fail" ? <X size={12} strokeWidth={3} /> : null}
         </span>
-        <Node node={relay} icon={<Globe size={20} />} name="pairfob.com" />
+        <Node node={relay} icon={<Globe size={20} />} name={relayHost()} />
         <span className={`conn-link is-${link2}`} aria-hidden="true">
           {link2 === "fail" ? <X size={12} strokeWidth={3} /> : null}
         </span>

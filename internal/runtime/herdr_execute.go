@@ -534,6 +534,9 @@ func (h *Herdr) startAgentOnPane(ctx context.Context, session SessionRef, paneID
 			return "", err
 		}
 	}
+	// Native agent.start rejects a busy shell immediately; timeout_ms only
+	// bounds agent startup after admission. Keep this read-only readiness gate
+	// before the single mutation, including when a new shell starts a child.
 	if err := h.waitCreatedShell(ctx, session, paneID); err != nil {
 		return "", err
 	}

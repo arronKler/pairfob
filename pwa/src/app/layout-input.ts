@@ -5,7 +5,7 @@ import { connectionStore, phase } from "../features/connection/connection-store"
 import { dashboardStore, selectedAgent } from "../features/dashboard/catalog-store";
 import { currentScreen, navigationStore } from "./navigation-store";
 import { preferencesStore, termFontPx } from "../features/settings/preferences-store";
-import { isAgentChat, isFullTerminal, openPaneId, sessionStore } from "../features/session/session-store";
+import { createdPaneAwaitingCatalog, isAgentChat, isFullTerminal, openPaneId, sessionStore } from "../features/session/session-store";
 import { computers, computersStore } from "../features/computers/catalog-store";
 import { connectFailure, retryingUnreachable } from "../features/connection/connection-store";
 import { unreachableHop } from "../features/connection/connection-path";
@@ -31,7 +31,10 @@ export function currentLayoutInput(): LayoutInput {
     fullTerminal: isFullTerminal(),
     agentChat: isAgentChat(),
     desk: isDesk(),
-    hasSelectedPane: Boolean(paneId) && selectedAgent() !== undefined,
+    // A pane the create just answered with is the desk's session before its
+    // dashboard card lands; an empty column would read as a failed create.
+    hasSelectedPane: Boolean(paneId)
+      && (selectedAgent() !== undefined || createdPaneAwaitingCatalog() === paneId),
     termFontPx: termFontPx(),
     operationBusy: operationBusy(),
     unreachable: computers().length === 1 && unreachableHop(connectFailure()) !== null,
@@ -59,7 +62,11 @@ export function publishedLayoutInput(): LayoutInput {
     fullTerminal: session.fullTerminal,
     agentChat: session.agentChat,
     desk: isDesk(),
-    hasSelectedPane: Boolean(paneId) && dashboardStore.get().agents.some((agent) => agent.paneId === paneId),
+    // Same grace as the live composition: the published frame keeps the desk's
+    // session column while the created pane's card is still on its way.
+    hasSelectedPane: Boolean(paneId)
+      && (dashboardStore.get().agents.some((agent) => agent.paneId === paneId)
+        || createdPaneAwaitingCatalog() === paneId),
     termFontPx: preferencesStore.get().termFontPx,
     operationBusy: capabilitiesStore.get().operationBusy,
     unreachable: computersStore.get().computers.length === 1

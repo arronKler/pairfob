@@ -43,12 +43,19 @@ test("failed creation keeps the project and agent; pending creation cannot be se
     onCreate: async () => { calls++; return new Promise(resolve => { finish = resolve; }); } });
   await submit();
   expect(button(".create-submit").disabled).toBe(true);
+  // The wait is on the button itself: a spinner and what is running.
+  expect(button(".create-submit").getAttribute("aria-busy")).toBe("true");
+  expect(button(".create-submit").querySelector(".spinner")).not.toBeNull();
+  expect(button(".create-submit").textContent).toContain(t("op.creatingConversation"));
   await submit();
   expect(calls).toBe(1);
   await act(async () => { finish({ ok: false, message: "Agent executable was not found" }); await settle(); });
   expect(sheet().textContent).toContain("Agent executable was not found");
   expect(sheet().textContent).toContain("/home/me/project");
   expect(button(".create-submit").disabled).toBe(false);
+  expect(button(".create-submit").getAttribute("aria-busy")).toBe("false");
+  expect(button(".create-submit").querySelector(".spinner")).toBeNull();
+  expect(button(".create-submit").textContent).toBe(t("create.submit"));
   expect(calls).toBe(1);
   await act(async () => { await closeTestDialogs(); });
   expect(await result).toBeNull();

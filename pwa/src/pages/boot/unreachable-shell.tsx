@@ -14,6 +14,7 @@ import { pointerFine } from "../../app/input-mode";
 import { MenuChoice, showActionSheet } from "../../shared/ui/overlay";
 import { Button, StatusDot, Swap } from "../../shared/ui/primitives";
 import { CommandLine } from "../../features/dashboard/components/herd-empty";
+import { relayHost } from "../../lib/runtime-config";
 import { ConnectionPathCard } from "./connection-path-card";
 
 /** Automatic retries while the page is up; each is a read-only reconnect. */
@@ -36,7 +37,7 @@ function hostView(pair: PairResult | null, failure: string): { name: string; lin
   const relay = (unreachableHop(failure) ?? "computer") === "relay";
   return {
     name: pair ? computerTitle(pair) : t("boot.computer"),
-    line: relay ? t("unreach.lineRelay") : t("unreach.lineComputer", { when: formatDeviceAge(pair?.lastSeen) }),
+    line: relay ? t("unreach.lineRelay", { relay: relayHost() }) : t("unreach.lineComputer", { when: formatDeviceAge(pair?.lastSeen) }),
     relay,
   };
 }
@@ -110,7 +111,7 @@ export function UnreachableBody({ retrying }: { retrying: boolean }) {
         relay={relay ? node("fail", failNote) : node("ok", t("path.relayOk"))}
         link2={relay ? "idle" : "fail"}
         computer={relay ? node("idle", t("path.unknown")) : node("fail", failNote)}>
-        <p className="conn-path-note">{relay ? t("unreach.noteRelay") : t("unreach.noteComputer", { host: name })}</p>
+        <p className="conn-path-note">{t(relay ? "unreach.noteRelay" : "unreach.noteComputer", { host: name, relay: relayHost() })}</p>
       </ConnectionPathCard>
       <section className="conn-steps" aria-labelledby="conn-steps-title">
         <h2 id="conn-steps-title" className="herd-empty-recent-label">{relay ? t("unreach.onPhone") : t("unreach.onComputer", { host: name })}</h2>
@@ -125,7 +126,7 @@ export function UnreachableBody({ retrying }: { retrying: boolean }) {
             </li>
           ))}
         </ol>
-        {relay ? <p className="herd-empty-note">{t("unreach.relayNote", { host: name })}</p> : null}
+        {relay ? <p className="herd-empty-note">{t("unreach.relayNote", { host: name, relay: relayHost() })}</p> : null}
       </section>
       <div className="conn-retry-dock">
         <Button className="btn btn-primary conn-retry" disabled={retrying} onClick={retryUnreachable}>

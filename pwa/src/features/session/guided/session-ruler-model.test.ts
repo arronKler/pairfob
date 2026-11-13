@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mapSnapshotAgents } from "../../../lib/dashboard";
-import { peekPlacement, rulerView } from "./session-ruler-model";
+import type { TabLayoutView } from "../../../lib/layout";
+import { peekPlacement, rulerMapBoxes, rulerRelation, rulerView } from "./session-ruler-model";
 
 function agents(panes: Array<{ id: string; workspace?: string; status?: string; label?: string }>) {
   return mapSnapshotAgents({
@@ -47,7 +48,7 @@ describe("rulerView", () => {
     expect(view.ticks.map((tick) => tick.paneId)).toEqual(["p2", "p1"]);
   });
 
-  test("the preview names the group only when the line does not already say it", () => {
+  test("the preview keeps the group and the row's place in it", () => {
     const space = rulerView({
       agents: agents([{ id: "p1" }]),
       listGroup: "space",
@@ -57,7 +58,9 @@ describe("rulerView", () => {
       stale: false,
     });
     expect(space.ticks[0]!.line).toContain("one");
-    expect(space.ticks[0]!.group).toBe("");
+    expect(space.ticks[0]!.group).toBe("one");
+    expect(space.ticks[0]!.groupWithin).toBe(1);
+    expect(space.ticks[0]!.groupCount).toBe(1);
 
     const byAgent = rulerView({
       agents: agents([{ id: "p1" }]),
@@ -118,6 +121,38 @@ describe("rulerView", () => {
     });
     expect(elsewhere.currentIndex).toBe(-1);
     expect(elsewhere.visible).toBeFalse();
+  });
+});
+
+describe("rulerRelation", () => {
+  test("names the target's place relative to the open session", () => {
+    expect(rulerRelation({ workspaceId: "w1", tabId: "t1" }, { workspaceId: "w1", tabId: "t1" })).toBe("same-tab");
+    expect(rulerRelation({ workspaceId: "w1", tabId: "t1" }, { workspaceId: "w1", tabId: "t2" })).toBe("same-workspace");
+    expect(rulerRelation({ workspaceId: "w1", tabId: "t1" }, { workspaceId: "w2", tabId: "t2" })).toBe("other-workspace");
+    expect(rulerRelation(undefined, { workspaceId: "w2", tabId: "t2" })).toBe("");
+  });
+});
+
+describe("rulerMapBoxes", () => {
+  const split: TabLayoutView = {
+    workspaceId: "w1", tabId: "t1", zoomed: false,
+    area: { x: 0, y: 0, width: 100, height: 40 },
+    focusedPaneId: "p2",
+    panes: [
+      { paneId: "p1", focused: false, rect: { x: 0, y: 0, width: 50, height: 40 } },
+      { paneId: "p2", focused: true, rect: { x: 50, y: 0, width: 50, height: 40 } },
+    ],
+  };
+
+  test("turns the target tab's rects into fractional boxes and marks both panes", () => {
+    expect(rulerMapBoxes(split, "p1", "p2")).toEqual([
+      { paneId: "p1", current: true, target: false, left: 0, top: 0, width: 0.5, height: 1 },
+      { paneId: "p2", current: false, target: true, left: 0.5, top: 0, width: 0.5, height: 1 },
+    ]);
+  });
+
+  test("an empty area draws no map", () => {
+    expect(rulerMapBoxes({ ...split, area: { x: 0, y: 0, width: 0, height: 0 } }, "p1", "p2")).toEqual([]);
   });
 });
 

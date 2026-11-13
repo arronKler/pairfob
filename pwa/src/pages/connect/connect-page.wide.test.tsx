@@ -108,7 +108,7 @@ describe("wide with a mouse: the code is typed on the page", () => {
     expect([...app.querySelectorAll(".connect-step-body > b")].map(node => node.textContent))
       .toEqual([t("connect.step1"), t("connect.step2Code")]);
     expect(app.querySelector(".connect-command code")?.textContent).toBe("pairfob pair");
-    expect(app.querySelector(".connect-phone-note")?.textContent).toBe(t("connect.phoneNote"));
+    expect(app.querySelector(".connect-phone-note")?.textContent).toBe(t("connect.phoneNote", { relay: "pairfob.com" }));
     // The QR to scan would be on this very screen.
     expect(app.querySelector(".connect-scan")).toBeNull();
     expect(app.querySelector(".connect-manual")).toBeNull();

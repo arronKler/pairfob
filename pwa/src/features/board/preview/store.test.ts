@@ -143,12 +143,12 @@ describe("board preview passes", () => {
     expect(boardPreviewText("good")).toBe("ok");
   });
 
-  test("a superseded pass stops before its next read and publishes nothing late", async () => {
+  test("a superseded pass stops both lanes before their next read and publishes nothing late", async () => {
     const log: string[] = [];
     const token = nextPreviewGeneration();
     const alive = () => token === previewGeneration();
     const pass = runPreviewPass({
-      ids: ["w1:p1", "w1:p2"],
+      ids: ["w1:p1", "w1:p2", "w1:p3"],
       linesOf: () => 24,
       source: source([
         { paneId: "w1:p1", text: "one", hash: "h1" },
@@ -159,7 +159,7 @@ describe("board preview passes", () => {
     // Another reader starts (or the cache is cleared) while the first read is in flight.
     nextPreviewGeneration();
     await pass;
-    expect(log).toEqual(["w1:p1:24"]);
+    expect(log).toEqual(["w1:p1:24", "w1:p2:24"]);
     expect(boardPreviewText("w1:p1")).toBe("");
     expect(boardPreviewText("w1:p2")).toBe("");
   });

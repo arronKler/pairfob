@@ -68,7 +68,8 @@ export type OpenPanePorts = {
   inPlace?: boolean;
   currentScreen(): string;
   isFullTerminal(): boolean;
-  findAgent(paneId: string): { paneId: string } | undefined;
+  /** The dashboard's card, or the kind a create just started on this pane. */
+  findAgent(paneId: string): { paneId: string; historyAvailable?: boolean; hasAgent?: boolean; agent?: string } | undefined;
   /**
    * Commit the destination. A shared list → pane transition resolves once its
    * deferred commit ran; every other navigation commits synchronously.

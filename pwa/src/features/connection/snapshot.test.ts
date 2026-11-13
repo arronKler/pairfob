@@ -8,9 +8,12 @@ import { setScreen } from "../../app/navigation-store";
 import { noteRelayRtt, setSessionTransport } from "./connection-store";
 import { applySnapshot, dashboardStore, refreshBusy, resetDashboard, setRefreshBusy, subscribeRefreshBusy } from "../dashboard/catalog-store";
 import { boardStore, resetBoardCatalog } from "../board/layout-store";
-import { adoptDaemonPreferences, preferencesStore } from "../settings/preferences-store";
+import { adoptDaemonPreferences, preferencesStore, rememberPane } from "../settings/preferences-store";
 import { batch } from "../../shared/model/domain-store";
 import {
+  createdPaneAwaitingCatalog,
+  markCreatedPane,
+  openPaneId,
   queueSnapshot,
   resetObservationLifecycle,
   selectPane,
@@ -195,6 +198,44 @@ describe("snapshot observation ownership", () => {
     session.verifyPath = () => true;
     await refreshSnapshot(snapshotPorts);
     expect(calls).toEqual(["commitView"]);
+  });
+
+  test("a fold that started before a create keeps its pane and activation", async () => {
+    setScreen("pane");
+    selectPane("new-P");
+    markCreatedPane("new-P");
+    rememberPane("new-P");
+    // This fold was requested before the mutation answered and lacks the pane.
+    await refreshSnapshot(snapshotPorts);
+    expect(reads).toBe(1);
+    expect(openPaneId()).toBe("new-P");
+    expect(calls).not.toContain("abandon");
+    expect(preferencesStore.get().paneActivated["new-P"]).toBeNumber();
+  });
+
+  test("a fold that carries the created pane ends its grace", async () => {
+    setScreen("pane");
+    selectPane("new-P");
+    markCreatedPane("new-P");
+    session.snapshot = async () => {
+      reads += 1;
+      return snap("new-P");
+    };
+    await refreshSnapshot(snapshotPorts);
+    expect(openPaneId()).toBe("new-P");
+    expect(createdPaneAwaitingCatalog()).toBe("");
+  });
+
+  test("without a create grace a fold still drops a pane it no longer carries", async () => {
+    setScreen("pane");
+    selectPane("old-A");
+    session.snapshot = async () => {
+      reads += 1;
+      return snap("other-B");
+    };
+    await refreshSnapshot(snapshotPorts);
+    expect(openPaneId()).toBe("");
+    expect(calls).toContain("abandon");
   });
 
   test("an ordinary current Snapshot applies once and a repeat unchanged herd does not paint", async () => {

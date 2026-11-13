@@ -1,5 +1,6 @@
 import { ProtocolError } from "./protocol/errors.ts";
 import { copy, hasCopy, t, type CopyKey } from "./i18n.ts";
+import { relayHost } from "./runtime-config.ts";
 
 const FRIENDLY_CODES = [
   "unpaired",
@@ -65,12 +66,12 @@ const FRIENDLY_SET = new Set<string>(FRIENDLY_CODES);
 function errorCopy(code: string): string | undefined {
   const key = `err.${code}`;
   if (!FRIENDLY_SET.has(code) || !hasCopy(key)) return undefined;
-  return t(key as CopyKey);
+  return t(key as CopyKey, { relay: relayHost() });
 }
 
 /** Fail-closed copy when a public code has no specific next step. */
 export function genericNotice(): string {
-  return t("err.generic");
+  return t("err.generic", { relay: relayHost() });
 }
 
 /** Live lookup so language switches stay in sync. */
@@ -117,7 +118,7 @@ export function messageCopy(error: unknown, context: "mutation" | "read" = "muta
 }
 
 export function messageOf(error: unknown, context: "mutation" | "read" = "mutation"): string {
-  return t(messageCopy(error, context).key);
+  return t(messageCopy(error, context).key, { relay: relayHost() });
 }
 
 /** Live session chrome copy. Never surfaces mux ERROR.message. */

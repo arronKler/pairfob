@@ -51,6 +51,18 @@ func TestWriteDoctorSanitizesOriginNote(t *testing.T) {
 	}
 }
 
+func TestRelayHostFollowsTheEnrolledOrigin(t *testing.T) {
+	for _, test := range []struct{ origin, want string }{
+		{"https://relay.example.com", "relay.example.com"},
+		{"http://127.0.0.1:8787", "127.0.0.1:8787"},
+		{"", "pairfob.com"},
+	} {
+		if got := relayHost(test.origin); got != test.want {
+			t.Fatalf("relayHost(%q) = %q, want %q", test.origin, got, test.want)
+		}
+	}
+}
+
 func TestWriteDoctorP2POff(t *testing.T) {
 	var buf bytes.Buffer
 	writeDoctor(&buf, health{Version: "dev", P2P: testBool(false)})

@@ -6,6 +6,7 @@
  */
 import { groupAgents, type AgentCard, type ListGroup, type PinnedAt, type TouchedAt } from "../../../lib/ranking";
 import type { DashboardAgentCard } from "../../../lib/dashboard";
+import type { TabLayoutView } from "../../../lib/layout";
 import { herdNeedsReader, paneHeaderLine, paneIdentity } from "../../dashboard/model/herd-view";
 
 export type RulerTick = {
@@ -18,6 +19,9 @@ export type RulerTick = {
   line: string;
   /** The list group this row sits in, when that adds something to `line`. */
   group: string;
+  /** Its place in that group, and the group's size. */
+  groupWithin: number;
+  groupCount: number;
   blocked: boolean;
   current: boolean;
 };
@@ -39,7 +43,7 @@ export function rulerView({ agents, listGroup, activation, pinned, currentPaneId
   stale: boolean;
 }): RulerView {
   const rich = new Map(agents.map((agent) => [agent.paneId, agent]));
-  const ticks = groupAgents([...agents], listGroup, activation, pinned).flatMap((group) => group.items.flatMap((item) => {
+  const ticks = groupAgents([...agents], listGroup, activation, pinned).flatMap((group) => group.items.flatMap((item, index) => {
     const agent = rich.get(item.paneId);
     if (!agent) return [];
     const identity = paneIdentity(agent, listGroup, stale);
@@ -53,7 +57,9 @@ export function rulerView({ agents, listGroup, activation, pinned, currentPaneId
       statusLabel: identity.statusLabel,
       statusTone: identity.statusTone,
       line,
-      group: groupName && !line.toLowerCase().includes(groupName.toLowerCase()) ? groupName : "",
+      group: groupName,
+      groupWithin: index + 1,
+      groupCount: group.items.length,
       // A plain terminal has no agent state, so it never waits on the reader.
       blocked: !stale && herdNeedsReader(agent) === "blocked",
       current: agent.paneId === currentPaneId,
@@ -65,6 +71,44 @@ export function rulerView({ agents, listGroup, activation, pinned, currentPaneId
 }
 
 export type PeekPlacement = { left: number; top: number; width: number };
+
+/** The target's place relative to the session the reader is in. */
+export type RulerRelation = "" | "same-tab" | "same-workspace" | "other-workspace";
+
+export function rulerRelation(
+  current: { workspaceId?: string; tabId?: string } | null | undefined,
+  target: { workspaceId?: string; tabId?: string } | null | undefined,
+): RulerRelation {
+  if (!current?.workspaceId || !target?.workspaceId || !target.tabId) return "";
+  if (current.workspaceId !== target.workspaceId) return "other-workspace";
+  if (!current.tabId || current.tabId !== target.tabId) return "same-workspace";
+  return "same-tab";
+}
+
+export type RulerMapBox = {
+  paneId: string;
+  current: boolean;
+  target: boolean;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+/** The target's tab as fractional boxes, so the card can draw where both sit. */
+export function rulerMapBoxes(layout: TabLayoutView, currentPaneId: string, targetPaneId: string): RulerMapBox[] {
+  const { area } = layout;
+  if (!area.width || !area.height) return [];
+  return layout.panes.map(({ paneId, rect }) => ({
+    paneId,
+    current: paneId === currentPaneId,
+    target: paneId === targetPaneId,
+    left: (rect.x - area.x) / area.width,
+    top: (rect.y - area.y) / area.height,
+    width: rect.width / area.width,
+    height: rect.height / area.height,
+  }));
+}
 
 const CARD_MAX_WIDTH = 322;
 const GUTTER = 8;

@@ -34,6 +34,8 @@ import {
   issueTicket,
   markWorkspaceBrowser,
   noteDirectoryPage,
+  retainDirectoryPageCount,
+  workspaceDirectoryPageCount,
   readCache,
   currentMediaGeneration,
   toggleChangeGroup,
@@ -116,12 +118,15 @@ async function loadEntered(
     } else if (changesFirst && scope.descriptor.features.git_status) {
       ticket.commit({ tab: "changes" });
     }
+    retainDirectoryPageCount(pages);
     const restored = getWorkspaceSnapshot();
     const detail = restored.view !== "browser";
     const tasks: Promise<void>[] = [];
     if (restored.view === "file") tasks.push(loadWorkspaceFile(restored.detailPath));
     else if (restored.view === "diff") tasks.push(loadGitDiff(restored.detailPath, restored.diffLayer));
-    tasks.push(restoreDirectory(restored.directory, pages, ticket, detail));
+    // The changes tab does not display the directory. Its first files visit
+    // loads it on demand; Git status still feeds the shared header and badges.
+    if (restored.tab === "files") tasks.push(restoreDirectory(restored.directory, pages, ticket, detail));
     if (scope.descriptor.features.git_status) tasks.push(loadStatus(ticket));
     await Promise.all(tasks);
   } catch (error) {
@@ -419,7 +424,13 @@ export function showWorkspaceTab(tab: WorkspaceTab): void {
   clearWorkspaceMedia();
   ticket.commit({ tab, view: "browser", error: "" });
   ticket.finishLoad();
-  if (tab === "changes" && ticket.current()) void loadStatus();
+  if (!ticket.current()) return;
+  if (tab === "changes") void loadStatus();
+  else {
+    ticket.commit({ loading: true });
+    void restoreDirectory(getWorkspaceSnapshot().directory, workspaceDirectoryPageCount(), ticket, true)
+      .finally(() => ticket.finishLoad());
+  }
 }
 
 export function closeWorkspaceDetail(): void {

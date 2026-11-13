@@ -354,6 +354,13 @@ export function activeScope(): WorkspaceScope | null {
   return workspaceScope;
 }
 
+/** Preserve pagination while the changes tab defers its directory read. */
+export function retainDirectoryPageCount(pages: number): void {
+  directoryPageCount = Math.max(1, pages);
+}
+
+export function workspaceDirectoryPageCount(): number { return directoryPageCount; }
+
 export function noteDirectoryPage(append: boolean): void {
   directoryPageCount = append ? directoryPageCount + 1 : 1;
 }

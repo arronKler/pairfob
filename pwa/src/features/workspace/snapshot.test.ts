@@ -92,7 +92,7 @@ describe("workspace snapshot identity", () => {
 
   test("compatibility and input aliases cannot mutate a published snapshot", async () => {
     prepare();
-    await enterWorkspace("p1");
+    await enterWorkspace("p1", "guided", false, "files");
     const snap = getWorkspaceSnapshot();
     let notices = 0;
     const stop = subscribeWorkspace(() => { notices++; });

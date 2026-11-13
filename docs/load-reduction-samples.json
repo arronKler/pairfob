@@ -1,0 +1,531 @@
+{
+  "method": {
+    "activity": "Replay last complete record in 20 real local Claude tail windows in memory; no transcript content or identities exported. Full bounded bytes revalidated; parsing reuse only.",
+    "board": "Native browser, real production preview functions, fixture reads with explicit 100 ms simulated latency.",
+    "workspace": "Native browser QA production actions and fixture RPC call counts. Baseline is saved pre-change modules in the same checkout.",
+    "pokes": "Controlled daemon tests, 20 duplicate pane statuses plus one distinct pane status and one availability event."
+  },
+  "activity_real_samples": [
+    {
+      "round": 0,
+      "windows": 20,
+      "validated_bytes": 10465774,
+      "parsed_candidate_bytes": 43204,
+      "baseline_ms": 1132.948,
+      "candidate_ms": 90.097
+    },
+    {
+      "round": 1,
+      "windows": 20,
+      "validated_bytes": 10465774,
+      "parsed_candidate_bytes": 43204,
+      "baseline_ms": 1153.115,
+      "candidate_ms": 24.325
+    },
+    {
+      "round": 2,
+      "windows": 20,
+      "validated_bytes": 10465774,
+      "parsed_candidate_bytes": 43204,
+      "baseline_ms": 1287.593,
+      "candidate_ms": 78.477
+    }
+  ],
+  "ui_baseline": {
+    "variant": "baseline",
+    "method": "local production QA with fixture RPCs; board latency explicitly simulated",
+    "surfaces": [
+      {
+        "surface": "phone",
+        "width": 390,
+        "height": 844,
+        "before": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "workspaceList",
+            "gitStatus",
+            "agentTurnWrites"
+          ],
+          "errors": [],
+          "viewport": [
+            390,
+            844
+          ]
+        },
+        "measurementOnly": true
+      },
+      {
+        "surface": "tablet-middle",
+        "width": 820,
+        "height": 768,
+        "before": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "workspaceList",
+            "gitStatus",
+            "agentTurnWrites"
+          ],
+          "errors": [],
+          "viewport": [
+            820,
+            768
+          ]
+        },
+        "measurementOnly": true
+      },
+      {
+        "surface": "tablet",
+        "width": 1024,
+        "height": 768,
+        "before": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "workspaceList",
+            "gitStatus",
+            "agentTurnWrites"
+          ],
+          "errors": [],
+          "viewport": [
+            1024,
+            768
+          ]
+        },
+        "measurementOnly": true
+      },
+      {
+        "surface": "desktop",
+        "width": 1440,
+        "height": 900,
+        "before": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "workspaceList",
+            "gitStatus",
+            "agentTurnWrites"
+          ],
+          "errors": [],
+          "viewport": [
+            1440,
+            900
+          ]
+        },
+        "measurementOnly": true
+      }
+    ],
+    "board": [
+      {
+        "ms": 816.1999998092651,
+        "reads": 8,
+        "peak": 1,
+        "configured_read_delay_ms": 100
+      },
+      {
+        "ms": 814.1999998092651,
+        "reads": 8,
+        "peak": 1,
+        "configured_read_delay_ms": 100
+      },
+      {
+        "ms": 813.6999998092651,
+        "reads": 8,
+        "peak": 1,
+        "configured_read_delay_ms": 100
+      }
+    ],
+    "hint": {
+      "paneId": "b1:p1",
+      "reads": 3,
+      "errors": []
+    }
+  },
+  "ui_candidate": {
+    "variant": "candidate",
+    "method": "local production QA with fixture RPCs; board latency explicitly simulated",
+    "surfaces": [
+      {
+        "surface": "phone",
+        "width": 390,
+        "height": 844,
+        "input": "touch",
+        "before": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "gitStatus",
+            "agentTurnWrites"
+          ],
+          "errors": [],
+          "viewport": [
+            390,
+            844
+          ]
+        },
+        "after": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "gitStatus",
+            "agentTurnWrites",
+            "workspaceList",
+            "workspaceRead",
+            "gitDiff"
+          ],
+          "errors": [],
+          "overflow": {
+            "documentX": 0,
+            "appX": 0
+          }
+        },
+        "board_previews": 3,
+        "board_opened": true,
+        "passed": true
+      },
+      {
+        "surface": "tablet-middle",
+        "width": 820,
+        "height": 768,
+        "input": "touch",
+        "before": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "gitStatus",
+            "agentTurnWrites"
+          ],
+          "errors": [],
+          "viewport": [
+            820,
+            768
+          ]
+        },
+        "after": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "gitStatus",
+            "agentTurnWrites",
+            "workspaceList",
+            "workspaceRead",
+            "gitDiff"
+          ],
+          "errors": [],
+          "overflow": {
+            "documentX": 0,
+            "appX": 0
+          }
+        },
+        "board_previews": 3,
+        "board_opened": true,
+        "passed": true
+      },
+      {
+        "surface": "tablet",
+        "width": 1024,
+        "height": 768,
+        "input": "touch",
+        "before": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "gitStatus",
+            "agentTurnWrites"
+          ],
+          "errors": [],
+          "viewport": [
+            1024,
+            768
+          ]
+        },
+        "after": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "gitStatus",
+            "agentTurnWrites",
+            "workspaceList",
+            "workspaceRead",
+            "gitDiff"
+          ],
+          "errors": [],
+          "overflow": {
+            "documentX": 0,
+            "appX": 0
+          }
+        },
+        "board_previews": 3,
+        "board_opened": true,
+        "passed": true
+      },
+      {
+        "surface": "desktop",
+        "width": 1440,
+        "height": 900,
+        "input": "keyboard + mouse",
+        "before": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "gitStatus",
+            "agentTurnWrites"
+          ],
+          "errors": [],
+          "viewport": [
+            1440,
+            900
+          ]
+        },
+        "after": {
+          "calls": [
+            "workspaceOpen",
+            "agentTurnWrites",
+            "gitStatus",
+            "agentTurnWrites",
+            "workspaceList",
+            "workspaceRead",
+            "gitDiff"
+          ],
+          "errors": [],
+          "overflow": {
+            "documentX": 0,
+            "appX": 0
+          }
+        },
+        "board_previews": 3,
+        "board_opened": true,
+        "passed": true
+      }
+    ],
+    "board": [
+      {
+        "ms": 406.80000019073486,
+        "reads": 8,
+        "peak": 2,
+        "configured_read_delay_ms": 100
+      },
+      {
+        "ms": 406.30000019073486,
+        "reads": 8,
+        "peak": 2,
+        "configured_read_delay_ms": 100
+      },
+      {
+        "ms": 406.7999997138977,
+        "reads": 8,
+        "peak": 2,
+        "configured_read_delay_ms": 100
+      }
+    ],
+    "hint": {
+      "paneId": "b1:p1",
+      "reads": 1,
+      "errors": []
+    }
+  },
+  "pokes": {
+    "baseline_sends": 22,
+    "candidate_sends": 3,
+    "batch_window_ms": 20
+  },
+  "display_snapshot_overlap": {
+    "baseline_runtime_reads": 2,
+    "candidate_runtime_reads": 1,
+    "authority_read_separate": true,
+    "pre_event_flight_reuse": false
+  },
+  "baseline_sha256": {
+    "internal/journal/activity.go": "2d28062e33381adfd461ad7a93c694583d5f6725045401bc64356b01cb45755f",
+    "internal/journal/journal.go": "26e0a871066a0eb3944a979357ab899ad9c2796e25d5885bc84703e6536fe70b",
+    "internal/daemon/coalesce.go": "d0695c91687e5812b82f2d1f70dc62a595615d1aeb46cff8d940792025bc07fb",
+    "internal/daemon/runtime_monitor.go": "8d563d3619b6e9809644dfb3375b6bf78ebefb773ff74d2ad1da4195cf970599",
+    "pwa/src/features/board/preview/store.ts": "4fbe0e7fbce4d4d4729c9e70518473d4fda85ac49392eb01c8c727b5a0efbb93",
+    "pwa/src/features/board/preview/refresh.ts": "66b405f556c86c8576042561068807138989acd21b7856bb007e9e8f04adaa18",
+    "pwa/src/features/connection/session-events.ts": "858b457324dcc96a7ae6741af9cdc988b56eccc70642bf5df4cc6c2753e93d61",
+    "pwa/src/features/workspace/actions.ts": "ec4c2996b47b8371721d5c257d26423335f142e729a897096ffab3c710972f3a",
+    "pwa/src/features/connection/controller.ts": "db80457ec1d6cd31fceb9c9f04e0eef607518c3bfa8c52b79a911518b60da418",
+    "pwa/src/features/workspace/store.ts": "1ea60ef60c50431aa5e34963958d84a68b58fb028a5016cdddd6f1df1701090d"
+  },
+  "candidate_sha256": {
+    "internal/daemon/coalesce.go": "a4491338e26c895d7d386c56d68805ad8d63fcd1e660b431de923cbb7dea4bfe",
+    "internal/daemon/connection_profile_live_test.go": "4ce252d301e28f8b60b064668c6cf9c7a99309c76754ff991616eab5b9f2a603",
+    "internal/daemon/runtime_load_test.go": "86e3a638e378e751308fbbf63ce962537c7dc34e0852e7b901897848ea9a91e7",
+    "internal/daemon/runtime_monitor.go": "383e5b2a2d57f1bb4209edeaa340bc93ec2cd9b9c058a051fb544a67a1ba59bd",
+    "internal/daemon/runtime_pokes.go": "1f16f48bea5f700c73635c3e234825747044556e44b5714c02a8ada11dff07ae",
+    "internal/journal/activity.go": "18a1cff99c7c74fffa2d6d711e79abce7e2d1663c6a9831190dce356f474efb5",
+    "internal/journal/activity_profile_test.go": "e8e2f5858b6c6760df05f915bc1faf81b48f5b14c29e04983419968fae592477",
+    "internal/journal/activity_window.go": "8e5d391b1d4b4e7604dd21f1e9f0113bc1e656fa2ae28817e9a53a052ca3fe48",
+    "internal/journal/activity_window_test.go": "1af1d8071a674772d565ad6bfd250b78a6f26585cc8b34baaacff9bf02210ebb",
+    "internal/journal/journal.go": "4a6d2e67a057cf7f2788473dd34edaf7c9e2e6301e460a085ee3e0a676529049",
+    "internal/journal/title_claude.go": "13c57e90afd1bd60b7d3b4e84e560858347c4e682604deea8a2e0540cbf2513e",
+    "internal/journal/title_claude_performance_test.go": "87280200788c074a035171dd693bc4c75ecefb11260814766f385199a2e822d1",
+    "internal/runtime/zz_create_latency_probe_test.go": "b0d2a3c26c76266ac9d23060fb053dec43dbf664a1ec2040d6f96cd9a06080f6",
+    "proto/direct-transport.md": "c6941fd29cdb191788e384a6bd98ef46f29a53a4185179e6ac81ed0e5e716fde",
+    "pwa/scripts/connection-benchmark-fixture.ts": "f480b2c7f953f9c03c9d06e82d8ac73fef9179382d0a8d43c7aa8ac95524a103",
+    "pwa/scripts/connection-benchmark.ts": "f27aec726f6d5cb63af294828c92ef05e14645c5814f4944e8275e67cd40d7b1",
+    "pwa/scripts/live-connection-profile.ts": "bc25a4c4b61d5d35e21948ac2f676711ad08f6800a7acdaa6cda508b84b01429",
+    "pwa/scripts/live-upgrade-profile.ts": "64f8312827379dca7afa972ff113fa90e98fac159f75fdf582a26eed86bf40e6",
+    "pwa/src/features/board/preview/refresh.ts": "234e41229b201b10fea7f85393b10851ef292afe48e9cd5979e727da4c56f9e5",
+    "pwa/src/features/board/preview/store.test.ts": "0fb482ec92097bf7d4f4a1dc6876c30b5856a112b2271dfb8a58c6698db45e72",
+    "pwa/src/features/board/preview/store.ts": "865881490efe4edc0071bfa2e9e50679a94da73393bb08568c6cde1db7816251",
+    "pwa/src/features/connection/controller.ts": "745e9912fc8511f1ace99d5abef2812146c5117bc96b1b9fe1f2df5763b359a7",
+    "pwa/src/features/connection/session-events.ts": "d7de01022c304b74bb844ebf89d5a6ca32237d15f5e92db8a7935d09b5213051",
+    "pwa/src/features/operations/create-sheet.test.tsx": "fcd6f70f5ab2ebb99f4582fda0b1cbf0abd45609a74a0907154e6ba51301057d",
+    "pwa/src/features/operations/create-sheet.tsx": "ce3ef1a923fa20e9d5fdaf7c4ae2ed967ca1bf6b5742ebd3c3226e81fc9e6a17",
+    "pwa/src/features/operations/styles/create-sheet-motion.test.ts": "e9a811e3ef3b2a31775b40b6dbbcf1fab6210447bba5714738a0a28f5ff6bbbf",
+    "pwa/src/features/operations/styles/create-sheet.scss": "cda1b471b4c55dbe2bbf7e34b25c335f426dbb16a8e7dc35add0bbb695c992e0",
+    "pwa/src/features/workspace/actions.ts": "6aaac3152d0c855697b253d703e56206c52d84c7d58ef579e0e0ffc8fbe749d4",
+    "pwa/src/features/workspace/snapshot.test.ts": "776b99964b6a5760d999eba2efad3e6cac354f9a2962397fad6950ec62a6a073",
+    "pwa/src/features/workspace/store.ts": "e19bbca301ba9fa68834873e460bce18c5edbdf0adfcaad449db655ef1b6abba",
+    "pwa/src/features/workspace/workspace-demand.test.ts": "eaac64514f2c1d6bd616bc8330613f0c8851edff5e9be27ab60c5f875f7223fd",
+    "pwa/src/lib/protocol/direct-offer-warmup.test.ts": "a7a5ea2198b219cac63a38b0fe10b662dae53aafd2ae16a4a133f2ac7dced4d1",
+    "pwa/src/lib/protocol/direct-offer-warmup.ts": "bb0f8355b2b79e073cbdb587bfaf2fe6dd5122459665d4ddd6cd94b01fd50f89",
+    "pwa/src/lib/protocol/direct-offer.test.ts": "92e32d52d672999af543920b6398b9202cf20404d17543b3e62fd3d26aed12d0",
+    "pwa/src/lib/protocol/direct-peer.ts": "64081c3a84c789d10cdee1c49d5299a01b0c340c0f1fc562b3d4b14c488b3ded",
+    "pwa/src/lib/protocol/relay-dial.test.ts": "cea64d0b4cdf9ea456bf6ef869b5964f271e81b5f359671593063421c292baeb",
+    "pwa/src/lib/protocol/relay-dial.ts": "e794b832b5d4760f4afde2c1cc566ea2f6c4102e3f45f227f1c1683528c81719",
+    "pwa/src/lib/protocol/session-crypto.test.ts": "f96a550acecff469e2429dd2a58b9a2255f69c251d48a0ea456734d492d8d6cb",
+    "pwa/src/lib/protocol/session-crypto.ts": "3c2d51d562fc3d88c1092e15e77152046b8148bf2f308f3312baa83217d568eb",
+    "pwa/src/lib/protocol/session-direct.ts": "abdc4a5ed2ac30affe3c10bfbbec48168db0b767ac92333e0efcf9832e751bfd",
+    "pwa/src/lib/protocol/session-handshake.ts": "b189531e385acba437d94495ee39821ef6f999294a17b354e7543e294fcec996",
+    "pwa/src/lib/protocol/session-ice-warmup.test.ts": "0129ca73f3e7984086b6fa1fc64b70fa0a583391cfdb15a40d63efd89b574d1e",
+    "pwa/src/lib/protocol/session-prepared-offer.test.ts": "f6cfb0e402ccf58f02e72a8001fa5d285a1e79ca1d02ebb9a78a02ab350e5f52",
+    "pwa/src/lib/protocol/session-upgrade.ts": "4a11798cf32b5551482bb5c43bba5883d841da9c9d2e7f479cffa3b22771e594",
+    "pwa/src/lib/protocol/session-ws.ts": "3e479cda70270f7eb9d116646f5912fa28d94e443b8029449a0c4ddfff285d3c",
+    "pwa/src/pages/board/preview-refresh.test.ts": "4ae40ab1cf339e818bbb05df62d526eb2b86fd331cd4e1c35dad7a0d04456e42",
+    "pwa/test-support/session-ice-warmup-isolated.test.ts": "b3e7183b6158271fb1b69fc2c14cb87d6441d5a7c612548399acd3e0b8dab5ae",
+    "pwa/test-support/session-standby-isolated.test.ts": "7d41557be0cf2e3bb80191f4cb443d2b9d574026af4c3c0a8ef03543a82f294a",
+    "pwa/test-support/session-switch-standby-isolated.test.ts": "f615a28f780af8832045c29a205409cd76c5d235756603e833aeaa4d06fba1bf",
+    "scripts/qa-load-reduction.mjs": "3db5017486e95dcf2c111c548c32a1fb37b3418dc73b5cbada2f7c8978baaa54"
+  },
+  "verification": {
+    "date": "2026-11-13",
+    "first_full_gate": {
+      "exit_code": 1,
+      "pwa_pass": 5854,
+      "pwa_fail": 2,
+      "note": "Concurrent session-creation edits; latest isolated recheck passed 16 tests without assertion changes."
+    },
+    "full_gate_recheck": {
+      "command": "./scripts/verify.sh",
+      "exit_code": 0,
+      "pwa_pass": 5856,
+      "pwa_fail": 0,
+      "pwa_files": 674,
+      "log": "/tmp/pairfob-load-recheck-verify.log",
+      "go_race": true,
+      "scripts": true,
+      "desktop": true,
+      "worker": true,
+      "types": true,
+      "build": true
+    },
+    "source_delta_after_full_gate_started": {
+      "internal/runtime/zz_create_latency_probe_test.go": {
+        "at_gate_start": "38139520a435d1fd4012536d61be6bd5cac02ceb3ee792516060747bbd851968",
+        "at_completion": null
+      },
+      "pwa/src/features/operations/controller.ts": {
+        "at_gate_start": "b51eb2839360055ad8f36750610cb4941f54d5f3d57762a022cb0d873bd1cca0",
+        "at_completion": "d65c2b617360ea560cd3d2f0eb7342c25cfc20c96d0adae346a1dd3f041e434a"
+      }
+    },
+    "supplemental_checks": [
+      {
+        "command": "go test -race ./internal/runtime",
+        "passed": true,
+        "log": "/tmp/pairfob-load-runtime-final.log"
+      },
+      {
+        "command": "bun run test:changed src/features/operations/controller.ts",
+        "pass": 179,
+        "fail": 1,
+        "files": 15,
+        "log": "/tmp/pairfob-load-last-controller-fixed.log",
+        "note": "After concurrent board-split correction. Remaining failure was touch creation waiting a fixed 10 ms."
+      },
+      {
+        "command": "bun test src/pages/home/create-bridge.test.tsx src/pages/board/pane-menu.test.tsx --isolate --timeout 120000",
+        "pass": 29,
+        "fail": 0,
+        "log": "/tmp/pairfob-load-final-dialog-regression.log"
+      },
+      {
+        "command": "bun run typecheck:all",
+        "passed": true,
+        "log": "/tmp/pairfob-load-last-types-fixed.log"
+      }
+    ],
+    "final_source_sha256": {
+      "internal/daemon/coalesce.go": "a4491338e26c895d7d386c56d68805ad8d63fcd1e660b431de923cbb7dea4bfe",
+      "internal/daemon/connection_profile_live_test.go": "4ce252d301e28f8b60b064668c6cf9c7a99309c76754ff991616eab5b9f2a603",
+      "internal/daemon/runtime_load_test.go": "86e3a638e378e751308fbbf63ce962537c7dc34e0852e7b901897848ea9a91e7",
+      "internal/daemon/runtime_monitor.go": "383e5b2a2d57f1bb4209edeaa340bc93ec2cd9b9c058a051fb544a67a1ba59bd",
+      "internal/daemon/runtime_pokes.go": "1f16f48bea5f700c73635c3e234825747044556e44b5714c02a8ada11dff07ae",
+      "internal/journal/activity.go": "18a1cff99c7c74fffa2d6d711e79abce7e2d1663c6a9831190dce356f474efb5",
+      "internal/journal/activity_profile_test.go": "e8e2f5858b6c6760df05f915bc1faf81b48f5b14c29e04983419968fae592477",
+      "internal/journal/activity_window.go": "8e5d391b1d4b4e7604dd21f1e9f0113bc1e656fa2ae28817e9a53a052ca3fe48",
+      "internal/journal/activity_window_test.go": "1af1d8071a674772d565ad6bfd250b78a6f26585cc8b34baaacff9bf02210ebb",
+      "internal/journal/journal.go": "4a6d2e67a057cf7f2788473dd34edaf7c9e2e6301e460a085ee3e0a676529049",
+      "internal/journal/title_claude.go": "13c57e90afd1bd60b7d3b4e84e560858347c4e682604deea8a2e0540cbf2513e",
+      "internal/journal/title_claude_performance_test.go": "87280200788c074a035171dd693bc4c75ecefb11260814766f385199a2e822d1",
+      "internal/runtime/herdr_execute.go": "1300c021117705179f936d52637dd750d99c4b73ca977d981a8d94abd68c1586",
+      "internal/runtime/herdr_shell_ready.go": "45989d5101b2db6ca840b655b3e325e0ad77e6448889bbbacd0b4816b4117b7a",
+      "internal/runtime/herdr_shell_ready_test.go": "b8ee62de8f5faa6798ba54ba4844e87bdd4c1923cdae4cae8d30dca9e0c24cd1",
+      "proto/direct-transport.md": "c6941fd29cdb191788e384a6bd98ef46f29a53a4185179e6ac81ed0e5e716fde",
+      "pwa/scripts/connection-benchmark-fixture.ts": "f480b2c7f953f9c03c9d06e82d8ac73fef9179382d0a8d43c7aa8ac95524a103",
+      "pwa/scripts/connection-benchmark.ts": "f27aec726f6d5cb63af294828c92ef05e14645c5814f4944e8275e67cd40d7b1",
+      "pwa/scripts/live-connection-profile.ts": "bc25a4c4b61d5d35e21948ac2f676711ad08f6800a7acdaa6cda508b84b01429",
+      "pwa/scripts/live-upgrade-profile.ts": "64f8312827379dca7afa972ff113fa90e98fac159f75fdf582a26eed86bf40e6",
+      "pwa/src/features/board/preview/refresh.ts": "234e41229b201b10fea7f85393b10851ef292afe48e9cd5979e727da4c56f9e5",
+      "pwa/src/features/board/preview/store.test.ts": "0fb482ec92097bf7d4f4a1dc6876c30b5856a112b2271dfb8a58c6698db45e72",
+      "pwa/src/features/board/preview/store.ts": "865881490efe4edc0071bfa2e9e50679a94da73393bb08568c6cde1db7816251",
+      "pwa/src/features/connection/controller.ts": "130b8b133679d79ecd9acfcb2be3075cf710f946a89b6018eacb0737beabf9ad",
+      "pwa/src/features/connection/open-pane.ts": "e856a45e04a3e7091334aa1bfa0808132cf4372b3f4e989ed1cdd07b32cbbe53",
+      "pwa/src/features/connection/session-events.ts": "d7de01022c304b74bb844ebf89d5a6ca32237d15f5e92db8a7935d09b5213051",
+      "pwa/src/features/operations/controller-create-pane.test.ts": "b0b2e101c3f59ba381fb03bc68a861bd111da85ea86f7ceccdf74fb17f75145d",
+      "pwa/src/features/operations/controller.ts": "d65c2b617360ea560cd3d2f0eb7342c25cfc20c96d0adae346a1dd3f041e434a",
+      "pwa/src/features/operations/create-sheet.test.tsx": "fcd6f70f5ab2ebb99f4582fda0b1cbf0abd45609a74a0907154e6ba51301057d",
+      "pwa/src/features/operations/create-sheet.tsx": "ce3ef1a923fa20e9d5fdaf7c4ae2ed967ca1bf6b5742ebd3c3226e81fc9e6a17",
+      "pwa/src/features/operations/created-pane.ts": "ff69ff3f8b51c4402c1ba1bb49e3ff45e7bd74291131f0291f9b66c17887b644",
+      "pwa/src/features/operations/styles/create-sheet-motion.test.ts": "e9a811e3ef3b2a31775b40b6dbbcf1fab6210447bba5714738a0a28f5ff6bbbf",
+      "pwa/src/features/operations/styles/create-sheet.scss": "cda1b471b4c55dbe2bbf7e34b25c335f426dbb16a8e7dc35add0bbb695c992e0",
+      "pwa/src/features/workspace/actions.ts": "6aaac3152d0c855697b253d703e56206c52d84c7d58ef579e0e0ffc8fbe749d4",
+      "pwa/src/features/workspace/snapshot.test.ts": "776b99964b6a5760d999eba2efad3e6cac354f9a2962397fad6950ec62a6a073",
+      "pwa/src/features/workspace/store.ts": "e19bbca301ba9fa68834873e460bce18c5edbdf0adfcaad449db655ef1b6abba",
+      "pwa/src/features/workspace/workspace-demand.test.ts": "eaac64514f2c1d6bd616bc8330613f0c8851edff5e9be27ab60c5f875f7223fd",
+      "pwa/src/lib/protocol/direct-offer-warmup.test.ts": "a7a5ea2198b219cac63a38b0fe10b662dae53aafd2ae16a4a133f2ac7dced4d1",
+      "pwa/src/lib/protocol/direct-offer-warmup.ts": "bb0f8355b2b79e073cbdb587bfaf2fe6dd5122459665d4ddd6cd94b01fd50f89",
+      "pwa/src/lib/protocol/direct-offer.test.ts": "92e32d52d672999af543920b6398b9202cf20404d17543b3e62fd3d26aed12d0",
+      "pwa/src/lib/protocol/direct-peer.ts": "64081c3a84c789d10cdee1c49d5299a01b0c340c0f1fc562b3d4b14c488b3ded",
+      "pwa/src/lib/protocol/relay-dial.test.ts": "cea64d0b4cdf9ea456bf6ef869b5964f271e81b5f359671593063421c292baeb",
+      "pwa/src/lib/protocol/relay-dial.ts": "e794b832b5d4760f4afde2c1cc566ea2f6c4102e3f45f227f1c1683528c81719",
+      "pwa/src/lib/protocol/session-crypto.test.ts": "f96a550acecff469e2429dd2a58b9a2255f69c251d48a0ea456734d492d8d6cb",
+      "pwa/src/lib/protocol/session-crypto.ts": "3c2d51d562fc3d88c1092e15e77152046b8148bf2f308f3312baa83217d568eb",
+      "pwa/src/lib/protocol/session-direct.ts": "abdc4a5ed2ac30affe3c10bfbbec48168db0b767ac92333e0efcf9832e751bfd",
+      "pwa/src/lib/protocol/session-handshake.ts": "b189531e385acba437d94495ee39821ef6f999294a17b354e7543e294fcec996",
+      "pwa/src/lib/protocol/session-ice-warmup.test.ts": "0129ca73f3e7984086b6fa1fc64b70fa0a583391cfdb15a40d63efd89b574d1e",
+      "pwa/src/lib/protocol/session-prepared-offer.test.ts": "f6cfb0e402ccf58f02e72a8001fa5d285a1e79ca1d02ebb9a78a02ab350e5f52",
+      "pwa/src/lib/protocol/session-upgrade.ts": "4a11798cf32b5551482bb5c43bba5883d841da9c9d2e7f479cffa3b22771e594",
+      "pwa/src/lib/protocol/session-ws.ts": "3e479cda70270f7eb9d116646f5912fa28d94e443b8029449a0c4ddfff285d3c",
+      "pwa/src/pages/board/preview-refresh.test.ts": "4ae40ab1cf339e818bbb05df62d526eb2b86fd331cd4e1c35dad7a0d04456e42",
+      "pwa/test-support/session-ice-warmup-isolated.test.ts": "b3e7183b6158271fb1b69fc2c14cb87d6441d5a7c612548399acd3e0b8dab5ae",
+      "pwa/test-support/session-standby-isolated.test.ts": "7d41557be0cf2e3bb80191f4cb443d2b9d574026af4c3c0a8ef03543a82f294a",
+      "pwa/test-support/session-switch-standby-isolated.test.ts": "f615a28f780af8832045c29a205409cd76c5d235756603e833aeaa4d06fba1bf",
+      "scripts/qa-load-reduction.mjs": "3db5017486e95dcf2c111c548c32a1fb37b3418dc73b5cbada2f7c8978baaa54"
+    },
+    "browser_surfaces": [
+      "390x844 touch",
+      "820x768 touch",
+      "1024x768 touch",
+      "1440x900 mouse and keyboard"
+    ],
+    "acceptance_gaps": [
+      "No production rollout or physical-device acceptance in this task.",
+      "Board latency uses controlled 100 ms fixture reads; activity timing is real-log replay, not end-to-end connection latency.",
+      "The final concurrent operations-controller difference has supplemental tests/typecheck; the full gate and built artifacts precede that external difference."
+    ]
+  }
+}

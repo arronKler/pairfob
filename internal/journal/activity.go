@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,6 +28,7 @@ const activityReadBytes = 512 << 10
 type activityCacheEntry struct {
 	info     os.FileInfo
 	activity Activity
+	records  []activityRecord
 }
 
 // ReadActivity is bounded and stat-cached for snapshot polling. An unreadable
@@ -44,6 +44,11 @@ func (r *Reader) ReadActivity(ref Ref) Activity {
 	if err != nil {
 		return Activity{}
 	}
+	cacheKey := ref.Agent + "\x00" + path
+	// Waiting before opening/statting prevents an older waiter from publishing
+	// a stale file identity after a newer read. Other logs never wait on this lock.
+	release := r.lockActivity(cacheKey)
+	defer release()
 	file, err := openActivityFile(r.transcriptBase(ref.Agent), path)
 	if err != nil {
 		return Activity{}
@@ -53,33 +58,37 @@ func (r *Reader) ReadActivity(ref Ref) Activity {
 	if err != nil || !info.Mode().IsRegular() {
 		return Activity{}
 	}
-	// Serialize cache misses so the monitor and phone snapshot share the work.
 	r.activityMu.Lock()
-	defer r.activityMu.Unlock()
-	cacheKey := ref.Agent + "\x00" + path
-	if cached, ok := r.activityCache[cacheKey]; ok && os.SameFile(info, cached.info) &&
+	cached := r.activityCache[cacheKey]
+	r.activityMu.Unlock()
+	if cached.info != nil && os.SameFile(info, cached.info) &&
 		info.Size() == cached.info.Size() && info.ModTime() == cached.info.ModTime() {
 		return cached.activity
 	}
 	var activity Activity
+	var records []activityRecord
 	if piAgent(ref.Agent) {
 		activity = r.piActivity(ref)
 	} else {
-		start := max(int64(0), info.Size()-activityReadBytes)
-		data := make([]byte, info.Size()-start)
-		if _, err := file.ReadAt(data, start); err != nil && err != io.EOF {
+		previous := cached.records
+		if cached.info == nil || !os.SameFile(info, cached.info) {
+			previous = nil
+		}
+		activity, records, err = readActivityWindow(file, info.Size(), ref.Agent, previous)
+		if err != nil {
 			return Activity{}
 		}
-		activity = scanActivity(ref.Agent, data, start)
 	}
 	after, err := file.Stat()
 	if err != nil || after.Size() != info.Size() || after.ModTime() != info.ModTime() {
 		return Activity{}
 	}
+	r.activityMu.Lock()
+	defer r.activityMu.Unlock()
 	if r.activityCache == nil || len(r.activityCache) >= maxTraceCacheEntries {
 		r.activityCache = make(map[string]activityCacheEntry)
 	}
-	r.activityCache[cacheKey] = activityCacheEntry{info: info, activity: activity}
+	r.activityCache[cacheKey] = activityCacheEntry{info: info, activity: activity, records: records}
 	return activity
 }
 

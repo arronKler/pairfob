@@ -76,19 +76,21 @@ type Reader struct {
 	// session identity or allowing a caller to supply arbitrary transcript paths.
 	NativeRoots map[string]string
 
-	indexMu       sync.Mutex
-	traceMu       sync.Mutex
-	piMu          sync.Mutex
-	activityMu    sync.Mutex
-	activityCache map[string]activityCacheEntry
-	titleMu       sync.Mutex
-	titleCache    map[string]titleCacheEntry
-	titleFlights  map[string]*titleFlight
-	traceCache    map[traceCacheKey]traceCacheEntry
-	piCache       []piCacheEntry
-	storeMu       sync.Mutex
-	storeCache    map[string]*storeEntry
-	storeTick     uint64
+	indexMu         sync.Mutex
+	traceMu         sync.Mutex
+	piMu            sync.Mutex
+	activityMu      sync.Mutex
+	activityCache   map[string]activityCacheEntry
+	activityFlights map[string]*activityFlight
+	titleMu         sync.Mutex
+	titleCache      map[string]titleCacheEntry
+	titleFlights    map[string]*titleFlight
+	claudeTitles    map[string]claudeTitleCacheEntry
+	traceCache      map[traceCacheKey]traceCacheEntry
+	piCache         []piCacheEntry
+	storeMu         sync.Mutex
+	storeCache      map[string]*storeEntry
+	storeTick       uint64
 	// sqlite runs one read-only query; nil uses the system sqlite3.
 	sqlite      func(ctx context.Context, db, sql string) ([]byte, error)
 	piCacheTick uint64

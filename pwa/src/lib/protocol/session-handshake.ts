@@ -1,11 +1,11 @@
-import { x25519 } from "@noble/curves/ed25519.js";
+import { createSessionCrypto, legacySessionCrypto, type SessionCrypto } from "./session-crypto.ts";
 import { Direction, DIR_C, DIR_S } from "./aead.ts";
 import { b64url, bytesToHex } from "./bytes.ts";
 import { jsonFrame, parseJSON, Typ, type Frame } from "./envelope.ts";
 import { ProtocolError } from "./errors.ts";
 import type { FrameChannel } from "./frame-channel.ts";
 import { envelopeError, parseExactB64, requireHeartbeatPayload, sameBytes, Z16 } from "./frame-socket.ts";
-import { proof, transcriptD, transcriptP, verifyEd25519 } from "./hello.ts";
+import { proof, transcriptD, transcriptP } from "./hello.ts";
 import { sessionKeys } from "./kdf.ts";
 import type { MuxProtocol } from "./mux.ts";
 import type { PairResult } from "./pair-ws.ts";
@@ -17,6 +17,24 @@ export type SessionEpoch = {
 };
 
 export type HandshakeStage = "route_bound" | "hello_verified" | "session_established";
+
+/** Native operations cannot be aborted; stop the protocol wait on channel close. */
+function whileChannelOpen<T>(channel: FrameChannel, work: Promise<T>): Promise<T> {
+  let unwatch: () => void = () => undefined;
+  const closed = new Promise<never>((_resolve, reject) => { unwatch = channel.onClose(reject); });
+  return Promise.race([work, closed]).finally(() => unwatch());
+}
+
+export async function awaitSessionCrypto(
+  channel: FrameChannel, prepared: Promise<SessionCrypto> = createSessionCrypto(),
+): Promise<SessionCrypto> {
+  try { return await whileChannelOpen(channel, prepared); }
+  catch (error) {
+    // Key generation may finish after cancellation. Retire that unused key.
+    void prepared.then((crypto) => crypto.dispose(), () => undefined);
+    throw error;
+  }
+}
 
 /**
  * A DeviceHello exchange paused between its two flights. Until `finish` sends
@@ -45,10 +63,10 @@ export function beginSessionEpoch(
   pair: PairResult,
   protocol: MuxProtocol,
   observe?: (stage: HandshakeStage) => void,
+  crypto: SessionCrypto = legacySessionCrypto(),
 ): SessionHello {
-  const ephemeralSecret = x25519.utils.randomPrivateKey();
-  const ephemeralPublic = x25519.getPublicKey(ephemeralSecret);
-  const nonce = crypto.getRandomValues(new Uint8Array(16));
+  const ephemeralPublic = crypto.publicKey;
+  const nonce = globalThis.crypto.getRandomValues(new Uint8Array(16));
   channel.send(jsonFrame(Typ.FWD, routeId ?? Z16, {
     v: 1,
     op: "DeviceHello1",
@@ -58,7 +76,7 @@ export function beginSessionEpoch(
     nonce: b64url(nonce),
   }));
 
-  const hello2 = (async () => {
+  const hello2 = whileChannelOpen(channel, (async () => {
     const route = routeId ?? await awaitSessionBound(channel);
     if (!routeId) observe?.("route_bound");
     const helloFrame = await channel.next(8_000);
@@ -84,10 +102,20 @@ export function beginSessionEpoch(
       route,
     );
     if (!sameBytes(proof(pair.psk, transcript), proofDaemon)) throw new ProtocolError("bad_proof", "daemon PSK 证明失败");
-    if (!verifyEd25519(pair.daemonPk, transcript, signatureDaemon)) throw new ProtocolError("bad_signature", "daemon 签名失败");
-    observe?.("hello_verified");
-    return { route, transcript, ephemeralDaemon };
-  })();
+    // Await both operations even on failure so every derived secret is erased.
+    const [signature, shared] = await Promise.allSettled([
+      crypto.verify(pair.daemonPk, transcript, signatureDaemon),
+      crypto.sharedSecret(ephemeralDaemon),
+    ]);
+    try {
+      if (signature.status === "rejected") throw signature.reason;
+      if (!signature.value) throw new ProtocolError("bad_signature", "daemon 签名失败");
+      if (shared.status === "rejected") throw shared.reason;
+      const keys = sessionKeys(shared.value, pair.psk);
+      observe?.("hello_verified");
+      return { route, transcript, keys };
+    } finally { if (shared.status === "fulfilled") shared.value.fill(0); }
+  })().finally(() => crypto.dispose()));
   const verified = hello2.then(() => undefined);
   // A paused handshake may be abandoned before anyone awaits it.
   verified.catch(() => undefined);
@@ -95,13 +123,12 @@ export function beginSessionEpoch(
   return {
     verified,
     finish: async (behind) => {
-      const { route, transcript, ephemeralDaemon } = await hello2;
+      const { route, transcript, keys } = await hello2;
       channel.send(jsonFrame(Typ.FWD, route, {
         v: 1,
         op: "DeviceHello3",
         proof_p: b64url(proof(pair.psk, transcriptP(transcript))),
       }));
-      const keys = sessionKeys(x25519.getSharedSecret(ephemeralSecret, ephemeralDaemon), pair.psk);
       const epoch = { routeId: route, c2s: new Direction(keys.c2s, DIR_C), s2c: new Direction(keys.s2c, DIR_S) };
       behind?.(epoch);
       await waitSessionEstablished(channel, route, protocol);
@@ -119,7 +146,9 @@ export async function establishSessionEpoch(
   protocol: MuxProtocol,
   observe?: (stage: HandshakeStage) => void,
 ): Promise<SessionEpoch> {
-  return beginSessionEpoch(channel, routeId, pair, protocol, observe).finish();
+  const crypto = await awaitSessionCrypto(channel);
+  try { return await beginSessionEpoch(channel, routeId, pair, protocol, observe, crypto).finish(); }
+  finally { crypto.dispose(); }
 }
 
 /** The relay's answer to SESSION_ATTACH: the route this socket now speaks on. */
