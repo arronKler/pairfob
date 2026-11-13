@@ -30,7 +30,7 @@ export type SessionEventPorts = {
   retireAgentTraceReads(): void;
   refreshRuntime(): Promise<void>;
   refreshSnapshot(): Promise<void>;
-  wakePane(): void;
+  wakePane(paneId?: string): void;
   preloadFullTerminal(): void;
   handleGuidedEvent(event: SessionEvent): boolean;
   handleFullTerminalEvent(event: SessionEvent): boolean;
@@ -90,10 +90,10 @@ export function observeSessionEvent(
       void ports.refreshSnapshot().then(() => {
         // Snapshot owns pane/occupant identity. Only its still-current owner may
         // wake the tail lane that consumes that identity.
-        if (wakeAfterSnapshot && stillActive() && ports.documentVisible()) ports.wakePane();
+        if (wakeAfterSnapshot && stillActive() && ports.documentVisible()) ports.wakePane(event.paneId);
       }, () => undefined);
     } else if (action === "paneread") {
-      ports.wakePane();
+      ports.wakePane(event.paneId);
       if (isAgentChat() && shouldPullStatus(true, Date.now(), lastSnapshotAt())) void ports.refreshSnapshot();
     }
     return;

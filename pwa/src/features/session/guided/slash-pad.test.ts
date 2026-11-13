@@ -2,7 +2,7 @@ import { expectDifferentNode, expectSameNode } from "../../../../test-support/no
 import { applySnapshot as seedPadSnapshot } from "../../dashboard/catalog-store";
 import { selectPane as selectPadPane } from "../session-store";
 import { act, createElement } from "react";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { renderReact, unmountReact } from "../../../../test-support/react-harness";
 import { closeTestDialogs } from "../../../../test-support/close-dialogs";
@@ -96,35 +96,42 @@ describe("expanded pad modes", () => {
   });
 
   test("the switch drawn by a turn of the pad knows which side its thumb comes from; any other paint of it is still", () => {
-    const option = (label: string) => byText(".pad-kind-option", label) as HTMLButtonElement;
-    const from = () => appRoot().querySelector<HTMLElement>(".pad-kind")!.getAttribute("data-from");
-    setKeysExpanded(true);
-    renderReact(createElement(SessionKeyPad));
-    // The pad opened: nothing was turned.
-    expect(from()).toBeNull();
-    const opened = appRoot().querySelector(".pad-kind");
-    act(() => { option("命令").click(); });
-    // Turning the pad draws a new switch with the new body.
-    expectDifferentNode(appRoot().querySelector(".pad-kind"), opened);
-    expect(from()).toBe("first");
-    expect(option("命令").getAttribute("aria-pressed")).toBe("true");
-    // The same switch painted again keeps its mark and its node: nothing replays.
-    const turned = appRoot().querySelector(".pad-kind");
-    renderReact(createElement(SessionKeyPad));
-    expectSameNode(appRoot().querySelector(".pad-kind"), turned);
-    act(() => { option("按键").click(); });
-    expect(from()).toBe("last");
+    // Render time on a loaded test host is not elapsed gesture time.
+    const now = spyOn(performance, "now").mockReturnValue(1000);
+    try {
+      const option = (label: string) => byText(".pad-kind-option", label) as HTMLButtonElement;
+      const from = () => appRoot().querySelector<HTMLElement>(".pad-kind")!.getAttribute("data-from");
+      setKeysExpanded(true);
+      renderReact(createElement(SessionKeyPad));
+      // The pad opened: nothing was turned.
+      expect(from()).toBeNull();
+      const opened = appRoot().querySelector(".pad-kind");
+      act(() => { option("命令").click(); });
+      // Turning the pad draws a new switch with the new body.
+      expectDifferentNode(appRoot().querySelector(".pad-kind"), opened);
+      expect(from()).toBe("first");
+      expect(option("命令").getAttribute("aria-pressed")).toBe("true");
+      // The same switch painted again keeps its mark and its node: nothing replays.
+      const turned = appRoot().querySelector(".pad-kind");
+      renderReact(createElement(SessionKeyPad));
+      expectSameNode(appRoot().querySelector(".pad-kind"), turned);
+      act(() => { option("按键").click(); });
+      expect(from()).toBe("last");
+    } finally { now.mockRestore(); }
   });
 
-  test("a switch drawn after the turn is over stands still", async () => {
-    setKeysExpanded(true);
-    renderReact(createElement(SessionKeyPad));
-    act(() => { (byText(".pad-kind-option", "命令") as HTMLButtonElement).click(); });
-    await act(() => new Promise<void>((done) => setTimeout(done, 200)));
-    // Put away and brought back: the pad is in commands, and nobody just turned it.
-    act(() => { setKeysExpanded(false); });
-    act(() => { setKeysExpanded(true); });
-    expect(appRoot().querySelector<HTMLElement>(".pad-kind")!.hasAttribute("data-from")).toBeFalse();
+  test("a switch drawn after the turn is over stands still", () => {
+    const now = spyOn(performance, "now").mockReturnValue(1000);
+    try {
+      setKeysExpanded(true);
+      renderReact(createElement(SessionKeyPad));
+      act(() => { (byText(".pad-kind-option", "命令") as HTMLButtonElement).click(); });
+      now.mockReturnValue(1200);
+      // Put away and brought back: the pad is in commands, and nobody just turned it.
+      act(() => { setKeysExpanded(false); });
+      act(() => { setKeysExpanded(true); });
+      expect(appRoot().querySelector<HTMLElement>(".pad-kind")!.hasAttribute("data-from")).toBeFalse();
+    } finally { now.mockRestore(); }
   });
 
   test("a saved command goes in at the caret and does not send", async () => {

@@ -80,7 +80,15 @@ test("returning to a silently dead path reconnects in one handshake instead of w
 test("returning to a healthy path keeps it and abandons the standby before DeviceHello3", async () => {
   const f = await connected();
   SessionSocket.hold = "hello";
+  // Keep the old path's probe pending until the standby actually sent Hello1.
+  // Native key generation may otherwise be cancelled before any auth leaves.
+  f.first.script = { slowOps: ["Ping"] };
+  const sent = f.first.requests.length;
   away(30_000);
+  await until(() => sockets()[1]?.blocked === "hello");
+  const probe = f.first.requests.slice(sent).find((request) => request.op === "Ping")!;
+  expect(probe.op).toBe("Ping");
+  f.first.answer(probe.id, { t_ms: probe.params.t_ms });
   await until(() => f.live.isConnected());
   await until(() => sockets().length === 2 && sockets()[1]!.closeCalls > 0);
   sockets()[1]!.releaseLate();

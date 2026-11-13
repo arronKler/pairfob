@@ -669,6 +669,7 @@ class ReconnectingSession implements LiveSession {
     if (!pageHidden()) this.recovery.start();
     const controller = new AbortController();
     this.connectAbort = controller;
+    this.direct.prepareForRelay();
     let transport: SessionTransport;
     let reads: RelayConnection["reads"];
     try {
@@ -676,6 +677,9 @@ class ReconnectingSession implements LiveSession {
         this.relayWS, this.pair, (event) => this.emit(event), controller.signal, this.relayWarmup, this.recovery.current,
         { reads: this.firstReads.plan(this.herdSessionName), style: this.dialStyle, budget: this.hellos },
       ));
+    } catch (error) {
+      this.direct.cancelPreparedOffer();
+      throw error;
     } finally {
       if (this.connectAbort === controller) this.connectAbort = null;
     }

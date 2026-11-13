@@ -99,19 +99,22 @@ export function nextPreviewGeneration(): number {
   return generation;
 }
 
-/** Serial pane reads. A later pass supersedes an in-flight one. */
+/** Two bounded read lanes keep the focused pane first without serial RTTs. */
 export async function runPreviewPass(pass: PreviewPass): Promise<void> {
-  for (const paneId of pass.ids) {
-    if (!pass.alive()) return;
-    try {
-      const read = await pass.source.paneRead(paneId, pass.linesOf(paneId));
-      // A late reply must not repopulate a cleared cache or notify another screen.
-      if (!pass.alive()) return;
-      publishPreview(paneId, read);
-    } catch {
-      /* a missed thumbnail is retried by the next pass */
+  let next = 0;
+  async function lane(): Promise<void> {
+    while (next < pass.ids.length && pass.alive()) {
+      const paneId = pass.ids[next++]!;
+      try {
+        const read = await pass.source.paneRead(paneId, pass.linesOf(paneId));
+        if (!pass.alive()) return;
+        publishPreview(paneId, read);
+      } catch {
+        /* a missed thumbnail is retried by the next pass */
+      }
     }
   }
+  await Promise.all([lane(), lane()]);
 }
 
 /** Queue a pass behind the previous one so reads never interleave. */

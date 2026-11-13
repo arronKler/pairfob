@@ -140,7 +140,7 @@ describe("a created pane opens through the normal pane-open path", () => {
     setDefaultTermMode("agent");
 
     const created = startNewConversation();
-    await submitOperationForm({ cwd: "/tmp/demo" });
+    await submitOperationForm({ cwd: "/tmp/demo", agentKind: "codex" });
     await created;
 
     expect(openPaneId()).toBe("p2");
@@ -162,6 +162,32 @@ describe("a created pane opens through the normal pane-open path", () => {
     expect(isAgentChat()).toBe(false);
     expect(app().querySelector(".agent-chat-root")).toBeNull();
     expect(app().querySelector(".term")).toBeTruthy();
+  }));
+
+  test("the new pane opens from the mutation without waiting for the dashboard snapshot", async () => await act(async () => {
+    boot();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let snapshots = 0;
+    attachLiveSession({
+      ...liveSession()!,
+      snapshot: async () => {
+        snapshots += 1;
+        await held;
+        return SNAPSHOT_TWO_PANES;
+      },
+    });
+
+    const created = startNewConversation();
+    await submitOperationForm({ cwd: "/tmp/demo" });
+    // The sheet and the navigation settle while the catalog read is still held.
+    await created;
+    expect(snapshots).toBeGreaterThan(0);
+    expect(openPaneId()).toBe("p2");
+    expect(currentScreen()).toBe("pane");
+
+    release();
+    await held;
   }));
 
   test("new conversations use the safe Control fallback for Auto before P2P is active", async () => await act(async () => {

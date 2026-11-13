@@ -22,6 +22,7 @@ import { currentScreen } from "../../app/navigation-store";
 import { connectionStore, networkOnline } from "./connection-store";
 import {
   applyPaneRead,
+  createdPaneAwaitingCatalog,
   isAgentChat,
   isFullTerminal,
   lastSnapshotAt,
@@ -77,7 +78,7 @@ import {
 } from "./lifecycle";
 import type { RetirementPorts } from "./retirement";
 import { isDesk } from "../../app/viewport";
-import { refreshBoardPreviews } from "../../features/board/preview/refresh";
+import { refreshBoardPreviews, refreshBoardPreviewHint } from "../../features/board/preview/refresh";
 import { composeField, preserveCompose } from "../../features/session/guided/compose";
 import { dropQueuedKeys } from "../../features/session/guided/keys";
 import { paneReadLines } from "../../features/session/guided/pane-model";
@@ -274,7 +275,10 @@ const sessionEventPorts = {
   // must fold the catalog without waking anything the visible path owns.
   refreshSnapshot: () => document.visibilityState === "visible"
     ? refreshSnapshot() : refreshSnapshotInBackground(snapshotPorts),
-  wakePane: () => livePolling.wakePane(),
+  wakePane: (paneId?: string) => {
+    if (currentScreen() === "board" && paneId) void refreshBoardPreviewHint(paneId);
+    else livePolling.wakePane();
+  },
   preloadFullTerminal: preloadFullTerminalXterm,
   handleGuidedEvent: (event: SessionEvent) => guidedScrollController.handleEvent(event),
   handleFullTerminalEvent,
@@ -368,14 +372,20 @@ export async function refreshHerdConfig(): Promise<boolean> {
 
 export type { PaneNavigation };
 
+/** What a create just made on its pane, before the dashboard has folded it in. */
+export type PaneAgentHint = { paneId: string; historyAvailable?: boolean; hasAgent?: boolean; agent?: string };
+
 /**
  * Open a pane. `source` is the list card or "needs you" ticket that was tapped:
  * only then does the card grow into the pane; every other entry (a new session,
  * the board, a notification) keeps its ordinary transition. `inPlace` is the
  * session ruler's switch: the destination replaces the open session in its
- * column on every surface.
+ * column on every surface. `agent` is the create's own answer for a pane the
+ * dashboard has not seen yet, so the remembered/default view mode still sees an
+ * agent was started there.
  */
-export async function openPane(paneId: string, source?: HTMLElement | null, options?: { inPlace?: boolean }): Promise<void> {
+export async function openPane(paneId: string, source?: HTMLElement | null,
+  options?: { inPlace?: boolean; agent?: PaneAgentHint }): Promise<void> {
   await openPaneWithOwner(paneId, source, options);
 }
 
@@ -383,7 +393,7 @@ export async function openPane(paneId: string, source?: HTMLElement | null, opti
 export async function openPaneWithOwner(
   paneId: string,
   source?: HTMLElement | null,
-  options?: { inPlace?: boolean },
+  options?: { inPlace?: boolean; agent?: PaneAgentHint },
 ): Promise<PaneNavigation | null> {
   return openOwnedPane(paneId, {
     currentLive: liveSession,
@@ -403,7 +413,8 @@ export async function openPaneWithOwner(
     inPlace: options?.inPlace === true,
     currentScreen,
     isFullTerminal,
-    findAgent: (id) => dashboardStore.get().agents.find((item) => item.paneId === id),
+    findAgent: (id) => dashboardStore.get().agents.find((item) => item.paneId === id)
+      ?? (options?.agent?.paneId === id ? options.agent : undefined),
     commitView: source ? () => navigateWithTransition(commitView, { direction: "open", paneId, source }) : commitView,
     refreshPane,
   });
@@ -445,6 +456,17 @@ const snapshotPorts = {
 
 export async function refreshSnapshot(): Promise<void> {
   await observeSnapshot(snapshotPorts);
+}
+
+/**
+ * Fold the catalog without painting a failure over a result the reader has
+ * already seen. A create reports success from the mutation; the poll retries
+ * this same read, so a transient failure here has no separate outcome to tell.
+ */
+const quietSnapshotPorts = { ...snapshotPorts, showError: () => {}, showStatus: () => {} };
+
+export async function refreshCatalogQuietly(): Promise<void> {
+  await observeSnapshot(quietSnapshotPorts);
 }
 
 function paneReadOwner(session: LiveSession, viewVersion: number, paneId: string): PaneReadOwner {
@@ -512,7 +534,8 @@ async function performPaneRead(owner: PaneReadOwner, startedAt: number): Promise
       applyPaneRead("", "");
       await refreshSnapshot();
       if (!paneReadOwnerIsCurrent(owner)) return null;
-      if (currentScreen() === "pane" && openPaneId() && !dashboardStore.get().agents.some((agent) => agent.paneId === openPaneId())) {
+      if (currentScreen() === "pane" && openPaneId() && createdPaneAwaitingCatalog() !== openPaneId()
+        && !dashboardStore.get().agents.some((agent) => agent.paneId === openPaneId())) {
         abandonOpenPane(t("err.paneGone"));
       }
       return null;

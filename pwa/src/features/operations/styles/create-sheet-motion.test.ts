@@ -46,4 +46,9 @@ describe("create sheet motion", () => {
   test("the pinned footer still clears the scroller's padding when the form is one of the sheet's swapped views", () => {
     expect(css).toMatch(/\.sheet-body:has\(> \.create-sheet-body > \.create-footer, > \.create-swap > \.create-sheet-body > \.create-footer\)\s*\{[^}]*padding-bottom:\s*0/);
   });
+
+  test("the submitting button keeps its wait visible: the spinner takes the button's own ink", () => {
+    // The accent ground is the spinner's default colour; on the button it would be invisible.
+    expect(declared(".create-submit .spinner")).toMatch(/color:\s*currentColor/);
+  });
 });

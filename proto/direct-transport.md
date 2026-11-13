@@ -36,6 +36,15 @@ continues to see only encrypted FWD bytes.
    locally, then closes its relay socket. If the commit reply is lost, that
    direct probe resolves the outcome without replaying `TransportCommit`.
 
+When P2P is enabled, a visible client begins one local ICE preparation beside
+its actual relay dial. Signaling still waits for the established encrypted
+relay session: the prepared offer is taken once by step 1. An unused preparation
+is cancelled on authentication failure, page hiding, offline state, relay-only
+selection, or an observed network-path change. A failed preparation uses the
+existing upgrade backoff; it does not start a second immediate offer. Before
+signaling, the client reads the current local SDP so later candidates are
+included and the SDP size limit is checked again.
+
 The offer does not wait for ICE gathering to complete: that only happens once
 every interface has heard from STUN or given up on it, which on some phones is
 the whole 8-second budget. The phone sends the offer 300 ms after its first

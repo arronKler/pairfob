@@ -2,7 +2,7 @@ import { applySnapshot, dashboardStore } from "../dashboard/catalog-store";
 import type { SnapshotWire } from "../../lib/dashboard";
 import { currentScreen, leavePaneScreen } from "../../app/navigation-store";
 import { applyHerdTouches } from "../settings/preferences-store";
-import { applyPaneRead, openPaneId, selectPane } from "../session/session-store";
+import { applyPaneRead, createdPaneAwaitingCatalog, openPaneId, selectPane } from "../session/session-store";
 import { liveSession } from "../computers/catalog-store";
 import { reconcileMutationFailure, type ListWorktreesInput } from "../../lib/operations";
 import { type LiveSession } from "../../lib/protocol/client";
@@ -24,8 +24,9 @@ export async function refreshSnapshotOnly(session: LiveSession, shouldPaint: () 
   if (liveSession() !== session || liveView() !== viewVersion) return;
   if (!shouldPaint()) return;
   const { previous } = applySnapshot(snapshot);
-  applyHerdTouches(previous, dashboardStore.get().agents);
-  const paneGone = Boolean(openPaneId() && !dashboardStore.get().agents.some((agent) => agent.paneId === openPaneId()));
+  applyHerdTouches(previous, dashboardStore.get().agents, Date.now(), createdPaneAwaitingCatalog());
+  const paneGone = Boolean(openPaneId() && !dashboardStore.get().agents.some((agent) => agent.paneId === openPaneId())
+    && createdPaneAwaitingCatalog() !== openPaneId());
   if (paneGone) {
     dropGonePane();
     if (currentScreen() === "pane") leavePaneScreen();

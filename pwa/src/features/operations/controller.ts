@@ -106,7 +106,7 @@ export async function startNewConversation(prepared?: CreateConversationInput): 
   if (!input || !ownsOperationView(owner) || !capabilityEnabled("create_conversation")) return NOT_RUN;
   return sheetOutcome(done => runHerdOperation(t("op.creatingConversation"), t("op.createdConversation"), () => session.createConversation(input), {
     owner, capability: "create_conversation", conflictMessage: t("err.createPaneConflict"), invalidArgumentMessage: t("create.checkDirectory"),
-    after: async (result, scope) => { await selectCreatedPane(result, scope); done(); },
+    after: async (result, scope) => { await selectCreatedPane(result, scope, input.agent_kind); done(); },
   }));
 }
 
@@ -124,7 +124,7 @@ export async function createSelectedTab(agent: AgentCard | undefined = selectedA
     t("op.createdTab"),
     () => session.createTab({ workspace_id: workspaceId, ...input }),
     { owner, capability: "create_tab", conflictMessage: t("err.createPaneConflict"),
-      after: async (result, scope) => { await selectCreatedPane(result, scope); done(); } },
+      after: async (result, scope) => { await selectCreatedPane(result, scope, input.agent_kind); done(); } },
   ));
 }
 
@@ -157,10 +157,10 @@ export async function splitSelectedPane(selected = selectedAgent(), options: Pan
     () => { requirePaneTarget(selected, options); return session.splitPane({ pane_id: selected.paneId, ...input }); },
     { owner, capability: "split_pane", conflictMessage: t("err.createPaneConflict"), after: async (result, scope) => {
       // An explicit board target owns neither global pane selection nor a new
-      // tab focus. Refresh without resetting its camera or pulling a reader
-      // back to the old tab after an in-flight create.
+      // tab focus. Its mark and reveal need the catalog read that adds the new
+      // tile, so this sheet still waits for it; the pane's own sheet does not.
       if (options.valid) await refreshFromSession();
-      else await selectCreatedPane(result, scope);
+      else await selectCreatedPane(result, scope, input.agent_kind);
       if (ownsOperationView(scope) && options.valid?.() !== false && result.pane_id) options.created?.(result.pane_id);
       done();
     } },

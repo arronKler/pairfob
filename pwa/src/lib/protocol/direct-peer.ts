@@ -75,7 +75,7 @@ export type DirectOffer = {
   attemptId: string;
   sdp: string;
   iceGathering: DirectICEGathering;
-  accept(answer: DirectAnswer): Promise<DataFrameChannel>;
+  accept(answer: DirectAnswer, signal?: AbortSignal): Promise<DataFrameChannel>;
   close(): void;
 };
 
@@ -280,6 +280,7 @@ export async function createDirectOffer(signal?: AbortSignal): Promise<DirectOff
     try { channel.close(); } catch { /* already closed */ }
     try { peer.close(); } catch { /* already closed */ }
   };
+  signal?.addEventListener("abort", close, { once: true });
   try {
     if (signal?.aborted) throw new DirectError("cancelled", "P2P 协商已取消");
     try {
@@ -293,22 +294,28 @@ export async function createDirectOffer(signal?: AbortSignal): Promise<DirectOff
     if (!sdp || sdp.length > MAX_SDP_BYTES) throw new DirectError("offer", "P2P offer 无效");
     return {
       attemptId,
-      sdp,
+      get sdp() {
+        const current = peer.localDescription?.sdp;
+        if (!current || current.length > MAX_SDP_BYTES) throw new DirectError("offer", "P2P offer 无效");
+        return current;
+      },
       iceGathering,
       close,
-      accept: async (answer) => {
+      accept: async (answer, acceptSignal = signal) => {
         if (answer.attemptId !== attemptId) throw new DirectError("answer", "P2P attempt_id 不匹配", "bad_message");
         try {
           await peer.setRemoteDescription({ type: "answer", sdp: answer.sdp });
         } catch (error) {
           throw asDirectError(error, "answer", "P2P answer 设置失败");
         }
-        await waitForOpen(channel, signal);
+        await waitForOpen(channel, acceptSignal);
         return new DataFrameChannel(channel, peer);
       },
     };
   } catch (error) {
     close();
     throw asDirectError(error, "offer", "P2P offer 生成失败");
+  } finally {
+    signal?.removeEventListener("abort", close);
   }
 }

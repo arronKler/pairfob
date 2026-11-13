@@ -8,6 +8,7 @@ import {
   parseDirectAnswer,
   parseDirectRestartAnswer,
   type DirectICEGathering,
+  type DirectOffer,
 } from "./direct-peer.ts";
 import { DIRECT_RESTART_TIMEOUT_MS } from "./direct-retry-policy.ts";
 import { ProtocolError } from "./errors.ts";
@@ -46,10 +47,12 @@ export async function prepareDirectSession(
   protocol: MuxProtocol,
   signal?: AbortSignal,
   onHello?: () => void,
+  takePreparedOffer?: () => Promise<DirectOffer> | undefined,
 ): Promise<PreparedDirectSession> {
   if (relay.kind !== "relay") throw new ProtocolError("conflict", "当前会话已是 P2P");
-  const offer = await createDirectOffer(signal);
+  const offer = await (takePreparedOffer?.() ?? createDirectOffer(signal));
   try {
+    if (signal?.aborted) throw new DirectError("cancelled", "P2P 协商已取消");
     let rawAnswer: unknown;
     try {
       rawAnswer = await relay.rpc("TransportOffer", {
@@ -68,7 +71,7 @@ export async function prepareDirectSession(
     } catch (error) {
       throw asDirectError(error, "answer", "P2P answer 格式错误");
     }
-    const channel = await offer.accept(answer);
+    const channel = await offer.accept(answer, signal);
     let epoch: SessionEpoch;
     try {
       onHello?.();

@@ -71,7 +71,9 @@ test("a candidate that died with the relay costs one handshake, not its Ping dea
   f.first.finishClose();
   // The replacement starts beside the candidate, not after it has failed.
   await until(() => logged("2:DeviceHello1") >= 0, 100);
-  await until(() => f.live.isConnected());
+  // isConnected alone can still describe the retained route during a switch;
+  // observe the replacement's authenticated second flight before asserting it.
+  await until(() => logged("2:DeviceHello3") >= 0 && f.live.isConnected());
   expect(Date.now() - started).toBeLessThan(1_000);
   expect(sockets()).toHaveLength(2);
   // The candidate was given up before DeviceHello3 could make the computer retire its route.

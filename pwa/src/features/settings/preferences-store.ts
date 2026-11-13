@@ -386,14 +386,17 @@ function sameEntries<V>(left: Record<string, V>, right: Record<string, V>): bool
  * and a status that changed are what date a row. This is the only writer of
  * `paneTouched`, through `nextTouchedAt`; never a raw field assign.
  */
-export function applyHerdTouches(previous: readonly AgentCard[], next: readonly AgentCard[], now = Date.now()): void {
+export function applyHerdTouches(previous: readonly AgentCard[], next: readonly AgentCard[], now = Date.now(),
+  keepPaneId = ""): void {
   const current = read().paneTouched;
   const updated = nextTouchedAt([...previous], [...next], current, now);
   // Activation is the reader's alone; a status change never writes it, but a
-  // pane that disappeared drops out of it too.
+  // pane that disappeared drops out of it too. A pane a create just opened is
+  // kept while a fold that predates it is still allowed to be the latest one.
   const live = new Set(next.map((agent) => agent.paneId));
   const activated = read().paneActivated;
-  const keptActivated = Object.fromEntries(Object.entries(activated).filter(([paneId]) => live.has(paneId)));
+  const keptActivated = Object.fromEntries(Object.entries(activated).filter(([paneId]) =>
+    live.has(paneId) || paneId === keepPaneId));
   const activationChanged = !sameTouched(keptActivated, activated);
   if (sameTouched(updated, current) && !activationChanged) return;
   batch(() => {

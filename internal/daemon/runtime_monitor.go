@@ -86,21 +86,13 @@ func (e *Engine) runRuntimeMonitors(stop <-chan struct{}, every time.Duration) {
 		}()
 	}
 
-	type pokeEvent struct{ reason, paneID string }
-	pokes := make(chan pokeEvent, 64)
+	pokes := make(chan runtimePoke, 64)
 	notifications := make(chan HerdPush, 64)
 	var workers sync.WaitGroup
 	workers.Add(2)
 	go func() {
 		defer workers.Done()
-		for {
-			select {
-			case event := <-pokes:
-				e.sendPoke(event.reason, event.paneID)
-			case <-ctx.Done():
-				return
-			}
-		}
+		runRuntimePokes(ctx, pokes, e.sendPoke)
 	}()
 	go func() {
 		defer workers.Done()
@@ -117,7 +109,7 @@ func (e *Engine) runRuntimeMonitors(stop <-chan struct{}, every time.Duration) {
 	}()
 	emitPoke := func(reason, paneID string) {
 		select {
-		case pokes <- pokeEvent{reason: reason, paneID: paneID}:
+		case pokes <- runtimePoke{reason: reason, paneID: paneID}:
 		default:
 			// A Poke only accelerates an authoritative client snapshot.
 		}
@@ -306,7 +298,14 @@ func waitRuntimeMonitor(ctx context.Context, duration time.Duration) bool {
 func (e *Engine) monitorSnapshot(ctx context.Context, session runtime.SessionRef) (runtime.Snapshot, error) {
 	callCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
-	view, err := e.RT.Observe(callCtx, session, runtime.SnapshotQuery{})
+	var name *string
+	if session.Name != "" {
+		name = &session.Name
+	}
+	// A monitor must not consume a phone read started before its invalidation.
+	// Later display reads share its fresh flight; workspace authorization keeps its separate
+	// undecorated, fresh read. Monitoring does not renew a named-session lease.
+	view, err := e.observeAfter(callCtx, name, runtime.SnapshotQuery{}, time.Now())
 	if err != nil {
 		return runtime.Snapshot{}, err
 	}
@@ -314,7 +313,7 @@ func (e *Engine) monitorSnapshot(ctx context.Context, session runtime.SessionRef
 	if !ok {
 		return runtime.Snapshot{}, errors.New("runtime returned an invalid snapshot view")
 	}
-	return e.decorateAgentActivity(snapshot.Snapshot), nil
+	return snapshot.Snapshot, nil
 }
 
 func (e *Engine) reconcileRuntimeSession(ctx context.Context, session runtime.SessionRef, allowPush bool, state *sessionMonitorState, emitPoke func(string, string), emitPush func(HerdPush)) (bool, []string) {
