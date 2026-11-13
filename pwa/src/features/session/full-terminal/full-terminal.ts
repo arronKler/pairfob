@@ -15,6 +15,9 @@ import {
   type SessionEvent,
 } from "../../../lib/protocol/client";
 import { appRoot } from "../../../app/dom-root";
+import { showStatus } from "../../../app/notices-store";
+import { capabilityEnabled } from "../../operations/capabilities-store";
+import { CLIENT_TERMINAL_HISTORY, scrollClientTerminal } from "./full-terminal-client-scroll";
 import { selectedAgent } from "../../dashboard/catalog-store";
 import { composeLive } from "../compose-store";
 import { liveSession } from "../../computers/catalog-store";
@@ -53,7 +56,7 @@ import { bindTerminalCopyKey, copyTerminalSelection } from "./full-terminal-copy
 import { bindHostScroll, pageLineCount, reportsWheel, type ScrollAt } from "./full-terminal-scroll";
 import { attachFullTerminalHost, attachedFullTerminalFileOpener, clearFullTerminalAttach, connectFullTerminalEngine, fullTerminalOwnerKey } from "./full-terminal-engine";
 import { releaseFullTerminalScreen } from "./full-terminal-screen";
-import { TerminalCommandPump, type TerminalCommand, type TerminalInputQueueOptions } from "./full-terminal-command";
+import { executeTerminalCommand, TerminalCommandPump, type TerminalCommand, type TerminalInputQueueOptions } from "./full-terminal-command";
 import { loadFullTerminalXterm, terminalWebglSupported } from "./full-terminal-loader";
 import { afterNextPaint, observeHostResize } from "./full-terminal-lifecycle";
 import { followCursor } from "./full-terminal-lift";
@@ -176,29 +179,12 @@ function startCommandPump(
     if (version !== bridgeVersion || bridgeId !== terminalId || liveSession() !== session || !isFullTerminal()) {
       return Promise.reject(new ProtocolError("conflict", t("err.controllerSwitch")));
     }
-    if (command.kind === "input") return session.terminalInput(terminalId, sequence, command.data);
-    if (command.kind === "resize") {
-      return session.terminalResize(
-        terminalId,
-        sequence,
-        command.cols,
-        command.rows,
-        command.cellWidth,
-        command.cellHeight,
-      );
-    }
-    return session.terminalScroll(
-      terminalId,
-      sequence,
-      command.direction,
-      command.lines,
-      command.source,
-      command.at,
-    );
+    return executeTerminalCommand(session, terminalId, command, sequence);
   };
   commandPump = new TerminalCommandPump({
     execute,
     observer: fullTerminalPerf.commandObserver,
+    onScrollUnsupported: () => showStatus(t("ft.scrollUnsupported")),
     onError: (error) => {
       if (version !== bridgeVersion) return;
       fullTerminalPerf.publish("command_error");
@@ -240,6 +226,11 @@ export function sendFullTerminalScroll(direction: "up" | "down", lines: number, 
   closeTerminalKeyboard();
   if (!bridgeId || opening || !commandPump) return;
   const count = clamp(Math.round(lines), 1, TERMINAL_MAX_ROWS);
+  if (terminal && capabilityEnabled("terminal_client_scroll")) {
+    const host = appRoot().querySelector<HTMLElement>(".full-terminal-host");
+    if (host && !scrollClientTerminal(terminal, host, direction, count, source, at)) showStatus(t("ft.appScrollUnsupported"));
+    return;
+  }
   commandPump.enqueueScroll({ direction, lines: count, source, at });
 }
 
@@ -349,6 +340,9 @@ async function mount(host: HTMLElement): Promise<void> {
   const openFile = fileOpener ? (value: string) => { if (version === rendererVersion) fileOpener(value); } : undefined;
   const fontPx = termFontPx();
   terminal = new module.Terminal(fullTerminalOptions({
+    // GetConfig may still be pending when the first raw history arrives.
+    // Reserve capacity now; only the advertised capability selects local scrolling.
+    scrollback: CLIENT_TERMINAL_HISTORY,
     fontFamily: FULL_TERM_FONT_FAMILY,
     fontSize: fontPx,
     lineHeight: pitchLineHeight(

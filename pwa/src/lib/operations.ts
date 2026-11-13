@@ -2,6 +2,7 @@ import { ProtocolError } from "./protocol/errors.ts";
 import { truncateUTF8Bytes } from "./text-budget.ts";
 
 export const OPERATION_CAPABILITY_KEYS = [
+  "terminal_client_scroll",
   "create_conversation",
   "create_tab",
   "split_pane",
@@ -35,6 +36,7 @@ export type OperationCapability = typeof OPERATION_CAPABILITY_KEYS[number];
 export type OperationCapabilities = Record<OperationCapability, boolean>;
 
 export const NO_OPERATION_CAPABILITIES: OperationCapabilities = {
+  terminal_client_scroll: false,
   create_conversation: false,
   create_tab: false,
   split_pane: false,
@@ -417,7 +419,7 @@ export function parseRuntimeOperationsConfig(value: unknown): RuntimeOperationsC
 
 	const rawCapabilities = isRecord(config.capabilities) ? config.capabilities : {};
 	const capabilities = { ...NO_OPERATION_CAPABILITIES };
-	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "download_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers", "trace_labels", "trace_times", "trace_models", "trace_writes", "git_change_stats", "search_files", "search_dirs"]);
+	const optionalCapabilities = new Set(["terminal_client_scroll", "agent_inspect", "rename_file", "delete_file", "download_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers", "trace_labels", "trace_times", "trace_models", "trace_writes", "git_change_stats", "search_files", "search_dirs"]);
 	// A capability this build does not know is ignored rather than rejected: keys
 	// are additive, and a packaged client (the Android shell bundles its page)
 	// cannot be replaced before the daemon that advertises them. Known keys must

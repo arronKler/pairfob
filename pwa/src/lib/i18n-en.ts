@@ -571,6 +571,8 @@ export const en: { [K in keyof typeof zh]: string } = {
   "ft.takeover": "Taking over the terminal…",
   "ft.live": "Live · end-to-end encrypted",
   "ft.interrupt": "Control interrupted: {error}",
+  "ft.scrollUnsupported": "This terminal backend does not support remote scrolling. Input and live output remain available.",
+  "ft.appScrollUnsupported": "This program has not enabled mouse scrolling. Try the page buttons; terminal control is still connected.",
   "ft.loadFail": "Terminal failed to load: {error}",
   "ft.webglLost": "The WebGL graphics context was lost",
   "ft.webglUnavailable": "WebGL2 terminal rendering is unavailable",

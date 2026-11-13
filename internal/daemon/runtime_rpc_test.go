@@ -113,7 +113,7 @@ func TestRuntimeRPCNewOperationsAndDeduplication(t *testing.T) {
 		t.Fatalf("unexpected config: %s", configRaw)
 	}
 	capabilities, ok := config["capabilities"].(map[string]any)
-	if !ok || len(capabilities) != 27 || capabilities["download_file"] != true || capabilities["trace_markers"] != true || capabilities["trace_labels"] != true || capabilities["trace_models"] != true || capabilities["trace_times"] != true || capabilities["trace_writes"] != true || capabilities["git_change_stats"] != true || capabilities["search_files"] != true || capabilities["search_dirs"] != true || capabilities["list_sessions"] != false || capabilities["create_conversation"] != true || capabilities["zoom_pane"] != true || capabilities["upload_file"] != true || capabilities["upload_file_v2"] != true || capabilities["worktrees"] != nil || capabilities["layout"] != nil {
+	if !ok || len(capabilities) != 28 || capabilities["download_file"] != true || capabilities["trace_markers"] != true || capabilities["trace_labels"] != true || capabilities["trace_models"] != true || capabilities["trace_times"] != true || capabilities["trace_writes"] != true || capabilities["git_change_stats"] != true || capabilities["search_files"] != true || capabilities["search_dirs"] != true || capabilities["list_sessions"] != false || capabilities["create_conversation"] != true || capabilities["zoom_pane"] != true || capabilities["upload_file"] != true || capabilities["upload_file_v2"] != true || capabilities["worktrees"] != nil || capabilities["layout"] != nil {
 		t.Fatalf("unexpected capability contract: %s", configRaw)
 	}
 
@@ -259,7 +259,7 @@ func TestGetConfigTracksRecoveringRuntimeAvailability(t *testing.T) {
 	}
 	offline := decodeResult(t, offlineRaw)
 	offlineCapabilities := offline["capabilities"].(map[string]any)
-	if offline["runtime"] != "offline" || len(offlineCapabilities) != 27 {
+	if offline["runtime"] != "offline" || len(offlineCapabilities) != 28 {
 		t.Fatalf("offline config did not fail closed: %s", offlineRaw)
 	}
 	for capability, available := range offlineCapabilities {
