@@ -15,7 +15,9 @@ type runtimeKindStub struct {
 }
 
 func (r *runtimeKindStub) Describe(context.Context, runtime.SessionRef) (runtime.Descriptor, error) {
-	return runtime.Descriptor{Runtime: r.kind}, nil
+	return runtime.Descriptor{Runtime: r.kind, Capabilities: map[runtime.Feature]runtime.Capability{
+		runtime.FeatureTerminalClientScroll: {Available: r.kind == "herdr-core"},
+	}}, nil
 }
 
 func TestGetConfigKeepsRuntimeInsideTheWireEnum(t *testing.T) {
@@ -37,6 +39,10 @@ func TestGetConfigKeepsRuntimeInsideTheWireEnum(t *testing.T) {
 			}
 			if got := decodeResult(t, raw)["runtime"]; got != test.want {
 				t.Fatalf("runtime=%v want %v: %s", got, test.want, raw)
+			}
+			capabilities := decodeResult(t, raw)["capabilities"].(map[string]any)
+			if got := capabilities["terminal_client_scroll"]; got != (test.kind == "herdr-core") {
+				t.Fatalf("terminal_client_scroll=%v runtime=%s", got, test.kind)
 			}
 		})
 	}

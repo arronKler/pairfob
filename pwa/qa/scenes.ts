@@ -191,6 +191,7 @@ export const scenes: FixtureScene[] = [
   { name: "chat-pi-recovery", description: "Long Pi transcript ready for disconnect, reconnect, and foreground actions" },
   { name: "chat-pi-compose", description: "Focused multiline compose at a narrow phone viewport" },
   { name: "terminal-live", description: "Real xterm/WebGL with local terminal RPC and injectable frames" },
+  { name: "terminal-core", description: "Raw-stream core terminal with client-owned history and mouse scrolling" },
   { name: "terminal-open-error", description: "Real renderer with a rejected local TerminalOpen" },
   { name: "terminal-frame", description: "Real renderer with the pane's screen drawn, redrawn after every resize" },
   { name: "terminal-wide", description: "Real renderer with a column ruler and rows that fill the whole grid" },
@@ -215,6 +216,7 @@ const TERMINAL_SCREENS: Record<string, NonNullable<SessionSource["terminalScreen
 
 /** The computer a scene talks to: busy scenes bring their own snapshot and screens. */
 export function sceneSource(name: string): SessionSource {
+  if (name === "terminal-core") return { clientScroll: true };
   if (name === "completion-recovery") return { snapshot: completionSnapshot };
   if (name === "chat-needs-you") return { snapshot: blockedFocusedSnapshot, paneText: () => data.NEEDS_YOU_SCREEN };
   if (name === "chat-needs-you-grok") return { snapshot: blockedGrokSnapshot, paneText: () => data.GROK_NEEDS_YOU_SCREEN };
@@ -235,7 +237,7 @@ export function sceneSource(name: string): SessionSource {
  */
 export function terminalSceneReadiness(name: string): { stage: "live" | "error"; screen: boolean } | null {
   if (name === "terminal-open-error") return { stage: "error", screen: false };
-  if (name === "terminal-live") return { stage: "live", screen: false };
+  if (name === "terminal-live" || name === "terminal-core") return { stage: "live", screen: false };
   return TERMINAL_SCREENS[name] ? { stage: "live", screen: true } : null;
 }
 
@@ -261,7 +263,7 @@ const RECENT_CHANGES: Array<[paneId: string, minutesAgo: number]> = [
 const OUTDATED_BUILD = "v2.3.0";
 
 function allCapabilities(): Record<string, boolean> {
-  return Object.fromEntries(Object.keys(NO_OPERATION_CAPABILITIES).map((key) => [key, true]));
+  return { ...Object.fromEntries(Object.keys(NO_OPERATION_CAPABILITIES).map((key) => [key, true])), terminal_client_scroll: false };
 }
 
 function paneScene(paneId: string): void {
@@ -656,6 +658,7 @@ export async function applyScene(name: string, session: FixtureSession): Promise
     }
   }
   if (name.startsWith("terminal")) {
+    if (name === "terminal-core") applyCapabilities({ ...allCapabilities(), terminal_client_scroll: true } as typeof NO_OPERATION_CAPABILITIES, AGENT_KINDS);
     paneScene(data.PANE);
     setFullTerminal(true);
     setAgentChat(false);

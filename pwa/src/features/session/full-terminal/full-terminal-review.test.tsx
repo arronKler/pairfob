@@ -5,17 +5,22 @@ import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { emulateTouchDevice } from "../touch-realm";
 
 class ReviewTerminal {
+  static latest: ReviewTerminal;
+  scrolled: number[] = [];
   cols = 80;
   rows = 24;
   modes = { applicationCursorKeysMode: false };
-  buffer = { active: { cursorX: 0, cursorY: 0, viewportY: 0,
+  buffer = { active: { type: "normal", cursorX: 0, cursorY: 0, viewportY: 0,
     getLine: (row: number) => ({ translateToString: () => row === 0 ? "live terminal text" : "" }),
   } };
   _core = { _renderService: { dimensions: { css: { cell: { width: 8, height: 16 } } } } };
-  options: { fontSize?: number; lineHeight?: number };
+  options: { fontSize?: number; lineHeight?: number; scrollback?: number };
   private root: HTMLElement | null = null;
   private data: (value: string) => void = () => {};
-  constructor(options: { fontSize?: number; lineHeight?: number }) { this.options = { ...options }; }
+  constructor(options: { fontSize?: number; lineHeight?: number; scrollback?: number }) {
+    this.options = { ...options };
+    ReviewTerminal.latest = this;
+  }
   loadAddon(_addon: object): void {}
   open(mount: HTMLElement): void {
     const root = document.createElement("div");
@@ -35,6 +40,7 @@ class ReviewTerminal {
   onBinary(_listener: (value: string) => void): void {}
   onResize(_listener: () => void): void {}
   input(value: string): void { this.data(value); }
+  scrollLines(lines: number): void { this.scrolled.push(lines); }
   focus(): void { this.root?.querySelector("textarea")?.focus(); }
   reset(): void {}
   write(_data: Uint8Array, done?: () => void): void { done?.(); }
@@ -69,6 +75,8 @@ const { setKeysExpanded, setPadKind, setPaneComposeLive, setPaneTermMode } = awa
 const { attachLiveSession } = await import("../../computers/catalog-store.ts");
 const { applySnapshot } = await import("../../dashboard/catalog-store.ts");
 const { applyRuntimeIdentity } = await import("../../connection/runtime-store.ts");
+const { clearCapabilities, applyCapabilities } = await import("../../operations/capabilities-store");
+const { NO_OPERATION_CAPABILITIES } = await import("../../../lib/operations");
 const {
   disposeFullTerminal, leaveFullTerminal, getFullTerminalView,
   sendFullTerminalScroll, syncFullTerminalChrome, setFullTerminalComposeLive,
@@ -141,6 +149,7 @@ beforeEach(async () => {
   await (await import("../../../app/connected-loader")).loadConnectedRuntime();
   resetTransitionState();
   resetComposeDrafts();
+  clearCapabilities();
   setLang("zh");
   act(() => {
     notifyFullTerminalKeyboard(false);
@@ -325,4 +334,20 @@ test("screen text comes from the mounted terminal and rejects another pane", asy
   act(() => applyPaneRead("stale guided snapshot", "stale-copy"));
   expect(fullTerminalScreenText("p1").trimEnd()).toBe("live terminal text");
   expect(fullTerminalScreenText("p2")).toBe("");
+});
+
+test("a renderer mounted during pending GetConfig reserves history before local scrolling is granted", async () => {
+  const live = session();
+  await act(() => boot(live));
+  await until(() => getFullTerminalView().stage === "live", "live terminal");
+  const renderer = ReviewTerminal.latest;
+  expect(renderer.options.scrollback).toBe(1000);
+  await act(() => sendFullTerminalScroll("up", 4, "wheel"));
+  expect(live.calls).toContain("scroll");
+  expect(renderer.scrolled).toEqual([]);
+  await act(() => applyCapabilities({ ...NO_OPERATION_CAPABILITIES, terminal_client_scroll: true }, []));
+  await act(() => sendFullTerminalScroll("up", 4, "wheel"));
+  expect(ReviewTerminal.latest).toBe(renderer);
+  expect(renderer.scrolled).toEqual([-4]);
+  expect(live.calls.filter((call) => call === "scroll")).toHaveLength(1);
 });

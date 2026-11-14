@@ -25,6 +25,7 @@ export function fullTerminalOptions(args: {
   fontSize: number;
   lineHeight: number;
   linkHandler: ILinkHandler;
+  scrollback?: number;
 }): ITerminalOptions {
   return {
     cursorBlink: true,
@@ -39,7 +40,7 @@ export function fullTerminalOptions(args: {
     fontSize: args.fontSize,
     lineHeight: args.lineHeight,
     letterSpacing: 0,
-    scrollback: 0,
+    scrollback: args.scrollback ?? 0,
     linkHandler: args.linkHandler,
     theme: {
       background: "#090c10",

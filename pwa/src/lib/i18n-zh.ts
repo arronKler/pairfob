@@ -574,6 +574,8 @@ export const zh = {
   "ft.takeover": "正在接管终端…",
   "ft.live": "实时 · 端到端加密",
   "ft.interrupt": "控制中断：{error}",
+  "ft.scrollUnsupported": "当前终端后端不支持远端滚动；输入和实时画面仍可使用。",
+  "ft.appScrollUnsupported": "当前程序未启用鼠标滚动，可尝试翻页按钮；终端控制保持连接。",
   "ft.loadFail": "终端组件加载失败：{error}",
   "ft.webglLost": "WebGL 图形上下文已丢失",
   "ft.webglUnavailable": "当前浏览器不支持 WebGL2 终端渲染",

@@ -186,6 +186,7 @@
       ],
       "properties": {
         "create_conversation": { "type": "boolean" },
+        "terminal_client_scroll": { "type": "boolean" },
         "create_tab": { "type": "boolean" },
         "split_pane": { "type": "boolean" },
         "prompt_agent": { "type": "boolean" },
