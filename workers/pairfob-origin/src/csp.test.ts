@@ -48,7 +48,7 @@ describe("static content security policy", () => {
       // Real workspace image/audio/video object URLs render under the PWA only.
       expect(csp).toContain("img-src 'self' data: blob:");
       expect(csp).toContain("media-src blob:");
-      // The media widening is the ONLY network/media relaxation on the PWA policy.
+      // Media and local decoder workers stay confined to the PWA; network access stays self-only.
       expect(csp).toContain("connect-src 'self'");
       expect(csp).not.toContain("connect-src 'self' blob:");
       expect(csp).not.toContain("*");
@@ -64,6 +64,22 @@ describe("static content security policy", () => {
       expect(csp).toContain("style-src 'self' https://fonts.googleapis.com");
       for (const hash of XTERM_STYLE) expect(csp).toContain(hash);
       expect(csp.match(/sha256-/g) ?? []).toHaveLength(2);
+    }
+  });
+
+  test("only the PWA admits the QR decoder's bundled blob worker", async () => {
+    for (const path of ["/pair", "/pair/", "/assets/qr-scanner-worker.js"]) {
+      const csp = await cspOf(path);
+      expect(csp.split(";").map(rule => rule.trim())).toContain("worker-src 'self' blob:");
+      expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval';");
+      expect(csp).toContain("connect-src 'self';");
+      expect(csp).not.toContain("'unsafe-inline'");
+      expect(csp).not.toContain("'unsafe-eval'");
+    }
+    for (const path of ["/", "/zh", "/doc"]) {
+      const csp = await cspOf(path);
+      expect(csp.split(";").map(rule => rule.trim())).toContain("worker-src 'self'");
+      expect(csp).not.toContain("blob:");
     }
   });
 
