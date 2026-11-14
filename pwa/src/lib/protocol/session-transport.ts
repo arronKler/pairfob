@@ -55,6 +55,8 @@ type Pending = {
   /** `performance.now()` when the caller first waited; carried requests keep mine. */
   startedAt: number;
   onLate?: (result: unknown) => void;
+  /** Opt-in streamed read: true consumes a delta without extending its deadline. */
+  onProgress?: (result: unknown) => boolean;
   /** Sealed and sent; a bulk job may still be waiting for send budget. */
   sent: boolean;
   /** Bulk upload write: admitted through the hard 4-job cap. */
@@ -276,7 +278,7 @@ export class SessionTransport {
     }
   }
 
-  async rpc(op: string, params: unknown, timeoutMs = READ_RPC_TIMEOUT_MS, onSent?: () => void, onLate?: (result: unknown) => void): Promise<unknown> {
+  async rpc(op: string, params: unknown, timeoutMs = READ_RPC_TIMEOUT_MS, onSent?: () => void, onLate?: (result: unknown) => void, onProgress?: (result: unknown) => boolean): Promise<unknown> {
     if (this.stopped) throw new ProtocolError("disconnected", "连接正在恢复");
     if (this.pending.size >= MAX_IN_FLIGHT) throw new ProtocolError("backpressure", "请求过多，请稍后再试");
     const bulk = BULK_RPC_OPS.has(op);
@@ -297,7 +299,7 @@ export class SessionTransport {
       const abort = new AbortController();
       const entry: Pending = {
         op, resolve, reject, bulk, counted: bulk, abort, deadline: performance.now() + timeoutMs, onLate, sent: false,
-        startedAt: performance.now(),
+        startedAt: performance.now(), onProgress,
         timer: globalThis.setTimeout(() => this.expireRPC(id, entry, op, onLate), timeoutMs),
       };
       this.bulkActive += bulk ? 1 : 0;
@@ -509,6 +511,7 @@ export class SessionTransport {
         }
         return;
       }
+      if (message.ok && pending.onProgress?.(message.result)) return;
       clearTimeout(pending.timer);
       this.pending.delete(message.id);
       pending.abort.abort();

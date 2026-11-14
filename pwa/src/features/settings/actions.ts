@@ -55,7 +55,7 @@ export function openSettings(): void {
   goToScreen("settings");
   commitView();
   track("pwa_settings");
-  void refreshSettings();
+  void refreshSettings(true);
 }
 
 /**
@@ -101,9 +101,9 @@ export function preparePush(): void {
     .catch(() => undefined);
 }
 
-export async function refreshSettings(): Promise<void> {
+export async function refreshSettings(reuseQuota = false): Promise<void> {
   void checkDaemonRelease();
-  void refreshAgentQuota();
+  void refreshAgentQuota(reuseQuota);
   void loadHerdSessions();
   const session = liveSession();
   const request = beginSettingsRead();

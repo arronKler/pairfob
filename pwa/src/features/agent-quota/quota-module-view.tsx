@@ -16,7 +16,7 @@ export function QuotaModuleView({ model, onOpen }: { model: QuotaModuleModel; on
   const rows = useArrivals(model.rows, row => row.id);
   const all = <SetNavItem className="quota-all" label={t("quota.allRow")} onClick={() => onOpen()}
     value={model.total || model.attention ? <>
-      {model.total ? t("quota.moduleTotal", { n: model.total }) : null}
+      {model.total ? t(model.incomplete ? "quota.moduleLoaded" : "quota.moduleTotal", { n: model.total }) : null}
       {model.total && model.attention ? " · " : null}
       {model.attention ? <span className="quota-attention-count">{t("quota.moduleAttention", { n: model.attention })}</span> : null}
     </> : undefined} />;

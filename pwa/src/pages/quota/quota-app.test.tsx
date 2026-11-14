@@ -23,7 +23,7 @@ import { quotaResetIn } from "../../features/agent-quota/model";
 import { loadQuotaCache, resetQuotaCache, saveQuotaCache } from "../../lib/quota-cache";
 import { CREATE_MEMORY_KEY } from "../../features/operations/create-memory";
 import { refreshAgentQuota, openQuota } from "../../features/agent-quota/actions";
-import { views } from "../../features/agent-quota/store";
+import { views, quotaSnapshot } from "../../features/agent-quota/store";
 import { resetTransitionState } from "../../app/transition";
 import { stopPolling } from "../../features/connection/controller";
 
@@ -36,6 +36,58 @@ import { stopPolling } from "../../features/connection/controller";
  */
 
 const sample = (): QuotaAccount => quotaAccount();
+
+test("streaming shows available balances, retains cached accounts, and keeps refresh busy", async () => {
+  mountLiveOn("quota");
+  let emit!: (report: QuotaReport) => void, finish!: (report: QuotaReport) => void;
+  const session = useSession(async () => [sample()]);
+  await act(async () => { await refreshAgentQuota(); });
+  session.agentQuota = progress => { emit = progress!; return new Promise(resolve => { finish = resolve; }); };
+  let pending!: Promise<unknown>;
+  act(() => { pending = refreshAgentQuota(); });
+  act(() => { emit(quotaReport(quotaAccount({provider:"copilot"}))); });
+  expect(appRoot().querySelector("#quota-copilot.quota-card")).not.toBeNull();
+  expect(appRoot().querySelector("#quota-codex.quota-card")).not.toBeNull();
+  expect(appRoot().querySelector<HTMLButtonElement>(".quota-refresh")!.disabled).toBeTrue();
+  expect(appRoot().querySelector('[role="status"]')?.textContent).toBe(t("quota.readingMore"));
+  // Partial reports must not replace the last completed on-disk snapshot.
+  expect(loadQuotaCache("d_aaaaaaaaaaaaaaaaaaaa")!.items.map(a=>a.id)).toEqual(["codex"]);
+  await act(async () => { finish(quotaReport(quotaAccount({provider:"copilot"}))); await pending; });
+  expect(quotaSnapshot(session)!.items!.map(a=>a.id)).toEqual(["copilot"]);
+  expect(appRoot().querySelector<HTMLButtonElement>(".quota-refresh")!.disabled).toBeFalse();
+  act(() => { emit(quotaReport(sample())); });
+  expect(quotaSnapshot(session)!.items!.map(a=>a.id)).toEqual(["copilot"]);
+});
+
+test("interrupted stream retains arrived samples without leaking them into the next computer", async () => {
+  mountLiveOn("quota");
+  const old = useSession(async () => []);
+  let emit!: (report:QuotaReport)=>void, fail!: (error:Error)=>void;
+  old.agentQuota = progress => { emit=progress!; return new Promise((_resolve,reject)=>{fail=reject;}); };
+  let pending!:Promise<unknown>;
+  act(()=>{pending=refreshAgentQuota();});
+  act(()=>{emit(quotaReport(sample()));});
+  const next = useSession(async()=>[quotaAccount({provider:"copilot"})]);
+  await act(async()=>{await refreshAgentQuota(); emit(quotaReport(quotaAccount({meters:[quotaShare({used_percent:80})]}))); fail(new Error("offline")); await pending;});
+  expect(quotaSnapshot(old)).toMatchObject({loading:false,error:"quota.failed"});
+  expect(quotaSnapshot(old)!.items).toHaveLength(1);
+  expect(quotaSnapshot(next)!.items!.map(a=>a.id)).toEqual(["copilot"]);
+  expect(appRoot().querySelector("#quota-codex.quota-card")).toBeNull();
+});
+
+test("quick navigation reuses a completed read while manual refresh and stale samples still read", async () => {
+  mountLiveOn("quota");
+  let calls=0; const account=sample();
+  useSession(async()=>{calls++;return [account];});
+  await act(async()=>{await refreshAgentQuota();});
+  for(let i=0;i<10;i++) await act(async()=>{await refreshAgentQuota(true);});
+  expect(calls).toBe(1);
+  await act(async()=>{await refreshAgentQuota();});
+  expect(calls).toBe(2);
+  account.observed_at -= 120;
+  await act(async()=>{await refreshAgentQuota(); await refreshAgentQuota(true);});
+  expect(calls).toBe(4);
+});
 
 /** Attach a fake session through the named action, inside act when mounted. Its read answers accounts. */
 function useSession(read: () => Promise<QuotaAccount[]>, report: Omit<QuotaReport, "accounts"> = { legacy: false, unknown: 0 }): LiveSession {
@@ -299,6 +351,8 @@ test("a failed refresh keeps the numbers that were read, and a first read that f
   await act(async () => { await refreshAgentQuota(); });
   await settle();
   expect(meterValue()).toBe(75);
+  expect(appRoot().querySelector(".quota-module")?.textContent).toContain(t("quota.failed"));
+  expect(appRoot().querySelector(".quota-all")?.textContent).toContain(t("quota.moduleLoaded", { n: 1 }));
   await act(async () => { openQuota(); });
   await settle();
   // The page says the read failed above the cards it still has.

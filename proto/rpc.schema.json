@@ -1240,6 +1240,17 @@
       ],
       "additionalProperties": false
     },
+    "agentQuotaStreamResult": {
+      "type": "object",
+      "required": ["items", "done"],
+      "properties": {
+        "items": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/agentQuotaAccount"}},
+        "done": {"type": "boolean"},
+        "order": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"}}
+      },
+      "allOf": [{"if": {"required": ["order"]}, "then": {"properties": {"done": {"const": true}}}}],
+      "additionalProperties": false
+    },
     "agentQuotaV2Result": {
       "type": "object",
       "required": ["items"],
@@ -1266,6 +1277,7 @@
             "DaemonUpdate",
             "AgentQuota",
             "AgentQuotaV2",
+            "AgentQuotaStream",
             "AgentInspect",
             "Snapshot",
             "PaneRead",
@@ -1353,6 +1365,7 @@
         {"if": {"properties": {"op": {"const": "AgentInspect"}}}, "then": {"properties": {"params": {"type": "object", "required": ["pane_id"], "properties": {"pane_id": {"$ref": "#/$defs/paneId"}, "session": {"$ref": "#/$defs/session"}}, "additionalProperties": false}}}},
         {"if": {"properties": {"op": {"const": "AgentQuota"}}}, "then": {"properties": {"params": {"type": "object", "additionalProperties": false}}}},
         {"if": {"properties": {"op": {"const": "AgentQuotaV2"}}}, "then": {"properties": {"params": {"type": "object", "additionalProperties": false}}}},
+        {"if": {"properties": {"op": {"const": "AgentQuotaStream"}}}, "then": {"properties": {"params": {"type": "object", "properties": {"compact": {"type": "boolean"}}, "additionalProperties": false}}}},
         {
           "if": { "properties": { "op": { "const": "Ping" } } },
           "then": {

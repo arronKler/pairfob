@@ -25,7 +25,7 @@ export function QuotaPanelView({ panel, onUpdate }: { panel: QuotaPanelModel; on
       {panel.attention.length ? <QuotaAttentionGroup notices={panel.attention} /> : null}
       {arrivals.length ? <>
         <h2 className="set-group-label quota-cards-label"><span>{`${t("quota.group.accounts")} · ${arrivals.length}`}</span>
-          {panel.updated ? <span className="set-group-aside">{panel.updated}</span> : null}</h2>
+          {panel.busy || panel.updated ? <span className="set-group-aside" role={panel.busy ? "status" : undefined}>{panel.busy ? t("quota.readingMore") : panel.updated}</span> : null}</h2>
         <div className="quota-cards">
           {arrivals.map(({ item: card, arrive }) => <QuotaCardView key={card.id} card={card} arrive={arrive} />)}
         </div>

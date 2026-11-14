@@ -232,7 +232,7 @@ func TestRealHerdrBootstrapWhenRequested(t *testing.T) {
 	t.Setenv("HERDR_CLIENT_SOCKET_PATH", filepath.Join(dir, "client.sock"))
 	if os.Getenv("PAIRFOB_TEST_REAL_HERDR_SLOW_SHELL") == "1" {
 		shell := filepath.Join(dir, "slow-shell")
-		if err := os.WriteFile(filepath.Join(dir, ".zshrc"), []byte("sleep 3\n"), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, ".zshrc"), []byte("sleep 6\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(shell, []byte("#!/bin/sh\nexport ZDOTDIR="+dir+"\nexec /bin/zsh -d -i\n"), 0o700); err != nil {
@@ -283,6 +283,15 @@ func TestRealHerdrBootstrapWhenRequested(t *testing.T) {
 			t.Fatalf("installed Herdr protocol %d does not support %s", availability.Descriptor.Protocol, feature)
 		}
 	}
+	waitShell := func(receipt Receipt) {
+		t.Helper()
+		if os.Getenv("PAIRFOB_TEST_REAL_HERDR_SLOW_SHELL") == "1" {
+			paneID := receiptEntityID(t, receipt, EntityPane)
+			if err := herdr.waitCreatedShell(ctx, DefaultSession(), paneID); err != nil {
+				t.Fatalf("slow shell %s: %v", paneID, err)
+			}
+		}
+	}
 
 	conversation, err := herdr.Execute(ctx, DefaultSession(), "contract-create-conversation", CreateConversationCommand{
 		CWD: dir, Label: "pairfob-contract",
@@ -298,6 +307,7 @@ func TestRealHerdrBootstrapWhenRequested(t *testing.T) {
 		defer cleanupCancel()
 		_, _ = herdr.Execute(cleanupCtx, DefaultSession(), "contract-cleanup-workspace", CloseWorkspaceCommand{WorkspaceID: workspaceID})
 	})
+	waitShell(conversation)
 
 	tab, err := herdr.Execute(ctx, DefaultSession(), "contract-create-tab", CreateTabCommand{
 		WorkspaceID: workspaceID, CWD: dir, Label: "contract-tab",
@@ -308,6 +318,7 @@ func TestRealHerdrBootstrapWhenRequested(t *testing.T) {
 	receiptEntityID(t, tab, EntityTab)
 	receiptEntityID(t, tab, EntityPane)
 	rejectReceiptEntity(t, tab, EntityAgent)
+	waitShell(tab)
 
 	split, err := herdr.Execute(ctx, DefaultSession(), "contract-split-pane", SplitPaneCommand{
 		WorkspaceID: workspaceID, TargetPaneID: rootPaneID, CWD: dir, Direction: SplitRight,
@@ -317,6 +328,7 @@ func TestRealHerdrBootstrapWhenRequested(t *testing.T) {
 	}
 	receiptEntityID(t, split, EntityPane)
 	rejectReceiptEntity(t, split, EntityAgent)
+	waitShell(split)
 
 	if kind := strings.TrimSpace(os.Getenv("PAIRFOB_TEST_REAL_HERDR_AGENT_KIND")); kind != "" {
 		if !containsAgent(availability.Descriptor.AgentKinds, kind) {

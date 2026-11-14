@@ -91,22 +91,7 @@ func fetchCommandCodeQuota(ctx context.Context, c *http.Client, key string, now 
 	if whoami.Org != nil && strings.TrimSpace(whoami.Org.ID) != "" {
 		query = "?orgId=" + url.QueryEscape(strings.TrimSpace(whoami.Org.ID))
 	}
-	var credits commandCodeCredits
-	if status := quotaJSON(ctx, c, commandCodeAPIURL+"/alpha/billing/credits"+query, headers, nil, &credits); status != "" {
-		return quotaAccount(emptyQuota("command-code", "api", status))
-	}
-	var plan string
-	var periodEnd int64
-	var subscription commandCodeSubscription
-	switch status := quotaJSON(ctx, c, commandCodeAPIURL+"/alpha/billing/subscriptions"+query, headers, nil, &subscription); status {
-	case "":
-		if subscription.Data != nil {
-			plan, periodEnd = commandCodePlan(subscription.Data.PlanID), subscription.Data.CurrentPeriodEnd.unix()
-		}
-	case "auth_required", "throttled":
-		return quotaAccount(emptyQuota("command-code", "api", status))
-	}
-	return parseCommandCodeQuota(credits, plan, periodEnd, now)
+	return readCommandCodeBilling(ctx, c, headers, query, now)
 }
 
 // parseCommandCodeQuota builds one meter per rate-limit window and a balance

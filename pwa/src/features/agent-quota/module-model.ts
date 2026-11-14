@@ -1,3 +1,4 @@
+import { t } from "../../lib/i18n";
 import { hasNumbers, originCopy, updatedCopy, type QuotaSnapshotLike } from "./card-model";
 import { meterLow, meterModel, meterSummarySub, summaryMeter, type QuotaMeterModel } from "./meter-model";
 import { orderAccounts, shortProviderNames, type QuotaProvider } from "./providers";
@@ -22,6 +23,8 @@ export type QuotaModuleModel = {
   /** Accounts whose login is there but cannot be read. */
   attention: number;
   updated: string | null;
+  /** The displayed accounts are not a successfully completed current batch. */
+  incomplete?: boolean;
 };
 
 /**
@@ -49,9 +52,10 @@ export function quotaModuleModel(snapshot: QuotaSnapshotLike | undefined, connec
   const newest = cards.reduce((latest, account) => Math.max(latest, account.observed_at), 0);
   return {
     state: "ready",
+    ...(snapshot.loading || snapshot.error ? { incomplete: true } : {}),
     rows,
     total: cards.length,
     attention: accounts.filter(account => account.state !== "not_configured" && !hasNumbers(account, now)).length,
-    updated: newest ? updatedCopy(newest, Math.floor(now)) : null,
+    updated: snapshot.error ? t("quota.failed") : snapshot.loading ? t("quota.readingMore") : newest ? updatedCopy(newest, Math.floor(now)) : null,
   };
 }

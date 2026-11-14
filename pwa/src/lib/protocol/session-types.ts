@@ -86,7 +86,7 @@ export type LiveSession = {
   connectionRecovery?: () => RecoveryClock | undefined;
   ping: (t: number) => Promise<unknown>;
   agentInspect?: (paneId: string) => Promise<AgentInspection>;
-  agentQuota: () => Promise<QuotaReport>;
+  agentQuota: (onProgress?: (report: QuotaReport) => void) => Promise<QuotaReport>;
   daemonUpdateStatus?: () => Promise<unknown>;
   daemonUpdate?: (target: string) => Promise<unknown>;
   listMachines?: () => Promise<MachineSummary[]>;

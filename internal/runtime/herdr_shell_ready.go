@@ -10,7 +10,9 @@ import (
 // settled foreground shell before the single agent.start mutation; Herdr still
 // performs the authoritative availability check when it handles that call.
 func (h *Herdr) waitCreatedShell(ctx context.Context, session SessionRef, paneID string) error {
-	return h.waitCreatedShellWithin(ctx, session, paneID, 5*time.Second, 100*time.Millisecond, 300*time.Millisecond)
+	// Login profiles and prompt hooks can take longer than five seconds on a
+	// healthy shell. This wait still shares the caller's mutation deadline.
+	return h.waitCreatedShellWithin(ctx, session, paneID, 15*time.Second, 100*time.Millisecond, 300*time.Millisecond)
 }
 
 func (h *Herdr) waitCreatedShellWithin(ctx context.Context, session SessionRef, paneID string, timeout, poll, settle time.Duration) error {

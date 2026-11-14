@@ -7,7 +7,9 @@ import { setScreen } from "../../app/navigation-store";
 import { clearNotice } from "../../app/notices-store";
 import type { LiveSession } from "../../lib/protocol/session-types";
 import { NO_OPERATION_CAPABILITIES } from "../../lib/operations";
-import { enablePush, refreshSettings, settingsReadStillOwned } from "./actions";
+import { enablePush, openSettings, refreshSettings, settingsReadStillOwned } from "./actions";
+import { quotaAccount, quotaReport } from "../../../test-support/quota";
+import { quotaSnapshot } from "../agent-quota/store";
 import { computerPushScope } from "./push-registrations";
 import { installFakeServiceWorkers } from "../../../test-support/service-workers";
 
@@ -33,6 +35,26 @@ afterEach(() => {
   resetRuntime();
   setScreen("home");
   clearNotice();
+});
+
+test("ten settings openings reuse fresh quota while explicit refresh still reads", async () => {
+  let reads = 0;
+  const session = {
+    isConnected: () => true,
+    listDevices: async () => ({ devices: [] }),
+    getConfig: async () => validConfig(),
+    agentQuota: async () => { reads++; return quotaReport(quotaAccount()); },
+  } as unknown as LiveSession;
+  attachLiveSession(session);
+  for (let i = 0; i < 10; i++) {
+    openSettings();
+    // The quota read starts independently of the other settings requests.
+    for (let turn = 0; turn < 10 && quotaSnapshot(session)?.loading; turn++) await Promise.resolve();
+    expect(quotaSnapshot(session)?.loading).toBeFalse();
+  }
+  expect(reads).toBe(1);
+  await refreshSettings();
+  expect(reads).toBe(2);
 });
 
 test("a settings read for a replaced session cannot write the new panel", async () => {

@@ -1,5 +1,6 @@
 /** Quota accounts: the page's three groups, the meter kinds and what to do about an account that cannot be read. Chinese is the source; English must cover the same keys. */
 export const zhQuota = {
+  "quota.readingMore": "其余订阅读取中…",
   "quota.group.attention": "需要处理",
   "quota.group.accounts": "订阅",
   "quota.group.others": "其他支持的订阅",
@@ -12,6 +13,7 @@ export const zhQuota = {
   "quota.upToDate": "已是最新",
   "quota.kept": "这次没有读到，下面是上一次的结果。",
   "quota.moduleTotal": "共 {n} 个",
+  "quota.moduleLoaded": "已读取 {n} 个",
   "quota.moduleAttention": "{n} 个需要处理",
   "quota.reason.relogin": "登录已过期",
   "quota.reason.allowKeychain": "电脑没有允许读取登录信息",
@@ -65,6 +67,7 @@ export const zhQuota = {
 };
 
 export const enQuota: { [K in keyof typeof zhQuota]: string } = {
+  "quota.readingMore": "Checking more…",
   "quota.group.attention": "Needs attention",
   "quota.group.accounts": "Subscriptions",
   "quota.group.others": "Other supported subscriptions",
@@ -77,6 +80,7 @@ export const enQuota: { [K in keyof typeof zhQuota]: string } = {
   "quota.upToDate": "Up to date",
   "quota.kept": "Could not read this time. This is the last result.",
   "quota.moduleTotal": "{n} in all",
+  "quota.moduleLoaded": "{n} checked",
   "quota.moduleAttention": "{n} need attention",
   "quota.reason.relogin": "Sign-in expired",
   "quota.reason.allowKeychain": "The computer did not allow reading the login",
