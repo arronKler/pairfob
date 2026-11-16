@@ -248,6 +248,9 @@ describe("what to do about an account without numbers", () => {
     // back in is that CLI's own login.
     expect(guide("opencode-go", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.opencodeGoHelp")], command: "opencode auth login" });
     expect(guide("command-code", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.commandCodeHelp")], command: "command-code login" });
+    expect(guide("kiro", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.kiroHelp")], command: "kiro-cli login" });
+    // Factory's way back in starts the CLI itself, so no command is named here.
+    expect(guide("factory", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.factoryHelp")], command: null });
   });
 
   test("a refused Keychain read, several logins and an unset collector each say their own step", () => {

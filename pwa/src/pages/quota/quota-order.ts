@@ -21,6 +21,8 @@ const KINDS: Record<QuotaProvider, readonly string[]> = {
   deepseek: [],
   "opencode-go": ["opencode"],
   "command-code": [],
+  factory: ["droid", "factory-droid", "factory"],
+  kiro: ["kiro", "kiro-cli"],
 };
 
 export function quotaProviderOrder(memory: Pick<CreateMemory, "pinned" | "uses">): QuotaProvider[] {

@@ -8,7 +8,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -97,8 +96,8 @@ func openCodeDataDir() string {
 	return filepath.Join(home, ".local", "share", "opencode")
 }
 
-// openCodeSQLite is a seam so tests need no sqlite3 binary.
-var openCodeSQLite = runOpenCodeSQLite
+// openCodeSQLite is the shared read-only sqlite seam.
+var openCodeSQLite = func(db, query string) ([]byte, error) { return quotaSQLite(db, query) }
 
 // openCodeDBCredential asks for the account row, or the opencode-go row when a
 // store names one, and returns its stored value.
@@ -158,35 +157,6 @@ func openCodeCredential(raw []byte) string {
 		return ""
 	}
 	return value
-}
-
-// runOpenCodeSQLite reads one query with sqlite3, read-only and bounded, the
-// way the transcript reader does. A host without sqlite3 has no database
-// credential, and the file login still answers.
-func runOpenCodeSQLite(db, query string) ([]byte, error) {
-	path := ""
-	for _, candidate := range []string{"/usr/bin/sqlite3", "/usr/local/bin/sqlite3", "/opt/homebrew/bin/sqlite3"} {
-		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
-			path = candidate
-			break
-		}
-	}
-	if path == "" {
-		var err error
-		if path, err = exec.LookPath("sqlite3"); err != nil {
-			return nil, errors.New("no sqlite3 reader")
-		}
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, path, "-init", os.DevNull, "-batch", "-readonly", "-json", "-cmd", ".timeout 1000", db, query)
-	cmd.Env = []string{"LC_ALL=C"}
-	out := &quotaOutput{limit: 8192}
-	cmd.Stdout = out
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), nil
 }
 
 func fetchOpenCodeGoQuota(ctx context.Context, c *http.Client, key string, now time.Time) QuotaAccount {

@@ -19,12 +19,15 @@ const PROVIDER_HELP = {
   deepseek: "quota.deepseekHelp",
   "opencode-go": "quota.opencodeGoHelp",
   "command-code": "quota.commandCodeHelp",
+  factory: "quota.factoryHelp",
+  kiro: "quota.kiroHelp",
 } as const satisfies Record<QuotaProvider, CopyKey>;
 
 /** The sign-in command of a provider whose CLI has one that is safe to name. */
 const LOGIN_COMMANDS: Partial<Record<QuotaProvider, string>> = {
   codex: "codex login", cursor: "cursor-agent login", grok: "grok login",
   "opencode-go": "opencode auth login", "command-code": "command-code login",
+  kiro: "kiro-cli login",
 };
 
 const CURSOR_FILE_STORE = "export AGENT_CLI_CREDENTIAL_STORE=file\ncursor-agent login\npairfob service install";

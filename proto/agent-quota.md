@@ -157,6 +157,8 @@ which meters are headline, because it knows each provider's shapes:
 | DeepSeek | Its only balance meter | |
 | OpenCode Go | `five hour`, `seven day`, and `monthly` when the plan has one | |
 | Command Code | `five hour`, `seven day`, `monthly balance` | |
+| Factory | `five hour`, `seven day`, `monthly` | |
+| Kiro | The first resource bucket; each resource type is its own pool | |
 
 Freshness is judged where it is shown. All meters of one read share the
 account's `observed_at`; each is also past use once its own `resets_at` has
@@ -191,7 +193,7 @@ Unknown names fail closed without querying providers. `service install` persists
 this non-secret setting. Disabled providers are omitted from both quota responses;
 no remote RPC fields or statuses change.
 
-`pairfob quota authorize <claude|cursor|antigravity>` is a local-only action that
+`pairfob quota authorize <claude|cursor|antigravity|factory>` is a local-only action that
 allows native Keychain interaction for up to two minutes and discards the returned
 credential. A successful read does not promise a permanent grant: that depends on
 the user's choice in macOS. Background reads pause after interaction is required
@@ -333,6 +335,36 @@ return unavailable without falling back to `security` or AppleScript.
   subscription read costs the plan name and the monthly reset, not the
   numbers. This provider is V2-only. No model turn, CLI process or credential
   write occurs.
+
+- Factory: reads the login the `droid` CLI saved in `~/.factory`
+  (`FACTORY_HOME` moves it). The store is AES-256-GCM ciphertext in the CLI's
+  own `iv:tag:ciphertext` envelope, and its 32-byte key is the CLI's
+  `Factory CLI` / `auth-encryption-key-security-cli` login-keychain item (the
+  older `auth-encryption-key` account is also tried). The key is read through
+  the same native reader as the other providers, so a background read never
+  prompts; a denied read is `allow_keychain`. It then GETs
+  `https://api.factory.ai/api/billing/limits` with the stored access token and,
+  when present, `X-Factory-Org-Id`. `limits.standard.fiveHour`, `weekly` and
+  `monthly` become `five hour`, `seven day` and `monthly` shares from
+  `usedPercent`, reset at `windowEnd`. `hasActiveSubscription: false` is a real
+  login without an allowance (`unsupported`), not zero usage and not a login to
+  renew. Extra Usage is a separate balance and is not read. No token refresh, credential write or model
+  turn occurs. This provider is V2-only.
+
+- Kiro: reads the login the `kiro-cli` CLI saved in its own SQLite database —
+  `~/Library/Application Support/kiro-cli/data.sqlite3` on macOS,
+  `$XDG_DATA_HOME/kiro-cli` elsewhere, `KIRO_DATA_DIR` to move it — with a
+  read-only `sqlite3` query for the `kirocli:social:token` row of `auth_kv`.
+  It then POSTs `AmazonCodeWhispererService.GetUsageLimits` to
+  `https://codewhisperer.us-east-1.amazonaws.com/` with the stored access token
+  and `profile_arn`. Each `usageBreakdownList` entry becomes one share of its
+  own pool from `currentUsageWithPrecision` over `usageLimitWithPrecision`,
+  reset at `nextDateReset`; the first is the account's headline. Counts are
+  shown only when both amounts are whole numbers of the provider's unit
+  (`INVOCATIONS` as `requests`, `CREDIT` as `credits`). `subscriptionTitle`
+  becomes the plan. 401 is `auth_required`; 403 is a logged-in account without
+  a subscription (`unsupported`). No token refresh, CLI process or credential
+  write occurs. This provider is V2-only.
 
 Gemini CLI is deliberately excluded. Each provider represents the locally
 selected account, not an aggregation of multiple login profiles. Provider
