@@ -25,6 +25,7 @@ function setup(options: { metadataError?: unknown; cleanupError?: unknown; close
     env: { BUILD: "test" }, ctx: { id: { toString: () => "11".repeat(32) } },
     wraps: new WeakMap([[ws, wrapped]]),
     core: {
+      settleClosedSocket: () => Promise.resolve(),
       onClose(socket: CfSocket, reason: string) {
         expect(socket).toBe(wrapped);
         calls.push("cleanup");

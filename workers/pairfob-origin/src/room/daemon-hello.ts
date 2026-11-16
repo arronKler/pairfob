@@ -70,6 +70,7 @@ export async function handleDaemonHello(room: RoomCore, ws: RoomSocket, frame: F
   room.daemon = ws;
   const next = newAttachment("daemon", room.now(), { hello_at_ms: room.now() });
   room.writeAtt(ws, next);
+  room.deps.metrics?.registered?.(typeof req.version === "string" ? req.version : "");
   sendJSON(ws, Typ.HELLO_DAEMON, frame.routeId, {
     v: PROTOCOL,
     op: "RegisterDaemon",

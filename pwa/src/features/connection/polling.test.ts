@@ -129,6 +129,56 @@ function createFlights() {
 }
 
 describe("live pane fallback scheduling", () => {
+  test("completed explicit reads replace their fallback while keeping its original cadence", () => {
+    const clock = installTimers();
+    const flights = createFlights();
+    try {
+      const polling = createLivePolling(flights.callbacks());
+      polling.start();
+      const pane = clock.pane()[0][0];
+      const snapshot = clock.snapshot()[0][0];
+      for (let i = 0; i < 100; i++) {
+        polling.paneReadCompleted();
+        polling.snapshotReadCompleted();
+      }
+      expect(clock.timers.has(pane)).toBe(false);
+      expect(clock.timers.has(snapshot)).toBe(false);
+      expectSingleDelay(clock.pane(), PANE_FALLBACK_MS);
+      expectSingleDelay(clock.snapshot(), SNAPSHOT_FALLBACK_MS);
+      expect(flights.pane.calls + flights.snapshot.calls).toBe(0);
+      polling.stop();
+    } finally { clock.restore(); }
+  });
+
+  test("an explicit read finishing after a poke never postpones its immediate refresh", async () => {
+    const clock = installTimers();
+    const flights = createFlights();
+    try {
+      const polling = createLivePolling(flights.callbacks());
+      polling.start();
+      polling.wakePane();
+      polling.paneReadCompleted();
+      expectSingleDelay(clock.pane(), 0);
+      const first = beginPaneTick(clock);
+      polling.wakePane();
+      polling.paneReadCompleted();
+      flights.settlePane();
+      await first;
+      // Completion can be published after the owned loop schedules its wake.
+      polling.paneReadCompleted();
+      expectSingleDelay(clock.pane(), 0);
+      const second = beginPaneTick(clock);
+      expect(flights.pane.calls).toBe(2);
+      flights.settlePane();
+      await second;
+      expectSingleDelay(clock.pane(), PANE_FALLBACK_MS);
+      polling.stop();
+      polling.paneReadCompleted();
+      polling.snapshotReadCompleted();
+      expect(clock.timers.size).toBe(0);
+    } finally { clock.restore(); }
+  });
+
   test("defers a pending fallback after an explicit confirmation read", () => {
     const clock = installTimers();
     try {

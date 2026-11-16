@@ -224,10 +224,30 @@ roots or `PAIRFOB_ALLOWED_ROOTS`.
 
 ## Durable Object duration diagnostics
 
-Use Cloudflare invocation logs and periodic Durable Object metrics, together
-with the existing Analytics Engine counters. The production room does not
-include temporary per-message or lifecycle trace hooks. Close reasons passed
-to application metrics remain allowlisted; arbitrary peer text is `other`.
+Use Cloudflare GraphQL invocation and periodic Durable Object metrics, together
+with the Analytics Engine counters. Production disables persisted invocation
+logs: every hibernating message would otherwise write one log event. Custom
+application logs, errors and uncaught exceptions remain enabled at 100%.
+Close reasons passed to application metrics remain allowlisted; arbitrary
+peer text is `other`. `ws_close` records the numeric WebSocket code in `blob4`
+and connection lifetime in `double3`, without retaining peer text or URLs.
+
+`relay_frame` independently samples one in 256 incoming envelopes. Its `blob2`
+separates authenticated `daemon` / established `phone` from `pending_daemon` /
+`pending_phone`; `blob3` is `PING`, `PONG`, `FWD` or `control`. `double1` and
+`double2` already contain the inverse-probability weight (256): multiply them
+by Analytics Engine's `_sample_interval` when aggregating. These are estimates,
+not exact counts, and no FWD plaintext or keys enter telemetry. Independent
+sampling also covers the first message after hibernation; a local modulo
+counter would miss idle connections repeatedly reconstructed between pings.
+`daemon_registered` records a bounded release version in `blob3` only after
+reconnect authentication; a missing or malformed version is `unknown`.
+
+Compare equivalent workloads before claiming cost savings: account for active
+connection hours, reconnects, message types, deployment and client versions.
+Keep stored-log reductions separate from DO request and duration reductions.
+The PWA keeps its 1.5s pane and 15s snapshot fallback deadlines; a successful
+explicit read postpones only its redundant fallback, never a queued poke.
 
 For a duration investigation, compare the **same object, deployment and time
 window** in periodic DO metrics and invocation metrics. Periodic `duration` is

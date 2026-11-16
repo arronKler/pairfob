@@ -27,6 +27,7 @@ function createOwnedLoop(options: {
   let generation = 0;
   let active = false;
   let timer: number | null = null;
+  let wakeArmed = false;
   let inFlight = false;
   let intent: LoopIntent = "none";
   let flight: Promise<void> | null = null;
@@ -35,14 +36,17 @@ function createOwnedLoop(options: {
     if (timer === null) return;
     window.clearTimeout(timer);
     timer = null;
+    wakeArmed = false;
   };
 
-  const arm = (delay: number): void => {
+  const arm = (delay: number, wake = false): void => {
     if (!active) return;
     clearTimer();
+    wakeArmed = wake;
     const gen = generation;
     timer = window.setTimeout(() => {
       timer = null;
+      wakeArmed = false;
       return run(gen);
     }, delay);
   };
@@ -71,9 +75,10 @@ function createOwnedLoop(options: {
       if (gen === generation) inFlight = false;
     }
     if (gen !== generation || !active) return;
-    const delay = intent === "wake" ? 0 : options.delayMs();
+    const wake = intent === "wake";
+    const delay = wake ? 0 : options.delayMs();
     intent = "none";
-    arm(delay);
+    arm(delay, wake);
   };
 
   const stop = (): void => {
@@ -99,7 +104,7 @@ function createOwnedLoop(options: {
         intent = "wake";
         return;
       }
-      arm(0);
+      arm(0, true);
     },
     defer(): void {
       if (!active) return;
@@ -107,6 +112,12 @@ function createOwnedLoop(options: {
         intent = "defer";
         return;
       }
+      arm(options.delayMs());
+    },
+    /** A real read already refreshed the view. Preserve every queued poke;
+     * only the redundant fallback moves to its usual deadline after that read. */
+    completed(): void {
+      if (!active || inFlight || wakeArmed) return;
       arm(options.delayMs());
     },
   };
@@ -143,6 +154,12 @@ export function createLivePolling(callbacks: PollingCallbacks) {
     },
     deferPane(): void {
       pane.defer();
+    },
+    snapshotReadCompleted(): void {
+      snapshot.completed();
+    },
+    paneReadCompleted(): void {
+      pane.completed();
     },
   };
 }

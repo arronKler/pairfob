@@ -44,6 +44,7 @@ export type SnapshotPorts = {
   messageOf(error: unknown): string;
   commitView(): void;
   now(): number;
+  snapshotReadCompleted?(): void;
 };
 
 /** The background lane folds the catalog; it never paints, navigates or reads a pane. */
@@ -96,6 +97,7 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
     const snapshot = (await session.snapshot()) as SnapshotWire;
     if (!viewIsCurrent(session, viewVersion, ports)) return;
     noteSnapshotAt(ports.now());
+    ports.snapshotReadCompleted?.();
     // The timestamp publication can reenter and install a replacement owner;
     // the old response must not apply onto it.
     if (!viewIsCurrent(session, viewVersion, ports)) return;

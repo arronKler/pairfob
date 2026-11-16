@@ -1,5 +1,6 @@
 import { DAEMON_ID_RE, GRANT_ID_RE } from "./constants.ts";
 import { buildOf } from "./http.ts";
+import { Typ } from "./envelope.ts";
 import type { RoomMetrics } from "./room/types.ts";
 
 export type { RoomMetrics };
@@ -146,8 +147,23 @@ export function observeFwd(env: MetricsEnv, bytes: number, daemonId = ""): void 
   emit(env, { event: "fwd", daemonId, n: 1, bytes, log: false });
 }
 
-export function observeClose(env: MetricsEnv, code: string, kind: string, daemonId = ""): void {
-  emit(env, { event: "ws_close", result: code || "unknown", dim: kind, daemonId });
+export function observeClose(env: MetricsEnv, code: string, kind: string, daemonId = "", ms?: number, wsCode?: number): void {
+  const extra = Number.isInteger(wsCode) && wsCode! >= 1000 && wsCode! <= 4999 ? String(wsCode) : "";
+  emit(env, { event: "ws_close", result: code || "unknown", dim: kind, daemonId, ms, extra });
+}
+
+export const RELAY_FRAME_SAMPLE_INTERVAL = 256;
+
+/** Independent sampling survives hibernation; a per-isolate modulo misses idle sockets.
+ * Math.random selects telemetry only, never identities, credentials or nonces.
+ * double1/2 are inverse-probability estimates, not exact counters. */
+export function observeRelayFrame(
+  env: MetricsEnv, role: string, typ: number, bytes: number, daemonId: string, sample = Math.random,
+): void {
+  if (sample() >= 1 / RELAY_FRAME_SAMPLE_INTERVAL) return;
+  const dim = typ === Typ.FWD ? "FWD" : typ === Typ.PING ? "PING" : typ === Typ.PONG ? "PONG" : "control";
+  emit(env, { event: "relay_frame", result: role, dim, daemonId,
+    n: RELAY_FRAME_SAMPLE_INTERVAL, bytes: bytes * RELAY_FRAME_SAMPLE_INTERVAL, log: false });
 }
 
 /**
@@ -175,11 +191,20 @@ export function roomMetrics(env: MetricsEnv, daemonId: string): RoomMetrics {
     bind(kind) {
       observeBind(env, kind, daemonId);
     },
-    close(code, kind) {
-      observeClose(env, code, kind, daemonId);
+    close(code, kind, ms, wsCode) {
+      observeClose(env, code, kind, daemonId, ms, wsCode);
     },
     fwd(bytes) {
       observeFwd(env, bytes, daemonId);
+    },
+    frame(role, typ, bytes) {
+      if (env.BUILD !== "test") observeRelayFrame(env, role, typ, bytes, daemonId);
+    },
+    registered(version) {
+      // Only a verified reconnect credential reaches this hook. The version
+      // remains untrusted metadata and must never carry arbitrary peer text.
+      const dim = /^v?\d{1,6}\.\d{1,6}\.\d{1,6}$/.test(version) ? version.replace(/^v/, "") : "unknown";
+      emit(env, { event: "daemon_registered", result: "ok", dim, daemonId, log: false });
     },
     reject(code, role) {
       observeReject(env, code, role, daemonId);

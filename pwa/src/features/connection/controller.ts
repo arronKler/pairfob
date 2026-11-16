@@ -452,6 +452,7 @@ const snapshotPorts = {
   messageOf,
   commitView,
   now: Date.now,
+  snapshotReadCompleted: () => livePolling.snapshotReadCompleted(),
 };
 
 export async function refreshSnapshot(): Promise<void> {
@@ -579,7 +580,10 @@ export async function refreshPaneRead(request: PaneRefreshRequest = {}): Promise
     if (changed && shouldPullStatus(true, Date.now(), lastSnapshotAt())) void refreshSnapshot();
     return null;
   }
-  return paneReads.request(paneReadOwner(session, viewVersion, openPaneId()), request);
+  const owner = paneReadOwner(session, viewVersion, openPaneId());
+  const observation = await paneReads.request(owner, request);
+  if (observation && paneReadOwnerIsCurrent(owner)) livePolling.paneReadCompleted();
+  return observation;
 }
 
 export async function refreshFromSession(): Promise<void> {

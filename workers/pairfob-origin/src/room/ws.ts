@@ -25,6 +25,7 @@ export function onMessage(
       reject(ws, "bad_frame", "invalid envelope");
       return;
     }
+    noteFrame(room, ws, Typ.FWD, fwdWire.length);
     return onFwdWire(room, ws, fwdWire);
   }
 
@@ -34,6 +35,7 @@ export function onMessage(
     return;
   }
   const { frame, wire } = decoded;
+  noteFrame(room, ws, frame.typ, wire.length);
   if (frame.typ === Typ.PING) {
     handlePing(room, ws, frame);
     return;
@@ -90,6 +92,16 @@ export function onMessage(
     default:
       reject(ws, "unbound", "frame type is not valid on client websocket");
   }
+}
+
+function noteFrame(room: RoomCore, ws: RoomSocket, typ: number, bytes: number): void {
+  if (!room.deps.metrics?.frame) return;
+  const att = room.att(ws);
+  // A claimed role is not an authenticated daemon or an established phone.
+  const role = att?.role === "daemon"
+    ? room.daemon === ws ? "daemon" : "pending_daemon"
+    : att?.kind === "established" ? "phone" : "pending_phone";
+  room.deps.metrics.frame(role, typ, bytes);
 }
 
 function onFwdWire(room: RoomCore, ws: RoomSocket, wire: Uint8Array): void | Promise<void> {
