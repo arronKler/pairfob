@@ -123,6 +123,8 @@ export function quotaCardModel(account: QuotaAccountRead, now = Date.now() / 100
   if (account.provider === "deepseek") notes.push(t("quota.deepseekNote"));
   if (account.provider === "opencode-go") notes.push(t("quota.opencodeGoNote"));
   if (account.provider === "command-code") notes.push(t("quota.commandCodeNote"));
+  if (account.provider === "factory") notes.push(t("quota.factoryNote"));
+  if (account.provider === "kiro") notes.push(t("quota.kiroNote"));
   if (account.source === "statusline") notes.push(t("quota.claudeNote"));
   return {
     id: account.id,

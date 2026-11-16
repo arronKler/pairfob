@@ -50,6 +50,8 @@ var quotaAccountProviders = []quotaAccountProvider{
 	{name: "deepseek", source: "api", locate: locateDeepSeekQuota},
 	{name: "opencode-go", source: "api", locate: locateOpenCodeGoQuota},
 	{name: "command-code", source: "api", locate: locateCommandCodeQuota},
+	{name: "factory", source: "api", locate: locateFactoryQuota},
+	{name: "kiro", source: "local_api", locate: locateKiroQuota},
 }
 
 // Reads that start a CLI share these slots. HTTP reads are not limited: run
