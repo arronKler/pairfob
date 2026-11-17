@@ -231,7 +231,9 @@ describe("user-facing documentation", () => {
     expect(push).toContain("Agent **等你处理**或从工作中变成**完成**时");
     expect(push).toContain("完成通知只认 `working → done`");
     expect(push).toContain("那台电脑的那个会话");
-    expect(push).toContain("不会补发旧通知");
+    expect(push).toContain("5 分钟后、再过 15 分钟");
+    expect(push).toContain("静音更新为**不再等待**");
+    expect(push).toContain("从未收到过提醒的设备会补上");
   });
 
   test("English docs quote English Pairfob labels, not Chinese chrome", async () => {

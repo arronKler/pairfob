@@ -5,9 +5,9 @@ description: Computer-side sending is on by default. Devices receive alerts afte
 
 # Notifications
 
-Sending is enabled on the computer by default. After permission and subscription, devices are notified when an Agent **needs you** or moves from **working to done**. Opening the notification goes to that session on the correct computer, not only the home list.
+Sending is enabled on the computer by default. After permission and subscription, devices are notified when an Agent **needs you** or moves from **working to done**. A waiting session stays on the record: each subscribed device is told once, then again if it is still waiting 5 minutes later and 15 minutes after that, up to three alerts. Answering it, closing it, or starting a new turn replaces the browser notice with a quiet **No longer waiting** update. Web Push requires every delivery to display a notification; native app notices can be removed instead. Opening the notification goes to that session on the correct computer, not only the home list.
 
-Completion means exactly `working → done`. Starting pairfob does not replay notifications for sessions that were already waiting or done.
+Completion means exactly `working → done` and is never replayed on startup. A session that is still waiting when pairfob starts or restarts is not forgotten: devices that were never told catch up, while devices already told are not repeated.
 
 Notification types cannot currently be selected separately: needs-you and completion alerts are subscribed together. A newer state for the same session replaces its older notification, so completion does not leave a stale needs-you alert in the tray.
 

@@ -37,4 +37,7 @@ func TestNotifyHerdRejectsInvalidIdentityAndKind(t *testing.T) {
 	if err := engine.NotifyHerd(HerdPush{HerdID: "w0:p1", Kind: "other"}); err == nil {
 		t.Fatal("invalid notification kind was accepted")
 	}
+	if err := engine.NotifyHerd(HerdPush{HerdID: "w0:p1", Kind: PushRetract}); err != nil {
+		t.Fatalf("retraction kind rejected: %v", err)
+	}
 }

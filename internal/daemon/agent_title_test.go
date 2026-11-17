@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -20,7 +21,7 @@ func TestAgentTitleUsesBoundFirstPromptOnPhoneAndMonitor(t *testing.T) {
 	label := "My custom name"
 	pane := runtime.Pane{PaneID: "p1", Agent: "codex", AgentStatus: "blocked", Cwd: "/repo/pairfob", TerminalTitle: "⠋ | pairfob", AgentSession: ref, Tokens: map[string]string{"phase": "review"}, Label: &label}
 	snapshot := runtime.Snapshot{Panes: []runtime.Pane{pane}}
-	got := e.decorateAgentActivity(snapshot).Panes[0]
+	got := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), snapshot).Panes[0]
 	if got.Tokens["task"] != "Fix the session title" || got.TerminalTitle != pane.TerminalTitle || *got.Label != label || got.AgentStatus != "blocked" {
 		t.Fatalf("decorated=%+v", got)
 	}
@@ -33,12 +34,12 @@ func TestAgentTitleUsesBoundFirstPromptOnPhoneAndMonitor(t *testing.T) {
 	}
 	// Even in the same cwd, an unbound pane cannot borrow this task.
 	pane.AgentSession = nil
-	if other := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
+	if other := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
 		t.Fatal("unbound pane acquired another session's title")
 	}
 	pane.AgentSession = ref
 	pane.TerminalTitle = "Review title handling | pairfob"
-	if next := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; next.Tokens["task"] != "Review title handling" {
+	if next := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; next.Tokens["task"] != "Review title handling" {
 		t.Fatalf("OSC title did not replace fallback: %+v", next)
 	}
 }
@@ -61,7 +62,7 @@ func TestAgentTitleUsesBoundPiSession(t *testing.T) {
 	e.Journal = &journal.Reader{PiRoot: root}
 	ref := &runtime.AgentSessionRef{Source: "herdr:pi", Agent: "pi", Kind: "path", Value: path}
 	pane := runtime.Pane{PaneID: "p1", Agent: "pi", AgentStatus: "blocked", Cwd: "/repo/pairfob", TerminalTitle: "π - pairfob", AgentSession: ref, Tokens: map[string]string{"phase": "review"}}
-	got := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
+	got := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
 	if got.Tokens["task"] != "修复 Pi 会话标题" || got.TerminalTitle != pane.TerminalTitle || got.Tokens["phase"] != "review" {
 		t.Fatalf("decorated=%+v", got)
 	}
@@ -74,12 +75,12 @@ func TestAgentTitleUsesBoundPiSession(t *testing.T) {
 	}
 	// Even in the same cwd, an unbound pane cannot borrow this task.
 	pane.AgentSession = nil
-	if other := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
+	if other := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
 		t.Fatal("unbound pane acquired another session's title")
 	}
 	pane.AgentSession = ref
 	pane.Agent = "claude"
-	if other := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
+	if other := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; other.Tokens["task"] != "" {
 		t.Fatal("another agent borrowed the Pi title")
 	}
 }
@@ -119,7 +120,7 @@ func TestAgentTitleUsesBoundClaudeSession(t *testing.T) {
 	e.Journal = &journal.Reader{ClaudeRoot: root}
 	ref := &runtime.AgentSessionRef{Source: "herdr:claude", Agent: "claude", Kind: "id", Value: id}
 	pane := runtime.Pane{PaneID: "p1", Agent: "claude", AgentStatus: "blocked", AgentSession: ref, TerminalTitle: "Claude Code", Tokens: map[string]string{"phase": "review"}}
-	got := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
+	got := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
 	if got.Tokens["task"] != "修复 Claude 会话标题" || got.TerminalTitle != "Claude Code" || got.Tokens["phase"] != "review" || pane.Tokens["task"] != "" {
 		t.Fatalf("decorated=%+v", got)
 	}
@@ -131,12 +132,12 @@ func TestAgentTitleUsesBoundClaudeSession(t *testing.T) {
 		t.Fatal("native binding leaked")
 	}
 	pane.Tokens["task"] = "Runtime name"
-	if got := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; got.Tokens["task"] != "Runtime name" {
+	if got := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; got.Tokens["task"] != "Runtime name" {
 		t.Fatal("overrode runtime name")
 	}
 	delete(pane.Tokens, "task")
 	pane.AgentSession = nil
-	if got := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; got.Tokens["task"] != "" {
+	if got := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; got.Tokens["task"] != "" {
 		t.Fatal("unbound pane borrowed Claude title")
 	}
 }
@@ -158,12 +159,12 @@ func TestAgentTitleAndStatusForSlashStartedClaudeSession(t *testing.T) {
 	e.Journal = &journal.Reader{ClaudeRoot: root}
 	ref := &runtime.AgentSessionRef{Source: "herdr:claude", Agent: "claude", Kind: "id", Value: id}
 	pane := runtime.Pane{PaneID: "p1", Agent: "claude", AgentStatus: "working", AgentSession: ref, TerminalTitle: "◑ Claude Code"}
-	got := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
+	got := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
 	if got.AgentStatus != "working" || got.Tokens["task"] != "修复 Claude 会话标题" {
 		t.Fatalf("decorated=%+v", got)
 	}
 	pane.AgentStatus = "done"
-	if got := e.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; got.AgentStatus != "idle" {
+	if got := e.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]; got.AgentStatus != "idle" {
 		t.Fatalf("finished command-only turn=%+v", got)
 	}
 }
