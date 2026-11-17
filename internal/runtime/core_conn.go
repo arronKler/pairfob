@@ -356,7 +356,7 @@ func (c *coreConn) Call(ctx context.Context, method string, params any, out any)
 }
 
 func (c *coreConn) OpenInput(ctx context.Context, terminal string, cols, rows int) (uint32, error) {
-	channel, err := c.openAttach(ctx, terminal, cols, rows)
+	channel, err := c.openAttach(ctx, terminal, cols, rows, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -368,14 +368,15 @@ func (c *coreConn) OpenInput(ctx context.Context, terminal string, cols, rows in
 // installed only after terminal.attach answers, so frames the read loop already
 // pulled off the pipe wait in order and are handed over here.
 func (c *coreConn) OpenOutput(ctx context.Context, terminal string, cols, rows int) (uint32, <-chan coreStreamItem, error) {
-	channel, err := c.openAttach(ctx, terminal, cols, rows)
+	// Raw-stream viewers own their scrollback; input-only channels need none.
+	channel, err := c.openAttach(ctx, terminal, cols, rows, 1000)
 	if err != nil {
 		return 0, nil, err
 	}
 	return channel, c.watchStream(channel), nil
 }
 
-func (c *coreConn) openAttach(ctx context.Context, terminal string, cols, rows int) (uint32, error) {
+func (c *coreConn) openAttach(ctx context.Context, terminal string, cols, rows, history int) (uint32, error) {
 	if cols < 0 || cols > 65535 || rows < 0 || rows > 65535 {
 		return 0, coreProtocol("terminal.attach", "invalid terminal size")
 	}
@@ -383,7 +384,7 @@ func (c *coreConn) openAttach(ctx context.Context, terminal string, cols, rows i
 		Channel  uint32       `json:"channel"`
 		Terminal coreTerminal `json:"terminal"`
 	}
-	params := map[string]any{"terminal": terminal, "observe": false, "history": 0, "cols": cols, "rows": rows}
+	params := map[string]any{"terminal": terminal, "observe": false, "history": history, "cols": cols, "rows": rows}
 	if err := c.Call(ctx, "terminal.attach", params, &result); err != nil {
 		return 0, err
 	}

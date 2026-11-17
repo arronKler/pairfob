@@ -38,11 +38,13 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 	descriptor, describeErr := e.RT.Describe(ctx, runtimeSession(p.Session))
 	cancel()
 	capabilities := map[string]bool{
-		"create_conversation": descriptor.Supports(runtime.FeatureCreateConversation),
-		"create_tab":          descriptor.Supports(runtime.FeatureCreateTab),
-		"split_pane":          descriptor.Supports(runtime.FeatureSplitPane),
-		"prompt_agent":        descriptor.Supports(runtime.FeaturePromptAgent),
-		"agent_inspect":       descriptor.Supports(runtime.FeatureAgentInspect),
+		// Raw attach viewers keep their own history and encode TUI mouse input.
+		"terminal_client_scroll": describeErr == nil && descriptor.Supports(runtime.FeatureTerminalClientScroll),
+		"create_conversation":    descriptor.Supports(runtime.FeatureCreateConversation),
+		"create_tab":             descriptor.Supports(runtime.FeatureCreateTab),
+		"split_pane":             descriptor.Supports(runtime.FeatureSplitPane),
+		"prompt_agent":           descriptor.Supports(runtime.FeaturePromptAgent),
+		"agent_inspect":          descriptor.Supports(runtime.FeatureAgentInspect),
 		// history: agent chat needs a pane bound to a readable transcript, not
 		// merely a readable pane, so a terminal-core pane cannot advertise it.
 		"history":         describeErr == nil && descriptor.Supports(runtime.FeatureTranscript),

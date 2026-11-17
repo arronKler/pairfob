@@ -327,19 +327,20 @@ var coreAllFeatures = []Feature{
 	FeatureCreateConversation, FeatureCreateTab, FeatureSplitPane, FeaturePromptAgent,
 	FeatureWorktreeList, FeatureWorktreeCreate, FeatureWorktreeOpen,
 	FeatureLayoutResize, FeatureLayoutSwap, FeatureLayoutZoom, FeatureHistory,
-	FeatureTranscript, FeatureAgentInspect,
+	FeatureTranscript, FeatureAgentInspect, FeatureTerminalClientScroll,
 }
 
 // Each capability is tied to the exact hello methods it needs. A missing
 // method is false; nothing is inferred from the core version.
 var coreFeatureMethods = map[Feature][]string{
-	FeatureSnapshot:           {"terminal.list"},
-	FeaturePaneRead:           {"terminal.read"},
-	FeaturePaneInput:          {"terminal.get", "terminal.keys", "terminal.send", "terminal.attach"},
-	FeatureRename:             {"terminal.label"},
-	FeatureClose:              {"terminal.kill"},
-	FeatureCreateConversation: {"terminal.run"},
-	FeaturePromptAgent:        {"terminal.send"},
+	FeatureSnapshot:             {"terminal.list"},
+	FeaturePaneRead:             {"terminal.read"},
+	FeaturePaneInput:            {"terminal.get", "terminal.keys", "terminal.send", "terminal.attach"},
+	FeatureRename:               {"terminal.label"},
+	FeatureClose:                {"terminal.kill"},
+	FeatureCreateConversation:   {"terminal.run"},
+	FeaturePromptAgent:          {"terminal.send"},
+	FeatureTerminalClientScroll: {"terminal.attach"},
 }
 
 func coreCapabilities(methods map[string]bool) map[Feature]Capability {

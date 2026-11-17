@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { TERMINAL_INPUT_CHUNK } from "../../../lib/protocol/terminal";
+import { ProtocolError } from "../../../lib/protocol/errors";
 import { TerminalCommandPump, type TerminalCommand } from "./full-terminal-command";
 
 type Deferred = {
@@ -25,6 +26,34 @@ async function flush(): Promise<void> {
 }
 
 describe("TerminalCommandPump", () => {
+  test("an unsupported scroll leaves queued input usable without a sequence gap or replay", async () => {
+    const sent: Array<{ command: TerminalCommand; sequence: number; done: Deferred }> = [];
+    const errors: unknown[] = [];
+    const notices: unknown[] = [];
+    const pump = new TerminalCommandPump({
+      execute: (command, sequence) => {
+        const done = deferred();
+        sent.push({ command, sequence, done });
+        return done.promise;
+      },
+      onError: (error) => errors.push(error),
+      onScrollUnsupported: (error) => notices.push(error),
+    });
+    pump.enqueueScroll({ direction: "up", lines: 3, source: "wheel" });
+    pump.enqueueScroll({ direction: "down", lines: 2, source: "wheel" });
+    pump.enqueueInput(new Uint8Array([120]));
+    sent[0].done.reject(new ProtocolError("unsupported"));
+    await flush();
+    expect(errors).toEqual([]);
+    expect(notices).toHaveLength(1);
+    expect(sent.map(({ command, sequence }) => [command.kind, sequence])).toEqual([["scroll", 1], ["input", 1]]);
+    pump.enqueueScroll({ direction: "down", lines: 1, source: "page_key" });
+    sent[1].done.resolve();
+    await flush();
+    pump.enqueueResize({ cols: 80, rows: 24, cellWidth: 0, cellHeight: 0 });
+    expect(sent.map(({ command, sequence }) => [command.kind, sequence])).toEqual([["scroll", 1], ["input", 1], ["resize", 2]]);
+  });
+
   test("sends one command immediately and coalesces unsent input", async () => {
     const requests: Array<{ command: TerminalCommand; sequence: number; done: Deferred }> = [];
     const pump = new TerminalCommandPump({

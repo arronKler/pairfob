@@ -48,6 +48,8 @@ export type SessionSource = {
   /** Per-pane screen text; panes it does not know read the shared baseline text. */
   paneText?: (paneId: string) => string | undefined;
   agentKinds?: string[];
+  /** Raw-stream viewer scrollback, as advertised by the core adapter. */
+  clientScroll?: boolean;
   /**
    * What the pane's complete terminal shows, drawn for the grid it was asked
    * for. Like the computer, the fixture sends it once the terminal opens and
@@ -91,6 +93,7 @@ export function createSession(source: SessionSource = {}): FixtureSession {
   let appendedTurns = 0;
   let appendedSteps = 0;
   const capabilities = Object.fromEntries(Object.keys(NO_OPERATION_CAPABILITIES).map((key) => [key, true]));
+  capabilities.terminal_client_scroll = source.clientScroll === true;
   const emit = (event: SessionEvent) => {
     // The fixture has no production connection pool; publish its transport observation here.
     if (event.type === "latency" && event.transport) setSessionTransport(event.transport);

@@ -118,6 +118,13 @@ describe("runtime operation config", () => {
     expect(() => parseRuntimeOperationsConfig(config({ ...older, download_file: "yes" }))).toThrow();
   });
 
+  test("terminal_client_scroll defaults to remote scrolling unless explicitly advertised", () => {
+    const { terminal_client_scroll, ...older } = NO_OPERATION_CAPABILITIES;
+    expect(parseRuntimeOperationsConfig(config(older)).capabilities.terminal_client_scroll).toBeFalse();
+    expect(parseRuntimeOperationsConfig(config({ ...older, terminal_client_scroll: true })).capabilities.terminal_client_scroll).toBeTrue();
+    expect(() => parseRuntimeOperationsConfig(config({ ...older, terminal_client_scroll: "yes" }))).toThrow();
+  });
+
   test("trace_markers is optional for daemons that predate trace markers", () => {
     const { trace_markers, ...older } = NO_OPERATION_CAPABILITIES;
     expect(parseRuntimeOperationsConfig(config(older)).capabilities.trace_markers).toBeFalse();

@@ -88,6 +88,42 @@ list, and prints its version, protocol and terminal count. Herdr-only flags
 (`--install-herdr`, `--no-install-herdr`, `--update-herdr`, `--restart-herdr`)
 fail under herdr-core; `--non-interactive` is accepted and has no effect there.
 
+Full-terminal viewers use the optional `GetConfig.capabilities.terminal_client_scroll`
+grant for raw herdr-core streams. The daemon requests up to 1000 history lines
+for a viewer attach; input-only attaches request none. The browser reserves
+1000 lines before the first output arrives, including while `GetConfig` is
+pending. With the grant, main-buffer gestures scroll locally and mouse-enabled
+TUIs receive xterm's negotiated wheel reports. An alternate-screen program
+without mouse support gets no synthetic cursor keys from a swipe; explicit
+page buttons send PageUp/PageDown. Page buttons also send keys in mouse mode
+and in main-screen application-cursor programs such as less -X; shell line
+editors with bracketed paste keep paging local history. Each page button
+activation routed to the program sends one page key, independently of the
+history line count.
+
+Without the grant, viewers retain Herdr's `TerminalScroll` path. An explicit
+`unsupported` response disables scrolling for that bridge without closing it
+or discarding queued input/resize commands. The rejected scroll is not replayed;
+the next new command uses its unconsumed sequence. Timeouts and uncertain
+outcomes still interrupt control. An older core daemon therefore needs both
+the daemon and hosted PWA update for local history scrolling, while the PWA
+update alone prevents an unsupported scroll from interrupting control.
+
+With `bun run dev --host 127.0.0.1` running in `pwa/`, the browser regression
+uses fixture sessions only and checks touch at 390×844 and 1024×768 plus mouse
+and keyboard at 1440×900:
+
+```sh
+playwright-cli -s=core-scroll open 'http://127.0.0.1:5173/qa/index.html?scene=home-populated' --browser=chrome
+playwright-cli -s=core-scroll run-code --filename=pwa/scripts/core-terminal-scroll.browser.js
+playwright-cli -s=core-scroll close
+```
+
+Run these commands from the repository root. The script covers history arriving
+before the capability grant, TUI wheel reports, page-button routing, and input
+after a rejected legacy scroll. Physical-phone acceptance and a live daemon/relay test remain
+separate from these fixture checks.
+
 `scripts/install.sh --runtime core` installs without downloading Herdr and
 requires `hc` on `PATH`. The installer resolves the runtime before setup and
 persists `PAIRFOB_RUNTIME` plus an absolute `PAIRFOB_HC` in the login service,
