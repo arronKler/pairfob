@@ -26,8 +26,9 @@ export const OPEN_ENROLL_MAX_DAEMONS = 1;
 export const SELF_GRANT_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const SELF_GRANT_PER_IP = 10;
 
+// qr-scanner bundles its fallback decoder into a blob Worker on browsers without BarcodeDetector.
 export const CSP =
-  "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src blob:; style-src 'self' https://fonts.googleapis.com 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-JVKkopR5uGguAsHA+8LKNHePLgO6ntgrlxTcOIvoM4w='; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests;";
+  "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src blob:; style-src 'self' https://fonts.googleapis.com 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-JVKkopR5uGguAsHA+8LKNHePLgO6ntgrlxTcOIvoM4w='; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; frame-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests;";
 
 /** The marketing page has no Wasm and therefore gets the stricter script policy. */
 export const CSP_SITE =
