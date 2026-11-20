@@ -3,8 +3,15 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { createElement } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { setLang } from "../../lib/i18n";
+import { setLang, t } from "../../lib/i18n";
+import { NO_OPERATION_CAPABILITIES } from "../../lib/operations";
 import { SettingsContent } from "./settings-page";
+import { setSettingsSection } from "../../features/settings/settings-section";
+import { attachLiveSession, computersStore, setCredential } from "../../features/computers/catalog-store";
+import { applyCapabilities } from "../../features/operations/capabilities-store";
+import { clearDesktopSetupDismissals } from "../../features/remote-desktop/desktop-setup-prompt";
+import { forgetConsole, saveConsole } from "../../lib/recovery-console";
+import type { LiveSession, PairResult } from "../../lib/protocol/client";
 
 /**
  * Content-only component contract on a private owned root.
@@ -19,10 +26,26 @@ import { SettingsContent } from "./settings-page";
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 
+function sampleHost(daemonId = "d_test_1234567890"): PairResult {
+  return {
+    daemonId,
+    deviceId: "dev_1",
+    hostname: "mac",
+    label: "Mac",
+    fp: "fp",
+    relayOrigin: "https://pairfob.com",
+    psk: new Uint8Array(32),
+    daemonPk: new Uint8Array(32),
+    createdAt: 1,
+  } as PairResult;
+}
+
 beforeEach(async () => {
   await resetTestDOM();
   Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
   setLang("zh");
+  clearDesktopSetupDismissals();
+  applyCapabilities({ ...NO_OPERATION_CAPABILITIES }, []);
 });
 afterEach(async () => {
   if (root) {
@@ -31,6 +54,10 @@ afterEach(async () => {
   }
   host?.remove();
   host = null;
+  clearDesktopSetupDismissals();
+  forgetConsole("d_test_1234567890");
+  attachLiveSession(null);
+  applyCapabilities({ ...NO_OPERATION_CAPABILITIES }, []);
 });
 
 test("content with no back bar renders no extra page wrapper", () => {
@@ -70,5 +97,93 @@ test("the link starts at this device, named for any device and marked for the on
   } finally {
     // Drop the override; the realm's own user agent shows through again.
     delete (navigator as { userAgent?: string }).userAgent;
+  }
+});
+
+test("computer details section renders unified DesktopSettingsSection without standalone duplicate console", () => {
+  const prev = computersStore.get().credential;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  try {
+    act(() => {
+      setCredential(sampleHost());
+      applyCapabilities({ ...NO_OPERATION_CAPABILITIES, view_desktop: true, control_desktop: true }, []);
+      setSettingsSection("connection");
+      root!.render(createElement(SettingsContent, { withBack: false }));
+    });
+    expect(host.querySelectorAll(".rd-settings-group")).toHaveLength(1);
+    expect(host.querySelectorAll(".recovery-console")).toHaveLength(1);
+    expect(host.querySelector(".rd-settings-group .recovery-console")).not.toBeNull();
+  } finally {
+    act(() => {
+      setCredential(prev);
+      setSettingsSection("overview");
+    });
+  }
+});
+
+test("pure Linux host hides DesktopSetupPrompt in overview and DesktopSettingsSection in computer details", () => {
+  const prev = computersStore.get().credential;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  try {
+    act(() => {
+      setCredential(sampleHost());
+      attachLiveSession({ isConnected: () => true } as unknown as LiveSession);
+      applyCapabilities({ ...NO_OPERATION_CAPABILITIES, view_desktop: false, setup_desktop: false }, []);
+      setSettingsSection("overview");
+      root!.render(createElement(SettingsContent, { withBack: false }));
+    });
+    expect(host.querySelector(".rd-setup-prompt")).toBeNull();
+
+    act(() => { setSettingsSection("connection"); });
+    expect(host.querySelector(".rd-settings-group")).toBeNull();
+    expect(host.querySelector(".recovery-console")).toBeNull();
+
+    // Preserves saved recovery console URL if already configured.
+    act(() => {
+      saveConsole(sampleHost(), "https://console.example.net/");
+      window.dispatchEvent(new window.Event("pairfob-recovery-change"));
+    });
+    expect(host.querySelector(".rd-settings-group")).toBeNull();
+    expect(host.querySelector(".recovery-console")).not.toBeNull();
+  } finally {
+    act(() => {
+      setCredential(prev);
+      setSettingsSection("overview");
+    });
+  }
+});
+
+test("upgraded Mac host shows setup prompt in overview and navigates to setup card in computer details", () => {
+  const prev = computersStore.get().credential;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  try {
+    act(() => {
+      setCredential(sampleHost());
+      attachLiveSession({ isConnected: () => true } as unknown as LiveSession);
+      applyCapabilities({ ...NO_OPERATION_CAPABILITIES, view_desktop: false, setup_desktop: true }, []);
+      setSettingsSection("overview");
+      root!.render(createElement(SettingsContent, { withBack: false }));
+    });
+    const prompt = host.querySelector(".rd-setup-prompt");
+    expect(prompt).not.toBeNull();
+    const openSetup = [...prompt!.querySelectorAll<HTMLButtonElement>("button")].find(
+      (btn) => btn.textContent === t("desktop.promptOpen"),
+    )!;
+    act(() => { openSetup.click(); });
+
+    expect(host.querySelector(".rd-setup-group")).not.toBeNull();
+    expect(host.textContent).toContain(t("desktop.setupCommand"));
+    expect(host.querySelector(".rd-setup-group .recovery-console")).not.toBeNull();
+  } finally {
+    act(() => {
+      setCredential(prev);
+      setSettingsSection("overview");
+    });
   }
 });

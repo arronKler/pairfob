@@ -408,6 +408,10 @@ func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
 		e.rpcTerminalScroll(s, id, params)
 	case "TerminalClose":
 		e.rpcTerminalClose(s, id, params)
+	case "DesktopOpen":
+		e.rpcDesktopOpen(s, id, params)
+	case "DesktopClose", "DesktopInput", "DesktopPing":
+		e.rpcDesktopCommand(s, id, op, params)
 	case "TransportOffer":
 		go e.rpcTransportOffer(s, id, params)
 	case "TransportCommit":

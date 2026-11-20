@@ -1,10 +1,11 @@
-import { LayoutDashboard, MessageSquare, Settings } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Monitor, Settings } from "lucide-react";
+import type { DesktopPip } from "../../features/remote-desktop/desktop-status";
 import { t } from "../../lib/i18n";
 import { useKeptList } from "../../shared/react/use-presence";
 import { MOTION_MS } from "../../shared/ui/dom/motion";
 import { Swap } from "../../shared/ui/primitives";
 import type { LayoutMode } from "../layout";
-export type TabId = "sessions" | "board" | "settings";
+export type TabId = "sessions" | "desktop" | "board" | "settings";
 
 const markKey = () => "mark";
 
@@ -21,27 +22,45 @@ export function useTabMark<Mark>(mark: Mark | undefined) {
 
 export const tabMarkClass = (base: string, mark: { entering: boolean }) => `${base}${mark.entering ? " pop-in" : ""}`;
 
-export function TabBarView({ mode, count = 0, update = false, onSwitch = () => {} }: {
-  mode: LayoutMode; count?: number; update?: boolean; onSwitch?: (tab: TabId) => void;
+export function TabBarView({ mode, count = 0, update = false, showDesktop = false, desktopPip, leaving = false, onSwitch = () => {} }: {
+  mode: LayoutMode;
+  count?: number;
+  update?: boolean;
+  /** Show the Desktop tab (3rd slot, after Board) when the host advertises view_desktop or while on the desktop route. */
+  showDesktop?: boolean;
+  desktopPip?: DesktopPip;
+  leaving?: boolean;
+  onSwitch?: (tab: TabId) => void;
 }) {
-  const active: TabId = mode === "board" ? "board" : mode === "settings" ? "settings" : "sessions";
+  const active: TabId = mode === "desktop" ? "desktop" : mode === "board" ? "board" : mode === "settings" ? "settings" : "sessions";
   const locked = mode === "boot" || mode === "pick";
+  const includeDesktop = !locked && (showDesktop || mode === "desktop");
   const badge = useTabMark(count > 0 ? count : undefined);
   const dot = useTabMark(update ? true : undefined);
-  const tabs: Array<{ id: TabId; label: string; icon: typeof MessageSquare; badge?: typeof badge; dot?: typeof dot; aria?: string }> = [
+  const tabs: Array<{
+    id: TabId;
+    label: string;
+    icon: typeof MessageSquare;
+    badge?: typeof badge;
+    dot?: typeof dot;
+    pip?: DesktopPip;
+    aria?: string;
+  }> = [
     { id: "sessions", label: t("tabs.sessions"), icon: MessageSquare, badge,
       aria: count > 0 ? t("tabs.attentionAria", { count: String(count) }) : undefined },
     { id: "board", label: t("tabs.board"), icon: LayoutDashboard },
+    ...(includeDesktop ? [{ id: "desktop" as const, label: t("tabs.desktop"), icon: Monitor, pip: desktopPip }] : []),
     { id: "settings", label: t("tabs.settings"), icon: Settings, dot,
       aria: update ? t("tabs.updateAria") : undefined },
   ];
   return (
-    <nav className="tab-bar" aria-label={t("tabs.aria")}>
-      {tabs.map(({ id, label, icon: Icon, badge, dot, aria }) => (
+    <nav className={`tab-bar${leaving ? " is-leaving" : ""}`} aria-label={t("tabs.aria")}
+      aria-hidden={leaving || undefined} inert={leaving || undefined}>
+      {tabs.map(({ id, label, icon: Icon, badge, dot, pip, aria }) => (
         <button
           key={id}
           type="button"
-          className={`tab-bar-item${active === id ? " on" : ""}`}
+          className={`tab-bar-item${active === id ? " on" : ""}${id === "desktop" && active === "desktop" ? " is-desktop" : ""}`}
           aria-current={active === id ? "page" : undefined}
           disabled={locked && id !== "sessions"}
           onClick={() => { if (!locked) onSwitch(id); }}
@@ -51,6 +70,7 @@ export function TabBarView({ mode, count = 0, update = false, onSwitch = () => {
             {badge ? (
               <span className={tabMarkClass("tab-bar-badge", badge)} aria-hidden="true"><Swap on={badge.item}>{badge.item}</Swap></span>
             ) : null}
+            {pip ? <span className={`tab-bar-pip is-${pip}`} aria-hidden="true" /> : null}
             {dot ? <span className={tabMarkClass("tab-bar-dot", dot)} aria-hidden="true" /> : null}
           </span>
           <span className="tab-bar-label">{label}</span>

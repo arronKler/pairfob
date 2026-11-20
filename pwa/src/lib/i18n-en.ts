@@ -184,6 +184,7 @@ export const en: { [K in keyof typeof zh]: string } = {
   "chrome.herdrOffBanner": "Herdr is unavailable. Run pairfob doctor on the computer to check.",
   "home.settings": "Settings",
   "home.new": "New",
+  "home.desktop": "Desktop",
   "home.board": "Board",
   "board.title": "Board",
   "board.back": "Back to list",

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { act } from "react";
 import { happy, resetBoardTestDOM } from "../../test-support/dom";
 import { startApplication, stopApplication } from "./bootstrap";
@@ -104,6 +104,21 @@ test("notification navigation into an already running app opens its pane", async
   expect(reads).toContain("p1");
   expect(location.hash).toBe("");
   expect(notificationTarget()).toBeNull();
+});
+
+test("a QR link delivered to the open pair page goes through pairing boot", async () => {
+  const reload = spyOn(location, "reload").mockImplementation(() => {});
+  try {
+    await settle(() => { location.hash = "v=2&c=bad"; });
+    expect(reload).not.toHaveBeenCalled();
+    await settle(() => {
+      location.hash = "v=2&d=d_0123456789abcdefabcd&r=4f7a2c9e1b0d88aa55cc3311abde7001&c=7K3M9H2P&fp=AAAAAAAAAAAAAAAAAAAAAA";
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
+  } finally {
+    reload.mockRestore();
+    history.replaceState(null, "", "/pair");
+  }
 });
 
 test("a running app reports a notification pane that disappeared", async () => {

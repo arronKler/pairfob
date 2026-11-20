@@ -43,7 +43,7 @@ let receipt: ReadAllReceipt | null = null;
 const noop = () => {};
 const actions = {
   openPaneFromCard: noop, openPaneMenu: noop, openWorkspaceMenu: noop, toggleGroup: noop, createConversation: noop,
-  openBoard: noop, openSettings: noop, openComputers: noop, runEmptyAction: noop, createInDir: noop, openHostMenu: noop,
+  openDesktop: noop, openBoard: noop, openSettings: noop, openComputers: noop, runEmptyAction: noop, createInDir: noop, openHostMenu: noop,
   openGroupModeMenu: noop, openAttention: (paneId: string) => { opened.push(paneId); }, revealAttention: noop, createInWorkspace: noop, openCreate: noop,
   openQuickCreate: noop, togglePin: noop, markRead: noop,
   markAllRead: () => {

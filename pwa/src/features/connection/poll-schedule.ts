@@ -29,7 +29,7 @@ export type PokeRefreshKind = "runtime" | "snapshot" | "paneread" | "ignore";
  * other panes whose cards remain visible in the desktop sidebar.
  */
 export function pokeRefreshAction(
-  screen: "home" | "pane" | "workspace" | "settings" | "quota" | "computers" | "board",
+  screen: "home" | "pane" | "workspace" | "settings" | "quota" | "computers" | "board" | "desktop",
   openPaneId: string,
   pokePaneId?: string,
   reason?: string,

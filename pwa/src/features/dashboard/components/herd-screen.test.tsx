@@ -76,6 +76,7 @@ const actions: HerdActions = {
   openWorkspaceMenu: (card) => calls.push(`workspaceMenu:${card?.paneId ?? "none"}`),
   toggleGroup: (groupId, groupIds) => calls.push(`toggle:${groupId}:${groupIds.join(",")}`),
   createConversation: () => calls.push("create"),
+  openDesktop: () => calls.push("desktop"),
   openBoard: () => calls.push("board"),
   openSettings: () => calls.push("settings"),
   openComputers: () => calls.push("computers"),
@@ -278,7 +279,7 @@ describe("herd screen presentation", () => {
   });
 
   test("the desktop rail controls fire one narrow action each and follow the model gates", () => {
-    paint(model(), "rail");
+    paint(model({ viewDesktop: true }), "rail");
     click(".rail-head .host-title");
     click(".rail-head .herd-mode");
     click(".rail-create");
@@ -286,14 +287,15 @@ describe("herd screen presentation", () => {
     const destinations = () => [...app().querySelectorAll<HTMLButtonElement>(".rail-nav button")];
     act(() => destinations()[0].click());
     act(() => destinations()[1].click());
-    expect(calls).toEqual(["host", "groupMode", "create", "quickCreate", "board", "settings"]);
-    expect(destinations().map((node) => node.textContent)).toEqual([t("home.board"), t("home.settings")]);
+    act(() => destinations()[2].click());
+    expect(calls).toEqual(["host", "groupMode", "create", "quickCreate", "board", "desktop", "settings"]);
+    expect(destinations().map((node) => node.textContent)).toEqual([t("home.board"), t("home.desktop"), t("home.settings")]);
     calls = [];
-    // No capability, no create; an empty list has nothing to group.
+    // No capability, no create or desktop; an empty list has nothing to group.
     paint(model({ createConversation: false, agents: [] }), "rail");
     expect(app().querySelector(".rail-create")).toBeNull();
     expect(app().querySelector(".rail-head .herd-mode")).toBeNull();
-    expect(destinations()).toHaveLength(2);
+    expect(destinations().map((node) => node.textContent)).toEqual([t("home.board"), t("home.settings")]);
     paint(model({ operationBusy: true }), "rail");
     expect(app().querySelector<HTMLButtonElement>(".rail-create")?.disabled).toBe(true);
   });
@@ -674,7 +676,7 @@ describe("the Herdr-session switch on the Sessions tab", () => {
   // The switch reads the live connection, not the view model, so the fixture is
   // a connection that names its selection plus the list a daemon would return.
   function liveWithSessions(selected: string | null): void {
-    const live = { herdSession: () => selected } as unknown as LiveSession;
+    const live = { isConnected: () => true, herdSession: () => selected } as unknown as LiveSession;
     attachLiveSession(live);
     setHerdSessionList(live, [{ name: null, running: true }, { name: "personal", running: true }]);
   }
@@ -720,7 +722,7 @@ describe("the Herdr-session switch on the Sessions tab", () => {
     { name: "a running named server", current: null, named: true, running: true, visible: true },
     { name: "the selected named server has stopped", current: "personal", named: true, running: false, visible: true },
     ]) {
-      const live = { herdSession: () => scenario.current } as unknown as LiveSession;
+      const live = { isConnected: () => true, herdSession: () => scenario.current } as unknown as LiveSession;
       act(() => {
         attachLiveSession(live);
         setHerdSessionList(live, [

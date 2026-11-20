@@ -1,8 +1,9 @@
+import { setSettingsSection } from "../src/features/settings/settings-section";
 import { offerNotifications } from "../src/features/settings/notification-onboarding";
 import { rememberPushConfig } from "../src/features/settings/push-config";
 import { modelTrace } from "./model-traces";
 import { PREVIEW_TRACE } from "./preview-files";
-import { isDesk } from "../src/app/viewport";
+import { isDesk, isRoomy } from "../src/app/viewport";
 import { clearAgentTraceCache } from "../src/lib/agent-trace-cache";
 import { clearAllDiffNotes } from "../src/lib/diff-notes";
 import { t } from "../src/lib/i18n";
@@ -12,7 +13,10 @@ import { applyOriginConfig, clearNotificationTarget, clearPairingFragment, noteR
 import { setConnectionRecordSource } from "../src/features/connection/connection-path";
 import { applyRuntimeIdentity, resetRuntime, applyDeviceList, setPushEnabled, setPushSubscribed,
   setDevicesError, setPushConfigError, beginSettingsRead, setIdentityPending } from "../src/features/connection/runtime-store";
-import { setScreen, setComputersFrom } from "../src/app/navigation-store";
+import { setDesktopFrom, setDesktopRailCollapsed, setScreen, setComputersFrom } from "../src/app/navigation-store";
+import { DESKTOP_PREFS_KEY, setDefaultAudio, setDefaultMode, setDefaultQuality, setTouchMode } from "../src/features/remote-desktop/desktop-prefs";
+import { setDesktopLive } from "../src/features/remote-desktop/desktop-status";
+import { clearDesktopSetupDismissals } from "../src/features/remote-desktop/desktop-setup-prompt";
 import { attachLiveSession, setAddingComputer, setComputers, setCredential, setLastUsedDaemon } from "../src/features/computers/catalog-store";
 import { setPairAwaitingApproval, setPairCodeDraft, setPairFailure, setPairManualOpen, resetPairingInput } from "../src/features/pairing/form-store";
 import { liveAgents, resetDashboard, replaceAgentsFromSnapshot } from "../src/features/dashboard/catalog-store";
@@ -83,6 +87,12 @@ export const scenes: FixtureScene[] = [
   { name: "pairing", description: "Pair code verification" },
   { name: "pairing-approval", description: "Waiting for approval on computer" },
   { name: "pairing-error", description: "Failed computer approval step" },
+  { name: "remote-desktop", description: "First-class desktop route in P2P control mode (phone split touchpad / desk embedded main)" },
+  { name: "remote-desktop-view", description: "First-class desktop route in P2P view-only mode" },
+  { name: "remote-desktop-relay", description: "Desktop route preflight awaiting a direct P2P connection" },
+  { name: "remote-desktop-unsupported", description: "Desktop route setup guide when the host lacks view_desktop" },
+  { name: "remote-desktop-settings", description: "Settings computer page with unified remote desktop and wake card" },
+  { name: "remote-desktop-setup", description: "Settings overview with one-time remote desktop setup discovery prompt for an upgraded Mac" },
   { name: "computers-one", description: "One computer offline retry" },
   { name: "computers-many", description: "Saved computer picker" },
   { name: "home-empty", description: "No session yet" },
@@ -326,9 +336,10 @@ export function resetFixtureBaseline(session: FixtureSession): void {
   // memory and in the fixture's storage, so the snapshot fold below starts from
   // a list nobody has opened anything on.
   resetHerdPresentationChoices();
+  clearDesktopSetupDismissals();
   for (let index = localStorage.length - 1; index >= 0; index--) {
     const key = localStorage.key(index) ?? "";
-    if (key.startsWith("pairfob_notification_prompt:") || key.startsWith(PANE_ACTIVATED_KEY) || key.startsWith(PANE_TOUCHED_KEY)) localStorage.removeItem(key);
+    if (key.startsWith("pairfob_notification_prompt:") || key.startsWith(PANE_ACTIVATED_KEY) || key.startsWith(PANE_TOUCHED_KEY) || key === DESKTOP_PREFS_KEY) localStorage.removeItem(key);
   }
   clearWorkspacePendingReveal();
   clearAgentTraceCache();
@@ -353,6 +364,14 @@ export function resetFixtureBaseline(session: FixtureSession): void {
   setPhase("live");
   setScreen("home");
   setComputersFrom("home");
+  setDesktopFrom("home");
+  setDesktopRailCollapsed(null);
+  setSettingsSection("overview");
+  setDesktopLive(false);
+  setDefaultMode("control");
+  setDefaultQuality("balanced");
+  setDefaultAudio(false);
+  setTouchMode("trackpad");
 
   // Computers baseline: catalog + credential + the opaque live session handle.
   setComputers(data.computers());
@@ -450,8 +469,48 @@ export async function applyScene(name: string, session: FixtureSession): Promise
     setPairManualOpen(name === "connect-manual" || name === "connect-error");
     setPairCodeDraft(name === "connect-error" ? "ABCD" : name === "connect-manual" ? "ABCD-EFGH-JKMPQR" : "");
     setPairAwaitingApproval(name === "pairing-approval");
-    if (name === "connect-error") { setPairFailure("code", null); showError(t("err.pairIncomplete", { n: 4 }), true); }
+    if (name === "connect-error") { setPairFailure("code", null); showError(t("err.pairIncomplete", { n: 10 }), true); }
     if (name === "pairing-error") { setPairFailure(null, "verify"); showError(t("err.pair_timeout"), true); }
+    return;
+  }
+  if (name.startsWith("remote-desktop")) {
+    if (name === "remote-desktop-setup") {
+      applyCapabilities({
+        ...allCapabilities(),
+        view_desktop: false,
+        control_desktop: false,
+        listen_desktop_audio: false,
+        setup_desktop: true,
+      } as typeof NO_OPERATION_CAPABILITIES, AGENT_KINDS);
+      setScreen("settings");
+      setSettingsSection("overview");
+      return;
+    }
+    if (name === "remote-desktop-settings") {
+      setScreen("settings");
+      setSettingsSection("connection");
+      return;
+    }
+    setDesktopFrom("home");
+    setDesktopRailCollapsed(!isRoomy());
+    setScreen("desktop");
+    if (name === "remote-desktop-relay") {
+      setSessionTransport("relay");
+    } else if (name === "remote-desktop-unsupported") {
+      applyCapabilities({
+        ...allCapabilities(),
+        view_desktop: false,
+        control_desktop: false,
+        listen_desktop_audio: false,
+        setup_desktop: false,
+      } as typeof NO_OPERATION_CAPABILITIES, AGENT_KINDS);
+    } else if (name === "remote-desktop-view") {
+      setDefaultMode("view");
+      setSessionTransport("p2p");
+    } else {
+      setDefaultMode("control");
+      setSessionTransport("p2p");
+    }
     return;
   }
   if (name.startsWith("computers")) {

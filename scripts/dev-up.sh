@@ -2,7 +2,7 @@
 # Start a local pairfob.v2 origin (workerd) + pairfob for pairing tests.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DEV="$ROOT/.dev"
+DEV="${PAIRFOB_DEV_DIR:-$ROOT/.dev}"
 ORIGIN_DIR="$ROOT/workers/pairfob-origin"
 mkdir -p "$DEV"
 cd "$ROOT"
@@ -189,7 +189,12 @@ fi
 
 echo "building PWA + pairfob…"
 (cd pwa && bun run build >/dev/null)
-go build -o "$DEV/pairfob" ./cmd/pairfob
+# A signed preview must run with the same identity whose TCC grants are tested.
+if [[ -n "${PAIRFOB_DEV_BINARY:-}" ]]; then
+  cp "$PAIRFOB_DEV_BINARY" "$DEV/pairfob"
+else
+  go build -o "$DEV/pairfob" ./cmd/pairfob
+fi
 
 echo "packing origin assets (PWA at / and /pair)…"
 DEST="$ORIGIN_DIR/public-dist"
@@ -197,6 +202,15 @@ rm -rf "$DEST"
 mkdir -p "$DEST"
 cp -R "$ROOT/pwa/dist/." "$DEST/"
 cp "$ROOT/pwa/dist/index.html" "$DEST/pair-shell.asset"
+# Identify the actual preview, including uncommitted PWA and daemon changes.
+preview_id="$(bun -e '
+  const hash = new Bun.CryptoHasher("sha256");
+  for (const file of process.argv.slice(1)) hash.update(await Bun.file(file).bytes());
+  console.log(hash.digest("hex").slice(0, 12));
+' "$DEST/pair-shell.asset" "$DEV/pairfob")"
+if [[ -d "$ROOT/site/doc/.vitepress/dist" ]]; then
+  cp -R "$ROOT/site/doc/.vitepress/dist" "$DEST/doc"
+fi
 if [[ "$TLS_MODE" == "local-ca" && -f "$TLS_DIR/ca.crt" ]]; then
   cp "$TLS_DIR/ca.crt" "$DEST/ca.crt"
 fi
@@ -218,7 +232,7 @@ fi
 echo "starting Worker origin on ${LISTEN}…"
 (
   cd "$ORIGIN_DIR"
-  bunx wrangler dev --config wrangler.local.jsonc --persist-to "$PERSIST" --ip "$HOST" --port "$PORT" "${HTTPS_ARGS[@]}"
+  bunx wrangler dev --config wrangler.local.jsonc --persist-to "$PERSIST" --ip "$HOST" --port "$PORT" --var "BUILD:dev-$preview_id" "${HTTPS_ARGS[@]}"
 ) >>"$DEV/origin.log" 2>&1 &
 origin_pid=$!
 echo "$origin_pid" >"$DEV/origin.pid"
@@ -274,16 +288,17 @@ fi
 export PAIRFOB_PAIR_CODE="${PAIRFOB_PAIR_CODE:-}"
 unset PAIRFOB_JOIN_TOKEN PAIRFOB_JOIN_GRANT PAIRFOB_RELAY_WS PAIRFOB_PROTOCOL || true
 
-"$DEV/pairfob" >"$DEV/daemon.log" 2>&1 &
-echo $! >"$DEV/daemon.pid"
-for i in $(seq 1 50); do
-  if grep -q 'pairfob admin' "$DEV/daemon.log" 2>/dev/null; then break; fi
-  if [[ "$i" -eq 50 ]]; then
-    echo "pairfob did not start; last log:" >&2
-    tail -n 40 "$DEV/daemon.log" >&2
+"$DEV/pairfob" run >"$DEV/daemon.log" 2>&1 &
+daemon_pid=$!
+echo "$daemon_pid" >"$DEV/daemon.pid"
+daemon_deadline=$((SECONDS + 30))
+while true; do
+  if ! kill -0 "$daemon_pid" 2>/dev/null || (( SECONDS >= daemon_deadline )); then
+    echo "pairfob did not start; check $DEV/daemon.log and $PAIRFOB_STATE_DIR/pairfob.log" >&2
     exit 1
   fi
-  sleep 0.1
+  if "$DEV/pairfob" pair status >/dev/null 2>&1; then break; fi
+  sleep 0.2
 done
 
 {
@@ -299,5 +314,5 @@ done
     echo "TLS            public ACME certificate via ${PAIRFOB_ACME_DNS} (no CA profile)"
     echo "LAN DNS        ${ACME_DOMAIN} -> ${expected_ip}"
   fi
-  echo "Stop           ./scripts/dev-down.sh"
+  printf 'Stop           PAIRFOB_DEV_DIR=%q ./scripts/dev-down.sh\n' "$DEV"
 } 

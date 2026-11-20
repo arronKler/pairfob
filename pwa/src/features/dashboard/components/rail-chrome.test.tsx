@@ -225,15 +225,21 @@ describe("rail create", () => {
 });
 
 describe("rail destinations", () => {
-  const view = { board: { label: "画板", current: false }, settings: { label: "设置" } } as HerdViewModel;
-  const actions = { openBoard() {}, openSettings() {} } as HerdActions;
+  const view = { desktop: { label: "桌面", current: false }, board: { label: "画板", current: false }, settings: { label: "设置", current: false } } as HerdViewModel;
+  const actions = { openDesktop() {}, openBoard() {}, openSettings() {} } as HerdActions;
 
   test("it is the main navigation landmark the phone tab bar is", () => {
     renderReact(<RailFoot view={view} actions={actions} />);
     const nav = app().querySelector("nav.rail-nav")!;
     expect(nav.getAttribute("aria-label")).toBe(t("tabs.aria"));
-    expect([...nav.querySelectorAll("button")].map((node) => node.textContent)).toEqual(["画板", "设置"]);
+    expect([...nav.querySelectorAll("button")].map((node) => node.textContent)).toEqual(["画板", "桌面", "设置"]);
+    expect(nav.querySelector(".rail-nav-pip")).not.toBeNull();
     expect(nav.querySelector(".rail-nav-dot")).toBeNull();
+
+    // Pure Linux / host without view_desktop omits Desktop cleanly
+    const linuxView = { desktop: null, board: { label: "画板", current: false }, settings: { label: "设置", current: false } } as HerdViewModel;
+    act(() => renderReact(<RailFoot view={linuxView} actions={actions} />));
+    expect([...app().querySelectorAll("nav.rail-nav button")].map((node) => node.textContent)).toEqual(["画板", "设置"]);
   });
 
   test("Settings carries the update dot while the computer needs an update", async () => {
@@ -248,7 +254,7 @@ describe("rail destinations", () => {
       acceptDaemonVersion({ build: "0.1.0" });
       await checkDaemonRelease(true);
     });
-    const settings = [...app().querySelectorAll<HTMLButtonElement>(".rail-nav button")][1];
+    const settings = [...app().querySelectorAll<HTMLButtonElement>(".rail-nav button")][2];
     expect(settings.querySelector(".rail-nav-dot")?.getAttribute("aria-hidden")).toBe("true");
     expect(settings.querySelector(".sr-only")?.textContent).toBe(t("tabs.updateAria"));
     expect(app().querySelectorAll(".rail-nav-dot")).toHaveLength(1);

@@ -1,7 +1,7 @@
 import { PREVIEW_HEADERS, PREVIEW_PATH } from "./preview-policy";
 import { handleAdmin } from "./admin.ts";
 import { appCorsHeaders, appPreflight, hasAppOrigin, isAllowedClientOrigin, withCors } from "./app-origin.ts";
-import { CSP_SITE, DAEMON_ID_RE, PROTOCOL, SUBPROTOCOL } from "./constants.ts";
+import { CSP_PAIR, CSP_SITE, DAEMON_ID_RE, PROTOCOL, SUBPROTOCOL } from "./constants.ts";
 import { handleEnroll } from "./enroll.ts";
 import { handleEvents, observeDocument } from "./events.ts";
 import { getDaemon } from "./d1.ts";
@@ -280,7 +280,11 @@ function staticAssetHeaders(path: string, ok: boolean, contentType: string | nul
   if (!ok) return undefined;
   if (path === PREVIEW_PATH) return PREVIEW_HEADERS;
   if (isPairAppPath(path)) {
-    return { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, no-transform" };
+    return {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      "Content-Security-Policy": CSP_PAIR,
+    };
   }
   // Build-generated, content-addressed assets can be reused across reloads.
   // Never make an HTML fallback or an unsuccessful response immutable.

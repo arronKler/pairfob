@@ -211,4 +211,12 @@ describe("computer picker copy (actual App)", () => {
       counter.finish();
     }
   });
+
+  test("removes legacy ConnectedDesktop and standalone RecoveryConsole from ComputersPage", () => {
+    setComputers([sample("d_0123456789abcdef0123", "desk")]);
+    mountPicker();
+    const app = appRoot();
+    expect(app.querySelector(".rd-settings-group")).toBeNull();
+    expect(app.querySelector(".recovery-console")).toBeNull();
+  });
 });

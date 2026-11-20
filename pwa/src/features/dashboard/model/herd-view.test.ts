@@ -220,10 +220,13 @@ describe("herd chrome gates", () => {
     expect(canCreateSession({ liveness: "exited", loading: false, operationBusy: false })).toBe(false);
   });
 
-  test("board and settings are always there", () => {
+  test("board and settings are always there; desktop follows view_desktop", () => {
     const view = buildHerdViewModel(input());
+    expect(view.desktop).toBeNull();
     expect(view.board).toEqual({ label: t("home.board"), current: false });
     expect(view.settings).toEqual({ label: t("home.settings"), current: false });
+    expect(buildHerdViewModel(input({ viewDesktop: true })).desktop).toEqual({ label: t("home.desktop"), current: false });
+    expect(buildHerdViewModel(input({ desktopOpen: true })).desktop?.current).toBe(true);
     expect(buildHerdViewModel(input({ settingsOpen: true })).settings.current).toBe(true);
   });
 

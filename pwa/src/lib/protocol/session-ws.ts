@@ -1,3 +1,4 @@
+import { bindDesktop } from "./remote-desktop";
 import { terminalLateCleanup } from "./terminal-late";
 import { WorkspaceDownloadRPC } from "./workspace-download-rpc";
 import { WorkspaceMediaRPC } from "./workspace-media-rpc";
@@ -251,6 +252,8 @@ class ReconnectingSession implements LiveSession {
       throw error;
     }
   }
+
+  desktop = () => bindDesktop(() => this.checking || this.transportSwitch.wait() ? null : this.transport);
 
   isConnected = (): boolean => this.transport !== null && !this.checking;
   isChecking = (): boolean => this.checking && !this.stopped;

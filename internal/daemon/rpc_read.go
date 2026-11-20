@@ -37,7 +37,9 @@ func (e *Engine) rpcGetConfig(s *sess, id string, params json.RawMessage) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	descriptor, describeErr := e.RT.Describe(ctx, runtimeSession(p.Session))
 	cancel()
+	desktop := e.desktopPolicy()
 	capabilities := map[string]bool{
+		"view_desktop": desktop.View, "setup_desktop": desktop.Supported, "control_desktop": desktop.Control, "listen_desktop_audio": desktop.View,
 		"create_conversation": descriptor.Supports(runtime.FeatureCreateConversation),
 		"create_tab":          descriptor.Supports(runtime.FeatureCreateTab),
 		"split_pane":          descriptor.Supports(runtime.FeatureSplitPane),

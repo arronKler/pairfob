@@ -125,8 +125,9 @@
   padding: 22px 26px 40px;
 }
 
-/* The board fills the main column; the rail beside it carries status and the list. */
-.main-board { position: relative; background: var(--bg); color: var(--ink); }
+/* The board and remote desktop fill the main column; the rail beside them carries status and the list. */
+.main-board,
+.main-desktop { position: relative; background: var(--bg); color: var(--ink); }
 .main-board > .board-shell { flex: 1 1 auto; min-height: 0; }
 
 /* A pane opened from the board leads back to it from above the session. */

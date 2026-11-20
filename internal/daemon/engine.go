@@ -23,6 +23,7 @@ import (
 	"pairfob/internal/envelope"
 	"pairfob/internal/journal"
 	"pairfob/internal/mux"
+	"pairfob/internal/remotedesktop"
 	runtimeapi "pairfob/internal/runtime"
 	"pairfob/internal/state"
 )
@@ -76,6 +77,7 @@ type pairingSlot struct {
 }
 
 type sess struct {
+	desktopOpens     map[string]bool
 	routeID          [16]byte
 	deviceID         string
 	link             mux.Conn
@@ -150,6 +152,8 @@ func (e *Engine) sendSessionFrame(s *sess, frame envelope.Frame) error {
 }
 
 type Engine struct {
+	Desktop   remotedesktop.Host
+	desktop   *desktopSlot
 	Updater   Updater
 	Machines  MachineLinker
 	Build     string // Immutable running binary version, set before serving sessions.

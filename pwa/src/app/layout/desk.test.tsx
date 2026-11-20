@@ -121,4 +121,15 @@ describe("desk shell", () => {
     act(() => root!.render(<DeskShell deskPage={null} />));
     expect(container.querySelector(".rail-nav .is-current")).toBeNull();
   });
+
+  test("the wide desktop screen fills the main column and marks the Desktop rail link current", () => {
+    act(() => setScreen("desktop"));
+    publishAllDomains();
+    act(() => root!.render(<DeskShell deskPage="desktop" railHidden={false} />));
+    const main = container.querySelector(".main.main-desktop");
+    expect(main?.querySelector(".rd-surface")).not.toBeNull();
+    const current = container.querySelector(".rail-nav .is-current");
+    expect(current?.textContent).toBe(t("home.desktop"));
+    expect(current?.getAttribute("aria-current")).toBe("page");
+  });
 });

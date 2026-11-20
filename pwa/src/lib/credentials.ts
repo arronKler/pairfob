@@ -1,3 +1,4 @@
+import { forgetConsole } from "./recovery-console";
 import { pickResumeCredential, validComputerAlias } from "./computer-catalog.ts";
 import { validDaemonId, validDeviceId } from "./identifiers.ts";
 import { b64url, b64urlDecode } from "./protocol/bytes.ts";
@@ -388,6 +389,7 @@ export async function deleteCredential(daemonId: string): Promise<void> {
       tx.onerror = () => reject(tx.error || new Error("credential delete failed"));
       tx.onabort = () => reject(tx.error || new Error("credential delete aborted"));
     });
+    try { forgetConsole(daemonId); } catch { /* local storage may be disabled */ }
     recordConnectionDiagnostic({ event: "credential_deleted" });
   } catch (error) {
     recordConnectionDiagnostic({ event: "credential_delete_failed", code: storageFailureCode(error) });

@@ -29,6 +29,9 @@ export const SELF_GRANT_PER_IP = 10;
 export const CSP =
   "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src blob:; style-src 'self' https://fonts.googleapis.com 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-JVKkopR5uGguAsHA+8LKNHePLgO6ntgrlxTcOIvoM4w='; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests;";
 
+// qr-scanner starts its bundled fallback decoder as a blob worker on the pairing page.
+export const CSP_PAIR = CSP.replace("worker-src 'self';", "worker-src 'self' blob:;");
+
 /** The marketing page has no Wasm and therefore gets the stricter script policy. */
 export const CSP_SITE =
   "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests;";

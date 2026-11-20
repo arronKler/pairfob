@@ -7,6 +7,7 @@ import { messageOf } from "../lib/notices";
 import { loadOriginConfig, originConfigErrorIsRecoverable, probeOrigin } from "../lib/origin-config";
 import { backgroundAndroidUpdateCheck } from "../features/settings/android-update";
 import { isNativeRuntime, relayOrigin } from "../lib/runtime-config";
+import { parsePairingURL } from "../lib/pairing-input";
 import { track } from "../lib/telemetry";
 import { connectedRuntime, loadConnectedRuntime, subscribeConnectedRuntime } from "./connected-loader";
 import { reloadComputers as reloadCatalog } from "../features/connection/catalog-load";
@@ -190,6 +191,11 @@ export function startApplication(): () => void {
     const configRead = readOriginConfig();
     bindLanguageChange(signal);
     capturePairingFragment();
+    window.addEventListener("hashchange", () => {
+      // Opening a QR link in an existing /pair tab can be a same-document
+      // navigation. Reuse cold boot to scrub the fragment and own the handshake.
+      if (parsePairingURL(location.href, relayOrigin())) location.reload();
+    }, { signal });
     bindNotificationLinks(signal);
     bindLocalNotifications(signal);
     // Bind the session feature's owner adoption on the frame seam before the

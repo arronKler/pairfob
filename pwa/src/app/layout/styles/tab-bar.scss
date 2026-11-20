@@ -1,6 +1,7 @@
 /* --- Phone tab bar ---------------------------------------------------------------
-   Sessions / Board / Settings on the phone tab roots. The shell marks #app with
-   `.tabs`; pages reserve the bar's height so their last row stays reachable.
+   Sessions / Board / [Desktop] / Settings on the phone tab roots. Desktop appears
+   in the 3rd slot only when the host supports view_desktop. The shell marks #app
+   with `.tabs`; pages reserve the bar's height so their last row stays reachable.
    ------------------------------------------------------------------------------ */
 
 :root { --tab-bar-h: 58px; }
@@ -12,10 +13,18 @@
   bottom: 0;
   z-index: 5;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   padding: 4px max(12px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(12px, env(safe-area-inset-left, 0px));
   background: var(--bg);
   border-top: 1px solid var(--line);
+  transition: transform var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease);
+}
+
+.tab-bar.is-leaving {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .tab-bar-item {
@@ -35,6 +44,7 @@
 }
 
 .tab-bar-item.on { color: var(--ink); }
+.tab-bar-item.on.is-desktop { color: var(--accent); }
 .tab-bar-icon { position: relative; display: grid; place-items: center; }
 
 .tab-bar-badge {
@@ -62,6 +72,49 @@
   background: var(--accent);
 }
 
+.tab-bar-pip {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg);
+  background: var(--ok);
+}
+
+.tab-bar-pip.is-relay { background: var(--warn); }
+.tab-bar-pip.is-off { background: var(--error); }
+.tab-bar-pip.is-live { background: var(--accent); animation: desktop-pip-pulse 1.6s infinite; }
+
+@keyframes desktop-pip-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.65; }
+}
+
+#app.desktop {
+  position: fixed;
+  top: var(--vv-top, 0px);
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: 100%;
+  height: var(--vv-height, 100%);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+}
+
 html:has(#app.tabs) { scroll-padding-bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom, 0px) + 12px); }
 #app.tabs .page { padding-bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom, 0px) + 24px); }
 #app.tabs.board .board-shell { padding-bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom, 0px)); }
+#app.tabs.desktop:has(> .tab-bar:not(.is-leaving)) { padding-bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom, 0px)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-bar { transition: none; }
+  .tab-bar-pip.is-live { animation: none; }
+}

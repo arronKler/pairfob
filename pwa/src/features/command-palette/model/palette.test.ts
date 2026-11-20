@@ -110,11 +110,13 @@ describe("palette with nothing typed", () => {
 });
 
 describe("palette actions", () => {
-  test("they follow the rail: create is absent without the capability and disabled while it cannot run", () => {
+  test("they follow the rail: create and desktop are absent without their capabilities and create is disabled while it cannot run", () => {
     expect(paletteActions(input([]).view).map((item) => [item.action, item.disabled]))
       .toEqual([["create", false], ["board", false], ["computers", false], ["settings", false]]);
-    expect(paletteActions(input([], {}, { createConversation: false }).view).map((item) => item.action))
-      .toEqual(["board", "computers", "settings"]);
+    expect(paletteActions(input([], {}, { viewDesktop: true }).view).map((item) => [item.action, item.disabled]))
+      .toEqual([["create", false], ["board", false], ["desktop", false], ["computers", false], ["settings", false]]);
+    expect(paletteActions(input([], {}, { createConversation: false, viewDesktop: true }).view).map((item) => item.action))
+      .toEqual(["board", "desktop", "computers", "settings"]);
     expect(paletteActions(input([], {}, { operationBusy: true }).view)[0]).toMatchObject({ action: "create", disabled: true });
     // The list's own answer to "can a session be started now", which the rail's + and the main column read too:
     // not while the connection is down, Herdr is not running or did not answer, or the list is still being read.
@@ -126,9 +128,11 @@ describe("palette actions", () => {
     }
   });
 
-  test("the board is not offered while it is the page beside the list", () => {
-    expect(paletteActions(input([], {}, { boardOpen: true }).view).map((item) => item.action))
-      .toEqual(["create", "computers", "settings"]);
+  test("the board or desktop is not offered while it is the page beside the list", () => {
+    expect(paletteActions(input([], {}, { boardOpen: true, viewDesktop: true }).view).map((item) => item.action))
+      .toEqual(["create", "desktop", "computers", "settings"]);
+    expect(paletteActions(input([], {}, { desktopOpen: true, viewDesktop: true }).view).map((item) => item.action))
+      .toEqual(["create", "board", "computers", "settings"]);
   });
 });
 
@@ -168,8 +172,9 @@ describe("palette query", () => {
   });
 
   test("actions are found by their label and by a plain English word", () => {
-    const actions = (query: string) => titles(buildPalette(input(agents), query).sections.find((section) => section.id === "actions")?.items ?? []);
+    const actions = (query: string) => titles(buildPalette(input(agents, {}, { viewDesktop: true }), query).sections.find((section) => section.id === "actions")?.items ?? []);
     expect(actions("设置")).toEqual([t("palette.settings")]);
+    expect(actions("desktop")).toEqual([t("palette.desktop")]);
     expect(actions("board")).toEqual([t("palette.board")]);
     expect(actions("new")).toEqual([t("palette.create")]);
     expect(actions("review")).toEqual([]);
@@ -185,8 +190,8 @@ describe("palette query", () => {
 
 describe("palette highlight", () => {
   test("the arrows walk every runnable item and wrap; a disabled action is skipped", () => {
-    const palette = buildPalette(input([agent("a")], {}, { operationBusy: true }), "");
-    expect(palette.items.map((item) => item.key)).toEqual(["session:a", "action:create", "action:board", "action:computers", "action:settings"]);
+    const palette = buildPalette(input([agent("a")], {}, { operationBusy: true, viewDesktop: true }), "");
+    expect(palette.items.map((item) => item.key)).toEqual(["session:a", "action:create", "action:board", "action:desktop", "action:computers", "action:settings"]);
     expect(stepActive(palette.items, null, 1)).toBe("action:board");
     expect(stepActive(palette.items, "action:board", -1)).toBe("session:a");
     expect(stepActive(palette.items, null, -1)).toBe("action:settings");

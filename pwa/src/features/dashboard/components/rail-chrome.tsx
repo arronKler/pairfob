@@ -1,4 +1,4 @@
-import { LayoutDashboard, Plus, Search, Settings } from "lucide-react";
+import { LayoutDashboard, Monitor, Plus, Search, Settings } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { commandKOffered, useHardwareKeyboard } from "../../../app/input-mode";
 import { tabMarkClass, useTabMark } from "../../../app/layout/tab-bar-view";
@@ -8,6 +8,7 @@ import { popoverTarget } from "../../../shared/ui/overlay/popover";
 import { Button } from "../../../shared/ui/primitives";
 import { openCommandPalette } from "../../command-palette";
 import { HerdSessionSwitch } from "../../herd-sessions/herd-session-row";
+import { useDesktopStatus } from "../../remote-desktop/desktop-status";
 import { needsDaemonUpdate, subscribeDaemonUpdates } from "../../settings/daemon-update";
 import type { HerdActions } from "../actions";
 import type { HerdViewModel } from "../model/herd-view";
@@ -87,14 +88,18 @@ function needsUpdate(): boolean {
 }
 
 /**
- * Board and Settings, the phone tab bar's other two destinations. Each is
- * marked current while it is the page beside the rail, and Settings carries the
- * tab bar's update dot. `disabled` locks both, as the tab bar does before a
- * session is live.
+ * Board, optional Desktop (only when the host advertises view_desktop) and Settings,
+ * mirroring the phone tab bar's other destinations in the same order. Each is marked
+ * current while it is the page beside the rail, Desktop carries the live/ready/relay
+ * pip, and Settings carries the tab bar's update dot.
  */
 export function RailFoot({ view, actions, disabled = false }: { view: HerdViewModel; actions: HerdActions; disabled?: boolean }) {
   const update = useSyncExternalStore(subscribeDaemonUpdates, needsUpdate);
   const dot = useTabMark(update ? true : undefined);
+  const desktop = useDesktopStatus();
+  const desktopCurrent = view.desktop?.current === true;
+  const showDesktop = !disabled && (Boolean(view.desktop) || desktop.supported);
+  const desktopClass = `rail-nav-item${desktopCurrent ? (desktop.live ? " is-desktop-live" : " is-current") : ""}`;
   return (
     <nav className="rail-nav" aria-label={t("tabs.aria")}>
       <Button className={`rail-nav-item${view.board.current ? " is-current" : ""}`}
@@ -102,6 +107,16 @@ export function RailFoot({ view, actions, disabled = false }: { view: HerdViewMo
         <LayoutDashboard size={16} aria-hidden="true" />
         <span>{view.board.label}</span>
       </Button>
+      {showDesktop ? (
+        <Button className={desktopClass}
+          aria-current={desktopCurrent ? "page" : undefined} disabled={disabled} onClick={actions.openDesktop}>
+          <span className="rail-nav-icon">
+            <Monitor size={16} aria-hidden="true" />
+            <span className={`rail-nav-pip is-${desktop.pip}`} aria-hidden="true" />
+          </span>
+          <span>{view.desktop?.label ?? t("home.desktop")}</span>
+        </Button>
+      ) : null}
       <Button className={`rail-nav-item${view.settings.current ? " is-current" : ""}`}
         aria-current={view.settings.current ? "page" : undefined} disabled={disabled} onClick={actions.openSettings}>
         <span className="rail-nav-icon">

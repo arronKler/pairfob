@@ -39,7 +39,7 @@ function effectiveKind(kind: TransitionKind): TransitionKind {
  * state and stays out of its import cycle. Callers pass `state.screen`, so a new
  * screen there fails to typecheck until it is given a depth below.
  */
-export type TransitionScreen = "home" | "pane" | "workspace" | "settings" | "quota" | "computers" | "board";
+export type TransitionScreen = "home" | "pane" | "workspace" | "settings" | "quota" | "computers" | "board" | "desktop";
 
 /** How deep each screen sits. Equal depth is a sideways move, so it cross-fades. */
 const DEPTH: Record<TransitionScreen, number> = {
@@ -48,6 +48,7 @@ const DEPTH: Record<TransitionScreen, number> = {
   settings: 0,
   quota: 0,
   computers: 0,
+  desktop: 0,
   pane: 1,
   workspace: 2,
 };

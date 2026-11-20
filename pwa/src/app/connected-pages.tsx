@@ -12,6 +12,7 @@ import { SettingsScreen } from "../pages/settings/settings-page";
 import { WorkspaceScreen } from "../pages/workspace/screen";
 import { sessionHandlers } from "../features/session/pane-actions";
 import { leaveWorkspaceInspector } from "../features/workspace/inspector";
+import { DesktopRoute } from "./desktop-route";
 import { DeskShell } from "./layout/desk";
 export { TabBar } from "./layout/tab-bar";
 import { type FrameSnapshot, type SessionScroll } from "./frame";
@@ -44,6 +45,8 @@ export function pageFor(layout: ShellLayout, frame: FrameSnapshot): ReactNode {
       return <WorkspaceScreen />;
     case "board":
       return <BoardScreen />;
+    case "desktop":
+      return <DesktopRoute />;
     case "settings":
       return <SettingsScreen />;
     case "quota":
@@ -53,7 +56,7 @@ export function pageFor(layout: ShellLayout, frame: FrameSnapshot): ReactNode {
     case "home":
       return <HomePage />;
     case "desk":
-      return <DeskShell deskPage={layout.deskPage} inspector={layout.shell.inspector}
+      return <DeskShell deskPage={layout.deskPage} inspector={layout.shell.inspector} railHidden={layout.shell.railHidden}
         onReturn={layout.deskReturn === "board" ? handlers.onBack : undefined}>
         {deskChild(layout, frame)}
       </DeskShell>;

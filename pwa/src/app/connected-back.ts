@@ -12,7 +12,9 @@ import { settingsSection, subscribeSettingsSection } from "../features/settings/
 import { leaveBoardForList } from "../pages/board/board-bridge";
 import { travelSettingsSection } from "../pages/settings/section-travel";
 import { goBackFromPane } from "../features/session/pane-actions";
-import { currentScreen, computersFrom, goToScreen } from "./navigation-store";
+import { getDesktopLive } from "../features/remote-desktop/desktop-status";
+import { leaveDesktop } from "./desktop-nav";
+import { currentScreen, computersFrom, desktopFrom, goToScreen } from "./navigation-store";
 import { getAppFrame } from "./frame";
 import { commitView } from "./host";
 
@@ -32,6 +34,12 @@ export function systemBackAction(): (() => void | Promise<void>) | null {
   }
   if (screen === "pane") return () => goBackFromPane();
   if (screen === "board" && layout.shell.railHidden) return leaveBoardForList;
+  if (screen === "desktop") {
+    if (layout.shell.desk || getDesktopLive() || desktopFrom() === "settings" || desktopFrom() === "pane") {
+      return leaveDesktop;
+    }
+    return null;
+  }
   if (screen === "settings") {
     if (settingsSection() !== "overview") return () => travelSettingsSection("overview");
     return layout.shell.desk ? leaveSettings : null;

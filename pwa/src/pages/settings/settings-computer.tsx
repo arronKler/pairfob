@@ -1,4 +1,6 @@
 import { Check, Download } from "lucide-react";
+import { openDesktop } from "../../app/desktop-nav";
+import { DesktopSettingsSection } from "../../features/remote-desktop/desktop-settings-section";
 import type { ConnectionRecord } from "../../features/connection/connection-store";
 import type { RuntimeRecord } from "../../features/connection/runtime-store";
 import { revokeSelf } from "../../features/operations/controller";
@@ -49,6 +51,7 @@ export function ComputerSection({ name, link, connection, runtime, connected, on
 }) {
   return <>
     <ComputerPanel name={name} link={link} onRename={onRename} />
+    <DesktopSettingsSection connected={connected} onOpenDesktop={openDesktop} />
     <RouteGroup connection={connection} />
     <SetGroup className="daemon-group" id="settings-daemon" label={t("set.computerGroup")}><DaemonUpdate /></SetGroup>
     <DevicesGroup runtime={runtime} connected={connected} />

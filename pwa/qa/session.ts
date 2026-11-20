@@ -1,3 +1,4 @@
+import { fixtureDesktop } from "./remote-desktop";
 import type { MediaReadOptions } from "../src/lib/protocol/workspace-media";
 import { parseDirIndex } from "../src/lib/dir-index";
 import { dirIndex as dirIndexFixture } from "./dir-index";
@@ -159,6 +160,7 @@ export function createSession(source: SessionSource = {}): FixtureSession {
     }),
   });
   const live = {
+    desktop: fixtureDesktop,
     isConnected: () => phase === "connected" && !disposed,
     isChecking: () => !disposed && (phase === "verifying" || phase === "connecting"),
     connectionPhase: () => disposed ? "disconnected" : phase,

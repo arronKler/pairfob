@@ -16,8 +16,8 @@ import { TabBarView } from "./tab-bar-view";
 const badge = () => appRoot().querySelector<HTMLElement>(".tab-bar-badge");
 const dot = () => appRoot().querySelector<HTMLElement>(".tab-bar-dot");
 
-function paint(count: number, update = false, mode: "home" | "settings" = "home"): void {
-  act(() => renderReact(<TabBarView mode={mode} count={count} update={update} />));
+function paint(count: number, update = false, mode: "home" | "desktop" | "board" | "settings" = "home", desktopPip?: "ready" | "relay" | "live" | "off", leaving = false): void {
+  act(() => renderReact(<TabBarView mode={mode} count={count} update={update} desktopPip={desktopPip} leaving={leaving} />));
 }
 
 beforeEach(async () => {
@@ -68,4 +68,25 @@ test("a mark that goes is gone at once, and one that comes back later is a new a
   await act(() => new Promise<void>((done) => setTimeout(done, MOTION_MS.press + 40)));
   paint(1, false);
   expect(badge()!.className).toBe("tab-bar-badge pop-in");
+});
+
+test("renders 3 tabs without view_desktop and 4 tabs (sessions | board | desktop | settings) when enabled", () => {
+  paint(0, false, "home");
+  expect([...appRoot().querySelectorAll(".tab-bar-label")].map((n) => n.textContent)).toEqual(["会话", "画板", "设置"]);
+
+  paint(0, false, "desktop", "ready");
+  const buttons = [...appRoot().querySelectorAll<HTMLButtonElement>(".tab-bar-item")];
+  expect(buttons).toHaveLength(4);
+  expect(buttons.map((b) => b.querySelector(".tab-bar-label")?.textContent)).toEqual(["会话", "画板", "桌面", "设置"]);
+  expect(buttons[2].classList.contains("on")).toBeTrue();
+  expect(buttons[2].classList.contains("is-desktop")).toBeTrue();
+  expect(buttons[2].getAttribute("aria-current")).toBe("page");
+  expect(buttons[2].querySelector(".tab-bar-pip.is-ready")).not.toBeNull();
+
+  paint(0, false, "desktop", "live", true);
+  const nav = appRoot().querySelector(".tab-bar")!;
+  expect(nav.classList.contains("is-leaving")).toBeTrue();
+  expect(nav.getAttribute("aria-hidden")).toBe("true");
+  expect(nav.hasAttribute("inert")).toBeTrue();
+  expect(buttons[2].querySelector(".tab-bar-pip.is-live")).not.toBeNull();
 });

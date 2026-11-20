@@ -51,6 +51,7 @@ import { haptic } from "../../shared/ui/dom/feedback";
 import { herdLivenessModel, herdStatusModel } from "../../features/dashboard/model/herd-status";
 import { buildHerdViewModel, herdAttentionCount, STATUS_JOIN, type HerdHostView, type HerdModelInput, type HerdStatus, type HerdViewModel } from "../../features/dashboard/model/herd-view";
 import { morphingPane } from "../../app/transition";
+import { openDesktop } from "../../app/desktop-nav";
 import { openBoard } from "../board/board-bridge";
 import { boardStore, clearBoardReturn } from "../../features/board/layout-store";
 import { navigationStore } from "../../app/navigation-store";
@@ -314,6 +315,8 @@ export function readHerdInput(painted: HerdPaint): HerdModelInput {
     createConversation: capabilityEnabled("create_conversation"),
     operationBusy: operationBusy(),
     morphingPaneId: morphingPane(),
+    viewDesktop: capabilityEnabled("view_desktop"),
+    desktopOpen: navigationStore.get().screen === "desktop",
     boardOpen: navigationStore.get().screen === "board",
     settingsOpen: SETTINGS_SCREENS.has(navigationStore.get().screen),
     boardTabId: boardStore.get().boardTabId,
@@ -431,6 +434,7 @@ export function herdActionPorts(): HerdActionPorts {
     canOpenMenu: () => !operationBusy() && liveSession()?.isConnected() === true,
     forgetBoardReturn: clearBoardReturn,
     toggleGroup: toggleHerdGroup,
+    openDesktop,
     openBoard: () => {
       void openBoard();
     },

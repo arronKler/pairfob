@@ -2,6 +2,7 @@
 export const zhShell = {
   "tabs.aria": "主导航",
   "tabs.sessions": "会话",
+  "tabs.desktop": "桌面",
   "tabs.board": "画板",
   "desk.backToBoard": "返回画板",
   "tabs.settings": "设置",

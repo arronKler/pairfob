@@ -28,7 +28,7 @@ Match the English Pairfob string on screen:
 | Herdr isn't running on the computer | The machine is up, but Herdr quit. Open Herdr; Pairfob recovers automatically |
 | No sessions on … yet | Connected, but there is no session yet — create one or open a terminal on the computer |
 | Enter the full pairing code shown on the computer | Hand entry is 8+6 glyphs |
-| The pairing code is not complete: 14 characters needed | Include the locator |
+| Remaining characters | Enter all three groups shown on the computer (14 characters in total) |
 | The pairing code is too long: it should have 14 characters | Keep only the 14 the computer shows |
 | That pairing code is spent or expired | `pairfob pair` again on the computer |
 | That pairing code is incorrect | Use the code being printed now; do not edit the old one |

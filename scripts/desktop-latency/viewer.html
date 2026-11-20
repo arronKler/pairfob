@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pairfob · 桌面延迟实测</title>
+<style>
+:root{color-scheme:dark;font:16px system-ui;background:#17191c;color:#fafafa}
+body{max-width:900px;margin:auto;padding:16px}h1{font-size:1.5rem}
+video{width:100%;aspect-ratio:16/9;background:#272a30;object-fit:contain}
+section{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}
+button,select{font:inherit;min-height:44px;padding:6px 12px}
+output,p{line-height:1.6}output{display:block}#result{font-variant-numeric:tabular-nums}
+</style>
+<main>
+<h1>桌面延迟实测</h1>
+<p>连接后按「翻转」或空格。Mac 测试窗会切换黑白，下面显示直连收到的画面。</p>
+<section><select id="mode" aria-label="编码档位"><option value="60">1080p · 60 fps</option><option value="120">720p · 120 fps</option></select>
+<button id="connect">连接 Mac</button><button id="stop" disabled>断开</button></section>
+<video autoplay playsinline muted aria-label="Mac 测试窗"></video>
+<section><button id="flip" disabled>翻转</button><button id="batch" disabled>连续测 30 次</button></section>
+<output id="state">待连接</output><p id="stats"></p><p id="result"></p><p id="trace"></p><button id="export" disabled>导出最近样本</button>
+<p>软件计时从浏览器发出翻转到读取播放器中心变色。导出样本包含可用的主机和解码分段计时。物理按键和屏幕发光延迟需要外部仪器测量。</p>
+</main><script type="module" src="/viewer.js"></script></html>

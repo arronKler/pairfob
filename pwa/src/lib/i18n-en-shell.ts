@@ -4,6 +4,7 @@ import type { zhShell } from "./i18n-zh-shell";
 export const enShell: Record<keyof typeof zhShell, string> = {
   "tabs.aria": "Main navigation",
   "tabs.sessions": "Sessions",
+  "tabs.desktop": "Desktop",
   "tabs.board": "Board",
   "desk.backToBoard": "Back to board",
   "tabs.settings": "Settings",

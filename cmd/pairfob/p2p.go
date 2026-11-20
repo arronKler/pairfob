@@ -10,6 +10,7 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"pairfob/internal/daemon"
+	"pairfob/internal/directice"
 	"pairfob/internal/envelope"
 	"pairfob/internal/mux"
 )
@@ -81,12 +82,7 @@ func (a *webRTCAcceptor) Accept(
 		link.Close()
 		return "", nil, err
 	}
-	gathered, reflexive := gatheringSignals(peer)
-	if err := peer.SetLocalDescription(answer); err != nil {
-		link.Close()
-		return "", nil, err
-	}
-	if err := awaitAnswerCandidates(ctx, gathered, reflexive, func() bool { return hasLocalCandidate(peer) }, p2pAnswerPace); err != nil {
+	if err := directice.SetLocalAnswer(ctx, peer, answer); err != nil {
 		link.Close()
 		return "", nil, err
 	}
@@ -135,11 +131,7 @@ func (c *webRTCConn) Restart(ctx context.Context, offer string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	gathered, reflexive := gatheringSignals(peer)
-	if err := peer.SetLocalDescription(answer); err != nil {
-		return "", err
-	}
-	if err := awaitAnswerCandidates(ctx, gathered, reflexive, func() bool { return hasLocalCandidate(peer) }, p2pAnswerPace); err != nil {
+	if err := directice.SetLocalAnswer(ctx, peer, answer); err != nil {
 		return "", err
 	}
 	local := peer.LocalDescription()

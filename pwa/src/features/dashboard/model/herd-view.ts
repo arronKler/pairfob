@@ -92,6 +92,10 @@ export type HerdModelInput = {
   createTab: boolean;
   /** Wall clock for the "changed n minutes ago" column. */
   now: number;
+  /** The connected host advertises view_desktop. */
+  viewDesktop?: boolean;
+  /** The remote desktop surface is the page beside the rail. */
+  desktopOpen?: boolean;
   /** The board is the page beside the rail: its link is current and its tab's rows are marked. */
   boardOpen?: boolean;
   /** A settings-family page is the page beside the rail. */
@@ -211,6 +215,7 @@ export type HerdViewModel = {
   /** The create entry: absent without the capability, disabled while `creatable` is false. */
   create: { label: string; aria: string; disabled: boolean } | null;
   /** Desktop rail destinations; the phone reaches these through the tab bar. */
+  desktop: { label: string; current: boolean } | null;
   board: { label: string; current: boolean };
   settings: { label: string; current: boolean };
 };
@@ -508,6 +513,9 @@ export function buildHerdViewModel(input: HerdModelInput): HerdViewModel {
     creatable,
     create: input.createConversation
       ? { label: input.operationBusy ? t("home.creating") : t("home.new"), aria: t("home.newAria"), disabled: !creatable }
+      : null,
+    desktop: input.viewDesktop || input.desktopOpen
+      ? { label: t("home.desktop"), current: input.desktopOpen === true }
       : null,
     board: { label: t("home.board"), current: input.boardOpen === true },
     settings: { label: t("home.settings"), current: input.settingsOpen === true },

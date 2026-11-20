@@ -1,7 +1,7 @@
 import { t } from "../../lib/i18n";
 import { normalizeCrockford } from "../../lib/protocol/bytes";
 import type { PairStepKey } from "../../lib/ui-model";
-import { parseCodeAndLocator, type FragmentPairing } from "../../lib/pairing-input";
+import { parseCodeAndLocator, plainPairingEntry, type FragmentPairing } from "../../lib/pairing-input";
 
 export type ConnectNotice = { text: string; tone: "error" | "status" };
 
@@ -90,7 +90,7 @@ const PAIR_CODE_LENGTH = 14;
  * the fourteen nor reported to the reader as one.
  */
 export function pairCodeCount(rawCode: string): number {
-  return rawCode.replace(/[^0-9A-Za-z]/g, "").length;
+  return plainPairingEntry(rawCode).replace(/[^0-9A-Za-z]/g, "").length;
 }
 
 /**
@@ -101,7 +101,7 @@ export function pairCodeCount(rawCode: string): number {
 export function pairCodeProblem(rawCode: string): string {
   const length = pairCodeCount(rawCode);
   if (!length) return t("err.locator_required");
-  if (length < PAIR_CODE_LENGTH) return t("err.pairIncomplete", { n: length });
+  if (length < PAIR_CODE_LENGTH) return t("err.pairIncomplete", { n: PAIR_CODE_LENGTH - length });
   if (length > PAIR_CODE_LENGTH) return t("err.pairTooLong", { n: length });
   return t("err.invalid_pair_code");
 }
@@ -115,7 +115,7 @@ const PRINTED_CODE = /(?:^|[^0-9A-Za-z-])([0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za
  * would cut off mid-sentence. Anything else is left to the field's own paste.
  */
 export function pastedPairCode(text: string): string | null {
-  const flat = text.replace(/\s+/g, " ").trim();
+  const flat = plainPairingEntry(text).trim();
   const printed = [...flat.matchAll(PRINTED_CODE)].map(match => match[1]);
   const both = parseCodeAndLocator(printed.length === 1 ? printed[0] : flat);
   return both ? formatPairCodeDraft(both.code + both.loc) : null;
@@ -142,6 +142,7 @@ export function connectViewModel(input: ConnectViewInput): ConnectViewModel {
   // every one of them, and the reader is not left to find out on Connect which
   // ones a shorter field would have dropped.
   const over = length > PAIR_CODE_LENGTH && !busy;
+  const malformed = length === PAIR_CODE_LENGTH && !parseCodeAndLocator(input.pairCodeDraft);
   const codeError = input.pairErrorTarget === "code";
   // A code error belongs to the field; the page never repeats it.
   const pageNotice = sheetOpen || codeError ? null : input.notice;
@@ -182,12 +183,12 @@ export function connectViewModel(input: ConnectViewInput): ConnectViewModel {
     ledeKeycap: stage === "approve",
     showInstall,
     sheetOpen,
-    fieldNotice: over ? { text: pairCodeProblem(input.pairCodeDraft), tone: "error" }
+    fieldNotice: over || malformed ? { text: pairCodeProblem(input.pairCodeDraft), tone: "error" }
       : sheetOpen || (entry === "code" && codeError) ? input.notice : null,
     pairCodeDraft: input.pairCodeDraft,
     pairCodeLength: length,
-    pairCodeComplete: length === PAIR_CODE_LENGTH,
+    pairCodeComplete: length === PAIR_CODE_LENGTH && !malformed,
     pairCodeOver: over,
-    pairCodeInvalid: codeError || over,
+    pairCodeInvalid: codeError || over || malformed,
   };
 }

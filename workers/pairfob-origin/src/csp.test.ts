@@ -79,6 +79,17 @@ describe("static content security policy", () => {
     }
   });
 
+  test("only the pairing shell can start the bundled QR decoder as a blob worker", async () => {
+    for (const path of ["/pair", "/pair/", "/pair.html"]) {
+      const directives = (await cspOf(path)).split("; ");
+      expect(directives).toContain("worker-src 'self' blob:");
+      expect(directives).toContain("script-src 'self' 'wasm-unsafe-eval'");
+    }
+    for (const path of ["/", "/doc", "/assets/index.js", "/sw.js", "/api/config"]) {
+      expect((await cspOf(path)).split("; ")).toContain("worker-src 'self'");
+    }
+  });
+
   test("static HTML is framed-off and tagged with the build", async () => {
     for (const path of ["/", "/pair", "/doc"]) {
       const res = await handleFetch(new Request("https://pairfob.com" + path), testEnv({ assets: assets() }));

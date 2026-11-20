@@ -189,20 +189,20 @@ describe("a pasted code", () => {
 describe("a typed code that is turned away", () => {
   test("too few, too many and the wrong shape each get their own words, in both languages", () => {
     setLang("zh");
-    expect(pairCodeProblem("ABCD")).toBe("配对码还没输完整：需要 14 位，现在识别到 4 位。");
+    expect(pairCodeProblem("ABCD")).toBe("配对码还差 10 位，请对照电脑上显示的码补全。");
     // Typed past the end in the middle of the field: more than a code has is not "incomplete".
     expect(pairCodeProblem("ABCD-EFGH-JKMNPQ-RSTV")).toBe("配对码太长了：应该是 14 位，现在识别到 18 位。");
     expect(pairCodeProblem("ABCDEFGHJKMNPQRSTVWX")).toBe("配对码太长了：应该是 14 位，现在识别到 20 位。");
     // Only code characters are counted: three dots do not make seventeen characters twenty,
     // and two marks do not make twelve fourteen.
     expect(pairCodeProblem("ABCD.2345.ABCD.23456")).toBe("配对码太长了：应该是 14 位，现在识别到 17 位。");
-    expect(pairCodeProblem("ABCD-EFGH-JKMN!?")).toBe("配对码还没输完整：需要 14 位，现在识别到 12 位。");
+    expect(pairCodeProblem("ABCD-EFGH-JKMN!?")).toBe("配对码还差 2 位，请对照电脑上显示的码补全。");
     // Fourteen characters that are not a code are neither short nor long.
     expect(pairCodeProblem("ABCD.EFGH.JKMNPQ")).toBe("配对码格式不对。请按电脑上显示的完整码输入。");
     expect(pairCodeProblem("")).toBe("请完整输入电脑上显示的配对码。");
     expect(pairCodeProblem(" - ")).toBe("请完整输入电脑上显示的配对码。");
     setLang("en");
-    expect(pairCodeProblem("ABCD")).toBe("The pairing code is not complete: 14 characters needed, 4 recognized.");
+    expect(pairCodeProblem("ABCD")).toBe("Check the code on your computer. Remaining characters: 10.");
     expect(pairCodeProblem("ABCDEFGHJKMNPQRSTVWX")).toBe("The pairing code is too long: it should have 14 characters, 20 recognized.");
     for (const code of ["ABCD", "ABCDEFGHJKMNPQRSTVWX", "ABCD.EFGH.JKMNPQ", ""]) expect(pairCodeProblem(code)).not.toContain("glyph");
     setLang("zh");

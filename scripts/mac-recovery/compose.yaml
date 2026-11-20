@@ -1,0 +1,34 @@
+name: pairfob-mac-recovery
+services:
+  guacd:
+    image: guacamole/guacd:1.6.0@sha256:8974eaa9ba32f713daf311e7cc8cd7e4cdfba1edea39eed75524e78ef4b08f4f
+    # Native Linux host networking keeps the magic packet on the physical LAN.
+    network_mode: host
+    command: ["-b", "127.0.0.1", "-l", "18483"]
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "18483"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  console:
+    image: guacamole/guacamole:1.6.0@sha256:f344085e618bb05e22b964b0208dbd06d3468275bac70206f93805245e067b40
+    network_mode: host
+    depends_on: [guacd]
+    environment:
+      GUACD_HOSTNAME: 127.0.0.1
+      GUACD_PORT: "18483"
+      BAN_ENABLED: "true"
+      WEBAPP_CONTEXT: ROOT
+    volumes:
+      - type: bind
+        source: ${PAIRFOB_RECOVERY_DIR:?set the absolute path to the generated directory}/user-mapping.xml
+        target: /etc/guacamole/user-mapping.xml
+        read_only: true
+        bind: {create_host_path: false}
+      - ./loopback.sh:/opt/guacamole/entrypoint.d/900-bind-loopback.sh:ro
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]

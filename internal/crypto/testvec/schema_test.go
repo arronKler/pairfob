@@ -90,7 +90,8 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
 		"TransportOffer", "TransportCommit", "TransportRestart",
-		"ListMachines", "LinkMachine", "LinkMachineStatus", "LinkMachineCancel",
+		"ListMachines", "DesktopOpen", "DesktopInput", "DesktopPing", "DesktopClose",
+		"LinkMachine", "LinkMachineStatus", "LinkMachineCancel",
 	}
 	if got := schema.Defs["request"].Properties["op"].Enum; !slices.Equal(got, wantOps) {
 		t.Fatalf("RPC op surface\n got: %q\nwant: %q", got, wantOps)
@@ -124,7 +125,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace", "CreateConversation", "CreateTab", "SplitPane",
 		"PromptAgent", "CreateWorktree", "OpenWorktree", "ResizePane", "SwapPane", "ZoomPane", "WorkspaceRename", "WorkspaceDelete",
 		"TerminalOpen", "TerminalInput", "TerminalResize", "TerminalScroll", "TerminalClose",
-		"LinkMachine", "LinkMachineCancel",
+		"LinkMachine", "LinkMachineCancel", "DesktopOpen", "DesktopClose", "DesktopInput",
 	} {
 		if !slices.Contains(paramsByOp[op].Required, "operation_id") {
 			t.Errorf("mutation %s does not require operation_id", op)
@@ -319,7 +320,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		"create_conversation", "create_tab", "split_pane", "prompt_agent", "history",
 		"list_worktrees", "create_worktree", "open_worktree", "resize_pane", "swap_pane", "zoom_pane",
 	}
-	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "download_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers", "trace_labels", "trace_times", "trace_models", "trace_writes", "git_change_stats", "search_files", "search_dirs"), capabilities)
+	requireExactObjectFields(t, schema.Defs, "capabilities", append(slices.Clone(capabilities), "agent_inspect", "rename_file", "delete_file", "download_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "view_desktop", "setup_desktop", "control_desktop", "listen_desktop_audio", "trace_markers", "trace_labels", "trace_times", "trace_models", "trace_writes", "git_change_stats", "search_files", "search_dirs"), capabilities)
 
 	// Machine linking names machines by opaque ID only: no SSH target, host,
 	// or path may be added to these objects.

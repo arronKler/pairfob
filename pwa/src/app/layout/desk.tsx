@@ -8,6 +8,7 @@ import { HomeRail } from "../../pages/home";
 import { QuotaContent } from "../../pages/quota/quota-page";
 import { SettingsContent } from "../../pages/settings/settings-page";
 import { WorkspaceInspector } from "../../pages/workspace/inspector";
+import { DesktopRoute } from "../desktop-route";
 import { AppNotice } from "../notice";
 import { DeskEmpty } from "./desk-empty";
 import { InspectorDivider } from "./inspector-divider";
@@ -46,22 +47,24 @@ function DeskReturn({ onReturn }: { onReturn: () => void }) {
  * family remounts the main section, while chat/guided swaps inside the same
  * section exactly as the old `state.screen === "pane"` branch did.
  */
-export function DeskShell({ deskPage, children, onReturn, inspector = false }: {
+export function DeskShell({ deskPage, children, onReturn, inspector = false, railHidden = false }: {
   deskPage: DeskPage;
   children?: ReactNode;
   onReturn?: () => void;
   inspector?: boolean;
+  railHidden?: boolean;
 }) {
   const settings = deskPage === "settings" || deskPage === "quota" || deskPage === "computers";
   // The shell hides and returns the rail, so it also owns the click that can land on it in between.
   useEffect(guardListReturn, []);
   return <>
     <HomeRail />
-    <section key={deskPage ?? "main"} className={`main${settings ? " main-settings" : deskPage === "board" ? " main-board" : ""}`}>
+    <section key={deskPage ?? "main"} className={`main${settings ? " main-settings" : deskPage === "board" ? " main-board" : deskPage === "desktop" ? " main-desktop" : ""}`}>
       {deskPage === "settings" ? <SettingsContent withBack />
         : deskPage === "quota" ? <QuotaContent />
         : deskPage === "computers" ? <ComputersContent withBack />
         : deskPage === "board" ? <BoardPage />
+        : deskPage === "desktop" ? <DesktopRoute railCollapsed={railHidden} />
         : children ? <>{onReturn ? <DeskReturn onReturn={onReturn} /> : null}{children}</> : <>
           <AppNotice />
           <DeskEmpty />

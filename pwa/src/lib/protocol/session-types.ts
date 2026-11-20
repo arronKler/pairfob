@@ -83,6 +83,7 @@ export interface DeviceSummary {
 }
 
 export type LiveSession = {
+  desktop?: () => import("./remote-desktop").DesktopRPC;
   connectionRecovery?: () => RecoveryClock | undefined;
   ping: (t: number) => Promise<unknown>;
   agentInspect?: (paneId: string) => Promise<AgentInspection>;

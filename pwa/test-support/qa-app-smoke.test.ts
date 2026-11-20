@@ -19,8 +19,8 @@ import { act } from "react";
  * (no WebGL/PTY): the open/frame/close lifecycle is production code. The two
  * `shellOnly` scenes deliberately render the standalone FullTerminalScreen
  * shell fixture without an engine. Coverage is reported honestly:
- * 127 scenes render through the stable App (including the 6 mock-engine
- * terminals), 2 shellOnly scenes render the QA shell fixture — all 129 catalog
+ * 133 scenes render through the stable App (including the 6 mock-engine
+ * terminals), 2 shellOnly scenes render the QA shell fixture — all 135 catalog
  * scenes are exercised here; the browser matrix remains the full visual
  * contract.
  *
@@ -198,7 +198,7 @@ function assertPaneRoot(expectedPane: string): void {
 }
 
 test("every QA scene id + untitled built", () => {
-  expect(scenes.length).toBe(129);
+  expect(scenes.length).toBe(135);
   const seen = new Set<string>();
   for (const scene of scenes) {
     expect(seen.has(scene.name)).toBeFalse();
@@ -207,7 +207,7 @@ test("every QA scene id + untitled built", () => {
   }
 });
 
-test("every scene renders: 127 through the stable App (incl. mock-engine terminals), 2 shellOnly fixtures", async () => {
+test("every scene renders: 133 through the stable App (incl. mock-engine terminals), 2 shellOnly fixtures", async () => {
   expect(domReady).toBeTrue();
   const failures: string[] = [];
   const appRendered: string[] = [];
@@ -262,8 +262,8 @@ test("every scene renders: 127 through the stable App (incl. mock-engine termina
   }
   expect(failures).toEqual([]);
   expect(shellRendered).toEqual(["terminal-loading", "terminal-error"]);
-  expect(appRendered).toHaveLength(127);
-  expect(appRendered.length + shellRendered.length).toBe(129);
+  expect(appRendered).toHaveLength(133);
+  expect(appRendered.length + shellRendered.length).toBe(135);
 }, 180_000);
 
 test("attention QA scenes show all statuses and runtime replacement without filter pills", async () => {
@@ -765,6 +765,24 @@ test("scene names and descriptions are documented for the window.qa surface", ()
   const names = scenes.map((scene) => scene.name);
   expect(names).toContain("terminal-loading");
   expect(names).toContain("terminal-error");
-  expect(names.length).toBe(129);
+  expect(names.length).toBe(135);
   for (const scene of scenes) expect(scene.description).toBeTruthy();
+});
+
+test("remote-desktop QA scenes render preflight, settings section, setup prompt, and tab bar states", async () => {
+  for (const [name, expectedText, tabCount] of [
+    ["remote-desktop-relay", t("desktop.relayTitle"), 4],
+    ["remote-desktop-unsupported", t("desktop.preflightUnsupportedTitle"), 4],
+    ["remote-desktop-settings", t("desktop.settingsGroup"), 4],
+    ["remote-desktop-setup", t("desktop.promptTitle"), 3],
+  ] as const) {
+    const session = await prepareScene(name);
+    try {
+      expect(document.querySelector("dialog.desktop-view")).toBeNull();
+      expect(document.querySelector("#app")?.textContent).toContain(expectedText);
+      expect(document.querySelectorAll(".tab-bar .tab-bar-item")).toHaveLength(tabCount);
+    } finally {
+      await teardownScene(session, false);
+    }
+  }
 });

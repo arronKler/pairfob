@@ -52,6 +52,13 @@ describe("pair input validation", () => {
     expect(parseCodeAndLocator("7K3M9H2P")).toBeNull();
   });
 
+  test("hand entry accepts mobile keyboard width and typographic separators", () => {
+    for (const input of ["７Ｋ３Ｍ－９Ｈ２Ｐ－ＷＪ３Ｋ９Ｍ", "7K3M–9H2P\u00a0WJ3K9M\n"]) {
+      expect(resolveHandPairing(2, input, false)).toEqual({ ok: true, code: "7K3M9H2P", loc: "WJ3K9M" });
+    }
+    expect(parseCodeAndLocator("7K3M.9H2P.WJ3K9M")).toBeNull();
+  });
+
   test("parses valid QR fragment and rejects query-shaped junk", () => {
     const valid = parsePairingFragment(V1);
     expect(valid).toEqual({

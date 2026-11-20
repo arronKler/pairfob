@@ -167,6 +167,16 @@ describe("runtime operation config", () => {
     }
   });
 
+  test("setup_desktop is optional (absent=false) and rejects non-boolean values", () => {
+    const { setup_desktop: _, ...legacy } = NO_OPERATION_CAPABILITIES;
+    expect(parseRuntimeOperationsConfig(config(legacy)).capabilities.setup_desktop).toBe(false);
+    expect(parseRuntimeOperationsConfig(config({ ...legacy, setup_desktop: true })).capabilities.setup_desktop).toBe(true);
+    expect(parseRuntimeOperationsConfig(config({ ...legacy, setup_desktop: false })).capabilities.setup_desktop).toBe(false);
+    for (const invalid of ["true", 1, null]) {
+      expect(() => parseRuntimeOperationsConfig(config({ ...legacy, setup_desktop: invalid }))).toThrow();
+    }
+  });
+
   test("recognizes every advertised capability", () => {
     const all = Object.fromEntries(Object.keys(NO_OPERATION_CAPABILITIES).map((key) => [key, true]));
 		expect(parseRuntimeOperationsConfig(config(all))).toEqual({

@@ -24,6 +24,8 @@ describe("screen transitions", () => {
     expect(transitionFor("workspace", "pane")).toBe("pop");
     expect(transitionFor("home", "settings")).toBe("fade");
     expect(transitionFor("settings", "quota")).toBe("fade");
+    expect(transitionFor("home", "desktop")).toBe("fade");
+    expect(transitionFor("desktop", "pane")).toBe("push");
     expect(transitionFor("home", "board")).toBe("fade");
     expect(transitionFor("home", "home")).toBe("none");
   });

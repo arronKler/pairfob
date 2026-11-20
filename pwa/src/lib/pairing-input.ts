@@ -29,12 +29,20 @@ export function parsePairLocator(raw: string): string | null {
 
 /** Accept `CODE LOC` or a 14-glyph Crockford blob. `s` stays 8 chars; loc is independent. */
 export function parseCodeAndLocator(raw: string): { code: string; loc: string } | null {
-  const normalized = normalizeCrockford(raw);
+  const entry = plainPairingEntry(raw);
+  if (!/^[a-zA-Z0-9 /_-]+$/.test(entry)) return null;
+  const normalized = normalizeCrockford(entry);
   if (normalized.length !== 14) return null;
   const code = parsePairingCode(normalized.slice(0, 8));
   const loc = parsePairLocator(normalized.slice(8));
   if (!code || !loc) return null;
   return { code, loc };
+}
+
+/** Normalize keyboard typography only at the manual input boundary. */
+export function plainPairingEntry(raw: string): string {
+  return raw.replace(/[０-９Ａ-Ｚａ-ｚ]/g, char => char.normalize("NFKC"))
+    .replace(/[‐‑‒–—−－]/g, "-").replace(/\s/g, " ");
 }
 
 export type HandPairing =

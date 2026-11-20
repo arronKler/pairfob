@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -50,6 +51,9 @@ func handleConn(conn net.Conn, svc Service) {
 }
 
 func timeoutFor(op string) time.Duration {
+	if op == "desktop.offer" || op == "desktop.setup" || op == "desktop.enable" || op == "desktop.enable-control" {
+		return 5*time.Minute + 10*time.Second
+	}
 	if op == "pair.wait" {
 		return pairWaitTimeout
 	}
@@ -64,6 +68,16 @@ func timeoutFor(op string) time.Duration {
 
 func dispatch(svc Service, req Request) Response {
 	switch req.Op {
+	case "desktop.offer", "desktop.setup", "desktop.enable", "desktop.enable-control", "desktop.standby-on", "desktop.standby-off", "desktop.disable", "desktop.status":
+		local, ok := svc.(interface{ ConfigureDesktop(string) (string, error) })
+		if !ok {
+			return errResult(errors.New("unknown_op"))
+		}
+		message, err := local.ConfigureDesktop(strings.TrimPrefix(req.Op, "desktop."))
+		if err != nil {
+			return errResult(err)
+		}
+		return okResult(message)
 	case "privacy.status", "privacy.retry":
 		privacy, ok := svc.(PrivacyService)
 		if !ok {

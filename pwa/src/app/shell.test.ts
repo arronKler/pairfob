@@ -70,6 +70,11 @@ describe("shell ownership", () => {
     expect(appRoot().classList.contains("board")).toBeTrue();
     expect(appRoot().classList.contains("desk")).toBeFalse();
 
+    applyShell(layout({ screen: "desktop" }));
+    expect(appRoot().classList.contains("desktop")).toBeTrue();
+    expect(appRoot().classList.contains("tabs")).toBeTrue();
+    expect(appRoot().classList.contains("board")).toBeFalse();
+
     applyShell(layout({ phase: "boot", screen: "home", desk: true }));
     expect(appRoot().classList.contains("boot-screen")).toBeTrue();
     expect(appRoot().classList.contains("board")).toBeFalse();

@@ -21,7 +21,7 @@ import * as credentials from "../../lib/credentials";
 import * as scanner from "../../lib/pairing-scanner";
 import * as telemetry from "../../lib/telemetry";
 import { ConnectScreen } from "../../pages/connect/connect-page";
-import { beginPairing, cancelPairing, retirePairingWork } from "./actions";
+import { beginPairing, cancelPairing, onPairSubmit, retirePairingWork } from "./actions";
 
 /**
  * Landing publication boundary.
@@ -140,6 +140,28 @@ afterEach(async () => {
 });
 
 type ReplacementKind = "live" | "beginCancel" | "localReject";
+
+test("manual submit after a scan looks up the new locator and shows the relay's rejection", async () => {
+  const requests: string[] = [];
+  const previous = globalThis.fetch;
+  const form = document.createElement("form");
+  const input = document.createElement("input");
+  input.name = "code";
+  input.value = "７Ｋ３Ｍ－９Ｈ２Ｐ－ＷＪ３Ｋ９Ｍ";
+  form.append(input);
+  try {
+    globalThis.fetch = (async (_url, init) => {
+      requests.push(JSON.parse(String(init?.body)).pair_loc);
+      return Response.json({ error: "unpaired" }, { status: 404 });
+    }) as typeof fetch;
+    await onPairSubmit({ preventDefault() {}, target: form } as unknown as Event);
+    expect(requests).toEqual(["WJ3K9M"]);
+    expect(handshakeCalls).toBe(0);
+    expect(visibleNotice()?.text).toContain("过期");
+  } finally {
+    globalThis.fetch = previous;
+  }
+});
 
 for (const failure of [false, true]) {
   for (const kind of ["live", "beginCancel", "localReject"] as ReplacementKind[]) {

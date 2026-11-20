@@ -20,6 +20,7 @@ export type HerdActionPorts = {
   canOpenMenu(): boolean;
   /** `groupIds` is the order the clicked list was rendered from. */
   toggleGroup(groupId: string, groupIds: string[]): void;
+  openDesktop(): void;
   openBoard(): void;
   /** Object menus read the record when the press lands, so the page owns them. */
   openPaneMenu(agent: AgentCard): void;
@@ -55,6 +56,7 @@ export type HerdActions = {
   openWorkspaceMenu(agent: AgentCard | undefined): void;
   toggleGroup(groupId: string, groupIds: string[]): void;
   createConversation(): void;
+  openDesktop(): void;
   openBoard(): void;
   openSettings(): void;
   openComputers(): void;
@@ -95,6 +97,9 @@ export function createHerdActions(ports: HerdActionPorts): HerdActions {
     },
     createConversation() {
       ports.openCreate();
+    },
+    openDesktop() {
+      ports.openDesktop();
     },
     openBoard() {
       ports.openBoard();

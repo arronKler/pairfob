@@ -3,7 +3,7 @@ import { computeLayout, type LayoutDescriptor, type LayoutInput } from "./layout
 import { capabilitiesStore, operationBusy } from "../features/operations/capabilities-store";
 import { connectionStore, phase } from "../features/connection/connection-store";
 import { dashboardStore, selectedAgent } from "../features/dashboard/catalog-store";
-import { currentScreen, navigationStore } from "./navigation-store";
+import { currentScreen, desktopRailCollapsed, navigationStore } from "./navigation-store";
 import { preferencesStore, termFontPx } from "../features/settings/preferences-store";
 import { createdPaneAwaitingCatalog, isAgentChat, isFullTerminal, openPaneId, sessionStore } from "../features/session/session-store";
 import { computers, computersStore } from "../features/computers/catalog-store";
@@ -45,6 +45,7 @@ export function currentLayoutInput(): LayoutInput {
     inspector: isRoomy() && inspectorOpen(),
     narrow: narrow(),
     retrying: retryingUnreachable(),
+    desktopRailCollapsed: desktopRailCollapsed(),
   };
 }
 
@@ -77,6 +78,7 @@ export function publishedLayoutInput(): LayoutInput {
     inspector: isRoomy() && inspectorStore.get().open,
     narrow: narrow(),
     retrying: connectionStore.get().retryingUnreachable,
+    desktopRailCollapsed: navigationStore.get().desktopRailCollapsed,
   };
 }
 

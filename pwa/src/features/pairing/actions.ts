@@ -19,7 +19,7 @@ import { prepareSessionPresentation, sessionPresentationIsReady } from "../conne
 import { withCarriedAlias } from "../../lib/computer-catalog";
 import { FRIENDLY_ERROR, messageOf } from "../../lib/notices";
 import { t } from "../../lib/i18n";
-import { fragmentUsableOnOrigin, parseCodeAndLocator, parsePairingCode, resolveHandPairing } from "../../lib/pairing-input";
+import { fragmentUsableOnOrigin, parsePairingCode, resolveHandPairing } from "../../lib/pairing-input";
 import { requestPairIntent } from "../../lib/pair-intent";
 import { PairingScanError, scanPairingCode } from "../../lib/pairing-scanner";
 import { pairOverWS, ProtocolError, type PairInput } from "../../lib/protocol/client";
@@ -28,7 +28,7 @@ import { saveCredential } from "../../lib/credentials";
 import { relayOrigin } from "../../lib/runtime-config";
 import { track } from "../../lib/telemetry";
 import { offerNotifications } from "../settings/notification-onboarding";
-import { pairCodeProblem, type ConnectNotice, type ConnectViewInput } from "./model";
+import { pairCodeProblem, pastedPairCode, type ConnectNotice, type ConnectViewInput } from "./model";
 import {
   claimPairingAttempt, claimPairingTransport, clearPairingTransport, pairingPageOwner, pairingTransportAbortFor,
   pairingWorkId, retirePairingWork,
@@ -117,7 +117,7 @@ export function applyOriginPairingPolicy(): boolean {
 export async function onPairSubmit(event: Event): Promise<void> {
   event.preventDefault();
   const data = new FormData(event.target as HTMLFormElement);
-  await beginPairing(String(data.get("code") || ""));
+  await beginPairing(String(data.get("code") || ""), null);
 }
 
 /**
@@ -141,7 +141,7 @@ export function setManualPairOpen(open: boolean): void {
   setPairManualOpen(open);
 }
 
-export async function beginPairing(rawCode: string): Promise<void> {
+export async function beginPairing(rawCode: string, scanned = pairingFragment()): Promise<void> {
   if (phase() === "pairing") return;
   // A new intent advances the attempt generation before anything captures it:
   // a stale landing from an earlier attempt can never adopt this attempt's
@@ -150,7 +150,11 @@ export async function beginPairing(rawCode: string): Promise<void> {
   claimPairingAttempt();
   const work = currentWork();
   const page = pairingPageOwner();
-  const scanned = pairingFragment();
+  // A manual submission starts a fresh locator lookup even after a failed QR scan.
+  if (!scanned && pairingFragment()) {
+    clearPairingFragment();
+    if (work !== currentWork()) return;
+  }
   setPairCodeDraft(rawCode);
   setPairFailure(null, null);
 
@@ -356,8 +360,7 @@ export async function pastePairCode(): Promise<void> {
   try {
     const text = await navigator.clipboard.readText();
     if (work !== currentWork()) return;
-    const both = parseCodeAndLocator(text);
-    const code = both ? `${both.code.slice(0, 4)}-${both.code.slice(4)}-${both.loc}` : parsePairingCode(text);
+    const code = pastedPairCode(text) ?? parsePairingCode(text);
     setPairManualOpen(true);
     if (!code) {
       setPairFailure("code", "code");

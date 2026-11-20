@@ -303,13 +303,14 @@
 .rail .card-name { font-size: var(--text-lead); }
 .rail .card-meta { font-size: var(--text-caption); }
 
-/* --- Foot: Board and Settings ------------------------------------------------------ */
+/* --- Foot: Board, optional Desktop, and Settings ----------------------------------- */
 
 .rail-nav {
   flex: none;
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 3px;
   padding: 4px 8px calc(4px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--line);
 }
@@ -317,9 +318,10 @@
 .rail-nav-item {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  gap: 6px;
   min-height: 44px;
-  padding: 0 10px;
+  padding: 0 6px;
   border-radius: var(--r-sm);
   color: var(--muted);
   font: 550 var(--text-secondary) var(--font);
@@ -328,8 +330,9 @@
 }
 
 .rail-nav-item:active { background: var(--surface-2); }
-/* The page beside the rail (the board) reads as the current destination. */
+/* The page beside the rail (desktop / board / settings) reads as the current destination. */
 .rail-nav-item.is-current { background: var(--surface); color: var(--ink); }
+.rail-nav-item.is-desktop-live { background: var(--accent-16); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-35); }
 .rail-nav-icon { position: relative; display: grid; place-items: center; }
 
 .rail-nav-dot {
@@ -340,6 +343,30 @@
   height: 7px;
   border-radius: 50%;
   background: var(--accent);
+}
+
+.rail-nav-pip {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg);
+  background: var(--ok);
+}
+
+.rail-nav-pip.is-relay { background: var(--warn); }
+.rail-nav-pip.is-off { background: var(--error); }
+.rail-nav-pip.is-live { background: var(--accent); animation: rail-pip-pulse 1.6s infinite; }
+
+@keyframes rail-pip-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.65; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-nav-pip.is-live { animation: none; }
 }
 
 /* The on-screen keyboard takes half a tablet's height: the list gets the foot's. */

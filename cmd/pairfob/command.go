@@ -16,6 +16,8 @@ const commandUsage = `Pairfob — this computer, on another device.
   pairfob forget N          Unpair
   pairfob machine link NAME Pair with a machine Herdr reaches over SSH
   pairfob update            Update Pairfob (keeps Herdr unchanged)
+  pairfob desktop setup|enable|enable-control|standby-on|standby-off|disable|status
+                            Manage local remote desktop permission
   pairfob doctor            Check this computer
   pairfob runtime           Show the selected terminal runtime
   pairfob setup             Install missing Herdr and check the session runtime
@@ -62,6 +64,8 @@ func runCommand(args []string, sock string) error {
 		return enrollCommand(args[1:], sock)
 	case "pair":
 		return pairCommand(args[1:], sock)
+	case "desktop":
+		return desktopCommand(sock, args[1:])
 	case "machine", "machines":
 		return machineCommand(args[1:])
 	case "list":

@@ -1,4 +1,5 @@
-package main
+// Package directice shares candidate gathering between data and desktop media peers.
+package directice
 
 import (
 	"context"
@@ -71,4 +72,14 @@ func awaitAnswerCandidates(
 			}
 		}
 	}
+}
+
+// SetLocalAnswer starts gathering and publishes a usable direct answer without
+// waiting for every network interface to time out.
+func SetLocalAnswer(ctx context.Context, peer *webrtc.PeerConnection, answer webrtc.SessionDescription) error {
+	gathered, reflexive := gatheringSignals(peer)
+	if err := peer.SetLocalDescription(answer); err != nil {
+		return err
+	}
+	return awaitAnswerCandidates(ctx, gathered, reflexive, func() bool { return hasLocalCandidate(peer) }, p2pAnswerPace)
 }

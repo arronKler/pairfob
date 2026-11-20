@@ -187,6 +187,7 @@ export const zh = {
   "chrome.herdrOffBanner": "电脑上的 Herdr 不可用。请在电脑运行 pairfob doctor 检查。",
   "home.settings": "设置",
   "home.new": "新建",
+  "home.desktop": "桌面",
   "home.board": "画板",
   "board.title": "画板",
   "board.back": "返回列表",

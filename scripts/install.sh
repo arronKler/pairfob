@@ -396,6 +396,14 @@ case ":${PATH}:" in
     ;;
 esac
 
+# Ask for unattended access from the installed login service, which also owns
+# future capture helpers. Upgrades preserve the operator's saved decision.
+if [ "$os" = darwin ] && [ "$NON_INTERACTIVE" -eq 0 ] && [ "$NO_SERVICE" -eq 0 ]; then
+  if ! "$dest" desktop setup --if-unconfigured; then
+    echo "To set up unattended desktop access later, run ${pairfob_command} desktop setup." >&2
+  fi
+fi
+
 if [ "$SKIP_RUNTIME_CHECK" -eq 1 ] || [ "$NO_SERVICE" -eq 1 ]; then
   echo "Installation complete; runtime setup is not verified. Run ${pairfob_command} setup, start Pairfob, then run ${pairfob_command} doctor before pairing."
   exit 0

@@ -70,6 +70,7 @@ provideCommandPalette({
   openSession: (paneId) => actions.openPaneFromCard(paneId, null),
   runAction(action) {
     if (action === "create") actions.createConversation();
+    else if (action === "desktop") actions.openDesktop();
     else if (action === "board") actions.openBoard();
     else if (action === "computers") actions.openComputers();
     else actions.openSettings();

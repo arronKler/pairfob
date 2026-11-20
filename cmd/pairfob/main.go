@@ -16,6 +16,7 @@ import (
 	"pairfob/internal/logfile"
 	"pairfob/internal/mux"
 	"pairfob/internal/pairingqr"
+	"pairfob/internal/remotedesktop"
 	"pairfob/internal/runtime"
 	"pairfob/internal/state"
 )
@@ -137,6 +138,7 @@ func runDaemon(store *state.Store, sock string) error {
 	}
 	if getenv("PAIRFOB_P2P", "1") != "0" {
 		eng.Direct = newWebRTCAcceptor()
+		eng.Desktop = remotedesktop.LocalHost{Dir: store.Dir}
 	}
 	runtimeConfig := daemon.RuntimeConfig{
 		MuxProtocol: plan.Protocol,
@@ -183,8 +185,14 @@ func runDaemon(store *state.Store, sock string) error {
 	updateCtx, updateCancel := context.WithCancel(context.Background())
 	defer updateCancel()
 	go newAutoUpdater(eng, updater, store.Dir, logger).Run(updateCtx)
+	var desktopChanged chan struct{}
+	if eng.Desktop != nil && remotedesktop.StandbySupported() {
+		desktopChanged = make(chan struct{}, 1)
+		host := remotedesktop.LocalHost{Dir: store.Dir}
+		go host.MonitorStandby(updateCtx, desktopChanged)
+	}
 	log.Printf("pairfob admin %s daemon_id %s", sock, target.DaemonID)
-	err = admin.Serve(ln, liveAdmin{eng: eng, store: store, origin: plan.Origin, process: process, stop: func() { _ = ln.Close() }})
+	err = admin.Serve(ln, liveAdmin{eng: eng, store: store, desktopChanged: desktopChanged, origin: plan.Origin, process: process, stop: func() { _ = ln.Close() }})
 	if errors.Is(err, net.ErrClosed) {
 		return nil
 	}
@@ -261,11 +269,12 @@ func announceStartup(eng *daemon.Engine, sock, explicitCode string) error {
 }
 
 type liveAdmin struct {
-	eng     *daemon.Engine
-	store   *state.Store
-	origin  string
-	process admin.ProcessInfo
-	stop    func()
+	desktopChanged chan<- struct{}
+	eng            *daemon.Engine
+	store          *state.Store
+	origin         string
+	process        admin.ProcessInfo
+	stop           func()
 }
 
 func (a liveAdmin) Status() admin.Pairing {

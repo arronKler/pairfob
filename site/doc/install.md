@@ -89,6 +89,14 @@ pairfob service restart
 
 Day to day you should not need those. `pairfob update` replaces the binary and restarts an installed user service.
 
+## Access your Mac desktop while away
+
+On macOS 13 or later, the interactive installer offers to set up remote desktop. On an existing installation, or if you chose **Set Up Later**, run `pairfob desktop setup` on the Mac. Choose the display and either **Allow View Only** or **Allow View & Control**. Grant Screen Recording when macOS asks. Keyboard and mouse control also require Accessibility. Before leaving, run `pairfob desktop status` to check the P2P setting, system permissions, lock state and display. A direct connection also depends on the networks in use when the phone connects.
+
+Open **Remote desktop** on the computer's details page on your paired phone. Your choice applies to current and future paired devices. They can reconnect without anyone confirming on the Mac while it is awake, unlocked and reachable over P2P. Stopping a stream ends that session. To turn off future access, run `pairfob desktop disable` on the Mac.
+
+If you leave your Mac plugged in, run `pairfob desktop standby-on` after granting desktop access to prevent idle system sleep on external power. Unplugging it or running `pairfob desktop standby-off` releases the request. The display can still sleep. When the system is awake and your account is unlocked, opening a remote session requests a wake for the selected sleeping display. Automatic locking still applies. For sleep, a locked account or the first login after a restart, set up a [recovery console](./mac-recovery).
+
 ## Update
 
 ```sh

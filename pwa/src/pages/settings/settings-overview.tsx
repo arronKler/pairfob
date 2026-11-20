@@ -1,4 +1,5 @@
 import { openComputers } from "../../features/computers/actions";
+import { DesktopSetupPrompt } from "../../features/remote-desktop/desktop-setup-prompt";
 import { AndroidUpdateCard } from "../../features/settings/android-update-view";
 import { DaemonUpdateRow } from "../../features/settings/daemon-update-view";
 import { HerdSessionRow } from "../../features/herd-sessions/herd-session-row";
@@ -42,6 +43,7 @@ export function SettingsOverview({ input }: { input: SettingsOverviewInput }) {
           onClick={openComputers} />
       </ComputerPanel>
       <AndroidUpdateCard />
+      <DesktopSetupPrompt onOpenSetup={() => travelSettingsSection("connection")} />
       <AgentQuotaModule />
       <SessionDefaults mode={input.defaultTermMode} live={input.defaultComposeLive} enterSends={input.composeEnterSends} />
       <SetGroup label={t(input.desk ? "set.deviceSection" : "settings.phoneSection")}>

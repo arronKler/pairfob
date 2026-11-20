@@ -258,7 +258,7 @@ describe("the only computer cannot be reached, on a wide layout", () => {
     expect(app.querySelector(".rail, .main")).toBeNull();
     expect(app.querySelector(".tab-bar")).toBeTruthy();
     expect([...app.querySelectorAll(".unreachable-shell > *")].map(node => node.className.split(" ")[0]))
-      .toEqual(["sr-only", "herd-head", "conn-path-card", "conn-steps", "conn-retry-dock"]);
+      .toEqual(["sr-only", "herd-head", "conn-path-card", "conn-steps", "recovery-console", "conn-retry-dock"]);
   });
 });
 

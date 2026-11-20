@@ -17,6 +17,7 @@ export type LayoutMode =
   | "pick"
   | "workspace"
   | "board"
+  | "desktop"
   | "full-terminal"
   | "desk"
   | "settings"
@@ -26,8 +27,8 @@ export type LayoutMode =
   | "pane"
   | "home";
 
-/** What the desk main column shows: a settings-family page, the board, a pane, or nothing. */
-export type DeskPage = "settings" | "quota" | "computers" | "board" | null;
+/** What the desk main column shows: a settings-family page, the board, desktop, a pane, or nothing. */
+export type DeskPage = "settings" | "quota" | "computers" | "board" | "desktop" | null;
 /** Where the desk's pane leads back to: the board it was opened from, or nowhere. */
 export type DeskReturn = "board" | null;
 /** The session the desk main column shows: agent chat, the guided pane or the complete terminal. */
@@ -62,6 +63,8 @@ export type LayoutInput = {
   narrow?: boolean;
   /** A retry started from the "cannot reach" page is in flight; the phase is `resuming` meanwhile. */
   retrying?: boolean;
+  /** Whether the user collapsed/expanded the rail on the desktop route; null defaults to narrow. */
+  desktopRailCollapsed?: boolean | null;
 };
 
 export type ShellFlags = {
@@ -69,9 +72,10 @@ export type ShellFlags = {
   desk: boolean;
   workspace: boolean;
   board: boolean;
+  desktop: boolean;
   /** The desktop splash while booting; the phone boots inside the list frame. */
   booting: boolean;
-  /** Phone tab roots (home / board / settings) carry the bottom tab bar. */
+  /** Phone tab roots (home / desktop / board / settings) carry the bottom tab bar. */
   tabs: boolean;
   /**
    * The pick phase renders the single-computer "cannot reach" page in the list
@@ -107,12 +111,13 @@ export function computeLayout(input: LayoutInput): LayoutDescriptor {
   // The phone board owns the whole screen; the wide board sits in the desk's
   // main column beside the list, like any other desk page.
   const board = live && input.screen === "board" && !input.desk;
+  const desktop = live && input.screen === "desktop" && !input.desk;
   // Every session mode, the complete terminal included, stays beside the list.
   // A phone on its side is the exception: its terminal keeps the whole screen.
   const desk = live && input.desk && !workspace && !(input.fullTerminal && input.handheld === true);
   const session = live && input.screen === "pane" && !desk;
   const deskPage: DeskPage = desk && (input.screen === "settings" || input.screen === "quota"
-    || input.screen === "computers" || input.screen === "board") ? input.screen : null;
+    || input.screen === "computers" || input.screen === "board" || input.screen === "desktop") ? input.screen : null;
   // The complete terminal keeps its page while its pane is briefly unreported,
   // exactly as it did when it owned the whole viewport.
   const deskChild: DeskChild = desk && !deskPage && input.fullTerminal ? "full"
@@ -122,8 +127,11 @@ export function computeLayout(input: LayoutInput): LayoutDescriptor {
   // worth of room the list gives way to it.
   const inspector = deskChild !== null && input.inspector === true;
   // The board keeps its canvas: in the narrowest tier the list gives way to it
-  // too, and the board's own header leads back.
-  const railHidden = (inspector && input.wide !== true) || (deskPage === "board" && input.narrow === true);
+  // too, and the board's own header leads back. On the desktop route the reader
+  // can toggle the rail explicitly (defaulting to collapsed in the narrow tier).
+  const railHidden = (inspector && input.wide !== true)
+    || (deskPage === "board" && input.narrow === true)
+    || (deskPage === "desktop" && (input.desktopRailCollapsed ?? input.narrow === true));
   const deskReturn: DeskReturn = deskChild && input.boardReturn === true ? "board" : null;
 
   // The explanation of what cannot be reached keeps the list's frame at every
@@ -135,12 +143,13 @@ export function computeLayout(input: LayoutInput): LayoutDescriptor {
   // placeholder rows, tab bar) so nothing jumps when the session goes live.
   const splash = booting && input.desk && !offline;
   const tabs = (booting && !input.desk) || (unreachable && !input.desk) || (live && !input.desk && !input.fullTerminal
-    && (input.screen === "home" || input.screen === "board" || input.screen === "settings"));
+    && (input.screen === "home" || input.screen === "desktop" || input.screen === "board" || input.screen === "settings"));
   const mode: LayoutMode = booting ? "boot"
     : input.phase === "connect" || input.phase === "pairing" ? "connect"
     : input.phase === "pick" ? "pick"
     : workspace ? "workspace"
     : board ? "board"
+    : desktop ? "desktop"
     : desk ? "desk"
     : live && input.fullTerminal ? "full-terminal"
     : input.screen === "settings" ? "settings"
@@ -154,8 +163,8 @@ export function computeLayout(input: LayoutInput): LayoutDescriptor {
     deskPage,
     deskChild,
     deskReturn,
-    shell: { session, desk: desk || offline, workspace, board, booting: splash, tabs, unreachable, inspector, railHidden },
-    lockScroll: session || desk || offline || workspace || board || splash,
+    shell: { session, desk: desk || offline, workspace, board, desktop, booting: splash, tabs, unreachable, inspector, railHidden },
+    lockScroll: session || desk || offline || workspace || board || desktop || splash,
     termFontPx: input.termFontPx,
     termLineHeightPx: termLineHeightPx(input.termFontPx),
     operationBusy: input.operationBusy,
@@ -179,6 +188,7 @@ export function layoutsEqual(left: LayoutDescriptor | null | undefined, right: L
     && left.shell.desk === right.shell.desk
     && left.shell.workspace === right.shell.workspace
     && left.shell.board === right.shell.board
+    && left.shell.desktop === right.shell.desktop
     && left.shell.booting === right.shell.booting
     && left.shell.tabs === right.shell.tabs
     && left.shell.unreachable === right.shell.unreachable

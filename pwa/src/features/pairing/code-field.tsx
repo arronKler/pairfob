@@ -2,7 +2,7 @@ import type { ClipboardEvent } from "react";
 import { t } from "../../lib/i18n";
 import { PAIR_CODE_WITH_LOCATOR_PATTERN } from "../../lib/pairing-input";
 import { Button } from "../../shared/ui/primitives";
-import type { ConnectViewModel } from "./model";
+import { pastedPairCode, type ConnectViewModel } from "./model";
 import { keepPhrases } from "./phrases";
 
 /**
@@ -11,28 +11,30 @@ import { keepPhrases } from "./phrases";
  * controlled by the pairing domain and lives inside the caller's form.
  *
  * `onPaste` is the clipboard button (the sheet, where reaching the system paste
- * menu takes a long press); `onPasteText` sees a keyboard paste before the field
- * does and returns true when it took the text.
+ * menu takes a long press). Both layouts accept a full terminal line pasted into the field.
  *
  * The field has no length limit of its own: one would cut a paste short without
  * a word. Everything typed or pasted stays, the counter and the message say when
  * it is more than a code (`pairCodeOver`), and Connect turns it away until it is
  * fourteen.
  */
-export function PairCodeField({ view, placeholder, readOnly = false, onPaste, onPasteText, onCodeChange }: {
+export function PairCodeField({ view, placeholder, readOnly = false, onPaste, onCodeChange }: {
   view: ConnectViewModel;
   placeholder: string;
   readOnly?: boolean;
   onPaste?: () => void;
-  onPasteText?: (text: string) => boolean;
   onCodeChange: (code: string) => void;
 }) {
   const notice = view.fieldNotice;
   const error = notice?.tone === "error";
   const hint = keepPhrases(notice?.text ?? t("connect.pairHelp"));
-  const paste = onPasteText
-    ? (event: ClipboardEvent<HTMLInputElement>) => { if (onPasteText(event.clipboardData.getData("text"))) event.preventDefault(); }
-    : undefined;
+  const paste = (event: ClipboardEvent<HTMLInputElement>) => {
+    if (readOnly) return;
+    const code = pastedPairCode(event.clipboardData.getData("text"));
+    if (!code) return;
+    event.preventDefault();
+    onCodeChange(code);
+  };
   return <>
     <div className="pair-field-head">
       <label className="field-label" htmlFor="pair-code">{t("connect.pairCode")}</label>

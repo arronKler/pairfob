@@ -1,3 +1,4 @@
+import { RecoveryConsole } from "../../features/remote-desktop/recovery-console";
 import { MoreHorizontal, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { computerTitle } from "../../lib/computer-catalog";
@@ -128,6 +129,7 @@ export function UnreachableBody({ retrying }: { retrying: boolean }) {
         </ol>
         {relay ? <p className="herd-empty-note">{t("unreach.relayNote", { host: name, relay: relayHost() })}</p> : null}
       </section>
+      <RecoveryConsole />
       <div className="conn-retry-dock">
         <Button className="btn btn-primary conn-retry" disabled={retrying} onClick={retryUnreachable}>
           {/* One box for the mark and one cell for both labels (the other one is

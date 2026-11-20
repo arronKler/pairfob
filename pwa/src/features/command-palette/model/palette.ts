@@ -39,7 +39,7 @@ export type PaletteSession = {
   waiting: boolean;
 };
 
-export type PaletteActionId = "create" | "board" | "computers" | "settings";
+export type PaletteActionId = "create" | "desktop" | "board" | "computers" | "settings";
 
 export type PaletteAction = {
   type: "action";
@@ -87,6 +87,7 @@ const RESULT_LIMIT = 30;
 /** Words an action answers to in any language, beside its visible label. */
 const ACTION_WORDS: Record<PaletteActionId, string> = {
   create: "new create session",
+  desktop: "desktop remote screen",
   board: "board canvas",
   computers: "computer switch host",
   settings: "settings preferences",
@@ -149,6 +150,7 @@ export function paletteActions(view: HerdViewModel): PaletteAction[] {
     ...(view.create ? [action("create", t("palette.create"), view.create.disabled)] : []),
     // Already the page beside the list: there is nowhere to go.
     ...(view.board.current ? [] : [action("board", t("palette.board"))]),
+    ...(view.desktop && !view.desktop.current ? [action("desktop", t("palette.desktop"))] : []),
     action("computers", t("palette.computers")),
     action("settings", t("palette.settings")),
   ];

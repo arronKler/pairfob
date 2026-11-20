@@ -9,17 +9,23 @@ import { composeTransaction } from "../shared/model/compose-transaction";
  * renders the page for the current screen — so a navigation is one typed action
  * here plus a paint, never a `root.render(screen)` call.
  */
-export type Screen = "home" | "pane" | "workspace" | "settings" | "quota" | "computers" | "board";
+export type Screen = "home" | "pane" | "workspace" | "settings" | "quota" | "computers" | "board" | "desktop";
 
 export type NavigationRecord = {
   screen: Screen;
   /** Live computer-list back target. Home may still land on the open pane. */
   computersFrom: "home" | "settings";
+  /** Screen the user entered Remote Desktop from, so Back returns there. */
+  desktopFrom: Screen;
+  /** Explicit rail collapse state on the desktop route; null defers to narrow tier. */
+  desktopRailCollapsed: boolean | null;
 };
 
 const navigationDomain = createDomain<NavigationRecord>("navigation", {
   screen: "home",
   computersFrom: "home",
+  desktopFrom: "home",
+  desktopRailCollapsed: null,
 });
 export const navigationStore = navigationDomain.store;
 const { read, write, stage } = navigationDomain.controller;
@@ -73,6 +79,36 @@ export function setComputersFrom(from: "home" | "settings"): void {
 /** Where the live computer list was opened from, read at action time. */
 export function computersFrom(): "home" | "settings" {
   return read().computersFrom;
+}
+
+export function setDesktopFrom(from: Screen): void {
+  const target: Screen = from === "desktop" ? "home" : from;
+  if (read().desktopFrom === target) return;
+  write((record) => {
+    record.desktopFrom = target;
+  });
+}
+
+export function desktopFrom(): Screen {
+  return read().desktopFrom;
+}
+
+export function desktopRailCollapsed(): boolean | null {
+  return read().desktopRailCollapsed;
+}
+
+export function setDesktopRailCollapsed(collapsed: boolean | null): void {
+  if (read().desktopRailCollapsed === collapsed) return;
+  write((record) => {
+    record.desktopRailCollapsed = collapsed;
+  });
+}
+
+export function toggleDesktopRail(fallbackCollapsed = false): void {
+  const current = read().desktopRailCollapsed;
+  write((record) => {
+    record.desktopRailCollapsed = !(current ?? fallbackCollapsed);
+  });
 }
 
 /**

@@ -21,6 +21,10 @@ export const OPERATION_CAPABILITY_KEYS = [
   "upload_file",
   "upload_file_v2",
   "link_machine",
+  "view_desktop",
+  "setup_desktop",
+  "control_desktop",
+  "listen_desktop_audio",
   "trace_markers",
   "trace_labels",
   "trace_times",
@@ -54,6 +58,10 @@ export const NO_OPERATION_CAPABILITIES: OperationCapabilities = {
   upload_file: false,
   upload_file_v2: false,
   link_machine: false,
+  view_desktop: false,
+  setup_desktop: false,
+  control_desktop: false,
+  listen_desktop_audio: false,
   trace_markers: false,
   trace_labels: false,
   trace_times: false,
@@ -417,7 +425,7 @@ export function parseRuntimeOperationsConfig(value: unknown): RuntimeOperationsC
 
 	const rawCapabilities = isRecord(config.capabilities) ? config.capabilities : {};
 	const capabilities = { ...NO_OPERATION_CAPABILITIES };
-	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "download_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "trace_markers", "trace_labels", "trace_times", "trace_models", "trace_writes", "git_change_stats", "search_files", "search_dirs"]);
+	const optionalCapabilities = new Set(["agent_inspect", "rename_file", "delete_file", "download_file", "upload_file", "upload_file_v2", "list_sessions", "link_machine", "view_desktop", "setup_desktop", "control_desktop", "listen_desktop_audio", "trace_markers", "trace_labels", "trace_times", "trace_models", "trace_writes", "git_change_stats", "search_files", "search_dirs"]);
 	// A capability this build does not know is ignored rather than rejected: keys
 	// are additive, and a packaged client (the Android shell bundles its page)
 	// cannot be replaced before the daemon that advertises them. Known keys must

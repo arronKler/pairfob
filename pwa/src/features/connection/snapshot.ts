@@ -163,7 +163,7 @@ export async function refreshSnapshot(ports: SnapshotPorts): Promise<void> {
       ports.commitView();
       return;
     }
-    if ((screen === "home" || screen === "workspace" || screen === "settings" || screen === "computers") && unchanged) return;
+    if ((screen === "home" || screen === "workspace" || screen === "settings" || screen === "computers" || screen === "desktop") && unchanged) return;
     ports.commitView();
   } catch (error) {
     if (!viewIsCurrent(session, viewVersion, ports)) return;

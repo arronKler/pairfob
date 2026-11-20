@@ -13,6 +13,7 @@ export type PaletteRun = () => void;
 
 const ACTION_ICONS: Record<PaletteActionId, LucideIcon> = {
   create: Plus,
+  desktop: Monitor,
   board: LayoutDashboard,
   computers: Monitor,
   settings: Settings,

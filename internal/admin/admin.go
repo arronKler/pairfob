@@ -86,17 +86,17 @@ func SocketPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return socketInDir(dir)
+	return DefaultSocketPathIn(dir)
 }
 
 func SocketPathIn(dir string) (string, error) {
 	if os.Getenv("PAIRFOB_ADMIN_SOCK") != "" || dir == "" {
 		return SocketPath()
 	}
-	return socketInDir(dir)
+	return DefaultSocketPathIn(dir)
 }
 
-func socketInDir(dir string) (string, error) {
+func DefaultSocketPathIn(dir string) (string, error) {
 	if dir == "" {
 		return "", errors.New("admin socket path is empty")
 	}

@@ -233,14 +233,36 @@ describe("composition selection", () => {
 });
 
 describe("phone tab roots", () => {
-  test("home, board and settings carry the tab bar on a phone, and nothing else does", () => {
+  test("home, desktop, board and settings carry the tab bar on a phone, and nothing else does", () => {
     expect(computeLayout(input({ screen: "home" })).shell.tabs).toBeTrue();
+    expect(computeLayout(input({ screen: "desktop" })).shell.tabs).toBeTrue();
+    expect(computeLayout(input({ screen: "desktop" })).mode).toBe("desktop");
+    expect(computeLayout(input({ screen: "desktop" })).shell.desktop).toBeTrue();
+    expect(computeLayout(input({ screen: "desktop" })).lockScroll).toBeTrue();
     expect(computeLayout(input({ screen: "board" })).shell.tabs).toBeTrue();
     expect(computeLayout(input({ screen: "settings" })).shell.tabs).toBeTrue();
     expect(computeLayout(input({ screen: "pane" })).shell.tabs).toBeFalse();
     expect(computeLayout(input({ screen: "quota" })).shell.tabs).toBeFalse();
     expect(computeLayout(input({ screen: "computers" })).shell.tabs).toBeFalse();
     expect(computeLayout(input({ screen: "workspace" })).shell.tabs).toBeFalse();
+  });
+
+  test("a wide desktop screen sits in the desk main column and supports toggling the rail", () => {
+    const roomy = computeLayout(input({ screen: "desktop", desk: true, narrow: false, desktopRailCollapsed: false, hasSelectedPane: true }));
+    expect(roomy.mode).toBe("desk");
+    expect(roomy.deskPage).toBe("desktop");
+    expect(roomy.deskChild).toBeNull();
+    expect(roomy.shell.desk).toBeTrue();
+    expect(roomy.shell.desktop).toBeFalse();
+    expect(roomy.shell.tabs).toBeFalse();
+    expect(roomy.shell.railHidden).toBeFalse();
+
+    const narrow = computeLayout(input({ screen: "desktop", desk: true, narrow: true, desktopRailCollapsed: null }));
+    expect(narrow.shell.railHidden).toBeTrue();
+    const expanded = computeLayout(input({ screen: "desktop", desk: true, narrow: true, desktopRailCollapsed: false }));
+    expect(expanded.shell.railHidden).toBeFalse();
+    // Toggling the rail does not change the composition key (no remount).
+    expect(expanded.key).toBe(narrow.key);
   });
 
   test("the desk, full terminal and non-live phases never carry it", () => {

@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import { t } from "../../lib/i18n";
 import { Button, Spinner } from "../../shared/ui/primitives";
 import { PairCodeField } from "./code-field";
-import { pastedPairCode, type ConnectViewModel } from "./model";
+import type { ConnectViewModel } from "./model";
 import { PairCommand } from "./pair-command";
 import { keepPhrases } from "./phrases";
 import { relayHost } from "../../lib/runtime-config";
@@ -118,12 +118,7 @@ export function CodeCard({ view, onCancel, onSubmit, onCodeChange }: {
 }) {
   return (
     <form className="connect-card connect-form" noValidate onSubmit={onSubmit}>
-      <PairCodeField view={view} placeholder={t("connect.pairPlaceholder")} readOnly={view.busy} onCodeChange={onCodeChange}
-        onPasteText={(text) => {
-          const code = pastedPairCode(text);
-          if (code) onCodeChange(code);
-          return code !== null;
-        }} />
+      <PairCodeField view={view} placeholder={t("connect.pairPlaceholder")} readOnly={view.busy} onCodeChange={onCodeChange} />
       {/* Keyed apart: a reused node would hand the held Enter that submitted straight to Cancel. */}
       {view.busy
         ? <Button key="cancel" className="btn connect-cancel" onClick={onCancel}>{t("cancel")}</Button>
