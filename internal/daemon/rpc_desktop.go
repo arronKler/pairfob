@@ -14,16 +14,57 @@ import (
 
 // Engine.mu owns the single reservation, including while capture is starting.
 type desktopSlot struct {
-	released chan struct{}
-	grantID  string
-	owner    *sess
-	id       string
-	cancel   context.CancelFunc
-	ctx      context.Context
-	stream   remotedesktop.Stream
-	control  bool
-	sequence uint64
-	lease    *time.Timer
+	released    chan struct{}
+	grantID     string
+	owner       *sess
+	id          string
+	cancel      context.CancelFunc
+	ctx         context.Context
+	stream      remotedesktop.Stream
+	control     bool
+	sequence    uint64
+	lease       *time.Timer
+	closeReason string
+}
+
+const maxDesktopEnded = 32
+
+type desktopEndedEntry struct {
+	owner  *sess
+	reason string
+}
+
+type desktopEndedLog struct {
+	byID  map[string]desktopEndedEntry
+	order []string
+}
+
+func (e *Engine) recordDesktopEndedLocked(id string, owner *sess, reason string) {
+	if id == "" || owner == nil || reason == "" {
+		return
+	}
+	if e.desktopEnded.byID == nil {
+		e.desktopEnded.byID = make(map[string]desktopEndedEntry, maxDesktopEnded)
+	}
+	if _, exists := e.desktopEnded.byID[id]; !exists {
+		for len(e.desktopEnded.order) >= maxDesktopEnded {
+			oldest := e.desktopEnded.order[0]
+			e.desktopEnded.order = e.desktopEnded.order[1:]
+			delete(e.desktopEnded.byID, oldest)
+		}
+		e.desktopEnded.order = append(e.desktopEnded.order, id)
+	}
+	e.desktopEnded.byID[id] = desktopEndedEntry{owner: owner, reason: reason}
+}
+
+func streamCloseReason(stream remotedesktop.Stream) string {
+	if stream == nil {
+		return ""
+	}
+	if cr, ok := stream.(interface{ CloseReason() string }); ok {
+		return cr.CloseReason()
+	}
+	return ""
 }
 
 func (e *Engine) desktopPolicy() remotedesktop.Policy {
@@ -51,11 +92,6 @@ func (e *Engine) rpcDesktopOpen(s *sess, id string, raw json.RawMessage) {
 		e.replyErr(s, id, "forbidden", "desktop requires a direct connection")
 		return
 	}
-	if e.desktop != nil {
-		e.mu.Unlock()
-		e.replyErr(s, id, "conflict", "the desktop is already in use")
-		return
-	}
 	if s.desktopOpens == nil {
 		s.desktopOpens = map[string]bool{}
 	}
@@ -63,6 +99,53 @@ func (e *Engine) rpcDesktopOpen(s *sess, id string, raw json.RawMessage) {
 		e.mu.Unlock()
 		e.replyErr(s, id, "conflict", "duplicate or exhausted desktop request")
 		return
+	}
+	if e.desktopPreempting {
+		e.mu.Unlock()
+		e.replyErr(s, id, "conflict", "the desktop is already in use")
+		return
+	}
+	if prev := e.desktop; prev != nil {
+		if prev.owner == nil || prev.owner.deviceID == "" || prev.owner.deviceID != s.deviceID {
+			e.mu.Unlock()
+			e.replyErr(s, id, "conflict", "the desktop is already in use")
+			return
+		}
+		e.desktopPreempting = true
+		prev.closeReason = "preempted"
+		prev.cancel()
+		e.mu.Unlock()
+
+		timer := time.NewTimer(1500 * time.Millisecond)
+		select {
+		case <-prev.released:
+			timer.Stop()
+		case <-timer.C:
+		}
+
+		e.mu.Lock()
+		e.desktopPreempting = false
+		policy = e.desktopPolicy()
+		if !e.desktopLiveLocked(s) {
+			e.mu.Unlock()
+			e.replyErr(s, id, "forbidden", "desktop requires a direct connection")
+			return
+		}
+		if e.desktop != nil {
+			e.mu.Unlock()
+			e.replyErr(s, id, "conflict", "the desktop is already in use")
+			return
+		}
+		if !policy.View || (req.Control && !policy.Control) {
+			e.mu.Unlock()
+			e.replyErr(s, id, "unsupported", "desktop access is disabled on this computer")
+			return
+		}
+		if s.desktopOpens[req.OperationID] || len(s.desktopOpens) >= 128 {
+			e.mu.Unlock()
+			e.replyErr(s, id, "conflict", "duplicate or exhausted desktop request")
+			return
+		}
 	}
 	s.desktopOpens[req.OperationID] = true
 	ctx, cancel := context.WithCancel(s.outputContext())
@@ -93,18 +176,29 @@ func (e *Engine) startDesktop(slot *desktopSlot, id, label string, req remotedes
 		if stream != nil {
 			<-stream.Done()
 		}
-		if opened {
-			e.audit("desktop_closed", map[string]any{"device_id": slot.owner.deviceID})
-		}
 		e.mu.Lock()
 		if slot.lease != nil {
 			slot.lease.Stop()
 		}
+		reason := slot.closeReason
+		if reason == "" {
+			reason = streamCloseReason(stream)
+		}
+		if reason != "" {
+			e.recordDesktopEndedLocked(slot.id, slot.owner, reason)
+		}
 		if e.desktop == slot {
 			e.desktop = nil
 		}
-		close(slot.released)
 		e.mu.Unlock()
+		if opened {
+			fields := map[string]any{"device_id": slot.owner.deviceID}
+			if reason != "" {
+				fields["reason"] = reason
+			}
+			e.audit("desktop_closed", fields)
+		}
+		close(slot.released)
 	}()
 	go func() {
 		ticker := time.NewTicker(time.Second)
@@ -128,18 +222,37 @@ func (e *Engine) startDesktop(slot *desktopSlot, id, label string, req remotedes
 	stream, result, err = e.Desktop.Open(slot.ctx, label, req)
 	pending.Stop()
 	if err != nil || slot.ctx.Err() != nil {
+		e.mu.Lock()
+		reason := slot.closeReason
+		e.mu.Unlock()
+		if reason == "preempted" {
+			e.audit("desktop_open_failed", map[string]any{"device_id": slot.owner.deviceID, "reason": reason})
+			e.replyErr(slot.owner, id, "kicked", "desktop session taken over by another window")
+			return
+		}
 		message := "desktop startup expired or was cancelled"
 		if err != nil && !errors.Is(err, context.Canceled) {
+			err = remotedesktop.NormalizeReasonError(err, "")
 			message = err.Error()
 		}
-		e.audit("desktop_open_failed", map[string]any{"device_id": slot.owner.deviceID})
+		fields := map[string]any{"device_id": slot.owner.deviceID}
+		if r := remotedesktop.ParseReasonCode(message); r != "" {
+			fields["reason"] = r
+		}
+		e.audit("desktop_open_failed", fields)
 		e.replyErr(slot.owner, id, "conflict", message)
 		return
 	}
 	e.mu.Lock()
 	policy := e.desktopPolicy()
 	if !e.desktopLiveLocked(slot.owner) || slot.ctx.Err() != nil || policy.GrantID != slot.grantID || !policy.View || (req.Control && !policy.Control) {
+		reason := slot.closeReason
 		e.mu.Unlock()
+		if reason == "preempted" {
+			e.audit("desktop_open_failed", map[string]any{"device_id": slot.owner.deviceID, "reason": reason})
+			e.replyErr(slot.owner, id, "kicked", "desktop session taken over by another window")
+			return
+		}
 		e.replyErr(slot.owner, id, "forbidden", "desktop permission changed during startup")
 		return
 	}
@@ -196,8 +309,26 @@ func (e *Engine) rpcDesktopCommand(s *sess, id, op string, raw json.RawMessage) 
 		return
 	}
 	if !live || !owned || slot.ctx.Err() != nil {
+		var endedReason string
+		if live && !owned {
+			if entry, ok := e.desktopEnded.byID[p.Desktop]; ok && entry.owner == s {
+				endedReason = entry.reason
+			}
+		} else if live && owned && slot.ctx.Err() != nil {
+			endedReason = slot.closeReason
+			if endedReason == "" {
+				endedReason = streamCloseReason(slot.stream)
+			}
+		}
 		e.mu.Unlock()
-		e.replyErr(s, id, "forbidden", "desktop session is closed")
+		switch {
+		case endedReason == "preempted":
+			e.replyErr(s, id, "kicked", "desktop session taken over by another window")
+		case endedReason != "":
+			e.replyErr(s, id, "forbidden", "[reason:"+endedReason+"] desktop session is closed")
+		default:
+			e.replyErr(s, id, "forbidden", "desktop session is closed")
+		}
 		return
 	}
 	if policy.GrantID != slot.grantID || !policy.View || (slot.control && !policy.Control) {

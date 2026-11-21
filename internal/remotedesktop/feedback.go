@@ -1,6 +1,7 @@
 package remotedesktop
 
 import (
+	"sync"
 	"time"
 
 	"github.com/pion/rtcp"
@@ -9,6 +10,7 @@ import (
 // A single RTCP reader owns the rate estimate. The helper writer consumes only
 // the latest target and at most one outstanding keyframe request.
 type videoFeedback struct {
+	mu                sync.Mutex
 	keyframes         chan struct{}
 	rates             chan int
 	lastKey, lastRate time.Time
@@ -44,11 +46,18 @@ func (f *videoFeedback) receive(packets []rtcp.Packet, now time.Time) {
 			}
 		}
 	}
-	if key && now.Sub(f.lastKey) >= 250*time.Millisecond {
-		f.lastKey = now
-		select {
-		case f.keyframes <- struct{}{}:
-		default:
+	if key {
+		f.mu.Lock()
+		allowed := now.Sub(f.lastKey) >= 250*time.Millisecond
+		if allowed {
+			f.lastKey = now
+		}
+		f.mu.Unlock()
+		if allowed {
+			select {
+			case f.keyframes <- struct{}{}:
+			default:
+			}
 		}
 	}
 	if now.Sub(f.lastRate) < time.Second {
@@ -73,4 +82,14 @@ func (f *videoFeedback) receive(packets []rtcp.Packet, now time.Time) {
 	default:
 	}
 	f.rates <- target
+}
+
+func (f *videoFeedback) requestKeyframe() {
+	f.mu.Lock()
+	f.lastKey = time.Time{}
+	f.mu.Unlock()
+	select {
+	case f.keyframes <- struct{}{}:
+	default:
+	}
 }

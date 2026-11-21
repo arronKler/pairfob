@@ -309,6 +309,10 @@
   overflow: hidden;
   transform-origin: center center;
   transition: transform var(--dur-2) var(--ease);
+
+  &.is-gesturing {
+    transition: none;
+  }
 }
 
 .rd-video {

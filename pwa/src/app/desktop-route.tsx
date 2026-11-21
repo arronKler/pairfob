@@ -1,3 +1,4 @@
+import "./layout/desk-empty";
 import { openCommandPalette } from "../features/command-palette";
 import { commandPalettePorts } from "../features/command-palette/ports";
 import { DesktopScreen } from "../features/remote-desktop/desktop-surface";

@@ -296,6 +296,30 @@ test("1-tap auto-connect skips setup form, uses saved prefs, updates status, and
   });
   expect(ctrl.closeCalls).toBe(2);
   expect(ctrl.openCalls.at(-1)).toEqual({ control: true, audio: true, quality: "motion" });
+
+  // Hot control <-> view switch when stream opened with control: true triggers ZERO close/open calls and sends release
+  const viewOption = [...appRoot().querySelectorAll<HTMLButtonElement>('.rd-mode-seg [role="radio"]')].find(
+    (b) => b.textContent === t("desktop.modeViewShort"),
+  )!;
+  await act(async () => {
+    viewOption.click();
+    await new Promise((done) => setTimeout(done, 25));
+  });
+  expect(ctrl.closeCalls).toBe(2);
+  expect(ctrl.openCalls).toHaveLength(3);
+  expect(ctrl.inputEvents.some((e) => e.kind === "release")).toBeTrue();
+  expect(appRoot().querySelector(".rd-kb-hint")).toBeNull();
+
+  const controlOptionAgain = [...appRoot().querySelectorAll<HTMLButtonElement>('.rd-mode-seg [role="radio"]')].find(
+    (b) => b.textContent === t("desktop.modeControlShort"),
+  )!;
+  await act(async () => {
+    controlOptionAgain.click();
+    await new Promise((done) => setTimeout(done, 25));
+  });
+  expect(ctrl.closeCalls).toBe(2);
+  expect(ctrl.openCalls).toHaveLength(3);
+  expect(appRoot().querySelector(".rd-kb-hint")?.textContent).toBe(t("desktop.kbHint"));
 });
 
 test("preflight cards: relay triggers onRetryDirect, unsupported shows setup cmd, error/disconnect embeds RecoveryConsole + Reconnect", async () => {
@@ -349,14 +373,15 @@ test("preflight cards: relay triggers onRetryDirect, unsupported shows setup cmd
   act(() => { retryBtn.click(); });
   expect(retries).toBe(1);
 
-  // 3) Error on open -> disconnected card with error cause, RecoveryConsole, Reconnect & Back
+  // 3) Error on open -> disconnected card with structured locked reason, RecoveryConsole (collapsed when none saved), Reconnect & Back
   ctrl.failNextOpen = "Mac screen locked";
   await act(async () => {
     setSessionTransport("p2p");
     await new Promise((done) => setTimeout(done, 25));
   });
-  expect(appRoot().querySelector(".rd-state-title")?.textContent).toBe("Mac screen locked");
+  expect(appRoot().querySelector(".rd-state-title")?.textContent).toBe(t("desktop.reason.lockedTitle"));
   expect(appRoot().querySelector("details.recovery-console")).not.toBeNull();
+  expect(appRoot().querySelector("details.recovery-console")?.hasAttribute("open")).toBeFalse();
 
   const reconnectBtn = [...appRoot().querySelectorAll<HTMLButtonElement>(".rd-state-actions button")].find(
     (b) => b.textContent === t("desktop.reconnect"),

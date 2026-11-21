@@ -49,12 +49,12 @@ function ConsoleForHost({ pair }: { pair: PairResult }) {
   </div>;
 }
 
-export function RecoveryConsole({ all = false }: { all?: boolean }) {
+export function RecoveryConsole({ all = false, defaultOpen = false }: { all?: boolean; defaultOpen?: boolean }) {
   const { credential, computers } = useComputers();
   const [selected, setSelected] = useState("");
   const pair = (all && computers.find(item => item.daemonId === selected)) || credential || computers[0];
   if (!pair) return null;
-  return <details className="recovery-console">
+  return <details className="recovery-console" open={defaultOpen || undefined}>
     <summary>{t("recovery.title")}</summary>
     {all && computers.length > 1 && <label>{t("recovery.computer")}
       <select value={pair.daemonId} onChange={event => setSelected(event.target.value)}>

@@ -8,23 +8,28 @@ import type { DesktopSurfaceMode } from "./desktop-input-mode";
 import type { DesktopMetricSample } from "./desktop-metrics";
 import type { DesktopPopoverKind } from "./desktop-popovers";
 import { useDesktopPrefs, type DesktopMode } from "./desktop-prefs";
+import { isAutoRetryableDesktopError, parseDesktopReason, type DesktopReasonKind } from "./desktop-reason";
 import { setDesktopLive } from "./desktop-status";
 import { attachScreenInput } from "./screen-input";
 import { trackpadAim, type ScreenPoint } from "./trackpad-aim";
+
+export { isAutoRetryableDesktopError, parseDesktopReason, type DesktopReasonKind } from "./desktop-reason";
 
 export type StreamPhase = "preflight" | "connecting" | "live" | "reconnecting" | "disconnected";
 
 const AUTO_RECONNECT_DELAYS_MS = [800, 1500, 2500, 4000] as const;
 export const MAX_AUTO_RECONNECT_ATTEMPTS = AUTO_RECONNECT_DELAYS_MS.length;
 
-const NON_RETRYABLE_PATTERN =
-  /lock|sleep|asleep|permission|screen recording|accessibility|disabled|revoked|denied|unsupported|锁屏|锁定|休眠|睡眠|权限|未开启|已停用/i;
+type WakeLockSentinelLike = {
+  released?: boolean;
+  release(): Promise<void>;
+};
 
-export function isAutoRetryableDesktopError(message: string, code?: string): boolean {
-  if (code === "unsupported" || code === "invalid_argument") return false;
-  if (NON_RETRYABLE_PATTERN.test(message)) return false;
-  return true;
-}
+type NavigatorWithWakeLock = Navigator & {
+  wakeLock?: {
+    request(type: "screen"): Promise<WakeLockSentinelLike>;
+  };
+};
 
 type UseDesktopSessionArgs = {
   session: LiveSession | null;
@@ -57,12 +62,14 @@ export function useDesktopSession({
   const resumeOnVisibleRef = useRef(false);
   const autoRetryCountRef = useRef(0);
   const reconnectTimerRef = useRef(0);
+  const streamGrantedControlRef = useRef(false);
   const cursorRef = useRef<ScreenPoint>({ x: 0.5, y: 0.5 });
 
   const [phase, setPhase] = useState<StreamPhase>("preflight");
   const [connectingStep, setConnectingStep] = useState<"p2p" | "media">("p2p");
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [error, setError] = useState("");
+  const [reasonKind, setReasonKind] = useState<DesktopReasonKind | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [mode, setMode] = useState<DesktopMode>(() => (canControl ? prefs.defaultMode : "view"));
   const [quality, setQuality] = useState<DesktopQuality>(prefs.defaultQuality);
@@ -80,8 +87,8 @@ export function useDesktopSession({
   const effectiveMode: DesktopMode = canControl ? mode : "view";
   const effectiveAudio = canAudio && audioEnabled;
 
-  const latestRef = useRef({ canStart, effectiveMode, quality, effectiveAudio, phase, error });
-  latestRef.current = { canStart, effectiveMode, quality, effectiveAudio, phase, error };
+  const latestRef = useRef({ canStart, effectiveMode, quality, effectiveAudio, phase, error, reasonKind });
+  latestRef.current = { canStart, effectiveMode, quality, effectiveAudio, phase, error, reasonKind };
 
   const clearReconnectTimer = useCallback(() => {
     if (!reconnectTimerRef.current) return;
@@ -104,6 +111,7 @@ export function useDesktopSession({
     attemptRef.current += 1;
     clearReconnectTimer();
     manualStopRef.current = manual;
+    streamGrantedControlRef.current = false;
     if (manual) {
       resumeOnVisibleRef.current = false;
       autoRetryCountRef.current = 0;
@@ -115,6 +123,7 @@ export function useDesktopSession({
     active?.close();
     setPhase(nextPhase);
     setError(nextError);
+    setReasonKind(null);
     setDisplayName("");
     setStalled(false);
     setZoom(1);
@@ -148,6 +157,7 @@ export function useDesktopSession({
     const token = ++attemptRef.current;
     manualStopRef.current = false;
     resumeOnVisibleRef.current = false;
+    streamGrantedControlRef.current = false;
     if (!preserveRetry) {
       autoRetryCountRef.current = 0;
       setReconnectAttempt(0);
@@ -155,6 +165,7 @@ export function useDesktopSession({
     cursorRef.current = { x: 0.5, y: 0.5 };
     setCursor({ x: 0.5, y: 0.5 });
     setError("");
+    setReasonKind(null);
     setStalled(false);
     setDragLock(false);
     setDisplayName("");
@@ -165,24 +176,31 @@ export function useDesktopSession({
     const fail = (message: string, code?: string) => {
       if (attemptRef.current !== token) return;
       connRef.current = null;
+      streamGrantedControlRef.current = false;
       releaseDragLock();
       setStalled(false);
       setZoom(1);
       setImeOpen(false);
       setActivePopover(null);
 
+      const parsed = parseDesktopReason(message, code);
+      const cleanMessage = parsed.cleanMessage || message;
+
       if (manualStopRef.current) {
+        setReasonKind(null);
         setPhase("disconnected");
-        setError(message);
+        setError(cleanMessage);
         return;
       }
       if (document.hidden) {
         resumeOnVisibleRef.current = true;
+        setReasonKind(parsed.kind);
         setPhase("disconnected");
-        setError(message);
+        setError(cleanMessage);
         return;
       }
       if (!latestRef.current.canStart) {
+        setReasonKind(null);
         setPhase("preflight");
         setError("");
         return;
@@ -193,7 +211,8 @@ export function useDesktopSession({
         autoRetryCountRef.current = nextAttempt;
         const delayMs = AUTO_RECONNECT_DELAYS_MS[nextAttempt - 1] ?? 4000;
         setReconnectAttempt(nextAttempt);
-        setError(message);
+        setReasonKind(parsed.kind);
+        setError(cleanMessage);
         setPhase("reconnecting");
         reconnectTimerRef.current = window.setTimeout(() => {
           reconnectTimerRef.current = 0;
@@ -211,8 +230,9 @@ export function useDesktopSession({
 
       autoRetryCountRef.current = 0;
       setReconnectAttempt(0);
+      setReasonKind(parsed.kind);
       setPhase("disconnected");
-      setError(message);
+      setError(cleanMessage);
     };
 
     try {
@@ -224,6 +244,7 @@ export function useDesktopSession({
       connRef.current = live;
       const allowControl = nextMode === "control" && canControl;
       const allowAudio = nextAudio && canAudio;
+      streamGrantedControlRef.current = allowControl;
       await live.start(allowControl, allowAudio, nextQuality, name => {
         if (attemptRef.current !== token) return;
         setDisplayName(name);
@@ -246,6 +267,7 @@ export function useDesktopSession({
   useEffect(() => () => {
     setDesktopLive(false);
     clearReconnectTimer();
+    streamGrantedControlRef.current = false;
     attemptRef.current += 1;
     connRef.current?.close();
     connRef.current = null;
@@ -254,10 +276,12 @@ export function useDesktopSession({
   useEffect(() => {
     manualStopRef.current = false;
     autoRetryCountRef.current = 0;
+    streamGrantedControlRef.current = false;
     setReconnectAttempt(0);
     clearReconnectTimer();
     setPhase("preflight");
     setError("");
+    setReasonKind(null);
     return () => {
       if (connRef.current) stopStream("preflight");
     };
@@ -315,7 +339,10 @@ export function useDesktopSession({
       if (document.hidden || manualStopRef.current) return;
       const cur = latestRef.current;
       if (!cur.canStart) return;
-      if (cur.phase === "reconnecting" || (cur.phase === "disconnected" && isAutoRetryableDesktopError(cur.error))) {
+      if (
+        cur.phase === "reconnecting"
+        || (cur.phase === "disconnected" && cur.reasonKind === null && isAutoRetryableDesktopError(cur.error))
+      ) {
         void startStreamRef.current(cur.effectiveMode, cur.quality, cur.effectiveAudio, false);
       }
     }
@@ -332,6 +359,49 @@ export function useDesktopSession({
       window.removeEventListener("blur", releaseInputsOnBlur);
     };
   }, [releaseDragLock, stopStream]);
+
+  useEffect(() => {
+    if (phase !== "live") return;
+    let active = true;
+    let sentinel: WakeLockSentinelLike | null = null;
+
+    async function acquireWakeLock() {
+      if (!active || document.hidden || (sentinel && !sentinel.released)) return;
+      const wakeLock = (navigator as NavigatorWithWakeLock).wakeLock;
+      if (!wakeLock?.request) return;
+      try {
+        const next = await wakeLock.request("screen");
+        if (!active || document.hidden) {
+          void next.release().catch(() => {});
+          return;
+        }
+        sentinel = next;
+      } catch {
+        /* Wake Lock unsupported or denied */
+      }
+    }
+
+    function releaseWakeLock() {
+      const cur = sentinel;
+      sentinel = null;
+      if (cur && !cur.released) {
+        void cur.release().catch(() => {});
+      }
+    }
+
+    function onVisibility() {
+      if (document.hidden) releaseWakeLock();
+      else void acquireWakeLock();
+    }
+
+    void acquireWakeLock();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", onVisibility);
+      releaseWakeLock();
+    };
+  }, [phase]);
 
   useEffect(() => {
     const onFullscreen = () => {
@@ -387,8 +457,14 @@ export function useDesktopSession({
   function handleSwitchMode(nextMode: DesktopMode) {
     if (nextMode === "control" && !canControl) return;
     if (nextMode === effectiveMode) return;
-    setMode(nextMode);
     setActivePopover(null);
+    if (phase === "live" && streamGrantedControlRef.current) {
+      releaseDragLock();
+      connRef.current?.send({ kind: "release" });
+      setMode(nextMode);
+      return;
+    }
+    setMode(nextMode);
     if (phase === "live" || phase === "connecting") {
       void startStream(nextMode, quality, effectiveAudio);
     }
@@ -447,6 +523,7 @@ export function useDesktopSession({
     resumeOnVisibleRef.current = false;
     setReconnectAttempt(0);
     setError("");
+    setReasonKind(null);
     setPhase("live");
     if (effectiveAudio && videoRef.current?.muted) setMuted(true);
   }
@@ -462,6 +539,7 @@ export function useDesktopSession({
     reconnectAttempt,
     maxReconnectAttempts: MAX_AUTO_RECONNECT_ATTEMPTS,
     error,
+    reasonKind,
     displayName,
     effectiveMode,
     quality,

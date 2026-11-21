@@ -179,7 +179,7 @@ afterEach(() => {
   localStorage.removeItem(DESKTOP_PREFS_KEY);
 });
 
-test("DesktopTouchpad handles cursor drag, tap click, scroll rail, and left/right buttons", () => {
+test("DesktopTouchpad removes .rd-scroll-rail, supports two-finger scroll/tap without accidental left-click, and handles cursor/buttons", async () => {
   const sent: DesktopEvent[] = [];
   let cursor = { x: 0.5, y: 0.5 };
   let dragLock = false;
@@ -204,6 +204,10 @@ test("DesktopTouchpad handles cursor drag, tap click, scroll rail, and left/righ
     ));
   };
   renderPad();
+
+  // .rd-scroll-rail is completely removed in favor of two-finger gestures
+  expect(appRoot().querySelector(".rd-scroll-rail")).toBeNull();
+  expect(appRoot().querySelector(".rd-tp-sub")?.textContent).toBe(t("desktop.trackpadTwoFingerSub"));
 
   const surface = appRoot().querySelector<HTMLElement>(".rd-trackpad-surface")!;
   surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON() {} });
@@ -230,17 +234,40 @@ test("DesktopTouchpad handles cursor drag, tap click, scroll rail, and left/righ
     { kind: "up", x: cursor.x, y: cursor.y, button: "left" },
   ]);
 
-  // Right-edge scroll rail sends scroll events and does not move cursor
+  // Two-finger drag emits scroll events and does NOT move cursor or trigger clicks on sequential lift
   sent.length = 0;
-  const scrollRail = appRoot().querySelector<HTMLElement>(".rd-scroll-rail")!;
   const beforeCursor = { ...cursor };
   act(() => {
-    scrollRail.dispatchEvent(pointerEvent("pointerdown", { clientX: 190, clientY: 20 }));
-    scrollRail.dispatchEvent(pointerEvent("pointermove", { clientX: 190, clientY: 55 }));
-    scrollRail.dispatchEvent(pointerEvent("pointerup", { clientX: 190, clientY: 55 }));
+    surface.dispatchEvent(pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 20 }));
+    surface.dispatchEvent(pointerEvent("pointerdown", { pointerId: 2, clientX: 130, clientY: 20 }));
+    surface.dispatchEvent(pointerEvent("pointermove", { pointerId: 1, clientX: 100, clientY: 55 }));
+    surface.dispatchEvent(pointerEvent("pointermove", { pointerId: 2, clientX: 130, clientY: 55 }));
+    surface.dispatchEvent(pointerEvent("pointerup", { pointerId: 1, clientX: 100, clientY: 55 }));
+    surface.dispatchEvent(pointerEvent("pointerup", { pointerId: 2, clientX: 130, clientY: 55 }));
   });
   expect(cursor).toEqual(beforeCursor);
-  expect(sent).toEqual([{ kind: "scroll", x: cursor.x, y: cursor.y, dx: 0, dy: 70 }]);
+  expect(sent).toEqual([
+    { kind: "scroll", x: cursor.x, y: cursor.y, dx: 0, dy: -35 },
+    { kind: "scroll", x: cursor.x, y: cursor.y, dx: 0, dy: -35 },
+  ]);
+
+  // Two-finger quick tap emits right-click and NEVER emits an accidental left-click when fingers lift sequentially
+  sent.length = 0;
+  act(() => {
+    surface.dispatchEvent(pointerEvent("pointerdown", { pointerId: 11, clientX: 90, clientY: 50 }));
+    surface.dispatchEvent(pointerEvent("pointerdown", { pointerId: 12, clientX: 120, clientY: 50 }));
+    surface.dispatchEvent(pointerEvent("pointermove", { pointerId: 11, clientX: 91, clientY: 51 }));
+    surface.dispatchEvent(pointerEvent("pointerup", { pointerId: 11, clientX: 91, clientY: 51 }));
+  });
+  expect(sent).toEqual([]);
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 20));
+    surface.dispatchEvent(pointerEvent("pointerup", { pointerId: 12, clientX: 120, clientY: 50 }));
+  });
+  expect(sent).toEqual([
+    { kind: "down", x: cursor.x, y: cursor.y, button: "right" },
+    { kind: "up", x: cursor.x, y: cursor.y, button: "right" },
+  ]);
 
   // Bottom buttons: left, drag-lock, right
   sent.length = 0;
@@ -395,4 +422,85 @@ test("DesktopIme never auto-focuses, guards IME composition, submits text, and l
   const closeBtn = appRoot().querySelector<HTMLButtonElement>(`button[aria-label="${t("desktop.close")}"]`)!;
   act(() => { closeBtn.click(); });
   expect(closed).toBe(1);
+});
+
+test("split-touchpad idle video supports scoped pinch-zoom and double-tap zoom without interfering with touchpad", async () => {
+  const frameCb: { cb?: VideoFrameRequestCallback } = {};
+  installFakeWebRTC(frameCb);
+  const state: MockPeerState = { openCalls: [], inputEvents: [], closeCalls: 0 };
+  const host = sampleHost();
+  setComputers([host]);
+  setCredential(host);
+  setPhase("live");
+  setNetworkMode("auto");
+  setSessionTransport("p2p");
+  applyCapabilities({ ...NO_OPERATION_CAPABILITIES, view_desktop: true, control_desktop: true }, []);
+  attachLiveSession(createFakeSession(state));
+
+  await act(async () => {
+    renderReact(<DesktopScreen />);
+    await new Promise((done) => setTimeout(done, 20));
+  });
+
+  const stage = appRoot().querySelector<HTMLElement>(".rd-stage")!;
+  stage.getBoundingClientRect = () => ({ left: 0, top: 0, width: 390, height: 300, right: 390, bottom: 300, x: 0, y: 0, toJSON() {} });
+  const canvas = appRoot().querySelector<HTMLElement>(".rd-canvas")!;
+  expect(canvas.style.touchAction).toBe("none");
+
+  // 1) Pinch-to-zoom from 1x to 2x on idle video canvas
+  act(() => {
+    canvas.dispatchEvent(pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 150 }));
+    canvas.dispatchEvent(pointerEvent("pointerdown", { pointerId: 2, clientX: 200, clientY: 150 }));
+    canvas.dispatchEvent(pointerEvent("pointermove", { pointerId: 1, clientX: 50, clientY: 150 }));
+    canvas.dispatchEvent(pointerEvent("pointermove", { pointerId: 2, clientX: 250, clientY: 150 }));
+  });
+  expect(canvas.classList.contains("is-gesturing")).toBeTrue();
+  expect(canvas.style.transform).toContain("scale(2)");
+  expect(appRoot().querySelector(".rd-zoom-minimap")).not.toBeNull();
+
+  act(() => {
+    canvas.dispatchEvent(pointerEvent("pointerup", { pointerId: 1, clientX: 50, clientY: 150 }));
+    canvas.dispatchEvent(pointerEvent("pointerup", { pointerId: 2, clientX: 250, clientY: 150 }));
+  });
+  expect(canvas.classList.contains("is-gesturing")).toBeFalse();
+  expect(state.inputEvents).toEqual([]);
+
+  // Touchpad controls still work independently while zoomed
+  const pad = appRoot().querySelector<HTMLElement>(".rd-trackpad-surface")!;
+  pad.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON() {} });
+  await act(async () => {
+    pad.dispatchEvent(pointerEvent("pointerdown", { pointerId: 3, clientX: 40, clientY: 40 }));
+    pad.dispatchEvent(pointerEvent("pointermove", { pointerId: 3, clientX: 60, clientY: 40 }));
+    pad.dispatchEvent(pointerEvent("pointerup", { pointerId: 3, clientX: 60, clientY: 40 }));
+    await new Promise((done) => setTimeout(done, 25));
+  });
+  expect(state.inputEvents.map((e) => e.kind)).toEqual(["move"]);
+
+  // 2) Double-tap resets from 2x back to 1x, and double-tap again zooms to 2.5x
+  act(() => {
+    canvas.dispatchEvent(pointerEvent("pointerdown", { pointerId: 4, clientX: 150, clientY: 150 }));
+    canvas.dispatchEvent(pointerEvent("pointerup", { pointerId: 4, clientX: 150, clientY: 150 }));
+    canvas.dispatchEvent(pointerEvent("pointerdown", { pointerId: 4, clientX: 152, clientY: 152 }));
+    canvas.dispatchEvent(pointerEvent("pointerup", { pointerId: 4, clientX: 152, clientY: 152 }));
+  });
+  expect(canvas.style.transform).toBe("");
+  expect(appRoot().querySelector(".rd-zoom-minimap")).toBeNull();
+
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 20));
+    canvas.dispatchEvent(pointerEvent("pointerdown", { pointerId: 5, clientX: 150, clientY: 150 }));
+    canvas.dispatchEvent(pointerEvent("pointerup", { pointerId: 5, clientX: 150, clientY: 150 }));
+    canvas.dispatchEvent(pointerEvent("pointerdown", { pointerId: 5, clientX: 151, clientY: 151 }));
+    canvas.dispatchEvent(pointerEvent("pointerup", { pointerId: 5, clientX: 151, clientY: 151 }));
+  });
+  expect(canvas.style.transform).toContain("scale(2.5)");
+  expect(appRoot().querySelector(".rd-zoom-minimap")).not.toBeNull();
+
+  // Switching to direct-tap mode disables canvas gesture zoom so screen-input owns touch
+  const directBtn = [...appRoot().querySelectorAll<HTMLButtonElement>(".rd-qchip")].find(
+    (b) => b.textContent?.includes(t("desktop.directTap")),
+  )!;
+  act(() => { directBtn.click(); });
+  expect(appRoot().querySelector(".rd-touch-dock")).toBeNull();
+  expect(canvas.style.touchAction).toBe("");
 });

@@ -152,19 +152,21 @@ func (e *Engine) sendSessionFrame(s *sess, frame envelope.Frame) error {
 }
 
 type Engine struct {
-	Desktop   remotedesktop.Host
-	desktop   *desktopSlot
-	Updater   Updater
-	Machines  MachineLinker
-	Build     string // Immutable running binary version, set before serving sessions.
-	Hub       *mux.Hub
-	Conn      mux.Conn
-	RT        runtimeapi.Runtime
-	PK        ed25519.PublicKey
-	SK        ed25519.PrivateKey
-	DaemonID  string
-	Reconnect string
-	Devices   map[string]*Device
+	Desktop           remotedesktop.Host
+	desktop           *desktopSlot
+	desktopPreempting bool
+	desktopEnded      desktopEndedLog
+	Updater           Updater
+	Machines          MachineLinker
+	Build             string // Immutable running binary version, set before serving sessions.
+	Hub               *mux.Hub
+	Conn              mux.Conn
+	RT                runtimeapi.Runtime
+	PK                ed25519.PublicKey
+	SK                ed25519.PrivateKey
+	DaemonID          string
+	Reconnect         string
+	Devices           map[string]*Device
 
 	Store          *state.Store
 	Audit          *audit.Logger

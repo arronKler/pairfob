@@ -82,7 +82,7 @@
   font-weight: 600;
   color: var(--muted);
   text-align: center;
-  padding: 0 36px;
+  padding: 0 20px;
   pointer-events: none;
 }
 
@@ -92,24 +92,6 @@
   opacity: 0.78;
   margin-top: 3px;
   pointer-events: none;
-}
-
-.rd-scroll-rail {
-  position: absolute;
-  right: 6px;
-  top: 12px;
-  bottom: 12px;
-  width: 26px;
-  border-radius: 999px;
-  background: var(--accent-08);
-  border: 1px dashed var(--line-strong);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  writing-mode: vertical-rl;
-  font-size: 0.65rem;
-  color: var(--muted);
-  touch-action: none;
 }
 
 .rd-tp-buttons {
@@ -196,6 +178,15 @@
 
   &.is-danger {
     color: var(--error);
+  }
+
+  &.rd-fp-stat {
+    font-family: var(--mono);
+    font-size: var(--text-caption);
+  }
+
+  &.rd-fp-attn {
+    padding: 0 4px;
   }
 }
 

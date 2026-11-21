@@ -32,6 +32,7 @@ export class DesktopConnection {
   private consecutivePingFailures = 0;
   private stalled = false;
   private hasPresented = false;
+  private inputFailure?: { message: string; code?: string };
   private abort = new AbortController();
 
   constructor(
@@ -40,7 +41,21 @@ export class DesktopConnection {
     private failed: (message: string, code?: string) => void,
     private onStallChange?: (stalled: boolean) => void,
   ) {
-    this.input = new DesktopInputQueue(event => rpc.input(event), () => this.fail(t("desktop.ended")));
+    this.input = new DesktopInputQueue(
+      event => rpc.input(event).catch(err => {
+        if (err instanceof ProtocolError && (err.code === "kicked" || err.code === "conflict" || err.message.includes("[reason:"))) {
+          this.inputFailure = { message: err.message, code: err.code };
+        } else if (err instanceof ProtocolError) {
+          this.inputFailure = { message: t("desktop.ended"), code: err.code };
+        }
+        throw err;
+      }),
+      () => {
+        const failure = this.inputFailure;
+        this.inputFailure = undefined;
+        this.fail(failure?.message ?? t("desktop.ended"), failure?.code);
+      },
+    );
     this.peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
     const stream = new MediaStream();
     this.video.srcObject = stream;
@@ -124,10 +139,12 @@ export class DesktopConnection {
       }).catch(err => {
         if (this.stopped) return;
         const code = err instanceof ProtocolError ? err.code : undefined;
-        const definitive = code === "forbidden" || code === "disconnected" || code === "unsupported";
+        const preserveMessage = err instanceof ProtocolError && (code === "kicked" || err.message.includes("[reason:"));
+        const message = preserveMessage ? err.message : t("desktop.ended");
+        const definitive = code === "kicked" || code === "conflict" || code === "forbidden" || code === "disconnected" || code === "unsupported";
         this.consecutivePingFailures += 1;
         if (definitive || this.consecutivePingFailures >= MAX_TRANSIENT_PING_FAILURES) {
-          this.fail(t("desktop.ended"), code);
+          this.fail(message, code);
         }
       }).finally(() => { this.pinging = false; });
     }, 1000);

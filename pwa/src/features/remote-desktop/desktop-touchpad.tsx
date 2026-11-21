@@ -20,12 +20,26 @@ type TouchpadProps = {
   onToggleDragLock: () => void;
 };
 
+type TrackpadPointer = {
+  x: number;
+  y: number;
+  startX: number;
+  startY: number;
+  at: number;
+};
+
+const TWO_FINGER_PAIR_MS = 120;
+const TWO_FINGER_TAP_MS = 320;
+const TWO_FINGER_TAP_MOVE_PX = 12;
+const TWO_FINGER_SCROLL_DEADZONE_PX = 4;
+
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
 function clampScroll(delta: number): number {
-  return Math.max(-1500, Math.min(1500, Math.round(delta)));
+  const clamped = Math.max(-1500, Math.min(1500, Math.round(delta)));
+  return clamped === 0 ? 0 : clamped;
 }
 
 export function DesktopTouchpad({
@@ -43,14 +57,10 @@ export function DesktopTouchpad({
   onToggleDragLock,
 }: TouchpadProps) {
   const padRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const tracking = useRef<{ active: boolean; moved: boolean; x: number; y: number }>({
-    active: false,
-    moved: false,
-    x: 0,
-    y: 0,
-  });
-  const scrolling = useRef<{ active: boolean; y: number }>({ active: false, y: 0 });
+  const pointersRef = useRef<Map<number, TrackpadPointer>>(new Map());
+  const multiTouchRef = useRef(false);
+  const singleMovedRef = useRef(false);
+  const twoFingerTapRef = useRef<{ eligible: boolean; startedAt: number; maxDelta: number } | null>(null);
   const [glow, setGlow] = useState<{ x: number; y: number } | null>(null);
 
   const disabled = !canControl || stalled;
@@ -65,6 +75,18 @@ export function DesktopTouchpad({
     if (disabled) return;
     onSend({ kind: "down", ...cursor, button });
     onSend({ kind: "up", ...cursor, button });
+  }
+
+  function clearPointer(pointerId: number) {
+    const pointers = pointersRef.current;
+    if (!pointers.has(pointerId)) return;
+    pointers.delete(pointerId);
+    twoFingerTapRef.current = null;
+    if (pointers.size === 0) {
+      multiTouchRef.current = false;
+      singleMovedRef.current = false;
+      setGlow(null);
+    }
   }
 
   return (
@@ -104,18 +126,68 @@ export function DesktopTouchpad({
         role="application"
         aria-label={t("desktop.trackpad")}
         onPointerDown={event => {
-          if (disabled || event.target === scrollRef.current) return;
+          if (disabled) return;
           padRef.current?.setPointerCapture?.(event.pointerId);
-          tracking.current = { active: true, moved: false, x: event.clientX, y: event.clientY };
-          updateGlow(event.clientX, event.clientY);
+          const now = Date.now();
+          const pointers = pointersRef.current;
+          pointers.set(event.pointerId, {
+            x: event.clientX,
+            y: event.clientY,
+            startX: event.clientX,
+            startY: event.clientY,
+            at: now,
+          });
+          if (pointers.size === 1 && !multiTouchRef.current) {
+            singleMovedRef.current = false;
+            twoFingerTapRef.current = null;
+            updateGlow(event.clientX, event.clientY);
+          } else if (pointers.size === 2) {
+            multiTouchRef.current = true;
+            setGlow(null);
+            const [first, second] = [...pointers.values()];
+            const firstAt = Math.min(first.at, second.at);
+            const secondAt = Math.max(first.at, second.at);
+            const dFirst = Math.hypot(first.x - first.startX, first.y - first.startY);
+            const dSecond = Math.hypot(second.x - second.startX, second.y - second.startY);
+            const maxDelta = Math.max(dFirst, dSecond);
+            twoFingerTapRef.current = {
+              eligible: (secondAt - firstAt) <= TWO_FINGER_PAIR_MS && maxDelta < TWO_FINGER_TAP_MOVE_PX,
+              startedAt: firstAt,
+              maxDelta,
+            };
+          } else {
+            multiTouchRef.current = true;
+            setGlow(null);
+            twoFingerTapRef.current = null;
+          }
         }}
         onPointerMove={event => {
-          if (!tracking.current.active || disabled) return;
-          const dx = event.clientX - tracking.current.x;
-          const dy = event.clientY - tracking.current.y;
-          if (Math.hypot(dx, dy) > 2) tracking.current.moved = true;
-          tracking.current.x = event.clientX;
-          tracking.current.y = event.clientY;
+          const pointers = pointersRef.current;
+          const prev = pointers.get(event.pointerId);
+          if (!prev || disabled) return;
+          const dx = event.clientX - prev.x;
+          const dy = event.clientY - prev.y;
+          const totalMoved = Math.hypot(event.clientX - prev.startX, event.clientY - prev.startY);
+          pointers.set(event.pointerId, { ...prev, x: event.clientX, y: event.clientY });
+
+          if (multiTouchRef.current) {
+            const tap = twoFingerTapRef.current;
+            if (tap) {
+              tap.maxDelta = Math.max(tap.maxDelta, totalMoved);
+              if (totalMoved >= TWO_FINGER_TAP_MOVE_PX) tap.eligible = false;
+            }
+            if (pointers.size >= 2) {
+              if (tap?.eligible && tap.maxDelta < TWO_FINGER_SCROLL_DEADZONE_PX) return;
+              const sx = clampScroll((-dx * 2) / pointers.size);
+              const sy = clampScroll((-dy * 2) / pointers.size);
+              if (sx !== 0 || sy !== 0) {
+                onSend({ kind: "scroll", ...cursor, dx: sx, dy: sy });
+              }
+            }
+            return;
+          }
+
+          if (Math.hypot(dx, dy) > 2 || totalMoved > 2) singleMovedRef.current = true;
           const rect = padRef.current?.getBoundingClientRect();
           const scaleX = rect && rect.width > 0 ? 1 / rect.width : 1 / 320;
           const scaleY = rect && rect.height > 0 ? 1 / rect.height : 1 / 200;
@@ -128,17 +200,37 @@ export function DesktopTouchpad({
           }
           updateGlow(event.clientX, event.clientY);
         }}
-        onPointerUp={() => {
-          if (!tracking.current.active) return;
-          const { moved } = tracking.current;
-          tracking.current.active = false;
+        onPointerUp={event => {
+          const pointers = pointersRef.current;
+          const prev = pointers.get(event.pointerId);
+          if (!prev) return;
+          pointers.delete(event.pointerId);
+          const totalMoved = Math.hypot(event.clientX - prev.startX, event.clientY - prev.startY);
+          const tap = twoFingerTapRef.current;
+          if (tap) {
+            tap.maxDelta = Math.max(tap.maxDelta, totalMoved);
+            if (totalMoved >= TWO_FINGER_TAP_MOVE_PX) tap.eligible = false;
+          }
+          if (pointers.size > 0) return;
+
           setGlow(null);
+          if (multiTouchRef.current) {
+            multiTouchRef.current = false;
+            singleMovedRef.current = false;
+            twoFingerTapRef.current = null;
+            const elapsed = Date.now() - (tap?.startedAt ?? 0);
+            if (tap && tap.eligible && tap.maxDelta < TWO_FINGER_TAP_MOVE_PX && elapsed <= TWO_FINGER_TAP_MS && !disabled) {
+              sendClick("right");
+            }
+            return;
+          }
+
+          const moved = singleMovedRef.current;
+          singleMovedRef.current = false;
           if (!moved && !dragLock && !disabled) sendClick("left");
         }}
-        onPointerCancel={() => {
-          tracking.current.active = false;
-          setGlow(null);
-        }}
+        onPointerCancel={event => clearPointer(event.pointerId)}
+        onLostPointerCapture={event => clearPointer(event.pointerId)}
       >
         {glow && (
           <span
@@ -150,29 +242,7 @@ export function DesktopTouchpad({
         <div className="rd-tp-hint">
           {dragLock ? t("desktop.trackpadDragHint") : t("desktop.trackpadHint")}
         </div>
-        <div className="rd-tp-sub">{t("desktop.trackpadSub")}</div>
-
-        <div
-          ref={scrollRef}
-          className="rd-scroll-rail"
-          aria-label={t("desktop.scrollRail")}
-          onPointerDown={event => {
-            event.stopPropagation();
-            if (disabled) return;
-            scrollRef.current?.setPointerCapture?.(event.pointerId);
-            scrolling.current = { active: true, y: event.clientY };
-          }}
-          onPointerMove={event => {
-            if (!scrolling.current.active || disabled) return;
-            const dy = event.clientY - scrolling.current.y;
-            scrolling.current.y = event.clientY;
-            if (dy !== 0) onSend({ kind: "scroll", ...cursor, dx: 0, dy: clampScroll(dy * 2) });
-          }}
-          onPointerUp={() => { scrolling.current.active = false; }}
-          onPointerCancel={() => { scrolling.current.active = false; }}
-        >
-          {t("desktop.scrollRail")}
-        </div>
+        <div className="rd-tp-sub">{t("desktop.trackpadTwoFingerSub")}</div>
       </div>
 
       <div className="rd-tp-buttons">

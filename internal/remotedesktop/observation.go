@@ -59,6 +59,12 @@ func (v *videoObservation) observe(now time.Time, observe, keyframe bool, feedba
 	return out
 }
 
+func (v *videoObservation) resetKeyframe() {
+	v.mu.Lock()
+	v.lastKey = time.Time{}
+	v.mu.Unlock()
+}
+
 func (v *videoObservation) capture(revision, token, ageMicros uint64) {
 	v.mu.Lock()
 	defer v.mu.Unlock()

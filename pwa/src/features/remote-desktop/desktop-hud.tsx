@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
-import { ChevronLeft, GripVertical, Hand, Keyboard, Pointer, Power, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, GripVertical, Hand, Keyboard, Pointer, Power, SlidersHorizontal, ZoomIn, ZoomOut } from "lucide-react";
 import { t } from "../../lib/i18n";
 import { Button } from "../../shared/ui/primitives";
+import type { DesktopPopoverKind } from "./desktop-popovers";
 import type { DesktopMode, DesktopTouchMode } from "./desktop-prefs";
 
 type DesktopHudProps = {
@@ -13,7 +14,11 @@ type DesktopHudProps = {
   imeOpen: boolean;
   rttMs?: number;
   showBackAndPower: boolean;
+  attentionCount?: number;
+  activePopover?: DesktopPopoverKind | null;
   onBack?: () => void;
+  onOpenAttention?: () => void;
+  onTogglePopover?: (kind: DesktopPopoverKind) => void;
   onToggleTouchMode: () => void;
   onRightClick: () => void;
   onToggleIme: () => void;
@@ -34,7 +39,11 @@ export function DesktopHud({
   imeOpen,
   rttMs,
   showBackAndPower,
+  attentionCount = 0,
+  activePopover = null,
   onBack,
+  onOpenAttention,
+  onTogglePopover,
   onToggleTouchMode,
   onRightClick,
   onToggleIme,
@@ -71,26 +80,66 @@ export function DesktopHud({
     </span>
   );
 
+  const zoomLabel = zoom > 1 ? `${Number(zoom.toFixed(1))}×` : t("desktop.fit");
+
   if (!expanded) {
     return (
-      <div className="rd-floating-hud" style={{ left: `${pos.x}%`, top: `${pos.y}%` }}>
+      <div className="rd-floating-hud" style={{ left: `${pos.x}%`, top: `${pos.y}%` }} onClick={event => event.stopPropagation()}>
         <div className="rd-floating-pill">
           {grip}
-          <Button className="rd-fp-btn is-active" onClick={() => setExpanded(true)}>
+          <Button
+            className={`rd-fp-btn is-active${showBackAndPower && activePopover === "stats" ? " is-active" : ""}`}
+            onClick={() => {
+              if (showBackAndPower && onTogglePopover) {
+                onTogglePopover("stats");
+              } else {
+                setExpanded(true);
+              }
+            }}
+            aria-expanded={showBackAndPower && onTogglePopover ? activePopover === "stats" : undefined}
+            aria-label={showBackAndPower && onTogglePopover ? t("desktop.stats") : undefined}
+          >
             <span className="rd-status-dot" aria-hidden="true" />
             <span>
               {mode === "control" ? t("desktop.modeControlShort") : t("desktop.modeViewShort")}
               {rttMs !== undefined ? ` · ${Math.round(rttMs)}ms` : ""}
             </span>
-            <span className="rd-fp-sub">{t("desktop.hudExpand")}</span>
+            {!showBackAndPower && <span className="rd-fp-sub">{t("desktop.hudExpand")}</span>}
           </Button>
+          {showBackAndPower && (
+            <>
+              {attentionCount > 0 && onOpenAttention && (
+                <Button
+                  className="rd-fp-btn rd-fp-attn"
+                  onClick={onOpenAttention}
+                  aria-label={t("desktop.attention", { count: attentionCount })}
+                >
+                  <span className="rd-attn-pill">{t("desktop.attention", { count: attentionCount })}</span>
+                </Button>
+              )}
+              {onTogglePopover && (
+                <Button
+                  className={`rd-fp-btn${activePopover === "quality" ? " is-active" : ""}`}
+                  onClick={() => onTogglePopover("quality")}
+                  aria-label={t("desktop.qualityAudio")}
+                  aria-expanded={activePopover === "quality"}
+                  title={t("desktop.hudSettings")}
+                >
+                  <SlidersHorizontal size={14} aria-hidden="true" />
+                </Button>
+              )}
+              <Button className="rd-fp-btn" onClick={() => setExpanded(true)}>
+                <span className="rd-fp-sub">{t("desktop.hudExpand")}</span>
+              </Button>
+            </>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="rd-floating-hud" style={{ left: `${pos.x}%`, top: `${pos.y}%` }}>
+    <div className="rd-floating-hud" style={{ left: `${pos.x}%`, top: `${pos.y}%` }} onClick={event => event.stopPropagation()}>
       <div className="rd-floating-pill" role="toolbar" aria-label={t("desktop.title")}>
         {grip}
         {showBackAndPower && onBack && (
@@ -101,6 +150,29 @@ export function DesktopHud({
             </Button>
             <span className="rd-fp-divider" aria-hidden="true" />
           </>
+        )}
+
+        {showBackAndPower && onTogglePopover && (
+          <Button
+            className={`rd-fp-btn rd-fp-stat${activePopover === "stats" ? " is-active" : ""}`}
+            onClick={() => onTogglePopover("stats")}
+            aria-label={t("desktop.stats")}
+            aria-expanded={activePopover === "stats"}
+            title={t("desktop.stats")}
+          >
+            <span className="rd-status-dot" aria-hidden="true" />
+            <span>{rttMs !== undefined ? `P2P ${Math.round(rttMs)}ms` : "P2P"}</span>
+          </Button>
+        )}
+
+        {showBackAndPower && attentionCount > 0 && onOpenAttention && (
+          <Button
+            className="rd-fp-btn rd-fp-attn"
+            onClick={onOpenAttention}
+            aria-label={t("desktop.attention", { count: attentionCount })}
+          >
+            <span className="rd-attn-pill">{t("desktop.attention", { count: attentionCount })}</span>
+          </Button>
         )}
 
         {canControl && mode === "control" && (
@@ -133,8 +205,20 @@ export function DesktopHud({
           aria-pressed={zoom > 1}
         >
           {zoom > 1 ? <ZoomOut size={14} aria-hidden="true" /> : <ZoomIn size={14} aria-hidden="true" />}
-          <span>{zoom > 1 ? "2×" : t("desktop.fit")}</span>
+          <span>{zoomLabel}</span>
         </Button>
+
+        {showBackAndPower && onTogglePopover && (
+          <Button
+            className={`rd-fp-btn${activePopover === "quality" ? " is-active" : ""}`}
+            onClick={() => onTogglePopover("quality")}
+            aria-label={t("desktop.qualityAudio")}
+            aria-expanded={activePopover === "quality"}
+            title={t("desktop.hudSettings")}
+          >
+            <SlidersHorizontal size={14} aria-hidden="true" />
+          </Button>
+        )}
 
         <span className="rd-fp-divider" aria-hidden="true" />
 

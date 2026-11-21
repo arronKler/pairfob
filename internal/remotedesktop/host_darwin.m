@@ -14,9 +14,55 @@ static void statusLine(NSDictionary *value) {
     fwrite(data.bytes,1,data.length,stdout); fputc('\n',stdout); fflush(stdout);
 }
 
+static NSString *classifyStopReason(NSString *reason) {
+    if (!reason.length) return nil;
+    NSString *lower = reason.lowercaseString;
+    if ([lower containsString:@"[reason:locked]"] || [lower containsString:@"locked"] ||
+        [lower containsString:@"unlock"] || [lower containsString:@"resign"]) {
+        return @"locked";
+    }
+    if ([lower containsString:@"[reason:sleeping]"] || [lower containsString:@"sleep"] ||
+        [lower containsString:@"asleep"] || [lower containsString:@"unable to wake"] ||
+        [lower containsString:@"inactive"]) {
+        return @"sleeping";
+    }
+    if ([lower containsString:@"[reason:perm_screen]"] || [lower containsString:@"screen recording"] ||
+        [lower containsString:@"screen capture"] || [lower containsString:@"tcc"]) {
+        return @"perm_screen";
+    }
+    if ([lower containsString:@"[reason:perm_accessibility]"] || [lower containsString:@"accessibility"]) {
+        return @"perm_accessibility";
+    }
+    if ([lower containsString:@"[reason:stopped_on_host]"] || [lower containsString:@"stopped on mac"] ||
+        [lower containsString:@"user stopped"]) {
+        return @"stopped_on_host";
+    }
+    if ([lower containsString:@"[reason:display_unavailable]"] ||
+        ([lower containsString:@"display"] &&
+         ([lower containsString:@"unavailable"] || [lower containsString:@"changed"] ||
+          [lower containsString:@"no longer active"] || [lower containsString:@"not found"]))) {
+        return @"display_unavailable";
+    }
+    return nil;
+}
+
 void PFStop(NSString *reason) {
     dispatch_async(dispatch_get_main_queue(),^{
-        if (!atomic_load(&active)) statusLine(@{@"error": reason ?: @"Screen sharing ended"});
+        static BOOL stopping = NO;
+        if (stopping) return;
+        stopping = YES;
+        NSString *code = classifyStopReason(reason);
+        if (code.length) {
+            fprintf(stderr, "PF_STOP_REASON:%s\n", code.UTF8String);
+            fflush(stderr);
+        }
+        if (!atomic_load(&active)) {
+            NSString *msg = reason.length ? reason : @"Screen sharing ended";
+            if (code.length && ![msg hasPrefix:@"[reason:"]) {
+                msg = [NSString stringWithFormat:@"[reason:%@] %@", code, msg];
+            }
+            statusLine(@{@"error": msg});
+        }
         PFReleaseButtons();
         exit(0);
     });
@@ -76,7 +122,15 @@ static void startSharing(NSString *device, NSString *quality, BOOL audio, NSStri
         dispatch_async(dispatch_get_main_queue(),^{
             SCDisplay *chosen=nil;
             for (SCDisplay *d in content.displays) if (d.displayID==displayID) chosen=d;
-            if (!chosen || !PFUnlocked()) { PFStop(err.localizedDescription ?: @"Display unavailable"); return; }
+            if (!PFUnlocked()) { PFStop(@"Unlock this Mac to share a display"); return; }
+            if (!chosen) {
+                if (!CGPreflightScreenCaptureAccess()) {
+                    PFStop(@"Enable Screen Recording for Pairfob in System Settings on the Mac");
+                } else {
+                    PFStop(err.localizedDescription ?: @"Display unavailable");
+                }
+                return;
+            }
             PFHost *target = [PFHost new];
             indicator = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
             indicator.button.title = @"Pairfob ●";
@@ -84,8 +138,18 @@ static void startSharing(NSString *device, NSString *quality, BOOL audio, NSStri
             NSMenuItem *stop = [menu addItemWithTitle:@"Stop desktop sharing" action:@selector(stop:) keyEquivalent:@""];
             stop.target = target; indicator.menu = menu;
             PFStartCapture(chosen,quality,audio,^(NSError *error){
-                if (error) { PFStop(error.localizedDescription); return; }
-                statusLine(@{@"display":screen.localizedName}); atomic_store(&active,true);
+                if (error) {
+                    if (!PFUnlocked()) { PFStop(@"Unlock this Mac to share a display"); return; }
+                    if (!CGPreflightScreenCaptureAccess() ||
+                        ([error.domain isEqualToString:SCStreamErrorDomain] && error.code == SCStreamErrorUserDeclined)) {
+                        PFStop(@"Enable Screen Recording for Pairfob in System Settings on the Mac");
+                        return;
+                    }
+                    PFStop(error.localizedDescription);
+                    return;
+                }
+                atomic_store(&active,true);
+                statusLine(@{@"display":screen.localizedName});
             });
         });
     }];
@@ -122,8 +186,9 @@ static int runDesktop(const char *label,const char *mode,const char *preset,cons
             }
             free(line); PFStop(@"Viewer disconnected");
         });
-        for (NSString *name in @[NSWorkspaceSessionDidResignActiveNotification,NSWorkspaceWillSleepNotification,NSWorkspaceScreensDidSleepNotification]) {
-            [[[NSWorkspace sharedWorkspace] notificationCenter] addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *n){PFStop(@"Mac is inactive");}];
+        [[[NSWorkspace sharedWorkspace] notificationCenter] addObserverForName:NSWorkspaceSessionDidResignActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n){PFStop(@"Mac session resigned");}];
+        for (NSString *name in @[NSWorkspaceWillSleepNotification,NSWorkspaceScreensDidSleepNotification]) {
+            [[[NSWorkspace sharedWorkspace] notificationCenter] addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *n){PFStop(@"Mac is sleeping");}];
         }
         [[NSDistributedNotificationCenter defaultCenter] addObserverForName:@"com.apple.screenIsLocked" object:nil queue:nil usingBlock:^(NSNotification *n){PFStop(@"Mac is locked");}];
         [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationDidChangeScreenParametersNotification object:nil queue:nil usingBlock:^(NSNotification *n){

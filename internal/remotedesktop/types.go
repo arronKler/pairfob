@@ -5,7 +5,9 @@ package remotedesktop
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -71,3 +73,75 @@ func (p Event) Valid() bool {
 }
 
 var ErrUnavailable = errors.New("remote desktop is disabled or unavailable")
+
+// IsKnownReason reports whether code is a recognized structured desktop stop/failure reason.
+func IsKnownReason(code string) bool {
+	switch code {
+	case "locked", "sleeping", "perm_screen", "perm_accessibility", "stopped_on_host", "display_unavailable":
+		return true
+	default:
+		return false
+	}
+}
+
+// ParseReasonCode extracts a valid [reason:<code>] prefix if present.
+func ParseReasonCode(msg string) string {
+	rest, ok := strings.CutPrefix(strings.TrimSpace(msg), "[reason:")
+	if !ok {
+		return ""
+	}
+	end := strings.IndexByte(rest, ']')
+	if end <= 0 {
+		return ""
+	}
+	code := rest[:end]
+	if IsKnownReason(code) {
+		return code
+	}
+	return ""
+}
+
+// ClassifyReason maps a structured prefix or known host error message to a reason code.
+func ClassifyReason(msg string) string {
+	if code := ParseReasonCode(msg); code != "" {
+		return code
+	}
+	lower := strings.ToLower(msg)
+	switch {
+	case lower == "":
+		return ""
+	case strings.Contains(lower, "locked") || strings.Contains(lower, "unlock") || strings.Contains(lower, "resign"):
+		return "locked"
+	case strings.Contains(lower, "sleep") || strings.Contains(lower, "asleep") || strings.Contains(lower, "unable to wake") || strings.Contains(lower, "inactive"):
+		return "sleeping"
+	case strings.Contains(lower, "screen recording") || strings.Contains(lower, "screen capture") || strings.Contains(lower, "tcc"):
+		return "perm_screen"
+	case strings.Contains(lower, "accessibility"):
+		return "perm_accessibility"
+	case strings.Contains(lower, "stopped on mac") || strings.Contains(lower, "user stopped"):
+		return "stopped_on_host"
+	case strings.Contains(lower, "display") && (strings.Contains(lower, "unavailable") || strings.Contains(lower, "changed") || strings.Contains(lower, "no longer active") || strings.Contains(lower, "not found")):
+		return "display_unavailable"
+	default:
+		return ""
+	}
+}
+
+// NormalizeReasonError attaches a [reason:<code>] prefix when err or fallbackCode identifies a known cause.
+func NormalizeReasonError(err error, fallbackCode string) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if ParseReasonCode(msg) != "" {
+		return err
+	}
+	code := ClassifyReason(msg)
+	if code == "" && IsKnownReason(fallbackCode) {
+		code = fallbackCode
+	}
+	if code == "" {
+		return err
+	}
+	return fmt.Errorf("[reason:%s] %w", code, err)
+}
