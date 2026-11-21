@@ -281,4 +281,5 @@ export const zhWorkspace = {
   'preview.stale': '会话或工作目录已变化，请在当前会话重新打开文件。',
   'preview.limit': '预览资源超过上限（128 个文件 / 共 32 MiB）。',
   'preview.missing': '页面未完成加载，请重试。',
+  'preview.missingFiles': '{count} 个本地文件未能加载：{files}',
 } as const;

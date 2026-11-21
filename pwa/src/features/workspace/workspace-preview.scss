@@ -88,6 +88,16 @@
 /* The reader's presses land here, never in the page: this reading never operates it. */
 .workspace-html-desktop-gestures { position: absolute; inset: 0; touch-action: none; }
 .workspace-html .workspace-code { flex: 1; }
+/* What the page names but could not be read: one line under the page, the full list in its title. */
+.workspace-html > .workspace-preview-missing {
+  display: block;
+  flex: none;
+  padding: 8px 16px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: start;
+}
 .workspace-code-line.is-target { background: rgba(230, 173, 48, .2); }
 
 @media (hover: hover) and (pointer: fine) {

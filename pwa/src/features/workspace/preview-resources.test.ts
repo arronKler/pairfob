@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { PreviewResources } from './preview-resources';
 import type { MediaSession } from './media-loader';
+import { ProtocolError } from '../../lib/protocol/errors';
 
 function fakeMedia() {
   const opens: string[] = [], closes: string[] = [];
@@ -73,5 +74,57 @@ test('HTML and later local resources use the original root even before a cwd not
   await expect(resources.read(new URL('./app.js', resources.base).href)).rejects.toThrow('conflict');
   expect(roots).toEqual(['/original', '/original']);
   expect(fake.opens).toEqual(['report%20draft.html']);
+  resources.close();
+});
+
+function fileTree(paths: string[]) {
+  const fake = fakeMedia();
+  const tried: string[] = [];
+  const session: MediaSession = {
+    ...fake.session,
+    async workspaceMediaOpen(pane, path, root) {
+      tried.push(path);
+      if (!paths.includes(path)) throw new ProtocolError('workspace_not_found');
+      return fake.session.workspaceMediaOpen(pane, path, root);
+    },
+  };
+  return { session, tried };
+}
+
+test('a root-relative reference from a built page is found under the page directory, and the site root is remembered', async () => {
+  const tree = fileTree(['dist/index.html', 'dist/assets/app.js', 'dist/assets/app.css', 'dist/about.html']);
+  const resources = new PreviewResources(tree.session, 'pane', 'dist/index.html', () => true);
+  await resources.read(resources.base);
+  await resources.read(new URL('/assets/app.js', resources.base).href);
+  expect(tree.tried).toEqual(['dist/index.html', 'assets/app.js', 'dist/assets/app.js']);
+  tree.tried.length = 0;
+  await resources.read(new URL('/assets/app.css', resources.base).href);
+  expect(tree.tried).toEqual(['assets/app.css', 'dist/assets/app.css']);
+  expect(resources.linkPath(new URL('/about.html', resources.base).href, true)).toBe('dist/about.html');
+  expect(resources.linkPath(new URL('../README.md', resources.base).href, false)).toBe('README.md');
+  expect(resources.linkPath(new URL('./guide/', resources.base).href, false)).toBe('dist/guide/index.html');
+  resources.close();
+});
+
+test('the workspace path wins when it exists, and paths inside the page tree are never retried', async () => {
+  const tree = fileTree(['site/blog/post.html', 'css/main.css', 'site/css/site.css']);
+  const resources = new PreviewResources(tree.session, 'pane', 'site/blog/post.html', () => true);
+  await resources.read(new URL('/css/main.css', resources.base).href);
+  await resources.read(new URL('/css/site.css', resources.base).href);
+  expect(tree.tried).toEqual(['css/main.css', 'css/site.css', 'site/blog/css/site.css', 'site/css/site.css']);
+  tree.tried.length = 0;
+  await expect(resources.read(new URL('./img/a.png', resources.base).href)).rejects.toThrow();
+  await expect(resources.read(new URL('../missing.css', resources.base).href)).rejects.toThrow();
+  expect(tree.tried).toEqual(['site/blog/img/a.png', 'site/missing.css']);
+  resources.close();
+});
+
+test('only absence moves on to another place; other failures answer at once', async () => {
+  const fake = fakeMedia();
+  const tried: string[] = [];
+  const session: MediaSession = { ...fake.session, async workspaceMediaOpen(_pane, path) { tried.push(path); throw new ProtocolError('forbidden'); } };
+  const resources = new PreviewResources(session, 'pane', 'dist/index.html', () => true);
+  await expect(resources.read(new URL('/assets/app.js', resources.base).href)).rejects.toThrow('forbidden');
+  expect(tried).toEqual(['assets/app.js']);
   resources.close();
 });

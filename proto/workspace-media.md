@@ -161,10 +161,31 @@ The PWA reads the complete HTML using the existing media RPC and verifies its
 SHA-256. `WorkspaceRead`'s truncated text is never executed. Local dependencies
 use the same established session and bounded read-only media handles. A preview
 allows at most 128 distinct files and 32 MiB total. Static CSS (including imports
-and URLs), script/image/font/media references, local ES module imports (including
-cycles and literal dynamic imports), and local `fetch()` GETs are resolved inside
-the current workspace. `.git`, encoded traversal, and host filesystem paths are
-not accepted. Preview bytes use existing media operations; no file server or origin upload is involved.
+and URLs), script/image/font/media/object references, SVG `<image>` pictures, local
+ES module imports (including cycles and literal dynamic imports) and local pages in
+`<iframe>` (packed as their own documents, two levels deep) are resolved inside the
+current workspace. While the page runs, local `fetch()` and asynchronous
+`XMLHttpRequest` GETs, resource URLs set on image/media/classic-script/stylesheet/
+icon/object elements (by property, `setAttribute` or inserted markup) and
+stylesheets the page adds are read through the same bridge, at most 16 at a time.
+`.git`, encoded traversal, and host filesystem paths are not accepted. Preview
+bytes use existing media operations; no file server or origin upload is involved.
+
+A root-relative reference (`/assets/app.js`) is read at the workspace path first.
+When that file is absent (`workspace_not_found`) and the path lies outside the
+page's top directory, it is retried under the page's own directories, deepest
+first, so a built page such as `dist/index.html` finds `dist/assets/app.js`. The
+directory that answered is remembered for later references and root-relative
+links. Paths inside the page's own tree are not retried. A dependency that cannot
+be read does not withhold the page: its reference keeps pointing at the
+workspace and fails as a missing file would, and the preview lists the unread
+paths under the page. Only the HTML file itself failing fails the preview.
+
+Clicking a link to another workspace file (not a fragment, download or external
+URL) opens that file in the workspace viewer through the same path checks and the
+preview's captured owner. Like a page navigating its own frame, this needs no user
+activation (an opaque intermediate frame does not reliably observe one); it can
+only show another file of the same workspace and never leaves the viewer.
 
 The PWA admits HTML preview only on an established P2P path (not merely a P2P
 settings preference). Both media Open and every chunk Read check the captured
@@ -200,8 +221,9 @@ Browser CORS and mixed-content rules still apply: an opaque document sends
 `Origin: null`, and an API must permit that caller (for example a public API with
 `Access-Control-Allow-Origin: *`). Preview pages do not share Pairfob DOM,
 localStorage, IndexedDB or pairing credentials. This is a document preview, not
-a development server: computed local module specifiers, local XMLHttpRequest,
-and dynamically inserted local resource elements are not bundled. External URLs
+a development server: computed local module specifiers, module scripts inserted
+at run time, synchronous XMLHttpRequest, workers, `srcset` set at run time and
+SVG `<use>` references to other files are not resolved. External URLs
 continue to use normal browser loading. Fragment navigation is supported; a
 history router that requires a normal origin/path must use its own hosted app.
 

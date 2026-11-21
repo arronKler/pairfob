@@ -2,11 +2,12 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import type { WorkspaceMediaOpen, WorkspaceMediaChunk } from '../src/lib/protocol/workspace-media';
 import { MEDIA_CHUNK_BYTES, MEDIA_MAX_BYTES, MEDIA_MAX_PIXELS } from '../src/lib/protocol/workspace-media';
+import { PREVIEW_SITE_FILES, previewSiteOwns } from './preview-site';
 
 export const PREVIEW_FILE = 'public/report.html';
 export const PREVIEW_TRACE = [
   { type: 'user' as const, text: '生成一个交互式报告' },
-  { type: 'assistant' as const, text: '打开 [交互式报告](/work/pairfob/public/report.html)，也可以点击 `public/report.html`。\n\n桌面周报 [运营周报](/work/pairfob/public/dashboard.html)。\n\n目录 ~/pairfob，绝对路径 /work/pairfob/public/report.html，主目录文件 `~/pairfob/public/report.html`。\n\n特殊文件 `/work/pairfob/public/report%20draft.html`，空格文件 [My Report](</work/pairfob/public/My Report.html>)。\n\n歧义示例 /work/My Project/report.html。\n\n本地链接 [file URI](file:///work/pairfob/public/report.html)，定位 [第 4 行](file:///work/pairfob/public/report.html:4)。\n\n资源路径 public/app.js，外部链接 [Example](https://example.com)。' },
+  { type: 'assistant' as const, text: '打开 [交互式报告](/work/pairfob/public/report.html)，也可以点击 `public/report.html`。\n\n桌面周报 [运营周报](/work/pairfob/public/dashboard.html)。\n\n构建产物 [站点首页](/work/pairfob/public/site/index.html)。\n\n目录 ~/pairfob，绝对路径 /work/pairfob/public/report.html，主目录文件 `~/pairfob/public/report.html`。\n\n特殊文件 `/work/pairfob/public/report%20draft.html`，空格文件 [My Report](</work/pairfob/public/My Report.html>)。\n\n歧义示例 /work/My Project/report.html。\n\n本地链接 [file URI](file:///work/pairfob/public/report.html)，定位 [第 4 行](file:///work/pairfob/public/report.html:4)。\n\n资源路径 public/app.js，外部链接 [Example](https://example.com)。' },
 ];
 const html = `<!doctype html><html lang="zh"><head><title>Preview acceptance</title>
 <link rel="stylesheet" href="./report.css"></head><body>
@@ -77,6 +78,7 @@ const dashboard = `<!doctype html><html lang="zh"><head><meta charset="utf-8"><t
 document.addEventListener('click', () => { document.querySelector('.hit').hidden = false; });</script>
 </body></html>`;
 const files: Record<string, string> = {
+  ...PREVIEW_SITE_FILES,
   [PREVIEW_FILE]: html,
   'public/dashboard.html': dashboard,
   // The folder lists this page too: it opens as a page, not as the stand-in source of a file nobody wrote.
@@ -108,6 +110,8 @@ export function createPreviewFiles() {
   const handles = new Map<string, Uint8Array>();
   return {
     has: (path: string) => Object.hasOwn(files, path),
+    /** A path this fixture answers for, so an absent one is missing rather than a stand-in workspace file. */
+    owns: (path: string) => Object.hasOwn(files, path) || previewSiteOwns(path),
     file(path: string) {
       const bytes = new TextEncoder().encode(files[path]);
       return { path, kind: 'text' as const, size: bytes.length, modified_ms: 1,

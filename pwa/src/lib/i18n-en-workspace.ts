@@ -281,4 +281,5 @@ export const enWorkspace = {
   'preview.stale': 'The session or working directory changed. Open the file again in the current session.',
   'preview.limit': 'Preview resources exceed the limit (128 files / 32 MiB total).',
   'preview.missing': 'The page did not finish loading. Please retry.',
+  'preview.missingFiles': '{count} local files could not be loaded: {files}',
 } as const;
