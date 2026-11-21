@@ -55,4 +55,25 @@ export function installPreviewFetch(base: string, token: string): void {
   const report = (message: string) => parent.postMessage({ type: 'preview-error', token, message: message.slice(0, 1000) }, '*');
   window.addEventListener('error', event => { if (event.message) report(event.message); });
   window.addEventListener('unhandledrejection', event => report(String(event.reason)));
+  // The host reads the page at a chosen width, and on a narrow screen it draws
+  // the whole document on a zoom surface: the document's own size is measured
+  // here, where only the document can see it. Bounded and debounced, because a
+  // page that lays itself out against its viewport reflows as its frame grows.
+  let sizeTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastSize = '';
+  const postSize = () => {
+    const root = document.documentElement;
+    if (!root) return;
+    const width = Math.round(root.scrollWidth);
+    const height = Math.min(16000, Math.round(root.scrollHeight));
+    const key = `${width}x${height}`;
+    if (key === lastSize) return;
+    lastSize = key;
+    parent.postMessage({ type: 'preview-size', token, width, height }, '*');
+  };
+  const scheduleSize = () => { clearTimeout(sizeTimer); sizeTimer = setTimeout(postSize, 120); };
+  window.addEventListener('load', scheduleSize);
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(scheduleSize).observe(document.documentElement);
+  if (document.fonts) void document.fonts.ready.then(scheduleSize, () => undefined);
+  scheduleSize();
 }

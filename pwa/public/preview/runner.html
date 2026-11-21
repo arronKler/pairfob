@@ -33,6 +33,8 @@
       port.postMessage({ type: 'file-read', id: data.id, url: data.url });
     } else if (data?.type === 'preview-error' && typeof data.message === 'string') {
       port.postMessage({ type: 'preview-error', message: data.message.slice(0, 1000) });
+    } else if (data?.type === 'preview-size' && Number.isFinite(data.width) && Number.isFinite(data.height)) {
+      port.postMessage({ type: 'preview-size', width: data.width, height: data.height });
     }
   });
 })();

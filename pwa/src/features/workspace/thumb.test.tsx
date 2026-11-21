@@ -149,6 +149,7 @@ describe("the style sheet moves one mark there", () => {
     expect(detail).toMatch(/\.workspace-layer-switch \{[^}]*--thumb-pad: 2px;[^}]*--thumb-gap: 2px;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*gap: 2px;[^}]*padding: 2px;/);
     // Under a finger the column's switch has no inset, and the mark follows.
     expect(inspector).toContain(".workspace-inspector .workspace-layer-switch { --thumb-pad: 0px; padding: 0; }");
-    expect(preview).toContain(".workspace-layer-switch.workspace-preview-width { grid-template-columns: repeat(3, minmax(0, 1fr)); }");
+    // The preview's widths are the strip's own count: three or four, whichever the stage offers.
+    expect(preview).toContain(".workspace-layer-switch.workspace-preview-width { grid-template-columns: repeat(var(--thumb-count, 3), minmax(0, 1fr)); }");
   });
 });

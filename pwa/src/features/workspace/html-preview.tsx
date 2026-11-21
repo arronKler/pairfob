@@ -9,19 +9,22 @@ import { useLiveSession } from '../computers/hooks';
 import { t } from '../../lib/i18n';
 import { messageOf } from '../../lib/notices';
 import { ProtocolError } from '../../lib/protocol/errors';
-import { notePreviewStage, usePreviewFrameWidth, type PreviewControls } from './preview-controls';
+import { notePreviewStage, usePreviewFrameWidth, usePreviewStageWidth, PREVIEW_DESKTOP_WIDTH, type PreviewControls } from './preview-controls';
 import type { FoundLines } from './file-find';
 import { FileSource } from './file-source';
 import type { WorkspaceSnapshot } from './model';
 import { activeScope, getWorkspaceSnapshot, issueTicket, subscribeWorkspace, workspaceContentVersion, workspacePaneCwd } from './store';
 import { PreviewResources } from './preview-resources';
 import { preparePreviewDocument } from './preview-document';
+import { DesktopPreview } from './preview-desktop';
 
 export { isHTMLFile } from "./preview-controls";
 type Loaded = { token: string; source: string; html: string; resources: PreviewResources };
+type PageSize = { width: number; height: number };
 
-function PreviewFrame({ loaded, onError, hidden, width }: {
+function PreviewFrame({ loaded, onError, onSize, hidden, width }: {
   hidden: boolean; loaded: Loaded; onError: (error: string) => void;
+  onSize: (size: PageSize) => void;
   /** The width the page is tried at, in pixels; null takes the stage's own. Resizing the frame never reloads it. */
   width: number | null;
 }) {
@@ -43,6 +46,11 @@ function PreviewFrame({ loaded, onError, hidden, width }: {
         if (!alive) return;
         if (data?.type === 'preview-ready') { clearTimeout(timer); setReady(true); return; }
         if (data?.type === 'preview-error' && typeof data.message === 'string') { onError(data.message.slice(0, 1000)); return; }
+        if (data?.type === 'preview-size' && Number.isFinite(data.width) && Number.isFinite(data.height)
+          && data.width >= 0 && data.width <= 4000 && data.height >= 0 && data.height <= 20000) {
+          onSize({ width: data.width, height: data.height });
+          return;
+        }
         if (data?.type !== 'file-read' || typeof data.url !== 'string' || data.url.length > 8192
           || !Number.isSafeInteger(data.id) || requests >= 16) return;
         requests++;
@@ -56,7 +64,7 @@ function PreviewFrame({ loaded, onError, hidden, width }: {
       frame.current?.contentWindow?.postMessage({ type: 'pairfob-preview', html: loaded.html, token: loaded.token }, '*', [channel.port2]);
     };
     return () => { alive = false; clearTimeout(timer); channel?.port1.close(); connect.current = () => undefined; };
-  }, [loaded, onError]);
+  }, [loaded, onError, onSize]);
   return <iframe aria-busy={!ready} data-preview-ready={ready ? "true" : "false"} hidden={hidden} ref={frame} className="workspace-html-frame" title={t('preview.title')}
     style={width === null ? undefined : { width: `${width}px` }}
     src="/preview/runner.html" sandbox="allow-scripts allow-forms allow-downloads allow-popups"
@@ -78,8 +86,10 @@ export function HTMLPreview({ snapshot, wrap, controls, found = null }: {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [runtimeError, setRuntimeError] = useState('');
+  const [pageSize, setPageSize] = useState<PageSize | null>(null);
   const stage = useRef<HTMLElement>(null);
   const frameWidth = usePreviewFrameWidth();
+  const stageWidth = usePreviewStageWidth();
   // The info bar offers the width choice by this stage's own width, not the window's.
   useLayoutEffect(() => {
     const node = stage.current;
@@ -90,9 +100,17 @@ export function HTMLPreview({ snapshot, wrap, controls, found = null }: {
     sized?.observe(node);
     return () => { sized?.disconnect(); notePreviewStage(0); };
   }, []);
+  // A page at a PC's width on a narrower stage is read on a zoom surface: the
+  // whole page laid out as the PC lays it out, fitted to the stage and read like
+  // a picture. Anywhere else the frame itself is the page.
+  const desktop = frameWidth === PREVIEW_DESKTOP_WIDTH && stageWidth > 0 && stageWidth < PREVIEW_DESKTOP_WIDTH;
   const sized = frameWidth !== null && mode === 'preview';
+  // A height reported by the stage's own frame says nothing about the page as a
+  // PC draws it: the surface starts from a PC screen and takes the page's height
+  // from the frame it lays out itself.
+  useLayoutEffect(() => { setPageSize(null); }, [desktop]);
   useEffect(() => {
-    setLoaded(null); setSource(null); setError(''); setRuntimeError('');
+    setLoaded(null); setSource(null); setError(''); setRuntimeError(''); setPageSize(null);
     const ticket = issueTicket({ content: 'keep' });
     const cwd = workspacePaneCwd(snapshot.paneId);
     const runtime = session?.herdSession?.();
@@ -123,9 +141,13 @@ export function HTMLPreview({ snapshot, wrap, controls, found = null }: {
     })();
     return () => { alive = false; stops.forEach(stop => stop()); resources.close(); };
   }, [session, snapshot.paneId, snapshot.descriptor?.root, file.path, file.revision, reload, started, direct, contentVersion]);
-  return <section ref={stage} className={`workspace-html${sized ? ' is-sized' : ''}`} aria-label={t('preview.title')}>
-    {loaded && started && direct && <PreviewFrame key={loaded.token} loaded={loaded} hidden={mode !== 'preview'} onError={setRuntimeError}
-      width={sized ? frameWidth : null} />}
+  return <section ref={stage} className={`workspace-html${sized ? ' is-sized' : ''}${desktop ? ' is-desktop' : ''}`} aria-label={t('preview.title')}>
+    {loaded && started && direct && (desktop
+      ? <DesktopPreview key={loaded.token} hidden={mode !== 'preview'} pageHeight={pageSize?.height ?? 0}>
+        <PreviewFrame loaded={loaded} hidden={false} onError={setRuntimeError} onSize={setPageSize} width={PREVIEW_DESKTOP_WIDTH} />
+      </DesktopPreview>
+      : <PreviewFrame key={loaded.token} loaded={loaded} hidden={mode !== 'preview'} onError={setRuntimeError} onSize={setPageSize}
+        width={sized ? frameWidth : null} />)}
     {mode === 'preview' ? <>
       {!direct ? <p className="workspace-feedback" role="status">{t('preview.p2pRequired')}</p>
         : error ? <p className="workspace-feedback workspace-error" role="alert">{error}</p>

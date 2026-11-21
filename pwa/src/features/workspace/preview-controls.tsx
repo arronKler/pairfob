@@ -2,8 +2,10 @@ import { useState, useSyncExternalStore } from "react";
 import { t } from "../../lib/i18n";
 import { Button } from "../../shared/ui/primitives";
 import type { WorkspaceSnapshot } from "./model";
-import { PREVIEW_WIDTHS, setPreviewWidth, usePreviewWidth, type PreviewWidth } from "./prefs";
+import { PREVIEW_DESKTOP_WIDTH, setPreviewWidth, usePreviewWidth, type PreviewWidth } from "./prefs";
 import { thumbAt } from "./thumb";
+
+export { PREVIEW_DESKTOP_WIDTH };
 
 export const isHTMLFile = (path: string) => /\.html?$/i.test(path);
 export const isMarkdownFile = (path: string) => /\.(md|markdown)$/i.test(path);
@@ -51,48 +53,78 @@ function subscribeStage(listener: () => void): () => void {
   return () => { stageListeners.delete(listener); };
 }
 
-/** The stage has to hold the widest choice with air on both sides, or choosing it would change nothing. */
-export const PREVIEW_WIDTH_STAGE_MIN = Math.max(...PREVIEW_WIDTHS) + 32;
-
-/**
- * A page is tried at a phone's or a tablet's width where that is a question:
- * the stage is wider than both. The stage's own width decides, not the window's
- * (the column beside a session is never this wide, whatever the window is) and
- * not what the page is operated with: a large tablet has the room too, and its
- * finger presses the same three buttons a mouse does.
- */
-export function previewWidthOffered(stage: number): boolean {
-  return stage >= PREVIEW_WIDTH_STAGE_MIN;
+export function usePreviewStageWidth(): number {
+  return useSyncExternalStore(subscribeStage, () => stageWidth, () => 0);
 }
 
-function usePreviewWidthOffered(): boolean {
-  const stage = useSyncExternalStore(subscribeStage, () => stageWidth, () => 0);
-  return previewWidthOffered(stage);
+const PREVIEW_DEVICE_WIDTHS = [375, 768] as const;
+/** A phone's or a tablet's width is a question only where the stage can hold it with air on both sides. */
+export const PREVIEW_WIDTH_STAGE_MIN = Math.max(...PREVIEW_DEVICE_WIDTHS) + 32;
+/** Below this the info bar has no room for two segments beside its other controls; the PC width is one toggle instead. */
+export const PREVIEW_COMPACT_STAGE = 340;
+
+/**
+ * The widths that are a question on a stage of this width. The stage's own
+ * width (auto) is always one. A phone's and a tablet's are offered where the
+ * stage is wider than both, so choosing one shows a boxed page. A PC's is
+ * offered everywhere: on a narrow stage the page is wider than the stage, and
+ * the preview reads it through its zoom surface; on a wide one it is a boxed
+ * page like the others.
+ */
+export function previewWidthChoices(stage: number): readonly PreviewWidth[] {
+  if (!(stage > 0)) return ["auto"];
+  return stage >= PREVIEW_WIDTH_STAGE_MIN
+    ? [...PREVIEW_DEVICE_WIDTHS, PREVIEW_DESKTOP_WIDTH, "auto"]
+    : ["auto", PREVIEW_DESKTOP_WIDTH];
+}
+
+export function previewWidthOffered(stage: number): boolean {
+  return previewWidthChoices(stage).length > 1;
 }
 
 /** The width the frame is held to, in pixels; null where the choice is not offered or is the room there is. */
 export function usePreviewFrameWidth(): number | null {
-  const offered = usePreviewWidthOffered();
+  const stage = usePreviewStageWidth();
   const chosen = usePreviewWidth();
-  return offered && chosen !== "auto" ? chosen : null;
+  return previewWidthChoices(stage).includes(chosen) && chosen !== "auto" ? chosen : null;
 }
 
-const WIDTH_CHOICES: readonly PreviewWidth[] = [...PREVIEW_WIDTHS, "auto"];
+function widthLabel(width: PreviewWidth): string {
+  if (width === "auto") return t("preview.widthAuto");
+  return width === PREVIEW_DESKTOP_WIDTH ? t("preview.widthDesktop") : String(width);
+}
 
-function WidthSwitch() {
+function widthAria(width: PreviewWidth): string | undefined {
+  return width === "auto" ? undefined : t("preview.widthPx", { width });
+}
+
+/**
+ * On a stage with room, every width is a segment. On a very narrow one the bar
+ * has room for one control only, so the PC width is one toggle: a chip that is
+ * pressed while the PC width is what is shown.
+ */
+function WidthSwitch({ stage }: { stage: number }) {
   const chosen = usePreviewWidth();
+  const choices = previewWidthChoices(stage);
+  const active = choices.includes(chosen) ? chosen : "auto";
+  if (stage < PREVIEW_COMPACT_STAGE) {
+    const desktop = active === PREVIEW_DESKTOP_WIDTH;
+    return <Button className="workspace-preview-pc" aria-pressed={desktop} aria-label={widthAria(PREVIEW_DESKTOP_WIDTH)}
+      title={t("preview.widthDesktopTitle")} onClick={() => setPreviewWidth(desktop ? "auto" : PREVIEW_DESKTOP_WIDTH)}>
+      {t("preview.widthDesktop")}
+    </Button>;
+  }
   return <span className="workspace-layer-switch workspace-preview-width" role="group" aria-label={t("preview.width")}
-    style={thumbAt(WIDTH_CHOICES.indexOf(chosen), WIDTH_CHOICES.length)}>
-    {WIDTH_CHOICES.map((width) => <Button key={width} aria-pressed={chosen === width}
-      aria-label={width === "auto" ? undefined : t("preview.widthPx", { width })}
-      onClick={() => setPreviewWidth(width)}>{width === "auto" ? t("preview.widthAuto") : String(width)}</Button>)}
+    style={thumbAt(choices.indexOf(active), choices.length)}>
+    {choices.map((width) => <Button key={width} aria-pressed={active === width} aria-label={widthAria(width)}
+      onClick={() => setPreviewWidth(width)}>{widthLabel(width)}</Button>)}
   </span>;
 }
 
 export function PreviewSwitch({ controls }: { controls: PreviewControls }) {
-  const offered = usePreviewWidthOffered();
+  const stage = usePreviewStageWidth();
   // A page is tried at a device's width; a Markdown document is simply read.
-  const widths = offered && !controls.markdown && controls.mode === "preview";
+  const widths = controls.mode === "preview" && !controls.markdown && previewWidthOffered(stage);
   return <>
     <span className="workspace-layer-switch workspace-preview-switch" role="group"
       aria-label={t(controls.markdown ? "preview.markdownTitle" : "preview.title")}
@@ -100,6 +132,6 @@ export function PreviewSwitch({ controls }: { controls: PreviewControls }) {
       <Button aria-pressed={controls.mode === "preview"} onClick={() => controls.select("preview")}>{t("preview.preview")}</Button>
       <Button aria-pressed={controls.mode === "source"} onClick={() => controls.select("source")}>{t("preview.source")}</Button>
     </span>
-    {widths && <WidthSwitch />}
+    {widths && <WidthSwitch stage={stage} />}
   </>;
 }

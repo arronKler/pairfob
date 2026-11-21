@@ -14,11 +14,79 @@
 .workspace-html-frame { width: 100%; flex: 1; min-height: 0; border: 0; background: white; }
 /* The page tried at a phone's or a tablet's width: centred on the media stage's dark, edged so a dark page still shows its box. */
 .workspace-html.is-sized { align-items: center; background: var(--media-ground); }
-.workspace-html.is-sized .workspace-html-frame { max-width: 100%; box-shadow: 0 0 0 1px var(--line-strong); }
+.workspace-html.is-sized > .workspace-html-frame { max-width: 100%; box-shadow: 0 0 0 1px var(--line-strong); }
 .workspace-html.is-sized > :not(.workspace-html-frame) { align-self: stretch; }
-/* 375 · 768 · auto, in the info bar's own segmented control: three equal shares for its mark. */
-.workspace-layer-switch.workspace-preview-width { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* The widths that are a question, whichever they are: 375 · 768 · 1280 · auto on a wide stage, one segment each. */
+.workspace-layer-switch.workspace-preview-width { grid-template-columns: repeat(var(--thumb-count, 3), minmax(0, 1fr)); }
 .workspace-preview-width button { min-width: 44px; font-variant-numeric: tabular-nums; }
+/* The PC width as one toggle, where the info bar is too narrow for a strip. */
+.workspace-preview-pc {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: var(--text-caption);
+  white-space: nowrap;
+  flex: none;
+}
+.workspace-preview-pc[aria-pressed="true"] { background: var(--surface-2); color: var(--accent); }
+
+/* --- The page at a PC's width, read as a picture ---------------------------------- */
+/* Toolbar over the page's own surface: the same stage and tools the media viewer
+   gives an image, because the reader moves it the same way. */
+.workspace-html-desktop {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  gap: 10px;
+}
+.workspace-html-desktop-tools { flex: none; container-type: inline-size; }
+.workspace-html-desktop-note {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Where the tools leave no room, the shortest form of the same fact. */
+@container (max-width: 520px) {
+  .workspace-html-desktop-note-long { display: none; }
+}
+@container (min-width: 521px) {
+  .workspace-html-desktop-note-short { display: none; }
+}
+.workspace-html-desktop-stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: contain;
+  background: var(--media-ground);
+  border-radius: 10px;
+}
+/* The page keeps the PC's own width and height; the surface fits and scales it. */
+.workspace-html-desktop-page {
+  flex: none;
+  background: white;
+  box-shadow: 0 0 0 1px var(--line-strong);
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.workspace-html-desktop-page > .workspace-html-frame { display: block; width: 100%; height: 100%; }
+/* The reader's presses land here, never in the page: this reading never operates it. */
+.workspace-html-desktop-gestures { position: absolute; inset: 0; touch-action: none; }
 .workspace-html .workspace-code { flex: 1; }
 .workspace-code-line.is-target { background: rgba(230, 173, 48, .2); }
 
@@ -31,4 +99,14 @@
     border-radius: var(--r-sm);
   }
   .workspace-preview-action:hover { color: var(--ink); background: var(--surface-2); }
+  .workspace-preview-pc:hover { background: var(--surface-2); }
+  /* An enlarged page is dragged, as an enlarged picture is. */
+  .workspace-html-desktop-gestures[data-zoomed] { cursor: grab; }
+  .workspace-html-desktop-gestures[data-zoomed]:active { cursor: grabbing; }
+}
+
+/* Under a finger the hit area is 44px high even where the chip is drawn smaller. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .workspace-preview-pc { position: relative; }
+  .workspace-preview-pc::after { content: ""; position: absolute; inset: min(0px, calc(50% - 22px)) 0; }
 }
