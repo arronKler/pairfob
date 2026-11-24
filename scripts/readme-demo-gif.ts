@@ -14,9 +14,10 @@ const ROOT = resolve(import.meta.dir, "..");
 const HOME_IMG = join(ROOT, "site", "img", "home");
 const README_OUT = join(ROOT, "site", "img", "readme");
 const CDP_PORT = Number(process.env.DEMO_GIF_CDP_PORT ?? 9339);
-const WIDTH = 920;
+const WIDTH = 960;
 const HEIGHT = 540;
-const FPS = 14;
+const SCALE = 2;
+const FPS = 12;
 const DURATION_MS = 22000;
 const TOTAL_FRAMES = Math.round((DURATION_MS / 1000) * FPS);
 
@@ -153,11 +154,8 @@ async function buildHtml(lang: Lang): Promise<string> {
   }
   .stage {
     position: relative; width: 100%; height: 100%;
-    padding: 18px 26px 16px;
-    background:
-      radial-gradient(560px 360px at 82% 18%, rgba(61, 123, 253, 0.22), transparent 70%),
-      radial-gradient(480px 320px at 14% 92%, rgba(70, 214, 140, 0.12), transparent 70%),
-      #090d14;
+    padding: 18px 24px 16px;
+    background: #090d14;
     display: flex; flex-direction: column; gap: 13px;
   }
   .top {
@@ -188,7 +186,7 @@ async function buildHtml(lang: Lang): Promise<string> {
     background: #2563d9; color: #fff;
   }
   .canvas {
-    flex: 1; display: grid; grid-template-columns: 1fr 236px; gap: 24px; align-items: center;
+    flex: 1; display: grid; grid-template-columns: 1fr 248px; gap: 22px; align-items: center;
     min-height: 0;
   }
   /* Mac terminal */
@@ -257,9 +255,9 @@ async function buildHtml(lang: Lang): Promise<string> {
   }
   /* Phone */
   .phone {
-    position: relative; width: 224px; height: 454px; padding: 7px; border-radius: 34px;
-    background: linear-gradient(160deg, #2a3240, #141923);
-    box-shadow: 0 28px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    position: relative; width: 236px; height: 458px; padding: 7px; border-radius: 34px;
+    background: #1b222e;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
     justify-self: center;
   }
   .screen {
@@ -528,10 +526,10 @@ async function buildHtml(lang: Lang): Promise<string> {
       el("agent-done").classList.add("hidden");
       el("agent-prompt").classList.add("hidden");
 
-      // Sequence of real PTY key taps on guided-expanded keypad:
-      // 9500..10100: tap Down arrow (78, 389) -> moves to opt 2
-      // 10600..11200: tap Up arrow (52, 389) -> moves back to opt 1
-      // 11800..12400: tap Enter (185, 322) -> confirms command!
+      // Sequence of real PTY key taps on guided-expanded keypad (222x444 screen):
+      // 9500..10100: tap Down arrow (82, 424) -> moves to opt 2
+      // 10600..11200: tap Up arrow (55, 424) -> moves back to opt 1
+      // 11800..12400: tap Enter (196, 354) -> confirms command!
       const onOpt2 = ms >= 9750 && ms < 10850;
       el("opt-1").classList.toggle("sel", !onOpt2);
       el("opt-2").classList.toggle("sel", onOpt2);
@@ -539,15 +537,15 @@ async function buildHtml(lang: Lang): Promise<string> {
       el("opt-2").textContent = (onOpt2 ? "› " : "  ") + "2. No, tell Codex what to do differently";
 
       if (ms >= 9500 && ms <= 10100) {
-        showTap(78, 389, (ms - 9500) / 600);
+        showTap(82, 424, (ms - 9500) / 600);
         keyBadge.classList.remove("hidden");
         el("key-val").textContent = "↓";
       } else if (ms >= 10600 && ms <= 11200) {
-        showTap(52, 389, (ms - 10600) / 600);
+        showTap(55, 424, (ms - 10600) / 600);
         keyBadge.classList.remove("hidden");
         el("key-val").textContent = "↑";
       } else if (ms >= 11800 && ms <= 13500) {
-        if (ms <= 12400) showTap(185, 322, (ms - 11800) / 600);
+        if (ms <= 12400) showTap(196, 354, (ms - 11800) / 600);
         keyBadge.classList.remove("hidden");
         el("key-val").textContent = "Enter ↵";
       }
@@ -608,7 +606,7 @@ async function renderLang(cdp: Cdp, lang: Lang): Promise<void> {
   const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
   try {
     await cdp.send("Emulation.setDeviceMetricsOverride", {
-      width: WIDTH, height: HEIGHT, deviceScaleFactor: 1, mobile: false,
+      width: WIDTH, height: HEIGHT, deviceScaleFactor: SCALE, mobile: false,
     }, sessionId);
     await cdp.send("Page.enable", {}, sessionId);
     const { frameTree } = await cdp.send("Page.getFrameTree", {}, sessionId);
@@ -634,12 +632,12 @@ async function renderLang(cdp: Cdp, lang: Lang): Promise<void> {
     };
     await run([
       "ffmpeg", "-y", "-framerate", String(FPS), "-i", join(framesDir, "f-%04d.png"),
-      "-vf", "palettegen=max_colors=192:stats_mode=diff", palette,
+      "-vf", "palettegen=max_colors=256:stats_mode=diff", palette,
     ]);
     await run([
       "ffmpeg", "-y", "-framerate", String(FPS), "-i", join(framesDir, "f-%04d.png"),
       "-i", palette,
-      "-lavfi", "paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle",
+      "-lavfi", "paletteuse=dither=bayer:bayer_scale=1:diff_mode=rectangle",
       "-loop", "0", outGif,
     ]);
     const sizeKB = Math.round((await Bun.file(outGif).size) / 1024);
