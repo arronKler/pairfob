@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { PREVIEW_HEADERS, PREVIEW_PATH } from "../workers/pairfob-origin/src/preview-policy";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
@@ -40,7 +41,19 @@ const nativeBuild = process.env.VITE_PAIRFOB_NATIVE === "1";
 const relayOrigin = process.env.VITE_PAIRFOB_RELAY_ORIGIN || "https://pairfob.com";
 
 export default defineConfig({
-  build: { manifest: true },
+  build: {
+    manifest: true,
+    ...(nativeBuild
+      ? {}
+      : {
+          rollupOptions: {
+            input: {
+              index: resolve(__dirname, "index.html"),
+              demo: resolve(__dirname, "demo.html"),
+            },
+          },
+        }),
+  },
   plugins: [react(), tailwindcss(), nativeBuild && nativeCspPlugin(relayOrigin), {
     name: 'preview-response-policy',
     configureServer(server) {

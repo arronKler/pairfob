@@ -3,6 +3,6 @@
   "compilerOptions": {
     "tsBuildInfoFile": "node_modules/.cache/tsc/all.tsbuildinfo"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "qa/**/*.ts", "qa/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "qa/**/*.ts", "qa/**/*.tsx", "demo/**/*.ts", "demo/**/*.tsx"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

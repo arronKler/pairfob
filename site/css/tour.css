@@ -322,6 +322,12 @@
   line-height: 1.45;
 }
 
+.vs-cta {
+  margin-top: 28px;
+  display: flex;
+  justify-content: center;
+}
+
 @media (max-width: 1040px) {
   .tour {
     display: grid;

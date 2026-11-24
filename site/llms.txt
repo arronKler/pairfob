@@ -7,6 +7,8 @@ Key facts:
 - Client: any modern mobile browser (iOS Safari, Android Chrome); installable to the Home Screen as a PWA. No App Store app; the optional Android beta is a sideloaded APK.
 - Same live session, not a copy: approve commands, reply (incl. dictation), review diffs, get "Needs you" push notifications.
 - Agents: install and sign in to your chosen AI agent separately on the host; Pairfob does not install agents or configure their accounts. After pairing, Terminal works without an agent. A browser on the host itself can also pair.
+- Live Demo (no install or pairing required): https://pairfob.com/demo (interactive sandbox with Chat/Control/real PTY Terminal, diff line comments, Board layout, and quota rings).
+- Self-hosting: one-command Cloudflare Worker + Durable Objects + D1 deploy (`docs/selfhost.md`).
 - Install: `curl -fsSL https://pairfob.com/install.sh | sh && pairfob pair`, then open https://pairfob.com/pair on the phone and scan. Or inside Herdr 0.8.2+: `herdr plugin install arronKler/pairfob`.
 - Price: free. Source: https://github.com/arronKler/pairfob
 

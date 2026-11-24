@@ -1,107 +1,92 @@
 # Pairfob
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-try_in_browser-2563d9)](https://pairfob.com/demo)
 [![pairfob.com](https://img.shields.io/badge/site-pairfob.com-111111)](https://pairfob.com)
 [![Docs](https://img.shields.io/badge/docs-pairfob.com%2Fdoc-111111)](https://pairfob.com/doc/)
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-111111)](https://github.com/arronKler/pairfob/discussions)
 
 **English** | [简体中文](README_zh.md)
 
-**Control the coding agents on your computer from your phone.** Codex, Claude,
-Grok and the rest keep running on the computer; after pairing once, a phone,
-tablet or another computer opens the same live sessions, not copies. The
-computer only dials out — no inbound ports, no VPN — and the session is
-end-to-end encrypted.
+**Control Claude Code, Codex, Grok, and other local coding agents from your phone in one QR scan — no VPN, no open ports, no account required.** Your agents keep running on your computer; after pairing once, your phone, tablet, or another browser attaches to the same live sessions over an end-to-end encrypted WebRTC P2P connection (with an open-source, one-command self-hostable relay fallback).
 
-![Pairfob on a phone: the session list, a live session, and a diff review](site/img/readme/en.webp)
+👉 **[Try the interactive Live Demo in your browser](https://pairfob.com/demo)** — test Chat/Terminal switching, diff line comments, Board layout, and subscription quotas without installing anything.
+
+![Pairfob end-to-end demo: pairfob pair, QR scan, Needs you notification, diff line comment, and live agent resume](site/img/readme/demo-en.gif)
+
+## Why Pairfob?
+
+| Capability | Pairfob | Official Remote Control (e.g. Claude Code) | SSH + Tailscale + tmux | Web / Cloud Agent Wrappers |
+| --- | --- | --- | --- | --- |
+| **Multi-agent support** | Claude Code, Codex, Grok, Gemini, Copilot, Cursor, OpenCode, Pi & plain shell | Single vendor only | Any CLI, raw terminal only | Usually 1–2 vendors |
+| **True PTY + Chat dual mode** | Switch live between **Chat** (structured steps & markdown), **Control** (touch keypad), and **Terminal** (real PTY for vim/TUIs) | Chat-oriented UI | Raw PTY only (painful on phone) | Chat wrapper only (no real PTY) |
+| **Diff review & line comments** | Browse workspace files, inspect git diffs, tap any line to send a review note straight to the agent | Basic / limited | CLI `git diff` only | Varies |
+| **Board layout & multi-machine** | Visual multi-pane **Board**, Git worktrees, and instant switching across multiple computers | Single session focus | Manual tmux panes | Single host |
+| **Subscription quota monitor** | Live allowance rings on your phone for Claude, Codex, Copilot, Cursor, Grok, Factory, Kiro, DeepSeek & more | No | No | No |
+| **Network & privacy** | Outbound-only, **no VPN/Tailscale**, **no account**, SPAKE2+ / Argon2id E2EE, **WebRTC P2P direct**, 1-command self-hostable Cloudflare relay | Vendor account & vendor cloud | Requires VPN mesh + SSH keys on phone | Vendor account / server sees plaintext |
 
 ## Install and pair
 
-Pairfob runs on macOS and Linux; Windows is not supported. The phone only needs
-a browser, and no Pairfob account is required. Keep the computer awake and
-online while you use it.
+Pairfob runs on macOS and Linux (Windows can open the browser client as a second screen). Your phone only needs a browser, and no Pairfob account is required. Keep the computer awake and online while using it.
 
-1. **Install on the computer.** The script installs Pairfob, adds the latest
-   stable Herdr if it is missing, and sets Pairfob to start at login.
+1. **Install on the computer.** The installer verifies the binary, automatically sets up the underlying multi-session runtime ([Herdr](https://herdr.dev)) with zero manual config, and registers Pairfob as a login service.
 
    ```sh
    curl -fsSL https://pairfob.com/install.sh | sh
    ```
 
-   If it says the install directory is not on your `PATH`, run the one-line fix
-   it prints. Flags, install locations and uninstall:
-   [Install](https://pairfob.com/doc/install).
+   If it reports the install directory is not on your `PATH`, run the one-line fix it prints. Flags, install paths, and uninstall: [Install](https://pairfob.com/doc/install).
 
-2. **Pair the phone.** On the computer, run `pairfob pair`. It shows a QR code
-   and a code you can type instead.
+2. **Pair your phone.** Run `pairfob pair` on your computer to display a QR code and fallback code:
 
    ```sh
    pairfob pair
    ```
 
-   On the phone, open [pairfob.com/pair](https://pairfob.com/pair), scan the QR
-   code (or type the code), then press Enter once on the computer.
+   Open [pairfob.com/pair](https://pairfob.com/pair) on your phone, scan the QR code (or enter the code), then press **Enter** once on your computer to approve.
 
-3. **Open a session.** Tap a session in the phone's list to attach to it. To
-   start one, choose **Create**, enter the project's absolute path on the
-   computer, and pick an agent or **Terminal**.
+3. **Open or start a session.** Tap any running session in your phone's list, or choose **Create**, pick a project directory on your computer, and launch Claude Code, Codex, Grok, or **Terminal**.
 
-Sessions come from [Herdr](https://herdr.dev): those started from the phone or
-inside `herdr` appear in the list, while an agent started in another terminal
-does not appear. Pairfob does not install or sign in to AI agents — do that on
-the computer first; **Terminal** works without one. Full walkthrough:
-[Get started](https://pairfob.com/doc/start).
+Sessions are managed by the auto-installed session runtime ([Herdr](https://herdr.dev)): sessions started from your phone or inside `herdr` appear automatically. Pairfob uses the AI agents you already signed in to on your computer — **Terminal** works without any agent installed. Full walkthrough: [Get started](https://pairfob.com/doc/start).
 
-Already living in Herdr? `herdr plugin install arronKler/pairfob` adds **Pairfob:
-Pair a device** to Herdr's action menu and installs the same verified binary on
-first use. See [`plugin/herdr/`](plugin/herdr/README.md).
+Already using Herdr? `herdr plugin install arronKler/pairfob` adds **Pairfob: Pair a device** directly to Herdr's action menu. See [`plugin/herdr/`](plugin/herdr/README.md).
 
-Versioned macOS and Linux binaries, SHA-256 checksums and release notes are on
-[GitHub Releases](https://github.com/arronKler/pairfob/releases).
+Versioned macOS and Linux binaries, SHA-256 checksums, and release notes are on [GitHub Releases](https://github.com/arronKler/pairfob/releases).
 
-## What you can do
+## What you can do on your phone
 
-- **Respond when an agent needs you.** A **Needs you** strip and optional push
-  notifications show waiting agents; open one to answer its prompt.
-- **Work in the live session.** **Auto** picks **Control** (terminal view,
-  system keyboard, keypad), **Terminal** (the real PTY, for vim and full-screen
-  TUIs) or **Chat** (message the agent and read its replies).
-- **Review and hand over files.** Browse files, read git status and diffs,
-  comment on diff lines, and upload photos, PDFs or other files into the draft.
-- **Shape the workspace.** Start conversations, tabs, splits and worktrees, and
-  see a tab's real pane layout on the **Board**.
-- **Use several computers and devices.** One phone switches between computers;
-  each computer can have several paired devices.
-- **Track quota.** Subscription allowance for Codex, Claude Code, Copilot,
-  Cursor, Grok and more, collected on the computer.
+![Pairfob on a phone: the session list, a live session, and a diff review](site/img/readme/en.webp)
 
-The app speaks English and 中文. Details: [Using the app](https://pairfob.com/doc/app).
+- **Never leave an agent waiting.** A **Needs you** strip and optional push notifications surface blocked or waiting agents; tap once to answer prompts or approve commands.
+- **True PTY + Chat dual mode.** **Auto** picks **Control** (rendered terminal + system keyboard/dictation + touch keypad), **Terminal** (full PTY via xterm.js for vim and full-screen TUIs), or **Chat** (structured tool steps and Markdown replies).
+- **Review diffs & attach files.** Browse workspace files, inspect git status and diffs, tap any diff line to write a review comment, and attach photos, PDFs, or files into your prompt.
+- **Shape workspaces on the Board.** Create conversations, tabs, splits, and Git worktrees, and inspect a tab's live multi-pane layout on the **Board**.
+- **Control multiple computers.** Switch between work and home machines from one phone — including remote machines reachable over SSH.
+- **Track subscription quotas.** Monitor remaining allowance across Claude Code, Codex, Copilot, Cursor, Grok, DeepSeek, Factory, Kiro, OpenCode, and more, read locally on your computer.
 
-## Android beta (optional)
+The UI speaks English and 简体中文. Details: [Using the app](https://pairfob.com/doc/app).
 
-The phone works in a browser. For an installed app, the optional Android beta is
-a sideloaded APK for Android 7.0 and newer — it is not on the Play Store.
-Install steps, updates, signing checksum and current limits:
-[Android beta](https://pairfob.com/doc/android-beta). Downloads:
-[GitHub Releases](https://github.com/arronKler/pairfob/releases).
+## Mobile apps (optional)
 
-## Security
+Your phone works straight in Safari or Chrome (add to Home Screen for full-screen PWA mode). For a native shell with local notifications:
 
-- **Pairing** uses SPAKE2+ with a code both sides confirm; session keys are
-  hardened with Argon2id.
-- **Keys** live only on the computer and paired devices. The relay at
-  `pairfob.com` forwards ciphertext frames it cannot read.
-- **Direct when possible.** An established session upgrades to a WebRTC
-  DataChannel and keeps the relay as fallback.
-- **Nothing exposed.** The computer only dials out; Herdr is never reachable
-  from the internet.
+- **Android beta**: sideloaded APK for Android 7.0+ — [Android beta guide](https://pairfob.com/doc/android-beta) and [GitHub Releases](https://github.com/arronKler/pairfob/releases).
+- **iOS**: native Capacitor shell with local notifications is in active preparation for TestFlight (`mobile/ios`).
 
-See [What the relay cannot see](https://pairfob.com/doc/security) and report
-vulnerabilities privately via [SECURITY.md](SECURITY.md).
+## Security & self-hosting
+
+- **Pairing** uses SPAKE2+ with terminal confirmation on your computer; session keys are hardened with Argon2id.
+- **Zero-knowledge relay.** Keys stay exclusively on your computer and paired devices. The relay at `pairfob.com` only forwards opaque ciphertext frames.
+- **WebRTC P2P direct.** Once authenticated, sessions upgrade to a direct WebRTC DataChannel and keep the relay only as encrypted fallback.
+- **Zero inbound exposure.** The computer only makes outbound connections — no port forwarding, no VPN, no exposed local sockets.
+- **One-command self-hosting.** Deploy the Worker, Durable Objects, D1 database, and web app to your own Cloudflare account in one command: [`docs/selfhost.md`](docs/selfhost.md).
+
+See [What the relay cannot see](https://pairfob.com/doc/security) and report vulnerabilities privately via [SECURITY.md](SECURITY.md).
 
 ## Computer commands
 
 ```sh
-pairfob          # status: service, paired devices, Herdr
+pairfob          # status: service, paired devices, runtime
 pairfob pair     # pair a phone, tablet or another computer
 pairfob list     # paired devices
 pairfob forget 1 # unpair by index or name
@@ -109,36 +94,29 @@ pairfob doctor   # diagnose this computer; changes nothing
 pairfob update   # update to the latest release and restart
 ```
 
-A second computer runs the same installer, then pairs from the phone with
-**Settings → Switch computer → Add a computer**. Machines that Herdr already
-reaches over SSH can be added from the phone's **Computers** page without a
-pairing code. Full CLI, service, setup and quota commands:
-[Computer commands](https://pairfob.com/doc/cli).
+Add a second computer by running the same installer, then tapping **Settings → Switch computer → Add a computer** on your phone. Full CLI reference: [Computer commands](https://pairfob.com/doc/cli).
 
 ## How it works
 
 ```
-phone  --HTTPS/WSS pairfob.v2-->  pairfob.com (Worker + Durable Object)
+phone  --HTTPS/WSS pairfob.v2-->  pairfob.com (Cloudflare Worker + Durable Object)
 pairfob --outbound WSS---------->  same room  --opaque FWD-->  phone
           \-- WebRTC DataChannel after authenticated setup --/
-pairfob --loopback-------------->  Herdr
+pairfob --loopback-------------->  Herdr session runtime
 ```
 
-Sessions run in [Herdr](https://herdr.dev); the installer sets it up for you.
-
-The phone reads the rendered pane and sends keys back to the PTY; it is not a
-terminal emulator of its own. `pairfob.com` is the project's official instance.
-Protocol specs live in [`proto/`](proto/), including
-[direct transport](proto/direct-transport.md).
+Protocol specs live in [`proto/`](proto/), including [envelope](proto/envelope.md), [v2 mux](proto/envelope-v2.md), and [direct transport](proto/direct-transport.md).
 
 | Path | What it is |
 | --- | --- |
-| `cmd/pairfob` | the computer daemon and CLI |
-| `internal/` | pairing, sessions, RPC, Herdr adapter, protocol primitives |
-| `pwa/` | the phone app (React + TypeScript, built with bun) |
-| `workers/pairfob-origin` | the relay: Cloudflare Worker + Durable Object |
+| `cmd/pairfob` | computer daemon and CLI (Go) |
+| `internal/` | pairing, E2EE sessions, RPC, quota readers, journal adapters, runtime adapter |
+| `pwa/` | responsive phone/tablet/desktop web app + `/demo` sandbox (React + TypeScript) |
+| `workers/pairfob-origin` | relay origin: Cloudflare Worker + Durable Object |
 | `site/` | homepage and [documentation](https://pairfob.com/doc/) sources |
-| `proto/` | frozen envelope, RPC schema and test vectors |
+| `proto/` | frozen envelope, RPC schema, and cross-language test vectors |
+| `mobile/` | optional Android & iOS Capacitor shells |
+| `desktop/` | native desktop client (Rust + GPUI) |
 | `plugin/herdr` | Herdr plugin entrypoints |
 
 ## Develop
@@ -150,22 +128,14 @@ Protocol specs live in [`proto/`](proto/), including
 ./scripts/dev-down.sh
 ```
 
-Set `PAIRFOB_DEV_FAKE_RUNTIME=1` for demo data without Herdr. Real-phone
-testing, verification scope, protocol invariants and releases:
-[`docs/develop.md`](docs/develop.md).
+Set `PAIRFOB_DEV_FAKE_RUNTIME=1` for demo data without Herdr. Real-phone testing, verification scope, protocol invariants, and releases: [`docs/develop.md`](docs/develop.md).
 
-To run your own relay instead of the official instance, deploy the Worker,
-Durable Objects, D1 database and web app to your Cloudflare account with one
-command: [`docs/selfhost.md`](docs/selfhost.md).
+## Community & contributing
 
-## Contributing
+- **Questions, mobile gesture feedback, and new agent requests**: join [GitHub Discussions](https://github.com/arronKler/pairfob/discussions).
+- **Want to contribute?** Check our [`good first issue`](https://github.com/arronKler/pairfob/labels/good%20first%20issue) list — adding a subscription quota adapter for your favorite agent CLI is a great self-contained first PR.
 
-Issues and pull requests are welcome at
-[github.com/arronKler/pairfob](https://github.com/arronKler/pairfob). Run the
-checks that match your change (see
-[`docs/develop.md`](docs/develop.md#verification)) and list them in the PR. The
-envelope, vectors and RPC fields under `proto/` are frozen by design; please
-open an issue before proposing a change there.
+Run the checks matching your change (see [`docs/develop.md`](docs/develop.md#verification)) and list them in your PR. Protocol files under `proto/` are frozen by design; please open an issue before proposing changes there.
 
 ## Star History
 
