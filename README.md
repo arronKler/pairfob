@@ -12,7 +12,7 @@
 
 👉 **[Try the interactive Live Demo in your browser](https://pairfob.com/demo)** — test Chat/Terminal switching, diff line comments, Board layout, and subscription quotas without installing anything.
 
-![Pairfob end-to-end demo: pairfob pair, QR scan, Needs you notification, diff line comment, and live agent resume](site/img/readme/demo-en.gif)
+![Pairfob end-to-end demo: pairfob pair, QR scan, Needs you Chat reply, True PTY Terminal keypad, diff line comment, and live agent resume](site/img/readme/demo-en.gif)
 
 ## Why Pairfob?
 

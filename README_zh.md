@@ -12,7 +12,7 @@
 
 👉 **[免安装在线试玩（Live Demo）](https://pairfob.com/demo?lang=zh)** — 直接在浏览器里体验 Chat / 真终端切换、Diff 行级评论、画板布局和订阅额度监控。
 
-![Pairfob 一镜到底演示：终端 pairfob pair、手机扫码、收到需要你通知、Diff 行级评论、电脑端 Agent 自动继续](site/img/readme/demo-zh.gif)
+![Pairfob 一镜到底演示：终端 pairfob pair、手机扫码、对话模式发消息、真 PTY 终端触控键盘审批、Diff 行级评论、电脑端 Agent 自动继续](site/img/readme/demo-zh.gif)
 
 ## 核心差异对比
 
