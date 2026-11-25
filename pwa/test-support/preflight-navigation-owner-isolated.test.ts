@@ -123,6 +123,7 @@ function session(): ProbeSession {
   return {
     calls,
     isConnected: () => true,
+    getConfig: async () => ({}),
     snapshot: async () => { calls.push("snapshot"); return { panes: [{ pane_id: "p1", workspace_id: "w1", tab_id: "t1", agent: "codex" }, { pane_id: "p2", workspace_id: "w1", tab_id: "t2", agent: "codex" }] }; },
     paneRead: async (id: string) => { calls.push("read:" + id); return { text: "ready", hash: "1".repeat(64) }; },
     terminalOpen: async (paneId: string, cols: number, rows: number) => ({ operationId: "op_AAECAwQFBgcICQoL", terminalId: "term_11111111111111111111111111111111", paneId, cols, rows, encoding: "ansi" as const }),
