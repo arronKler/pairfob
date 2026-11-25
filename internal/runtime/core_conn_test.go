@@ -665,6 +665,13 @@ func TestCoreConnCreditWriteTimesOutWithoutReader(t *testing.T) {
 }
 
 func TestCoreOpenConfigured(t *testing.T) {
+	// Make the historical Herdr branch independent of whether the host has
+	// migrated to core-only. This test never executes the fixture binary.
+	binary := filepath.Join(t.TempDir(), "herdr")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HERDR_BIN", binary)
 	socket := filepath.Join(t.TempDir(), "herdr.sock")
 	t.Setenv("HERDR_SOCKET_PATH", socket)
 	t.Setenv("PAIRFOB_HC", "")
