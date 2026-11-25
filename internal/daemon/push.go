@@ -94,6 +94,13 @@ type HerdPush struct {
 	AgentInstanceID string
 	StateChangeSeq  *uint64
 	TaskEvidence    string
+	// Devices targets a ledger delivery at the devices that owe it. Empty
+	// means every subscribed device behind the normal debounce.
+	Devices []string
+	// AttentionID ties a ledger delivery back to its event. The worker also
+	// uses this opaque ID to prevent a resolved notice from reappearing.
+	AttentionID string
+	AttentionAt int64
 }
 
 type PushKind string
@@ -101,6 +108,7 @@ type PushKind string
 const (
 	PushNeedsYou PushKind = "needs_you"
 	PushDone     PushKind = "done"
+	PushRetract  PushKind = "retract"
 )
 
 func pushKindForTransition(previous string, known bool, current string) (PushKind, bool) {
@@ -392,7 +400,7 @@ func (e *Engine) notifyHerd(ctx context.Context, event HerdPush) error {
 	if !validID(event.HerdID) {
 		return errors.New("valid herd id is required")
 	}
-	if event.Kind != PushNeedsYou && event.Kind != PushDone {
+	if event.Kind != PushNeedsYou && event.Kind != PushDone && event.Kind != PushRetract {
 		return errors.New("push kind is required")
 	}
 	title, body := pushNotificationCopy(event)
@@ -404,34 +412,53 @@ func (e *Engine) notifyHerd(ctx context.Context, event HerdPush) error {
 	// delivery debounce separated by kind below, but let a completion replace a
 	// stale needs-you notification instead of leaving both in the tray.
 	tagSum := sha256.Sum256([]byte(e.DaemonID + "\x00" + event.HerdID))
-	payload, _ := json.Marshal(map[string]string{
+	fields := map[string]string{
 		"title": title,
 		"body":  body,
 		"kind":  string(event.Kind),
 		"tag":   fmt.Sprintf("pairfob-pane-%x", tagSum[:8]),
 		"url":   "/pair#" + fragment.Encode(),
-	})
+	}
+	// A retry of an older episode's resolution must not replace a newer episode
+	// that reused the pane tag.
+	if event.AttentionID != "" {
+		fields["event"] = event.AttentionID
+		if event.AttentionAt > 0 {
+			fields["event_at"] = fmt.Sprint(event.AttentionAt)
+		}
+	}
+	payload, _ := json.Marshal(fields)
 	now := time.Now()
 	e.mu.Lock()
 	// Prune on every notification, including when no subscribed device exists.
 	// Sequence-specific keys are otherwise never reused and would accumulate.
 	e.prunePushLastLocked(now)
 	var devices []string
-	for id, dev := range e.Devices {
-		if dev.RevokedAt != nil || len(dev.PushSubscriptions) == 0 {
-			continue
-		}
-		key := id + "\x00" + event.HerdID + "\x00" + string(event.Kind)
-		if event.AgentInstanceID != "" {
-			key += "\x00" + event.AgentInstanceID
-		}
-		if event.Kind == PushDone && event.TaskEvidence != "" {
-			key += "\x00task:" + event.TaskEvidence
-		} else if event.StateChangeSeq != nil {
-			key += fmt.Sprintf("\x00%d", *event.StateChangeSeq)
-		}
-		if e.admitPushLocked(key, now) {
+	if len(event.Devices) > 0 {
+		for _, id := range event.Devices {
+			dev := e.Devices[id]
+			if dev == nil || dev.RevokedAt != nil || len(dev.PushSubscriptions) == 0 {
+				continue
+			}
 			devices = append(devices, id)
+		}
+	} else {
+		for id, dev := range e.Devices {
+			if dev.RevokedAt != nil || len(dev.PushSubscriptions) == 0 {
+				continue
+			}
+			key := id + "\x00" + event.HerdID + "\x00" + string(event.Kind)
+			if event.AgentInstanceID != "" {
+				key += "\x00" + event.AgentInstanceID
+			}
+			if event.Kind == PushDone && event.TaskEvidence != "" {
+				key += "\x00task:" + event.TaskEvidence
+			} else if event.StateChangeSeq != nil {
+				key += fmt.Sprintf("\x00%d", *event.StateChangeSeq)
+			}
+			if e.admitPushLocked(key, now) {
+				devices = append(devices, id)
+			}
 		}
 	}
 	e.mu.Unlock()

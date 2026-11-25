@@ -7,11 +7,12 @@ import type { AlarmKind, RoomSocket, RoomStore } from "./types.ts";
 /** Every pending hello in a room shares one sweep alarm instead of one per connection. */
 const HELLO_REF = "hellos";
 
-function pendingHellos(room: RoomCore): Array<{ ws: RoomSocket; deadline: number }> {
+function pendingHellos(room: RoomCore, closed?: RoomSocket): Array<{ ws: RoomSocket; deadline: number }> {
   const pending: Array<{ ws: RoomSocket; deadline: number }> = [];
   for (const ws of room.sockets()) {
+    if (ws === closed) continue;
     const a = room.att(ws);
-    if (!a || a.mode !== "hello" || a.kind !== "none") continue;
+    if (!a || a.retired || a.mode !== "hello" || a.kind !== "none") continue;
     if (isRegisteredDaemon(a)) continue;
     const started = a.hello_at_ms || a.created_ms;
     if (!started) continue;
@@ -134,8 +135,8 @@ export async function armHello(room: RoomCore, helloAt: number): Promise<void> {
 }
 
 /** A socket that completed its handshake no longer needs the hello timeout. */
-export async function settleHello(room: RoomCore): Promise<void> {
-  const pending = pendingHellos(room);
+export async function settleHello(room: RoomCore, closed?: RoomSocket): Promise<void> {
+  const pending = pendingHellos(room, closed);
   if (pending.length === 0) {
     await clearKindRef(room.store, "hello_5s", HELLO_REF);
     return;

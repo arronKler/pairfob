@@ -145,6 +145,13 @@ mouse/keyboard, including Source/Preview state retention, source-line links,
 Reload, and returning to the original chat. These are fixture checks, not a real
 daemon/relay or physical-device acceptance result.
 
+The chat's "站点首页" link opens `public/site/index.html` (`qa/preview-site.ts`), a
+built site: root-relative `/assets/...` found beside the page, a favicon nobody
+shipped (listed under the page as not loaded), and probes for what the page loads
+while it runs: XHR JSON, an image set by script, an image in inserted markup, a
+late stylesheet with its own `url()`, and a framed local page that fetches. Every
+probe line should read "loaded". Its "关于页" link opens `about.html` in the viewer.
+
 The HTML preview also exercises P2P admission and page-lifetime content caching:
 reload or close/reopen a report and inspect `workspaceMediaOpen` versus
 `workspaceMediaRead` counts. Unchanged dependencies are opened for validation

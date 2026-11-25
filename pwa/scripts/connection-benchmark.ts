@@ -1,7 +1,7 @@
 /** Serve two browser benchmark modules without changing the checkout.
  * bun scripts/connection-benchmark.ts <baseline-commit>
  * In a browser import /baseline.js and /current.js; alternate connectionSample
- * calls and compare cryptoSample(false/true). See docs/connection-performance.md.
+ * calls and compare cryptoSample(false/true).
  */
 import { resolve, relative } from "node:path";
 import { execFileSync } from "node:child_process";

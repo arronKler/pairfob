@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"regexp"
 	"testing"
@@ -18,7 +19,7 @@ func TestCompletionIdentitySurvivesRuntimeChurn(t *testing.T) {
 		pane.AgentStatus = status
 		// A runtime-supplied value must never be trusted, including unknown panes.
 		pane.CompletionID = "untrusted"
-		return engine.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
+		return engine.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
 	}
 	if got := observe("done"); got.CompletionID != "" {
 		t.Fatal("empty startup has completion evidence")

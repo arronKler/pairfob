@@ -222,6 +222,8 @@ async function staticOrPlaceholder(req: Request, env: Env, build: string): Promi
       // Fetch an opaque asset name so the Worker, not Assets, owns the public
       // canonical route and cannot create a self-redirect.
       assetReq = new Request(new URL("/pair-shell.asset", url.origin), req);
+    } else if (isDemoAppPath(url.pathname)) {
+      assetReq = new Request(new URL("/demo-shell.asset", url.origin), req);
     } else if (isAltMarketingPath(url.pathname)) {
       // Same trap: /index.html canonicalizes to `/`, which would bounce /zh.
       assetReq = new Request(new URL("/zh-shell.asset", url.origin), req);
@@ -243,6 +245,10 @@ function isAltMarketingPath(path: string): boolean {
 
 function isPairAppPath(path: string): boolean {
   return path === "/pair" || path === "/pair/" || path === "/pair.html";
+}
+
+function isDemoAppPath(path: string): boolean {
+  return path === "/demo" || path === "/demo/" || path === "/demo.html";
 }
 
 function isMarketingDocument(path: string): boolean {
@@ -279,7 +285,7 @@ async function followDocAsset(assets: Fetcher, req: Request, url: URL, res: Resp
 function staticAssetHeaders(path: string, ok: boolean, contentType: string | null): Record<string, string> | undefined {
   if (!ok) return undefined;
   if (path === PREVIEW_PATH) return PREVIEW_HEADERS;
-  if (isPairAppPath(path)) {
+  if (isPairAppPath(path) || isDemoAppPath(path)) {
     return { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, no-transform" };
   }
   // Build-generated, content-addressed assets can be reused across reloads.

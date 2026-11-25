@@ -19,4 +19,9 @@
     <xhtml:link rel="alternate" hreflang="zh-CN" href="https://pairfob.com/zh/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://pairfob.com/" />
   </url>
+  <url>
+    <loc>https://pairfob.com/demo</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>

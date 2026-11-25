@@ -13,7 +13,10 @@ export { needsHomeScreen } from "../../lib/platform";
 
 /**
  * A floating invitation never resizes the computer's terminal or takes focus.
- * Settings has its own notification row, which the card would float over.
+ * Settings has its own notification row, which the card would float over, and
+ * the dock's floating surfaces (the key panel, an attachment chip's action
+ * bar, a blocked attachment note) share its corner:
+ * `notification-prompt.scss` stands the card aside while one is open.
  */
 export function NotificationPrompt() {
   const phase = useConnectionPhase();

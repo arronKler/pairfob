@@ -33,8 +33,8 @@ func (a liveAdmin) RetryKeychain(provider string) error {
 }
 
 func quotaAuthorize(provider string, out io.Writer) error {
-	if provider != "claude" && provider != "cursor" && provider != "antigravity" {
-		return fmt.Errorf("choose claude, cursor or antigravity")
+	if provider != "claude" && provider != "cursor" && provider != "antigravity" && provider != "factory" {
+		return fmt.Errorf("choose claude, cursor, antigravity or factory")
 	}
 	// Grant to the executable the daemon actually uses, not another checkout.
 	sock, err := admin.SocketPath()

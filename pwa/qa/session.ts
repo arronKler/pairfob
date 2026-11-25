@@ -219,6 +219,7 @@ export function createSession(source: SessionSource = {}): FixtureSession {
     workspaceMediaOpen: (paneId: string, path: string, root?: string, options?: MediaReadOptions) => request("workspaceMediaOpen", [paneId, path, ...(root === undefined ? [] : [root])], () => {
       if (root !== undefined && root !== data.ROOT) throw new ProtocolError('conflict');
       if (options?.requireDirect && sessionTransport() !== 'p2p') throw new ProtocolError('p2p_required');
+      if (!preview.has(path) && preview.owns(path)) throw new ProtocolError('workspace_not_found');
       return preview.has(path) ? preview.open(path) : data.mediaOpen(path);
     }),
     workspaceMediaRead: (handle: string, offset: number, length: number, options?: MediaReadOptions) => request("workspaceMediaRead", [handle, offset, length], () => {

@@ -186,6 +186,40 @@ func quotaCommand(parent context.Context, limit int, name string, args ...string
 	}
 	return out.Bytes(), nil
 }
+
+// quotaSQLite is a seam so tests need no sqlite3 binary. Providers that read a
+// CLI's own database go through it.
+var quotaSQLite = runQuotaSQLite
+
+// runQuotaSQLite reads one query with sqlite3, read-only and bounded, the way
+// the transcript reader does. A host without sqlite3 has no database
+// credential, and a file login still answers.
+func runQuotaSQLite(db, query string) ([]byte, error) {
+	path := ""
+	for _, candidate := range []string{"/usr/bin/sqlite3", "/usr/local/bin/sqlite3", "/opt/homebrew/bin/sqlite3"} {
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+			path = candidate
+			break
+		}
+	}
+	if path == "" {
+		var err error
+		if path, err = exec.LookPath("sqlite3"); err != nil {
+			return nil, errors.New("no sqlite3 reader")
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, path, "-init", os.DevNull, "-batch", "-readonly", "-json", "-cmd", ".timeout 1000", db, query)
+	cmd.Env = []string{"LC_ALL=C"}
+	out := &quotaOutput{limit: 8192}
+	cmd.Stdout = out
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
 func quotaReset(raw string) int64 {
 	for _, layout := range []string{time.RFC3339Nano, "2006-01-02"} {
 		if t, err := time.Parse(layout, raw); err == nil && t.Unix() > 0 && t.Unix() <= 4102444800 {

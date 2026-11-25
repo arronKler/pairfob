@@ -104,7 +104,7 @@ func TestAgentActivityMissingEvidenceDoesNotEraseRuntimeCompletion(t *testing.T)
 	pane := runtime.Pane{PaneID: "p1", Agent: "codex", AgentStatus: "done", AgentSession: ref}
 	assertStatus := func(want string) {
 		t.Helper()
-		got := engine.decorateAgentActivity(runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
+		got := engine.decorateAgentActivity(context.Background(), runtime.DefaultSession(), runtime.Snapshot{Panes: []runtime.Pane{pane}}).Panes[0]
 		if got.AgentStatus != want {
 			t.Fatalf("status=%s want=%s", got.AgentStatus, want)
 		}
@@ -130,6 +130,7 @@ func TestAgentActivityPushRequiresNewTaskEvidence(t *testing.T) {
 	rt := newMonitorTestRuntime()
 	engine := NewEngine(nil, nil, rt)
 	engine.PushEnabled = true
+	engine.Devices[attentionTestDevice] = &Device{ID: attentionTestDevice, PushSubscriptions: attentionTestSubscription()}
 	ref, appendEvent := taskActivityFixture(t, engine)
 	state := sessionMonitorState{panes: map[string]monitoredPane{}}
 	sequence := uint64(1)

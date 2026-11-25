@@ -295,6 +295,8 @@ func (e *Engine) dispatch(s *sess, id, op string, params json.RawMessage) {
 		go e.rpcAgentQuota(s, id, params)
 	case "AgentQuotaV2":
 		go e.rpcAgentQuotaV2(s, id, params)
+	case "AgentQuotaStream":
+		go e.rpcAgentQuotaStream(s, id, params)
 	case "DaemonUpdateStatus":
 		e.rpcUpdate(s, id, params, false)
 	case "DaemonUpdate":

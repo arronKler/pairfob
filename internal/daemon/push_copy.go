@@ -186,6 +186,11 @@ func copyAlreadyShown(value, title string, bits []string) bool {
 }
 
 func pushNotificationCopy(event HerdPush) (title, body string) {
+	if event.Kind == PushRetract {
+		// Web Push requires a visible notification, even for resolutions. Keep
+		// useful fallback copy for workers that predate localized resolutions.
+		return "Pairfob · No longer waiting", "Open the session to see its current state."
+	}
 	agent := compactPushText(event.Agent)
 	if agent == "" {
 		agent = "Agent"

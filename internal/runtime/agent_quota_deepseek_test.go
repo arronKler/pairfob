@@ -143,7 +143,7 @@ func TestDeepSeekIsOnlyOnAgentQuotaV2(t *testing.T) {
 	for _, source := range QuotaSources() {
 		ids = append(ids, source.ID)
 	}
-	if len(ids) != 9 || ids[6] != "deepseek" || ids[7] != "opencode-go" || ids[8] != "command-code" {
+	if len(ids) != 11 || ids[6] != "deepseek" || ids[7] != "opencode-go" || ids[8] != "command-code" || ids[9] != "factory" || ids[10] != "kiro" {
 		t.Fatalf("sources: %v", ids)
 	}
 }

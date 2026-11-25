@@ -56,9 +56,9 @@
     />
     <link rel="stylesheet" href="/css/base.css?v=71" />
     <link rel="stylesheet" href="/css/device.css?v=71" />
-    <link rel="stylesheet" href="/css/hero.css?v=71" />
+    <link rel="stylesheet" href="/css/hero.css?v=72" />
     <link rel="stylesheet" href="/css/how.css?v=71" />
-    <link rel="stylesheet" href="/css/tour.css?v=71" />
+    <link rel="stylesheet" href="/css/tour.css?v=72" />
     <link rel="stylesheet" href="/css/safe.css?v=71" />
     <link rel="stylesheet" href="/css/faq.css?v=71" />
     <script src="/lang.js?v=49"></script>
@@ -127,8 +127,9 @@
         <nav class="site-nav" data-i18n-aria="nav.aria" aria-label="On this page">
           <a href="#how" data-i18n="nav.how">How it works</a>
           <a href="#what" data-i18n="nav.what">What it does</a>
+          <a href="#vs" data-i18n="nav.vs">Compare</a>
           <a href="#safe" data-i18n="nav.safe">Security</a>
-          <a href="#faq" data-i18n="nav.faq">FAQ</a>
+          <a href="/demo" data-locale-href="demo" data-i18n="nav.demo">Live Demo</a>
           <a href="/doc/" data-locale-href="doc" data-i18n="nav.doc">Docs</a>
         </nav>
         <div class="bar-end">
@@ -151,22 +152,22 @@
         <div class="wrap">
           <div class="hero-head">
             <div>
-              <p class="chip"><i class="live" aria-hidden="true"></i><span data-i18n="hero.chip">Phone remote for coding agents</span><i class="chip-sep" aria-hidden="true"></i><span data-i18n="hero.chip2">Open source · Free</span></p>
-              <h1 data-i18n="hero.title" data-i18n-html>Agents that run on your computer,<br />continued from your phone.</h1>
+              <p class="chip"><i class="live" aria-hidden="true"></i><span data-i18n="hero.chip">Phone remote for Claude Code, Codex and Grok</span><i class="chip-sep" aria-hidden="true"></i><span data-i18n="hero.chip2">Open source · Self-hostable</span></p>
+              <h1 data-i18n="hero.title" data-i18n-html>Control Claude Code &amp; Codex<br />from your phone in one QR scan.</h1>
               <ul class="ticks">
-                <li><svg><use href="#i-check" /></svg><span data-i18n="hero.tick1">Runs in the browser, no app required</span></li>
-                <li><svg><use href="#i-check" /></svg><span data-i18n="hero.tick2">No Pairfob account</span></li>
-                <li><svg><use href="#i-check" /></svg><span data-i18n="hero.tick3">End-to-end encrypted</span></li>
-                <li><svg><use href="#i-check" /></svg><span data-i18n="hero.tick4" data-i18n-html>Optional <a class="android-beta-link" href="/doc/android-beta">Android beta</a> for an installed app</span></li>
+                <li><svg><use href="#i-check" /></svg><span data-i18n="hero.tick1">No VPN, no Tailscale, no account</span></li>
+                <li><svg><use href="#i-check" /></svg><span data-i18n="hero.tick2">True PTY + Chat dual mode</span></li>
+                <li><svg><use href="#i-check" /></svg><span data-i18n="hero.tick3">WebRTC P2P direct · E2EE</span></li>
+                <li><svg><use href="#i-check" /></svg><span data-i18n="hero.tick4" data-i18n-html>Browser-first · optional <a class="android-beta-link" href="/doc/android-beta">Android beta</a></span></li>
               </ul>
             </div>
             <div>
-              <p class="sub" data-i18n="hero.sub" data-i18n-html>Codex and Claude keep running on your computer, and <b>leaving your desk doesn't stop the work</b>: check progress, reply, and confirm from your phone. Phone and computer share <b>the same terminal</b>. It is not a remote desktop.</p>
+              <p class="sub" data-i18n="hero.sub" data-i18n-html>Your coding agents stay on your computer while you leave your desk: <b>answer prompts, review diffs with line comments, monitor quotas</b>, and switch between Chat and real PTY Terminal. Not a remote desktop.</p>
               <div class="cta">
                 <a class="btn btn-dark cta-desk" href="#how"><span data-i18n="hero.cta.how">Get started in 3 steps</span><svg><use href="#i-down" /></svg></a>
-                <a class="btn btn-line cta-desk" href="#what" data-i18n="hero.cta.see">See it on the phone</a>
+                <a class="btn btn-line cta-desk" href="/demo" data-locale-href="demo"><span data-i18n="hero.cta.demo">Try Live Demo</span><svg><use href="#i-arrow" /></svg></a>
                 <a class="btn btn-dark cta-phone" href="/pair"><span data-i18n="cta.open">Open Pairfob</span><svg><use href="#i-arrow" /></svg></a>
-                <a class="btn btn-line cta-phone" href="#how" data-i18n="hero.cta.install">Install on your computer first</a>
+                <a class="btn btn-line cta-phone" href="/demo" data-locale-href="demo" data-i18n="hero.cta.demo">Try Live Demo</a>
               </div>
             </div>
           </div>
@@ -420,13 +421,16 @@
             <h2 data-i18n="vs.h2" data-i18n-html>Not a remote desktop,<br />and not agents in the cloud.</h2>
           </header>
           <ul class="vs">
-            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs1.not">Remote desktop / VNC / screen share</s></p><b data-i18n="vs1.is">Attaches to sessions, not the whole desktop</b></li>
-            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs2.not">Another terminal in the browser</s></p><b data-i18n="vs2.is">Opens the session already running on the computer</b></li>
-            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs3.not">Agents moved into the cloud</s></p><b data-i18n="vs3.is">Agents still run on your computer</b></li>
-            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs4.not">A cut-down mobile agent</s></p><b data-i18n="vs4.is">What the computer can do is what the phone can do</b></li>
-            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs5.not">An account login</s></p><b data-i18n="vs5.is">Pairing is authorization; the credential stays in this browser</b></li>
-            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs6.not">A VPN / Tailscale</s></p><b data-i18n="vs6.is">The computer dials out; you do not open ports at home</b></li>
+            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs1.not">Single-vendor remote control</s></p><b data-i18n="vs1.is">Works across Claude Code, Codex, Grok, Gemini, Cursor, OpenCode and plain shells</b></li>
+            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs2.not">Chat-only wrapper or raw mobile SSH</s></p><b data-i18n="vs2.is">True PTY + Chat dual mode, plus a visual multi-pane Board</b></li>
+            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs3.not">Agents moved into the cloud</s></p><b data-i18n="vs3.is">Agents keep running locally on your computer with live diff review</b></li>
+            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs4.not">Guessing remaining usage</s></p><b data-i18n="vs4.is">Multi-plan subscription quota rings read locally on your computer</b></li>
+            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs5.not">Account login or vendor lock-in</s></p><b data-i18n="vs5.is">No account; open source and self-hostable on Cloudflare in 1 command</b></li>
+            <li><p class="not"><i data-i18n="vs.not">Not</i><s data-i18n="vs6.not">VPN / Tailscale / port forwarding</s></p><b data-i18n="vs6.is">Outbound-only with WebRTC P2P direct and SPAKE2+ E2EE</b></li>
           </ul>
+          <div class="vs-cta">
+            <a class="btn btn-line" href="/demo" data-locale-href="demo"><span data-i18n="vs.demo">Try the interactive demo without installing</span><svg><use href="#i-arrow" /></svg></a>
+          </div>
         </div>
       </section>
 
@@ -511,6 +515,7 @@
           <a href="/doc/android-beta" data-locale-href="android" data-i18n="nav.android">Android beta</a>
           <a href="/doc/privacy" data-locale-href="privacy" data-i18n="nav.privacy">Privacy</a>
           <a href="/doc/faq" data-locale-href="faq" data-i18n="nav.faq">FAQ</a>
+          <a href="https://github.com/arronKler/pairfob/discussions" target="_blank" rel="noreferrer" data-i18n="nav.discussions">Discussions</a>
           <a href="https://github.com/arronKler/pairfob/issues/new" target="_blank" rel="noreferrer" data-i18n="nav.feedback">Feedback</a>
           <a href="https://github.com/arronKler/pairfob" target="_blank" rel="noreferrer">GitHub</a>
           <a href="https://herdr.dev" target="_blank" rel="noreferrer">Herdr</a>
@@ -536,7 +541,7 @@
       }
     </script>
 
-    <script src="/home-i18n.js?v=74"></script>
+    <script src="/home-i18n.js?v=75"></script>
     <script src="/home-motion.js?v=1"></script>
   </body>
 </html>

@@ -30,9 +30,13 @@
     if (data?.type === 'file-read' && Number.isSafeInteger(data.id) && typeof data.url === 'string'
       && data.url.length <= 8192 && pending.size < 16 && !pending.has(data.id)) {
       pending.add(data.id);
-      port.postMessage({ type: 'file-read', id: data.id, url: data.url });
+      port.postMessage({ type: 'file-read', id: data.id, url: data.url, kind: data.kind === 'style' ? 'style' : undefined });
+    } else if (data?.type === 'open-file' && typeof data.url === 'string' && data.url.length <= 8192) {
+      port.postMessage({ type: 'open-file', url: data.url, rooted: data.rooted === true });
     } else if (data?.type === 'preview-error' && typeof data.message === 'string') {
       port.postMessage({ type: 'preview-error', message: data.message.slice(0, 1000) });
+    } else if (data?.type === 'preview-size' && Number.isFinite(data.width) && Number.isFinite(data.height)) {
+      port.postMessage({ type: 'preview-size', width: data.width, height: data.height });
     }
   });
 })();

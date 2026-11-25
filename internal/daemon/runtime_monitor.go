@@ -100,7 +100,9 @@ func (e *Engine) runRuntimeMonitors(stop <-chan struct{}, every time.Duration) {
 			select {
 			case event := <-notifications:
 				deliveryCtx, deliveryCancel := context.WithTimeout(ctx, 20*time.Second)
-				_ = e.notifyHerd(deliveryCtx, event)
+				if err := e.notifyHerd(deliveryCtx, event); err == nil {
+					e.attentionRetracted(event)
+				}
 				deliveryCancel()
 			case <-ctx.Done():
 				return
@@ -334,6 +336,12 @@ func (e *Engine) reconcileRuntimeSession(ctx context.Context, session runtime.Se
 	for _, tab := range snapshot.Tabs {
 		tabLabels[tab.TabID] = tab.Label
 	}
+	if allowPush {
+		// The ledger owns needs-you deliveries. Run it before the transition
+		// pushes so answering a blocked pane resolves its notice before a
+		// completion replaces the same tag.
+		e.reconcileAttention(session, snapshot, emitPush)
+	}
 	next := make(map[string]monitoredPane, len(snapshot.Panes))
 	for _, pane := range snapshot.Panes {
 		previous, known := state.panes[pane.PaneID]
@@ -354,7 +362,9 @@ func (e *Engine) reconcileRuntimeSession(ctx context.Context, session runtime.Se
 			if kind == PushDone && (pane.TaskEvidence == "" || pane.TaskEvidence == previous.completionEvidence) {
 				notify = false
 			}
-			if notify && allowPush && e.PushEnabled {
+			// needs_you is ledger-owned above; keep this path for one-shot
+			// completions only.
+			if notify && kind == PushDone && allowPush && e.PushEnabled {
 				emitPush(herdPushForPane(pane, current.workspaceLabel, current.tabLabel, kind))
 			}
 		}

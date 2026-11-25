@@ -128,3 +128,10 @@ func TestPushNotificationCopyCompactsUntrustedLabels(t *testing.T) {
 		t.Fatalf("control characters leaked: title=%q body=%q", title, body)
 	}
 }
+
+func TestPushRetractionCarriesVisibleResolutionCopy(t *testing.T) {
+	title, body := pushNotificationCopy(HerdPush{HerdID: "w0:p1", Kind: PushRetract})
+	if title != "Pairfob · No longer waiting" || body != "Open the session to see its current state." {
+		t.Fatalf("title=%q body=%q", title, body)
+	}
+}

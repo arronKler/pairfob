@@ -1,8 +1,8 @@
-# AgentQuota and AgentQuotaV2
+# Subscription quota reads
 
-`AgentQuota` and `AgentQuotaV2` are additive, read-only inner RPCs on an
+`AgentQuota`, `AgentQuotaV2` and `AgentQuotaStream` are additive, read-only inner RPCs on an
 Established Pairfob session. They use the existing encrypted transport. The
-origin never reads either result. Existing RPC fields, the eleven operation
+origin never reads their results. Existing RPC fields, the eleven operation
 capabilities, and envelope cryptography are unchanged.
 
 `AgentQuota` is the first operation: at most six items, one per provider of a
@@ -32,6 +32,57 @@ Statuses: `ok`, `stale`, `not_installed`, `not_logged_in`, `unsupported`,
 `unavailable`, `setup_required`, `auth_required`, `not_running`. Missing data never means zero usage. An
 expired reset timestamp does not imply renewed quota: a new sample is needed.
 The UI hides percentages for expired samples and samples older than 15 minutes.
+
+## AgentQuotaStream
+
+A current phone first asks `AgentQuotaStream` with `{"compact":true}`.
+Only this operation permits multiple encrypted response envelopes with the same
+request id. Interim results have `items` (newly completed V2 accounts) and
+`done:false`. In compact mode the final `done:true` result contains only items
+not previously sent, plus `order`: every account id exactly once, in source
+order. The phone assembles the complete list and rejects duplicate, missing or
+unknown ids. Unknown providers still count toward the manifest and are omitted
+from display by the existing V2 parser.
+
+Empty `{}` parameters or `{"compact":false}` keep the original stream contract:
+no `order` field and a complete authoritative account list in the final result.
+Other parameters and non-boolean `compact` values are rejected. The older quota
+operations retain their original single-response contract and empty parameters.
+
+The daemon coalesces useful completions with a one-shot 40 ms timer, sends at
+most four interim results, and never wakes periodically while waiting for
+providers. Login/permission errors, failures and throttling can appear before
+numbers. Missing logins travel alongside useful results or the final response.
+If no numeric sample has been sent, the fourth interim slot is reserved for one.
+Warm cache reads normally need only the final response. Provider requests,
+the per-account cache, throttling, authentication states, prefetch and the
+nine-second query budget are shared with the older operations. A canceled
+cache waiter exits without canceling another caller's shared owner. A batch
+that cannot finish reports an RPC error, never an empty successful list.
+
+The phone keeps the original 12-second RPC deadline across deltas and transport
+migration; progress never extends it. An `invalid_argument` response to the
+compact request before any delta retries once with empty parameters. An
+`unknown_op` before any delta falls back to `AgentQuotaV2`, then `AgentQuota`.
+Both decisions are remembered for the connection and reset on reconnect.
+Malformed results, authentication failures, timeouts and errors after progress
+do not permit fallback.
+
+Partial results update the page while it remains busy. The Settings summary
+also shows that more subscriptions are being read, and labels the partial
+count as accounts checked. Unresolved cached accounts retain their own sample
+times; the final list applies removals. A failed stream retains the latest
+visible samples under an error, without persisting an incomplete result as a
+completed cache. Rapid navigation into Settings or the quota page reuses a
+successfully completed read for at most five seconds, only while its samples
+remain within the daemon's existing one-minute freshness window. Explicit
+refresh always sends a read. No background polling is added.
+
+Cold queries can add up to four encrypted relay frames. Compact mode removes
+repeated account payloads from the final frame, but adds an id manifest; a warm
+single-frame response is therefore slightly larger. Streaming is a latency /
+traffic tradeoff, not a claim that every query uses fewer bytes or relay frames.
+No cloud service is added.
 
 ## AgentQuotaV2
 
@@ -106,6 +157,8 @@ which meters are headline, because it knows each provider's shapes:
 | DeepSeek | Its only balance meter | |
 | OpenCode Go | `five hour`, `seven day`, and `monthly` when the plan has one | |
 | Command Code | `five hour`, `seven day`, `monthly balance` | |
+| Factory | `five hour`, `seven day`, `monthly` | |
+| Kiro | The first resource bucket; each resource type is its own pool | |
 
 Freshness is judged where it is shown. All meters of one read share the
 account's `observed_at`; each is also past use once its own `resets_at` has
@@ -140,7 +193,7 @@ Unknown names fail closed without querying providers. `service install` persists
 this non-secret setting. Disabled providers are omitted from both quota responses;
 no remote RPC fields or statuses change.
 
-`pairfob quota authorize <claude|cursor|antigravity>` is a local-only action that
+`pairfob quota authorize <claude|cursor|antigravity|factory>` is a local-only action that
 allows native Keychain interaction for up to two minutes and discards the returned
 credential. A successful read does not promise a permanent grant: that depends on
 the user's choice in macOS. Background reads pause after interaction is required
@@ -267,7 +320,13 @@ return unavailable without falling back to `security` or AppleScript.
   `~/.config/pairfob/command-code.key`), then GETs
   `https://api.commandcode.ai/alpha/whoami`, `/alpha/billing/credits` and
   `/alpha/billing/subscriptions`, scoping the two billing reads to the `orgId`
-  whoami names. `windowLimits.fiveHour` and `windowLimits.weekly` become
+  whoami names. After discovery the billing requests run concurrently, with
+  separate error metadata. Credits errors keep priority; a subscription
+  authentication or rate-limit error remains authoritative after valid credits.
+  A failed credits read cancels the subscription request. Successful reads still
+  make three HTTP requests; on a credits failure the parallel subscription GET
+  may already have started, unlike the former serial short-circuit. No retry is
+  added. `windowLimits.fiveHour` and `windowLimits.weekly` become
   `five hour` and `seven day` shares, carrying the dollars used and the cap as
   their counts; `monthlyCredits` with `purchasedCredits` and `freeCredits`
   becomes one `monthly balance` in `usd`, reset at the subscription's period
@@ -276,6 +335,36 @@ return unavailable without falling back to `security` or AppleScript.
   subscription read costs the plan name and the monthly reset, not the
   numbers. This provider is V2-only. No model turn, CLI process or credential
   write occurs.
+
+- Factory: reads the login the `droid` CLI saved in `~/.factory`
+  (`FACTORY_HOME` moves it). The store is AES-256-GCM ciphertext in the CLI's
+  own `iv:tag:ciphertext` envelope, and its 32-byte key is the CLI's
+  `Factory CLI` / `auth-encryption-key-security-cli` login-keychain item (the
+  older `auth-encryption-key` account is also tried). The key is read through
+  the same native reader as the other providers, so a background read never
+  prompts; a denied read is `allow_keychain`. It then GETs
+  `https://api.factory.ai/api/billing/limits` with the stored access token and,
+  when present, `X-Factory-Org-Id`. `limits.standard.fiveHour`, `weekly` and
+  `monthly` become `five hour`, `seven day` and `monthly` shares from
+  `usedPercent`, reset at `windowEnd`. `hasActiveSubscription: false` is a real
+  login without an allowance (`unsupported`), not zero usage and not a login to
+  renew. Extra Usage is a separate balance and is not read. No token refresh, credential write or model
+  turn occurs. This provider is V2-only.
+
+- Kiro: reads the login the `kiro-cli` CLI saved in its own SQLite database —
+  `~/Library/Application Support/kiro-cli/data.sqlite3` on macOS,
+  `$XDG_DATA_HOME/kiro-cli` elsewhere, `KIRO_DATA_DIR` to move it — with a
+  read-only `sqlite3` query for the `kirocli:social:token` row of `auth_kv`.
+  It then POSTs `AmazonCodeWhispererService.GetUsageLimits` to
+  `https://codewhisperer.us-east-1.amazonaws.com/` with the stored access token
+  and `profile_arn`. Each `usageBreakdownList` entry becomes one share of its
+  own pool from `currentUsageWithPrecision` over `usageLimitWithPrecision`,
+  reset at `nextDateReset`; the first is the account's headline. Counts are
+  shown only when both amounts are whole numbers of the provider's unit
+  (`INVOCATIONS` as `requests`, `CREDIT` as `credits`). `subscriptionTitle`
+  becomes the plan. 401 is `auth_required`; 403 is a logged-in account without
+  a subscription (`unsupported`). No token refresh, CLI process or credential
+  write occurs. This provider is V2-only.
 
 Gemini CLI is deliberately excluded. Each provider represents the locally
 selected account, not an aggregation of multiple login profiles. Provider

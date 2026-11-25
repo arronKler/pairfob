@@ -77,6 +77,53 @@ func TestCreatedShellBusyStartupAcrossCreateCommands(t *testing.T) {
 	}
 }
 
+func TestCreatedShellStartupLongerThanFiveSeconds(t *testing.T) {
+	for _, tc := range []struct {
+		name, pane string
+		command    Command
+	}{
+		{"conversation", "w2:p1", CreateConversationCommand{CWD: "/repo", AgentKind: "codex"}},
+		{"tab", "w1:p2", CreateTabCommand{WorkspaceID: "w1", AgentKind: "codex"}},
+		{"split", "w1:p2", SplitPaneCommand{WorkspaceID: "w1", TargetPaneID: "w1:p1", Direction: SplitRight, AgentKind: "codex"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			// Real login shells with conda and prompt hooks can take over five
+			// seconds. Keep a foreground child until that startup has finished.
+			readyAt := time.Now().Add(6 * time.Second)
+			var starts atomic.Int32
+			socket, log := startScriptedHerdr(t, func(request scriptedRequest) scriptedReply {
+				switch request.Method {
+				case "pane.process_info":
+					if time.Now().Before(readyAt) {
+						return shellProcessReply(tc.pane, 42, 42, 43)
+					}
+					return shellProcessReply(tc.pane, 42, 42)
+				case "agent.start":
+					starts.Add(1)
+					if time.Now().Before(readyAt) {
+						t.Error("agent started while shell initialization was running")
+					}
+					return scriptedReply{Result: map[string]any{"type": "agent_started", "agent": map[string]any{"pane_id": tc.pane}}}
+				}
+				return standardReply(request)
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+			defer cancel()
+			receipt, err := NewHerdr(socket).Execute(ctx, DefaultSession(), "slow-"+tc.name, tc.command)
+			if err != nil || receipt.Outcome != OutcomeApplied || starts.Load() != 1 {
+				t.Fatalf("receipt=%+v err=%v agent.start calls=%d", receipt, err, starts.Load())
+			}
+			for _, request := range log.snapshot() {
+				switch request.Method {
+				case "workspace.close", "tab.close", "pane.close":
+					t.Fatalf("rolled back a shell that became ready: %s", request.Method)
+				}
+			}
+		})
+	}
+}
+
 func shellProcessReply(paneID string, foreground int, pids ...int) scriptedReply {
 	processes := make([]any, 0, len(pids))
 	for _, pid := range pids {
@@ -141,6 +188,24 @@ func TestCreatedShellReadinessFailsClosed(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCreatedShellReadinessHonorsCallerDeadline(t *testing.T) {
+	socket, log := startScriptedHerdr(t, func(request scriptedRequest) scriptedReply {
+		return shellProcessReply("w2:p1", 42, 42, 43)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	err := NewHerdr(socket).waitCreatedShell(ctx, DefaultSession(), "w2:p1")
+	fault, ok := AsFault(err)
+	if !ok || fault.Code != CodeNotReady || fault.Outcome != OutcomeNotApplied || ctx.Err() == nil {
+		t.Fatalf("fault=%+v err=%v context=%v", fault, err, ctx.Err())
+	}
+	for _, request := range log.snapshot() {
+		if request.Method != "pane.process_info" {
+			t.Fatalf("unexpected mutation: %s", request.Method)
+		}
 	}
 }
 

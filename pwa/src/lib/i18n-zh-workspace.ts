@@ -268,6 +268,11 @@ export const zhWorkspace = {
   'preview.reload': '重新加载',
   'preview.width': '预览宽度',
   'preview.widthAuto': '自适应',
+  'preview.widthDesktop': '电脑',
+  'preview.widthDesktopTitle': '按电脑屏幕宽度阅读',
+  'preview.zoomTools': '页面缩放',
+  'preview.desktopViewOnly': '只读 · 切回“自适应”可操作页面',
+  'preview.desktopViewOnlyShort': '只读',
   'preview.widthPx': '{width} 像素宽',
   'preview.p2pRequired': 'HTML 预览需要 P2P 直连。连接恢复后会自动加载；现在仍可切换到源码。',
   'preview.loading': '正在读取完整页面及资源…',
@@ -276,4 +281,5 @@ export const zhWorkspace = {
   'preview.stale': '会话或工作目录已变化，请在当前会话重新打开文件。',
   'preview.limit': '预览资源超过上限（128 个文件 / 共 32 MiB）。',
   'preview.missing': '页面未完成加载，请重试。',
+  'preview.missingFiles': '{count} 个本地文件未能加载：{files}',
 } as const;

@@ -81,7 +81,7 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantOps := []string{
-		"Ping", "GetConfig", "DaemonUpdateStatus", "DaemonUpdate", "AgentQuota", "AgentQuotaV2", "AgentInspect", "Snapshot", "PaneRead", "SendText", "SendKeys",
+		"Ping", "GetConfig", "DaemonUpdateStatus", "DaemonUpdate", "AgentQuota", "AgentQuotaV2", "AgentQuotaStream", "AgentInspect", "Snapshot", "PaneRead", "SendText", "SendKeys",
 		"PushSubscribe", "RevokeDevice", "ListDevices", "ListSessions", "History", "AgentTrace", "AgentTraceSummary", "AgentTraceModelSummary", "AgentTraceDetail", "RenamePane",
 		"RenameTab", "RenameWorkspace", "ClosePane", "CloseTab", "CloseWorkspace",
 		"CreateConversation", "CreateTab", "SplitPane", "PromptAgent", "ListWorktrees",
@@ -298,6 +298,9 @@ func TestRPCSchemaListsExactSurface(t *testing.T) {
 		t.Error("AgentQuotaV2 must reject all parameters")
 	}
 	requireExactObject(t, schema.Defs, "agentQuotaV2Result", []string{"items"})
+	requireExactObjectFields(t, schema.Defs, "agentQuotaStreamResult", []string{"items", "done", "order"}, []string{"items", "done"})
+	requireExactObjectFields(t, paramsByOp, "AgentQuotaStream", []string{"compact"}, nil)
+
 	requireExactObjectFields(t, schema.Defs, "agentQuotaAccount",
 		[]string{"id", "provider", "plan", "scope", "region", "label", "source", "state", "reason", "observed_at", "retry_at", "meters"},
 		[]string{"id", "provider", "plan", "state", "observed_at", "meters"})

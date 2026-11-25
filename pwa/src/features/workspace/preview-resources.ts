@@ -1,4 +1,5 @@
 import { t } from '../../lib/i18n';
+import { ProtocolError } from '../../lib/protocol/errors';
 import { WorkspaceMediaLoader, type MediaContentCache, type MediaSession } from './media-loader';
 
 export const PREVIEW_ORIGIN = 'https://pairfob-preview.invalid';
@@ -32,12 +33,41 @@ export class PreviewResources {
   private queue: Promise<unknown> = Promise.resolve();
   private bytes = 0;
   private stopped = false;
+  /** The page's own directories, deepest first: `site/blog/`, `site/`. */
+  private ancestors: string[];
+  /** The directory a root-relative reference was last found under. */
+  private site: string | null = null;
 
   constructor(private session: MediaSession, private pane: string, path: string, private current: () => boolean, private sharedCache?: MediaContentCache) {
     this.base = `${PREVIEW_ORIGIN}/${path.split('/').map(encodeURIComponent).join('/')}`;
+    const dirs = path.split('/').slice(0, -1);
+    this.ancestors = dirs.map((_, i) => dirs.slice(0, dirs.length - i).join('/') + '/');
   }
   close(): void { this.stopped = true; this.cached.clear(); this.loader.release(); }
   private check(): void { if (this.stopped || !this.current()) throw new Error(t('preview.stale')); }
+
+  /**
+   * Where a path may live. A root-relative reference (`/assets/app.js`) names
+   * the site's root, which for a built page is its own directory
+   * (`dist/index.html`), not the workspace. A path above the page's top
+   * directory is read as written first, then under the page's directories.
+   * Paths inside the page's own tree resolved correctly and get no retries.
+   */
+  private candidates(path: string): string[] {
+    const top = this.ancestors.at(-1);
+    if (!top || path.startsWith(top)) return [path];
+    const dirs = this.site ? [this.site, ...this.ancestors] : this.ancestors;
+    return [...new Set([path, ...dirs.map(dir => dir + path)])];
+  }
+
+  /** The workspace file a link names. A root-relative link follows a site root already found by the page's resources. */
+  linkPath(url: string, rooted: boolean): string {
+    const target = new URL(url);
+    if (target.pathname.endsWith('/')) target.pathname += 'index.html';
+    const path = previewResourcePath(target.href);
+    return rooted && this.site && this.candidates(path).length > 1 ? this.site + path : path;
+  }
+
   read = (url: string): Promise<PreviewResource> => {
     this.check();
     const path = previewResourcePath(url);
@@ -45,18 +75,27 @@ export class PreviewResources {
     if (hit) return hit;
     if (this.cached.size >= MAX_FILES) return Promise.reject(new Error(t('preview.limit')));
     const result = this.queue.then(async () => {
-      this.check();
-      try {
-        const loaded = await this.loader.load(this.session, this.pane, path, ({ total }) => {
+      let missing: unknown;
+      for (const candidate of this.candidates(path)) {
+        this.check();
+        try {
+          const loaded = await this.loader.load(this.session, this.pane, candidate, ({ total }) => {
+            this.check();
+            if (this.bytes + total > MAX_BYTES) throw new Error(t('preview.limit'));
+          }, undefined, this.sharedCache);
           this.check();
-          if (this.bytes + total > MAX_BYTES) throw new Error(t('preview.limit'));
-        }, undefined, this.sharedCache);
-        this.check();
-        const bytes = new Uint8Array(await loaded.blob.arrayBuffer());
-        this.check();
-        this.bytes += bytes.length;
-        return { bytes, mime: MIMES[path.split('.').pop()?.toLowerCase() || ''] || loaded.open.mime };
-      } finally { this.loader.release(); }
+          const bytes = new Uint8Array(await loaded.blob.arrayBuffer());
+          this.check();
+          this.bytes += bytes.length;
+          if (candidate !== path) this.site = candidate.slice(0, -path.length);
+          return { bytes, mime: MIMES[candidate.split('.').pop()?.toLowerCase() || ''] || loaded.open.mime };
+        } catch (error) {
+          // Only absence moves on to the next place; every other failure is the answer.
+          if (!(error instanceof ProtocolError && error.code === 'workspace_not_found')) throw error;
+          missing = error;
+        } finally { this.loader.release(); }
+      }
+      throw missing;
     });
     this.cached.set(path, result);
     this.queue = result.catch(() => undefined);

@@ -97,6 +97,8 @@ const ALIASES: Readonly<Record<string, string>> = {
   "qoder-cli": "qoder",
   "qodercli": "qoder",
   "factory-droid": "droid",
+  "factory": "droid",
+  "droid-cli": "droid",
   "hermes-agent": "hermes",
   "trae-agent": "trae",
   "trae-cli": "trae",

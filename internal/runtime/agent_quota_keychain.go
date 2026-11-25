@@ -26,6 +26,7 @@ var quotaKeychains = map[string]quotaKeychainSpec{
 	"claude":      {"Claude Code-credentials", "", 1024 * 1024},
 	"cursor":      {"cursor-access-token", "cursor-user", 16384},
 	"antigravity": {"gemini", "antigravity", 256 * 1024},
+	"factory":     {"Factory CLI", "auth-encryption-key-security-cli", 4096},
 }
 
 // Diagnostics contain no credential bytes, account names or arbitrary errors.
@@ -60,12 +61,19 @@ func quotaKeychainRead(ctx context.Context, service, account string, limit int) 
 	return quotaKeychain.read(ctx, provider, quotaKeychainSpec{service, account, limit}, false, nativeQuotaKeychainRead)
 }
 
+// quotaKeychainReadAs reads one item for a provider that keeps more than one
+// account name, so every layout shares that provider's pause and diagnostics.
+// It is a seam so tests need no keychain.
+var quotaKeychainReadAs = func(ctx context.Context, provider, service, account string, limit int) ([]byte, error) {
+	return quotaKeychain.read(ctx, provider, quotaKeychainSpec{service, account, limit}, false, nativeQuotaKeychainRead)
+}
+
 // AuthorizeQuotaKeychain is called only by an explicit local CLI action. It
 // discards the secret; neither the CLI nor the admin socket returns it.
 func AuthorizeQuotaKeychain(ctx context.Context, provider string) error {
 	spec, ok := quotaKeychains[provider]
 	if !ok {
-		return errors.New("choose claude, cursor or antigravity")
+		return errors.New("choose claude, cursor, antigravity or factory")
 	}
 	raw, err := quotaKeychain.read(ctx, provider, spec, true, nativeQuotaKeychainRead)
 	clear(raw)

@@ -160,11 +160,15 @@ export function resetDiffWrap(): void {
 }
 
 /**
- * The width an HTML preview is drawn at: a phone's, a tablet's, or the room
- * the page has. Whether the choice is offered, and so whether it applies, is
- * the preview's own question (`preview-controls`).
+ * The width an HTML preview is drawn at: a phone's, a tablet's, a PC's, or the
+ * room the page has. A page drawn wider than the stage is read through the
+ * preview's zoom surface, so the width can be chosen on any screen; whether a
+ * choice is offered, and so whether it applies, is the preview's own question
+ * (`preview-controls`).
  */
-export const PREVIEW_WIDTHS = [375, 768] as const;
+/** The width a page is drawn at when it is read as a PC draws it. */
+export const PREVIEW_DESKTOP_WIDTH = 1280;
+export const PREVIEW_WIDTHS = [375, 768, PREVIEW_DESKTOP_WIDTH] as const;
 export type PreviewWidth = (typeof PREVIEW_WIDTHS)[number] | "auto";
 
 const PREVIEW_WIDTH_KEY = "pairfob.workspace.previewWidth";
