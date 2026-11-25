@@ -67,8 +67,8 @@ describe("static content security policy", () => {
     }
   });
 
-  test("only the PWA admits the QR decoder's bundled blob worker", async () => {
-    for (const path of ["/pair", "/pair/", "/assets/qr-scanner-worker.js"]) {
+  test("only the pairing documents admit the QR decoder's bundled blob worker", async () => {
+    for (const path of ["/pair", "/pair/", "/pair.html"]) {
       const csp = await cspOf(path);
       expect(csp.split(";").map(rule => rule.trim())).toContain("worker-src 'self' blob:");
       expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval';");
@@ -76,10 +76,10 @@ describe("static content security policy", () => {
       expect(csp).not.toContain("'unsafe-inline'");
       expect(csp).not.toContain("'unsafe-eval'");
     }
-    for (const path of ["/", "/zh", "/doc"]) {
+    for (const path of ["/", "/zh", "/doc", "/pair/workspace/root", "/demo", "/demo/", "/demo.html", "/sw.js", "/assets/qr-scanner-worker.js"]) {
       const csp = await cspOf(path);
       expect(csp.split(";").map(rule => rule.trim())).toContain("worker-src 'self'");
-      expect(csp).not.toContain("blob:");
+      // Blob media is independent of permission to start blob workers.
     }
   });
 

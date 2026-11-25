@@ -1,7 +1,7 @@
 import { PREVIEW_HEADERS, PREVIEW_PATH } from "./preview-policy";
 import { handleAdmin } from "./admin.ts";
 import { appCorsHeaders, appPreflight, hasAppOrigin, isAllowedClientOrigin, withCors } from "./app-origin.ts";
-import { CSP_SITE, DAEMON_ID_RE, PROTOCOL, SUBPROTOCOL } from "./constants.ts";
+import { CSP, CSP_SITE, DAEMON_ID_RE, PROTOCOL, SUBPROTOCOL } from "./constants.ts";
 import { handleEnroll } from "./enroll.ts";
 import { handleEvents, observeDocument } from "./events.ts";
 import { getDaemon } from "./d1.ts";
@@ -285,7 +285,11 @@ async function followDocAsset(assets: Fetcher, req: Request, url: URL, res: Resp
 function staticAssetHeaders(path: string, ok: boolean, contentType: string | null): Record<string, string> | undefined {
   if (!ok) return undefined;
   if (path === PREVIEW_PATH) return PREVIEW_HEADERS;
-  if (isPairAppPath(path) || isDemoAppPath(path)) {
+  if (isPairAppPath(path)) {
+    // qr-scanner's fallback decoder starts a blob Worker in this document.
+    return { "Content-Security-Policy": CSP.replace("worker-src 'self';", "worker-src 'self' blob:;"), "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, no-transform" };
+  }
+  if (isDemoAppPath(path)) {
     return { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, no-transform" };
   }
   // Build-generated, content-addressed assets can be reused across reloads.
