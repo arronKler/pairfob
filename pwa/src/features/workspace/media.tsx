@@ -9,14 +9,14 @@ import { formatMediaBytes } from "./media-model";
 import type { WorkspaceMediaView } from "./media-model";
 
 /** Zoom is counted from the picture fitted to its stage: 1 is the fit, and never less. */
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 8;
+export const MIN_ZOOM = 1;
+export const MAX_ZOOM = 8;
 /** Two presses this close in time and place are one double press. */
-const DOUBLE_PRESS_MS = 320;
-const DOUBLE_PRESS_PX = 32;
+export const DOUBLE_PRESS_MS = 320;
+export const DOUBLE_PRESS_PX = 32;
 /** A press that travelled further, or lasted longer, was a drag or a hold. */
-const PRESS_SLOP_PX = 10;
-const PRESS_MS = 350;
+export const PRESS_SLOP_PX = 10;
+export const PRESS_MS = 350;
 
 /** How large the fitted picture is drawn against its own pixels; 0 until it can be measured. */
 function fitScale(node: HTMLImageElement | null): number {
@@ -43,7 +43,7 @@ export function zoomReadout(zoom: number, fit: number): string {
  * control that goes out of use under the reader (zoom out, at the fit) hands
  * the keyboard to its neighbour, not to the page.
  */
-function useToolbarStops(bar: RefObject<HTMLElement | null>): {
+export function useToolbarStops(bar: RefObject<HTMLElement | null>): {
   onFocus(event: FocusEvent<HTMLElement>): void;
   onKeyDown(event: KeyboardEvent<HTMLElement>): void;
 } {

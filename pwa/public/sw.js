@@ -3,6 +3,7 @@ const PREVIOUS_CACHE = "pairfob-shell-v12";
 const PREF = "pairfob-pref";
 const NOTIFY_DIAGNOSTICS = "pairfob-notification-diagnostics-v1";
 const NOTIFY_LOG = "/__pairfob_notification_diagnostics__";
+const NOTIFY_RESOLVED = "pairfob-notification-resolved-v1";
 const SHELL = ["/", "/pair", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 const SHELL_NETWORK_GRACE_MS = 750;
 
@@ -56,6 +57,10 @@ function notificationCopy(data, lang) {
     done: en ? "Pairfob · Turn finished" : "Pairfob · 本轮结束",
     body: en ? "Agent status updated" : "Agent 状态已更新",
     need: en ? "An agent needs you" : "Agent 需要你处理",
+  };
+  if (kind === "retract") return {
+    title: en ? "Pairfob · No longer waiting" : "Pairfob · 不再等待",
+    body: en ? "Open the session to see its current state." : "打开会话查看当前状态。",
   };
   return {
     title: blocked ? copy.blocked : done ? copy.done : title || "Pairfob",
@@ -365,20 +370,86 @@ self.addEventListener("message", (event) => {
   event.waitUntil(caches.open(PREF).then((cache) => cache.put("lang", new Response(lang === "auto" ? "" : lang))));
 });
 
+// Retain content-free resolution markers across worker restarts. A delayed
+// needs-you push must not restore an episode whose resolution arrived first.
+const resolvedEpisodes = new Map();
+async function notificationResolutions(tag, episode, resolve) {
+  const key = "/__pairfob_notification_resolved__/" + encodeURIComponent(tag);
+  let rows = resolvedEpisodes.get(tag);
+  let cache;
+  try {
+    cache = await caches.open(NOTIFY_RESOLVED);
+    if (!rows) rows = await (await cache.match(key))?.json();
+  } catch { /* Keep ordering protection in memory when storage is unavailable. */ }
+  const now = Date.now();
+  rows = Array.isArray(rows) ? rows.filter(row => row && typeof row.event === "string"
+    && Number.isFinite(row.at) && row.at >= now - 86400000 && row.at <= now + 60000) : [];
+  const retired = rows.some(row => row.event === episode);
+  if (resolve && !retired) rows.push({ event: episode, at: now });
+  rows = rows.slice(-32);
+  resolvedEpisodes.delete(tag);
+  resolvedEpisodes.set(tag, rows);
+  if (resolvedEpisodes.size > 256) resolvedEpisodes.delete(resolvedEpisodes.keys().next().value);
+  if (resolve && cache) try {
+    await cache.put(key, Response.json(rows));
+    const keys = await cache.keys();
+    await Promise.all(keys.slice(0, Math.max(0, keys.length - 256)).map(old => cache.delete(old)));
+  } catch { /* Display must not depend on storage writes. */ }
+  return retired;
+}
+
+async function showPushNotification(data) {
+  const tag = typeof data.tag === "string" && data.tag ? data.tag : "herd";
+  const episode = typeof data.event === "string" ? data.event : "";
+  const resolving = data.kind === "retract";
+  const retired = episode && (resolving || data.kind === "needs_you")
+    ? await notificationResolutions(tag, episode, resolving) : false;
+  const quiet = resolving || retired;
+  let current;
+  if (quiet) {
+    // Re-show a newer episode (or completion) instead of replacing it with an
+    // older resolution. Every push must display a notice: Safari revokes
+    // subscriptions that perform silent work, including close-only pushes.
+    try {
+      const shown = await self.registration.getNotifications({ tag });
+      current = shown.find(notice => {
+        if ((notice.data?.event || "") === episode) return false;
+        const incomingAt = data.event_at;
+        const currentAt = notice.data?.event_at;
+        // Nanoseconds travel as decimal strings to retain all precision.
+        // A resolution for a newer episode must replace an older wait too.
+        return !/^[0-9]{19}$/.test(incomingAt) || !/^[0-9]{19}$/.test(currentAt)
+          || currentAt >= incomingAt;
+      });
+    } catch { /* Fall back to the visible resolution. */ }
+    if (!current) data = { ...data, kind: "retract" };
+  }
+  const copy = current || notificationCopy(data, await readLang());
+  await self.registration.showNotification(copy.title, {
+    body: copy.body,
+    tag,
+    icon: "/icon.svg",
+    badge: "/icon.svg",
+    renotify: !quiet,
+    silent: quiet ? true : undefined,
+    data: current ? current.data : {
+      url: safeNotificationURL(data.url), event: episode, event_at: data.event_at, kind: data.kind,
+    },
+  });
+  await recordNotificationDiagnostic(resolving ? "notify_sw_retract" : "notify_sw_shown",
+    quiet ? { reason: current ? "preserved" : "resolved" } : {});
+}
+
+// Push events may overlap while reading preferences or creating a notice.
+// Order display work so a resolution cannot overtake its in-flight notice.
+let notificationWork = Promise.resolve();
 self.addEventListener("push", (event) => {
-  event.waitUntil((async () => {
-    let data = {};
-    try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data?.text() || "" }; }
-    const copy = notificationCopy(data, await readLang());
-    await self.registration.showNotification(copy.title, {
-      body: copy.body,
-      tag: typeof data.tag === "string" ? data.tag : "herd",
-      icon: "/icon.svg",
-      badge: "/icon.svg",
-      data: { url: safeNotificationURL(data.url) },
-    });
-    await recordNotificationDiagnostic("notify_sw_shown");
-  })());
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data?.text() || "" }; }
+  if (!data || typeof data !== "object" || Array.isArray(data)) data = {};
+  const pending = notificationWork.then(() => showPushNotification(data));
+  notificationWork = pending.catch(() => {});
+  event.waitUntil(pending);
 });
 
 // Older pages do not speak the message protocol. Only fall back to navigation

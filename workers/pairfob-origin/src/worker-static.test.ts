@@ -35,6 +35,22 @@ describe("worker static overlay", () => {
     }
   });
 
+  test("GET /demo bypasses HTML normalization and serves the opaque demo shell", async () => {
+    const env = testEnv({
+      assets: assets({
+        "/index.html": "<h1>marketing</h1>",
+        "/demo-shell.asset": "<main id=\"app\"></main><script src=\"/assets/demo.js\"></script>",
+      }, true),
+    });
+    for (const path of ["/demo", "/demo/", "/demo.html"]) {
+      const res = await handleFetch(new Request("https://pairfob.com" + path), env);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("text/html");
+      expect(res.headers.get("Cache-Control")).toBe("no-store, no-transform");
+      expect(await res.text()).toContain("demo.js");
+    }
+  });
+
   test("GET /zh serves the same marketing document as /", async () => {
     const env = testEnv({
       assets: assets({

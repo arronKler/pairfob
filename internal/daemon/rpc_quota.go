@@ -43,8 +43,11 @@ func (entry *quotaEntry) fresh(now time.Time) bool {
 // read returns the account's reading: the cached one while it is fresh, the
 // result of a read already in flight, or a new read. Two phones refreshing
 // together share one read rather than starting a second process or request.
-func (c *quotaCache) read(ctx context.Context, source runtime.QuotaSource) runtime.QuotaReading {
+func (c *quotaCache) read(ctx context.Context, source runtime.QuotaSource) (runtime.QuotaReading, error) {
 	for {
+		if err := ctx.Err(); err != nil {
+			return runtime.QuotaReading{}, err
+		}
 		c.mu.Lock()
 		if c.entries == nil {
 			c.entries = map[string]*quotaEntry{}
@@ -57,12 +60,16 @@ func (c *quotaCache) read(ctx context.Context, source runtime.QuotaSource) runti
 		if entry.fresh(time.Now()) {
 			reading := entry.reading
 			c.mu.Unlock()
-			return reading
+			return reading, nil
 		}
 		if running := entry.running; running != nil {
 			c.mu.Unlock()
-			<-running
-			continue
+			select {
+			case <-running:
+				continue
+			case <-ctx.Done():
+				return runtime.QuotaReading{}, ctx.Err()
+			}
 		}
 		running := make(chan struct{})
 		entry.running = running
@@ -83,28 +90,8 @@ func (c *quotaCache) read(ctx context.Context, source runtime.QuotaSource) runti
 		entry.reading, entry.sampled, entry.running = reading, now, nil
 		c.mu.Unlock()
 		close(running)
-		return reading
+		return reading, nil
 	}
-}
-
-// quotaReadings reads every account once, bounded as a batch. Account queries
-// run off the session queue so terminal traffic never waits on a provider.
-func (e *Engine) quotaReadings() []runtime.QuotaReading {
-	sources := runtime.QuotaSources
-	if e.QuotaSources != nil {
-		sources = e.QuotaSources
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), quotaBatchTime)
-	defer cancel()
-	list := sources()
-	out := make([]runtime.QuotaReading, len(list))
-	var wg sync.WaitGroup
-	for i, source := range list {
-		wg.Add(1)
-		go func() { defer wg.Done(); out[i] = e.quotas.read(ctx, source) }()
-	}
-	wg.Wait()
-	return out
 }
 
 // prefetchQuota reads every account once in the background when a phone
@@ -131,8 +118,13 @@ func (e *Engine) rpcAgentQuota(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "invalid_argument", "AgentQuota takes no parameters")
 		return
 	}
+	readings, err := e.quotaBatch(nil)
+	if err != nil {
+		e.replyErr(s, id, "internal", "subscription quota query timed out")
+		return
+	}
 	items := []runtime.AgentQuota{}
-	for _, reading := range e.quotaReadings() {
+	for _, reading := range readings {
 		if reading.Legacy != nil {
 			items = append(items, *reading.Legacy)
 		}
@@ -146,7 +138,11 @@ func (e *Engine) rpcAgentQuotaV2(s *sess, id string, params json.RawMessage) {
 		e.replyErr(s, id, "invalid_argument", "AgentQuotaV2 takes no parameters")
 		return
 	}
-	readings := e.quotaReadings()
+	readings, err := e.quotaBatch(nil)
+	if err != nil {
+		e.replyErr(s, id, "internal", "subscription quota query timed out")
+		return
+	}
 	items := make([]runtime.QuotaAccount, len(readings))
 	for i, reading := range readings {
 		items[i] = reading.Account

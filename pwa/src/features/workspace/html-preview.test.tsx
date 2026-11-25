@@ -8,7 +8,7 @@ import { connectionStore, setPhase, setSessionTransport, setNetworkOnline, setTr
 import { WorkspaceReadCache } from '../../lib/workspace-cache';
 import type { LiveSession } from '../../lib/protocol/session-types';
 import { HTMLPreview } from './html-preview';
-import { PREVIEW_WIDTH_STAGE_MIN, PreviewSwitch, previewWidthOffered, usePreviewControls } from './preview-controls';
+import { PREVIEW_DESKTOP_WIDTH, PREVIEW_WIDTH_STAGE_MIN, PreviewSwitch, previewWidthChoices, previewWidthOffered, usePreviewControls } from './preview-controls';
 import { previewWidth, setPreviewWidth } from './prefs';
 import { setLang } from '../../lib/i18n';
 import { loadWorkspaceFile } from './actions';
@@ -114,18 +114,19 @@ test('relay blocks HTML media, P2P recovery starts it, and fallback removes the 
   expect(opens).toBe(1);
 });
 
-test('a width is chosen where the stage is wider than the widest choice, whatever presses it', () => {
-  expect(previewWidthOffered(PREVIEW_WIDTH_STAGE_MIN)).toBeTrue();
-  expect(previewWidthOffered(PREVIEW_WIDTH_STAGE_MIN - 1)).toBeFalse();
-  // The column beside a session, and no preview on the page.
-  expect(previewWidthOffered(720)).toBeFalse();
+test('a width is a question once the stage is measured: device widths where they fit, the PC width everywhere', () => {
+  expect(previewWidthChoices(PREVIEW_WIDTH_STAGE_MIN)).toEqual([375, 768, PREVIEW_DESKTOP_WIDTH, 'auto']);
+  expect(previewWidthChoices(PREVIEW_WIDTH_STAGE_MIN - 1)).toEqual(['auto', PREVIEW_DESKTOP_WIDTH]);
+  // The column beside a session still draws its page as a PC does.
+  expect(previewWidthOffered(720)).toBeTrue();
+  // Nothing is measured until a preview is on the page.
   expect(previewWidthOffered(0)).toBeFalse();
 });
 
 test('a wide tablet under a finger is offered the widths too', async () => {
   setLang('en'); surface(false, 1010);
   renderReact(<Page />); await settle();
-  expect(widthButtons().map((item) => item.textContent)).toEqual(['375', '768', 'Auto']);
+  expect(widthButtons().map((item) => item.textContent)).toEqual(['375', '768', 'PC', 'Auto']);
   act(() => { widthButtons()[0].click(); });
   expect(document.querySelector('iframe')!.style.width).toBe('375px');
 });
@@ -133,10 +134,11 @@ test('a wide tablet under a finger is offered the widths too', async () => {
 test('375, 768 and auto hold the frame to a width and centre it, without reloading the page', async () => {
   setLang('en'); surface(true, 1000);
   renderReact(<Page />); await settle();
-  expect(widthButtons().map((item) => item.textContent)).toEqual(['375', '768', 'Auto']);
+  expect(widthButtons().map((item) => item.textContent)).toEqual(['375', '768', 'PC', 'Auto']);
   expect(widthSwitch()!.getAttribute('aria-label')).toBe('Preview width');
-  expect(widthButtons().map((item) => item.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true']);
+  expect(widthButtons().map((item) => item.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false', 'true']);
   expect(widthButtons()[0].getAttribute('aria-label')).toBe('375 pixels wide');
+  expect(widthButtons()[2].getAttribute('aria-label')).toBe('1280 pixels wide');
   const frame = document.querySelector('iframe')!;
   expect(frame.style.width).toBe('');
   expect(document.querySelector('.workspace-html')!.classList.contains('is-sized')).toBeFalse();
@@ -149,11 +151,32 @@ test('375, 768 and auto hold the frame to a width and centre it, without reloadi
   expect(opens).toBe(1);
   act(() => { widthButtons()[1].click(); });
   expect(frame.style.width).toBe('768px');
-  act(() => { widthButtons()[2].click(); });
+  act(() => { widthButtons()[3].click(); });
   expect(frame.style.width).toBe('');
   expect(localStorage.getItem('pairfob.workspace.previewWidth')).toBeNull();
   // The frame's sandbox is what it was: the width is the only thing the switch touches.
   expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-forms allow-downloads allow-popups');
+});
+
+test('a PC width narrower than the stage is a boxed page, and a wider one is read on the zoom surface', async () => {
+  setLang('en'); surface(true, 1000);
+  renderReact(<Page />); await settle();
+  act(() => { widthButtons()[2].click(); });
+  const frame = document.querySelector('iframe')!;
+  expect(frame.style.width).toBe('1280px');
+  expect(document.querySelector('.workspace-html')!.classList.contains('is-desktop')).toBeTrue();
+  expect(document.querySelector('.workspace-html-desktop')).not.toBeNull();
+  expect(document.querySelector('.workspace-html-desktop-page')!.getAttribute('style')).toContain('width: 1280px');
+  expect(document.querySelector('.workspace-html-desktop-tools')!.getAttribute('role')).toBe('toolbar');
+  expect(frame.closest('.workspace-html-desktop-page')).not.toBeNull();
+  // A wide stage holds the whole page itself: no zoom surface, a boxed page.
+  unmountReact();
+  surface(true, 1400);
+  renderReact(<Page />); await settle();
+  act(() => { widthButtons()[2].click(); });
+  expect(document.querySelector('.workspace-html-desktop')).toBeNull();
+  expect(document.querySelector('.workspace-html')!.classList.contains('is-desktop')).toBeFalse();
+  expect(document.querySelector('iframe')!.style.width).toBe('1280px');
 });
 
 test('the source has no width to choose, and the choice waits for the preview', async () => {
@@ -169,15 +192,35 @@ test('the source has no width to choose, and the choice waits for the preview', 
   expect(document.querySelector('iframe')!.style.width).toBe('768px');
 });
 
-test('a remembered width is not applied on a stage too narrow to offer it, under a mouse or a finger', async () => {
-  for (const fine of [true, false]) {
-    surface(fine, 700); setPreviewWidth(375);
+test('a narrow stage offers Auto and PC, and one toggle where even those two will not fit', async () => {
+  for (const [fine, lang] of [[true, 'en'], [false, 'zh']] as const) {
+    setLang(lang); surface(fine, 390); setPreviewWidth(375);
     renderReact(<Page />); await settle();
-    expect(widthSwitch()).toBeNull();
+    expect(widthButtons().map((item) => item.textContent))
+      .toEqual(lang === 'en' ? ['Auto', 'PC'] : ['自适应', '电脑']);
+    expect(widthButtons()[1].getAttribute('aria-pressed')).toBe('false');
     expect(document.querySelector('iframe')!.style.width).toBe('');
     expect(document.querySelector('.workspace-html')!.classList.contains('is-sized')).toBeFalse();
-    // The choice is kept for where it is offered.
-    expect(previewWidth()).toBe(375);
+    act(() => { widthButtons()[1].click(); });
+    expect(previewWidth()).toBe(PREVIEW_DESKTOP_WIDTH);
+    expect(document.querySelector('.workspace-html-desktop')).not.toBeNull();
+    act(() => { widthButtons()[0].click(); });
+    expect(previewWidth()).toBe('auto');
     unmountReact();
+    // Back to the remembered device width, for the other surface and the toggle below.
+    setPreviewWidth(375);
   }
+  // A 320-wide phone cannot hold two segments beside the bar's other controls.
+  setLang('zh'); surface(false, 320);
+  renderReact(<Page />); await settle();
+  expect(widthSwitch()).toBeNull();
+  const pc = document.querySelector<HTMLButtonElement>('.workspace-preview-pc')!;
+  expect(pc.textContent).toBe('电脑');
+  expect(pc.getAttribute('aria-pressed')).toBe('false');
+  expect(document.querySelector('iframe')!.style.width).toBe('');
+  act(() => { pc.click(); });
+  expect(previewWidth()).toBe(PREVIEW_DESKTOP_WIDTH);
+  expect(document.querySelector('.workspace-html-desktop')).not.toBeNull();
+  act(() => { document.querySelector<HTMLButtonElement>('.workspace-preview-pc')!.click(); });
+  expect(previewWidth()).toBe('auto');
 });

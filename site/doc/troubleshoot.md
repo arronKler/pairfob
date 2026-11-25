@@ -106,7 +106,7 @@ the executable, its on-disk signing identity, enabled quota sources and recent
 Keychain results without probing protected folders.
 
 Run `pairfob quota authorize cursor` on the computer to allow a Keychain prompt
-(also supports `claude` and `antigravity`). Whether access persists depends on
+(also supports `claude`, `antigravity` and `factory`). Whether access persists depends on
 your choice in macOS. After changing permissions yourself, use
 `pairfob quota retry cursor` to resume silent reads. Wait for the one-minute
 quota cache to expire before refreshing. Use the same executable as the running

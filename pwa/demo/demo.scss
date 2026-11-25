@@ -1,0 +1,201 @@
+/* Floating live-demo switcher. Positioned fixed so it never alters the app's
+   viewport height or resizes the complete terminal grid. */
+
+.pf-demo-bar {
+  position: fixed;
+  bottom: max(74px, calc(66px + env(safe-area-inset-bottom, 0px)));
+  right: max(16px, env(safe-area-inset-right, 16px));
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 5px 8px 5px 12px;
+  border-radius: 999px;
+  background: rgba(15, 19, 27, 0.92);
+  color: #e9edf3;
+  border: 1px solid rgba(110, 168, 254, 0.34);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", system-ui, sans-serif;
+  font-size: 12.5px;
+  line-height: 1;
+}
+
+.pf-demo-bar.is-collapsed {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.pf-demo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(110, 168, 254, 0.38);
+  background: rgba(15, 19, 27, 0.92);
+  color: #e9edf3;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+}
+
+.pf-demo-head {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.pf-demo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #cfe0ff;
+  white-space: nowrap;
+}
+
+.pf-demo-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #46d68c;
+  box-shadow: 0 0 0 3px rgba(70, 214, 140, 0.2);
+}
+
+.pf-demo-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+}
+
+.pf-demo-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.pf-demo-tab {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #9aa5b4;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.pf-demo-tab:hover {
+  color: #e9edf3;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pf-demo-tab[aria-selected="true"] {
+  background: #2563d9;
+  color: #ffffff;
+}
+
+.pf-demo-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+
+.pf-demo-btn,
+.pf-demo-cta,
+.pf-demo-hide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pf-demo-btn {
+  padding: 0 9px;
+  border: 1px solid rgba(233, 237, 243, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e9edf3;
+}
+
+.pf-demo-cta {
+  padding: 0 11px;
+  border: 0;
+  background: #e9edf3;
+  color: #0b0e13;
+}
+
+.pf-demo-cta:hover {
+  opacity: 0.9;
+}
+
+.pf-demo-hide {
+  width: 28px;
+  border: 0;
+  background: transparent;
+  color: #9aa5b4;
+  font-size: 16px;
+}
+
+.pf-demo-hide:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 719px) {
+  .pf-demo-bar {
+    left: 10px;
+    right: 10px;
+    bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+    max-width: none;
+    padding: 5px 6px 5px 8px;
+    gap: 6px;
+  }
+
+  .pf-demo-bar.is-collapsed {
+    left: auto;
+    right: 12px;
+  }
+
+  .pf-demo-badge {
+    display: none;
+  }
+
+  .pf-demo-cta {
+    display: none;
+  }
+
+  .pf-demo-tab {
+    height: 32px;
+    padding: 0 10px;
+  }
+
+  .pf-demo-btn,
+  .pf-demo-hide {
+    height: 32px;
+  }
+
+  .pf-demo-hide {
+    width: 32px;
+  }
+}

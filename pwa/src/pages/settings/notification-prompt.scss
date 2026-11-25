@@ -16,3 +16,22 @@
   > div { display: flex; justify-content: flex-end; gap: 12px; }
   button { min-height: 44px; }
 }
+
+/*
+  The dock's own floating surfaces hang in this same corner: the key panel and
+  an attachment chip's action bar above the compose row, and a
+  blocked-attachment note over the send button. While one of them is open the
+  invitation steps aside — still offered, not dismissed — instead of covering
+  it; it returns when the reader closes that surface.
+*/
+#app:has(.pad-panel, .attach-pop, .send-issue) .notification-prompt {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* The phone list's floating create button keeps this corner too; the
+   invitation waits above it instead of sitting on it. */
+#app:has(.create-fab) .notification-prompt {
+  bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom, 0px) + 14px + var(--create-fab-h) + 12px);
+}

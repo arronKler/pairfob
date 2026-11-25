@@ -84,11 +84,11 @@ export class DaemonRoom {
     return onMessage(this.core, socket, message);
   }
 
-  webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): void {
+  webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): void | Promise<void> {
     let cleanupFailed = false;
+    const wrapped = this.wraps.get(ws) ?? new CfSocket(ws);
     try {
-      const wrapped = this.wraps.get(ws) ?? new CfSocket(ws);
-      this.core.onClose(wrapped, closeReason(reason));
+      this.core.onClose(wrapped, closeReason(reason), code);
     } catch (error) {
       cleanupFailed = true;
       throw error;
@@ -103,6 +103,10 @@ export class DaemonRoom {
         if (!cleanupFailed) throw error;
       }
     }
+    // Reply first so storage cannot delay the close handshake or retain its I/O.
+    // A native CLOSING socket can still be returned by getWebSockets().
+    this.wraps.set(ws, wrapped);
+    return this.core.settleClosedSocket(wrapped);
   }
 
   webSocketError(_ws: WebSocket, _error: unknown): void {

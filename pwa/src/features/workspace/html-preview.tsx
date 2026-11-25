@@ -3,25 +3,37 @@ import { previewCache } from './preview-cache';
 import { connectionStore } from '../connection/connection-store';
 import { dashboardStore } from "../dashboard/catalog-store";
 import "./workspace-preview.scss";
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { computersStore } from '../computers/catalog-store';
 import { useLiveSession } from '../computers/hooks';
 import { t } from '../../lib/i18n';
 import { messageOf } from '../../lib/notices';
 import { ProtocolError } from '../../lib/protocol/errors';
-import { notePreviewStage, usePreviewFrameWidth, type PreviewControls } from './preview-controls';
+import { notePreviewStage, usePreviewFrameWidth, usePreviewStageWidth, PREVIEW_DESKTOP_WIDTH, type PreviewControls } from './preview-controls';
 import type { FoundLines } from './file-find';
 import { FileSource } from './file-source';
 import type { WorkspaceSnapshot } from './model';
 import { activeScope, getWorkspaceSnapshot, issueTicket, subscribeWorkspace, workspaceContentVersion, workspacePaneCwd } from './store';
-import { PreviewResources } from './preview-resources';
+import { PreviewResources, type PreviewResource } from './preview-resources';
 import { preparePreviewDocument } from './preview-document';
+import { missingPath, previewPacker } from './preview-packer';
+import { loadWorkspaceFile } from './actions';
+import { DesktopPreview } from './preview-desktop';
 
 export { isHTMLFile } from "./preview-controls";
-type Loaded = { token: string; source: string; html: string; resources: PreviewResources };
+type Loaded = {
+  token: string; source: string; html: string; resources: PreviewResources;
+  /** A stylesheet the page adds while it runs, packed like a static one. */
+  style: (url: string) => Promise<PreviewResource>;
+  /** A link in the page to another workspace file. */
+  open: (url: string, rooted: boolean) => void;
+};
+type PageSize = { width: number; height: number };
 
-function PreviewFrame({ loaded, onError, hidden, width }: {
+function PreviewFrame({ loaded, onError, onMissing, onSize, hidden, width }: {
   hidden: boolean; loaded: Loaded; onError: (error: string) => void;
+  onMissing: (path: string, reason: string) => void;
+  onSize: (size: PageSize) => void;
   /** The width the page is tried at, in pixels; null takes the stage's own. Resizing the frame never reloads it. */
   width: number | null;
 }) {
@@ -43,20 +55,28 @@ function PreviewFrame({ loaded, onError, hidden, width }: {
         if (!alive) return;
         if (data?.type === 'preview-ready') { clearTimeout(timer); setReady(true); return; }
         if (data?.type === 'preview-error' && typeof data.message === 'string') { onError(data.message.slice(0, 1000)); return; }
+        if (data?.type === 'preview-size' && Number.isFinite(data.width) && Number.isFinite(data.height)
+          && data.width >= 0 && data.width <= 4000 && data.height >= 0 && data.height <= 20000) {
+          onSize({ width: data.width, height: data.height });
+          return;
+        }
+        if (data?.type === 'open-file' && typeof data.url === 'string' && data.url.length <= 8192) { loaded.open(data.url, data.rooted === true); return; }
         if (data?.type !== 'file-read' || typeof data.url !== 'string' || data.url.length > 8192
           || !Number.isSafeInteger(data.id) || requests >= 16) return;
         requests++;
         try {
-          const resource = await loaded.resources.read(data.url);
+          const resource = await (data.kind === 'style' ? loaded.style(data.url) : loaded.resources.read(data.url));
           if (alive) port.postMessage({ type: 'file-response', id: data.id, ...resource });
         } catch (error) {
-          if (alive) port.postMessage({ type: 'file-response', id: data.id, error: messageOf(error) });
+          if (!alive) return;
+          onMissing(missingPath(data.url), messageOf(error));
+          port.postMessage({ type: 'file-response', id: data.id, error: messageOf(error) });
         } finally { requests--; }
       };
       frame.current?.contentWindow?.postMessage({ type: 'pairfob-preview', html: loaded.html, token: loaded.token }, '*', [channel.port2]);
     };
     return () => { alive = false; clearTimeout(timer); channel?.port1.close(); connect.current = () => undefined; };
-  }, [loaded, onError]);
+  }, [loaded, onError, onMissing, onSize]);
   return <iframe aria-busy={!ready} data-preview-ready={ready ? "true" : "false"} hidden={hidden} ref={frame} className="workspace-html-frame" title={t('preview.title')}
     style={width === null ? undefined : { width: `${width}px` }}
     src="/preview/runner.html" sandbox="allow-scripts allow-forms allow-downloads allow-popups"
@@ -78,8 +98,14 @@ export function HTMLPreview({ snapshot, wrap, controls, found = null }: {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [runtimeError, setRuntimeError] = useState('');
+  const [pageSize, setPageSize] = useState<PageSize | null>(null);
+  const [missing, setMissing] = useState<ReadonlyMap<string, string>>(new Map());
+  const noteMissing = useCallback((path: string, reason: string) => {
+    setMissing(known => known.has(path) ? known : new Map(known).set(path, reason));
+  }, []);
   const stage = useRef<HTMLElement>(null);
   const frameWidth = usePreviewFrameWidth();
+  const stageWidth = usePreviewStageWidth();
   // The info bar offers the width choice by this stage's own width, not the window's.
   useLayoutEffect(() => {
     const node = stage.current;
@@ -90,9 +116,17 @@ export function HTMLPreview({ snapshot, wrap, controls, found = null }: {
     sized?.observe(node);
     return () => { sized?.disconnect(); notePreviewStage(0); };
   }, []);
+  // A page at a PC's width on a narrower stage is read on a zoom surface: the
+  // whole page laid out as the PC lays it out, fitted to the stage and read like
+  // a picture. Anywhere else the frame itself is the page.
+  const desktop = frameWidth === PREVIEW_DESKTOP_WIDTH && stageWidth > 0 && stageWidth < PREVIEW_DESKTOP_WIDTH;
   const sized = frameWidth !== null && mode === 'preview';
+  // A height reported by the stage's own frame says nothing about the page as a
+  // PC draws it: the surface starts from a PC screen and takes the page's height
+  // from the frame it lays out itself.
+  useLayoutEffect(() => { setPageSize(null); }, [desktop]);
   useEffect(() => {
-    setLoaded(null); setSource(null); setError(''); setRuntimeError('');
+    setLoaded(null); setSource(null); setError(''); setRuntimeError(''); setPageSize(null); setMissing(new Map());
     const ticket = issueTicket({ content: 'keep' });
     const cwd = workspacePaneCwd(snapshot.paneId);
     const runtime = session?.herdSession?.();
@@ -113,8 +147,16 @@ export function HTMLPreview({ snapshot, wrap, controls, found = null }: {
         if (!current()) return;
         setSource(text);
         const token = crypto.randomUUID();
-        const html = await preparePreviewDocument(text, resources.base, resources.read, token);
-        if (current()) setLoaded({ token, source: text, html, resources });
+        const page = await preparePreviewDocument(text, resources.base, resources.read, token);
+        if (!current()) return;
+        const open = (url: string, rooted: boolean) => {
+          if (!current()) return;
+          let path: string;
+          try { path = resources.linkPath(url, rooted); } catch (error) { setRuntimeError(messageOf(error)); return; }
+          void loadWorkspaceFile(path);
+        };
+        setMissing(page.missing);
+        setLoaded({ token, source: text, html: page.html, resources, style: previewPacker(resources.read, noteMissing).style, open });
       } catch (error) {
         if (current()) setError(error instanceof ProtocolError && error.code === 'unknown_op'
           ? t('workspace.media.unsupportedDaemon') : error instanceof ProtocolError && error.code === 'p2p_required'
@@ -122,15 +164,22 @@ export function HTMLPreview({ snapshot, wrap, controls, found = null }: {
       }
     })();
     return () => { alive = false; stops.forEach(stop => stop()); resources.close(); };
-  }, [session, snapshot.paneId, snapshot.descriptor?.root, file.path, file.revision, reload, started, direct, contentVersion]);
-  return <section ref={stage} className={`workspace-html${sized ? ' is-sized' : ''}`} aria-label={t('preview.title')}>
-    {loaded && started && direct && <PreviewFrame key={loaded.token} loaded={loaded} hidden={mode !== 'preview'} onError={setRuntimeError}
-      width={sized ? frameWidth : null} />}
+  }, [session, snapshot.paneId, snapshot.descriptor?.root, file.path, file.revision, reload, started, direct, contentVersion, noteMissing]);
+  return <section ref={stage} className={`workspace-html${sized ? ' is-sized' : ''}${desktop ? ' is-desktop' : ''}`} aria-label={t('preview.title')}>
+    {loaded && started && direct && (desktop
+      ? <DesktopPreview key={loaded.token} hidden={mode !== 'preview'} pageHeight={pageSize?.height ?? 0}>
+        <PreviewFrame loaded={loaded} hidden={false} onError={setRuntimeError} onMissing={noteMissing} onSize={setPageSize} width={PREVIEW_DESKTOP_WIDTH} />
+      </DesktopPreview>
+      : <PreviewFrame key={loaded.token} loaded={loaded} hidden={mode !== 'preview'} onError={setRuntimeError} onMissing={noteMissing} onSize={setPageSize}
+        width={sized ? frameWidth : null} />)}
     {mode === 'preview' ? <>
       {!direct ? <p className="workspace-feedback" role="status">{t('preview.p2pRequired')}</p>
         : error ? <p className="workspace-feedback workspace-error" role="alert">{error}</p>
         : loaded ? null
         : <p className="workspace-feedback" role="status">{t('preview.loading')}</p>}
+      {loaded && missing.size > 0 && <p className="workspace-feedback workspace-preview-missing" role="status"
+        title={[...missing].map(([path, reason]) => `${path}: ${reason}`).join('\n')}>
+        {t('preview.missingFiles', { count: missing.size, files: [...missing.keys()].join(', ') })}</p>}
       {runtimeError && <p className="workspace-feedback workspace-error" role="status">{runtimeError}</p>}
     </> : <>
       <FileSource path={file.path} content={source ?? file.content} wrap={wrap} line={snapshot.sourceLine} found={found} />

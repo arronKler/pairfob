@@ -184,6 +184,7 @@ type Engine struct {
 	helloByDevice map[string][]time.Time
 	pushLast      map[string]time.Time
 	pushSem       chan struct{}
+	attention     map[string]*state.AttentionEvent
 
 	runtimeMonitorMu      sync.Mutex
 	runtimeMonitorTouches map[string]time.Time
@@ -241,6 +242,7 @@ func newEngine(hub *mux.Hub, conn mux.Conn, rt runtimeapi.Runtime, pk ed25519.Pu
 		Devices: map[string]*Device{}, sessions: map[[16]byte]*sess{}, byDevice: map[string][16]byte{},
 		nonceByDevice: map[string][]string{}, helloByDevice: map[string][]time.Time{},
 		pushLast: map[string]time.Time{}, pushSem: make(chan struct{}, 8),
+		attention:             map[string]*state.AttentionEvent{},
 		runtimeMonitorTouches: map[string]time.Time{}, runtimeMonitorWake: make(chan struct{}, 1),
 		PushHTTPClient: productionPushHTTPClient(),
 		Journal:        journal.NewDefault(), operations: map[string]*operationRecord{},
@@ -280,6 +282,10 @@ func NewPersistentEngine(hub *mux.Hub, conn mux.Conn, rt runtimeapi.Runtime, sto
 	if err != nil {
 		return nil, err
 	}
+	attentionRows, err := store.LoadAttention()
+	if err != nil {
+		return nil, err
+	}
 	vapid, err := store.LoadOrCreateVAPID(os.Getenv("PAIRFOB_VAPID_SUBJECT"))
 	if err != nil {
 		return nil, err
@@ -297,6 +303,7 @@ func NewPersistentEngine(hub *mux.Hub, conn mux.Conn, rt runtimeapi.Runtime, sto
 	if err := e.restoreOperations(operationRows); err != nil {
 		return nil, err
 	}
+	e.restoreAttention(attentionRows)
 	for _, row := range rows {
 		psk, err := canon.DecodeB64URL(row.PSK)
 		if err != nil || len(psk) != 32 || row.ID == "" {

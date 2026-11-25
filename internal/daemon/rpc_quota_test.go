@@ -63,7 +63,7 @@ func TestAgentQuotaOperationsRejectParametersAndShareOneRead(t *testing.T) {
 			}},
 		}
 	}
-	for _, op := range []string{"AgentQuota", "AgentQuotaV2"} {
+	for _, op := range []string{"AgentQuota", "AgentQuotaV2", "AgentQuotaStream"} {
 		if _, err := client.RPC(op, map[string]any{"path": "/secret"}); err == nil || !strings.Contains(err.Error(), "invalid_argument") {
 			t.Fatalf("%s bad params: %v", op, err)
 		}
@@ -88,6 +88,10 @@ func TestAgentQuotaOperationsRejectParametersAndShareOneRead(t *testing.T) {
 	}
 	if got := calls.Load(); got != 2 {
 		t.Fatalf("account read count %d", got)
+	}
+	raw, err := client.RPC("AgentQuotaStream", map[string]any{})
+	if err != nil || !strings.Contains(string(raw), `"done":true`) || len(quotaTestItems(t, raw)) != 2 {
+		t.Fatalf("stream final: %s, %v", raw, err)
 	}
 	// Each account ages on its own: only the one past a minute is read again.
 	quotaTestAge(engine, "codex", 2*time.Minute)

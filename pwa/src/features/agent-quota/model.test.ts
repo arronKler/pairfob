@@ -27,6 +27,16 @@ const snapshot = (...items: QuotaAccount[]) => ({ loading: false, items, error: 
 
 beforeEach(() => setLang("zh"));
 
+test("partial settings summary keeps its loading notice with numbers or login errors", () => {
+  for (const items of [[account()], [quotaOff("codex", "needs_action", "relogin")]]) {
+    const model = quotaModuleModel({ loading: true, items, error: "" }, true, [], NOW);
+    expect(model.state).toBe("ready");
+    expect(model.incomplete).toBeTrue();
+    expect(model.updated).toBe(t("quota.readingMore"));
+  }
+  expect(quotaModuleModel(snapshot(account()), true, [], NOW).incomplete).toBeUndefined();
+});
+
 describe("the meter that stands for an account", () => {
   test("is the tightest of the meters the computer marked, and never one it did not", () => {
     const meters = [share(25), share(90, { name: "week" }), share(99, { name: "model", pool: "model", headline: false })];
@@ -238,6 +248,9 @@ describe("what to do about an account without numbers", () => {
     // back in is that CLI's own login.
     expect(guide("opencode-go", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.opencodeGoHelp")], command: "opencode auth login" });
     expect(guide("command-code", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.commandCodeHelp")], command: "command-code login" });
+    expect(guide("kiro", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.kiroHelp")], command: "kiro-cli login" });
+    // Factory's way back in starts the CLI itself, so no command is named here.
+    expect(guide("factory", "needs_action", "relogin")).toEqual({ reason: "登录已过期", steps: [t("quota.factoryHelp")], command: null });
   });
 
   test("a refused Keychain read, several logins and an unset collector each say their own step", () => {
@@ -322,6 +335,8 @@ describe("the settings quota module", () => {
     expect(quotaModuleModel(undefined, true).state).toBe("error");
     const kept = quotaModuleModel({ ...snapshot(...five), error: "quota.failed" }, true, [], NOW);
     expect([kept.state, kept.rows.length]).toEqual(["ready", 4]);
+    expect(kept.updated).toBe(t("quota.failed"));
+    expect(kept.incomplete).toBeTrue();
     // Numbers kept past fifteen minutes are not shown as current.
     expect(quotaModuleModel(snapshot(...five), true, [], NOW + 900).rows).toEqual([]);
   });

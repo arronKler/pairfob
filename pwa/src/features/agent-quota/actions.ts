@@ -48,17 +48,35 @@ function previousSnapshot(session: LiveSession, daemon: string | null): QuotaSna
  */
 export type QuotaRefresh = "skipped" | "updated" | "unchanged" | "failed";
 
-export async function refreshAgentQuota(): Promise<QuotaRefresh> {
+const completed = new WeakMap<LiveSession, number>();
+
+export async function refreshAgentQuota(reuseRecent = false): Promise<QuotaRefresh> {
   const session = liveSession();
   if (!session || !session.isConnected() || alreadyLoading()) return "skipped";
   // The computer this read belongs to, captured with the session: a switch
   // while it is in flight must not file its answer under the next computer.
   const daemon = currentDaemonId();
   const previous = previousSnapshot(session, daemon);
-  const kept = { items: previous?.items ?? null, legacy: previous?.legacy, unknown: previous?.unknown };
+  // Coalesce a quick settings → quota navigation, never an explicit refresh.
+  // Do not extend the daemon's one-minute sample freshness window.
+  if (reuseRecent && previous && !previous.error && performance.now() - (completed.get(session) ?? -Infinity) < 5_000
+    && previous.items?.every(account => !account.observed_at || Date.now() / 1_000 - account.observed_at < 60)) return "skipped";
+  let kept = { items: previous?.items ?? null, legacy: previous?.legacy, unknown: previous?.unknown };
+  let active = true;
   setQuotaSnapshot(session, { loading: true, ...kept, error: "" });
   try {
-    const report = await session.agentQuota();
+    const report = await session.agentQuota(part => {
+      if (!active) return;
+      const arrived = new Map(part.accounts.map(account => [account.id, account]));
+      // Keep cached accounts until their own result arrives. The final report
+      // is authoritative, including accounts removed from this computer.
+      const items = (previous?.items ?? []).map(account => arrived.get(account.id) ?? account);
+      const retained = new Set(items.map(account => account.id));
+      items.push(...part.accounts.filter(account => !retained.has(account.id)));
+      kept = { items, legacy: part.legacy, unknown: part.unknown };
+      setQuotaSnapshot(session, { loading: true, ...kept, error: "" });
+    });
+    completed.set(session, performance.now());
     const unchanged = !!previous?.items && !previous.error && sameSample(previous.items, report.accounts);
     setQuotaSnapshot(session, { loading: false, items: report.accounts, legacy: report.legacy, unknown: report.unknown, error: "" });
     if (daemon && liveSession() === session) {
@@ -71,6 +89,8 @@ export async function refreshAgentQuota(): Promise<QuotaRefresh> {
     const upgrade = error instanceof ProtocolError && error.code === "unknown_op";
     setQuotaSnapshot(session, upgrade ? { loading: false, items: null, error: "quota.upgrade" } : { loading: false, ...kept, error: "quota.failed" });
     return "failed";
+  } finally {
+    active = false;
   }
 }
 
@@ -91,7 +111,7 @@ function sameSample(left: readonly Sampled[], right: readonly Sampled[]): boolea
 export function openQuota(id?: string): void {
   goToScreen("quota");
   commitView();
-  void refreshAgentQuota();
+  void refreshAgentQuota(true);
   if (id) focusQuotaCard(id);
 }
 

@@ -41,7 +41,7 @@ describe("static content security policy", () => {
   });
 
   test("the PWA and its assets keep the default-deny CSP plus blob media and the two xterm style hashes", async () => {
-    for (const path of ["/pair", "/pair/", "/pair.html", "/pair/workspace/root", "/assets/index.js", "/sw.js"]) {
+    for (const path of ["/pair", "/pair/", "/pair.html", "/pair/workspace/root", "/demo", "/demo/", "/demo.html", "/assets/index.js", "/sw.js"]) {
       const csp = await cspOf(path);
       expect(csp).not.toContain(REMOTE_CHALLENGE);
       expect(csp).toContain("default-src 'self'");

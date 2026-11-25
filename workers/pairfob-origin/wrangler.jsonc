@@ -6,7 +6,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "vars": {
-    "BUILD": "2026-11-13.1",
+    "BUILD": "2026-11-24.2",
     "P2P_OPEN": "1",
     "APP_ORIGINS": "https://localhost"
   },
@@ -15,7 +15,9 @@
     "head_sampling_rate": 1,
     "logs": {
       "enabled": true,
-      "invocation_logs": true,
+      // Each relay message is an invocation. Keep errors and application logs;
+      // GraphQL metrics and sampled relay_frame points cover traffic volume.
+      "invocation_logs": false,
       "persist": true
     }
   },

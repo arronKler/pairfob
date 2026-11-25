@@ -98,8 +98,10 @@ export interface PairIndexClient {
 
 export interface RoomMetrics {
   bind(kind: string): void;
-  close(code: string, kind: string): void;
+  close(code: string, kind: string, ms?: number, wsCode?: number): void;
   fwd(bytes: number): void;
+  frame?(role: string, typ: number, bytes: number): void;
+  registered?(version: string): void;
   reject(code: string, role: string): void;
   alarmLate(ms: number): void;
 }

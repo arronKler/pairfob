@@ -1,96 +1,92 @@
 # Pairfob
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![pairfob.com](https://img.shields.io/badge/site-pairfob.com-111111)](https://pairfob.com)
-[![Docs](https://img.shields.io/badge/docs-pairfob.com%2Fdoc-111111)](https://pairfob.com/doc/zh/)
+[![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-Live_Demo-2563d9)](https://pairfob.com/demo?lang=zh)
+[![pairfob.com](https://img.shields.io/badge/site-pairfob.com-111111)](https://pairfob.com/zh/)
+[![文档](https://img.shields.io/badge/docs-pairfob.com%2Fdoc-111111)](https://pairfob.com/doc/zh/)
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-111111)](https://github.com/arronKler/pairfob/discussions)
 
 [English](README.md) | **简体中文**
 
-**在手机上操控电脑里的编程 Agent。** Codex、Claude、Grok 等继续在电脑上跑；配对
-一次后，手机、平板或另一台电脑打开的是同一批活着的会话，不是副本。电脑只往外连
-——不开入站端口、不需要 VPN——会话端到端加密。
+**用手机浏览器一扫，接管电脑上的 Claude Code、Codex、Grok 等本地编程 Agent——无需 VPN、无需开端口、无需注册账号。** Agent 继续留在你的电脑上运行；配对一次后，手机、平板或另一台电脑通过端到端加密的 WebRTC P2P 直连打开同一批活着的会话（支持一条命令自托管 Cloudflare 中继作为兜底）。
 
-![手机上的 Pairfob：会话列表、实时会话和 diff 审查](site/img/readme/zh.webp)
+👉 **[免安装在线试玩（Live Demo）](https://pairfob.com/demo?lang=zh)** — 直接在浏览器里体验 Chat / 真终端切换、Diff 行级评论、画板布局和订阅额度监控。
+
+![Pairfob 一镜到底演示：终端 pairfob pair、手机扫码、对话模式发消息、真 PTY 终端触控键盘审批、Diff 行级评论、电脑端 Agent 自动继续](site/img/readme/demo-zh.gif)
+
+## 核心差异对比
+
+| 能力维度 | Pairfob | 官方 Remote Control（如 Claude Code） | SSH + Tailscale + tmux | 云端 / 网页套壳工具 |
+| --- | --- | --- | --- | --- |
+| **多 Agent 支持** | Claude Code、Codex、Grok、Gemini、Copilot、Cursor、OpenCode、Pi 及普通终端 | 仅限单一厂商 | 任意 CLI，但仅裸终端 | 通常仅 1–2 家 |
+| **真 PTY + Chat 双模** | 一键切换 **对话**（结构化步骤与 Markdown）、**控制**（触控键区）与 **真终端**（完整 PTY，支持 vim/TUI） | 偏聊天交互 | 仅裸 PTY（手机操作门槛高） | 仅聊天封装，无真 PTY |
+| **Diff 审查与行级评论** | 浏览工作区文件、看 git diff，点任意代码行直接写批注发回 Agent | 基础 / 有限 | 仅命令行 `git diff` | 参差不齐 |
+| **画板布局与多机切换** | 可视化多窗格 **画板**、Git worktree、一台手机切换多台电脑 | 偏单会话 | 手动管理 tmux 分屏 | 通常单机 |
+| **多平台订阅额度监控** | 手机一眼查看 Claude、Codex、Copilot、Cursor、Grok、Factory、Kiro、DeepSeek 等额度 | 无 | 无 | 无 |
+| **网络与隐私** | 仅出站连接、**无需 VPN/Tailscale**、**无需账号**、SPAKE2+ / Argon2id 端到端加密、**WebRTC 直连**、支持一键自托管 Cloudflare 中继 | 需厂商账号并经厂商云 | 需组网工具 + 手机配 SSH 密钥 | 需注册账号 / 服务端可见明文 |
 
 ## 安装与配对
 
-Pairfob 运行在 macOS 和 Linux 上，不支持 Windows。手机只用浏览器即可，无需
-Pairfob 账号。用手机接着操作时，电脑要保持唤醒并联网。
+Pairfob 宿主支持 macOS 和 Linux（Windows 可用浏览器作为第二块屏幕打开）。手机只需浏览器，无需 Pairfob 账号。使用时让电脑保持唤醒并联网即可。
 
-1. **在电脑上安装。** 安装脚本会装好 Pairfob，缺少 Herdr 时补装最新稳定版，
-   并把 Pairfob 设为登录后自动启动的服务。
+1. **在电脑上安装。** 安装脚本会校验二进制、自动配好底层多会话运行时（[Herdr](https://herdr.dev)，零手动配置），并把 Pairfob 注册为登录后自动启动的用户服务。
 
    ```sh
    curl -fsSL https://pairfob.com/install.sh | sh
    ```
 
-   如果提示安装目录不在 `PATH` 上，按它打印的一行命令补上即可。安装参数、安装位置
-   和卸载见[安装](https://pairfob.com/doc/zh/install)。
+   如果提示安装目录不在 `PATH` 上，按它打印的一行命令补上即可。安装参数、安装位置和卸载见[安装](https://pairfob.com/doc/zh/install)。
 
-2. **配对手机。** 在电脑终端运行 `pairfob pair`，它会显示二维码，以及一串可以
-   手输的配对码。
+2. **配对手机。** 在电脑终端运行 `pairfob pair`，终端会打印二维码和手输配对码：
 
    ```sh
    pairfob pair
    ```
 
-   在手机上打开 [pairfob.com/pair](https://pairfob.com/pair)，扫码（或手输
-   配对码），然后在电脑上按一次回车。
+   在手机浏览器打开 [pairfob.com/pair](https://pairfob.com/pair)，扫码（或手输配对码），然后回电脑按一次 **Enter** 确认即可。
 
-3. **打开会话。** 在手机列表里点一个会话，打开的就是电脑上那个会话。要新建就点
-   **创建**，输入电脑上项目的绝对路径，再选择 Agent 或 **终端**。
+3. **打开或新建会话。** 在手机列表里点一个会话即可接管；点击 **创建**、选择电脑上的项目目录，即可直接启动 Claude Code、Codex、Grok 或 **终端**。
 
-会话来自 [Herdr](https://herdr.dev)：只有从手机或 `herdr` 里启动的会话会出现在
-列表里，直接在别的终端启动的 Agent 不会出现。Pairfob 不负责安装或登录 AI
-Agent，请先在电脑上装好并登录；**终端**不需要 Agent 也能用。完整步骤见
-[开始使用](https://pairfob.com/doc/zh/start)。
+底层会话由安装脚本自动配好的运行时（[Herdr](https://herdr.dev)）托管：从手机或 `herdr` 里启动的会话会自动出现在列表中。Pairfob 直接使用你电脑上已登录的 AI Agent；**终端** 无需安装任何 Agent 也能直接用。完整步骤见[开始使用](https://pairfob.com/doc/zh/start)。
 
-平时就在 Herdr 里？`herdr plugin install arronKler/pairfob` 会把
-**Pairfob: Pair a device** 加进 Herdr 的动作菜单，首次使用时安装同一个经过
-校验的二进制。见 [`plugin/herdr/`](plugin/herdr/README.md)。
+如果本来就在用 Herdr，运行 `herdr plugin install arronKler/pairfob` 即可把 **Pairfob: Pair a device** 加进动作菜单。见 [`plugin/herdr/`](plugin/herdr/README.md)。
 
-各版本的 macOS、Linux 二进制、SHA-256 校验文件和更新说明见
-[GitHub Releases](https://github.com/arronKler/pairfob/releases)。
+各版本 macOS / Linux 二进制、SHA-256 校验文件与更新说明见 [GitHub Releases](https://github.com/arronKler/pairfob/releases)。
 
 ## 在手机上能做什么
 
-- **Agent 等你时及时处理。** 列表顶部的 **需要你** 和可选的推送通知会列出等待
-  中的 Agent，点开即可处理提示。
-- **在活着的会话里干活。** **自动** 会按会话选择 **控制**（终端画面 + 系统
-  键盘 + 快捷键区，支持听写）、**终端**（真实 PTY，适合 vim 和全屏 TUI）或
-  **对话**（给 Agent 发消息、看回复）。
-- **审查改动、传递文件。** 浏览文件，查看 git 状态和 diff，在 diff 行上写评论，
-  也可以上传照片、PDF 等文件并把工作区路径插入草稿。
-- **管理工作区。** 新建对话、标签页、分屏和 worktree，在 **画板** 上看标签页的
-  真实分栏。
-- **多台电脑、多台设备。** 一台手机可以在几台电脑之间切换，一台电脑也可以配对
-  多台设备。
-- **看订阅余量。** 由电脑收集 Codex、Claude Code、Copilot、Cursor、Grok 等账号
-  的额度。
+![手机上的 Pairfob：会话列表、实时会话和 diff 审查](site/img/readme/zh.webp)
 
-界面支持中文和 English。详见[界面怎么用](https://pairfob.com/doc/zh/app)。
+- **Agent 等你时及时响应。** 列表顶部的 **需要你** 一栏与可选推送通知会立刻提示等待中的 Agent，点一下直达审批或回复。
+- **真 PTY + 对话双模切换。** **自动** 会按会话选择 **控制**（终端画面 + 系统键盘听写 + 触控快捷键区）、**终端**（基于 xterm.js 的真实 PTY，适合 vim 和全屏 TUI）或 **对话**（结构化工具步骤与 Markdown 回复）。
+- **审查 Diff、传递文件。** 浏览工作区文件、查看 git 状态和 diff，点任意 diff 行写批注发给 Agent，也可以上传照片、PDF 或其他文件插入草稿。
+- **在画板上管理工作区。** 新建对话、标签页、分屏和 Git worktree，在 **画板** 上直观查看并调整标签页的真实多窗格布局。
+- **多台电脑、多台设备。** 一台手机在公司和家里的电脑之间自由切换，也支持直接纳管通过 SSH 连接的远端机器。
+- **看多平台订阅余量。** 由电脑本地读取 Claude Code、Codex、Copilot、Cursor、Grok、DeepSeek、Factory、Kiro、OpenCode 等账号的实时剩余额度。
 
-## Android 测试版（可选）
+界面支持简体中文和 English。详见[界面怎么用](https://pairfob.com/doc/zh/app)。
 
-手机用浏览器就能用。想安装成应用，可以试试可选的 Android 测试版：侧载 APK，
-支持 Android 7.0 及以上，尚未上架应用商店。安装步骤、更新、签名校验和当前限制见
-[Android 测试版](https://pairfob.com/doc/zh/android-beta)；下载见
-[GitHub Releases](https://github.com/arronKler/pairfob/releases)。
+## 移动端 App（可选）
 
-## 安全
+手机在 Safari 或 Chrome 里直接打开就能用（添加到主屏幕即全屏 PWA 体验）。如果你更习惯原生壳与本地通知：
 
-- **配对** 用 SPAKE2+，配对码由双方确认；会话密钥用 Argon2id 加固。
-- **密钥** 只在电脑和已配对设备上。`pairfob.com` 上的中继只转发它读不懂的密文帧。
-- **能直连就直连。** 会话建立后升级为 WebRTC DataChannel，中继保留为兜底。
-- **不暴露任何东西。** 电脑只往外连，Herdr 永远不会暴露到公网。
+- **Android 测试版**：支持 Android 7.0+ 的侧载 APK — 见[Android 测试版](https://pairfob.com/doc/zh/android-beta)与 [GitHub Releases](https://github.com/arronKler/pairfob/releases)。
+- **iOS**：带本地通知的原生 Capacitor 壳正在筹备 TestFlight（源码见 `mobile/ios`）。
 
-见 [中继看不到什么](https://pairfob.com/doc/zh/security)。安全漏洞请按
-[SECURITY.md](SECURITY.md) 私下报告。
+## 安全与一键自托管
+
+- **配对安全**：使用 SPAKE2+ 并必须在电脑终端按 Enter 确认，会话密钥经 Argon2id 加固。
+- **零知识中继**：密钥只保存在你的电脑与已配对设备上。`pairfob.com` 中继只转发无法解密的密文帧。
+- **WebRTC P2P 直连**：会话建立后自动升级为点对点 WebRTC DataChannel，中继仅作为加密兜底。
+- **零公网暴露**：电脑只主动往外连，无需端口映射、无需 Tailscale/VPN，本地端口绝不暴露。
+- **一条命令自托管**：将 Worker、Durable Objects、D1 和 Web 应用一键部署到你自己的 Cloudflare 账号：[`docs/selfhost.md`](docs/selfhost.md)。
+
+详见[中继看不到什么](https://pairfob.com/doc/zh/security)。安全漏洞请按 [SECURITY.md](SECURITY.md) 私下报告。
 
 ## 电脑上的命令
 
 ```sh
-pairfob          # 状态：服务、已配对设备、Herdr
+pairfob          # 状态：服务、已配对设备、运行时
 pairfob pair     # 配对手机、平板或另一台电脑
 pairfob list     # 已配对设备
 pairfob forget 1 # 按序号或名字解除配对
@@ -98,34 +94,29 @@ pairfob doctor   # 检查这台电脑；不做任何修改
 pairfob update   # 更新到最新版本并重启服务
 ```
 
-第二台电脑运行同一个安装脚本，然后在手机上用 **设置 → 切换电脑 → 添加电脑**
-配对。Herdr 已经通过 SSH 连接的机器，可以在手机的 **电脑** 页里直接添加，不用
-配对码。`pairfob setup`、`pairfob service …`、`pairfob quota …` 等完整命令见
-[电脑上的命令](https://pairfob.com/doc/zh/cli)。
+第二台电脑运行同一个安装脚本，然后在手机上用 **设置 → 切换电脑 → 添加电脑** 配对即可。完整命令见[电脑上的命令](https://pairfob.com/doc/zh/cli)。
 
 ## 工作原理
 
 ```
-phone  --HTTPS/WSS pairfob.v2-->  pairfob.com (Worker + Durable Object)
+phone  --HTTPS/WSS pairfob.v2-->  pairfob.com (Cloudflare Worker + Durable Object)
 pairfob --outbound WSS---------->  same room  --opaque FWD-->  phone
           \-- WebRTC DataChannel after authenticated setup --/
-pairfob --loopback-------------->  Herdr
+pairfob --loopback-------------->  Herdr 会话运行时
 ```
 
-会话在 [Herdr](https://herdr.dev) 里运行；安装脚本会帮你装好。
-
-手机读取渲染好的终端画面，把按键发回 PTY；它本身不是终端模拟器。
-`pairfob.com` 是本项目的官方实例。协议规格在 [`proto/`](proto/)，包括
-[直连传输](proto/direct-transport.md)。
+协议规格位于 [`proto/`](proto/)，包括[信封格式](proto/envelope.md)、[v2 复用协议](proto/envelope-v2.md)和[直连传输](proto/direct-transport.md)。
 
 | 目录 | 内容 |
 | --- | --- |
-| `cmd/pairfob` | 电脑端 daemon 和命令行 |
-| `internal/` | 配对、会话、RPC、Herdr 适配、协议原语 |
-| `pwa/` | 手机端应用（React + TypeScript，用 bun 构建） |
-| `workers/pairfob-origin` | 中继：Cloudflare Worker + Durable Object |
+| `cmd/pairfob` | 电脑端 daemon 和命令行（Go） |
+| `internal/` | 配对、端到端加密会话、RPC、额度读取器、Agent 日志与运行时适配 |
+| `pwa/` | 手机 / 平板 / 桌面自适应 Web 应用与 `/demo` 在线试玩（React + TypeScript） |
+| `workers/pairfob-origin` | 中继服务：Cloudflare Worker + Durable Object |
 | `site/` | 主页和[文档](https://pairfob.com/doc/zh/)源码 |
-| `proto/` | 冻结的信封格式、RPC schema 和测试向量 |
+| `proto/` | 冻结的信封格式、RPC schema 和跨语言测试向量 |
+| `mobile/` | 可选的 Android & iOS Capacitor 原生壳 |
+| `desktop/` | 原生桌面客户端（Rust + GPUI） |
 | `plugin/herdr` | Herdr 插件入口 |
 
 ## 开发
@@ -137,16 +128,14 @@ pairfob --loopback-------------->  Herdr
 ./scripts/dev-down.sh
 ```
 
-设置 `PAIRFOB_DEV_FAKE_RUNTIME=1` 可以不接 Herdr、用演示数据。真机调试、
-验证范围、协议约束和发布流程见 [`docs/develop.md`](docs/develop.md)（英文）。
+设置 `PAIRFOB_DEV_FAKE_RUNTIME=1` 可不接 Herdr、直接使用模拟数据运行。真机调试、验证范围、协议约束和发布流程见 [`docs/develop.md`](docs/develop.md)（英文）。
 
-## 参与贡献
+## 社区与参与贡献
 
-欢迎在 [github.com/arronKler/pairfob](https://github.com/arronKler/pairfob)
-提 issue 和 PR。按改动范围运行对应检查（见
-[`docs/develop.md`](docs/develop.md#verification)），并在 PR 里写明跑了哪些。
-`proto/` 下的信封格式、测试向量和 RPC 字段是有意冻结的，想改动请先开 issue
-讨论。
+- **使用交流、移动端手势/键盘痛点、新 Agent 适配需求**：欢迎前往 [GitHub Discussions](https://github.com/arronKler/pairfob/discussions)。
+- **想提第一个 PR？** 查看 [`good first issue`](https://github.com/arronKler/pairfob/labels/good%20first%20issue) 列表——为你常用的编程 Agent CLI 补一个订阅额度读取器是非常清晰的独立任务。
+
+按改动范围运行对应检查（见 [`docs/develop.md`](docs/develop.md#verification)），并在 PR 中写明跑了哪些检查。`proto/` 下的信封格式、测试向量和 RPC 字段是有意冻结的，想改动请先开 issue 讨论。
 
 ## Star 历史
 

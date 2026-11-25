@@ -2,7 +2,7 @@ import { DAEMON_ID_RE, FWD_FLUSH_BYTES, HELLO_GRACE_MS, RESUME_MS, TICKET_MS, TI
 import { bytesToHex, sha256Hex, timingSafeEqual } from "../crypto.ts";
 import { Typ } from "../envelope.ts";
 import { encodeJSON } from "../frames.ts";
-import { harvestDue, syncHeapAlarm } from "./alarms.ts";
+import { harvestDue, settleHello, syncHeapAlarm } from "./alarms.ts";
 import { isRegisteredDaemon, needsConstructorSql, newAttachment, readAttachment, type Attachment } from "./attachment.ts";
 import type { PairIndexClient, RoomDeps, RoomSocket, RoomStore } from "./types.ts";
 import { TeardownNotifications } from "./teardown-notifications.ts";
@@ -332,6 +332,9 @@ export class RoomCore {
 
   private releaseBind(ws: RoomSocket, att: Attachment): void {
     if (!att.route_id) return;
+    for (const kind of ["resume_15s", "pair_first_15s", "pair_confirm_30s"] as const) {
+      this.store.deleteAlarmsByKindRef(kind, att.route_id);
+    }
     this.deleteBind(att.route_id);
     this.writeAtt(ws, { ...att, kind: "none", route_id: "" });
   }
@@ -397,12 +400,14 @@ export class RoomCore {
     this.routes.set(hex, { socket: ws, routeId: hexToRoute(hex), established: kind === "established" });
   }
 
-  onClose(ws: RoomSocket, reason = "closed"): void {
+  onClose(ws: RoomSocket, reason = "closed", wsCode?: number): void {
     this.closeCount++;
     const a = this.att(ws);
+    if (a && !a.retired) ws.serializeAttachment({ ...a, retired: true });
     const kind = a?.kind && a.kind !== "none" ? a.kind : a?.role || "none";
     this.flushFwd();
-    this.deps.metrics?.close(reason || "closed", kind);
+    this.deps.metrics?.close(reason || "closed", kind,
+      a ? Math.max(0, this.now() - a.created_ms) : undefined, wsCode);
     if (a?.role === "daemon" && this.daemon === ws) {
       this.dropDaemon("closed");
       return;
@@ -421,6 +426,12 @@ export class RoomCore {
     }
     this.rebuildMaps();
     notifications.finish();
+  }
+
+  /** A disconnected socket cannot owe a handshake timeout. Other deadlines stay armed. */
+  settleClosedSocket(ws: RoomSocket): Promise<void> {
+    this.store.ensureSchema();
+    return settleHello(this, ws);
   }
 
   async alarm(): Promise<void> {

@@ -17,6 +17,7 @@ export const enSingular: Partial<Record<keyof typeof zh, string>> = {
   "diffNotes.sentReceipt": "Sent {count} comment to the agent",
   "workspace.dirChanges": "{count} changed file inside",
   "workspace.lines": "{count} line",
+  "preview.missingFiles": "{count} local file could not be loaded: {files}",
   "workspace.noteCount": "{count} comment",
   "workspace.showRemote": "Show {count} remote branch",
   "tabs.attentionAria": "{count} session needs you",

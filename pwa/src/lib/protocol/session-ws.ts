@@ -5,7 +5,7 @@ import { parseWorkspaceReference } from "./workspace-reference";
 import { RecoveryDiagnostics } from "./recovery-diagnostics";
 import { parseAgentInspection } from "../agent-inspect";
 import { pageHidden, watchPageVisibility } from "./page-activity.ts";
-import { readQuotaReport } from "../agent-quota-report";
+import { AgentQuotaRPC } from "./agent-quota-rpc";
 import { validDaemonId, validDeviceId } from "../identifiers.ts";
 import { fingerprint16 } from "./hello.ts";
 import { parseMachineLink, parseMachineList } from "./machine-link.ts";
@@ -310,9 +310,8 @@ class ReconnectingSession implements LiveSession {
   };
   ping = (t: number) => this.readRPC("Ping", { t_ms: t });
   agentInspect = async (paneId: string) => parseAgentInspection(await this.readRPC("AgentInspect", { pane_id: paneId }));
-  /** Whether this computer answered `unknown_op` to AgentQuotaV2 (see `readQuotaReport`). */
-  private readonly quotaWire = { legacy: false };
-  agentQuota = () => readQuotaReport(op => this.readRPC(op, {}, 12_000), this.quotaWire);
+  private readonly quotaRPC = new AgentQuotaRPC();
+  agentQuota: LiveSession["agentQuota"] = progress => this.quotaRPC.read((op, onProgress, params) => this.readRPC(op, params ?? {}, 12_000, onProgress), progress);
   daemonUpdateStatus = () => this.readRPC("DaemonUpdateStatus", {});
   daemonUpdate = (target: string) => this.trackedMutation("DaemonUpdate", { target });
   listMachines = async () => parseMachineList(await this.readRPC("ListMachines", {}, 12_000));
@@ -513,7 +512,7 @@ class ReconnectingSession implements LiveSession {
     this.transport = null;
   };
 
-  private async readRPC(op: string, params: unknown, timeoutMs?: number): Promise<unknown> {
+  private async readRPC(op: string, params: unknown, timeoutMs?: number, onProgress?: (result: unknown) => boolean): Promise<unknown> {
     // Scope at call time, before any await: a switch while this waits for a
     // transport must not retarget a read the caller issued for the old session.
     const scoped = scopeHerdSession(op, params, this.herdSessionName);
@@ -524,7 +523,7 @@ class ReconnectingSession implements LiveSession {
     const ahead = this.firstReads.take(live, op, scoped);
     const transport = await this.captureTransport();
     if (!transport) return Promise.reject(new ProtocolError("reconnecting", "连接正在恢复"));
-    return (transport === live && ahead) || transport.rpc(op, scoped, timeoutMs);
+    return (transport === live && ahead) || transport.rpc(op, scoped, timeoutMs, undefined, undefined, onProgress);
   }
 
   /** Capture one transport; mutation RPCs are never replayed on another socket. */
@@ -693,7 +692,7 @@ class ReconnectingSession implements LiveSession {
     this.reconnectBackoff.connected();
     this.lastConnectCode = "";
     // A computer that was updated comes back on a new connection.
-    this.quotaWire.legacy = false;
+    this.quotaRPC.reset();
     transport.onDisconnect((error) => this.onDisconnect(transport, error));
     if (this.transport !== transport) return;
     this.emit({ type: "connected" });

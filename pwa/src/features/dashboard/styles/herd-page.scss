@@ -507,13 +507,15 @@ html:has(.herd-page) { scroll-padding-top: calc(var(--herd-head-h, 0px) + 64px);
   text-overflow: ellipsis;
 }
 
-/* Floating create; it folds to a round button while the list scrolls. */
+/* Floating create; it folds to a round button while the list scrolls. The
+   height is shared with the notification invitation, which waits above it. */
+:root { --create-fab-h: 52px; }
 .create-fab {
   position: fixed;
   right: max(16px, env(safe-area-inset-right, 0px));
   bottom: calc(var(--tab-bar-h) + env(safe-area-inset-bottom, 0px) + 14px);
   z-index: 4;
-  min-height: 52px;
+  min-height: var(--create-fab-h);
   display: inline-flex;
   align-items: center;
   gap: 6px;
