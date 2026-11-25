@@ -7,6 +7,7 @@ import { emulateTouchDevice } from "../touch-realm";
 class ReviewTerminal {
   static latest: ReviewTerminal;
   scrolled: number[] = [];
+  writes: Uint8Array[] = [];
   cols = 80;
   rows = 24;
   modes = { applicationCursorKeysMode: false };
@@ -43,7 +44,7 @@ class ReviewTerminal {
   scrollLines(lines: number): void { this.scrolled.push(lines); }
   focus(): void { this.root?.querySelector("textarea")?.focus(); }
   reset(): void {}
-  write(_data: Uint8Array, done?: () => void): void { done?.(); }
+  write(data: Uint8Array, done?: () => void): void { this.writes.push(data); done?.(); }
   dispose(): void { this.root?.remove(); }
 }
 
@@ -97,6 +98,7 @@ function session() {
   const calls: string[] = [];
   return {
     calls,
+    getConfig: async () => ({}),
     terminalOpen: async (pane: string, cols: number, rows: number): Promise<OpenResult> => {
       calls.push(`open:${pane}`); return opened(pane, cols, rows);
     },
@@ -350,4 +352,40 @@ test("a renderer mounted during pending GetConfig reserves history before local 
   expect(ReviewTerminal.latest).toBe(renderer);
   expect(renderer.scrolled).toEqual([-4]);
   expect(live.calls.filter((call) => call === "scroll")).toHaveLength(1);
+});
+
+test("pending config opens a raw bridge that preserves every delta across grid changes", async () => {
+  const live = session();
+  let release!: (value: Record<string, unknown>) => void;
+  live.getConfig = () => new Promise(done => { release = done; });
+  await act(() => boot(live));
+  await until(() => Boolean(release), "pending config");
+  expect(live.calls).not.toContain("open:p1");
+  await act(async () => release({ capabilities: { terminal_client_scroll: true } }));
+  await until(() => getFullTerminalView().stage === "live", "raw terminal");
+  const { handleFullTerminalEvent } = await import("./full-terminal");
+  const renderer = ReviewTerminal.latest;
+  const chunks = ["first history", "old-grid history", "new-grid history", "live sentinel"];
+  await act(() => chunks.forEach((text, index) => handleFullTerminalEvent({
+    type: "terminal_frame", terminalId: opened().terminalId, terminalFrame: {
+      terminalId: opened().terminalId, sequence: String(index + 1), full: index === 0,
+      width: index === 1 ? 160 : renderer.cols, height: renderer.rows,
+      index: 0, count: 1, data: new TextEncoder().encode(text),
+    },
+  })));
+  expect(renderer.writes.map(bytes => new TextDecoder().decode(bytes))).toEqual(chunks);
+});
+
+test("retiring a pane while config is pending never sends TerminalOpen", async () => {
+  const live = session();
+  let release!: (value: Record<string, unknown>) => void;
+  live.getConfig = () => new Promise(done => { release = done; });
+  await act(() => boot(live));
+  await until(() => Boolean(release), "pending config");
+  await act(async () => {
+    const leaving = leaveFullTerminal({ rememberGuided: false, paint: false });
+    release({ capabilities: { terminal_client_scroll: true } });
+    await leaving;
+  });
+  expect(live.calls).not.toContain("open:p1");
 });

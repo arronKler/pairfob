@@ -27,24 +27,33 @@ async page => {
         };
         await window.qa.setScene("terminal-core");
       });
-      // Like a remote PTY, acknowledge the requested grid before replaying output.
-      await target.evaluate(async () => {
+      // Core marks only its first DATA frame full. Resize after that frame while
+      // GetConfig has not yet published global grants; no historical byte may drop.
+      await target.evaluate(() => {
         if (window.scrollRenderer.options.scrollback !== 1000) throw new Error("history capacity lost while config pending");
-        const asked = () => {
-          const call = window.qa.calls.filter(call => ["terminalOpen", "terminalResize"].includes(call.method)).at(-1);
-          const offset = call?.method === "terminalResize" ? 2 : 1;
-          if (!call) throw new Error("fixture terminal not open");
-          return { cols: call.args[offset], rows: call.args[offset + 1] };
-        };
-        for (let attempt = 0; attempt < 20; attempt++) {
-          const grid = asked();
-          if (!window.qa.terminalFrame("", grid)) throw new Error("fixture terminal closed");
-          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-          const next = asked();
-          if (next.cols === grid.cols && next.rows === grid.rows && window.scrollRenderer.cols === grid.cols && window.scrollRenderer.rows === grid.rows) break;
-          if (attempt === 19) throw new Error("fixture grid did not settle");
-        }
-        if (!window.qa.terminalFrame(Array.from({ length: 300 }, (_, index) => `history_${String(index).padStart(4, "0")}\r\n`).join(""), asked())) throw new Error("fixture history not sent");
+        const grid = { cols: window.scrollRenderer.cols, rows: window.scrollRenderer.rows };
+        if (!window.qa.terminalFrame("history_initial\r\n", grid)) throw new Error("fixture terminal not open");
+      });
+      await target.waitForFunction(() => window.scrollController.fullTerminalScreenText("w1:p1").includes("history_initial"));
+      await target.setViewportSize({ width: profile.viewport.width + 45, height: profile.viewport.height - 48 });
+      await target.evaluate(async () => {
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const renderer = window.scrollRenderer;
+        // Deliberately old grid, then the newly requested grid, both deltas.
+        const call = window.qa.calls.filter(call => ["terminalOpen", "terminalResize"].includes(call.method)).at(-1);
+        const offset = call.method === "terminalResize" ? 2 : 1;
+        const next = { cols: call.args[offset], rows: call.args[offset + 1] };
+        window.qa.terminalFrame("history_old_grid\r\n", { cols: renderer.cols + 30, rows: renderer.rows + 3, full: false });
+        window.qa.terminalFrame("history_new_grid\r\n", { ...next, full: false });
+        window.qa.terminalFrame("live_after_resize\r\n", { ...next, full: false });
+      });
+      await target.waitForFunction(() => {
+        const text = window.scrollController.fullTerminalScreenText("w1:p1");
+        return ["history_initial", "history_old_grid", "history_new_grid", "live_after_resize"].every(value => text.includes(value));
+      });
+      await target.evaluate(() => {
+        const grid = { cols: window.scrollRenderer.cols, rows: window.scrollRenderer.rows, full: false };
+        window.qa.terminalFrame(Array.from({ length: 300 }, (_, index) => "history_" + String(index).padStart(4, "0") + "\r\n").join(""), grid);
       });
       await target.waitForFunction(() => window.scrollController.fullTerminalScreenText("w1:p1").includes("history_0299"));
       await target.evaluate(() => window.scrollCapabilities.applyCapabilities({
@@ -74,6 +83,16 @@ async page => {
       const after = await read();
       assert(/history_\d+/.test(after), `${name}: history viewport lost`);
       assert(!await target.evaluate(() => window.qa.calls.some(call => ["terminalScroll", "terminalInput"].includes(call.method))), `${name}: main history sent remote input`);
+
+      // Chromium's real mouse uses pixel units; dispatch DOM line/page units too.
+      await target.evaluate(() => window.scrollRenderer.scrollToBottom());
+      for (const mode of [1, 2]) {
+        const previous = await target.evaluate(() => window.scrollRenderer.buffer.active.viewportY);
+        const delta = mode === 1 ? 3 : await target.evaluate(() => Math.max(1, window.scrollRenderer.rows - 1));
+        await target.locator(".full-terminal-host").dispatchEvent("wheel", { deltaMode: mode, deltaY: mode === 1 ? -3 : -1, bubbles: true, cancelable: true });
+        await target.waitForFunction(({ previous, delta }) => window.scrollRenderer.buffer.active.viewportY === Math.max(0, previous - delta), { previous, delta });
+      }
+      assert(!await target.evaluate(() => window.qa.calls.some(call => ["terminalScroll", "terminalInput"].includes(call.method))), name + ": line/page wheel sent remote input");
 
       await target.evaluate(() => window.qa.terminalFrame("\x1b[?1049h\x1b[?1000h\x1b[?1006hTUI ready", { full: false }));
       await target.waitForFunction(() => window.scrollController.fullTerminalScreenText("w1:p1").includes("TUI ready"));

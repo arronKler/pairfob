@@ -14,6 +14,7 @@ import { FRIENDLY_ERROR } from "../../lib/notices";
 import { parseRuntimeOperationsConfig } from "../../lib/operations";
 import { CONFIG_RPC_TIMEOUT_MS, ProtocolError, type LiveSession, type PairResult } from "../../lib/protocol/client";
 import { herdConfigIsCurrent, nextHerdConfigRequest } from "./generations";
+import { readRuntimeConfig } from "../../lib/protocol/runtime-config-read";
 import { rememberPushConfig } from "../settings/push-config";
 
 export type RuntimeObservationPorts = {
@@ -113,7 +114,7 @@ export async function refreshHerdConfig(ports: RuntimeObservationPorts): Promise
   if (!runtimeStore.get().runtimeKind && retryAttempts === 0) beginIdentityRead();
   if (!acceptedStillCurrent(request, session, ports)) return false;
   try {
-    const config = await session.getConfig();
+    const config = await readRuntimeConfig(session, true);
     if (!acceptedStillCurrent(request, session, ports)) return false;
     // External daemon-version listeners can reenter here; revalidate after it.
     ports.acceptDaemonVersion(config);

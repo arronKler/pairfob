@@ -14,6 +14,7 @@
  * are not domain state arrive as ports, so this module never reaches into another
  * slice's DOM, storage or paint loop.
  */
+import { resetRuntimeConfigReads } from "../../lib/protocol/runtime-config-read";
 import { resetBoardCatalog } from "../board/layout-store";
 import { clearCapabilities, setOperationBusy } from "../operations/capabilities-store";
 import { attachLiveSession } from "../computers/catalog-store";
@@ -56,6 +57,7 @@ export function retireLiveDomains(): void {
  */
 export function retireHerdView(): void {
   // Capabilities fail closed: an absent advertisement is a refused operation.
+  resetRuntimeConfigReads();
   clearCapabilities();
   setOperationBusy(false);
   resetDashboard();

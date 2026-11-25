@@ -106,6 +106,7 @@ function live(): LiveSession {
   return {
     snapshot: async () => ({ panes: [] }),
     closePane: async () => undefined,
+    getConfig: async () => ({}),
     terminalOpen: (_paneId: string, _cols: number, _rows: number) => new Promise(() => undefined),
     terminalClose: async () => undefined,
     terminalInput: async () => undefined,

@@ -108,7 +108,7 @@ export function createSession(source: SessionSource = {}): FixtureSession {
     terminalFrames++;
     emit({ type: "terminal_frame", terminalId: terminal.id, terminalFrame: {
       terminalId: terminal.id, sequence, width: options.cols ?? terminal.cols, height: options.rows ?? terminal.rows,
-      full: options.full ?? true, index: 0, count: 1, data: new TextEncoder().encode(text),
+      full: options.full ?? (source.clientScroll !== true || terminal.sequence === 1n), index: 0, count: 1, data: new TextEncoder().encode(text),
     } });
     return true;
   };

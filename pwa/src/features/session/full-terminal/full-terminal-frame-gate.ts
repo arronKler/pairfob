@@ -1,4 +1,4 @@
-/** Keep ANSI deltas behind a complete frame for the renderer's current grid. */
+/** Snapshot deltas need a matching full grid; raw streams must retain every byte. */
 export class FullTerminalFrameGate {
   private lastSequence: bigint | null = null;
   private needsFullFrame = true;
@@ -14,8 +14,14 @@ export class FullTerminalFrameGate {
     return "accept";
   }
 
-  settle(sequence: bigint, full: boolean, gridMatches: boolean): "render" | "wait" {
+  settle(sequence: bigint, full: boolean, gridMatches: boolean, rawStream = false): "render" | "wait" {
     this.lastSequence = sequence;
+    // Raw PTY deltas cannot be skipped: Core sends only one initial full frame.
+    if (rawStream) {
+      if (this.needsFullFrame && !full) return "wait";
+      this.needsFullFrame = false;
+      return "render";
+    }
     if (!gridMatches) {
       this.needsFullFrame = true;
       return "wait";

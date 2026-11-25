@@ -26,6 +26,18 @@ export function executeTerminalCommand(session: LiveSession, terminalId: string,
   return session.terminalScroll(terminalId, sequence, command.direction, command.lines, command.source, command.at);
 }
 
+/** Bind execution to the controller incarnation that owns these ordered mutations. */
+export function createTerminalCommandPump(
+  session: LiveSession,
+  terminalId: string,
+  current: () => boolean,
+  options: Omit<TerminalCommandPumpOptions, "execute">,
+): TerminalCommandPump {
+  return new TerminalCommandPump({ ...options, execute: (command, sequence) => current()
+    ? executeTerminalCommand(session, terminalId, command, sequence)
+    : Promise.reject(new ProtocolError("conflict")) });
+}
+
 /** What the daemon accepts as one `TerminalScroll` (`internal/runtime/herdr_terminal.go`). */
 const SCROLL_LINES_MAX = 160;
 
