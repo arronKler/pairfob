@@ -257,9 +257,16 @@ export class TerminalCommandPump {
       this.scrollSupported = false;
       this.nextSequence = current.sequence;
       this.inFlight = null;
+      let droppedScrolls = 0;
       for (let index = this.queue.length - 1; index >= 0; index--) {
-        if (this.queue[index].command.kind === "scroll") this.queue.splice(index, 1);
+        if (this.queue[index].command.kind === "scroll") {
+          this.queue.splice(index, 1);
+          droppedScrolls++;
+        }
       }
+      this.observer?.failed?.("scroll", current.sequence, Math.max(0, this.now() - current.sentAt), {
+        commands: droppedScrolls, inputBytes: 0,
+      });
       this.onScrollUnsupported?.(error);
       this.drain();
       return;

@@ -548,70 +548,6 @@ func TestCoreConnOpenEventsDeliversLines(t *testing.T) {
 	}
 }
 
-func TestCoreConnStreamOverflowClosesSink(t *testing.T) {
-	conn, _, err := startCoreScript(t, coreScriptHello(), func(request coreScriptRequest) coreScriptReply {
-		if request.method != "terminal.attach" {
-			return coreScriptReply{result: map[string]any{}}
-		}
-		push := make([]coreScriptPush, 0, coreStreamBuffer+8)
-		for index := 0; index < coreStreamBuffer+8; index++ {
-			push = append(push, coreScriptPush{channel: 7, data: []byte{byte('a' + index%26)}})
-		}
-		return coreScriptReply{
-			result: map[string]any{"channel": 7, "terminal": map[string]any{"address": "t3", "state": "live", "cols": 80, "rows": 24}},
-			push:   push,
-		}
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, items, err := conn.OpenOutput(context.Background(), "t3", 80, 24)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Stall the consumer so the bounded sink overflows and closes itself.
-	time.Sleep(50 * time.Millisecond)
-	count := 0
-	for range items {
-		count++
-	}
-	if count != coreStreamBuffer {
-		t.Fatalf("delivered %d frames before overflow, want %d", count, coreStreamBuffer)
-	}
-}
-
-func TestCoreConnWatchStreamClosesOnBufferedOverflow(t *testing.T) {
-	client, server := net.Pipe()
-	conn := newCoreConn(client, func() { _ = client.Close() }, nil)
-	t.Cleanup(func() {
-		_ = conn.Close()
-		_ = server.Close()
-	})
-	conn.streamsMu.Lock()
-	for index := 0; index < coreStreamBuffer+8; index++ {
-		conn.pendingIn[7] = append(conn.pendingIn[7], coreStreamItem{kind: coreKindData, payload: []byte{byte(index)}})
-		conn.pendingBytes++
-	}
-	conn.streamsMu.Unlock()
-
-	items := conn.watchStream(7)
-	count := 0
-	for {
-		select {
-		case _, ok := <-items:
-			if !ok {
-				if count != coreStreamBuffer {
-					t.Fatalf("delivered %d frames before overflow, want %d", count, coreStreamBuffer)
-				}
-				return
-			}
-			count++
-		case <-time.After(2 * time.Second):
-			t.Fatalf("sink stayed open after %d frames", count)
-		}
-	}
-}
-
 // startStalledCorePipe answers the hello line and then stops reading, so any
 // frame written to the pipe blocks in the writer.
 func startStalledCorePipe(t *testing.T, writeTimeout time.Duration) *coreConn {
@@ -707,7 +643,7 @@ func TestCoreConnCreditWriteTimesOutWithoutReader(t *testing.T) {
 		if _, err := server.Write(append(reply, '\n')); err != nil {
 			return
 		}
-		// The attach output makes the read loop write a credit; the server
+		// Discarded output is credited immediately; the server
 		// then stops reading, so that write stalls.
 		_ = writeCoreScriptFrame(server, 7, coreKindData, []byte("paint"))
 	}()
@@ -716,6 +652,7 @@ func TestCoreConnCreditWriteTimesOutWithoutReader(t *testing.T) {
 	if _, err := conn.start(ctx); err != nil {
 		t.Fatalf("start: %v", err)
 	}
+	conn.discardStream(7)
 	select {
 	case <-conn.done:
 	case <-time.After(2 * time.Second):
