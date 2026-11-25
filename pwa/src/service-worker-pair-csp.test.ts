@@ -19,7 +19,7 @@ function harness(network: "offline" | "slow" | "404") {
     if (network === "slow") return new Promise<Response>(() => undefined);
     return new Response("not found", { status: 404 });
   };
-  new Function("self", "caches", "fetch", "setTimeout", "clearTimeout", worker)(scope, caches, fetch, (callback: () => void) => { callback(); return 1; }, () => undefined);
+  new Function("self", "caches", "fetch", "setTimeout", "clearTimeout", worker)(scope, caches, fetch, (callback: () => void) => { if (network === "slow") callback(); return 1; }, () => undefined);
   return (path: string) => {
     let response: Promise<Response> | undefined;
     handler!({ request: { url: origin + path, method: "GET", mode: "navigate" }, respondWith: (value: Promise<Response>) => { response = value; }, waitUntil: () => undefined });
