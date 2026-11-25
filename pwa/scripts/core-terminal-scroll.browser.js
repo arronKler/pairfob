@@ -151,7 +151,10 @@ async page => {
       await target.waitForFunction(() => window.scrollRenderer.modes.mouseTrackingMode === "none");
       await gesture();
       await target.waitForFunction(() => window.qa.calls.some(call => call.method === "terminalScroll"));
-      await target.evaluate(() => window.scrollController.fullTerminalControlOptions().keyboard.open(true));
+      await target.evaluate(() => {
+        window.scrollController.setFullTerminalComposeLive(true);
+        window.scrollController.fullTerminalControlOptions().keyboard.open(true);
+      });
       await target.locator(".xterm-helper-textarea").focus();
       await target.keyboard.type("y");
       await target.waitForFunction(() => window.qa.calls.some(call => call.method === "terminalInput" && call.args[2].includes(121)));
