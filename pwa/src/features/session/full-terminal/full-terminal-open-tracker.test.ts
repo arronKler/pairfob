@@ -44,3 +44,20 @@ describe("complete-terminal open tracking", () => {
     expect(starts).toBe(2);
   });
 });
+
+test("canceling preparation finishes teardown while the shared read is still pending", async () => {
+  const tracker = new FullTerminalOpenTracker();
+  let release!: (value: number) => void;
+  const read = new Promise<number>(resolve => { release = resolve; });
+  let mutation = false;
+  const open = tracker.run(async () => {
+    const config = await tracker.prepare(read);
+    if (config) mutation = true;
+  });
+  tracker.cancelPreparation();
+  await tracker.pending();
+  expect(mutation).toBeFalse();
+  release(1);
+  await open;
+  expect(mutation).toBeFalse();
+});

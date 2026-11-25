@@ -338,20 +338,20 @@ test("screen text comes from the mounted terminal and rejects another pane", asy
   expect(fullTerminalScreenText("p2")).toBe("");
 });
 
-test("a renderer mounted during pending GetConfig reserves history before local scrolling is granted", async () => {
+test("a raw bridge keeps local history scrolling while global configuration is refreshing", async () => {
   const live = session();
+  live.getConfig = async () => ({ capabilities: { terminal_client_scroll: true } });
   await act(() => boot(live));
   await until(() => getFullTerminalView().stage === "live", "live terminal");
   const renderer = ReviewTerminal.latest;
   expect(renderer.options.scrollback).toBe(1000);
   await act(() => sendFullTerminalScroll("up", 4, "wheel"));
-  expect(live.calls).toContain("scroll");
-  expect(renderer.scrolled).toEqual([]);
   await act(() => applyCapabilities({ ...NO_OPERATION_CAPABILITIES, terminal_client_scroll: true }, []));
+  await act(() => clearCapabilities());
   await act(() => sendFullTerminalScroll("up", 4, "wheel"));
   expect(ReviewTerminal.latest).toBe(renderer);
-  expect(renderer.scrolled).toEqual([-4]);
-  expect(live.calls.filter((call) => call === "scroll")).toHaveLength(1);
+  expect(renderer.scrolled).toEqual([-4, -4]);
+  expect(live.calls.filter(call => call === "scroll")).toEqual([]);
 });
 
 test("pending config opens a raw bridge that preserves every delta across grid changes", async () => {
@@ -384,8 +384,19 @@ test("retiring a pane while config is pending never sends TerminalOpen", async (
   await until(() => Boolean(release), "pending config");
   await act(async () => {
     const leaving = leaveFullTerminal({ rememberGuided: false, paint: false });
-    release({ capabilities: { terminal_client_scroll: true } });
     await leaving;
+    expect(live.calls).not.toContain("open:p1");
+    release({ capabilities: { terminal_client_scroll: true } });
   });
   expect(live.calls).not.toContain("open:p1");
+});
+
+test("a legacy bridge cannot gain raw scrolling from a later global grant", async () => {
+  const live = session();
+  await act(() => boot(live));
+  await until(() => getFullTerminalView().stage === "live", "legacy terminal");
+  await act(() => applyCapabilities({ ...NO_OPERATION_CAPABILITIES, terminal_client_scroll: true }, []));
+  await act(() => sendFullTerminalScroll("up", 4, "wheel"));
+  expect(live.calls).toContain("scroll");
+  expect(ReviewTerminal.latest.scrolled).toEqual([]);
 });

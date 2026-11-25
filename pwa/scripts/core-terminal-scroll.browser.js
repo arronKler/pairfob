@@ -140,10 +140,12 @@ async page => {
       await target.keyboard.type("x");
       await target.waitForFunction(() => window.qa.calls.some(call => call.method === "terminalInput" && call.args[2].includes(120)));
 
+      // A legacy daemon is a different bridge, not a temporary missing UI grant.
+      await target.evaluate(async () => { await window.qa.setScene("terminal-live"); });
+      await target.waitForFunction(() => window.scrollController.getFullTerminalView().stage === "live" && window.qa.calls.some(call => call.method === "terminalOpen"));
       await target.evaluate(() => {
-        window.scrollCapabilities.clearCapabilities();
+        window.qa.terminalFrame("legacy terminal ready");
         window.qa.clearCalls();
-        window.qa.terminalFrame("\x1b[?1000l\x1b[?1006l\x1b[?1049l", { full: false });
         window.qa.failNext("terminalScroll", "unsupported");
       });
       await target.waitForFunction(() => window.scrollRenderer.modes.mouseTrackingMode === "none");

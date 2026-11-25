@@ -92,7 +92,9 @@ Full-terminal viewers use the optional `GetConfig.capabilities.terminal_client_s
 grant for raw herdr-core streams. The daemon requests up to 1000 history lines
 for a viewer attach; input-only attaches request none. The browser reserves
 1000 lines before the first output arrives, including while `GetConfig` is
-pending. With the grant, main-buffer gestures scroll locally and mouse-enabled
+pending. TerminalOpen waits for that connection's configuration, and the bridge
+keeps its chosen raw/snapshot mode while background configuration refreshes.
+With the grant, main-buffer gestures scroll locally and mouse-enabled
 TUIs receive xterm's negotiated wheel reports. An alternate-screen program
 without mouse support gets no synthetic cursor keys from a swipe; explicit
 page buttons send PageUp/PageDown. Page buttons also send keys in mouse mode
@@ -120,7 +122,9 @@ playwright-cli -s=core-scroll close
 ```
 
 Run these commands from the repository root. The script covers history arriving
-before the capability grant, TUI wheel reports, page-button routing, and input
+before the global capability store publishes the bridge grant, a resize with
+only the first raw frame marked full, line/page wheel units, TUI wheel reports,
+page-button routing, and input
 after a rejected legacy scroll. Physical-phone acceptance and a live daemon/relay test remain
 separate from these fixture checks.
 
