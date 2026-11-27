@@ -336,7 +336,9 @@ self.addEventListener("fetch", (event) => {
   // Release checks must report network failure instead of a cached release.
   if (url.pathname === "/dl/VERSION") return;
   if (request.mode === "navigate") {
-    const fallback = url.pathname.startsWith("/pair") ? "/pair" : "/";
+    // Only pairing documents may inherit the cached QR-worker CSP exception.
+    const pairDocument = ["/pair", "/pair/", "/pair.html"].includes(url.pathname);
+    const fallback = pairDocument ? "/pair" : "/";
     event.respondWith(shellNetworkFirst(event, request, fallback));
     return;
   }
