@@ -34,6 +34,8 @@ export type HostScrollOptions = {
   wheelReported?: () => boolean;
   /** Height of one rendered row. A hand pan then moves the view as far as the finger. */
   linePx?: () => number;
+  /** Visible rows minus the overlap row, for a DOM_DELTA_PAGE wheel. */
+  pageLines?: () => number;
 };
 
 /** Whether xterm reports the wheel to the app under this mouse protocol; X10 reports presses only. */
@@ -213,12 +215,14 @@ export function bindHostScroll(
     if (opts.panXScroller?.() && Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
     if (opts.capturePan && !opts.capturePan(-event.deltaY)) return;
     event.preventDefault();
-    wheelRemainder += event.deltaY;
+    const unit = event.deltaMode === 1 ? SCROLL_LINE_PX
+      : event.deltaMode === 2 ? SCROLL_LINE_PX * (opts.pageLines?.() ?? pageLineCount(24)) : 1;
+    wheelRemainder += event.deltaY * unit;
     const lines = Math.trunc(Math.abs(wheelRemainder) / SCROLL_LINE_PX);
     if (!lines) return;
     const direction = wheelRemainder < 0 ? "up" : "down";
     wheelRemainder %= SCROLL_LINE_PX;
-    scroll(direction, Math.min(lines, 40), "wheel", cellAt(event.clientX, event.clientY));
+    scroll(direction, Math.min(lines, event.deltaMode === 2 ? 160 : 40), "wheel", cellAt(event.clientX, event.clientY));
   };
 
   const findTouch = (list: TouchList, identifier: number): Touch | null => {

@@ -5,17 +5,23 @@ import { resetBoardTestDOM } from "../../../../test-support/dom";
 import { emulateTouchDevice } from "../touch-realm";
 
 class ReviewTerminal {
+  static latest: ReviewTerminal;
+  scrolled: number[] = [];
+  writes: Uint8Array[] = [];
   cols = 80;
   rows = 24;
   modes = { applicationCursorKeysMode: false };
-  buffer = { active: { cursorX: 0, cursorY: 0, viewportY: 0,
+  buffer = { active: { type: "normal", cursorX: 0, cursorY: 0, viewportY: 0,
     getLine: (row: number) => ({ translateToString: () => row === 0 ? "live terminal text" : "" }),
   } };
   _core = { _renderService: { dimensions: { css: { cell: { width: 8, height: 16 } } } } };
-  options: { fontSize?: number; lineHeight?: number };
+  options: { fontSize?: number; lineHeight?: number; scrollback?: number };
   private root: HTMLElement | null = null;
   private data: (value: string) => void = () => {};
-  constructor(options: { fontSize?: number; lineHeight?: number }) { this.options = { ...options }; }
+  constructor(options: { fontSize?: number; lineHeight?: number; scrollback?: number }) {
+    this.options = { ...options };
+    ReviewTerminal.latest = this;
+  }
   loadAddon(_addon: object): void {}
   open(mount: HTMLElement): void {
     const root = document.createElement("div");
@@ -35,9 +41,10 @@ class ReviewTerminal {
   onBinary(_listener: (value: string) => void): void {}
   onResize(_listener: () => void): void {}
   input(value: string): void { this.data(value); }
+  scrollLines(lines: number): void { this.scrolled.push(lines); }
   focus(): void { this.root?.querySelector("textarea")?.focus(); }
   reset(): void {}
-  write(_data: Uint8Array, done?: () => void): void { done?.(); }
+  write(data: Uint8Array, done?: () => void): void { this.writes.push(data); done?.(); }
   dispose(): void { this.root?.remove(); }
 }
 
@@ -69,6 +76,8 @@ const { setKeysExpanded, setPadKind, setPaneComposeLive, setPaneTermMode } = awa
 const { attachLiveSession } = await import("../../computers/catalog-store.ts");
 const { applySnapshot } = await import("../../dashboard/catalog-store.ts");
 const { applyRuntimeIdentity } = await import("../../connection/runtime-store.ts");
+const { clearCapabilities, applyCapabilities } = await import("../../operations/capabilities-store");
+const { NO_OPERATION_CAPABILITIES } = await import("../../../lib/operations");
 const {
   disposeFullTerminal, leaveFullTerminal, getFullTerminalView,
   sendFullTerminalScroll, syncFullTerminalChrome, setFullTerminalComposeLive,
@@ -89,6 +98,7 @@ function session() {
   const calls: string[] = [];
   return {
     calls,
+    getConfig: async () => ({}),
     terminalOpen: async (pane: string, cols: number, rows: number): Promise<OpenResult> => {
       calls.push(`open:${pane}`); return opened(pane, cols, rows);
     },
@@ -141,6 +151,7 @@ beforeEach(async () => {
   await (await import("../../../app/connected-loader")).loadConnectedRuntime();
   resetTransitionState();
   resetComposeDrafts();
+  clearCapabilities();
   setLang("zh");
   act(() => {
     notifyFullTerminalKeyboard(false);
@@ -325,4 +336,67 @@ test("screen text comes from the mounted terminal and rejects another pane", asy
   act(() => applyPaneRead("stale guided snapshot", "stale-copy"));
   expect(fullTerminalScreenText("p1").trimEnd()).toBe("live terminal text");
   expect(fullTerminalScreenText("p2")).toBe("");
+});
+
+test("a raw bridge keeps local history scrolling while global configuration is refreshing", async () => {
+  const live = session();
+  live.getConfig = async () => ({ capabilities: { terminal_client_scroll: true } });
+  await act(() => boot(live));
+  await until(() => getFullTerminalView().stage === "live", "live terminal");
+  const renderer = ReviewTerminal.latest;
+  expect(renderer.options.scrollback).toBe(1000);
+  await act(() => sendFullTerminalScroll("up", 4, "wheel"));
+  await act(() => applyCapabilities({ ...NO_OPERATION_CAPABILITIES, terminal_client_scroll: true }, []));
+  await act(() => clearCapabilities());
+  await act(() => sendFullTerminalScroll("up", 4, "wheel"));
+  expect(ReviewTerminal.latest).toBe(renderer);
+  expect(renderer.scrolled).toEqual([-4, -4]);
+  expect(live.calls.filter(call => call === "scroll")).toEqual([]);
+});
+
+test("pending config opens a raw bridge that preserves every delta across grid changes", async () => {
+  const live = session();
+  let release!: (value: Record<string, unknown>) => void;
+  live.getConfig = () => new Promise(done => { release = done; });
+  await act(() => boot(live));
+  await until(() => Boolean(release), "pending config");
+  expect(live.calls).not.toContain("open:p1");
+  await act(async () => release({ capabilities: { terminal_client_scroll: true } }));
+  await until(() => getFullTerminalView().stage === "live", "raw terminal");
+  const { handleFullTerminalEvent } = await import("./full-terminal");
+  const renderer = ReviewTerminal.latest;
+  const chunks = ["first history", "old-grid history", "new-grid history", "live sentinel"];
+  await act(() => chunks.forEach((text, index) => handleFullTerminalEvent({
+    type: "terminal_frame", terminalId: opened().terminalId, terminalFrame: {
+      terminalId: opened().terminalId, sequence: String(index + 1), full: index === 0,
+      width: index === 1 ? 160 : renderer.cols, height: renderer.rows,
+      index: 0, count: 1, data: new TextEncoder().encode(text),
+    },
+  })));
+  expect(renderer.writes.map(bytes => new TextDecoder().decode(bytes))).toEqual(chunks);
+});
+
+test("retiring a pane while config is pending never sends TerminalOpen", async () => {
+  const live = session();
+  let release!: (value: Record<string, unknown>) => void;
+  live.getConfig = () => new Promise(done => { release = done; });
+  await act(() => boot(live));
+  await until(() => Boolean(release), "pending config");
+  await act(async () => {
+    const leaving = leaveFullTerminal({ rememberGuided: false, paint: false });
+    await leaving;
+    expect(live.calls).not.toContain("open:p1");
+    release({ capabilities: { terminal_client_scroll: true } });
+  });
+  expect(live.calls).not.toContain("open:p1");
+});
+
+test("a legacy bridge cannot gain raw scrolling from a later global grant", async () => {
+  const live = session();
+  await act(() => boot(live));
+  await until(() => getFullTerminalView().stage === "live", "legacy terminal");
+  await act(() => applyCapabilities({ ...NO_OPERATION_CAPABILITIES, terminal_client_scroll: true }, []));
+  await act(() => sendFullTerminalScroll("up", 4, "wheel"));
+  expect(live.calls).toContain("scroll");
+  expect(ReviewTerminal.latest.scrolled).toEqual([]);
 });

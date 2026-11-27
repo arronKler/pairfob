@@ -28,10 +28,6 @@ const (
 	coreFrameHeader = 9
 	coreMaxFrame    = 1 << 20
 
-	// A watched stream's reader gets this many frames of slack. A reader that
-	// falls further behind is closed instead of stalling the connection's read
-	// loop, which also serves JSON-RPC on the same pipe.
-	coreStreamBuffer = 32
 	// Frames can arrive before the caller that caused the stream has registered
 	// its sink (the attach response is read from the pipe first). They wait here
 	// in order, bounded, until the channel is watched or discarded.
@@ -67,49 +63,6 @@ type corePushTransport interface {
 // instead of discarded. Optional for the same reason.
 type coreFrameTransport interface {
 	OpenOutput(ctx context.Context, terminal string, cols, rows int) (channel uint32, items <-chan coreStreamItem, err error)
-}
-
-type coreStreamSink struct {
-	mu     sync.Mutex
-	items  chan coreStreamItem
-	closed bool
-}
-
-func newCoreStreamSink() *coreStreamSink {
-	return &coreStreamSink{items: make(chan coreStreamItem, coreStreamBuffer)}
-}
-
-// deliver never blocks the read loop. A full sink is closed, which is how a
-// stalled consumer learns to stop.
-func (s *coreStreamSink) deliver(item coreStreamItem) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return true
-	}
-	select {
-	case s.items <- item:
-		return true
-	default:
-		return false
-	}
-}
-
-func (s *coreStreamSink) close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return
-	}
-	s.closed = true
-	close(s.items)
-}
-
-// coreStream is one non-RPC channel's local state. A nil sink means output is
-// discarded; ended means the core closed it or the connection dropped.
-type coreStream struct {
-	sink  *coreStreamSink
-	ended bool
 }
 
 type coreDial func(context.Context) (coreTransport, coreHello, error)
@@ -356,7 +309,7 @@ func (c *coreConn) Call(ctx context.Context, method string, params any, out any)
 }
 
 func (c *coreConn) OpenInput(ctx context.Context, terminal string, cols, rows int) (uint32, error) {
-	channel, err := c.openAttach(ctx, terminal, cols, rows)
+	channel, err := c.openAttach(ctx, terminal, cols, rows, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -368,14 +321,15 @@ func (c *coreConn) OpenInput(ctx context.Context, terminal string, cols, rows in
 // installed only after terminal.attach answers, so frames the read loop already
 // pulled off the pipe wait in order and are handed over here.
 func (c *coreConn) OpenOutput(ctx context.Context, terminal string, cols, rows int) (uint32, <-chan coreStreamItem, error) {
-	channel, err := c.openAttach(ctx, terminal, cols, rows)
+	// Raw-stream viewers own their scrollback; input-only channels need none.
+	channel, err := c.openAttach(ctx, terminal, cols, rows, 1000)
 	if err != nil {
 		return 0, nil, err
 	}
 	return channel, c.watchStream(channel), nil
 }
 
-func (c *coreConn) openAttach(ctx context.Context, terminal string, cols, rows int) (uint32, error) {
+func (c *coreConn) openAttach(ctx context.Context, terminal string, cols, rows, history int) (uint32, error) {
 	if cols < 0 || cols > 65535 || rows < 0 || rows > 65535 {
 		return 0, coreProtocol("terminal.attach", "invalid terminal size")
 	}
@@ -383,7 +337,7 @@ func (c *coreConn) openAttach(ctx context.Context, terminal string, cols, rows i
 		Channel  uint32       `json:"channel"`
 		Terminal coreTerminal `json:"terminal"`
 	}
-	params := map[string]any{"terminal": terminal, "observe": false, "history": 0, "cols": cols, "rows": rows}
+	params := map[string]any{"terminal": terminal, "observe": false, "history": history, "cols": cols, "rows": rows}
 	if err := c.Call(ctx, "terminal.attach", params, &result); err != nil {
 		return 0, err
 	}
@@ -412,118 +366,6 @@ func (c *coreConn) OpenEvents(ctx context.Context) (uint32, <-chan coreStreamIte
 		return 0, nil, coreProtocol("events.subscribe", "terminal core returned no event channel")
 	}
 	return *result.Channel, c.watchStream(*result.Channel), nil
-}
-
-// watchStream attaches a sink to a channel and replays anything that arrived
-// before the sink existed. A channel the core already closed is closed at once.
-//
-// The replay runs while streamsMu is held: the read loop delivers later frames
-// straight to a registered sink, so releasing the lock before the replay would
-// let a newer frame overtake the buffered ones.
-func (c *coreConn) watchStream(channel uint32) <-chan coreStreamItem {
-	sink := newCoreStreamSink()
-	c.streamsMu.Lock()
-	stream := c.streams[channel]
-	if stream == nil {
-		stream = &coreStream{}
-		c.streams[channel] = stream
-	}
-	stream.sink = sink
-	buffered, ended := c.takePending(channel), stream.ended || c.streamsClosed
-	overflowed := false
-	for _, item := range buffered {
-		if !sink.deliver(item) {
-			overflowed = true
-			break
-		}
-	}
-	if ended {
-		sink.close()
-	}
-	c.streamsMu.Unlock()
-	if overflowed {
-		c.endStream(channel)
-	}
-	return sink.items
-}
-
-// discardStream keeps output flowing (and credited) without keeping it.
-func (c *coreConn) discardStream(channel uint32) {
-	c.streamsMu.Lock()
-	stream := c.streams[channel]
-	if stream == nil {
-		stream = &coreStream{}
-		c.streams[channel] = stream
-	}
-	stream.sink = nil
-	c.takePending(channel)
-	c.streamsMu.Unlock()
-}
-
-func (c *coreConn) takePending(channel uint32) []coreStreamItem {
-	buffered := c.pendingIn[channel]
-	if len(buffered) == 0 {
-		delete(c.pendingIn, channel)
-		return nil
-	}
-	delete(c.pendingIn, channel)
-	for _, item := range buffered {
-		c.pendingBytes -= len(item.payload)
-	}
-	return buffered
-}
-
-// endStream marks a channel closed, closes its sink, and drops queued frames.
-// The core can also end a stream by itself; both paths meet here.
-func (c *coreConn) endStream(channel uint32) {
-	c.streamsMu.Lock()
-	stream := c.streams[channel]
-	if stream == nil {
-		stream = &coreStream{}
-		c.streams[channel] = stream
-	}
-	stream.ended = true
-	sink := stream.sink
-	c.takePending(channel)
-	c.streamsMu.Unlock()
-	if sink != nil {
-		sink.close()
-	}
-}
-
-func (c *coreConn) streamEnded(channel uint32) bool {
-	c.streamsMu.Lock()
-	defer c.streamsMu.Unlock()
-	stream := c.streams[channel]
-	return stream != nil && stream.ended
-}
-
-// routeStream hands a frame to a watched sink. Frames for a channel that is
-// not registered yet wait, bounded and in order, for OpenOutput/OpenEvents.
-func (c *coreConn) routeStream(channel uint32, item coreStreamItem) {
-	c.streamsMu.Lock()
-	if c.streamsClosed {
-		c.streamsMu.Unlock()
-		return
-	}
-	stream := c.streams[channel]
-	if stream == nil {
-		if c.pendingBytes+len(item.payload) <= corePendingStreamBytes {
-			c.pendingIn[channel] = append(c.pendingIn[channel], item)
-			c.pendingBytes += len(item.payload)
-		}
-		c.streamsMu.Unlock()
-		return
-	}
-	if stream.ended || stream.sink == nil {
-		c.streamsMu.Unlock()
-		return
-	}
-	sink := stream.sink
-	c.streamsMu.Unlock()
-	if !sink.deliver(item) {
-		c.endStream(channel)
-	}
 }
 
 func (c *coreConn) TypeInput(channel uint32, data []byte) error {
@@ -562,7 +404,9 @@ func (c *coreConn) ResizeInput(channel uint32, cols, rows int) error {
 }
 
 func (c *coreConn) CloseInput(channel uint32) error {
-	c.endStream(channel)
+	if sink := c.endStream(channel); sink != nil {
+		sink.abort()
+	}
 	if err := c.writeFrame(context.Background(), channel, coreKindClose, nil); err != nil {
 		return c.transportErr(err)
 	}
@@ -617,12 +461,6 @@ func (c *coreConn) readLoop() {
 				continue
 			}
 			if len(payload) > 0 {
-				consumed := make([]byte, 4)
-				binary.LittleEndian.PutUint32(consumed, uint32(len(payload)))
-				if err := c.writeFrame(context.Background(), channel, coreKindCredit, consumed); err != nil {
-					c.shutdown(c.transportErr(err))
-					return
-				}
 				c.routeStream(channel, coreStreamItem{kind: coreKindData, payload: payload})
 			}
 		case coreKindClose:
@@ -670,7 +508,7 @@ func (c *coreConn) shutdown(cause error) {
 		c.pendingBytes = 0
 		c.streamsMu.Unlock()
 		for _, sink := range sinks {
-			sink.close()
+			sink.abort()
 		}
 	})
 }

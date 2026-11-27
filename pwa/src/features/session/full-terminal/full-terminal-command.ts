@@ -1,4 +1,6 @@
 import { TERMINAL_INPUT_CHUNK } from "../../../lib/protocol/terminal";
+import { ProtocolError } from "../../../lib/protocol/errors";
+import type { LiveSession } from "../../../lib/protocol/session-types";
 
 export type TerminalInputCommand = { kind: "input"; data: Uint8Array };
 export type TerminalResizeCommand = {
@@ -16,6 +18,25 @@ export type TerminalScrollCommand = {
   at?: { column: number; row: number };
 };
 export type TerminalCommand = TerminalInputCommand | TerminalResizeCommand | TerminalScrollCommand;
+
+/** All three mutations use the same ordered stream and fresh operation ids. */
+export function executeTerminalCommand(session: LiveSession, terminalId: string, command: TerminalCommand, sequence: number): Promise<unknown> {
+  if (command.kind === "input") return session.terminalInput(terminalId, sequence, command.data);
+  if (command.kind === "resize") return session.terminalResize(terminalId, sequence, command.cols, command.rows, command.cellWidth, command.cellHeight);
+  return session.terminalScroll(terminalId, sequence, command.direction, command.lines, command.source, command.at);
+}
+
+/** Bind execution to the controller incarnation that owns these ordered mutations. */
+export function createTerminalCommandPump(
+  session: LiveSession,
+  terminalId: string,
+  current: () => boolean,
+  options: Omit<TerminalCommandPumpOptions, "execute">,
+): TerminalCommandPump {
+  return new TerminalCommandPump({ ...options, execute: (command, sequence) => current()
+    ? executeTerminalCommand(session, terminalId, command, sequence)
+    : Promise.reject(new ProtocolError("conflict")) });
+}
 
 /** What the daemon accepts as one `TerminalScroll` (`internal/runtime/herdr_terminal.go`). */
 const SCROLL_LINES_MAX = 160;
@@ -92,6 +113,7 @@ type InFlightCommand = QueuedCommand & {
 export type TerminalCommandPumpOptions = {
   execute: (command: TerminalCommand, sequence: number) => Promise<unknown>;
   onError: (error: unknown) => void;
+  onScrollUnsupported?: (error: unknown) => void;
   now?: () => number;
   observer?: TerminalCommandPumpObserver;
 };
@@ -104,6 +126,7 @@ export type TerminalCommandPumpOptions = {
 export class TerminalCommandPump {
   private readonly execute: TerminalCommandPumpOptions["execute"];
   private readonly onError: TerminalCommandPumpOptions["onError"];
+  private readonly onScrollUnsupported: TerminalCommandPumpOptions["onScrollUnsupported"];
   private readonly now: () => number;
   private readonly observer?: TerminalCommandPumpObserver;
   private readonly queue: QueuedCommand[] = [];
@@ -111,10 +134,12 @@ export class TerminalCommandPump {
   private inFlight: InFlightCommand | null = null;
   private nextSequence = 1;
   private stopped = false;
+  private scrollSupported = true;
 
   constructor(options: TerminalCommandPumpOptions) {
     this.execute = options.execute;
     this.onError = options.onError;
+    this.onScrollUnsupported = options.onScrollUnsupported;
     this.now = options.now ?? (() => performance.now());
     this.observer = options.observer;
   }
@@ -160,7 +185,7 @@ export class TerminalCommandPump {
    * passed before the pane catches up.
    */
   enqueueScroll(command: Omit<TerminalScrollCommand, "kind">): void {
-    if (this.stopped) return;
+    if (this.stopped || !this.scrollSupported) return;
     const tail = this.queue[this.queue.length - 1];
     if (command.source === "wheel" && tail?.command.kind === "scroll" && tail.command.source === "wheel") {
       const merged = mergeWheel(tail.command, command);
@@ -238,6 +263,26 @@ export class TerminalCommandPump {
 
   private fail(current: InFlightCommand, error: unknown): void {
     if (this.stopped || this.inFlight !== current) return;
+    if (current.command.kind === "scroll" && error instanceof ProtocolError && error.code === "unsupported") {
+      // Unsupported is explicitly not applied. The daemon did not consume this
+      // sequence; use it for the next NEW mutation, never replay the scroll.
+      this.scrollSupported = false;
+      this.nextSequence = current.sequence;
+      this.inFlight = null;
+      let droppedScrolls = 0;
+      for (let index = this.queue.length - 1; index >= 0; index--) {
+        if (this.queue[index].command.kind === "scroll") {
+          this.queue.splice(index, 1);
+          droppedScrolls++;
+        }
+      }
+      this.observer?.failed?.("scroll", current.sequence, Math.max(0, this.now() - current.sentAt), {
+        commands: droppedScrolls, inputBytes: 0,
+      });
+      this.onScrollUnsupported?.(error);
+      this.drain();
+      return;
+    }
     const dropped = this.queuedState();
     this.stopped = true;
     this.queue.length = 0;

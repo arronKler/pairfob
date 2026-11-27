@@ -34,3 +34,12 @@ describe("complete-terminal frame admission", () => {
     expect(gate.settle(1n, false, true)).toBe("wait");
   });
 });
+
+test("raw PTY bytes survive grid changes with only the initial full frame", () => {
+  const gate = new FullTerminalFrameGate();
+  expect(gate.settle(1n, true, false, true)).toBe("render");
+  expect(gate.settle(2n, false, false, true)).toBe("render");
+  expect(gate.settle(3n, false, true, true)).toBe("render");
+  expect(gate.settle(4n, false, true, true)).toBe("render");
+  expect(gate.preflight(6n, false)).toBe("gap");
+});

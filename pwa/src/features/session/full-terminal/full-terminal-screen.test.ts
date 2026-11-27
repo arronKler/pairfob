@@ -98,6 +98,7 @@ async function waitUntil(predicate: () => boolean, label: string): Promise<void>
 
 function live(extra: Record<string, unknown> = {}) {
   return {
+    getConfig: async () => ({}),
     terminalOpen: async (paneId: string, cols: number, rows: number) => ({
       operationId: "op_AAECAwQFBgcICQoL",
       terminalId: "term_11111111111111111111111111111111",
@@ -302,6 +303,7 @@ describe("react complete-terminal shell", () => {
       resetPaneView();
       setFullTerminal(true);
       attachLiveSession(live({
+        getConfig: async () => ({}),
         terminalOpen: async () => {
           throw new Error("nope");
         },

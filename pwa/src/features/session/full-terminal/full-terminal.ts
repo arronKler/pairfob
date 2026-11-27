@@ -1,3 +1,4 @@
+import { readRuntimeConfig, terminalUsesRawStream } from "../../../lib/protocol/runtime-config-read";
 import { TerminalRecoveryDiagnostics } from "./terminal-recovery-diagnostics";
 import { terminalLinkProvider } from "./full-terminal-links";
 import { encodeLiveKey } from "../keypad/live-key";
@@ -15,6 +16,8 @@ import {
   type SessionEvent,
 } from "../../../lib/protocol/client";
 import { appRoot } from "../../../app/dom-root";
+import { showStatus } from "../../../app/notices-store";
+import { CLIENT_TERMINAL_HISTORY, scrollClientTerminal } from "./full-terminal-client-scroll";
 import { selectedAgent } from "../../dashboard/catalog-store";
 import { composeLive } from "../compose-store";
 import { liveSession } from "../../computers/catalog-store";
@@ -53,7 +56,7 @@ import { bindTerminalCopyKey, copyTerminalSelection } from "./full-terminal-copy
 import { bindHostScroll, pageLineCount, reportsWheel, type ScrollAt } from "./full-terminal-scroll";
 import { attachFullTerminalHost, attachedFullTerminalFileOpener, clearFullTerminalAttach, connectFullTerminalEngine, fullTerminalOwnerKey } from "./full-terminal-engine";
 import { releaseFullTerminalScreen } from "./full-terminal-screen";
-import { TerminalCommandPump, type TerminalCommand, type TerminalInputQueueOptions } from "./full-terminal-command";
+import { createTerminalCommandPump, type TerminalCommandPump, type TerminalInputQueueOptions } from "./full-terminal-command";
 import { loadFullTerminalXterm, terminalWebglSupported } from "./full-terminal-loader";
 import { afterNextPaint, observeHostResize } from "./full-terminal-lifecycle";
 import { followCursor } from "./full-terminal-lift";
@@ -94,6 +97,7 @@ let rendererVersion = 0;
 let bridgeId = "";
 let bridgePane = "";
 let bridgeVersion = 0;
+let rawStream = false;
 let opening = false;
 let leaving: Promise<void> | null = null;
 export type FullTerminalLeaveTransition = { from: number; to: number };
@@ -172,33 +176,10 @@ function startCommandPump(
   version: number,
 ): void {
   stopCommandPump();
-  const execute = (command: TerminalCommand, sequence: number): Promise<unknown> => {
-    if (version !== bridgeVersion || bridgeId !== terminalId || liveSession() !== session || !isFullTerminal()) {
-      return Promise.reject(new ProtocolError("conflict", t("err.controllerSwitch")));
-    }
-    if (command.kind === "input") return session.terminalInput(terminalId, sequence, command.data);
-    if (command.kind === "resize") {
-      return session.terminalResize(
-        terminalId,
-        sequence,
-        command.cols,
-        command.rows,
-        command.cellWidth,
-        command.cellHeight,
-      );
-    }
-    return session.terminalScroll(
-      terminalId,
-      sequence,
-      command.direction,
-      command.lines,
-      command.source,
-      command.at,
-    );
-  };
-  commandPump = new TerminalCommandPump({
-    execute,
+  commandPump = createTerminalCommandPump(session, terminalId,
+    () => version === bridgeVersion && bridgeId === terminalId && liveSession() === session && isFullTerminal(), {
     observer: fullTerminalPerf.commandObserver,
+    onScrollUnsupported: () => showStatus(t("ft.scrollUnsupported")),
     onError: (error) => {
       if (version !== bridgeVersion) return;
       fullTerminalPerf.publish("command_error");
@@ -240,6 +221,11 @@ export function sendFullTerminalScroll(direction: "up" | "down", lines: number, 
   closeTerminalKeyboard();
   if (!bridgeId || opening || !commandPump) return;
   const count = clamp(Math.round(lines), 1, TERMINAL_MAX_ROWS);
+  if (terminal && rawStream) {
+    const host = appRoot().querySelector<HTMLElement>(".full-terminal-host");
+    if (host && !scrollClientTerminal(terminal, host, direction, count, source, at)) showStatus(t("ft.appScrollUnsupported"));
+    return;
+  }
   commandPump.enqueueScroll({ direction, lines: count, source, at });
 }
 
@@ -282,6 +268,7 @@ function bindInput(host: HTMLElement): void {
     panXScroller: () => host.classList.contains("is-pan") ? host.querySelector<HTMLElement>(".full-terminal-pan") : null,
     wheelReported: () => reportsWheel(terminal?.modes.mouseTrackingMode),
     linePx: () => (terminal ? cssCellOf(terminal)?.height ?? 0 : 0),
+    pageLines: pageScrollLines,
   });
   unbindCopy?.();
   unbindCopy = bindTerminalCopyKey(host, () => terminal);
@@ -349,6 +336,9 @@ async function mount(host: HTMLElement): Promise<void> {
   const openFile = fileOpener ? (value: string) => { if (version === rendererVersion) fileOpener(value); } : undefined;
   const fontPx = termFontPx();
   terminal = new module.Terminal(fullTerminalOptions({
+    // GetConfig may still be pending when the first raw history arrives.
+    // Reserve capacity now; only the advertised capability selects local scrolling.
+    scrollback: CLIENT_TERMINAL_HISTORY,
     fontFamily: FULL_TERM_FONT_FAMILY,
     fontSize: fontPx,
     lineHeight: pitchLineHeight(
@@ -445,6 +435,10 @@ async function openBridge(takeover: boolean): Promise<void> {
   fullTerminalPerf.bridgeStarted();
   const recovery = new TerminalRecoveryDiagnostics(session.connectionRecovery?.());
   try {
+    const config = await openTracker.prepare(readRuntimeConfig(session));
+    if (!config) return;
+    const stream = terminalUsesRawStream(config.value);
+    if (version !== bridgeVersion || !isFullTerminal() || liveSession() !== session || openPaneId() !== paneId || terminalDocumentHidden()) return;
     const size = fittedSize ?? fit();
     resizeGate.opened(size);
     const opened = await session.terminalOpen(paneId, size.cols, size.rows, takeover);
@@ -452,6 +446,7 @@ async function openBridge(takeover: boolean): Promise<void> {
       await session.terminalClose(opened.terminalId).catch(() => undefined);
       return;
     }
+    rawStream = stream;
     bridgeId = opened.terminalId;
     bridgePane = paneId;
     startCommandPump(session, opened.terminalId, version);
@@ -486,6 +481,7 @@ async function suspendBridge(sendClose: boolean, reason?: LocalizedText, showFai
   const session = liveSession();
   const id = bridgeId;
   const renderer = rendererVersion;
+  openTracker.cancelPreparation();
   const pendingOpen = openTracker.pending();
   terminalRecovery = undefined;
   stopCommandPump();
@@ -711,7 +707,7 @@ export function handleFullTerminalEvent(event: SessionEvent): boolean {
       remoteGrid = nextRemote;
       if (remoteChanged) requestResize(fit(), nextRemote);
       const writer = terminal;
-      if (frameGate.settle(sequence, frame.full, Boolean(writer && frameMatchesGrid(frame, writer))) === "wait") return true;
+      if (frameGate.settle(sequence, frame.full, Boolean(writer && frameMatchesGrid(frame, writer)), rawStream) === "wait") return true;
       if (frame.full) writer?.reset();
       if (writer) {
         const writeVersion = bridgeVersion;
